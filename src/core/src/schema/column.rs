@@ -43,6 +43,12 @@ impl Into<ColumnId> for &ColumnId {
     }
 }
 
+impl Into<ColumnId> for &Column {
+    fn into(self) -> ColumnId {
+        self.id
+    }
+}
+
 impl fmt::Debug for ColumnId {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(fmt, "ColumnId({}/{})", self.table.0, self.index)

@@ -34,30 +34,8 @@ impl<'stmt> ExprRecord<'stmt> {
         })
     }
 
-    pub(crate) fn eval_ref(
-        &self,
-        input: &mut impl eval::Input<'stmt>,
-    ) -> crate::Result<Record<'stmt>> {
-        let mut applied = vec![];
-
-        for expr in &self.fields {
-            applied.push(expr.eval_ref(input)?);
-        }
-
-        Ok(Record::from_vec(applied))
-    }
-
     pub fn push(&mut self, expr: Expr<'stmt>) {
         self.fields.push(expr)
-    }
-
-    /// Special case of `eval` where the expression is a constant
-    ///
-    /// # Panics
-    ///
-    /// `eval_const` panics if the expression is not constant
-    pub fn eval_const(&self) -> Record<'stmt> {
-        self.eval_ref(&mut eval::const_input()).unwrap()
     }
 
     pub(crate) fn simplify(&mut self) -> Option<Expr<'stmt>> {
@@ -162,6 +140,12 @@ impl<'stmt> AsRef<[Expr<'stmt>]> for ExprRecord<'stmt> {
 impl<'stmt> From<Record<'stmt>> for ExprRecord<'stmt> {
     fn from(src: Record<'stmt>) -> ExprRecord<'stmt> {
         ExprRecord::from_vec(src.into_iter().map(Into::into).collect())
+    }
+}
+
+impl<'stmt> From<ExprRecord<'stmt>> for Expr<'stmt> {
+    fn from(value: ExprRecord<'stmt>) -> Expr<'stmt> {
+        Expr::Record(value)
     }
 }
 

@@ -381,7 +381,13 @@ impl<'a> Generator<'a> {
         match filter {
             stmt::Expr::And(exprs) => self.gen_expr_chain(mid, args, exprs, quote!(and), depth),
             stmt::Expr::Or(exprs) => self.gen_expr_chain(mid, args, exprs, quote!(or), depth),
+            stmt::Expr::Field(expr_field) => {
+                let base = quote!(#struct_name);
+                let field = self.field_const_name(expr_field.field);
+                quote!( #base :: #field )
+            }
             stmt::Expr::Project(expr_project) => {
+                /*
                 let steps = expr_project.projection.as_slice();
                 let mut current_model = model;
                 let mut base = quote!(#struct_name);
@@ -409,6 +415,8 @@ impl<'a> Generator<'a> {
                 }
 
                 base
+                */
+                todo!()
             }
             stmt::Expr::Arg(arg) => {
                 let arg = &args[arg.position];
@@ -462,6 +470,7 @@ impl<'a> Generator<'a> {
                 quote!(#lhs . in_query ( #subquery ))
             }
             stmt::Expr::Pattern(_)
+            | stmt::Expr::Column(_)
             | stmt::Expr::Concat(_)
             | stmt::Expr::Stmt(_)
             | stmt::Expr::Type(_)

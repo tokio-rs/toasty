@@ -23,12 +23,20 @@ pub trait Map<'stmt>: Sized {
         map_expr_binary_op(self, i)
     }
 
+    fn map_expr_column(&mut self, i: &ExprColumn) -> ExprColumn {
+        map_expr_column(self, i)
+    }
+
     fn map_expr_concat(&mut self, i: &ExprConcat<'stmt>) -> ExprConcat<'stmt> {
         map_expr_concat(self, i)
     }
 
     fn map_expr_enum(&mut self, i: &ExprEnum<'stmt>) -> ExprEnum<'stmt> {
         map_expr_enum(self, i)
+    }
+
+    fn map_expr_field(&mut self, i: &ExprField) -> ExprField {
+        map_expr_field(self, i)
     }
 
     fn map_expr_in_subquery(&mut self, i: &ExprInSubquery<'stmt>) -> ExprInSubquery<'stmt> {
@@ -69,10 +77,6 @@ pub trait Map<'stmt>: Sized {
 
     fn map_expr_ty(&mut self, i: &ExprTy) -> ExprTy {
         map_expr_ty(self, i)
-    }
-
-    fn map_project_base(&mut self, i: &ProjectBase<'stmt>) -> ProjectBase<'stmt> {
-        map_project_base(self, i)
     }
 
     fn map_projection(&mut self, i: &Projection) -> Projection {
@@ -128,8 +132,10 @@ where
         Expr::And(expr) => v.map_expr_and(expr).into(),
         Expr::Arg(expr) => v.map_expr_arg(expr).into(),
         Expr::BinaryOp(expr) => v.map_expr_binary_op(expr).into(),
+        Expr::Column(expr) => v.map_expr_column(expr).into(),
         Expr::Concat(expr) => v.map_expr_concat(expr).into(),
         Expr::Enum(expr) => v.map_expr_enum(expr).into(),
+        Expr::Field(expr) => v.map_expr_field(expr).into(),
         Expr::InList(expr) => todo!(),
         Expr::InSubquery(expr) => v.map_expr_in_subquery(expr).into(),
         Expr::Or(expr) => v.map_expr_or(expr).into(),
@@ -174,6 +180,13 @@ where
     }
 }
 
+pub fn map_expr_column<'stmt, V>(v: &mut V, node: &ExprColumn) -> ExprColumn
+where
+    V: Map<'stmt> + ?Sized,
+{
+    node.clone()
+}
+
 pub fn map_expr_concat<'stmt, V>(v: &mut V, node: &ExprConcat<'stmt>) -> ExprConcat<'stmt>
 where
     V: Map<'stmt> + ?Sized,
@@ -191,6 +204,13 @@ where
         variant: node.variant,
         fields: v.map_expr_record(&node.fields).into(),
     }
+}
+
+pub fn map_expr_field<'stmt, V>(v: &mut V, node: &ExprField) -> ExprField
+where
+    V: Map<'stmt> + ?Sized,
+{
+    node.clone()
 }
 
 pub fn map_expr_in_subquery<'stmt, V>(
@@ -284,18 +304,8 @@ where
     V: Map<'stmt> + ?Sized,
 {
     ExprProject {
-        base: v.map_project_base(&node.base),
+        base: Box::new(v.map_expr(&node.base)),
         projection: v.map_projection(&node.projection),
-    }
-}
-
-pub fn map_project_base<'stmt, V>(v: &mut V, node: &ProjectBase<'stmt>) -> ProjectBase<'stmt>
-where
-    V: Map<'stmt> + ?Sized,
-{
-    match node {
-        ProjectBase::ExprSelf => ProjectBase::ExprSelf,
-        ProjectBase::Expr(e) => ProjectBase::Expr(Box::new(v.map_expr(e))),
     }
 }
 

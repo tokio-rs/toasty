@@ -116,7 +116,7 @@ impl<'stmt> Planner<'stmt> {
                 // Previous value of returning does nothing in this
                 // context
                 insert.returning = Some(match &belongs_to.foreign_key.fields[..] {
-                    [fk_field] => stmt::Returning::Expr(stmt::Expr::project(fk_field.target)),
+                    [fk_field] => stmt::Returning::Expr(stmt::Expr::field(fk_field.target)),
                     _ => {
                         todo!("composite keys");
                     }
@@ -224,9 +224,11 @@ impl<'stmt> Planner<'stmt> {
         value: stmt::Value<'stmt>,
         scope: &stmt::Query<'stmt>,
     ) {
+        todo!("value={:#?}", value);
         let mut stmt = stmt::Query::filter(
             has_many.target,
-            stmt::Expr::eq(stmt::Expr::self_expr(), value),
+            // stmt::Expr::eq(stmt::Expr::self_expr(), value),
+            stmt::Expr::default(),
         )
         .update(&self.schema);
 
@@ -300,9 +302,12 @@ impl<'stmt> Planner<'stmt> {
             self.plan_mut_has_one_nullify(has_one, scope);
         }
 
+        todo!("value = {:#?}", value);
+
         let mut stmt = stmt::Query::filter(
             has_one.target,
-            stmt::Expr::eq(stmt::Expr::self_expr(), value),
+            // stmt::Expr::eq(stmt::Expr::self_expr(), value),
+            stmt::Expr::default(),
         )
         .update(self.schema);
 

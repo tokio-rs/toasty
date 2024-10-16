@@ -20,8 +20,8 @@ use super::*;
 
 #[derive(Debug)]
 pub enum Operation<'stmt> {
-    /// Create a new record. This will always be a `sql::Insert`
-    Insert(sql::Statement<'stmt>),
+    /// Create a new record. This will always be a lowered `stmt::Insert`
+    Insert(stmt::Statement<'stmt>),
 
     /// Delete records identified by the given keys.
     DeleteByKey(DeleteByKey<'stmt>),

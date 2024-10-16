@@ -17,7 +17,7 @@ pub use lowering::{IndexLowering, Lowering};
 pub mod schema;
 pub use schema::Schema;
 
-pub mod sql;
+// pub mod sql;
 
 pub mod stmt;
 

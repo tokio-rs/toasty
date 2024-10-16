@@ -1,5 +1,11 @@
+mod assignments;
+pub use assignments::Assignments;
+
 mod delete;
 pub use delete::Delete;
+
+mod direction;
+pub use direction::Direction;
 
 pub mod eval;
 
@@ -12,18 +18,23 @@ pub use expr_and::ExprAnd;
 mod expr_arg;
 pub use expr_arg::ExprArg;
 
-// TODO: combine w/ ExprPattern
 mod expr_begins_with;
 pub use expr_begins_with::ExprBeginsWith;
 
 mod expr_binary_op;
 pub use expr_binary_op::ExprBinaryOp;
 
+mod expr_column;
+pub use expr_column::ExprColumn;
+
 mod expr_concat;
 pub use expr_concat::ExprConcat;
 
 mod expr_enum;
 pub use expr_enum::ExprEnum;
+
+mod expr_field;
+pub use expr_field::ExprField;
 
 mod expr_in_list;
 pub use expr_in_list::ExprInList;
@@ -41,7 +52,7 @@ mod expr_pattern;
 pub use expr_pattern::ExprPattern;
 
 mod expr_project;
-pub use expr_project::{ExprProject, ProjectBase};
+pub use expr_project::ExprProject;
 
 mod expr_record;
 pub use expr_record::ExprRecord;

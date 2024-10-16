@@ -13,11 +13,17 @@ pub enum Expr<'stmt> {
     /// Binary expression
     BinaryOp(ExprBinaryOp<'stmt>),
 
+    /// References a column from a table in the statement
+    Column(ExprColumn),
+
     /// Concat multiple expressions together
     Concat(ExprConcat<'stmt>),
 
     /// Return an enum value
     Enum(ExprEnum<'stmt>),
+
+    /// References a field in the statement
+    Field(ExprField),
 
     /// In list
     InList(ExprInList<'stmt>),
@@ -93,23 +99,6 @@ impl<'stmt> Expr<'stmt> {
         }
     }
 
-    /// Returns the identity expression.
-    ///
-    /// TODO: delete?
-    pub const fn identity() -> Expr<'stmt> {
-        Expr::Project(ExprProject {
-            base: ProjectBase::ExprSelf,
-            projection: Projection::identity(),
-        })
-    }
-
-    pub const fn is_identity(&self) -> bool {
-        match self {
-            Expr::Project(expr_project) => expr_project.is_identity(),
-            _ => false,
-        }
-    }
-
     pub fn null() -> Expr<'stmt> {
         Expr::Value(Value::Null)
     }
@@ -132,14 +121,6 @@ impl<'stmt> Expr<'stmt> {
         T: Into<Expr<'stmt>>,
     {
         Expr::List(items.into_iter().map(Into::into).collect())
-    }
-
-    pub fn self_expr() -> Expr<'stmt> {
-        ExprProject {
-            base: ProjectBase::ExprSelf,
-            projection: Projection::identity(),
-        }
-        .into()
     }
 
     pub fn record<T>(items: impl IntoIterator<Item = T>) -> Expr<'stmt>
@@ -228,84 +209,33 @@ impl<'stmt> Expr<'stmt> {
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input<'stmt>) {
         visit_mut::for_each_expr_mut(self, move |expr| match expr {
             Expr::Arg(expr_arg) => {
-                *expr = input.resolve_arg(expr_arg);
+                if let Some(sub) = input.resolve_arg(expr_arg) {
+                    *expr = sub;
+                }
             }
+            Expr::Field(expr_field) => {
+                if let Some(sub) = input.resolve_field(expr_field) {
+                    *expr = sub;
+                }
+            }
+            Expr::Column(expr_column) => {
+                if let Some(sub) = input.resolve_column(expr_column) {
+                    *expr = sub;
+                }
+            }
+            Expr::Project(expr) => todo!("project = {:#?}", expr),
+            /*
             Expr::Project(expr_project) => match &expr_project.base {
                 ProjectBase::ExprSelf => {
                     *expr = input.resolve_self_projection(&expr_project.projection);
                 }
                 _ => {}
             },
+            */
             _ => {}
         });
 
         self.simplify();
-    }
-
-    /// Special case of `eval` where the expression is a constant
-    ///
-    /// # Panics
-    ///
-    /// `eval_const` panics if the expression is not constant
-    pub(crate) fn eval_const(&self) -> Value<'stmt> {
-        self.eval_ref(&mut eval::const_input()).unwrap()
-    }
-
-    pub(crate) fn eval_bool_ref(&self, input: &mut impl eval::Input<'stmt>) -> Result<bool> {
-        match self.eval_ref(input)? {
-            Value::Bool(ret) => Ok(ret),
-            _ => todo!(),
-        }
-    }
-
-    pub(crate) fn eval_ref(&self, input: &mut impl eval::Input<'stmt>) -> Result<Value<'stmt>> {
-        match self {
-            Expr::And(expr_and) => {
-                debug_assert!(!expr_and.operands.is_empty());
-
-                for operand in &expr_and.operands {
-                    if !operand.eval_bool_ref(input)? {
-                        return Ok(false.into());
-                    }
-                }
-
-                Ok(true.into())
-            }
-            Expr::Arg(expr_arg) => Ok(input.resolve_arg(expr_arg)),
-            Expr::Value(value) => Ok(value.clone()),
-            Expr::BinaryOp(expr_binary_op) => {
-                let lhs = expr_binary_op.lhs.eval_ref(input)?;
-                let rhs = expr_binary_op.rhs.eval_ref(input)?;
-
-                match expr_binary_op.op {
-                    BinaryOp::Eq => Ok((lhs == rhs).into()),
-                    BinaryOp::Ne => Ok((lhs != rhs).into()),
-                    _ => todo!("{:#?}", self),
-                }
-            }
-            Expr::Enum(expr_enum) => Ok(ValueEnum {
-                variant: expr_enum.variant,
-                fields: expr_enum.fields.eval_ref(input)?,
-            }
-            .into()),
-            Expr::Project(expr_project) => match expr_project.base {
-                ProjectBase::ExprSelf => {
-                    Ok(input.resolve_self_projection(&expr_project.projection))
-                }
-                _ => todo!(),
-            },
-            Expr::Record(expr_record) => Ok(expr_record.eval_ref(input)?.into()),
-            Expr::List(exprs) => {
-                let mut applied = vec![];
-
-                for expr in exprs {
-                    applied.push(expr.eval_ref(input)?);
-                }
-
-                Ok(Value::List(applied))
-            }
-            _ => todo!("{:#?}", self),
-        }
     }
 
     pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Expr<'stmt> {
@@ -345,6 +275,7 @@ impl<'stmt> Expr<'stmt> {
         std::mem::replace(self, Expr::Value(Value::Null))
     }
 
+    /*
     /// Updates the expression to assume a projected `expr_self`
     ///
     /// TODO: rename this... not a good name
@@ -361,6 +292,7 @@ impl<'stmt> Expr<'stmt> {
             }
         });
     }
+    */
 }
 
 impl<'stmt> Default for Expr<'stmt> {
@@ -422,30 +354,6 @@ impl<'stmt> Node<'stmt> for Expr<'stmt> {
 impl<'stmt> From<bool> for Expr<'stmt> {
     fn from(value: bool) -> Expr<'stmt> {
         Expr::Value(Value::from(value))
-    }
-}
-
-impl<'stmt> From<ColumnId> for Expr<'stmt> {
-    fn from(value: ColumnId) -> Self {
-        ExprProject::from(value).into()
-    }
-}
-
-impl<'stmt> From<ExprRecord<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprRecord<'stmt>) -> Expr<'stmt> {
-        Expr::Record(value)
-    }
-}
-
-impl<'stmt> From<&Field> for Expr<'stmt> {
-    fn from(value: &Field) -> Self {
-        ExprProject::from(value).into()
-    }
-}
-
-impl<'stmt> From<FieldId> for Expr<'stmt> {
-    fn from(value: FieldId) -> Self {
-        ExprProject::from(value).into()
     }
 }
 

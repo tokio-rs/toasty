@@ -11,7 +11,7 @@ pub struct FindPkByIndex<'stmt> {
     pub index: IndexId,
 
     /// How to filter the index.
-    pub filter: sql::Expr<'stmt>,
+    pub filter: stmt::Expr<'stmt>,
 }
 
 impl<'stmt> From<FindPkByIndex<'stmt>> for Operation<'stmt> {

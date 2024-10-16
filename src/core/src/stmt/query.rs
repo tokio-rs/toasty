@@ -20,12 +20,10 @@ impl<'stmt> Query<'stmt> {
 
     pub fn update(self, schema: &Schema) -> Update<'stmt> {
         let width = self.body.width(schema);
-        let expr = stmt::ExprRecord::from_iter(std::iter::repeat(stmt::Expr::null()).take(width));
 
         stmt::Update {
             selection: self,
-            fields: stmt::PathFieldSet::default(),
-            expr,
+            assignemnts: stmt::Assignments::with_capacity(width),
             condition: None,
             returning: false,
         }

@@ -40,11 +40,7 @@ impl Path {
     }
 
     pub fn into_self_project_expr<'stmt>(self) -> Expr<'stmt> {
-        ExprProject {
-            base: ProjectBase::ExprSelf,
-            projection: self.projection,
-        }
-        .into()
+        todo!("delete this")
     }
 }
 

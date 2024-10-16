@@ -1,11 +1,44 @@
 use super::*;
 
 pub trait Input<'stmt> {
-    fn resolve_self_projection(&mut self, projection: &Projection) -> Expr<'stmt>;
+    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr<'stmt>> {
+        None
+    }
 
-    fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Expr<'stmt>;
+    fn resolve_column(&mut self, expr_column: &ExprColumn) -> Option<Expr<'stmt>> {
+        None
+    }
+
+    fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Option<Expr<'stmt>> {
+        None
+    }
 }
 
+pub struct TableToModel<T>(pub T);
+
+impl<'stmt> Input<'stmt> for TableToModel<&ExprRecord<'stmt>> {
+    fn resolve_column(&mut self, expr_column: &ExprColumn) -> Option<Expr<'stmt>> {
+        todo!("column = {:#?}; self={:#?}", expr_column, self.0);
+    }
+}
+
+pub struct ModelToTable<T>(pub T);
+
+impl<'stmt> Input<'stmt> for ModelToTable<&ExprRecord<'stmt>> {
+    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr<'stmt>> {
+        Some(self.0[expr_field.field.index].clone())
+    }
+}
+
+pub struct Args<T>(pub T);
+
+impl<'stmt> Input<'stmt> for Args<&[Value<'stmt>]> {
+    fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Option<Expr<'stmt>> {
+        todo!("arg = {:#?}; self={:#?}", expr_arg, self.0);
+    }
+}
+
+/*
 pub struct Args<T>(T);
 
 impl<'stmt> Input<'stmt> for &Value<'stmt> {
@@ -53,10 +86,13 @@ pub fn args<T>(input: T) -> Args<T> {
 
 impl<'stmt> Input<'stmt> for Args<&[Value<'stmt>]> {
     fn resolve_self_projection(&mut self, projection: &Projection) -> Expr<'stmt> {
+        /*
         Expr::Project(ExprProject {
             base: ProjectBase::ExprSelf,
             projection: projection.clone(),
         })
+        */
+        todo!()
     }
 
     fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Expr<'stmt> {
@@ -66,13 +102,17 @@ impl<'stmt> Input<'stmt> for Args<&[Value<'stmt>]> {
 
 impl<'stmt> Input<'stmt> for Args<&[Expr<'stmt>]> {
     fn resolve_self_projection(&mut self, projection: &Projection) -> Expr<'stmt> {
+        /*
         Expr::Project(ExprProject {
             base: ProjectBase::ExprSelf,
             projection: projection.clone(),
         })
+        */
+        todo!()
     }
 
     fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Expr<'stmt> {
         self.0[expr_arg.position].clone()
     }
 }
+    */

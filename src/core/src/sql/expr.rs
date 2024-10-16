@@ -78,6 +78,7 @@ impl<'stmt> Expr<'stmt> {
     }
 
     pub fn from_stmt(schema: &Schema, table: TableId, stmt: stmt::Expr<'stmt>) -> Expr<'stmt> {
+        /*
         match stmt {
             stmt::Expr::Arg(expr_arg) => {
                 // TODO: not always true
@@ -157,6 +158,7 @@ impl<'stmt> Expr<'stmt> {
                 }
             }
             stmt::Expr::Project(expr_project) => {
+                /*
                 assert!(expr_project.base.is_expr_self());
                 let [step] = expr_project.projection.as_slice() else {
                     todo!("expr = {:#?}", expr_project)
@@ -167,6 +169,8 @@ impl<'stmt> Expr<'stmt> {
                     table,
                     index: step.into_usize(),
                 })
+                */
+                todo!()
             }
             stmt::Expr::Value(value) => Expr::Value(value),
             stmt::Expr::Enum(expr_enum) => {
@@ -212,6 +216,8 @@ impl<'stmt> Expr<'stmt> {
             }
             _ => todo!("expr = {:#?}", stmt),
         }
+        */
+        todo!()
     }
 
     fn list_from_stmt(schema: &Schema, table: TableId, stmt: stmt::Expr<'stmt>) -> ExprList<'stmt> {

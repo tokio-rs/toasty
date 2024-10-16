@@ -171,12 +171,15 @@ impl<'stmt> SimplifyExpr<'stmt> {
         match (&mut *lhs, &mut *rhs) {
             (stmt::Expr::Project(expr_project), other)
             | (other, stmt::Expr::Project(expr_project)) => {
-                if expr_project.is_identity() {
+                todo!("expr_project={:#?}", expr_project);
+
+                if todo!("expr_project={:#?}", expr_project) {
+                    // if expr_project.is_identity() {
                     assert!(op.is_eq());
 
                     Some(self.rewrite_root_path_expr(other.clone()))
                 } else {
-                    assert!(expr_project.base.is_expr_self());
+                    // todo!(expr_project.base.is_expr_self());
 
                     let field = expr_project
                         .projection

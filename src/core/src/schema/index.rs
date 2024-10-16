@@ -44,7 +44,7 @@ pub struct IndexColumn {
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum IndexOp {
     Eq,
-    Sort(sql::Direction),
+    Sort(stmt::Direction),
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]

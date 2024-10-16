@@ -1,6 +1,6 @@
 use toasty_core::{
     driver::{operation::Operation, Capability, Driver},
-    schema, sql, stmt, Schema,
+    schema, stmt, Schema,
 };
 
 use anyhow::Result;

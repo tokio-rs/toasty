@@ -4,7 +4,11 @@ pub use capability::Capability;
 pub mod operation;
 pub use operation::Operation;
 
-use crate::{async_trait, eval, sql, stmt::ValueStream, Schema};
+use crate::{
+    async_trait, eval,
+    stmt::{self, ValueStream},
+    Schema,
+};
 
 use std::fmt::Debug;
 

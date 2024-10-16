@@ -28,7 +28,8 @@ impl<'stmt> Planner<'stmt> {
                 let position = expr_arg.position;
 
                 // Replace w/ a project... because
-                *expr = stmt::Expr::project(&[position]);
+                // *expr = stmt::Expr::project(&[position]);
+                todo!("expr={:#?}", expr);
 
                 Extract::Arg(position)
             }
@@ -79,10 +80,12 @@ impl<'stmt> Planner<'stmt> {
             Value(_) => Extract::Const,
             Record(_) => Extract::Field, // TODO: not correct
             List(_) => Extract::Field,   // TODO: not correct
+            /*
             Project(expr_project) => match expr_project.base {
                 stmt::ProjectBase::ExprSelf => Extract::Field,
                 _ => todo!("project = {:#?}", expr_project),
             },
+            */
             _ => todo!("expr = {:#?}", expr),
         }
     }

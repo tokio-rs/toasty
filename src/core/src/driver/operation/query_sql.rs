@@ -5,7 +5,7 @@ use crate::stmt;
 #[derive(Debug)]
 pub struct QuerySql<'stmt> {
     /// The SQL query to execute
-    pub stmt: sql::Statement<'stmt>,
+    pub stmt: stmt::Statement<'stmt>,
 
     /// The type of each item in the returned stream
     ///

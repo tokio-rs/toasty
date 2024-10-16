@@ -42,7 +42,9 @@ impl<'stmt> Planner<'stmt> {
             }
             stmt::Returning::Expr(returning) => {
                 let mut stmt = returning.clone();
-                stmt.substitute(&model.lowering.table_to_model);
+                stmt.substitute(stmt::substitute::TableToModel(
+                    &model.lowering.table_to_model,
+                ));
                 project = eval::Expr::from_stmt(stmt)
             }
         }
@@ -85,7 +87,7 @@ impl<'stmt> Planner<'stmt> {
         for column_id in &model.lowering.columns {
             let column = table.column(column_id);
 
-            sql_project.push(stmt::Expr::project(*column_id));
+            sql_project.push(stmt::Expr::column(column));
             sql_ty.push(column.ty.clone());
         }
 

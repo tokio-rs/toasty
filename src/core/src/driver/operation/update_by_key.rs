@@ -11,13 +11,13 @@ pub struct UpdateByKey<'stmt> {
     pub keys: Vec<stmt::Value<'stmt>>,
 
     /// How to update the table
-    pub assignments: Vec<sql::Assignment<'stmt>>,
+    pub assignments: stmt::Assignments<'stmt>,
 
     /// Only update keys that match the filter
-    pub filter: Option<sql::Expr<'stmt>>,
+    pub filter: Option<stmt::Expr<'stmt>>,
 
     /// Any conditions that must hold to apply the update
-    pub condition: Option<sql::Expr<'stmt>>,
+    pub condition: Option<stmt::Expr<'stmt>>,
 
     /// If true, then the driver should return a record for each instance of the
     /// model that was updated.

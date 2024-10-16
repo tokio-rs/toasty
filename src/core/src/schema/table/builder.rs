@@ -409,8 +409,8 @@ impl<'a> ModelLoweringBuilder<'a> {
         model.lowering.model_pk_to_table = if self.model_pk_to_table.len() == 1 {
             let mut expr = self.model_pk_to_table.into_iter().next().unwrap();
 
-            // Lower the projection to trim off the front
-            expr.project_self(1);
+            debug_assert!(expr.is_field(), "expr={:#?}", expr);
+
             expr
         } else {
             stmt::ExprRecord::from_vec(self.model_pk_to_table).into()
@@ -482,15 +482,8 @@ impl<'a> ModelLoweringBuilder<'a> {
         let column_id = primitive.column;
         let column = self.table.column(column_id);
 
-        // Find the index in the lowering's column list
-        let i = self
-            .lowering_columns
-            .iter()
-            .position(|c| *c == column_id)
-            .unwrap();
-
         if column.ty == primitive.ty {
-            stmt::Expr::project(&[i])
+            stmt::Expr::column(column)
         } else {
             // Project the enum to the model
             let ty_enum = match &column.ty {
@@ -507,7 +500,7 @@ impl<'a> ModelLoweringBuilder<'a> {
                 })
                 .unwrap();
 
-            stmt::Expr::project(&[i, variant.discriminant])
+            stmt::Expr::project(column, &[variant.discriminant])
         }
     }
 }

@@ -77,10 +77,10 @@ impl<'db> SimplifyExpr<'db> {
             let mut subquery = query.clone();
 
             subquery.body.as_select_mut().returning =
-                stmt::Returning::Expr(stmt::Expr::project(fk_fields.target));
+                stmt::Returning::Expr(stmt::Expr::field(fk_fields.target));
 
             Some(stmt::Expr::in_subquery(
-                stmt::Expr::project(fk_fields.source),
+                stmt::Expr::field(fk_fields.source),
                 subquery,
             ))
         } else {
@@ -108,7 +108,7 @@ impl<'db> SimplifyExpr<'db> {
         let pair = has_one.pair(&self.schema);
 
         let expr = match &pair.foreign_key.fields[..] {
-            [fk_field] => stmt::Expr::project(&[fk_field.target]),
+            [fk_field] => stmt::Expr::field(fk_field.target),
             _ => todo!("composite"),
         };
 
@@ -117,7 +117,7 @@ impl<'db> SimplifyExpr<'db> {
         match &mut *subquery.body {
             stmt::ExprSet::Select(subquery) => {
                 subquery.returning = stmt::Returning::Expr(match &pair.foreign_key.fields[..] {
-                    [fk_field] => stmt::Expr::project(fk_field.source).into(),
+                    [fk_field] => stmt::Expr::field(fk_field.source),
                     _ => todo!("composite key"),
                 });
             }

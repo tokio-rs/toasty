@@ -27,12 +27,20 @@ pub trait VisitMut<'stmt>: Sized {
         visit_expr_binary_op_mut(self, i);
     }
 
+    fn visit_expr_column_mut(&mut self, i: &mut ExprColumn) {
+        visit_expr_column_mut(self, i);
+    }
+
     fn visit_expr_concat_mut(&mut self, i: &mut ExprConcat<'stmt>) {
         visit_expr_concat_mut(self, i);
     }
 
     fn visit_expr_enum_mut(&mut self, i: &mut ExprEnum<'stmt>) {
         visit_expr_enum_mut(self, i);
+    }
+
+    fn visit_expr_field_mut(&mut self, i: &mut ExprField) {
+        visit_expr_field_mut(self, i);
     }
 
     fn visit_expr_in_list_mut(&mut self, i: &mut ExprInList<'stmt>) {
@@ -81,10 +89,6 @@ pub trait VisitMut<'stmt>: Sized {
 
     fn visit_expr_project_mut(&mut self, i: &mut ExprProject<'stmt>) {
         visit_expr_project_mut(self, i);
-    }
-
-    fn visit_project_base_mut(&mut self, i: &mut ProjectBase<'stmt>) {
-        visit_project_base_mut(self, i);
     }
 
     fn visit_projection_mut(&mut self, i: &mut Projection) {
@@ -214,8 +218,10 @@ where
         Expr::And(expr) => v.visit_expr_and_mut(expr),
         Expr::Arg(expr) => v.visit_expr_arg_mut(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op_mut(expr),
+        Expr::Column(expr) => v.visit_expr_column_mut(expr),
         Expr::Concat(expr) => v.visit_expr_concat_mut(expr),
         Expr::Enum(expr) => v.visit_expr_enum_mut(expr),
+        Expr::Field(expr) => v.visit_expr_field_mut(expr),
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
         Expr::Or(expr) => v.visit_expr_or_mut(expr),
@@ -260,6 +266,12 @@ where
     v.visit_expr_mut(&mut node.rhs);
 }
 
+pub fn visit_expr_column_mut<'stmt, V>(v: &mut V, node: &mut ExprColumn)
+where
+    V: VisitMut<'stmt> + ?Sized,
+{
+}
+
 pub fn visit_expr_concat_mut<'stmt, V>(v: &mut V, node: &mut ExprConcat<'stmt>)
 where
     V: VisitMut<'stmt> + ?Sized,
@@ -274,6 +286,12 @@ where
     V: VisitMut<'stmt> + ?Sized,
 {
     v.visit_expr_record_mut(&mut node.fields);
+}
+
+pub fn visit_expr_field_mut<'stmt, V>(_v: &mut V, _node: &mut ExprField)
+where
+    V: VisitMut<'stmt> + ?Sized,
+{
 }
 
 pub fn visit_expr_in_list_mut<'stmt, V>(v: &mut V, node: &mut ExprInList<'stmt>)
@@ -374,18 +392,8 @@ pub fn visit_expr_project_mut<'stmt, V>(v: &mut V, node: &mut ExprProject<'stmt>
 where
     V: VisitMut<'stmt> + ?Sized,
 {
-    v.visit_project_base_mut(&mut node.base);
+    v.visit_expr_mut(&mut node.base);
     v.visit_projection_mut(&mut node.projection);
-}
-
-pub fn visit_project_base_mut<'stmt, V>(v: &mut V, node: &mut ProjectBase<'stmt>)
-where
-    V: VisitMut<'stmt> + ?Sized,
-{
-    match node {
-        ProjectBase::ExprSelf => {}
-        ProjectBase::Expr(e) => v.visit_expr_mut(e),
-    }
 }
 
 pub fn visit_projection_mut<'stmt, V>(v: &mut V, node: &mut Projection)

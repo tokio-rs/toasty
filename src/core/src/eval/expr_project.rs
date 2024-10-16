@@ -34,6 +34,7 @@ impl<'stmt> Expr<'stmt> {
 
 impl<'stmt> ExprProject<'stmt> {
     pub(crate) fn from_stmt(expr: stmt::ExprProject<'stmt>) -> ExprProject<'stmt> {
+        /*
         ExprProject {
             base: match expr.base {
                 stmt::ProjectBase::ExprSelf => ProjectBase::ExprSelf,
@@ -43,6 +44,8 @@ impl<'stmt> ExprProject<'stmt> {
             },
             projection: expr.projection.clone(),
         }
+        */
+        todo!()
     }
 
     pub const fn is_identity(&self) -> bool {

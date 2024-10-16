@@ -17,7 +17,7 @@ impl<'stmt> Planner<'stmt> {
 
         for lowering in &model.lowering.model_to_table {
             let mut lowering = lowering.clone();
-            lowering.substitute(&record);
+            lowering.substitute(stmt::substitute::ModelToTable(&record));
             lowered.push(sql::Expr::from_stmt(
                 &self.schema,
                 model.lowering.table,
@@ -48,7 +48,7 @@ impl<'stmt> Planner<'stmt> {
             match &field.ty {
                 FieldTy::Primitive(primitive) => {
                     let mut lowered = model.lowering.model_to_table[primitive.lowering].clone();
-                    lowered.substitute(&stmt.expr);
+                    lowered.substitute(stmt::substitute::ModelToTable(&stmt.expr));
 
                     assignments.push(sql::Assignment {
                         target: primitive.column,
@@ -130,7 +130,7 @@ impl<'stmt> Planner<'stmt> {
             assert_eq!(model.lowering.columns[column.id.index], column.id);
 
             operands.push(stmt::Expr::is_a(
-                stmt::ExprProject::from(column),
+                stmt::Expr::column(column),
                 stmt::ExprTy {
                     ty: column.ty.clone(),
                     variant: Some(expr_enum.variant),
@@ -177,7 +177,7 @@ impl<'stmt> Planner<'stmt> {
             };
 
             operands.push(stmt::Expr::is_a(
-                stmt::ExprProject::from(column),
+                stmt::Expr::column(column),
                 stmt::ExprTy {
                     ty: column.ty.clone(),
                     variant: Some(expr_enum.variant),
@@ -284,7 +284,9 @@ impl<'a, 'stmt> VisitMut<'stmt> for LowerExpr2<'a> {
         let stmt::Returning::Expr(returning) = &mut select.returning else {
             todo!()
         };
-        returning.substitute(&model.lowering.table_to_model);
+        returning.substitute(stmt::substitute::TableToModel(
+            &model.lowering.table_to_model,
+        ));
 
         // TODO: do the rest of the lowering...
     }
@@ -303,19 +305,7 @@ impl<'a> LowerExpr2<'a> {
             expr: &'a mut stmt::Expr<'stmt>,
         }
 
-        impl<'a, 'stmt> stmt::substitute::Input<'stmt> for Input<'a, 'stmt> {
-            fn resolve_self_projection(
-                &mut self,
-                projection: &stmt::Projection,
-            ) -> stmt::Expr<'stmt> {
-                assert_eq!(self.projection, projection);
-                std::mem::take(self.expr)
-            }
-
-            fn resolve_arg(&mut self, _expr_arg: &stmt::ExprArg) -> stmt::Expr<'stmt> {
-                todo!()
-            }
-        }
+        impl<'a, 'stmt> stmt::substitute::Input<'stmt> for Input<'a, 'stmt> {}
 
         // Find the referenced model field.
         let field = projection.resolve_field(self.schema, self.model);

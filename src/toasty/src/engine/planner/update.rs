@@ -156,7 +156,7 @@ impl<'stmt> Planner<'stmt> {
             match &field.ty {
                 FieldTy::Primitive(primitive) => {
                     let mut lowered = model.lowering.model_to_table[primitive.lowering].clone();
-                    lowered.substitute(&stmt.expr);
+                    lowered.substitute(stmt::substitute::ModelToTable(&stmt.expr));
 
                     columns.push(primitive.column);
                     projected.push(lowered);
