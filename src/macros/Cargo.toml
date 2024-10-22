@@ -1,0 +1,16 @@
+[package]
+name = "toasty-macros"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+toasty-codegen = { path = "../codegen" }
+toasty-core = { path = "../core" }
+
+proc-macro2 = "1.0.38"
+quote = "1.0.18"
+syn = { version = "1.0.93", features = ["parsing"] }

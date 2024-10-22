@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# Exit on error and unset variable usage, and print each command before
+# executing it
+set -euo pipefail
+
+# Define an array of directory components
+directories=(
+    "hello-toasty"
+    "composite-key"
+    "cratehub"
+    "user-has-one-profile"
+)
+
+export RUST_BACKTRACE=1
+
+# Function to check if a directory exists
+check_directory_exists() {
+    if [ ! -d "examples/$1" ]; then
+        echo "Directory examples/$1 does not exist." >&2
+        exit 1
+    fi
+}
+
+# Ensure all directories exist
+for dir in "${directories[@]}"; do
+    check_directory_exists "$dir"
+done
+
+# Main loop to execute the command for each directory
+for dir in "${directories[@]}"; do
+    cargo +nightly run -p toasty-cli -- gen --schema "examples/$dir/schema.toasty" "examples/$dir/src/db"
+    cargo +nightly check -p example-$dir
+done

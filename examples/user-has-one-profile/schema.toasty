@@ -1,0 +1,21 @@
+model User {
+    #[key]
+    #[auto]
+    id: Id,
+
+    name: String,
+
+    profile: Option<Profile>,
+}
+
+model Profile {
+    #[key]
+    #[auto]
+    id: Id,
+
+    #[relation(key = user_id, references = id)]
+    user: Option<User>,
+
+    #[unique]
+    user_id: Option<Id<User>>,
+}

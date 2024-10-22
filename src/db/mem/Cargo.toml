@@ -1,0 +1,8 @@
+[package]
+name = "toasty-mem"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+toasty-driver = { path = "../../driver" }

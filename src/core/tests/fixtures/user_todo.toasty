@@ -1,0 +1,10 @@
+
+model User {
+    name: string;
+    todos: [Todo];
+}
+
+model Todo {
+    title: string;
+    user: User;
+}

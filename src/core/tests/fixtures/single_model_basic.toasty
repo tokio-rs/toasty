@@ -1,0 +1,4 @@
+
+model User {
+    name: string;
+}

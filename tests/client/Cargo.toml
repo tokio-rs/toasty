@@ -1,0 +1,26 @@
+[package]
+name = "tests-client"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+toasty = { path = "../../src/toasty" }
+toasty-core = { path = "../../src/core" }
+toasty-macros = { path = "../../src/macros" }
+
+# Drivers
+toasty-sqlite = { path = "../../src/db/sqlite" }
+toasty-dynamodb = { path = "../../src/db/ddb" }
+
+# Utilities
+std-util = { path = "../../src/std-util" }
+trybuild = { version = "1.0.89", features = ["diff"] }
+
+[dev-dependencies]
+
+# Tokio
+tokio = { version = "1.18", features = ["full"] }
