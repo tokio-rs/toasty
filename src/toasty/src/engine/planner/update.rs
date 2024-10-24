@@ -196,9 +196,7 @@ impl<'stmt> Planner<'stmt> {
             debug_assert_eq!(
                 projected.len(),
                 columns.len(),
-                "projected={:?}; columns={:?}",
-                projected,
-                columns
+                "projected={projected:?}; columns={columns:?}"
             );
 
             let output = if stmt.returning {

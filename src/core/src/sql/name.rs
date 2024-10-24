@@ -19,7 +19,7 @@ impl fmt::Display for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut s = "";
         for ident in &self.0 {
-            write!(f, "{}{}", s, ident)?;
+            write!(f, "{s}{ident}")?;
             s = ", ";
         }
 

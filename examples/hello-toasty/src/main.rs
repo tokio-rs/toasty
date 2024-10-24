@@ -13,7 +13,7 @@ async fn main() {
         .join("../schema.toasty");
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
-    println!("{:#?}", schema);
+    println!("{schema:#?}");
 
     // Use the in-memory toasty driver
     // let driver = Sqlite::new();
@@ -42,12 +42,12 @@ async fn main() {
     // Find by ID
     println!("==> let user = User::find_by_id(&u1.id)");
     let user = User::find_by_id(&u1.id).get(&db).await.unwrap();
-    println!("USER = {:#?}", user);
+    println!("USER = {user:#?}");
 
     // Find by email!
     println!("==> let user = User::find_by_email(&u1.email)");
     let mut user = User::find_by_email(&u1.email).get(&db).await.unwrap();
-    println!("USER = {:#?}", user);
+    println!("USER = {user:#?}");
 
     assert!(User::create()
         .name("John Dos")
@@ -65,7 +65,7 @@ async fn main() {
 
     // Load the user again
     let user = User::find_by_id(&u2.id).get(&db).await.unwrap();
-    println!("  reloaded -> {:#?}", user);
+    println!("  reloaded -> {user:#?}");
 
     println!(" ~~~~~~~~~~~ CREATE TODOs ~~~~~~~~~~~~");
 
@@ -79,13 +79,13 @@ async fn main() {
         .await
         .unwrap();
 
-    println!("CREATED = {:#?}", todo);
+    println!("CREATED = {todo:#?}");
 
     let mut todos = u2.todos().all(&db).await.unwrap();
 
     while let Some(todo) = todos.next().await {
         let todo = todo.unwrap();
-        println!("TODO = {:#?}", todo);
+        println!("TODO = {todo:#?}");
         println!("-> user {:?}", todo.user().find(&db).await.unwrap());
     }
 

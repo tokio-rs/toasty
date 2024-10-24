@@ -52,8 +52,7 @@ impl<'a, M: Model> Cursor<'a, M> {
 
             if record.len() != expect_num_columns {
                 panic!(
-                    "expected row to have {} columns; {:#?}",
-                    expect_num_columns, record
+                    "expected row to have {expect_num_columns} columns; {record:#?}"
                 );
             }
         }

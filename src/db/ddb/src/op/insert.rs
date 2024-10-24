@@ -113,7 +113,7 @@ impl DynamoDB {
 
                         if condition_expression.is_empty() {
                             let name = format!("#{}", column.id.index);
-                            condition_expression = format!("attribute_not_exists({})", name);
+                            condition_expression = format!("attribute_not_exists({name})");
                             expression_names.insert(name, column.name.clone());
                         }
                     }

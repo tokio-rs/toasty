@@ -17,8 +17,8 @@ async fn batch_get_by_key(s: impl Setup) {
 
     for i in 0..5 {
         let foo = db::Foo::create()
-            .one(format!("foo-{}", i))
-            .two(format!("bar-{}", i))
+            .one(format!("foo-{i}"))
+            .two(format!("bar-{i}"))
             .exec(&db)
             .await
             .unwrap();

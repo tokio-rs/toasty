@@ -93,7 +93,7 @@ impl Verify<'_> {
     fn verify_indices_have_columns(&self) {
         for table in &self.schema.tables {
             for index in &table.indices {
-                assert!(!index.columns.is_empty(), "TABLE={:#?}", table);
+                assert!(!index.columns.is_empty(), "TABLE={table:#?}");
             }
         }
     }

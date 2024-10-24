@@ -105,15 +105,14 @@ impl<'stmt> Input<'stmt> for &Value<'stmt> {
     }
 
     fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Value<'stmt> {
-        panic!("no argument source provided; expr_arg={:#?}", expr_arg)
+        panic!("no argument source provided; expr_arg={expr_arg:#?}")
     }
 }
 
 impl<'stmt> Input<'stmt> for Args<&[Value<'stmt>]> {
     fn resolve_self_projection(&mut self, projection: &Projection) -> Value<'stmt> {
         panic!(
-            "no `expr_self` provided; input={:#?}; projection={:#?}",
-            self, projection
+            "no `expr_self` provided; input={self:#?}; projection={projection:#?}"
         );
     }
 

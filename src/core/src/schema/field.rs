@@ -134,7 +134,7 @@ impl FieldTy {
     pub fn expect_primitive(&self) -> &FieldPrimitive {
         match self {
             Self::Primitive(simple) => simple,
-            _ => panic!("expected simple field, but was {:?}", self),
+            _ => panic!("expected simple field, but was {self:?}"),
         }
     }
 
@@ -142,7 +142,7 @@ impl FieldTy {
     pub fn expect_primitive_mut(&mut self) -> &mut FieldPrimitive {
         match self {
             Self::Primitive(simple) => simple,
-            _ => panic!("expected simple field, but was {:?}", self),
+            _ => panic!("expected simple field, but was {self:?}"),
         }
     }
 
@@ -168,7 +168,7 @@ impl FieldTy {
     pub fn expect_has_many(&self) -> &HasMany {
         match self {
             Self::HasMany(has_many) => has_many,
-            _ => panic!("expected field to be `HasMany`, but was {:?}", self),
+            _ => panic!("expected field to be `HasMany`, but was {self:?}"),
         }
     }
 
@@ -176,7 +176,7 @@ impl FieldTy {
     pub fn expect_has_many_mut(&mut self) -> &mut HasMany {
         match self {
             Self::HasMany(has_many) => has_many,
-            _ => panic!("expected field to be `HasMany`, but was {:?}", self),
+            _ => panic!("expected field to be `HasMany`, but was {self:?}"),
         }
     }
 
@@ -195,7 +195,7 @@ impl FieldTy {
     pub fn expect_has_one(&self) -> &HasOne {
         match self {
             Self::HasOne(has_one) => has_one,
-            _ => panic!("expected field to be `HasOne`, but it was {:?}", self),
+            _ => panic!("expected field to be `HasOne`, but it was {self:?}"),
         }
     }
 
@@ -203,7 +203,7 @@ impl FieldTy {
     pub fn expect_has_one_mut(&mut self) -> &mut HasOne {
         match self {
             Self::HasOne(has_one) => has_one,
-            _ => panic!("expected field to be `HasOne`, but it was {:?}", self),
+            _ => panic!("expected field to be `HasOne`, but it was {self:?}"),
         }
     }
 
@@ -222,7 +222,7 @@ impl FieldTy {
     pub fn expect_belongs_to(&self) -> &BelongsTo {
         match self {
             Self::BelongsTo(belongs_to) => belongs_to,
-            _ => panic!("expected field to be `BelongsTo`, but was {:?}", self),
+            _ => panic!("expected field to be `BelongsTo`, but was {self:?}"),
         }
     }
 
@@ -230,7 +230,7 @@ impl FieldTy {
     pub fn expect_belongs_to_mut(&mut self) -> &mut BelongsTo {
         match self {
             Self::BelongsTo(belongs_to) => belongs_to,
-            _ => panic!("expected field to be `BelongsTo`, but was {:?}", self),
+            _ => panic!("expected field to be `BelongsTo`, but was {self:?}"),
         }
     }
 }

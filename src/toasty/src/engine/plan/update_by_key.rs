@@ -26,7 +26,7 @@ pub(crate) struct UpdateByKey<'stmt> {
 
 impl<'stmt> UpdateByKey<'stmt> {
     pub(crate) fn apply(&self) -> Result<operation::UpdateByKey<'stmt>> {
-        debug_assert!(!self.assignments.is_empty(), "plan = {:#?}", self);
+        debug_assert!(!self.assignments.is_empty(), "plan = {self:#?}");
 
         let keys = match self.key.eval_const() {
             stmt::Value::List(keys) => keys,
@@ -47,7 +47,7 @@ impl<'stmt> UpdateByKey<'stmt> {
         &self,
         mut input: ValueStream<'stmt>,
     ) -> Result<operation::UpdateByKey<'stmt>> {
-        debug_assert!(!self.assignments.is_empty(), "plan = {:#?}", self);
+        debug_assert!(!self.assignments.is_empty(), "plan = {self:#?}");
 
         let mut keys = vec![];
 

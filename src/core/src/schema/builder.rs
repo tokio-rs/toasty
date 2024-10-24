@@ -283,8 +283,7 @@ impl Builder {
         assert_eq!(
             attr.key.len(),
             attr.references.len(),
-            "unbalanced relation attribute {:#?}",
-            attr
+            "unbalanced relation attribute {attr:#?}"
         );
 
         let target = &self.models[target.0];

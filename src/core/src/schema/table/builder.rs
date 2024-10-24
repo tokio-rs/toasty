@@ -113,7 +113,7 @@ impl<'a> LowerModels<'a> {
             };
 
             if let Some(column) = self.table.columns.get_mut(i) {
-                column.name = format!("key_{}", i);
+                column.name = format!("key_{i}");
 
                 match &mut column.ty {
                     stmt::Type::Enum(ty_enum) => {
@@ -165,7 +165,7 @@ impl<'a> LowerModels<'a> {
                     .fields
                     .get(i)
                     .map(|field_id| model.field(field_id).name.clone())
-                    .unwrap_or_else(|| format!("key_{}", i));
+                    .unwrap_or_else(|| format!("key_{i}"));
 
                 // If unit type, go straight to enum
                 //
@@ -287,7 +287,7 @@ impl<'a> LowerModels<'a> {
         nullable: bool,
     ) {
         let name = if let Some(prefix) = prefix {
-            format!("{}__{}", prefix, name)
+            format!("{prefix}__{name}")
         } else {
             name.to_string()
         };

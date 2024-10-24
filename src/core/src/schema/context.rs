@@ -62,7 +62,7 @@ impl Context {
                 self.model_lookup
                     .get(ident)
                     .copied()
-                    .unwrap_or_else(|| panic!("no model named `{}`", ident)),
+                    .unwrap_or_else(|| panic!("no model named `{ident}`")),
             ),
         };
 
