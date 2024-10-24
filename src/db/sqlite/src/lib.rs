@@ -145,7 +145,7 @@ impl Driver for Sqlite {
 }
 
 impl Sqlite {
-    fn create_table(&self, schema: &Schema, table: &schema::Table) {
+    fn create_table(&self, schema: &Schema, table: &schema::Table) -> Result<()> {
         let connection = self.connection.lock().unwrap();
 
         let mut params = vec![];
@@ -153,7 +153,7 @@ impl Sqlite {
         assert!(params.is_empty());
 
         println!("{}", stmt);
-        connection.execute(&stmt, []).unwrap();
+        connection.execute(&stmt, [])?;
 
         // Create any indices
         for index in &table.indices {
@@ -165,8 +165,9 @@ impl Sqlite {
             let stmt = sql::Statement::create_index(index).to_sql_string(schema, &mut params);
             assert!(params.is_empty());
 
-            connection.execute(&stmt, []).unwrap();
+            connection.execute(&stmt, [])?;
         }
+        Ok(())
     }
 }
 
