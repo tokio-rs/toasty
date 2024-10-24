@@ -18,7 +18,7 @@ impl Verify<'_> {
     fn verify(&self) {
         debug_assert!(self.verify_ids_populated());
 
-        for model in &self.schema.models {
+        for model in &self.schema.inner.models {
             for field in &model.fields {
                 self.verify_relations_are_indexed(field);
             }
@@ -34,7 +34,7 @@ impl Verify<'_> {
     // TODO: move these methods to separate modules?
 
     fn verify_ids_populated(&self) -> bool {
-        for model in &self.schema.models {
+        for model in &self.schema.inner.models {
             assert_ne!(model.id, ModelId::placeholder());
             assert_ne!(model.lowering.table, TableId::placeholder());
 
@@ -59,7 +59,7 @@ impl Verify<'_> {
             }
         }
 
-        for table in &self.schema.tables {
+        for table in &self.schema.inner.tables {
             assert_ne!(table.primary_key.index, IndexId::placeholder());
             assert!(!table.primary_key.columns.is_empty());
 
@@ -74,7 +74,7 @@ impl Verify<'_> {
     }
 
     fn verify_model_indices_are_scoped_correctly(&self) {
-        for model in &self.schema.models {
+        for model in &self.schema.inner.models {
             for index in &model.indices {
                 let mut seen_local = false;
 
@@ -91,7 +91,7 @@ impl Verify<'_> {
     }
 
     fn verify_indices_have_columns(&self) {
-        for table in &self.schema.tables {
+        for table in &self.schema.inner.tables {
             for index in &table.indices {
                 assert!(!index.columns.is_empty(), "TABLE={table:#?}");
             }
@@ -101,7 +101,7 @@ impl Verify<'_> {
     fn verify_index_names_are_unique(&self) -> Result<()> {
         let mut names = HashSet::new();
 
-        for table in &self.schema.tables {
+        for table in &self.schema.inner.tables {
             for index in &table.indices {
                 if !names.insert(&index.name) {
                     anyhow::bail!("duplicate index name `{}`", index.name);
@@ -116,7 +116,7 @@ impl Verify<'_> {
         if false {
             let mut names = HashSet::new();
 
-            for query in &self.schema.queries {
+            for query in &self.schema.inner.queries {
                 if !names.insert(&query.full_name) {
                     anyhow::bail!("duplicate query name `{}`", query.full_name);
                 }
@@ -127,7 +127,7 @@ impl Verify<'_> {
     }
 
     fn verify_table_indices_and_nullable(&self) {
-        for table in &self.schema.tables {
+        for table in &self.schema.inner.tables {
             for index in &table.indices {
                 let nullable = index
                     .columns

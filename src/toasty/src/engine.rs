@@ -15,7 +15,7 @@ use toasty_core::{
     Schema,
 };
 
-pub(crate) async fn exec<'a>(db: &'a Db, stmt: Statement<'a>) -> Result<ValueStream<'a>> {
+pub(crate) async fn exec<'stmt>(db: &Db, stmt: Statement<'stmt>) -> Result<ValueStream<'stmt>> {
     if cfg!(debug_assertions) {
         verify::apply(&db.schema, &stmt);
     }

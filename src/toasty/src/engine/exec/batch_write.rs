@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'stmt> Exec<'stmt> {
+impl<'stmt> Exec<'_, 'stmt> {
     pub(super) async fn exec_batch_write(
         &mut self,
         action: &plan::BatchWrite<'stmt>,

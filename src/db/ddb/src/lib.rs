@@ -72,16 +72,16 @@ impl Driver for DynamoDB {
         Ok(())
     }
 
-    async fn exec<'a>(
+    async fn exec<'stmt>(
         &self,
-        schema: &'a Schema,
-        op: Operation<'a>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        schema: &Schema,
+        op: Operation<'stmt>,
+    ) -> Result<stmt::ValueStream<'stmt>> {
         self.exec2(schema, op).await
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
-        for table in &schema.tables {
+        for table in schema.tables() {
             self.create_table(schema, table, true).await?;
         }
 
@@ -90,11 +90,11 @@ impl Driver for DynamoDB {
 }
 
 impl DynamoDB {
-    async fn exec2<'a>(
+    async fn exec2<'stmt>(
         &self,
-        schema: &'a Schema,
-        op: Operation<'a>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        schema: &Schema,
+        op: Operation<'stmt>,
+    ) -> Result<stmt::ValueStream<'stmt>> {
         use Operation::*;
 
         match op {
@@ -258,10 +258,10 @@ fn ddb_key_schema(
     ks
 }
 
-fn item_to_record<'a>(
+fn item_to_record<'a, 'stmt>(
     item: &HashMap<String, AttributeValue>,
     columns: impl Iterator<Item = &'a schema::Column>,
-) -> Result<stmt::Record<'a>> {
+) -> Result<stmt::Record<'stmt>> {
     Ok(stmt::Record::from_vec(
         columns
             .map(|column| {

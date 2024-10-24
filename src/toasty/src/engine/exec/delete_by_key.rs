@@ -1,9 +1,9 @@
 use super::*;
 
-impl<'a> Exec<'a> {
+impl<'stmt> Exec<'_, 'stmt> {
     pub(super) async fn exec_delete_by_key(
         &mut self,
-        action: &plan::DeleteByKey<'a>,
+        action: &plan::DeleteByKey<'stmt>,
     ) -> Result<()> {
         let keys = self
             .collect_keys_from_input(&action.keys, &action.input)

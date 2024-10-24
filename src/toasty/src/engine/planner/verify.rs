@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'stmt> Planner<'stmt> {
+impl<'stmt> Planner<'_, 'stmt> {
     pub(super) fn verify_action(&self, action: &plan::Action<'stmt>) {
         use plan::Action::*;
 

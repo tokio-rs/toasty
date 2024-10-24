@@ -15,20 +15,20 @@ use crate::{driver::operation, engine::*, Result};
 
 use toasty_core::{sql, stmt};
 
-struct Exec<'stmt> {
-    db: &'stmt Db,
+struct Exec<'a, 'stmt> {
+    db: &'a Db,
     vars: VarStore<'stmt>,
 }
 
 pub(crate) async fn exec<'stmt>(
-    db: &'stmt Db,
+    db: &Db,
     pipeline: &plan::Pipeline<'stmt>,
     vars: VarStore<'stmt>,
 ) -> Result<ValueStream<'stmt>> {
     Exec { db, vars }.exec_pipeline(pipeline).await
 }
 
-impl<'stmt> Exec<'stmt> {
+impl<'a, 'stmt> Exec<'a, 'stmt> {
     async fn exec_pipeline(
         &mut self,
         pipeline: &plan::Pipeline<'stmt>,

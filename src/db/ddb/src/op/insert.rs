@@ -1,11 +1,11 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_insert<'a>(
+    pub(crate) async fn exec_insert<'stmt>(
         &self,
-        schema: &'a schema::Schema,
-        insert: sql::Insert<'a>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        schema: &schema::Schema,
+        insert: sql::Insert<'stmt>,
+    ) -> Result<stmt::ValueStream<'stmt>> {
         let table = &schema.table(insert.table);
 
         let unique_indices = table

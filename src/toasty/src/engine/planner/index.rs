@@ -11,7 +11,7 @@ use std::collections::hash_map;
 
  */
 
-impl<'stmt> Planner<'stmt> {
+impl<'stmt> Planner<'_, 'stmt> {
     pub(crate) fn plan_index_path2<'a>(
         &mut self,
         model: &'a Model,

@@ -5,6 +5,8 @@ use toasty::Db;
 // use toasty_sqlite::Sqlite;
 use toasty_dynamodb::DynamoDB;
 
+fn assert_sync_send<T: Send>(_: T) {}
+
 #[tokio::main]
 async fn main() {
     let schema_file = std::path::Path::new(file!())
@@ -22,6 +24,8 @@ async fn main() {
     let db = Db::new(schema, driver).await;
     // For now, reset!s
     db.reset_db().await.unwrap();
+
+    assert_sync_send(db::User::find_by_email("hello").first(&db));
 
     println!("==> let u1 = User::create()");
     let u1 = User::create()

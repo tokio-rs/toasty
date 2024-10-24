@@ -1,7 +1,7 @@
 use super::*;
 
-impl<'a> Exec<'a> {
-    pub(super) async fn exec_query_sql(&mut self, action: &plan::QuerySql<'a>) -> Result<()> {
+impl<'stmt> Exec<'_, 'stmt> {
+    pub(super) async fn exec_query_sql(&mut self, action: &plan::QuerySql<'stmt>) -> Result<()> {
         let mut sql = action.sql.clone();
 
         if !action.input.is_empty() {

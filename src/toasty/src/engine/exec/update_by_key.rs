@@ -1,9 +1,9 @@
 use super::*;
 
-impl<'a> Exec<'a> {
+impl<'stmt> Exec<'_, 'stmt> {
     pub(super) async fn exec_update_by_key(
         &mut self,
-        action: &plan::UpdateByKey<'a>,
+        action: &plan::UpdateByKey<'stmt>,
     ) -> Result<()> {
         let op = if let Some(input) = action.input {
             let mut input = self.vars.load(input);

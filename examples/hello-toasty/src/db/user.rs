@@ -88,13 +88,13 @@ impl<'a> Query<'a> {
         Query { stmt }
     }
     pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, User>> {
-        db.all(self).await
+        db.all(self.stmt).await
     }
     pub async fn first(self, db: &Db) -> Result<Option<User>> {
-        db.first(self).await
+        db.first(self.stmt).await
     }
     pub async fn get(self, db: &Db) -> Result<User> {
-        db.get(self).await
+        db.get(self.stmt).await
     }
     pub fn update(self) -> UpdateQuery<'a> {
         UpdateQuery::from(self)
@@ -493,13 +493,13 @@ pub mod relation {
                 self,
                 db: &'a Db,
             ) -> Result<Cursor<'a, super::super::super::todo::Todo>> {
-                db.all(self).await
+                db.all(self.stmt).await
             }
             pub async fn first(self, db: &Db) -> Result<Option<super::super::super::todo::Todo>> {
-                db.first(self).await
+                db.first(self.stmt).await
             }
             pub async fn get(self, db: &Db) -> Result<super::super::super::todo::Todo> {
-                db.get(self).await
+                db.get(self.stmt).await
             }
             pub fn update(self) -> super::super::super::todo::UpdateQuery<'a> {
                 super::super::super::todo::UpdateQuery::from(self.stmt)
