@@ -35,6 +35,13 @@ pub struct DynamoDB {
 }
 
 impl DynamoDB {
+    pub fn new(client: Client, table_prefix: Option<String>) -> DynamoDB {
+        DynamoDB {
+            client,
+            table_prefix,
+        }
+    }
+
     pub async fn from_env() -> Result<DynamoDB> {
         use aws_config::BehaviorVersion;
         use aws_sdk_dynamodb::config::Credentials;

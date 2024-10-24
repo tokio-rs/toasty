@@ -5,7 +5,7 @@ use toasty_core::{
 
 use anyhow::Result;
 use rusqlite::Connection;
-use std::sync::Mutex;
+use std::{path::Path, sync::Mutex};
 
 #[derive(Debug)]
 pub struct Sqlite {
@@ -19,6 +19,14 @@ impl Sqlite {
         Sqlite {
             connection: Mutex::new(connection),
         }
+    }
+
+    pub fn new_with_file<P: AsRef<Path>>(path: P) -> Result<Sqlite> {
+        let connection = Connection::open(path)?;
+        let sqlite = Sqlite {
+            connection: Mutex::new(connection),
+        };
+        Ok(sqlite)
     }
 }
 
