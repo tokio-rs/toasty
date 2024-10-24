@@ -111,9 +111,7 @@ impl<'stmt> Input<'stmt> for &Value<'stmt> {
 
 impl<'stmt> Input<'stmt> for Args<&[Value<'stmt>]> {
     fn resolve_self_projection(&mut self, projection: &Projection) -> Value<'stmt> {
-        panic!(
-            "no `expr_self` provided; input={self:#?}; projection={projection:#?}"
-        );
+        panic!("no `expr_self` provided; input={self:#?}; projection={projection:#?}");
     }
 
     fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Value<'stmt> {

@@ -51,9 +51,7 @@ impl<'a, M: Model> Cursor<'a, M> {
             let expect_num_columns = self.schema.model(M::ID).fields.len();
 
             if record.len() != expect_num_columns {
-                panic!(
-                    "expected row to have {expect_num_columns} columns; {record:#?}"
-                );
+                panic!("expected row to have {expect_num_columns} columns; {record:#?}");
             }
         }
     }
