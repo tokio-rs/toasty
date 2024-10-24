@@ -9,6 +9,7 @@ anyhow = "1"
 async-trait = "0.1"
 std-util = { path = "../std-util" }
 tokio-stream = { version = "0.1.12", default-features = false }
+tracing = "0.1.40"
 
 [dev-dependencies]
 pretty_assertions = "1.2"

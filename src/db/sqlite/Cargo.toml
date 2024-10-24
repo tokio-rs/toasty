@@ -9,6 +9,7 @@ toasty-core = { path = "../../core" }
 
 anyhow = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
+tracing = "0.1.40"
 
 # TODO: get rid of
 serde = { version = "1.0.196", features = ["derive"] }

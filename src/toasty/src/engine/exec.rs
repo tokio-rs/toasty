@@ -14,6 +14,7 @@ pub(crate) use var_store::VarStore;
 use crate::{driver::operation, engine::*, Result};
 
 use toasty_core::{sql, stmt};
+use tracing::debug;
 
 struct Exec<'stmt> {
     db: &'stmt Db,
@@ -45,7 +46,7 @@ impl<'stmt> Exec<'stmt> {
     }
 
     async fn exec_step(&mut self, action: &Action<'stmt>) -> Result<()> {
-        println!("EXEC = {:#?}", action);
+        debug!("EXEC = {:#?}", action);
 
         match action {
             Action::Associate(action) => self.exec_associate(action).await,

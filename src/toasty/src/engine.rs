@@ -8,7 +8,7 @@ mod planner;
 mod verify;
 
 use crate::{Db, Result};
-
+use tracing::debug;
 use toasty_core::{
     eval, sql,
     stmt::{self, Statement, ValueStream},
@@ -23,7 +23,7 @@ pub(crate) async fn exec<'a>(db: &'a Db, stmt: Statement<'a>) -> Result<ValueStr
     // Translate the optimized statement into a series of driver operations.
     let plan = planner::apply(db.driver.capability(), &db.schema, stmt);
 
-    dbg!("PLAN = {:#?}", plan);
+    debug!("PLAN = {:#?}", plan);
 
     // The plan is called once (single entry record stream) with no arguments
     // (empty record).

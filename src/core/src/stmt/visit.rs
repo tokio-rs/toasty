@@ -1,6 +1,7 @@
 #![allow(unused_variables)]
 
 use super::*;
+use tracing::debug;
 
 pub trait Visit<'stmt>: Sized {
     fn visit<N: Node<'stmt>>(&mut self, i: &N) {
@@ -493,7 +494,7 @@ where
 {
     match node {
         Value::Record(node) => v.visit_value_record(node),
-        _ => println!("TODO! implement visit value type {:#?}", node),
+        _ => debug!("TODO! implement visit value type {:#?}", node),
     }
 }
 

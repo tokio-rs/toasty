@@ -1,4 +1,5 @@
 use super::*;
+use tracing::debug;
 
 #[derive(Debug, Default)]
 pub(super) struct Context<'stmt> {
@@ -15,7 +16,7 @@ impl<'stmt> Planner<'stmt> {
     }
 
     fn plan_select2(&mut self, cx: &Context<'stmt>, mut stmt: stmt::Query<'stmt>) -> plan::VarId {
-        println!("+ plan_select; {:#?}", stmt);
+        debug!("+ plan_select; {:#?}", stmt);
         self.simplify_stmt_query(&mut stmt);
         self.plan_simplified_select(cx, &stmt)
     }
@@ -27,7 +28,7 @@ impl<'stmt> Planner<'stmt> {
     ) -> plan::VarId {
         let stmt = stmt.body.as_select();
 
-        println!(" + plan_simplified_select; {:#?}", stmt);
+        debug!(" + plan_simplified_select; {:#?}", stmt);
 
         let source_model = stmt.source.as_model();
         let model = self.schema.model(source_model.model);
@@ -134,7 +135,7 @@ impl<'stmt> Planner<'stmt> {
         }
 
         if index_plan.index.primary_key {
-            println!("index_filter={:#?}", index_filter);
+            debug!("index_filter={:#?}", index_filter);
             // Is the index filter a set of keys
             if let Some(keys) = self.try_build_key_filter(index, &index_filter) {
                 assert!(index_plan.post_filter.is_none());
@@ -158,7 +159,7 @@ impl<'stmt> Planner<'stmt> {
 
                 let output = self.var_table.register_var();
 
-                println!(
+                debug!(
                     "===>>>> index_filter={:#?}; converted={:#?}",
                     index_filter,
                     sql::Expr::from_stmt(self.schema, table.id, index_filter.clone())

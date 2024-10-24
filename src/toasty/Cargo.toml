@@ -16,3 +16,4 @@ tokio-stream = { version = "0.1.12", default-features = false }
 uuid = { version = "1.3.0", features = ["v4", "fast-rng"] }
 indexmap = "2.1.0"
 by_address = "1.2.1"
+tracing = "0.1.40"

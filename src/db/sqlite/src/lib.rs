@@ -6,6 +6,7 @@ use toasty_core::{
 use anyhow::Result;
 use rusqlite::Connection;
 use std::sync::Mutex;
+use tracing::debug;
 
 #[derive(Debug)]
 pub struct Sqlite {
@@ -39,7 +40,7 @@ impl Driver for Sqlite {
     ) -> Result<stmt::ValueStream<'a>> {
         use Operation::*;
 
-        println!("op={:#?}", op);
+        debug!("op={:#?}", op);
 
         let connection = self.connection.lock().unwrap();
 
@@ -61,7 +62,7 @@ impl Driver for Sqlite {
         let mut params = vec![];
         let sql_str = sql.to_sql_string(schema, &mut params);
 
-        println!("{} {:#?}", sql_str, params);
+        debug!("{} {:#?}", sql_str, params);
 
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
@@ -78,7 +79,7 @@ impl Driver for Sqlite {
                     ))
                     .unwrap();
 
-                println!("sqlite; rows={}", ret);
+                debug!("sqlite; rows={}", ret);
 
                 return Ok(stmt::ValueStream::new());
             }
