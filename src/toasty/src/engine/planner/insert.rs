@@ -10,7 +10,6 @@ struct ApplyInsertScope<'a, 'stmt> {
 impl<'stmt> Planner<'stmt> {
     pub(super) fn plan_insert(&mut self, mut stmt: stmt::Insert<'stmt>) -> Option<plan::VarId> {
         self.simplify_stmt_insert(&mut stmt);
-        println!("plan_insert(simplified) = {:#?}", stmt);
 
         let model = self.model(stmt.scope.body.as_select().source.as_model_id());
 

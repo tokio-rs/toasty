@@ -45,8 +45,6 @@ impl<'stmt> Exec<'stmt> {
     }
 
     async fn exec_step(&mut self, action: &Action<'stmt>) -> Result<()> {
-        println!("EXEC = {:#?}", action);
-
         match action {
             Action::Associate(action) => self.exec_associate(action).await,
             Action::BatchWrite(action) => self.exec_batch_write(action).await,

@@ -6,7 +6,6 @@ impl<'stmt> Planner<'stmt> {
 
         // TODO: this should be heavily optimized to avoid multiple queries if
         // possible...
-        println!("plan_link = {:#?}", stmt);
 
         // TODO: implement this for SQL
         self.plan_link_kv(stmt);

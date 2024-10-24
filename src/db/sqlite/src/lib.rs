@@ -47,8 +47,6 @@ impl Driver for Sqlite {
     ) -> Result<stmt::ValueStream<'a>> {
         use Operation::*;
 
-        println!("op={:#?}", op);
-
         let connection = self.connection.lock().unwrap();
 
         let sql;
@@ -69,8 +67,6 @@ impl Driver for Sqlite {
         let mut params = vec![];
         let sql_str = sql.to_sql_string(schema, &mut params);
 
-        println!("{} {:#?}", sql_str, params);
-
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
         if ty.is_none() {
@@ -85,8 +81,6 @@ impl Driver for Sqlite {
                         params.iter().map(value_from_param),
                     ))
                     .unwrap();
-
-                println!("sqlite; rows={}", ret);
 
                 return Ok(stmt::ValueStream::new());
             }
@@ -160,7 +154,6 @@ impl Sqlite {
         let stmt = sql::Statement::create_table(table).to_sql_string(schema, &mut params);
         assert!(params.is_empty());
 
-        println!("{}", stmt);
         connection.execute(&stmt, [])?;
 
         // Create any indices

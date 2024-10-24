@@ -106,7 +106,6 @@ impl DynamoDB {
                         .await;
 
                     if let Err(SdkError::ServiceError(e)) = res {
-                        println!("err={:#?}", e);
                         if let UpdateItemError::ConditionalCheckFailedException(_e) = e.err() {
                             /*
                             let record =

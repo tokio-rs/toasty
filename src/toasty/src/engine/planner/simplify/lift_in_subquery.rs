@@ -19,7 +19,6 @@ impl<'db> SimplifyExpr<'db> {
         let projection = match expr {
             stmt::Expr::Project(expr_project) => &expr_project.projection,
             _ => {
-                println!("+ lift_in_subquery -- not a path; expr={:#?}", expr);
                 return None;
             }
         };
@@ -35,10 +34,6 @@ impl<'db> SimplifyExpr<'db> {
             FieldTy::BelongsTo(belongs_to) => self.lift_belongs_to_in_subquery(belongs_to, query),
             FieldTy::HasOne(has_one) => self.lift_has_one_in_subquery(has_one, query),
             _ => {
-                println!(
-                    "+ lift_in_subquery; not belongs_to or has_one; ty={:#?}",
-                    field.ty
-                );
                 return None;
             }
         }

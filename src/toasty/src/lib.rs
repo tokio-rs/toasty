@@ -1,6 +1,3 @@
-#[macro_use]
-mod macros;
-
 mod batch;
 pub use batch::CreateMany;
 

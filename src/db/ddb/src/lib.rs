@@ -1,11 +1,3 @@
-macro_rules! dbg {
-    ( $( $t:tt )* ) => {{
-        if cfg!(debug_assertions) {
-            eprintln!( $($t)* )
-        }
-    }}
-}
-
 mod op;
 
 use toasty_core::{
@@ -104,8 +96,6 @@ impl DynamoDB {
         op: Operation<'a>,
     ) -> Result<stmt::ValueStream<'a>> {
         use Operation::*;
-
-        dbg!("DDB: {:#?}", op);
 
         match op {
             Insert(op) => self.exec_insert(schema, op.into_insert()).await,

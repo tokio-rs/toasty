@@ -493,7 +493,7 @@ where
 {
     match node {
         Value::Record(node) => v.visit_value_record(node),
-        _ => println!("TODO! implement visit value type {:#?}", node),
+        _ => {}
     }
 }
 
