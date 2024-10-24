@@ -156,7 +156,7 @@ impl<'a> FindByBuilder<'a> {
         let mut query_name = if full {
             format!("{}_{}_by", base, self.model.name.snake_case())
         } else {
-            format!("{}_by", base)
+            format!("{base}_by")
         };
 
         let mut parts = vec![];

@@ -16,7 +16,7 @@ impl<T: Model> HasMany<T> {
 
                 for value in record.into_owned() {
                     let Value::Record(record) = value else {
-                        panic!("unexpected input; value={:#?}", value)
+                        panic!("unexpected input; value={value:#?}")
                     };
 
                     values.push(T::load(record.into_owned())?);

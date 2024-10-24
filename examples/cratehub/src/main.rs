@@ -27,7 +27,7 @@ async fn main() {
         .await
         .unwrap();
 
-    println!(" -> u1 = {:#?}", u1);
+    println!(" -> u1 = {u1:#?}");
 
     println!("==> let u2 = User::create()");
     let u2 = User::create()
@@ -36,7 +36,7 @@ async fn main() {
         .exec(&db)
         .await
         .unwrap();
-    println!(" -> u2 = {:#?}", u2);
+    println!(" -> u2 = {u2:#?}");
 
     let p1 = u1
         .packages()
@@ -52,7 +52,7 @@ async fn main() {
         .await
         .unwrap();
 
-    println!("{:#?}", package);
+    println!("{package:#?}");
 
     println!("==> u1.packages().all(&db)");
     let packages = u1
@@ -62,7 +62,7 @@ async fn main() {
         .unwrap()
         .collect::<Vec<_>>()
         .await;
-    println!("packages = {:#?}", packages);
+    println!("packages = {packages:#?}");
 
     // Find the user again, this should not include the package
     println!("==> User::find_by_id(&u1.id)");
@@ -76,6 +76,6 @@ async fn main() {
     assert_eq!(1, users.len());
 
     for user in users {
-        println!("USER = {:#?}", user);
+        println!("USER = {user:#?}");
     }
 }

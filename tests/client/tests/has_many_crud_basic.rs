@@ -90,7 +90,7 @@ async fn crud_user_todos(s: impl Setup) {
 
     // Create a few more TODOs
     for i in 0..5 {
-        let title = format!("hello world {}", i);
+        let title = format!("hello world {i}");
 
         let todo = if i.is_even() {
             // Create via user
@@ -441,7 +441,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
 
     // Create a few more TODOs
     for i in 0..5 {
-        let title = format!("hello world {}", i);
+        let title = format!("hello world {i}");
 
         let todo = if i.is_even() {
             // Create via user
@@ -665,7 +665,7 @@ async fn delete_when_belongs_to_optional(s: impl Setup) {
         let todo = user
             .todos()
             .create()
-            .title(format!("todo {}", i))
+            .title(format!("todo {i}"))
             .exec(&db)
             .await
             .unwrap();

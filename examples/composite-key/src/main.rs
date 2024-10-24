@@ -12,7 +12,7 @@ async fn main() {
         .join("../schema.toasty");
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
-    println!("{:#?}", schema);
+    println!("{schema:#?}");
 
     // Use the in-memory toasty driver
     // let driver = Sqlite::new();
@@ -42,7 +42,7 @@ async fn main() {
             .await
             .unwrap();
 
-        println!("CREATED = {:#?}", todo);
+        println!("CREATED = {todo:#?}");
     }
 
     // let mut todos = user.todos().all(&db).await.unwrap();
@@ -66,7 +66,7 @@ async fn main() {
 
     while let Some(todo) = todos.next().await {
         let todo = todo.unwrap();
-        println!("TODO = {:#?}", todo);
+        println!("TODO = {todo:#?}");
     }
 
     println!(">>> DONE <<<");

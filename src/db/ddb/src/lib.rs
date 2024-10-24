@@ -287,15 +287,15 @@ fn ddb_expression<'a>(
             let rhs = ddb_expression(schema, attrs, primary, &expr_binary_op.rhs);
 
             match expr_binary_op.op {
-                sql::BinaryOp::Eq => format!("{} = {}", lhs, rhs),
+                sql::BinaryOp::Eq => format!("{lhs} = {rhs}"),
                 sql::BinaryOp::Ne if primary => {
                     todo!("!= conditions on primary key not supported")
                 }
-                sql::BinaryOp::Ne => format!("{} <> {}", lhs, rhs),
-                sql::BinaryOp::Gt => format!("{} > {}", lhs, rhs),
-                sql::BinaryOp::Ge => format!("{} >= {}", lhs, rhs),
-                sql::BinaryOp::Lt => format!("{} < {}", lhs, rhs),
-                sql::BinaryOp::Le => format!("{} <= {}", lhs, rhs),
+                sql::BinaryOp::Ne => format!("{lhs} <> {rhs}"),
+                sql::BinaryOp::Gt => format!("{lhs} > {rhs}"),
+                sql::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
+                sql::BinaryOp::Lt => format!("{lhs} < {rhs}"),
+                sql::BinaryOp::Le => format!("{lhs} <= {rhs}"),
                 // stmt::BinaryOp::IsA => format!("begins_with({lhs}, {rhs})"),
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
@@ -356,7 +356,7 @@ impl ExprAttrs {
 
     fn ddb_value(&mut self, val: AttributeValue) -> String {
         let i = self.attr_values.len();
-        let name = format!(":v_{}", i);
+        let name = format!(":v_{i}");
         self.attr_values.insert(name.clone(), val);
         name
     }

@@ -84,7 +84,7 @@ async fn crud_user_todos(s: impl Setup) {
 
     // Create a few more TODOs
     for i in 0..5 {
-        let title = format!("hello world {}", i);
+        let title = format!("hello world {i}");
 
         let todo = if i.is_even() {
             // Create via user

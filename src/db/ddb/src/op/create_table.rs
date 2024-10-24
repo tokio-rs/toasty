@@ -41,8 +41,7 @@ impl DynamoDB {
         // TODO: for now, up to 2 columns are supported as part of the PK.
         assert!(
             pk_columns.len() >= 1 && pk_columns.len() <= 2,
-            "TABLE={:#?}",
-            table
+            "TABLE={table:#?}"
         );
 
         let partition_column = pk_columns.next().unwrap();
