@@ -29,6 +29,6 @@ done
 
 # Main loop to execute the command for each directory
 for dir in "${directories[@]}"; do
-    cargo +nightly run -p toasty-cli -- gen --schema "examples/$dir/schema.toasty" "examples/$dir/src/db"
-    cargo +nightly check -p example-$dir
+    cargo run -p toasty-cli -- gen --schema "examples/$dir/schema.toasty" "examples/$dir/src/db"
+    cargo check -p example-$dir
 done
