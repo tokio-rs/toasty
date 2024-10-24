@@ -450,8 +450,8 @@ impl<'a> Generator<'a> {
 
                 impl<'a> #relation_struct_name<'a> {
                     // TODO: make this return a query type?
-                    pub async fn find<'db>(&self, db: &'db Db) -> Result<#find_ret_ty> {
-                        db.#find_db_fn(self).await
+                    pub async fn find(&self, db: &Db) -> Result<#find_ret_ty> {
+                        db.#find_db_fn(self.into_select()).await
                     }
                 }
             }

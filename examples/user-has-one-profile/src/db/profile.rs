@@ -82,13 +82,13 @@ impl<'a> Query<'a> {
         Query { stmt }
     }
     pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, Profile>> {
-        db.all(self).await
+        db.all(self.stmt).await
     }
     pub async fn first(self, db: &Db) -> Result<Option<Profile>> {
-        db.first(self).await
+        db.first(self.stmt).await
     }
     pub async fn get(self, db: &Db) -> Result<Profile> {
-        db.get(self).await
+        db.get(self.stmt).await
     }
     pub fn update(self) -> UpdateQuery<'a> {
         UpdateQuery::from(self)
@@ -401,11 +401,8 @@ pub mod relation {
             }
         }
         impl<'a> User<'a> {
-            pub async fn find<'db>(
-                &self,
-                db: &'db Db,
-            ) -> Result<Option<super::super::super::user::User>> {
-                db.first(self).await
+            pub async fn find(&self, db: &Db) -> Result<Option<super::super::super::user::User>> {
+                db.first(self.into_select()).await
             }
         }
     }

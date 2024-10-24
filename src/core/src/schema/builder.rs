@@ -93,9 +93,11 @@ impl Builder {
         }
 
         let schema = Schema {
-            models: self.models,
-            tables: self.tables,
-            queries: self.queries,
+            inner: Arc::new(Inner {
+                models: self.models,
+                tables: self.tables,
+                queries: self.queries,
+            }),
         };
 
         // Verify the schema structure

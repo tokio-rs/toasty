@@ -337,15 +337,15 @@ impl<'a> Generator<'a> {
 
             impl<'a> #query_struct_name<'a> {
                 pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, #model_struct_name>> {
-                    db.all(self).await
+                    db.all(self.stmt).await
                 }
 
                 pub async fn first(self, db: &Db) -> Result<Option<#model_struct_name>> {
-                    db.first(self).await
+                    db.first(self.stmt).await
                 }
 
                 pub async fn get(self, db: &Db) -> Result<#model_struct_name> {
-                    db.get(self).await
+                    db.get(self.stmt).await
                 }
 
                 pub fn update(self) -> #path UpdateQuery<'a> {
