@@ -4,7 +4,7 @@
 is still evolving and documentation is lacking.**
 
 Toasty is an ORM for the Rust programming language that prioritizes ease-of-use.
-It supports both SQL datases as well as some NoSQL databases, including DynamoDB
+It supports both SQL databases as well as some NoSQL databases, including DynamoDB
 and Cassandra. Note that Toasty does not hide the database capabilities.
 Instead, Toasty exposes features based on the target database.
 
