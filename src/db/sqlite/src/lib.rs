@@ -1,3 +1,4 @@
+use std::path::Path;
 use toasty_core::{
     driver::{operation::Operation, Capability, Driver},
     schema, sql, stmt, Schema,
@@ -19,6 +20,14 @@ impl Sqlite {
         Sqlite {
             connection: Mutex::new(connection),
         }
+    }
+
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Sqlite> {
+        let connection = Connection::open(path)?;
+
+        Ok(Sqlite {
+            connection: Mutex::new(connection),
+        })
     }
 }
 
