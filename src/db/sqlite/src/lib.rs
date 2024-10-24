@@ -21,7 +21,7 @@ impl Sqlite {
         }
     }
 
-    pub fn new_with_file<P: AsRef<Path>>(path: P) -> Result<Sqlite> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Sqlite> {
         let connection = Connection::open(path)?;
         let sqlite = Sqlite {
             connection: Mutex::new(connection),
