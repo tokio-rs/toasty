@@ -9,8 +9,6 @@ impl<'stmt> Planner<'stmt> {
     // If the update statement requested the result to be returned, then this
     // method returns the var in which it will be stored.
     pub(super) fn plan_update(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
-        println!("plan_update={:#?}", stmt);
-
         self.simplify_stmt_update(&mut stmt);
 
         let model = self.model(stmt.selection.body.as_select().source.as_model_id());

@@ -153,8 +153,6 @@ impl DynamoDB {
                     );
                 }
 
-                dbg!("DDB; TransactWriteItems={:#?}", transact_items);
-
                 self.client
                     .transact_write_items()
                     .set_transact_items(Some(transact_items))

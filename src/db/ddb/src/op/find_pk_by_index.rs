@@ -12,11 +12,6 @@ impl DynamoDB {
         let mut expr_attrs = ExprAttrs::default();
         let key_expression = ddb_expression(schema, &mut expr_attrs, false, &op.filter);
 
-        println!(
-            "index.unique={:#?}; key_condition_expression={:#?}; names={:#?}",
-            index.unique, key_expression, expr_attrs.attr_names
-        );
-
         let res = if index.unique {
             self.client
                 .query()

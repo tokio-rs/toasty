@@ -19,7 +19,6 @@ impl DynamoDB {
                 .await?;
 
             if let Some(item) = res.item() {
-                dbg!("DDB: got = {:#?}", item);
                 if let Some(filter) = op.post_filter {
                     // TODO: improve filtering logic
                     let row = item_to_record(item, table.columns.iter())?;

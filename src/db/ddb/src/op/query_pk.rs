@@ -17,14 +17,6 @@ impl DynamoDB {
             None
         };
 
-        println!("client.query()");
-        println!("  + op = {:#?}", op);
-        println!("  + table = {:#?}", table);
-        println!("  + key_condition_expr = {:#?}", key_expression);
-        println!("  + filter_expression = {:#?}", filter_expression);
-        println!("  + expr_attr_names = {:#?}", expr_attrs.attr_names);
-        println!("  + expr_attr_values = {:#?}", expr_attrs.attr_values);
-
         let res = self
             .client
             .query()

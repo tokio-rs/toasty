@@ -73,7 +73,6 @@ impl Db {
         &'a self,
         statement: Statement<'a, M>,
     ) -> Result<ValueStream<'a>> {
-        dbg!("EXEC: {:#?}", statement);
         // Create a plan to execute the statement
         let mut res = engine::exec(self, statement.untyped).await?;
 
