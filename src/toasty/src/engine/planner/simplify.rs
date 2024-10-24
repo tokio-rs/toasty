@@ -6,16 +6,16 @@ mod rewrite_root_path_expr;
 
 use super::*;
 
-struct SimplifyStmt<'stmt> {
-    schema: &'stmt Schema,
+struct SimplifyStmt<'a> {
+    schema: &'a Schema,
 }
 
-struct SimplifyExpr<'stmt> {
-    model: &'stmt Model,
-    schema: &'stmt Schema,
+struct SimplifyExpr<'a> {
+    model: &'a Model,
+    schema: &'a Schema,
 }
 
-impl<'stmt> Planner<'stmt> {
+impl<'stmt> Planner<'_, 'stmt> {
     pub(crate) fn simplify_stmt_delete(&self, stmt: &mut stmt::Delete<'stmt>) {
         self.simplify_stmt(stmt);
     }
@@ -48,9 +48,9 @@ impl<'stmt> Planner<'stmt> {
     }
 }
 
-impl<'stmt> SimplifyStmt<'stmt> {
+impl SimplifyStmt<'_> {
     /// Returns the source model
-    fn flatten_nested_unions(
+    fn flatten_nested_unions<'stmt>(
         &self,
         expr_set_op: &mut stmt::ExprSetOp<'stmt>,
         operands: &mut Vec<stmt::ExprSet<'stmt>>,
@@ -90,7 +90,7 @@ impl<'stmt> SimplifyStmt<'stmt> {
     }
 }
 
-impl<'stmt> VisitMut<'stmt> for SimplifyStmt<'stmt> {
+impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
     fn visit_expr_set_mut(&mut self, i: &mut stmt::ExprSet<'stmt>) {
         match i {
             stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 0 => {
@@ -160,9 +160,9 @@ impl<'stmt> VisitMut<'stmt> for SimplifyStmt<'stmt> {
     }
 }
 
-impl<'stmt> SimplifyExpr<'stmt> {
+impl SimplifyExpr<'_> {
     /// Recursively walk a binary expression in parallel
-    fn simplify_binary_op(
+    fn simplify_binary_op<'stmt>(
         &mut self,
         op: stmt::BinaryOp,
         lhs: &mut stmt::Expr<'stmt>,
@@ -245,7 +245,7 @@ impl<'stmt> SimplifyExpr<'stmt> {
     }
 }
 
-impl<'stmt> VisitMut<'stmt> for SimplifyExpr<'stmt> {
+impl<'stmt> VisitMut<'stmt> for SimplifyExpr<'_> {
     fn visit_stmt_mut(&mut self, _i: &mut stmt::Statement<'stmt>) {
         panic!("should not be reached");
     }

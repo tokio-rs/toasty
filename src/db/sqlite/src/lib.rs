@@ -40,11 +40,11 @@ impl Driver for Sqlite {
         Ok(())
     }
 
-    async fn exec<'a>(
+    async fn exec<'stmt>(
         &self,
-        schema: &'a Schema,
-        op: Operation<'a>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        schema: &Schema,
+        op: Operation<'stmt>,
+    ) -> Result<stmt::ValueStream<'stmt>> {
         use Operation::*;
 
         let connection = self.connection.lock().unwrap();
@@ -138,7 +138,7 @@ impl Driver for Sqlite {
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
-        for table in &schema.tables {
+        for table in schema.tables() {
             self.create_table(schema, table);
         }
 

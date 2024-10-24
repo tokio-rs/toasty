@@ -41,11 +41,18 @@ mod verify;
 
 use crate::*;
 
+use std::sync::Arc;
+
 #[derive(Debug, Default)]
 pub struct Schema {
-    pub models: Vec<Model>,
-    pub tables: Vec<Table>,
-    pub queries: Vec<Query>,
+    inner: Arc<Inner>,
+}
+
+#[derive(Debug, Default)]
+struct Inner {
+    models: Vec<Model>,
+    tables: Vec<Table>,
+    queries: Vec<Query>,
 }
 
 pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Schema> {
@@ -71,11 +78,25 @@ pub fn from_str(source: &str) -> Result<Schema> {
 impl Schema {
     /// Get a model by ID
     pub fn model(&self, id: impl Into<ModelId>) -> &Model {
-        self.models.get(id.into().0).expect("invalid model ID")
+        self.inner
+            .models
+            .get(id.into().0)
+            .expect("invalid model ID")
+    }
+
+    pub fn models<'a>(&'a self) -> impl ExactSizeIterator<Item = &'a Model> {
+        self.inner.models.iter()
     }
 
     pub fn table(&self, id: impl Into<TableId>) -> &Table {
-        self.tables.get(id.into().0).expect("invalid table ID")
+        self.inner
+            .tables
+            .get(id.into().0)
+            .expect("invalid table ID")
+    }
+
+    pub fn tables<'a>(&'a self) -> impl ExactSizeIterator<Item = &'a Table> {
+        self.inner.tables.iter()
     }
 
     /// Get a field by ID
@@ -103,10 +124,22 @@ impl Schema {
 
     pub fn query(&self, id: impl Into<QueryId>) -> &Query {
         let id = id.into();
-        &self.queries[id.0]
+        &self.inner.queries[id.0]
+    }
+
+    pub fn queries<'a>(&'a self) -> impl ExactSizeIterator<Item = &'a Query> {
+        self.inner.queries.iter()
     }
 
     pub(crate) fn from_ast(ast: &ast::Schema) -> Result<Schema> {
         schema::Builder::new().from_ast(ast)
+    }
+}
+
+impl Clone for Schema {
+    fn clone(&self) -> Self {
+        Schema {
+            inner: self.inner.clone(),
+        }
     }
 }

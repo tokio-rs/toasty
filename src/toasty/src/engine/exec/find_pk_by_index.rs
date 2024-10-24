@@ -1,9 +1,9 @@
 use super::*;
 
-impl<'a> Exec<'a> {
+impl<'stmt> Exec<'_, 'stmt> {
     pub(super) async fn exec_find_pk_by_index(
         &mut self,
-        action: &plan::FindPkByIndex<'a>,
+        action: &plan::FindPkByIndex<'stmt>,
     ) -> Result<()> {
         let op = if !action.input.is_empty() {
             // TODO: this isn't actually right, but I'm temporarily hacking my

@@ -7,7 +7,7 @@ pub(super) struct Context<'stmt> {
     input: Vec<plan::Input<'stmt>>,
 }
 
-impl<'stmt> Planner<'stmt> {
+impl<'stmt> Planner<'_, 'stmt> {
     /// Plan a select statement, returning the variable ID where the output will
     /// be stored.
     pub(super) fn plan_select(&mut self, stmt: stmt::Query<'stmt>) -> plan::VarId {

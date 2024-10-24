@@ -5,7 +5,7 @@ use super::*;
 // * Queries might mix `insert`, `update`, and `delete`
 // * Since Update may insert, it could trigger the full insertion planning path.
 
-impl<'stmt> Planner<'stmt> {
+impl<'stmt> Planner<'_, 'stmt> {
     // If the update statement requested the result to be returned, then this
     // method returns the var in which it will be stored.
     pub(super) fn plan_update(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {

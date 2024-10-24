@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'stmt> Planner<'stmt> {
+impl<'stmt> Planner<'_, 'stmt> {
     pub(crate) fn lower_insert_expr(
         &self,
         model: &Model,

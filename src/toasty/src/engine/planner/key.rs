@@ -5,7 +5,7 @@ struct TryConvert<'a> {
     index: &'a Index,
 }
 
-impl<'stmt> Planner<'stmt> {
+impl<'stmt> Planner<'_, 'stmt> {
     /// If the expression is shaped like a key expression, then convert it to
     /// one.
     pub(crate) fn try_build_key_filter(

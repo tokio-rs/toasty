@@ -32,12 +32,12 @@ use std::collections::HashMap;
 use super::exec;
 
 #[derive(Debug)]
-struct Planner<'stmt> {
+struct Planner<'a, 'stmt> {
     /// Database schema
-    schema: &'stmt Schema,
+    schema: &'a Schema,
 
     /// Database capabilities
-    capability: &'stmt Capability,
+    capability: &'a Capability,
 
     /// Table of record stream slots. Used to figure out where to store outputs
     /// of actions.
@@ -74,8 +74,8 @@ struct Insertion {
 }
 
 pub(crate) fn apply<'stmt>(
-    capability: &'stmt Capability,
-    schema: &'stmt Schema,
+    capability: &Capability,
+    schema: &Schema,
     stmt: stmt::Statement<'stmt>,
 ) -> Plan<'stmt> {
     let mut planner = Planner {
@@ -94,7 +94,7 @@ pub(crate) fn apply<'stmt>(
     planner.build()
 }
 
-impl<'stmt> Planner<'stmt> {
+impl<'a, 'stmt> Planner<'a, 'stmt> {
     /// Entry point to plan the root statement.
     fn plan_stmt(&mut self, stmt: stmt::Statement<'stmt>) {
         match stmt {
@@ -184,7 +184,7 @@ impl<'stmt> Planner<'stmt> {
         action.value
     }
 
-    fn model(&self, id: impl Into<ModelId>) -> &'stmt Model {
+    fn model(&self, id: impl Into<ModelId>) -> &'a Model {
         self.schema.model(id)
     }
 }
