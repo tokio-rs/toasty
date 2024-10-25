@@ -254,7 +254,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_user_id(&mut self, user_id: impl Into<Id<super::user::User>>) -> &mut Self {
-        self.stmt.set_expr(1, user_id.into().into_expr());
+        self.stmt.set_expr(1, user_id.into());
         self
     }
     pub fn id(mut self, id: impl Into<Id<Package>>) -> Self {
@@ -262,7 +262,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<Package>>) -> &mut Self {
-        self.stmt.set_expr(2, id.into().into_expr());
+        self.stmt.set_expr(2, id.into());
         self
     }
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -270,7 +270,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_name(&mut self, name: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(3, name.into().into_expr());
+        self.stmt.set_expr(3, name.into());
         self
     }
     pub async fn exec(self, db: &Db) -> Result<()> {

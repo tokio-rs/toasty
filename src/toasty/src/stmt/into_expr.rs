@@ -51,18 +51,6 @@ impl IntoExpr<'static, String> for String {
     }
 }
 
-impl<'a, T: Model> IntoExpr<'a, Id<T>> for Id<T> {
-    fn into_expr(self) -> Expr<'a, Id<T>> {
-        Expr::from_value(self.inner.into())
-    }
-}
-
-impl<'a, T: Model> IntoExpr<'a, Id<T>> for &'a Id<T> {
-    fn into_expr(self) -> Expr<'a, Id<T>> {
-        Expr::from_value(Value::from(&self.inner))
-    }
-}
-
 impl<'a, T1, T2> IntoExpr<'a, (T1,)> for (T2,)
 where
     T2: IntoExpr<'a, T1>,
