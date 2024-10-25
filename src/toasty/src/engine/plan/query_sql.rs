@@ -9,7 +9,7 @@ pub(crate) struct QuerySql<'stmt> {
     pub output: Option<QuerySqlOutput<'stmt>>,
 
     /// The query to execute. This may require input to generate the query.
-    pub sql: sql::Statement<'stmt>,
+    pub stmt: stmt::Statement<'stmt>,
 }
 
 #[derive(Debug)]

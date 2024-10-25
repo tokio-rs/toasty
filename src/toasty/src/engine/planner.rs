@@ -23,7 +23,6 @@ use crate::{
 use toasty_core::{
     eval,
     schema::*,
-    sql,
     stmt::{self, Visit, VisitMut},
 };
 

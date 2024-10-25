@@ -105,7 +105,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         self.push_action(plan::QuerySql {
             output,
             input: vec![],
-            sql,
+            stmt: sql,
         });
 
         output_var

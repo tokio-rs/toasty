@@ -13,7 +13,7 @@ pub(crate) use var_store::VarStore;
 
 use crate::{driver::operation, engine::*, Result};
 
-use toasty_core::{sql, stmt};
+use toasty_core::stmt;
 
 struct Exec<'a, 'stmt> {
     db: &'a Db,

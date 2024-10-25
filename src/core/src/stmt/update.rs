@@ -6,7 +6,7 @@ pub struct Update<'stmt> {
     pub selection: Query<'stmt>,
 
     /// Assignments
-    pub assignemnts: Assignments<'stmt>,
+    pub assignments: Assignments<'stmt>,
 
     /// A condition that must be satisfied in order for the update to apply.
     pub condition: Option<Expr<'stmt>>,

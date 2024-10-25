@@ -23,7 +23,7 @@ impl<'stmt> Query<'stmt> {
 
         stmt::Update {
             selection: self,
-            assignemnts: stmt::Assignments::with_capacity(width),
+            assignments: stmt::Assignments::with_capacity(width),
             condition: None,
             returning: false,
         }

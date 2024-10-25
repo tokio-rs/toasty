@@ -104,7 +104,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                 ty: stmt::Type::Record(sql_ty),
                 project,
             }),
-            sql,
+            stmt: sql,
         });
 
         output

@@ -26,7 +26,7 @@ impl<'stmt> Planner<'_, 'stmt> {
 
                 if pair.nullable {
                     let mut update = query.update(self.schema);
-                    update.set(pair.id, stmt::Value::Null);
+                    update.assignments.set(pair.id, stmt::Value::Null);
 
                     self.plan_update(update);
                 } else {
@@ -45,17 +45,13 @@ impl<'stmt> Planner<'_, 'stmt> {
         }
     }
 
-    fn plan_delete_sql(&mut self, model: &Model, stmt: stmt::Delete<'stmt>) {
-        let mut filter = stmt.selection.body.as_select().filter.clone();
-
-        self.lower_expr2(model, &mut filter);
-
-        let sql = sql::Statement::delete(self.schema, model.lowering.table, filter);
+    fn plan_delete_sql(&mut self, model: &Model, mut stmt: stmt::Delete<'stmt>) {
+        self.lower_delete_stmt(model, &mut stmt);
 
         self.push_action(plan::QuerySql {
             output: None,
             input: vec![],
-            sql,
+            stmt: stmt.into(),
         });
     }
 
@@ -73,9 +69,9 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         if index_plan.index.primary_key {
             if let Some(keys) = self.try_build_key_filter(index, &index_filter) {
-                let filter = index_plan.result_filter.clone().map(|mut stmt| {
-                    self.lower_expr2(model, &mut stmt);
-                    sql::Expr::from_stmt(&self.schema, table.id, stmt)
+                let filter = index_plan.result_filter.map(|mut expr| {
+                    self.lower_expr2(model, &mut expr);
+                    expr
                 });
 
                 self.push_write_action(plan::DeleteByKey {
@@ -100,7 +96,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                 output: pk_by_index_out,
                 table: table.id,
                 index: index_plan.index.lowering.index,
-                filter: sql::Expr::from_stmt(self.schema, table.id, index_filter),
+                filter: index_filter,
             });
 
             // TODO: include a deletion condition that ensures the index fields
@@ -110,9 +106,10 @@ impl<'stmt> Planner<'_, 'stmt> {
                 input: vec![plan::Input::from_var(pk_by_index_out)],
                 table: table.id,
                 keys: eval::Expr::project(&[0]),
-                filter: index_plan
-                    .result_filter
-                    .map(|stmt| sql::Expr::from_stmt(self.schema, table.id, stmt)),
+                filter: index_plan.result_filter.map(|mut expr| {
+                    self.lower_expr2(model, &mut expr);
+                    expr
+                }),
             });
         }
     }

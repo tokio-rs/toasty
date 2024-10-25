@@ -10,7 +10,7 @@ mod verify;
 use crate::{Db, Result};
 
 use toasty_core::{
-    eval, sql,
+    eval,
     stmt::{self, Statement, ValueStream},
     Schema,
 };

@@ -1,6 +1,17 @@
 use super::*;
 
 impl<'stmt> Planner<'_, 'stmt> {
+    pub(crate) fn lower_delete_stmt(&self, model: &Model, stmt: &mut stmt::Delete<'stmt>) {
+        /*
+        let mut filter = stmt.selection.body.as_select().filter.clone();
+
+        self.lower_expr2(model, &mut filter);
+
+        let sql = sql::Statement::delete(self.schema, model.lowering.table, filter);
+        */
+        todo!()
+    }
+
     pub(crate) fn lower_insert_expr(
         &self,
         model: &Model,

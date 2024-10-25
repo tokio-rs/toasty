@@ -14,7 +14,7 @@ pub(crate) struct DeleteByKey<'stmt> {
     pub keys: eval::Expr<'stmt>,
 
     /// Only delete keys that match the filter
-    pub filter: Option<sql::Expr<'stmt>>,
+    pub filter: Option<stmt::Expr<'stmt>>,
 }
 
 impl<'stmt> From<DeleteByKey<'stmt>> for Action<'stmt> {
