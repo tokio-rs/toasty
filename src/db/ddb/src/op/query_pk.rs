@@ -1,11 +1,11 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_query_pk<'a>(
+    pub(crate) async fn exec_query_pk<'stmt>(
         &self,
-        schema: &'a schema::Schema,
-        op: operation::QueryPk<'_>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        schema: &schema::Schema,
+        op: operation::QueryPk<'stmt>,
+    ) -> Result<stmt::ValueStream<'stmt>> {
         let table = schema.table(op.table);
 
         let mut expr_attrs = ExprAttrs::default();
@@ -17,14 +17,6 @@ impl DynamoDB {
             None
         };
 
-        println!("client.query()");
-        println!("  + op = {:#?}", op);
-        println!("  + table = {:#?}", table);
-        println!("  + key_condition_expr = {:#?}", key_expression);
-        println!("  + filter_expression = {:#?}", filter_expression);
-        println!("  + expr_attr_names = {:#?}", expr_attrs.attr_names);
-        println!("  + expr_attr_values = {:#?}", expr_attrs.attr_values);
-
         let res = self
             .client
             .query()
@@ -35,6 +27,8 @@ impl DynamoDB {
             .set_expression_attribute_values(Some(expr_attrs.attr_values))
             .send()
             .await?;
+
+        let schema = schema.clone();
 
         Ok(stmt::ValueStream::from_iter(
             res.items.into_iter().flatten().map(move |item| {

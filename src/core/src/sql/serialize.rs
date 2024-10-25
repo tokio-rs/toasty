@@ -256,7 +256,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
     fn values(&mut self, values: &Values<'stmt>) -> fmt::Result {
         let mut s = "VALUES";
         for record in &values.rows {
-            write!(self.dst, "{} (", s)?;
+            write!(self.dst, "{s} (")?;
             self.expr_list(record)?;
             write!(self.dst, ")")?;
             s = ",";
@@ -269,7 +269,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         let mut s = "";
 
         for expr in exprs {
-            write!(self.dst, "{}", s)?;
+            write!(self.dst, "{s}")?;
             self.expr(expr)?;
             s = ", ";
         }
@@ -281,7 +281,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         match expr {
             Expr::BeginsWith(ExprBeginsWith { expr, pattern }) => {
                 let str = pattern.as_value().expect_string();
-                let pattern = format!("{}%", str);
+                let pattern = format!("{str}%");
                 self.expr(expr)?;
                 write!(self.dst, " LIKE ")?;
                 self.expr(&Expr::Value(pattern.into()))?;
@@ -320,14 +320,14 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
                 match list {
                     ExprList::Expr(exprs) => {
                         for e in exprs {
-                            write!(self.dst, "{}", s)?;
+                            write!(self.dst, "{s}")?;
                             self.expr(e)?;
                             s = ", ";
                         }
                     }
                     ExprList::Value(values) => {
                         for v in values {
-                            write!(self.dst, "{}", s)?;
+                            write!(self.dst, "{s}")?;
                             self.value(v)?;
                             s = ", ";
                         }
@@ -354,7 +354,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
                 let mut s = "";
 
                 for expr in operands {
-                    write!(self.dst, "{}", s)?;
+                    write!(self.dst, "{s}")?;
                     self.expr(expr)?;
                     s = " AND ";
                 }
@@ -363,7 +363,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
                 let mut s = "";
 
                 for expr in operands {
-                    write!(self.dst, "{}", s)?;
+                    write!(self.dst, "{s}")?;
                     self.expr(expr)?;
                     s = " OR ";
                 }
@@ -373,7 +373,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
 
                 let mut s = "";
                 for expr in &expr_tuple.exprs {
-                    write!(self.dst, "{}", s)?;
+                    write!(self.dst, "{s}")?;
                     self.expr(expr)?;
                     s = ", ";
                 }
@@ -436,7 +436,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
     }
 
     fn ident_str(&mut self, ident: &str) -> fmt::Result {
-        write!(self.dst, "\"{}\"", ident)?;
+        write!(self.dst, "\"{ident}\"")?;
         Ok(())
     }
 }

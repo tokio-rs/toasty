@@ -5,6 +5,8 @@ use toasty::Db;
 // use toasty_sqlite::Sqlite;
 use toasty_dynamodb::DynamoDB;
 
+fn assert_sync_send<T: Send>(_: T) {}
+
 #[tokio::main]
 async fn main() {
     let schema_file = std::path::Path::new(file!())
@@ -13,7 +15,7 @@ async fn main() {
         .join("../schema.toasty");
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
-    println!("{:#?}", schema);
+    println!("{schema:#?}");
 
     // Use the in-memory toasty driver
     // let driver = Sqlite::new();
@@ -22,6 +24,8 @@ async fn main() {
     let db = Db::new(schema, driver).await;
     // For now, reset!s
     db.reset_db().await.unwrap();
+
+    assert_sync_send(db::User::find_by_email("hello").first(&db));
 
     println!("==> let u1 = User::create()");
     let u1 = User::create()
@@ -42,12 +46,12 @@ async fn main() {
     // Find by ID
     println!("==> let user = User::find_by_id(&u1.id)");
     let user = User::find_by_id(&u1.id).get(&db).await.unwrap();
-    println!("USER = {:#?}", user);
+    println!("USER = {user:#?}");
 
     // Find by email!
     println!("==> let user = User::find_by_email(&u1.email)");
     let mut user = User::find_by_email(&u1.email).get(&db).await.unwrap();
-    println!("USER = {:#?}", user);
+    println!("USER = {user:#?}");
 
     assert!(User::create()
         .name("John Dos")
@@ -65,7 +69,7 @@ async fn main() {
 
     // Load the user again
     let user = User::find_by_id(&u2.id).get(&db).await.unwrap();
-    println!("  reloaded -> {:#?}", user);
+    println!("  reloaded -> {user:#?}");
 
     println!(" ~~~~~~~~~~~ CREATE TODOs ~~~~~~~~~~~~");
 
@@ -79,13 +83,13 @@ async fn main() {
         .await
         .unwrap();
 
-    println!("CREATED = {:#?}", todo);
+    println!("CREATED = {todo:#?}");
 
     let mut todos = u2.todos().all(&db).await.unwrap();
 
     while let Some(todo) = todos.next().await {
         let todo = todo.unwrap();
-        println!("TODO = {:#?}", todo);
+        println!("TODO = {todo:#?}");
         println!("-> user {:?}", todo.user().find(&db).await.unwrap());
     }
 

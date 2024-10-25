@@ -89,7 +89,7 @@ impl<'stmt> Value<'stmt> {
     pub fn to_id(self) -> Result<Id> {
         match self {
             Self::Id(v) => Ok(v),
-            _ => panic!("cannot convert value to Id; value={:#?}", self),
+            _ => panic!("cannot convert value to Id; value={self:#?}"),
         }
     }
 
@@ -97,7 +97,7 @@ impl<'stmt> Value<'stmt> {
         match self {
             Self::Null => Ok(None),
             Self::Id(v) => Ok(Some(v)),
-            _ => panic!("cannot convert value to Id; value={:#?}", self),
+            _ => panic!("cannot convert value to Id; value={self:#?}"),
         }
     }
 

@@ -1,9 +1,9 @@
 use crate::{Error, Model};
 use toasty_core::{stmt, Schema};
 
-pub struct Cursor<'a, M> {
-    schema: &'a Schema,
-    values: stmt::ValueStream<'a>,
+pub struct Cursor<'stmt, M> {
+    schema: Schema,
+    values: stmt::ValueStream<'stmt>,
     _p: std::marker::PhantomData<M>,
 }
 
@@ -11,8 +11,8 @@ pub trait FromCursor<A>: Extend<A> + Default {}
 
 impl<A, T: Extend<A> + Default> FromCursor<A> for T {}
 
-impl<'a, M: Model> Cursor<'a, M> {
-    pub(crate) fn new(schema: &'a Schema, values: stmt::ValueStream<'a>) -> Cursor<'a, M> {
+impl<'stmt, M: Model> Cursor<'stmt, M> {
+    pub(crate) fn new(schema: Schema, values: stmt::ValueStream<'stmt>) -> Cursor<'stmt, M> {
         Cursor {
             schema,
             values,
@@ -51,10 +51,7 @@ impl<'a, M: Model> Cursor<'a, M> {
             let expect_num_columns = self.schema.model(M::ID).fields.len();
 
             if record.len() != expect_num_columns {
-                panic!(
-                    "expected row to have {} columns; {:#?}",
-                    expect_num_columns, record
-                );
+                panic!("expected row to have {expect_num_columns} columns; {record:#?}");
             }
         }
     }

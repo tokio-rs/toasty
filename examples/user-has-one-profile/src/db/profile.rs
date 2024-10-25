@@ -82,13 +82,13 @@ impl<'a> Query<'a> {
         Query { stmt }
     }
     pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, Profile>> {
-        db.all(self).await
+        db.all(self.stmt).await
     }
     pub async fn first(self, db: &Db) -> Result<Option<Profile>> {
-        db.first(self).await
+        db.first(self.stmt).await
     }
     pub async fn get(self, db: &Db) -> Result<Profile> {
-        db.get(self).await
+        db.get(self.stmt).await
     }
     pub fn update(self) -> UpdateQuery<'a> {
         UpdateQuery::from(self)
@@ -250,7 +250,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<Profile>>) -> &mut Self {
-        self.stmt.set_expr(0, id.into().into_expr());
+        self.stmt.set_expr(0, id.into());
         self
     }
     pub fn user<'b>(mut self, user: impl IntoExpr<'a, self::relation::User<'b>>) -> Self {
@@ -270,7 +270,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_user_id(&mut self, user_id: impl Into<Id<super::user::User>>) -> &mut Self {
-        self.stmt.set_expr(2, user_id.into().into_expr());
+        self.stmt.set_expr(2, user_id.into());
         self
     }
     pub fn unset_user_id(&mut self) -> &mut Self {
@@ -401,11 +401,8 @@ pub mod relation {
             }
         }
         impl<'a> User<'a> {
-            pub async fn find<'db>(
-                &self,
-                db: &'db Db,
-            ) -> Result<Option<super::super::super::user::User>> {
-                db.first(self).await
+            pub async fn find(&self, db: &Db) -> Result<Option<super::super::super::user::User>> {
+                db.first(self.into_select()).await
             }
         }
     }

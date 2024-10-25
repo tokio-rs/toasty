@@ -15,15 +15,13 @@ use toasty_core::{
     Schema,
 };
 
-pub(crate) async fn exec<'a>(db: &'a Db, stmt: Statement<'a>) -> Result<ValueStream<'a>> {
+pub(crate) async fn exec<'stmt>(db: &Db, stmt: Statement<'stmt>) -> Result<ValueStream<'stmt>> {
     if cfg!(debug_assertions) {
         verify::apply(&db.schema, &stmt);
     }
 
     // Translate the optimized statement into a series of driver operations.
     let plan = planner::apply(db.driver.capability(), &db.schema, stmt);
-
-    dbg!("PLAN = {:#?}", plan);
 
     // The plan is called once (single entry record stream) with no arguments
     // (empty record).

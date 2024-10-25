@@ -1,9 +1,7 @@
 use super::*;
 
-impl<'stmt> Planner<'stmt> {
+impl<'stmt> Planner<'_, 'stmt> {
     pub(super) fn plan_delete(&mut self, mut stmt: stmt::Delete<'stmt>) {
-        println!("plan_delete={:#?}", stmt);
-
         self.simplify_stmt_delete(&mut stmt);
 
         let model = self.model(stmt.selection.body.as_select().source.as_model_id());

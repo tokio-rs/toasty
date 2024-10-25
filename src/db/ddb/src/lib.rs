@@ -1,11 +1,3 @@
-macro_rules! dbg {
-    ( $( $t:tt )* ) => {{
-        if cfg!(debug_assertions) {
-            eprintln!( $($t)* )
-        }
-    }}
-}
-
 mod op;
 
 use toasty_core::{
@@ -35,6 +27,13 @@ pub struct DynamoDB {
 }
 
 impl DynamoDB {
+    pub fn new(client: Client, table_prefix: Option<String>) -> DynamoDB {
+        DynamoDB {
+            client,
+            table_prefix,
+        }
+    }
+
     pub async fn from_env() -> Result<DynamoDB> {
         use aws_config::BehaviorVersion;
         use aws_sdk_dynamodb::config::Credentials;
@@ -73,16 +72,16 @@ impl Driver for DynamoDB {
         Ok(())
     }
 
-    async fn exec<'a>(
+    async fn exec<'stmt>(
         &self,
-        schema: &'a Schema,
-        op: Operation<'a>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        schema: &Schema,
+        op: Operation<'stmt>,
+    ) -> Result<stmt::ValueStream<'stmt>> {
         self.exec2(schema, op).await
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
-        for table in &schema.tables {
+        for table in schema.tables() {
             self.create_table(schema, table, true).await?;
         }
 
@@ -91,14 +90,12 @@ impl Driver for DynamoDB {
 }
 
 impl DynamoDB {
-    async fn exec2<'a>(
+    async fn exec2<'stmt>(
         &self,
-        schema: &'a Schema,
-        op: Operation<'a>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        schema: &Schema,
+        op: Operation<'stmt>,
+    ) -> Result<stmt::ValueStream<'stmt>> {
         use Operation::*;
-
-        dbg!("DDB: {:#?}", op);
 
         match op {
             Insert(op) => self.exec_insert(schema, op.into_insert()).await,
@@ -261,10 +258,10 @@ fn ddb_key_schema(
     ks
 }
 
-fn item_to_record<'a>(
+fn item_to_record<'a, 'stmt>(
     item: &HashMap<String, AttributeValue>,
     columns: impl Iterator<Item = &'a schema::Column>,
-) -> Result<stmt::Record<'a>> {
+) -> Result<stmt::Record<'stmt>> {
     Ok(stmt::Record::from_vec(
         columns
             .map(|column| {
@@ -290,15 +287,15 @@ fn ddb_expression<'a>(
             let rhs = ddb_expression(schema, attrs, primary, &expr_binary_op.rhs);
 
             match expr_binary_op.op {
-                sql::BinaryOp::Eq => format!("{} = {}", lhs, rhs),
+                sql::BinaryOp::Eq => format!("{lhs} = {rhs}"),
                 sql::BinaryOp::Ne if primary => {
                     todo!("!= conditions on primary key not supported")
                 }
-                sql::BinaryOp::Ne => format!("{} <> {}", lhs, rhs),
-                sql::BinaryOp::Gt => format!("{} > {}", lhs, rhs),
-                sql::BinaryOp::Ge => format!("{} >= {}", lhs, rhs),
-                sql::BinaryOp::Lt => format!("{} < {}", lhs, rhs),
-                sql::BinaryOp::Le => format!("{} <= {}", lhs, rhs),
+                sql::BinaryOp::Ne => format!("{lhs} <> {rhs}"),
+                sql::BinaryOp::Gt => format!("{lhs} > {rhs}"),
+                sql::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
+                sql::BinaryOp::Lt => format!("{lhs} < {rhs}"),
+                sql::BinaryOp::Le => format!("{lhs} <= {rhs}"),
                 // stmt::BinaryOp::IsA => format!("begins_with({lhs}, {rhs})"),
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
@@ -359,7 +356,7 @@ impl ExprAttrs {
 
     fn ddb_value(&mut self, val: AttributeValue) -> String {
         let i = self.attr_values.len();
-        let name = format!(":v_{}", i);
+        let name = format!(":v_{i}");
         self.attr_values.insert(name.clone(), val);
         name
     }

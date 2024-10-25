@@ -1,12 +1,11 @@
 use super::*;
 
-impl<'stmt> Planner<'stmt> {
+impl<'stmt> Planner<'_, 'stmt> {
     pub(super) fn plan_link(&mut self, mut stmt: stmt::Link<'stmt>) {
         self.simplify_stmt_link(&mut stmt);
 
         // TODO: this should be heavily optimized to avoid multiple queries if
         // possible...
-        println!("plan_link = {:#?}", stmt);
 
         // TODO: implement this for SQL
         self.plan_link_kv(stmt);

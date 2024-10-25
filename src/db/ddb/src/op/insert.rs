@@ -1,11 +1,11 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_insert<'a>(
+    pub(crate) async fn exec_insert<'stmt>(
         &self,
-        schema: &'a schema::Schema,
-        insert: sql::Insert<'a>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        schema: &schema::Schema,
+        insert: sql::Insert<'stmt>,
+    ) -> Result<stmt::ValueStream<'stmt>> {
         let table = &schema.table(insert.table);
 
         let unique_indices = table
@@ -113,7 +113,7 @@ impl DynamoDB {
 
                         if condition_expression.is_empty() {
                             let name = format!("#{}", column.id.index);
-                            condition_expression = format!("attribute_not_exists({})", name);
+                            condition_expression = format!("attribute_not_exists({name})");
                             expression_names.insert(name, column.name.clone());
                         }
                     }
@@ -152,8 +152,6 @@ impl DynamoDB {
                             .build(),
                     );
                 }
-
-                dbg!("DDB; TransactWriteItems={:#?}", transact_items);
 
                 self.client
                     .transact_write_items()

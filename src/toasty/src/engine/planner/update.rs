@@ -5,12 +5,10 @@ use super::*;
 // * Queries might mix `insert`, `update`, and `delete`
 // * Since Update may insert, it could trigger the full insertion planning path.
 
-impl<'stmt> Planner<'stmt> {
+impl<'stmt> Planner<'_, 'stmt> {
     // If the update statement requested the result to be returned, then this
     // method returns the var in which it will be stored.
     pub(super) fn plan_update(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
-        println!("plan_update={:#?}", stmt);
-
         self.simplify_stmt_update(&mut stmt);
 
         let model = self.model(stmt.selection.body.as_select().source.as_model_id());
@@ -198,9 +196,7 @@ impl<'stmt> Planner<'stmt> {
             debug_assert_eq!(
                 projected.len(),
                 columns.len(),
-                "projected={:?}; columns={:?}",
-                projected,
-                columns
+                "projected={projected:?}; columns={columns:?}"
             );
 
             let output = if stmt.returning {

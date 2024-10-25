@@ -93,9 +93,11 @@ impl Builder {
         }
 
         let schema = Schema {
-            models: self.models,
-            tables: self.tables,
-            queries: self.queries,
+            inner: Arc::new(Inner {
+                models: self.models,
+                tables: self.tables,
+                queries: self.queries,
+            }),
         };
 
         // Verify the schema structure
@@ -283,8 +285,7 @@ impl Builder {
         assert_eq!(
             attr.key.len(),
             attr.references.len(),
-            "unbalanced relation attribute {:#?}",
-            attr
+            "unbalanced relation attribute {attr:#?}"
         );
 
         let target = &self.models[target.0];

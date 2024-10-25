@@ -88,13 +88,13 @@ impl<'a> Query<'a> {
         Query { stmt }
     }
     pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, Todo>> {
-        db.all(self).await
+        db.all(self.stmt).await
     }
     pub async fn first(self, db: &Db) -> Result<Option<Todo>> {
-        db.first(self).await
+        db.first(self.stmt).await
     }
     pub async fn get(self, db: &Db) -> Result<Todo> {
-        db.get(self).await
+        db.get(self.stmt).await
     }
     pub fn update(self) -> UpdateQuery<'a> {
         UpdateQuery::from(self)
@@ -258,7 +258,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<Todo>>) -> &mut Self {
-        self.stmt.set_expr(0, id.into().into_expr());
+        self.stmt.set_expr(0, id.into());
         self
     }
     pub fn title(mut self, title: impl Into<String>) -> Self {
@@ -266,7 +266,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_title(&mut self, title: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(1, title.into().into_expr());
+        self.stmt.set_expr(1, title.into());
         self
     }
     pub fn order(mut self, order: impl Into<i64>) -> Self {
@@ -274,7 +274,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_order(&mut self, order: impl Into<i64>) -> &mut Self {
-        self.stmt.set_expr(2, order.into().into_expr());
+        self.stmt.set_expr(2, order.into());
         self
     }
     pub fn user<'b>(mut self, user: impl IntoExpr<'a, self::relation::User<'b>>) -> Self {
@@ -290,7 +290,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_user_id(&mut self, user_id: impl Into<Id<super::user::User>>) -> &mut Self {
-        self.stmt.set_expr(4, user_id.into().into_expr());
+        self.stmt.set_expr(4, user_id.into());
         self
     }
     pub async fn exec(self, db: &Db) -> Result<()> {
@@ -414,8 +414,8 @@ pub mod relation {
             }
         }
         impl<'a> User<'a> {
-            pub async fn find<'db>(&self, db: &'db Db) -> Result<super::super::super::user::User> {
-                db.get(self).await
+            pub async fn find(&self, db: &Db) -> Result<super::super::super::user::User> {
+                db.get(self.into_select()).await
             }
         }
     }

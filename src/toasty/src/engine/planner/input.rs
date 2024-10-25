@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'stmt> Planner<'stmt> {
+impl<'stmt> Planner<'_, 'stmt> {
     pub(crate) fn extract_input(
         &mut self,
         expr: &mut stmt::Expr<'stmt>,

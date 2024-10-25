@@ -1,11 +1,11 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_get_by_key<'a>(
+    pub(crate) async fn exec_get_by_key<'stmt>(
         &self,
-        schema: &'a schema::Schema,
-        op: operation::GetByKey<'a>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        schema: &schema::Schema,
+        op: operation::GetByKey<'stmt>,
+    ) -> Result<stmt::ValueStream<'stmt>> {
         let table = schema.table(op.table);
 
         if op.keys.len() == 1 {
@@ -19,7 +19,6 @@ impl DynamoDB {
                 .await?;
 
             if let Some(item) = res.item() {
-                dbg!("DDB: got = {:#?}", item);
                 if let Some(filter) = op.post_filter {
                     // TODO: improve filtering logic
                     let row = item_to_record(item, table.columns.iter())?;
@@ -72,6 +71,8 @@ impl DynamoDB {
             let Some(items) = responses.remove(&self.table_name(table)) else {
                 return Ok(stmt::ValueStream::new());
             };
+
+            let schema = schema.clone();
 
             Ok(stmt::ValueStream::from_iter(items.into_iter().filter_map(
                 move |item| {

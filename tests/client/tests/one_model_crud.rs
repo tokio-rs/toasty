@@ -121,7 +121,7 @@ async fn crud_one_string(s: impl Setup) {
 
     for i in 0..10 {
         let foo = db::Foo::create()
-            .val(format!("hello {}", i))
+            .val(format!("hello {i}"))
             .exec(&db)
             .await
             .unwrap();
@@ -143,7 +143,7 @@ async fn crud_one_string(s: impl Setup) {
 
         assert_eq!(1, read.len());
         assert_eq!(*id, read[0].id);
-        assert_eq!(format!("hello {}", i), read[0].val);
+        assert_eq!(format!("hello {i}"), read[0].val);
     }
 
     // Update by val

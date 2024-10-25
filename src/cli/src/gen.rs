@@ -86,6 +86,6 @@ fn rustfmt(source: String) -> String {
 }
 
 fn target_file(dir: &Path, module_name: &str) -> PathBuf {
-    let file = format!("{}.rs", module_name);
+    let file = format!("{module_name}.rs");
     dir.join(file)
 }

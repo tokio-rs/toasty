@@ -2,43 +2,37 @@ use crate::{driver::Driver, engine, stmt, Cursor, Model, Result, Statement};
 
 use toasty_core::{stmt::ValueStream, Schema};
 
+use std::sync::Arc;
+
 #[derive(Debug)]
 pub struct Db {
     /// Handle to the underlying database driver.
-    pub(crate) driver: Box<dyn Driver>,
+    pub(crate) driver: Arc<dyn Driver>,
 
     /// Schema being managed by this DB instance.
     pub(crate) schema: Schema,
 }
 
 impl Db {
-    pub async fn new(schema: Schema, driver: impl Driver) -> Db {
-        let mut driver = Box::new(driver);
+    pub async fn new(schema: Schema, mut driver: impl Driver) -> Db {
         driver.register_schema(&schema).await.unwrap();
 
-        Db { driver, schema }
+        Db {
+            driver: Arc::new(driver),
+            schema: schema,
+        }
     }
 
     /// Execute a query, returning all matching records
-    pub async fn all<'a, Q>(
-        &'a self,
-        query: Q,
-    ) -> Result<Cursor<'a, <Q as stmt::IntoSelect<'a>>::Model>>
-    where
-        Q: stmt::IntoSelect<'a>,
-    {
-        let select = query.into_select();
-        let records = self.exec(select.into()).await?;
-        Ok(Cursor::new(&self.schema, records))
+    pub async fn all<'stmt, M: Model>(
+        &self,
+        query: stmt::Select<'stmt, M>,
+    ) -> Result<Cursor<'stmt, M>> {
+        let records = self.exec(query.into()).await?;
+        Ok(Cursor::new(self.schema.clone(), records))
     }
 
-    pub async fn first<'a, Q>(
-        &'a self,
-        query: Q,
-    ) -> Result<Option<<Q as stmt::IntoSelect<'a>>::Model>>
-    where
-        Q: stmt::IntoSelect<'a>,
-    {
+    pub async fn first<'stmt, M: Model>(&self, query: stmt::Select<'stmt, M>) -> Result<Option<M>> {
         let mut res = self.all(query).await?;
         match res.next().await {
             Some(Ok(value)) => Ok(Some(value)),
@@ -47,10 +41,7 @@ impl Db {
         }
     }
 
-    pub async fn get<'a, Q>(&'a self, query: Q) -> Result<<Q as stmt::IntoSelect<'a>>::Model>
-    where
-        Q: stmt::IntoSelect<'a>,
-    {
+    pub async fn get<'stmt, M: Model>(&self, query: stmt::Select<'stmt, M>) -> Result<M> {
         let mut res = self.all(query).await?;
 
         match res.next().await {
@@ -60,20 +51,19 @@ impl Db {
         }
     }
 
-    pub async fn delete<'a, Q>(&self, query: Q) -> Result<()>
+    pub async fn delete<'stmt, Q>(&self, query: Q) -> Result<()>
     where
-        Q: stmt::IntoSelect<'a>,
+        Q: stmt::IntoSelect<'stmt>,
     {
         self.exec(query.into_select().delete()).await?;
         Ok(())
     }
 
     /// Execute a statement
-    pub async fn exec<'a, M: Model>(
-        &'a self,
-        statement: Statement<'a, M>,
-    ) -> Result<ValueStream<'a>> {
-        dbg!("EXEC: {:#?}", statement);
+    pub async fn exec<'stmt, M: Model>(
+        &self,
+        statement: Statement<'stmt, M>,
+    ) -> Result<ValueStream<'stmt>> {
         // Create a plan to execute the statement
         let mut res = engine::exec(self, statement.untyped).await?;
 
@@ -88,7 +78,10 @@ impl Db {
     ///
     /// Used by generated code
     #[doc(hidden)]
-    pub async fn exec_insert_one<'a, M: Model>(&'a self, stmt: stmt::Insert<'a, M>) -> Result<M> {
+    pub async fn exec_insert_one<'stmt, M: Model>(
+        &self,
+        stmt: stmt::Insert<'stmt, M>,
+    ) -> Result<M> {
         // TODO: get rid of this assertion and move to verify
         let toasty_core::stmt::Expr::Record(expr_record) = &stmt.untyped.values else {
             todo!()
@@ -97,7 +90,7 @@ impl Db {
 
         // Execute the statement and return the result
         let records = self.exec(stmt.into()).await?;
-        let mut cursor = Cursor::new(&self.schema, records);
+        let mut cursor = Cursor::new(self.schema.clone(), records);
 
         cursor.next().await.unwrap()
     }

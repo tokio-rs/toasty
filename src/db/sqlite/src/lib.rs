@@ -5,7 +5,7 @@ use toasty_core::{
 
 use anyhow::Result;
 use rusqlite::Connection;
-use std::sync::Mutex;
+use std::{path::Path, sync::Mutex};
 
 #[derive(Debug)]
 pub struct Sqlite {
@@ -13,12 +13,20 @@ pub struct Sqlite {
 }
 
 impl Sqlite {
-    pub fn new() -> Sqlite {
+    pub fn in_memory() -> Sqlite {
         let connection = Connection::open_in_memory().unwrap();
 
         Sqlite {
             connection: Mutex::new(connection),
         }
+    }
+
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Sqlite> {
+        let connection = Connection::open(path)?;
+        let sqlite = Sqlite {
+            connection: Mutex::new(connection),
+        };
+        Ok(sqlite)
     }
 }
 
@@ -32,14 +40,12 @@ impl Driver for Sqlite {
         Ok(())
     }
 
-    async fn exec<'a>(
+    async fn exec<'stmt>(
         &self,
-        schema: &'a Schema,
-        op: Operation<'a>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        schema: &Schema,
+        op: Operation<'stmt>,
+    ) -> Result<stmt::ValueStream<'stmt>> {
         use Operation::*;
-
-        println!("op={:#?}", op);
 
         let connection = self.connection.lock().unwrap();
 
@@ -61,8 +67,6 @@ impl Driver for Sqlite {
         let mut params = vec![];
         let sql_str = sql.to_sql_string(schema, &mut params);
 
-        println!("{} {:#?}", sql_str, params);
-
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
         if ty.is_none() {
@@ -77,8 +81,6 @@ impl Driver for Sqlite {
                         params.iter().map(value_from_param),
                     ))
                     .unwrap();
-
-                println!("sqlite; rows={}", ret);
 
                 return Ok(stmt::ValueStream::new());
             }
@@ -136,7 +138,7 @@ impl Driver for Sqlite {
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
-        for table in &schema.tables {
+        for table in schema.tables() {
             self.create_table(schema, table);
         }
 
@@ -145,15 +147,14 @@ impl Driver for Sqlite {
 }
 
 impl Sqlite {
-    fn create_table(&self, schema: &Schema, table: &schema::Table) {
+    fn create_table(&self, schema: &Schema, table: &schema::Table) -> Result<()> {
         let connection = self.connection.lock().unwrap();
 
         let mut params = vec![];
         let stmt = sql::Statement::create_table(table).to_sql_string(schema, &mut params);
         assert!(params.is_empty());
 
-        println!("{}", stmt);
-        connection.execute(&stmt, []).unwrap();
+        connection.execute(&stmt, [])?;
 
         // Create any indices
         for index in &table.indices {
@@ -165,8 +166,9 @@ impl Sqlite {
             let stmt = sql::Statement::create_index(index).to_sql_string(schema, &mut params);
             assert!(params.is_empty());
 
-            connection.execute(&stmt, []).unwrap();
+            connection.execute(&stmt, [])?;
         }
+        Ok(())
     }
 }
 

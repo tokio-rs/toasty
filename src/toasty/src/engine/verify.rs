@@ -41,7 +41,7 @@ impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
         self.visit_stmt_query(&i.selection);
 
         // Is not an empty update
-        assert!(!i.fields.is_empty(), "stmt = {:#?}", i);
+        assert!(!i.fields.is_empty(), "stmt = {i:#?}");
 
         // TODO: VERIFY THIS
 
@@ -82,7 +82,7 @@ impl<'stmt> VerifyExpr<'stmt> {
             | InSubquery(_)
             | Or(_)
             | Value(stmt::Value::Bool(_)) => {}
-            expr => panic!("Not a bool? {:#?}", expr),
+            expr => panic!("Not a bool? {expr:#?}"),
         }
     }
 }

@@ -1,7 +1,7 @@
 use super::*;
 
-impl<'a> Exec<'a> {
-    pub(super) async fn exec_query_pk(&mut self, action: &plan::QueryPk<'a>) -> Result<()> {
+impl<'stmt> Exec<'_, 'stmt> {
+    pub(super) async fn exec_query_pk(&mut self, action: &plan::QueryPk<'stmt>) -> Result<()> {
         let op = action.apply()?;
         let res = self.db.driver.exec(&self.db.schema, op.into()).await?;
 

@@ -85,13 +85,13 @@ impl<'a> Query<'a> {
         Query { stmt }
     }
     pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, User>> {
-        db.all(self).await
+        db.all(self.stmt).await
     }
     pub async fn first(self, db: &Db) -> Result<Option<User>> {
-        db.first(self).await
+        db.first(self.stmt).await
     }
     pub async fn get(self, db: &Db) -> Result<User> {
-        db.get(self).await
+        db.get(self.stmt).await
     }
     pub fn update(self) -> UpdateQuery<'a> {
         UpdateQuery::from(self)
@@ -239,7 +239,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<User>>) -> &mut Self {
-        self.stmt.set_expr(0, id.into().into_expr());
+        self.stmt.set_expr(0, id.into());
         self
     }
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -247,7 +247,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_name(&mut self, name: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(1, name.into().into_expr());
+        self.stmt.set_expr(1, name.into());
         self
     }
     pub fn email(mut self, email: impl Into<String>) -> Self {
@@ -255,7 +255,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_email(&mut self, email: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(2, email.into().into_expr());
+        self.stmt.set_expr(2, email.into());
         self
     }
     pub fn package(mut self, package: impl IntoExpr<'a, super::package::Package>) -> Self {
@@ -468,16 +468,16 @@ pub mod relation {
                 self,
                 db: &'a Db,
             ) -> Result<Cursor<'a, super::super::super::package::Package>> {
-                db.all(self).await
+                db.all(self.stmt).await
             }
             pub async fn first(
                 self,
                 db: &Db,
             ) -> Result<Option<super::super::super::package::Package>> {
-                db.first(self).await
+                db.first(self.stmt).await
             }
             pub async fn get(self, db: &Db) -> Result<super::super::super::package::Package> {
-                db.get(self).await
+                db.get(self.stmt).await
             }
             pub fn update(self) -> super::super::super::package::UpdateQuery<'a> {
                 super::super::super::package::UpdateQuery::from(self.stmt)

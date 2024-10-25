@@ -150,9 +150,9 @@ impl DynamoDB {
         let mut condition_expression = String::new();
 
         for (name, value) in &curr_unique_values {
-            let expr_name = format!("#{}", name);
-            let expr_value_name = format!(":{}", name);
-            condition_expression = format!("{} = {}", expr_name, expr_value_name);
+            let expr_name = format!("#{name}");
+            let expr_value_name = format!(":{name}");
+            condition_expression = format!("{expr_name} = {expr_value_name}");
             expression_names.insert(expr_name, name.clone());
             expression_values.insert(expr_value_name, value.clone());
         }

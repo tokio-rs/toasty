@@ -85,13 +85,13 @@ impl<'a> Query<'a> {
         Query { stmt }
     }
     pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, Package>> {
-        db.all(self).await
+        db.all(self.stmt).await
     }
     pub async fn first(self, db: &Db) -> Result<Option<Package>> {
-        db.first(self).await
+        db.first(self.stmt).await
     }
     pub async fn get(self, db: &Db) -> Result<Package> {
-        db.get(self).await
+        db.get(self.stmt).await
     }
     pub fn update(self) -> UpdateQuery<'a> {
         UpdateQuery::from(self)
@@ -254,7 +254,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_user_id(&mut self, user_id: impl Into<Id<super::user::User>>) -> &mut Self {
-        self.stmt.set_expr(1, user_id.into().into_expr());
+        self.stmt.set_expr(1, user_id.into());
         self
     }
     pub fn id(mut self, id: impl Into<Id<Package>>) -> Self {
@@ -262,7 +262,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<Package>>) -> &mut Self {
-        self.stmt.set_expr(2, id.into().into_expr());
+        self.stmt.set_expr(2, id.into());
         self
     }
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -270,7 +270,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_name(&mut self, name: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(3, name.into().into_expr());
+        self.stmt.set_expr(3, name.into());
         self
     }
     pub async fn exec(self, db: &Db) -> Result<()> {
@@ -394,8 +394,8 @@ pub mod relation {
             }
         }
         impl<'a> User<'a> {
-            pub async fn find<'db>(&self, db: &'db Db) -> Result<super::super::super::user::User> {
-                db.get(self).await
+            pub async fn find(&self, db: &Db) -> Result<super::super::super::user::User> {
+                db.get(self.into_select()).await
             }
         }
     }

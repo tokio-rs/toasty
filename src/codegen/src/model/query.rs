@@ -17,15 +17,15 @@ impl<'a> Generator<'a> {
                 }
 
                 pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, #struct_name>> {
-                    db.all(self).await
+                    db.all(self.stmt).await
                 }
 
                 pub async fn first(self, db: &Db) -> Result<Option<#struct_name>> {
-                    db.first(self).await
+                    db.first(self.stmt).await
                 }
 
                 pub async fn get(self, db: &Db) -> Result<#struct_name> {
-                    db.get(self).await
+                    db.get(self.stmt).await
                 }
 
                 pub fn update(self) -> UpdateQuery<'a> {

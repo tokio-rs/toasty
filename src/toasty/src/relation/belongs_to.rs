@@ -33,6 +33,9 @@ impl<T> Default for BelongsTo<T> {
 
 impl<T: fmt::Debug> fmt::Debug for BelongsTo<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.value.as_ref().unwrap().fmt(fmt)
+        match self.value.as_ref() {
+            Some(t) => t.fmt(fmt),
+            None => Ok(()),
+        }
     }
 }

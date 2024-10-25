@@ -74,11 +74,11 @@ impl DynamoDB {
         let mut update_expression = String::new();
 
         if !update_expression_set.is_empty() {
-            write!(update_expression, "SET {}", update_expression_set).unwrap();
+            write!(update_expression, "SET {update_expression_set}").unwrap();
         }
 
         if !update_expression_remove.is_empty() {
-            write!(update_expression, " REMOVE {}", update_expression_remove).unwrap();
+            write!(update_expression, " REMOVE {update_expression_remove}").unwrap();
         }
 
         match &unique_indices[..] {
@@ -106,7 +106,6 @@ impl DynamoDB {
                         .await;
 
                     if let Err(SdkError::ServiceError(e)) = res {
-                        println!("err={:#?}", e);
                         if let UpdateItemError::ConditionalCheckFailedException(_e) = e.err() {
                             /*
                             let record =
@@ -336,9 +335,9 @@ impl DynamoDB {
 
                         // Ensure value is unique
                         let mut expression_names = HashMap::new();
-                        let expr_name = format!("#{}", name);
+                        let expr_name = format!("#{name}");
 
-                        let condition_expression = format!("attribute_not_exists({})", expr_name);
+                        let condition_expression = format!("attribute_not_exists({expr_name})");
                         expression_names.insert(expr_name, name.clone());
 
                         transact_items.push(

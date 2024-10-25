@@ -20,6 +20,6 @@ async fn main() {
     // Create a user without a profile
     let user = db::User::create().name("John Doe").exec(&db).await.unwrap();
 
-    println!("user = {:#?}", user);
+    println!("user = {user:#?}");
     println!("profile: {:#?}", user.profile().get(&db).await);
 }
