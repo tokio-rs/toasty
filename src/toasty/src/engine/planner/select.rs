@@ -88,6 +88,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             sql_ty.push(column.ty.clone());
         }
 
+        /*
         let sql = sql::Statement::query(
             self.schema,
             table.id,
@@ -108,6 +109,8 @@ impl<'stmt> Planner<'_, 'stmt> {
         });
 
         output
+        */
+        todo!()
     }
 
     fn plan_select_kv(
@@ -132,6 +135,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             self.lower_expr2(model, result_filter);
         }
 
+        /*
         if index_plan.index.primary_key {
             // Is the index filter a set of keys
             if let Some(keys) = self.try_build_key_filter(index, &index_filter) {
@@ -198,6 +202,8 @@ impl<'stmt> Planner<'_, 'stmt> {
 
             get_by_key_out
         }
+        */
+        todo!()
     }
 
     fn plan_select_include(&mut self, base: ModelId, path: &stmt::Path, input: plan::VarId) {
