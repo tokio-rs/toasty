@@ -76,11 +76,10 @@ impl Driver for Sqlite {
             };
 
             if exec {
-                let ret = stmt
-                    .execute(rusqlite::params_from_iter(
-                        params.iter().map(value_from_param),
-                    ))
-                    .unwrap();
+                stmt.execute(rusqlite::params_from_iter(
+                    params.iter().map(value_from_param),
+                ))
+                .unwrap();
 
                 return Ok(stmt::ValueStream::new());
             }
@@ -139,7 +138,7 @@ impl Driver for Sqlite {
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
         for table in schema.tables() {
-            self.create_table(schema, table);
+            self.create_table(schema, table)?;
         }
 
         Ok(())
