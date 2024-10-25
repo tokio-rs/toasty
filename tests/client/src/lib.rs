@@ -30,22 +30,24 @@ macro_rules! tests {
             $f:ident
         ),+
     ) => {
+        #[cfg(feature = "dynamodb")]
         mod dynamodb {
             $(
                 #[tokio::test]
                 $( #[$attrs] )*
                 async fn $f() {
-                    super::$f($crate::db::SetupDynamoDb).await;
+                    super::$f($crate::db::dynamodb::SetupDynamoDb).await;
                 }
             )*
         }
 
+        #[cfg(feature = "sqlite")]
         mod sqlite {
             $(
                 #[tokio::test]
                 $( #[$attrs] )*
                 async fn $f() {
-                    super::$f($crate::db::SetupSqlite).await;
+                    super::$f($crate::db::sqlite::SetupSqlite).await;
                 }
             )*
         }
