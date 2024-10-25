@@ -250,7 +250,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<Profile>>) -> &mut Self {
-        self.stmt.set_expr(0, id.into().into_expr());
+        self.stmt.set_expr(0, id.into());
         self
     }
     pub fn user<'b>(mut self, user: impl IntoExpr<'a, self::relation::User<'b>>) -> Self {
@@ -270,7 +270,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_user_id(&mut self, user_id: impl Into<Id<super::user::User>>) -> &mut Self {
-        self.stmt.set_expr(2, user_id.into().into_expr());
+        self.stmt.set_expr(2, user_id.into());
         self
     }
     pub fn unset_user_id(&mut self) -> &mut Self {

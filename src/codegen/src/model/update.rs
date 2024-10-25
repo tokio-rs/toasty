@@ -246,7 +246,7 @@ impl<'a> Generator<'a> {
                         }
 
                         pub fn #set_ident(&mut self, #name: impl Into<#ty>) -> &mut Self {
-                            self.stmt.set_expr(#index, #name.into().into_expr());
+                            self.stmt.set_expr(#index, #name.into());
                             self
                         }
 

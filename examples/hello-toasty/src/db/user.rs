@@ -255,7 +255,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<User>>) -> &mut Self {
-        self.stmt.set_expr(0, id.into().into_expr());
+        self.stmt.set_expr(0, id.into());
         self
     }
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -263,7 +263,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_name(&mut self, name: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(1, name.into().into_expr());
+        self.stmt.set_expr(1, name.into());
         self
     }
     pub fn email(mut self, email: impl Into<String>) -> Self {
@@ -271,7 +271,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_email(&mut self, email: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(2, email.into().into_expr());
+        self.stmt.set_expr(2, email.into());
         self
     }
     pub fn todo(mut self, todo: impl IntoExpr<'a, super::todo::Todo>) -> Self {
@@ -287,7 +287,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_moto(&mut self, moto: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(4, moto.into().into_expr());
+        self.stmt.set_expr(4, moto.into());
         self
     }
     pub fn unset_moto(&mut self) -> &mut Self {

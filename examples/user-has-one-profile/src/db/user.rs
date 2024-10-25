@@ -229,7 +229,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<User>>) -> &mut Self {
-        self.stmt.set_expr(0, id.into().into_expr());
+        self.stmt.set_expr(0, id.into());
         self
     }
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -237,7 +237,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_name(&mut self, name: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(1, name.into().into_expr());
+        self.stmt.set_expr(1, name.into());
         self
     }
     pub fn profile(mut self, profile: impl IntoExpr<'a, super::profile::Profile>) -> Self {

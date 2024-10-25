@@ -258,7 +258,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<Todo>>) -> &mut Self {
-        self.stmt.set_expr(0, id.into().into_expr());
+        self.stmt.set_expr(0, id.into());
         self
     }
     pub fn title(mut self, title: impl Into<String>) -> Self {
@@ -266,7 +266,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_title(&mut self, title: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(1, title.into().into_expr());
+        self.stmt.set_expr(1, title.into());
         self
     }
     pub fn order(mut self, order: impl Into<i64>) -> Self {
@@ -274,7 +274,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_order(&mut self, order: impl Into<i64>) -> &mut Self {
-        self.stmt.set_expr(2, order.into().into_expr());
+        self.stmt.set_expr(2, order.into());
         self
     }
     pub fn user<'b>(mut self, user: impl IntoExpr<'a, self::relation::User<'b>>) -> Self {
@@ -290,7 +290,7 @@ impl<'a> UpdateQuery<'a> {
         self
     }
     pub fn set_user_id(&mut self, user_id: impl Into<Id<super::user::User>>) -> &mut Self {
-        self.stmt.set_expr(4, user_id.into().into_expr());
+        self.stmt.set_expr(4, user_id.into());
         self
     }
     pub async fn exec(self, db: &Db) -> Result<()> {

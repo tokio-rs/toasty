@@ -1,3 +1,7 @@
+use crate::{
+    stmt::{Expr, IntoExpr},
+    Model,
+};
 use toasty_core::stmt::{self, Value};
 
 use std::{
@@ -21,6 +25,42 @@ impl<M> Id<M> {
 
     pub fn to_string(&self) -> String {
         self.inner.to_string()
+    }
+}
+
+impl<'a, M: Model> IntoExpr<'a, Id<M>> for Id<M> {
+    fn into_expr(self) -> Expr<'a, Id<M>> {
+        Expr::from_value(self.inner.into())
+    }
+}
+
+impl<'a, M: Model> IntoExpr<'a, Id<M>> for &'a Id<M> {
+    fn into_expr(self) -> Expr<'a, Id<M>> {
+        Expr::from_value(Value::from(&self.inner))
+    }
+}
+
+impl<'a, M: Model> IntoExpr<'a, Id<M>> for String {
+    fn into_expr(self) -> Expr<'a, Id<M>> {
+        Expr::from_value(stmt::Id::from_string(M::ID, self).into())
+    }
+}
+
+impl<'a, M: Model> IntoExpr<'a, Id<M>> for &'a String {
+    fn into_expr(self) -> Expr<'a, Id<M>> {
+        Expr::from_value(stmt::Id::from_string(M::ID, self.clone()).into())
+    }
+}
+
+impl<'a, M: Model> IntoExpr<'a, Id<M>> for &'a str {
+    fn into_expr(self) -> Expr<'a, Id<M>> {
+        Expr::from_value(stmt::Id::from_string(M::ID, self.into()).into())
+    }
+}
+
+impl<'a, M: Model> From<Id<M>> for stmt::Expr<'a> {
+    fn from(value: Id<M>) -> Self {
+        stmt::Expr::Value(value.inner.into())
     }
 }
 
