@@ -35,7 +35,7 @@ impl DynamoDB {
                     .client
                     .delete_item()
                     .table_name(self.table_name(table))
-                    .set_key(Some(ddb_key(&table, key)))
+                    .set_key(Some(ddb_key(table, key)))
                     .set_expression_attribute_names(if filter_expression.is_some() {
                         Some(expr_attrs.attr_names)
                     } else {
@@ -70,7 +70,7 @@ impl DynamoDB {
                             .delete(
                                 Delete::builder()
                                     .table_name(self.table_name(table))
-                                    .set_key(Some(ddb_key(&table, key)))
+                                    .set_key(Some(ddb_key(table, key)))
                                     .set_expression_attribute_names(
                                         if filter_expression.is_some() {
                                             Some(expr_attrs.attr_names.clone())
@@ -132,7 +132,7 @@ impl DynamoDB {
             .client
             .get_item()
             .table_name(self.table_name(table))
-            .set_key(Some(ddb_key(&table, key)))
+            .set_key(Some(ddb_key(table, key)))
             .set_attributes_to_get(Some(attributes_to_get))
             .send()
             .await?;
@@ -162,7 +162,7 @@ impl DynamoDB {
                 .delete(
                     Delete::builder()
                         .table_name(self.table_name(table))
-                        .set_key(Some(ddb_key(&table, key)))
+                        .set_key(Some(ddb_key(table, key)))
                         .condition_expression(condition_expression)
                         .set_expression_attribute_names(Some(expression_names))
                         .set_expression_attribute_values(Some(expression_values))

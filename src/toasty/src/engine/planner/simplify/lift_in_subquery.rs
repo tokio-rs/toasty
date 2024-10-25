@@ -100,10 +100,10 @@ impl<'db> SimplifyExpr<'db> {
             return None;
         }
 
-        let pair = has_one.pair(&self.schema);
+        let pair = has_one.pair(self.schema);
 
         let expr = match &pair.foreign_key.fields[..] {
-            [fk_field] => stmt::Expr::project(&[fk_field.target]),
+            [fk_field] => stmt::Expr::project([fk_field.target]),
             _ => todo!("composite"),
         };
 

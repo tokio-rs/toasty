@@ -21,7 +21,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         // TODO: for now, this is required. The belongs_to FK must be the target
         // model's PK.
         if let Some(has_many) = field.ty.as_has_many() {
-            let belongs_to = has_many.pair(&self.schema);
+            let belongs_to = has_many.pair(self.schema);
 
             assert_eq!(
                 belongs_to.foreign_key.fields.len(),
@@ -52,7 +52,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             todo!("stmt={:#?}", stmt)
         };
 
-        let mut stmt = stmt.target.update(&self.schema);
+        let mut stmt = stmt.target.update(self.schema);
 
         match &field.ty {
             FieldTy::HasMany(has_many) => {

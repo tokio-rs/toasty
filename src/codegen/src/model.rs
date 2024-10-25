@@ -116,7 +116,7 @@ impl<'a> Generator<'a> {
 
     pub(crate) fn singular_name(&self, field: impl Into<FieldId>) -> &syn::Ident {
         let field = field.into();
-        &self.names.relations[&field].singular_name.as_ref().unwrap()
+        self.names.relations[&field].singular_name.as_ref().unwrap()
     }
 
     pub(crate) fn field_ty(&self, field: &Field, depth: usize) -> TokenStream {
@@ -202,7 +202,7 @@ impl<'a> Generator<'a> {
     }
 
     pub(crate) fn scoped_query_method_name(&self, query: QueryId) -> &syn::Ident {
-        &self.names.queries[&query]
+        self.names.queries[&query]
             .scoped_method_name
             .as_ref()
             .unwrap()
