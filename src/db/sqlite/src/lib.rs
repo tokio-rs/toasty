@@ -13,7 +13,7 @@ pub struct Sqlite {
 }
 
 impl Sqlite {
-    pub fn new() -> Sqlite {
+    pub fn in_memory() -> Sqlite {
         let connection = Connection::open_in_memory().unwrap();
 
         Sqlite {
