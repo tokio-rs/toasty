@@ -30,13 +30,15 @@ impl<'a, M: Model> Update<'a, M> {
     }
 
     pub fn set_expr(&mut self, field: usize, expr: impl Into<stmt::Expr<'a>>) {
-        self.untyped.fields.insert(field);
-        self.untyped.expr[field] = expr.into();
+        self.untyped.assignments.set(field, expr);
     }
 
     pub fn push_expr(&mut self, field: usize, expr: impl Into<stmt::Expr<'a>>) {
+        /*
         self.untyped.fields.insert(field);
         self.untyped.expr[field].push(expr);
+        */
+        todo!()
     }
 
     pub fn set_selection<S>(&mut self, selection: S)
@@ -47,7 +49,7 @@ impl<'a, M: Model> Update<'a, M> {
     }
 
     pub fn fields(&self) -> &stmt::PathFieldSet {
-        &self.untyped.fields
+        &self.untyped.assignments.fields
     }
 }
 
@@ -65,10 +67,7 @@ impl<'a, M: Model> Default for Update<'a, M> {
         Update {
             untyped: stmt::Update {
                 selection: stmt::Query::unit(),
-                fields: Default::default(),
-                expr: stmt::ExprRecord::from_iter(
-                    std::iter::repeat(stmt::Expr::null()).take(M::FIELD_COUNT),
-                ),
+                assignments: stmt::Assignments::default(),
                 condition: None,
                 returning: true,
             },

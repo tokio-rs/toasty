@@ -15,6 +15,9 @@ impl<'stmt> Exec<'_, 'stmt> {
             // Collect input
             let input = self.collect_input(&action.input[0]).await?;
 
+            todo!("FILTER = {:#?}\nINPUT = {input:#?}", action.filter);
+
+            /*
             let mut args = [Some(sql::Expr::from(stmt::Value::List(input)))];
 
             let mut filter = action.filter.clone();
@@ -25,6 +28,7 @@ impl<'stmt> Exec<'_, 'stmt> {
                 index: action.index,
                 filter,
             }
+            */
         } else {
             action.apply()?
         };

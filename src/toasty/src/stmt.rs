@@ -68,6 +68,7 @@ impl<'a, M: Model> Statement<'a, M> {
     where
         Q: IntoSelect<'a, Model = M>,
     {
+        /*
         let untyped = stmt::Update {
             fields,
             selection: selection.into_select().untyped,
@@ -81,6 +82,8 @@ impl<'a, M: Model> Statement<'a, M> {
             untyped,
             _p: PhantomData,
         }
+        */
+        todo!()
     }
 }
 

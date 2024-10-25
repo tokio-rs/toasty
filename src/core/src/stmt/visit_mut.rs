@@ -7,6 +7,10 @@ pub trait VisitMut<'stmt>: Sized {
         i.visit_mut(self);
     }
 
+    fn visit_assignments_mut(&mut self, i: &mut Assignments<'stmt>) {
+        visit_assignments_mut(self, i);
+    }
+
     fn visit_expr_mut(&mut self, i: &mut Expr<'stmt>) {
         visit_expr_mut(self, i);
     }
@@ -207,6 +211,17 @@ impl<'stmt, V: VisitMut<'stmt>> VisitMut<'stmt> for &mut V {
 
     fn visit_value_mut(&mut self, i: &mut Value<'stmt>) {
         VisitMut::visit_value_mut(&mut **self, i);
+    }
+}
+
+pub fn visit_assignments_mut<'stmt, V>(v: &mut V, node: &mut Assignments<'stmt>)
+where
+    V: VisitMut<'stmt> + ?Sized,
+{
+    for expr in &mut node.exprs {
+        if let Some(expr) = expr {
+            v.visit_expr_mut(expr);
+        }
     }
 }
 
@@ -438,7 +453,9 @@ pub fn visit_stmt_insert_mut<'stmt, V>(v: &mut V, node: &mut Insert<'stmt>)
 where
     V: VisitMut<'stmt> + ?Sized,
 {
-    v.visit_stmt_query_mut(&mut node.scope);
+    if let InsertTarget::Scope(query) = &mut node.target {
+        v.visit_stmt_query_mut(query);
+    }
     v.visit_expr_mut(&mut node.values);
 
     if let Some(returning) = &mut node.returning {
@@ -458,6 +475,11 @@ where
     V: VisitMut<'stmt> + ?Sized,
 {
     v.visit_stmt_query_mut(&mut node.selection);
+    v.visit_assignments_mut(&mut node.assignments);
+
+    if let Some(expr) = &mut node.condition {
+        v.visit_expr_mut(expr);
+    }
 }
 
 pub fn visit_stmt_delete_mut<'stmt, V>(v: &mut V, node: &mut Delete<'stmt>)

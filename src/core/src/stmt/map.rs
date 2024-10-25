@@ -79,6 +79,10 @@ pub trait Map<'stmt>: Sized {
         map_expr_ty(self, i)
     }
 
+    fn map_insert_target(&mut self, i: &InsertTarget<'stmt>) -> InsertTarget<'stmt> {
+        map_insert_target(self, i)
+    }
+
     fn map_projection(&mut self, i: &Projection) -> Projection {
         map_projection(self, i)
     }
@@ -309,6 +313,16 @@ where
     }
 }
 
+pub fn map_insert_target<'stmt, V>(v: &mut V, node: &InsertTarget<'stmt>) -> InsertTarget<'stmt>
+where
+    V: Map<'stmt> + ?Sized,
+{
+    match node {
+        InsertTarget::Scope(query) => InsertTarget::Scope(v.map_stmt_query(query)),
+        _ => node.clone(),
+    }
+}
+
 pub fn map_projection<'stmt, V>(v: &mut V, node: &Projection) -> Projection
 where
     V: Map<'stmt> + ?Sized,
@@ -356,7 +370,7 @@ where
     V: Map<'stmt> + ?Sized,
 {
     Insert {
-        scope: v.map_stmt_query(&node.scope),
+        target: v.map_insert_target(&node.target),
         values: v.map_expr(&node.values),
         returning: node
             .returning

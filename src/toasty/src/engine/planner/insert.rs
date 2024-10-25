@@ -11,13 +11,14 @@ impl<'stmt> Planner<'_, 'stmt> {
     pub(super) fn plan_insert(&mut self, mut stmt: stmt::Insert<'stmt>) -> Option<plan::VarId> {
         self.simplify_stmt_insert(&mut stmt);
 
-        let model = self.model(stmt.scope.body.as_select().source.as_model_id());
+        /*
+        let model = self.model(stmt.target.body.as_select().source.as_model_id());
 
         if let stmt::Expr::Record(record) = &stmt.values {
             assert!(!record.is_empty());
         }
 
-        let filter = &stmt.scope.body.as_select().filter;
+        let filter = &stmt.target.body.as_select().filter;
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -140,6 +141,8 @@ impl<'stmt> Planner<'_, 'stmt> {
         self.write_actions[action].as_insert_mut().output = output_plan;
 
         output_var
+        */
+        todo!()
     }
 
     fn plan_insert_record(
@@ -154,6 +157,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         self.verify_non_nullable_fields_have_values(model, &mut expr);
         self.apply_fk_association(model, &expr, returning_pk);
 
+        /*
         let lowered = self.lower_insert_expr(model, expr);
 
         self.write_actions[action]
@@ -163,6 +167,8 @@ impl<'stmt> Planner<'_, 'stmt> {
             .as_values_mut()
             .rows
             .push(lowered);
+        */
+        todo!()
     }
 
     // Checks all fields of a record and handles nulls

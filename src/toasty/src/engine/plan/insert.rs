@@ -9,7 +9,7 @@ pub(crate) struct Insert<'stmt> {
     pub output: Option<InsertOutput<'stmt>>,
 
     /// The insert statement
-    pub stmt: sql::Insert<'stmt>,
+    pub stmt: stmt::Insert<'stmt>,
 }
 
 #[derive(Debug)]

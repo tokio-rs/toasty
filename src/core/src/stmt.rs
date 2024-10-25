@@ -73,7 +73,7 @@ mod id;
 pub use id::Id;
 
 mod insert;
-pub use insert::Insert;
+pub use insert::{Insert, InsertTarget};
 
 mod link;
 pub use link::Link;
@@ -158,7 +158,7 @@ pub mod visit;
 pub use visit::Visit;
 
 use crate::{
-    schema::{Column, ColumnId, Field, FieldId, Model, ModelId, Schema},
+    schema::{Column, ColumnId, Field, FieldId, Model, ModelId, Schema, TableId},
     stmt, Error, Result,
 };
 

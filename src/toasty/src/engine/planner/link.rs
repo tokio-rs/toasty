@@ -57,7 +57,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         match &field.ty {
             FieldTy::HasMany(has_many) => {
                 let key = key.eval_const();
-                stmt.set(has_many.pair, key);
+                stmt.assignments.set(has_many.pair, key);
             }
             ty => todo!("ty={:#?}", ty),
         }

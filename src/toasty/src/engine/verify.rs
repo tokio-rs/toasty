@@ -20,11 +20,18 @@ pub(crate) fn apply<'stmt>(schema: &'stmt Schema, stmt: &Statement<'stmt>) {
 
 impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
     fn visit_stmt_insert(&mut self, i: &stmt::Insert<'stmt>) {
-        self.visit_stmt_query(&i.scope);
+        let model = match &i.target {
+            stmt::InsertTarget::Scope(query) => {
+                self.visit_stmt_query(query);
+                query.body.as_select().source.as_model_id()
+            }
+            stmt::InsertTarget::Model(model) => *model,
+            _ => todo!(),
+        };
 
         VerifyExpr {
             schema: self.schema,
-            model: i.scope.body.as_select().source.as_model_id(),
+            model,
         }
         .visit(&i.values);
     }
@@ -41,7 +48,7 @@ impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
         self.visit_stmt_query(&i.selection);
 
         // Is not an empty update
-        assert!(!i.fields.is_empty(), "stmt = {i:#?}");
+        assert!(!i.assignments.is_empty(), "stmt = {i:#?}");
 
         // TODO: VERIFY THIS
 

@@ -2,10 +2,8 @@ use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Insert<'stmt> {
-    /// The scope in which the record is inserted. This identifies the model
-    /// being inserted and is used to populate defaults fields and some level of
-    /// validations.
-    pub scope: Query<'stmt>,
+    /// Where to insert the values
+    pub target: InsertTarget<'stmt>,
 
     /// Expression that evaluates to the values to insert.
     pub values: Expr<'stmt>,
@@ -13,9 +11,24 @@ pub struct Insert<'stmt> {
     /// Optionally return data from the insertion
     pub returning: Option<Returning<'stmt>>,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum InsertTarget<'stmt> {
+    /// Inserting into a scope implies that the inserted value should be
+    /// included by the query after insertion. This could be a combination of
+    /// setting default field values or validating existing ones.
+    Scope(Query<'stmt>),
+
+    /// Insert a model
+    Model(ModelId),
+
+    /// Insert into a table
+    Table(TableId),
+}
+
 impl<'stmt> Insert<'stmt> {
     pub fn merge(&mut self, other: Insert<'stmt>) {
-        if self.scope != other.scope {
+        if self.target != other.target {
             todo!("handle this case");
         }
 

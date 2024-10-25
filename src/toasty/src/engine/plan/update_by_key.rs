@@ -16,12 +16,12 @@ pub(crate) struct UpdateByKey<'stmt> {
     pub key: eval::Expr<'stmt>,
 
     /// Assignments
-    pub assignments: Vec<sql::Assignment<'stmt>>,
+    pub assignments: stmt::Assignments<'stmt>,
 
     /// Only update keys that match the filter
-    pub filter: Option<sql::Expr<'stmt>>,
+    pub filter: Option<stmt::Expr<'stmt>>,
 
-    pub condition: Option<sql::Expr<'stmt>>,
+    pub condition: Option<stmt::Expr<'stmt>>,
 }
 
 impl<'stmt> UpdateByKey<'stmt> {

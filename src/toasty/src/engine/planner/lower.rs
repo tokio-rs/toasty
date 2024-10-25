@@ -12,6 +12,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         todo!()
     }
 
+    /*
     pub(crate) fn lower_insert_expr(
         &self,
         model: &Model,
@@ -38,7 +39,9 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         lowered
     }
+    */
 
+    /*
     pub(crate) fn lower_update_expr(
         &self,
         model: &Model,
@@ -112,6 +115,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             },
         }
     }
+    */
 
     pub(crate) fn lower_expr2(&self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
         LowerExpr2 {

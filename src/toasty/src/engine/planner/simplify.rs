@@ -116,12 +116,17 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
     }
 
     fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert<'stmt>) {
-        self.visit_stmt_query_mut(&mut i.scope);
+        let model = match &mut i.target {
+            stmt::InsertTarget::Scope(query) => {
+                self.visit_stmt_query_mut(query);
+                query.body.as_select().source.as_model_id()
+            }
+            stmt::InsertTarget::Model(model) => *model,
+            _ => todo!(),
+        };
 
         let mut simplify_expr = SimplifyExpr {
-            model: self
-                .schema
-                .model(i.scope.body.as_select().source.as_model_id()),
+            model: self.schema.model(model),
             schema: self.schema,
         };
 
@@ -138,6 +143,7 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
             schema: self.schema,
         };
 
+        /*
         for expr in i.expr.iter_mut() {
             simplify_expr.visit_expr_mut(expr);
         }
@@ -145,6 +151,8 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
         if let Some(expr) = &mut i.condition {
             simplify_expr.visit_expr_mut(expr);
         }
+        */
+        todo!()
     }
 
     fn visit_stmt_select_mut(&mut self, i: &mut stmt::Select<'stmt>) {

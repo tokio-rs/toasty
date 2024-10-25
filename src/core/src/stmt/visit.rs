@@ -7,6 +7,10 @@ pub trait Visit<'stmt>: Sized {
         i.visit(self);
     }
 
+    fn visit_assignments(&mut self, i: &Assignments<'stmt>) {
+        visit_assignments(self, i);
+    }
+
     fn visit_expr(&mut self, i: &Expr<'stmt>) {
         visit_expr(self, i);
     }
@@ -219,6 +223,17 @@ impl<'stmt, V: Visit<'stmt>> Visit<'stmt> for &mut V {
 
     fn visit_values(&mut self, i: &Values<'stmt>) {
         Visit::visit_values(&mut **self, i);
+    }
+}
+
+pub fn visit_assignments<'stmt, V>(v: &mut V, node: &Assignments<'stmt>)
+where
+    V: Visit<'stmt> + ?Sized,
+{
+    for expr in &node.exprs {
+        if let Some(expr) = expr {
+            v.visit_expr(expr);
+        }
     }
 }
 
@@ -457,7 +472,9 @@ pub fn visit_stmt_insert<'stmt, V>(v: &mut V, node: &Insert<'stmt>)
 where
     V: Visit<'stmt> + ?Sized,
 {
-    v.visit_stmt_query(&node.scope);
+    if let InsertTarget::Scope(scope) = &node.target {
+        v.visit_stmt_query(scope);
+    }
     v.visit_expr(&node.values);
 
     if let Some(returning) = &node.returning {
@@ -493,6 +510,11 @@ where
     V: Visit<'stmt> + ?Sized,
 {
     v.visit_stmt_query(&node.selection);
+    v.visit_assignments(&node.assignments);
+
+    if let Some(expr) = &node.condition {
+        v.visit_expr(expr);
+    }
 }
 
 pub fn visit_value<'stmt, V>(v: &mut V, node: &Value<'stmt>)

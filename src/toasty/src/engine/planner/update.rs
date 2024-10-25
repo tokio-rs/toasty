@@ -10,6 +10,7 @@ impl<'stmt> Planner<'_, 'stmt> {
     // method returns the var in which it will be stored.
     pub(super) fn plan_update(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
         self.simplify_stmt_update(&mut stmt);
+        /*
 
         let model = self.model(stmt.selection.body.as_select().source.as_model_id());
 
@@ -63,9 +64,12 @@ impl<'stmt> Planner<'_, 'stmt> {
         } else {
             self.plan_update_kv(stmt)
         }
+        */
+        todo!()
     }
 
     fn plan_update_sql(&mut self, stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
+        /*
         let model = self.model(stmt.selection.body.as_select().source.as_model_id());
 
         if stmt.fields.is_empty() {
@@ -109,6 +113,8 @@ impl<'stmt> Planner<'_, 'stmt> {
         });
 
         output_var
+        */
+        todo!()
     }
 
     fn plan_update_kv(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
@@ -124,6 +130,8 @@ impl<'stmt> Planner<'_, 'stmt> {
         let mut index_filter = index_plan.index_filter;
         let index = self.schema.index(index_plan.index.lowering.index);
         self.lower_index_filter(table, model, index_plan.index, &mut index_filter);
+
+        /*
 
         /*
          *
@@ -284,5 +292,8 @@ impl<'stmt> Planner<'_, 'stmt> {
 
             output
         }
+
+        */
+        todo!();
     }
 }

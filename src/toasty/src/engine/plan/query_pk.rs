@@ -13,13 +13,13 @@ pub(crate) struct QueryPk<'stmt> {
     pub columns: Vec<ColumnId>,
 
     /// How to filter the index.
-    pub pk_filter: sql::Expr<'stmt>,
+    pub pk_filter: stmt::Expr<'stmt>,
 
     /// How to project the result returned by the driver
     pub project: eval::Expr<'stmt>,
 
     /// Filter to pass to the database
-    pub filter: Option<sql::Expr<'stmt>>,
+    pub filter: Option<stmt::Expr<'stmt>>,
 
     /// Filter to apply in-memory
     pub post_filter: Option<eval::Expr<'stmt>>,

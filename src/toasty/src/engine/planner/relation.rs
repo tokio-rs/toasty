@@ -86,7 +86,7 @@ impl<'stmt> Planner<'_, 'stmt> {
 
                     if field.nullable {
                         let mut stmt = scope.update(&planner.schema);
-                        stmt.set(field.id, stmt::Value::Null);
+                        stmt.assignments.set(field.id, stmt::Value::Null);
                         planner.plan_update(stmt);
                     } else {
                         todo!("delete any models with the association currently being set");
@@ -232,7 +232,8 @@ impl<'stmt> Planner<'_, 'stmt> {
         )
         .update(&self.schema);
 
-        stmt.set(has_many.pair, stmt::ExprStmt::new(scope.clone()));
+        stmt.assignments
+            .set(has_many.pair, stmt::ExprStmt::new(scope.clone()));
         self.plan_update(stmt);
     }
 
@@ -282,7 +283,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         if self.schema.field(has_one.pair).nullable {
             // TODO: unify w/ has_many ops?
             let mut stmt = pair_scope.update(&self.schema);
-            stmt.set(has_one.pair, stmt::Value::Null);
+            stmt.assignments.set(has_one.pair, stmt::Value::Null);
             self.plan_update(stmt);
         } else {
             self.plan_delete(pair_scope.delete());
@@ -311,7 +312,8 @@ impl<'stmt> Planner<'_, 'stmt> {
         )
         .update(self.schema);
 
-        stmt.set(has_one.pair, stmt::ExprStmt::new(scope.clone()));
+        stmt.assignments
+            .set(has_one.pair, stmt::ExprStmt::new(scope.clone()));
         self.plan_update(stmt);
     }
 
@@ -324,12 +326,15 @@ impl<'stmt> Planner<'_, 'stmt> {
         // Returning does nothing in this context.
         stmt.returning = None;
 
-        stmt.scope.and(
-            self.relation_pair_scope(has_many.pair, scope.clone())
-                .body
-                .into_select()
-                .filter,
-        );
+        /*
+            stmt.target.and(
+                self.relation_pair_scope(has_many.pair, scope.clone())
+                    .body
+                    .into_select()
+                    .filter,
+            );
+        */
+        todo!();
 
         self.plan_insert(stmt);
     }
@@ -350,12 +355,15 @@ impl<'stmt> Planner<'_, 'stmt> {
             self.plan_mut_has_one_nullify(has_one, scope);
         }
 
-        stmt.scope.and(
+        /*
+        stmt.target.and(
             self.relation_pair_scope(has_one.pair, scope.clone())
                 .body
                 .into_select()
                 .filter,
         );
+        */
+        todo!();
 
         self.plan_insert(stmt);
     }

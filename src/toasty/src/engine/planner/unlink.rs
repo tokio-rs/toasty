@@ -29,7 +29,7 @@ impl<'stmt> Planner<'_, 'stmt> {
 
                     // This protects against races.
                     stmt.condition = Some(stmt::Expr::eq(has_many.pair, key));
-                    stmt.set(has_many.pair, stmt::Value::Null);
+                    stmt.assignments.set(has_many.pair, stmt::Value::Null);
 
                     self.plan_update(stmt);
                 } else {

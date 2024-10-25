@@ -8,27 +8,13 @@ pub struct Insert<'a, M: ?Sized> {
 }
 
 impl<'a, M: Model> Insert<'a, M> {
-    pub fn new<S>(scope: S, records: Vec<stmt::Expr<'a>>) -> Insert<'a, M>
-    where
-        S: IntoSelect<'a, Model = M>,
-    {
-        Insert {
-            untyped: stmt::Insert {
-                scope: scope.into_select().untyped,
-                values: stmt::ExprRecord::from_vec(records).into(),
-                returning: Some(stmt::Returning::Star),
-            },
-            _p: PhantomData,
-        }
-    }
-
     /// Create an insertion statement that inserts an empty record (all fields are null).
     ///
     /// This insertion statement is not guaranteed to be valid.
     pub fn blank() -> Insert<'a, M> {
         Insert {
             untyped: stmt::Insert {
-                scope: stmt::Query::filter(M::ID, true),
+                target: stmt::InsertTarget::Model(M::ID),
                 values: stmt::ExprRecord::from_vec(vec![stmt::Expr::record(
                     std::iter::repeat(stmt::Expr::null()).take(M::FIELD_COUNT),
                 )])
@@ -51,7 +37,7 @@ impl<'a, M: Model> Insert<'a, M> {
     where
         S: IntoSelect<'a, Model = M>,
     {
-        self.untyped.scope = scope.into_select().untyped;
+        self.untyped.target = stmt::InsertTarget::Scope(scope.into_select().untyped);
     }
 
     /// Set a record value for the last record in the statement
