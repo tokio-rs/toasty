@@ -12,10 +12,7 @@ async fn string_to_id_expr(s: impl Setup) {
 
     let db = s.setup(db::load_schema()).await;
 
-    let foo = db::Foo::create()
-        .exec(&db)
-        .await
-        .unwrap();
+    let foo = db::Foo::create().exec(&db).await.unwrap();
 
     let id = foo.id.to_string();
 
@@ -32,6 +29,4 @@ async fn string_to_id_expr(s: impl Setup) {
     assert_eq!(foo2.id, foo.id);
 }
 
-tests!(
-    string_to_id_expr,
-);
+tests!(string_to_id_expr,);
