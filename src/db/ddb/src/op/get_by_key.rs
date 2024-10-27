@@ -14,7 +14,7 @@ impl DynamoDB {
                 .client
                 .get_item()
                 .table_name(self.table_name(table))
-                .set_key(Some(ddb_key(&table, &op.keys[0])))
+                .set_key(Some(ddb_key(table, &op.keys[0])))
                 .send()
                 .await?;
 
@@ -45,7 +45,7 @@ impl DynamoDB {
             let mut keys = vec![];
 
             for key in &op.keys {
-                keys.push(ddb_key(&table, key));
+                keys.push(ddb_key(table, key));
             }
 
             let res = self

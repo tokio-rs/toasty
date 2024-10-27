@@ -61,7 +61,7 @@ impl DynamoDB {
 
                     self.client
                         .put_item()
-                        .table_name(&self.table_name(table))
+                        .table_name(self.table_name(table))
                         .set_item(Some(insert_items))
                         .send()
                         .await?;

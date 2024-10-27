@@ -335,7 +335,7 @@ impl Builder {
                     // and one by foreign key.
                     for by_fk in by_fk {
                         let id = QueryId(self.queries.len());
-                        let mut builder = Query::find_by(id, &model, by_fk);
+                        let mut builder = Query::find_by(id, model, by_fk);
 
                         for index_field in &fields {
                             builder.field(model.field(index_field));
@@ -354,7 +354,7 @@ impl Builder {
                             let id = QueryId(self.queries.len());
                             // TODO: do we need to generate multiple versions `by_fk`
                             // like above.
-                            let mut builder = Query::find_by(id, &model, by_fk);
+                            let mut builder = Query::find_by(id, model, by_fk);
                             builder.many();
 
                             for index_field in &index.fields {

@@ -85,7 +85,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                     );
 
                     if field.nullable {
-                        let mut stmt = scope.update(&planner.schema);
+                        let mut stmt = scope.update(planner.schema);
                         stmt.set(field.id, stmt::Value::Null);
                         planner.plan_update(stmt);
                     } else {
@@ -228,7 +228,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             has_many.target,
             stmt::Expr::eq(stmt::Expr::self_expr(), value),
         )
-        .update(&self.schema);
+        .update(self.schema);
 
         stmt.set(has_many.pair, stmt::ExprStmt::new(scope.clone()));
         self.plan_update(stmt);
@@ -279,7 +279,7 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         if self.schema.field(has_one.pair).nullable {
             // TODO: unify w/ has_many ops?
-            let mut stmt = pair_scope.update(&self.schema);
+            let mut stmt = pair_scope.update(self.schema);
             stmt.set(has_one.pair, stmt::Value::Null);
             self.plan_update(stmt);
         } else {

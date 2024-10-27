@@ -28,7 +28,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                 let position = expr_arg.position;
 
                 // Replace w/ a project... because
-                *expr = stmt::Expr::project(&[position]);
+                *expr = stmt::Expr::project([position]);
 
                 Extract::Arg(position)
             }
