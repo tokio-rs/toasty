@@ -90,7 +90,7 @@ impl DynamoDB {
                         .client
                         .update_item()
                         .table_name(self.table_name(table))
-                        .set_key(Some(ddb_key(&table, key)))
+                        .set_key(Some(ddb_key(table, key)))
                         .set_update_expression(Some(update_expression))
                         .set_expression_attribute_names(Some(expr_attrs.attr_names))
                         .set_expression_attribute_values(if !expr_attrs.attr_values.is_empty() {
@@ -149,7 +149,7 @@ impl DynamoDB {
                                 .update(
                                     Update::builder()
                                         .table_name(self.table_name(table))
-                                        .set_key(Some(ddb_key(&table, key)))
+                                        .set_key(Some(ddb_key(table, key)))
                                         .set_update_expression(Some(update_expression.clone()))
                                         .set_expression_attribute_names(Some(
                                             expr_attrs.attr_names.clone(),
@@ -208,7 +208,7 @@ impl DynamoDB {
                     .client
                     .get_item()
                     .table_name(self.table_name(table))
-                    .set_key(Some(ddb_key(&table, key)))
+                    .set_key(Some(ddb_key(table, key)))
                     .set_attributes_to_get(Some(attributes_to_get))
                     .send()
                     .await?;
@@ -270,7 +270,7 @@ impl DynamoDB {
                             .update(
                                 Update::builder()
                                     .table_name(self.table_name(table))
-                                    .set_key(Some(ddb_key(&table, key)))
+                                    .set_key(Some(ddb_key(table, key)))
                                     .condition_expression(condition_expression)
                                     .set_update_expression(Some(update_expression))
                                     .set_expression_attribute_names(Some(expr_attrs.attr_names))

@@ -490,7 +490,7 @@ impl<'a> ModelLoweringBuilder<'a> {
             .unwrap();
 
         if column.ty == primitive.ty {
-            stmt::Expr::project(&[i])
+            stmt::Expr::project([i])
         } else {
             // Project the enum to the model
             let ty_enum = match &column.ty {
@@ -507,7 +507,7 @@ impl<'a> ModelLoweringBuilder<'a> {
                 })
                 .unwrap();
 
-            stmt::Expr::project(&[i, variant.discriminant])
+            stmt::Expr::project([i, variant.discriminant])
         }
     }
 }

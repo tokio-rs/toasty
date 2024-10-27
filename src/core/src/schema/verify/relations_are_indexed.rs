@@ -17,11 +17,11 @@ impl Verify<'_> {
     }
 
     fn verify_has_many_relation_is_indexed(&self, rel: &HasMany) {
-        self.verify_has_relation_is_indexed(rel.target(&self.schema), rel.pair);
+        self.verify_has_relation_is_indexed(rel.target(self.schema), rel.pair);
     }
 
     fn verify_has_one_relation_is_indexed(&self, rel: &HasOne) {
-        self.verify_has_relation_is_indexed(rel.target(&self.schema), rel.pair);
+        self.verify_has_relation_is_indexed(rel.target(self.schema), rel.pair);
     }
 
     fn verify_has_relation_is_indexed(&self, target: &Model, pair: FieldId) {

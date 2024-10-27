@@ -66,7 +66,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         let input = self.extract_input(filter, &[], true);
 
         // Figure out which index to use for the query
-        let index_plan = self.plan_index_path2(model, &filter);
+        let index_plan = self.plan_index_path2(model, filter);
         let mut index_filter = index_plan.index_filter;
         let index = self.schema.index(index_plan.index.lowering.index);
         self.lower_index_filter(table, model, index_plan.index, &mut index_filter);
@@ -75,7 +75,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             if let Some(keys) = self.try_build_key_filter(index, &index_filter) {
                 let filter = index_plan.result_filter.clone().map(|mut stmt| {
                     self.lower_expr2(model, &mut stmt);
-                    sql::Expr::from_stmt(&self.schema, table.id, stmt)
+                    sql::Expr::from_stmt(self.schema, table.id, stmt)
                 });
 
                 self.push_write_action(plan::DeleteByKey {
@@ -109,7 +109,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             self.push_write_action(plan::DeleteByKey {
                 input: vec![plan::Input::from_var(pk_by_index_out)],
                 table: table.id,
-                keys: eval::Expr::project(&[0]),
+                keys: eval::Expr::project([0]),
                 filter: index_plan
                     .result_filter
                     .map(|stmt| sql::Expr::from_stmt(self.schema, table.id, stmt)),

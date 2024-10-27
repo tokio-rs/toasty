@@ -103,7 +103,7 @@ impl<'a> Generator<'a> {
                     }
                 }
                 FieldTy::Primitive(_) => {
-                    let ty = self.field_ty(&field, 0);
+                    let ty = self.field_ty(field, 0);
                     let ty = quote!(impl Into<#ty>);
 
                     quote! {

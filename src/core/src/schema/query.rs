@@ -283,7 +283,7 @@ impl<'a> FindByBuilder<'a> {
                     match &rel.foreign_key.fields[..] {
                         [] => panic!("foreign keys cannot be empty"),
                         [fk_field] => {
-                            exprs.push(stmt::Expr::project(&[field.id, fk_field.target]));
+                            exprs.push(stmt::Expr::project([field.id, fk_field.target]));
                             tys.push(
                                 self.model
                                     .field(fk_field.source)
