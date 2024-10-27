@@ -207,13 +207,13 @@ impl<'stmt> Planner<'_, 'stmt> {
 
             let condition = stmt.condition.map(|mut stmt| {
                 self.lower_expr2(model, &mut stmt);
-                sql::Expr::from_stmt(&self.schema, table.id, stmt)
+                sql::Expr::from_stmt(self.schema, table.id, stmt)
             });
 
             let filter = index_plan.result_filter.clone().map(|stmt| {
                 // Was lowered above...
                 // self.lower_expr2(model, &mut stmt);
-                sql::Expr::from_stmt(&self.schema, table.id, stmt)
+                sql::Expr::from_stmt(self.schema, table.id, stmt)
             });
 
             let assignments = columns
@@ -221,7 +221,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                 .zip(projected.into_iter())
                 .map(|(column, value)| sql::Assignment {
                     target: column,
-                    value: sql::Expr::from_stmt(&self.schema, table.id, value),
+                    value: sql::Expr::from_stmt(self.schema, table.id, value),
                 })
                 .collect();
 

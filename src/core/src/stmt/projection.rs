@@ -67,7 +67,7 @@ impl Projection {
     }
 
     pub fn resolve_field<'a>(&self, schema: &'a Schema, expr_self: &'a Model) -> &'a Field {
-        self.steps.resolve_field(schema, &expr_self)
+        self.steps.resolve_field(schema, expr_self)
     }
 
     // TODO: unify with above
@@ -192,7 +192,7 @@ impl Steps {
             let target = match &projected.ty {
                 Primitive(..) => panic!("failed to resolve path"),
                 BelongsTo(belongs_to) => belongs_to.target(schema),
-                HasMany(has_many) => &has_many.target(schema),
+                HasMany(has_many) => has_many.target(schema),
                 HasOne(_) => todo!(),
             };
 

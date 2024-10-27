@@ -171,7 +171,7 @@ impl<'a, 'stmt> IndexPlanner<'a, 'stmt> {
 
         for (i, index_match) in self.index_matches.iter().enumerate() {
             index_paths.push(IndexPath {
-                cost: index_match.compute_cost(&self.filter),
+                cost: index_match.compute_cost(self.filter),
                 index_match: i,
             });
         }

@@ -291,7 +291,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
                 write!(self.dst, " ")?;
                 self.binary_op(op)?;
                 write!(self.dst, " ")?;
-                self.expr(&rhs)?;
+                self.expr(rhs)?;
             }
             Expr::Value(value) => self.value(value)?,
             Expr::Column(column_id) => {
@@ -343,7 +343,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
                 self.expr(expr)?;
                 write!(self.dst, " IN (")?;
 
-                self.query(&subquery)?;
+                self.query(subquery)?;
                 write!(self.dst, ")")?;
             }
             Expr::IsNotNull(expr) => {
