@@ -11,14 +11,13 @@ use toasty_sqlite::Sqlite;
 #[cfg(feature = "dynamodb")]
 use toasty_dynamodb::DynamoDB;
 
-
 #[tokio::main]
 async fn main() {
     let schema_file: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    .join("examples")
-    .join("hello-toasty")
-    .join("schema.toasty");
-   
+        .join("examples")
+        .join("hello-toasty")
+        .join("schema.toasty");
+
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
     println!("{schema:#?}");
