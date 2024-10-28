@@ -1,5 +1,7 @@
 use super::*;
 
+use std::fmt::{self, Write};
+
 pub trait Params<'stmt> {
     fn push(&mut self, param: &stmt::Value<'stmt>);
 }
@@ -18,10 +20,6 @@ struct Formatter<'a, T> {
 
     /// Query paramaters (referenced by placeholders) are stored here.
     params: &'a mut T,
-
-    /// Maps aliases to strings. For now, aliases are all tables. Eventually
-    /// there will be more options.
-    aliases: Vec<TableId>,
 }
 
 impl<'a> Serializer<'a> {
@@ -39,41 +37,17 @@ impl<'a> Serializer<'a> {
 }
 
 impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
-    fn build_alias_table(&mut self, stmt: &Statement<'stmt>) {
-        let table_with_join = match stmt {
-            Statement::Delete(stmt) => {
-                assert_eq!(1, stmt.from.len());
-                &stmt.from[0]
-            }
-            Statement::Insert(stmt) => {
-                assert!(stmt.source.is_values());
-                return;
-            }
-            Statement::Query(stmt) => match &*stmt.body {
-                ExprSet::Select(select) => {
-                    assert_eq!(1, select.from.len());
-                    &select.from[0]
-                }
-                _ => todo!(),
-            },
-            Statement::Update(stmt) => &stmt.table,
-            _ => return,
-        };
-
-        assert_eq!(0, table_with_join.alias);
-        assert!(self.aliases.is_empty());
-
-        self.aliases.push(table_with_join.table);
-    }
-
     fn statement(&mut self, statement: &Statement<'stmt>) -> fmt::Result {
         match statement {
+            /*
             Statement::CreateIndex(stmt) => self.create_index(stmt)?,
             Statement::CreateTable(stmt) => self.create_table(stmt)?,
+            */
             Statement::Delete(stmt) => self.delete(stmt)?,
             Statement::Insert(stmt) => self.insert(stmt)?,
             Statement::Query(stmt) => self.query(stmt)?,
             Statement::Update(stmt) => self.update(stmt)?,
+            _ => todo!("stmt = {statement:#?}"),
         }
 
         write!(self.dst, ";")?;
@@ -81,6 +55,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
+    /*
     fn create_index(&mut self, stmt: &CreateIndex<'stmt>) -> fmt::Result {
         write!(
             self.dst,
@@ -146,11 +121,13 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         self.ty(&stmt.ty)?;
         Ok(())
     }
+    */
 
     fn query(&mut self, query: &Query<'stmt>) -> fmt::Result {
         match &*query.body {
             ExprSet::Select(select) => self.select(select),
             ExprSet::Values(values) => self.values(values),
+            _ => todo!("query={query:#?}"),
         }
     }
 
@@ -159,15 +136,14 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
 
         assert!(delete.returning.is_none());
 
-        for table_with_join in &delete.from {
+        for table_with_join in delete.from.as_table_with_joins() {
             let table = self.schema.table(table_with_join.table);
             write!(self.dst, "\"{}\"", table.name)?;
         }
 
         write!(self.dst, " WHERE ")?;
 
-        let selection = delete.selection.as_ref().unwrap();
-        self.expr(selection)?;
+        self.expr(&delete.filter)?;
 
         Ok(())
     }

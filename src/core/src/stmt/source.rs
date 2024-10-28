@@ -4,6 +4,9 @@ use super::*;
 pub enum Source {
     /// Source is a model
     Model(SourceModel),
+
+    /// Source is a database table (lowered)
+    Table(Vec<TableWithJoins>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -19,12 +22,18 @@ impl Source {
     pub fn as_model(&self) -> &SourceModel {
         match self {
             Source::Model(source) => source,
+            Source::Table(_) => todo!(),
         }
     }
 
     pub fn as_model_id(&self) -> ModelId {
+        self.as_model().model
+    }
+
+    pub fn as_table_with_joins(&self) -> &[TableWithJoins] {
         match self {
-            Source::Model(source) => source.model,
+            Source::Table(source) => source,
+            _ => todo!(),
         }
     }
 }

@@ -26,6 +26,7 @@ impl<'stmt> Select<'stmt> {
     pub(crate) fn include(&mut self, path: impl Into<Path>) {
         match &mut self.source {
             Source::Model(source) => source.include.push(path.into()),
+            Source::Table(_) => panic!(),
         }
     }
 

@@ -125,9 +125,12 @@ pub use select::Select;
 mod source;
 pub use source::{Source, SourceModel};
 
-// pub mod sql;
+pub mod sql;
 
 pub mod substitute;
+
+mod table_with_joins;
+pub use table_with_joins::TableWithJoins;
 
 mod ty;
 pub use ty::Type;
