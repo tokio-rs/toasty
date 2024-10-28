@@ -6,13 +6,11 @@ use db::{Todo, User};
 use toasty::Db;
 use toasty_sqlite::Sqlite;
 
-
 fn assert_sync_send<T: Send>(_: T) {}
 
 #[tokio::main]
 async fn main() {
     let schema_file: PathBuf = std::env::current_dir().unwrap().join("schema.toasty");
- 
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
     println!("{schema:#?}");
