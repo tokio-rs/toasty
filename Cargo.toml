@@ -20,7 +20,7 @@ members = [
     "examples/user-has-one-profile",
 
     # Tests
-    "tests/client", "examples/sqlite-hello-toasty",
+    "tests/client",
 ]
 
 resolver = "2"
