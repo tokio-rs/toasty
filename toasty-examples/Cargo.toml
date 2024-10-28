@@ -1,0 +1,18 @@
+[package]
+name = "toasty-examples"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+toasty = { path = "../src/toasty" }
+toasty-dynamodb = { path = "../src/db/ddb", optional = true }
+toasty-sqlite = { path = "../src/db/sqlite", optional = true }
+
+tokio = { version = "1.18", features = ["full"] }
+
+[features]
+default = ["sqlite"]
+dynamodb = ["toasty-dynamodb"]
+sqlite = ["toasty-sqlite"]
+
+
