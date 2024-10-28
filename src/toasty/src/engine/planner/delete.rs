@@ -4,7 +4,7 @@ impl<'stmt> Planner<'_, 'stmt> {
     pub(super) fn plan_delete(&mut self, mut stmt: stmt::Delete<'stmt>) {
         self.simplify_stmt_delete(&mut stmt);
 
-        let model = self.model(stmt.selection.body.as_select().source.as_model_id());
+        let model = self.model(stmt.from.as_model_id());
 
         // Handle any cascading deletes
         for field in model.fields.iter() {
@@ -12,12 +12,14 @@ impl<'stmt> Planner<'_, 'stmt> {
                 // HAX: unify w/ relation planner
                 if self.relations.last().copied() != Some(rel.pair) {
                     self.relations.push(field.id);
-                    self.plan_mut_has_one_nullify(rel, &stmt.selection);
+                    self.plan_mut_has_one_nullify(model, rel, &stmt.filter);
                     self.relations.pop();
                 }
             } else if let Some(rel) = field.ty.as_has_many() {
                 let pair = self.schema.field(rel.pair);
 
+                todo!("{stmt:#?}");
+                /*
                 // TODO: can this be unified with update?
                 let query = stmt::Query::filter(
                     rel.target,
@@ -32,6 +34,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                 } else {
                     self.plan_delete(query.delete());
                 }
+                */
             }
         }
 
@@ -58,7 +61,7 @@ impl<'stmt> Planner<'_, 'stmt> {
     fn plan_delete_kv(&mut self, model: &Model, mut stmt: stmt::Delete<'stmt>) {
         let table = self.schema.table(model.lowering.table);
 
-        let filter = &mut stmt.selection.body.as_select_mut().filter;
+        let filter = &mut stmt.filter;
         let input = self.extract_input(filter, &[], true);
 
         // Figure out which index to use for the query

@@ -30,7 +30,14 @@ impl<'stmt> Query<'stmt> {
     }
 
     pub fn delete(self) -> Delete<'stmt> {
-        Delete { selection: self }
+        match *self.body {
+            ExprSet::Select(select) => Delete {
+                from: select.source,
+                filter: select.filter,
+                returning: None,
+            },
+            _ => todo!("{self:#?}"),
+        }
     }
 
     pub fn and(&mut self, expr: impl Into<Expr<'stmt>>) {

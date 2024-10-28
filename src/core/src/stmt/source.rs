@@ -29,6 +29,12 @@ impl Source {
     }
 }
 
+impl From<&Model> for Source {
+    fn from(value: &Model) -> Self {
+        Source::from(value.id)
+    }
+}
+
 impl From<ModelId> for Source {
     fn from(value: ModelId) -> Self {
         Source::Model(SourceModel {

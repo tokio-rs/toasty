@@ -2,8 +2,14 @@ use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Delete<'stmt> {
-    /// Which records to delete
-    pub selection: Query<'stmt>,
+    /// Source of data to delete from
+    pub from: Source,
+
+    /// WHERE
+    pub filter: Expr<'stmt>,
+
+    /// Optionally, return something
+    pub returning: Option<Returning<'stmt>>,
 }
 
 impl<'stmt> Delete<'stmt> {}

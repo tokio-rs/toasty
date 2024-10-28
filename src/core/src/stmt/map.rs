@@ -91,6 +91,10 @@ pub trait Map<'stmt>: Sized {
         map_returning(self, i)
     }
 
+    fn map_source(&mut self, i: &Source) -> Source {
+        map_source(self, i)
+    }
+
     fn map_stmt(&mut self, i: &Statement<'stmt>) -> Statement<'stmt> {
         map_stmt(self, i)
     }
@@ -340,6 +344,13 @@ where
     }
 }
 
+pub fn map_source<'stmt, V>(v: &mut V, node: &Source) -> Source
+where
+    V: Map<'stmt> + ?Sized,
+{
+    node.clone()
+}
+
 pub fn map_stmt<'stmt, V>(v: &mut V, node: &Statement<'stmt>) -> Statement<'stmt>
 where
     V: Map<'stmt> + ?Sized,
@@ -359,7 +370,7 @@ where
     V: Map<'stmt> + ?Sized,
 {
     Select {
-        source: node.source.clone(),
+        source: v.map_source(&node.source),
         filter: v.map_expr(&node.filter),
         returning: v.map_returning(&node.returning),
     }
@@ -400,7 +411,12 @@ where
     V: Map<'stmt> + ?Sized,
 {
     Delete {
-        selection: v.map_stmt_query(&node.selection),
+        from: v.map_source(&node.from),
+        filter: v.map_expr(&node.filter),
+        returning: node
+            .returning
+            .as_ref()
+            .map(|returning| v.map_returning(returning)),
     }
 }
 

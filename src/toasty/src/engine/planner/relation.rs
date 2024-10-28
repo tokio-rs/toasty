@@ -15,7 +15,14 @@ impl<'stmt> Planner<'_, 'stmt> {
                 assert_ne!(self.relations.last(), Some(&has_one.pair));
 
                 self.relation_step(field, |planner| {
-                    planner.plan_mut_has_one_expr(has_one, mem::take(expr), selection, is_insert);
+                    let model = planner.schema.model(field.id.model);
+                    planner.plan_mut_has_one_expr(
+                        model,
+                        has_one,
+                        mem::take(expr),
+                        todo!(),
+                        is_insert,
+                    );
                 });
             }
             FieldTy::HasMany(has_many) => {
@@ -176,9 +183,12 @@ impl<'stmt> Planner<'_, 'stmt> {
                         stmt::Expr::and(filter.take(), stmt::Expr::ne(field, stmt::Value::Null));
                 }
 
+                todo!();
+                /*
                 planner.plan_delete(stmt::Delete {
                     selection: planner.relation_pair_scope(belongs_to.pair, scope.clone()),
                 });
+                */
             }
         });
     }
@@ -239,20 +249,26 @@ impl<'stmt> Planner<'_, 'stmt> {
 
     pub(super) fn plan_mut_has_one_expr(
         &mut self,
+        // Base model
+        model: &Model,
+        // Has one association with the base model as the source
         has_one: &HasOne,
+        // Expression to use as the value for the field.
         expr: stmt::Expr<'stmt>,
-        scope: &stmt::Query<'stmt>,
+        // Which instances of the base model to update
+        filter: &stmt::Expr<'stmt>,
+        // If the mutation is from an insert or update
         is_insert: bool,
     ) {
         match expr {
             stmt::Expr::Value(stmt::Value::Null) => {
-                self.plan_mut_has_one_nullify(has_one, scope);
+                self.plan_mut_has_one_nullify(model, has_one, filter);
             }
             stmt::Expr::Value(value) => {
-                self.plan_mut_has_one_value(has_one, value, scope, is_insert);
+                self.plan_mut_has_one_value(model, has_one, value, filter, is_insert);
             }
             stmt::Expr::Stmt(expr_stmt) => {
-                self.plan_mut_has_one_stmt(has_one, *expr_stmt.stmt, scope, is_insert);
+                self.plan_mut_has_one_stmt(model, has_one, *expr_stmt.stmt, filter, is_insert);
             }
             expr => todo!("expr={:#?}", expr),
         }
@@ -260,14 +276,15 @@ impl<'stmt> Planner<'_, 'stmt> {
 
     pub(super) fn plan_mut_has_one_stmt(
         &mut self,
+        model: &Model,
         has_one: &HasOne,
         stmt: stmt::Statement<'stmt>,
-        scope: &stmt::Query<'stmt>,
+        filter: &stmt::Expr<'stmt>,
         is_insert: bool,
     ) {
         match stmt {
             stmt::Statement::Insert(stmt) => {
-                self.plan_mut_has_one_insert(has_one, stmt, scope, is_insert)
+                self.plan_mut_has_one_insert(model, has_one, stmt, filter, is_insert)
             }
             _ => todo!("stmt={:#?}", stmt),
         }
@@ -275,10 +292,11 @@ impl<'stmt> Planner<'_, 'stmt> {
 
     pub(super) fn plan_mut_has_one_nullify(
         &mut self,
+        model: &Model,
         has_one: &HasOne,
-        scope: &stmt::Query<'stmt>,
+        filter: &stmt::Expr<'stmt>,
     ) {
-        let pair_scope = self.relation_pair_scope(has_one.pair, scope.clone());
+        let pair_scope = self.relation_pair_scope(model, has_one.pair, filter);
 
         if self.schema.field(has_one.pair).nullable {
             // TODO: unify w/ has_many ops?
@@ -292,19 +310,21 @@ impl<'stmt> Planner<'_, 'stmt> {
 
     pub(super) fn plan_mut_has_one_value(
         &mut self,
+        model: &Model,
         has_one: &HasOne,
         value: stmt::Value<'stmt>,
-        scope: &stmt::Query<'stmt>,
+        filter: &stmt::Expr<'stmt>,
         is_insert: bool,
     ) {
         // Only nullify if calling from an update context
         if !is_insert {
             // Update the row of the existing association (if there is one)
-            self.plan_mut_has_one_nullify(has_one, scope);
+            self.plan_mut_has_one_nullify(model, has_one, filter);
         }
 
         todo!("value = {:#?}", value);
 
+        /*
         let mut stmt = stmt::Query::filter(
             has_one.target,
             // stmt::Expr::eq(stmt::Expr::self_expr(), value),
@@ -314,7 +334,9 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         stmt.assignments
             .set(has_one.pair, stmt::ExprStmt::new(scope.clone()));
+
         self.plan_update(stmt);
+        */
     }
 
     fn plan_mut_has_many_insert(
@@ -341,9 +363,10 @@ impl<'stmt> Planner<'_, 'stmt> {
 
     fn plan_mut_has_one_insert(
         &mut self,
+        model: &Model,
         has_one: &HasOne,
         mut stmt: stmt::Insert<'stmt>,
-        scope: &stmt::Query<'stmt>,
+        filter: &stmt::Expr<'stmt>,
         is_insert: bool,
     ) {
         // Returning does nothing in this context
@@ -352,7 +375,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         // Only nullify if calling from an update context
         if !is_insert {
             // Update the row of the existing association (if there is one)
-            self.plan_mut_has_one_nullify(has_one, scope);
+            self.plan_mut_has_one_nullify(model, has_one, filter);
         }
 
         /*
@@ -370,7 +393,13 @@ impl<'stmt> Planner<'_, 'stmt> {
 
     /// Translate a source model scope to a target model scope for a has_one
     /// relation.
-    fn relation_pair_scope(&self, pair: FieldId, scope: stmt::Query<'stmt>) -> stmt::Query<'stmt> {
+    fn relation_pair_scope(
+        &self,
+        model: &Model,
+        pair: FieldId,
+        filter: &stmt::Expr<'stmt>,
+    ) -> stmt::Query<'stmt> {
+        let scope = stmt::Query::filter(model, filter.clone());
         stmt::Query::filter(pair.model, stmt::ExprInSubquery::new(pair, scope))
     }
 

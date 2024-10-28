@@ -103,6 +103,10 @@ pub trait Visit<'stmt>: Sized {
         visit_returning(self, i);
     }
 
+    fn visit_source(&mut self, i: &Source) {
+        visit_source(self, i);
+    }
+
     fn visit_stmt(&mut self, i: &Statement<'stmt>) {
         visit_stmt(self, i);
     }
@@ -439,6 +443,12 @@ where
     }
 }
 
+pub fn visit_source<'stmt, V>(_v: &mut V, _node: &Source)
+where
+    V: Visit<'stmt> + ?Sized,
+{
+}
+
 pub fn visit_stmt<'stmt, V>(v: &mut V, node: &Statement<'stmt>)
 where
     V: Visit<'stmt> + ?Sized,
@@ -457,7 +467,12 @@ pub fn visit_stmt_delete<'stmt, V>(v: &mut V, node: &Delete<'stmt>)
 where
     V: Visit<'stmt> + ?Sized,
 {
-    v.visit_stmt_query(&node.selection);
+    v.visit_source(&node.from);
+    v.visit_expr(&node.filter);
+
+    if let Some(returning) = &node.returning {
+        v.visit_returning(returning);
+    }
 }
 
 pub fn visit_stmt_link<'stmt, V>(v: &mut V, node: &Link<'stmt>)
@@ -493,6 +508,7 @@ pub fn visit_stmt_select<'stmt, V>(v: &mut V, node: &Select<'stmt>)
 where
     V: Visit<'stmt> + ?Sized,
 {
+    v.visit_source(&node.source);
     v.visit_expr(&node.filter);
     v.visit_returning(&node.returning);
 }

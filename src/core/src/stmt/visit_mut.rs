@@ -103,6 +103,10 @@ pub trait VisitMut<'stmt>: Sized {
         visit_returning_mut(self, i);
     }
 
+    fn visit_source_mut(&mut self, i: &mut Source) {
+        visit_source_mut(self, i);
+    }
+
     fn visit_stmt_mut(&mut self, i: &mut Statement<'stmt>) {
         visit_stmt_mut(self, i);
     }
@@ -427,6 +431,12 @@ where
     }
 }
 
+pub fn visit_source_mut<'stmt, V>(_v: &mut V, _node: &mut Source)
+where
+    V: VisitMut<'stmt> + ?Sized,
+{
+}
+
 pub fn visit_stmt_mut<'stmt, V>(v: &mut V, node: &mut Statement<'stmt>)
 where
     V: VisitMut<'stmt> + ?Sized,
@@ -445,6 +455,7 @@ pub fn visit_stmt_select_mut<'stmt, V>(v: &mut V, node: &mut Select<'stmt>)
 where
     V: VisitMut<'stmt> + ?Sized,
 {
+    v.visit_source_mut(&mut node.source);
     v.visit_expr_mut(&mut node.filter);
     v.visit_returning_mut(&mut node.returning);
 }
@@ -486,7 +497,12 @@ pub fn visit_stmt_delete_mut<'stmt, V>(v: &mut V, node: &mut Delete<'stmt>)
 where
     V: VisitMut<'stmt> + ?Sized,
 {
-    v.visit_stmt_query_mut(&mut node.selection);
+    v.visit_source_mut(&mut node.from);
+    v.visit_expr_mut(&mut node.filter);
+
+    if let Some(returning) = &mut node.returning {
+        v.visit_returning_mut(returning);
+    }
 }
 
 pub fn visit_stmt_link_mut<'stmt, V>(v: &mut V, node: &mut Link<'stmt>)
