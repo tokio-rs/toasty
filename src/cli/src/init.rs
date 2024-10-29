@@ -7,7 +7,7 @@ pub fn exec() -> Result<()> {
 
     fs::create_dir("db")?;
     fs::create_dir("db/migrations")?;
-    fs::write("db/schema.toasty", BLANK)?;
+    fs::write("schema.toasty", BLANK)?;
 
     Ok(())
 }
