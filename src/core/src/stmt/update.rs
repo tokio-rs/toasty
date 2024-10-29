@@ -30,6 +30,13 @@ pub enum UpdateTarget {
 impl<'stmt> Update<'stmt> {}
 
 impl UpdateTarget {
+    pub fn as_model_id(&self) -> ModelId {
+        match self {
+            UpdateTarget::Model(model_id) => *model_id,
+            _ => todo!(),
+        }
+    }
+
     pub fn as_table(&self) -> &TableWithJoins {
         match self {
             UpdateTarget::Table(table) => table,

@@ -8,24 +8,23 @@ pub struct Insert<'a, M: ?Sized> {
 }
 
 impl<'a, M: Model> Insert<'a, M> {
-    /*
     /// Create an insertion statement that inserts an empty record (all fields are null).
     ///
     /// This insertion statement is not guaranteed to be valid.
+    ///
+    /// TODO: rename `new`?
     pub fn blank() -> Insert<'a, M> {
         Insert {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::ID),
-                values: stmt::ExprRecord::from_vec(vec![stmt::Expr::record(
-                    std::iter::repeat(stmt::Expr::null()).take(M::FIELD_COUNT),
-                )])
-                .into(),
+                source: stmt::Query {
+                    body: Box::new(stmt::ExprSet::Values(stmt::Values::default())),
+                },
                 returning: Some(stmt::Returning::Star),
             },
             _p: PhantomData,
         }
     }
-    */
 
     pub const fn from_untyped(untyped: stmt::Insert<'a>) -> Insert<'a, M> {
         Insert {
