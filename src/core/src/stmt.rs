@@ -125,7 +125,7 @@ pub use select::Select;
 mod source;
 pub use source::{Source, SourceModel};
 
-// pub mod sql;
+pub mod sql;
 
 pub mod substitute;
 

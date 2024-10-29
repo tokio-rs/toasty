@@ -74,7 +74,7 @@ impl<'a, M: Model> Default for Update<'a, M> {
                 assignments: stmt::Assignments::default(),
                 filter: Some(stmt::Expr::from(false)),
                 condition: None,
-                returning: true,
+                returning: Some(stmt::Returning::Star),
             },
             _p: PhantomData,
         }

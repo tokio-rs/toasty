@@ -29,7 +29,7 @@ impl<'stmt> Query<'stmt> {
             assignments: stmt::Assignments::with_capacity(width),
             filter: Some(select.filter),
             condition: None,
-            returning: false,
+            returning: None,
         }
     }
 

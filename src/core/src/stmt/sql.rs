@@ -193,20 +193,20 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
             self.expr(expr)?;
         }
 
-        if update.selection.is_some() || update.pre_condition.is_some() {
+        if update.filter.is_some() || update.condition.is_some() {
             write!(self.dst, " WHERE ")?;
         }
 
-        if let Some(selection) = &update.selection {
-            self.expr(selection)?;
+        if let Some(filter) = &update.filter {
+            self.expr(filter)?;
         }
 
-        if let Some(pre_condition) = &update.pre_condition {
-            if update.selection.is_some() {
+        if let Some(condition) = &update.condition {
+            if update.filter.is_some() {
                 write!(self.dst, " AND ")?;
             }
 
-            self.expr(pre_condition)?;
+            self.expr(condition)?;
 
             if update.returning.is_none() {
                 write!(self.dst, " RETURNING true")?;
@@ -214,15 +214,21 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         }
 
         if let Some(returning) = &update.returning {
+            let Returning::Expr(returning) = returning else {
+                todo!("update={update:#?}")
+            };
             write!(self.dst, " RETURNING ")?;
-            self.expr_list(returning)?;
+            // self.expr_list(returning)?;
+            todo!("returning={returning:#?}");
         }
 
         Ok(())
     }
 
     fn select(&mut self, select: &Select<'stmt>) -> fmt::Result {
+        /*
         write!(self.dst, "SELECT ")?;
+
         self.expr_list(&select.project)?;
 
         write!(self.dst, " FROM ")?;
@@ -238,6 +244,8 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         self.expr(selection)?;
 
         Ok(())
+        */
+        todo!("stmt={select:#?}");
     }
 
     fn values(&mut self, values: &Values<'stmt>) -> fmt::Result {
@@ -398,14 +406,16 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
+    /*
     fn ty(&mut self, stmt: &Type) -> fmt::Result {
         write!(
             self.dst,
             "{}",
             match stmt {
-                Type::Boolean => "BOOLEAN",
-                Type::Integer => "INTEGER",
-                Type::Text => "TEXT",
+                Type::Bool => "BOOLEAN",
+                Type::I64 => "INTEGER",
+                Type::String => "TEXT",
+                _ => todo!("ty={stmt:#?}"),
             }
         )
     }
@@ -429,4 +439,5 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         write!(self.dst, "\"{ident}\"")?;
         Ok(())
     }
+    */
 }

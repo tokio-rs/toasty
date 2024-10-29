@@ -14,9 +14,8 @@ pub struct Update<'stmt> {
     /// A condition that must be satisfied in order for the update to apply.
     pub condition: Option<Expr<'stmt>>,
 
-    /// If true, then Toasty should return a record for each instance of the
-    /// model that was updated.
-    pub returning: bool,
+    /// Optionally return data from the update
+    pub returning: Option<Returning<'stmt>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
