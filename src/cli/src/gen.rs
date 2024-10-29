@@ -1,18 +1,31 @@
+use crate::utils::create_example;
 use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub fn exec(schema: impl AsRef<Path>, target: impl AsRef<Path>) -> Result<()> {
+pub fn exec_example(name: Option<String>) -> Result<()> {
+    let target = create_example(name)?;
+    exec(None::<PathBuf>, &target)
+}
+
+pub fn exec(schema: Option<impl AsRef<Path>>, target: impl AsRef<Path>) -> Result<()> {
     let target = target.as_ref();
 
+    let schema_path: PathBuf = if let Some(schema) = schema {
+        schema.as_ref().to_path_buf()
+    } else {
+        target.join("schema.toasty")
+    };
     // Make sure the target directory exists
     fs::create_dir_all(target)?;
 
+    let db_dir = target.join("db");
+
     // Parse the schema file
-    let schema = toasty_core::schema::from_file(schema).unwrap();
+    let schema = toasty_core::schema::from_file(schema_path)?;
     let codegen_output = toasty_codegen::generate(&schema, true);
 
-    let module_file = target.join("mod.rs");
+    let module_file = db_dir.join("mod.rs");
     let module_src = gen_module(&codegen_output);
 
     // Generate the module file
@@ -20,7 +33,7 @@ pub fn exec(schema: impl AsRef<Path>, target: impl AsRef<Path>) -> Result<()> {
     fs::write(module_file, module_src)?;
 
     for model_codegen_output in &codegen_output.models {
-        let model_file = target_file(target, &model_codegen_output.module_name.to_string());
+        let model_file = target_file(&db_dir, &model_codegen_output.module_name.to_string());
         let source = model_codegen_output.body.to_string();
         let source = rustfmt(source);
 

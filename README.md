@@ -8,20 +8,9 @@ It supports both SQL databases as well as some NoSQL databases, including Dynamo
 and Cassandra. Note that Toasty does not hide the database capabilities.
 Instead, Toasty exposes features based on the target database.
 
-## Quickstart
-You can run the examples using an [sqlite](src/db/sqlite) in-memory database on most platforms using:
-
-```
-git clone https://github.com/tokio-rs/toasty.git
-cd toasty
-cargo run --example hello-toasty
-```
-You can also run the examples with an alternative database such as [dynamodb](src/db/ddb) through disabling the default feature (sqlite) and passing a feature for the database:
-```
-cargo run --example hello-toasty --no-default-features --feature dynamodb
-```
-
 ## Using Toasty
+
+See the [toasty-examples/README](toasty-examples/README.md) for more information on how to run the examples.
 
 Projects that use toasty create a schema file to define the application's data
 model. Here is the schema file from the
@@ -60,7 +49,7 @@ model Todo {
 
 Using the Toasty CLI tool, you will generate all necessary Rust code for working
 with this data model. The generated code for the above schema is
-[here](toasty-examples/examples/examples/hello-toasty/src/db).
+[here](toasty-examples/examples/hello-toasty/src/db).
 
 Then, you can easily work with the data model:
 
