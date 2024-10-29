@@ -27,7 +27,7 @@ impl<'stmt> Query<'stmt> {
         stmt::Update {
             target: UpdateTarget::Model(select.source.as_model_id()),
             assignments: stmt::Assignments::with_capacity(width),
-            filter: select.filter,
+            filter: Some(select.filter),
             condition: None,
             returning: false,
         }

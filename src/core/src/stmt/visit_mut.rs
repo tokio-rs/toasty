@@ -486,7 +486,10 @@ where
     V: VisitMut<'stmt> + ?Sized,
 {
     v.visit_assignments_mut(&mut node.assignments);
-    v.visit_expr_mut(&mut node.filter);
+
+    if let Some(expr) = &mut node.filter {
+        v.visit_expr_mut(expr);
+    }
 
     if let Some(expr) = &mut node.condition {
         v.visit_expr_mut(expr);

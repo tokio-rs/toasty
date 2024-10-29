@@ -72,7 +72,7 @@ impl<'a, M: Model> Default for Update<'a, M> {
             untyped: stmt::Update {
                 target: stmt::UpdateTarget::Model(M::ID),
                 assignments: stmt::Assignments::default(),
-                filter: stmt::Expr::from(false),
+                filter: Some(stmt::Expr::from(false)),
                 condition: None,
                 returning: true,
             },

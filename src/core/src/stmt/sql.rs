@@ -182,15 +182,15 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
     }
 
     fn update(&mut self, update: &Update<'stmt>) -> fmt::Result {
-        let table = self.schema.table(update.table.table);
+        let table = self.schema.table(update.target.as_table().table);
 
         write!(self.dst, "UPDATE \"{}\" SET", table.name)?;
 
         for (index, expr) in update.assignments.iter() {
-            let column = self.schema.column(assignment.target);
+            let column = &table.columns[index];
             write!(self.dst, " \"{}\" = ", column.name)?;
 
-            self.expr(&assignment.value)?;
+            self.expr(expr)?;
         }
 
         if update.selection.is_some() || update.pre_condition.is_some() {

@@ -8,7 +8,8 @@ pub struct Update<'stmt> {
     /// Assignments
     pub assignments: Assignments<'stmt>,
 
-    pub filter: Expr<'stmt>,
+    /// Which entries to update
+    pub filter: Option<Expr<'stmt>>,
 
     /// A condition that must be satisfied in order for the update to apply.
     pub condition: Option<Expr<'stmt>>,
@@ -28,6 +29,15 @@ pub enum UpdateTarget {
 }
 
 impl<'stmt> Update<'stmt> {}
+
+impl UpdateTarget {
+    pub fn as_table(&self) -> &TableWithJoins {
+        match self {
+            UpdateTarget::Table(table) => table,
+            _ => todo!(),
+        }
+    }
+}
 
 impl<'stmt> From<Update<'stmt>> for Statement<'stmt> {
     fn from(src: Update<'stmt>) -> Statement<'stmt> {

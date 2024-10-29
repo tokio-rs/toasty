@@ -526,7 +526,10 @@ where
     V: Visit<'stmt> + ?Sized,
 {
     v.visit_assignments(&node.assignments);
-    v.visit_expr(&node.filter);
+
+    if let Some(expr) = &node.filter {
+        v.visit_expr(expr);
+    }
 
     if let Some(expr) = &node.condition {
         v.visit_expr(expr);
