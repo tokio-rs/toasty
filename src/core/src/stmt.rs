@@ -48,6 +48,9 @@ pub use expr_like::ExprLike;
 mod expr_or;
 pub use expr_or::ExprOr;
 
+mod expr_order_by;
+pub use expr_order_by::ExprOrderBy;
+
 mod expr_pattern;
 pub use expr_pattern::ExprPattern;
 

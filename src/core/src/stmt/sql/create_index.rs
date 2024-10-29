@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::schema::{Index, TableId};
+use crate::schema::{self, Index, TableId};
 
 #[derive(Debug, Clone)]
 pub struct CreateIndex<'stmt> {
@@ -17,6 +17,7 @@ pub struct CreateIndex<'stmt> {
     pub unique: bool,
 }
 
+/*
 impl<'stmt> Statement<'stmt> {
     pub fn create_index(index: &Index) -> Statement<'stmt> {
         CreateIndex {
@@ -44,3 +45,4 @@ impl<'stmt> From<CreateIndex<'stmt>> for Statement<'stmt> {
         Statement::CreateIndex(value)
     }
 }
+*/

@@ -70,7 +70,7 @@ impl Driver for Sqlite {
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
         if ty.is_none() {
-            let exec = !matches!(sql, stmt::Statement::Update(u) if u.pre_condition.is_some());
+            let exec = !matches!(sql, stmt::Statement::Update(u) if u.condition.is_some());
 
             if exec {
                 stmt.execute(rusqlite::params_from_iter(
@@ -120,8 +120,8 @@ impl Driver for Sqlite {
         }
 
         // Some special handling
-        if let sql::Statement::Update(update) = sql {
-            if update.pre_condition.is_some() && ret.is_empty() {
+        if let stmt::Statement::Update(update) = sql {
+            if update.condition.is_some() && ret.is_empty() {
                 // Just assume the precondition failed here... we will
                 // need to make this transactional later.
                 anyhow::bail!("pre condition failed");
@@ -147,7 +147,7 @@ impl Sqlite {
         let connection = self.connection.lock().unwrap();
 
         let mut params = vec![];
-        let stmt = sql::Statement::create_table(table).to_sql_string(schema, &mut params);
+        let stmt = stmt::Statement::create_table(table).to_sql_string(schema, &mut params);
         assert!(params.is_empty());
 
         connection.execute(&stmt, [])?;
@@ -159,7 +159,7 @@ impl Sqlite {
                 continue;
             }
 
-            let stmt = sql::Statement::create_index(index).to_sql_string(schema, &mut params);
+            let stmt = stmt::Statement::create_index(index).to_sql_string(schema, &mut params);
             assert!(params.is_empty());
 
             connection.execute(&stmt, [])?;
