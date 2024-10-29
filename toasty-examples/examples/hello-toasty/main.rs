@@ -33,7 +33,6 @@ async fn main() {
     // For now, reset!s
     db.reset_db().await.unwrap();
 
-
     assert_sync_send(db::User::find_by_email("hello").first(&db));
 
     println!("==> let u1 = User::create()");

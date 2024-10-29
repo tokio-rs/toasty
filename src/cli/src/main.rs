@@ -32,17 +32,9 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Gen { schema, target } => {
-            gen::exec(schema, target)
-        }
-        Command::Init { root_dir} => {
-            init::exec()
-        }
-        Command::InitExample { name } => {
-            init::exec_example(name)
-        }
-        Command::GenExample { target } => {
-            gen::exec_example(target)
-        }
+        Command::Gen { schema, target } => gen::exec(schema, target),
+        Command::Init { root_dir } => init::exec(),
+        Command::InitExample { name } => init::exec_example(name),
+        Command::GenExample { target } => gen::exec_example(target),
     }
 }
