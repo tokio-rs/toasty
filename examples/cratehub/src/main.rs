@@ -1,4 +1,6 @@
 mod db;
+use std::path::PathBuf;
+
 use db::*;
 
 use toasty::Db;
@@ -6,10 +8,7 @@ use toasty_dynamodb::DynamoDB;
 
 #[tokio::main]
 async fn main() {
-    let schema_file = std::path::Path::new(file!())
-        .parent()
-        .unwrap()
-        .join("../schema.toasty");
+    let schema_file: PathBuf = std::env::current_dir().unwrap().join("schema.toasty");
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
     // Use the in-memory toasty driver
