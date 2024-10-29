@@ -177,7 +177,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         } else {
             assert!(index_plan.post_filter.is_none());
 
-            let filter = sql::Expr::from_stmt(&self.schema, table.id, index_filter);
+            let filter = sql::Expr::from_stmt(self.schema, table.id, index_filter);
 
             let pk_by_index_out = self.var_table.register_var();
             self.push_action(plan::FindPkByIndex {
@@ -194,7 +194,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                 input: vec![plan::Input::from_var(pk_by_index_out)],
                 output: get_by_key_out,
                 table: table.id,
-                keys: eval::Expr::project(&[0]),
+                keys: eval::Expr::project([0]),
                 columns: model.lowering.columns.clone(),
                 project,
                 post_filter: index_plan.result_filter.map(eval::Expr::from_stmt),
@@ -217,7 +217,7 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         match &field.ty {
             FieldTy::HasMany(rel) => {
-                let pair = rel.pair(&self.schema);
+                let pair = rel.pair(self.schema);
 
                 let [fk_field] = &pair.foreign_key.fields[..] else {
                     todo!("composite key")
@@ -227,7 +227,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                     input: vec![plan::Input::project_var_ref(
                         input,
                         eval::Expr::map(
-                            eval::Expr::project(&[0]),
+                            eval::Expr::project([0]),
                             eval::Expr::project(fk_field.target),
                         ),
                     )],
@@ -252,7 +252,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                     input: vec![plan::Input::project_var_ref(
                         input,
                         eval::Expr::map(
-                            eval::Expr::project(&[0]),
+                            eval::Expr::project([0]),
                             eval::Expr::project(fk_field.source),
                         ),
                     )],

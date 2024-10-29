@@ -194,7 +194,7 @@ impl SimplifyExpr<'_> {
 
                     let field = expr_project
                         .projection
-                        .resolve_field(self.schema, &self.model);
+                        .resolve_field(self.schema, self.model);
 
                     match &field.ty {
                         FieldTy::Primitive(_) => None,
@@ -239,7 +239,7 @@ impl SimplifyExpr<'_> {
                     if let stmt::Expr::Project(expr_project) = expr {
                         let field = expr_project
                             .projection
-                            .resolve_field(&self.schema, &self.model);
+                            .resolve_field(self.schema, self.model);
                         assert!(field.ty.is_primitive());
                     }
                 });
@@ -248,7 +248,7 @@ impl SimplifyExpr<'_> {
                     if let stmt::Expr::Project(expr_project) = expr {
                         let field = expr_project
                             .projection
-                            .resolve_field(&self.schema, &self.model);
+                            .resolve_field(self.schema, self.model);
                         assert!(field.ty.is_primitive());
                     }
                 });

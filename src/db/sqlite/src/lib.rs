@@ -70,10 +70,7 @@ impl Driver for Sqlite {
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
         if ty.is_none() {
-            let exec = match sql {
-                stmt::Statement::Update(u) if u.pre_condition.is_some() => false,
-                _ => true,
-            };
+            let exec = !matches!(sql, stmt::Statement::Update(u) if u.pre_condition.is_some());
 
             if exec {
                 stmt.execute(rusqlite::params_from_iter(

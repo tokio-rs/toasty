@@ -1,4 +1,6 @@
 mod db;
+use std::path::PathBuf;
+
 use db::{Todo, User};
 
 use toasty::Db;
@@ -9,10 +11,7 @@ fn assert_sync_send<T: Send>(_: T) {}
 
 #[tokio::main]
 async fn main() {
-    let schema_file = std::path::Path::new(file!())
-        .parent()
-        .unwrap()
-        .join("../schema.toasty");
+    let schema_file: PathBuf = std::env::current_dir().unwrap().join("schema.toasty");
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
     println!("{schema:#?}");

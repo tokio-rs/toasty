@@ -92,7 +92,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                     );
 
                     if field.nullable {
-                        let mut stmt = scope.update(&planner.schema);
+                        let mut stmt = scope.update(planner.schema);
                         stmt.assignments.set(field.id, stmt::Value::Null);
                         planner.plan_update(stmt);
                     } else {
@@ -243,7 +243,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             // stmt::Expr::eq(stmt::Expr::self_expr(), value),
             stmt::Expr::default(),
         )
-        .update(&self.schema);
+        .update(self.schema);
 
         stmt.assignments
             .set(has_many.pair, stmt::ExprStmt::new(scope.clone()));
@@ -303,7 +303,7 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         if self.schema.field(has_one.pair).nullable {
             // TODO: unify w/ has_many ops?
-            let mut stmt = pair_scope.update(&self.schema);
+            let mut stmt = pair_scope.update(self.schema);
             stmt.assignments.set(has_one.pair, stmt::Value::Null);
             self.plan_update(stmt);
         } else {

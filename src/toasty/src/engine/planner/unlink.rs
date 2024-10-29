@@ -25,7 +25,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                 let pair = self.schema.field(has_many.pair);
 
                 if pair.nullable {
-                    let mut stmt = stmt.target.update(&self.schema);
+                    let mut stmt = stmt.target.update(self.schema);
 
                     // This protects against races.
                     stmt.condition = Some(stmt::Expr::eq(has_many.pair, key));

@@ -500,7 +500,7 @@ impl<'a> ModelLoweringBuilder<'a> {
                 })
                 .unwrap();
 
-            stmt::Expr::project(column, &[variant.discriminant])
+            stmt::Expr::project(column, [variant.discriminant])
         }
     }
 }

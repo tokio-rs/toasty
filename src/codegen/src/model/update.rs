@@ -166,7 +166,7 @@ impl<'a> Generator<'a> {
 
             match &field.ty {
                 FieldTy::Primitive(_) => {
-                    let ty = self.field_ty(&field, 0);
+                    let ty = self.field_ty(field, 0);
 
                     quote! {
                         pub fn #name(mut self, #name: impl Into<#ty>) -> Self {
@@ -237,7 +237,7 @@ impl<'a> Generator<'a> {
 
             match &field.ty {
                 FieldTy::Primitive(_) => {
-                    let ty = self.field_ty(&field, 0);
+                    let ty = self.field_ty(field, 0);
 
                     quote! {
                         pub fn #name(mut self, #name: impl Into<#ty>) -> Self {

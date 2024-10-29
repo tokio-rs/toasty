@@ -31,7 +31,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             let mut lowering = lowering.clone();
             lowering.substitute(stmt::substitute::ModelToTable(&record));
             lowered.push(sql::Expr::from_stmt(
-                &self.schema,
+                self.schema,
                 model.lowering.table,
                 lowering,
             ));
