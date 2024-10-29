@@ -125,7 +125,7 @@ pub use select::Select;
 mod source;
 pub use source::{Source, SourceModel};
 
-pub mod sql;
+// pub mod sql;
 
 pub mod substitute;
 
@@ -142,7 +142,7 @@ mod unlink;
 pub use unlink::Unlink;
 
 mod update;
-pub use update::Update;
+pub use update::{Update, UpdateTarget};
 
 mod value;
 pub use value::Value;

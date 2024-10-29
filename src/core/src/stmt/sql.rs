@@ -149,14 +149,18 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
     }
 
     fn insert(&mut self, stmt: &Insert<'stmt>) -> fmt::Result {
+        let InsertTarget::Table(insert_target) = &stmt.target else {
+            todo!()
+        };
+
         write!(
             self.dst,
             "INSERT INTO \"{}\" (",
-            self.schema.table(stmt.table).name
+            self.schema.table(insert_target).name
         )?;
 
         let mut s = "";
-        for column_id in &stmt.columns {
+        for column_id in &insert_target.columns {
             write!(self.dst, "{}\"{}\"", s, self.schema.column(column_id).name)?;
             s = ", ";
         }
@@ -166,8 +170,12 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         self.query(&stmt.source)?;
 
         if let Some(returning) = &stmt.returning {
+            let Returning::Expr(returning) = returning else {
+                todo!("returning={returning:#?}")
+            };
             write!(self.dst, " RETURNING ")?;
-            self.expr_list(returning)?;
+            // self.expr_list(returning)?;
+            todo!("returning={returning:#?}");
         }
 
         Ok(())
@@ -178,7 +186,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
 
         write!(self.dst, "UPDATE \"{}\" SET", table.name)?;
 
-        for assignment in &update.assignments {
+        for (index, expr) in update.assignments.iter() {
             let column = self.schema.column(assignment.target);
             write!(self.dst, " \"{}\" = ", column.name)?;
 

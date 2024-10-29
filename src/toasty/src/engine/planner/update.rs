@@ -118,6 +118,7 @@ impl<'stmt> Planner<'_, 'stmt> {
     }
 
     fn plan_update_kv(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
+        /*
         let model = self.model(stmt.selection.body.as_select().source.as_model_id());
         let table = self.schema.table(model.lowering.table);
 
@@ -130,8 +131,6 @@ impl<'stmt> Planner<'_, 'stmt> {
         let mut index_filter = index_plan.index_filter;
         let index = self.schema.index(index_plan.index.lowering.index);
         self.lower_index_filter(table, model, index_plan.index, &mut index_filter);
-
-        /*
 
         /*
          *

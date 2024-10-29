@@ -467,7 +467,7 @@ where
     if let InsertTarget::Scope(query) = &mut node.target {
         v.visit_stmt_query_mut(query);
     }
-    v.visit_expr_mut(&mut node.values);
+    v.visit_stmt_query_mut(&mut node.source);
 
     if let Some(returning) = &mut node.returning {
         v.visit_returning_mut(returning);
@@ -485,8 +485,8 @@ pub fn visit_stmt_update_mut<'stmt, V>(v: &mut V, node: &mut Update<'stmt>)
 where
     V: VisitMut<'stmt> + ?Sized,
 {
-    v.visit_stmt_query_mut(&mut node.selection);
     v.visit_assignments_mut(&mut node.assignments);
+    v.visit_expr_mut(&mut node.filter);
 
     if let Some(expr) = &mut node.condition {
         v.visit_expr_mut(expr);

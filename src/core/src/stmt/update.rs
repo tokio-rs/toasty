@@ -2,11 +2,13 @@ use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Update<'stmt> {
-    /// Which records to update within the target
-    pub selection: Query<'stmt>,
+    /// What to update
+    pub target: UpdateTarget,
 
     /// Assignments
     pub assignments: Assignments<'stmt>,
+
+    pub filter: Expr<'stmt>,
 
     /// A condition that must be satisfied in order for the update to apply.
     pub condition: Option<Expr<'stmt>>,
@@ -14,6 +16,15 @@ pub struct Update<'stmt> {
     /// If true, then Toasty should return a record for each instance of the
     /// model that was updated.
     pub returning: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UpdateTarget {
+    /// Update a model
+    Model(ModelId),
+
+    /// Update a table
+    Table(TableWithJoins),
 }
 
 impl<'stmt> Update<'stmt> {}

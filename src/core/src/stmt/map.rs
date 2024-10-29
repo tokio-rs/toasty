@@ -382,7 +382,7 @@ where
 {
     Insert {
         target: v.map_insert_target(&node.target),
-        values: v.map_expr(&node.values),
+        source: v.map_stmt_query(&node.source),
         returning: node
             .returning
             .as_ref()

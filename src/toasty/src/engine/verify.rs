@@ -20,20 +20,23 @@ pub(crate) fn apply<'stmt>(schema: &'stmt Schema, stmt: &Statement<'stmt>) {
 
 impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
     fn visit_stmt_insert(&mut self, i: &stmt::Insert<'stmt>) {
-        let model = match &i.target {
-            stmt::InsertTarget::Scope(query) => {
-                self.visit_stmt_query(query);
-                query.body.as_select().source.as_model_id()
-            }
-            stmt::InsertTarget::Model(model) => *model,
-            _ => todo!(),
-        };
+        /*
+            let model = match &i.target {
+                stmt::InsertTarget::Scope(query) => {
+                    self.visit_stmt_query(query);
+                    query.body.as_select().source.as_model_id()
+                }
+                stmt::InsertTarget::Model(model) => *model,
+                _ => todo!(),
+            };
 
-        VerifyExpr {
-            schema: self.schema,
-            model,
-        }
-        .visit(&i.values);
+            VerifyExpr {
+                schema: self.schema,
+                model,
+            }
+            .visit(&i.values);
+        */
+        todo!("stmt={i:#?}");
     }
 
     fn visit_stmt_select(&mut self, i: &stmt::Select<'stmt>) {
@@ -45,6 +48,8 @@ impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
     }
 
     fn visit_stmt_update(&mut self, i: &stmt::Update<'stmt>) {
+        todo!("stmt={i:#?}");
+        /*
         self.visit_stmt_query(&i.selection);
 
         // Is not an empty update
@@ -56,8 +61,6 @@ impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
 
         // TODO: verify this better
         // self.verify_model_expr_record(model, &*stmt.values);
-
-        /*
 
         // Verify the update expression matches the type of the field being
         // updated.

@@ -37,16 +37,6 @@ impl<'stmt> ExprSet<'stmt> {
         }
     }
 
-    pub(crate) fn width(&self, schema: &Schema) -> usize {
-        match self {
-            ExprSet::Select(select) => schema.model(select.source.as_model_id()).fields.len(),
-            ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 0 => 0,
-            ExprSet::SetOp(expr_set_op) => expr_set_op.operands[0].width(schema),
-            ExprSet::Values(values) if values.rows.len() == 0 => 0,
-            ExprSet::Values(values) => values.rows[0].len(),
-        }
-    }
-
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input<'stmt>) {
         match self {
             ExprSet::Select(expr) => expr.substitute_ref(input),

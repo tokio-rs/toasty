@@ -82,12 +82,6 @@ impl Db {
         &self,
         stmt: stmt::Insert<'stmt, M>,
     ) -> Result<M> {
-        // TODO: get rid of this assertion and move to verify
-        let toasty_core::stmt::Expr::Record(expr_record) = &stmt.untyped.values else {
-            todo!()
-        };
-        assert!(!expr_record.is_empty());
-
         // Execute the statement and return the result
         let records = self.exec(stmt.into()).await?;
         let mut cursor = Cursor::new(self.schema.clone(), records);

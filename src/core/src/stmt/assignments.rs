@@ -29,6 +29,13 @@ impl<'stmt> Assignments<'stmt> {
 
         self.exprs[index] = Some(expr.into());
     }
+
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (usize, &'a Expr<'stmt>)> + '_ {
+        self.fields.iter().map(|path_step| {
+            let index = path_step.into_usize();
+            (index, self.exprs[index].as_ref().unwrap())
+        })
+    }
 }
 
 impl<'stmt> Default for Assignments<'stmt> {

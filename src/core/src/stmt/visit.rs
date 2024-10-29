@@ -490,7 +490,7 @@ where
     if let InsertTarget::Scope(scope) = &node.target {
         v.visit_stmt_query(scope);
     }
-    v.visit_expr(&node.values);
+    v.visit_stmt_query(&node.source);
 
     if let Some(returning) = &node.returning {
         v.visit_returning(returning);
@@ -525,8 +525,8 @@ pub fn visit_stmt_update<'stmt, V>(v: &mut V, node: &Update<'stmt>)
 where
     V: Visit<'stmt> + ?Sized,
 {
-    v.visit_stmt_query(&node.selection);
     v.visit_assignments(&node.assignments);
+    v.visit_expr(&node.filter);
 
     if let Some(expr) = &node.condition {
         v.visit_expr(expr);

@@ -5,8 +5,8 @@ pub struct Insert<'stmt> {
     /// Where to insert the values
     pub target: InsertTarget<'stmt>,
 
-    /// Expression that evaluates to the values to insert.
-    pub values: Expr<'stmt>,
+    /// Source of values to insert
+    pub source: Query<'stmt>,
 
     /// Optionally return data from the insertion
     pub returning: Option<Returning<'stmt>>,
@@ -23,11 +23,21 @@ pub enum InsertTarget<'stmt> {
     Model(ModelId),
 
     /// Insert into a table
-    Table(TableId),
+    Table(InsertTable),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InsertTable {
+    /// Table identifier to insert into
+    pub table: TableId,
+
+    /// Columns to insert into
+    pub columns: Vec<ColumnId>,
 }
 
 impl<'stmt> Insert<'stmt> {
     pub fn merge(&mut self, other: Insert<'stmt>) {
+        /*
         if self.target != other.target {
             todo!("handle this case");
         }
@@ -40,6 +50,8 @@ impl<'stmt> Insert<'stmt> {
             }
             (self_values, other) => todo!("self={:#?}; other={:#?}", self_values, other),
         }
+        */
+        todo!("self={self:#?} / other={other:#?}");
     }
 }
 
@@ -60,5 +72,11 @@ impl<'stmt> Node<'stmt> for Insert<'stmt> {
 
     fn visit_mut<V: VisitMut<'stmt>>(&mut self, mut visit: V) {
         visit.visit_stmt_insert_mut(self);
+    }
+}
+
+impl<'stmt> From<&InsertTable> for TableId {
+    fn from(value: &InsertTable) -> Self {
+        value.table
     }
 }

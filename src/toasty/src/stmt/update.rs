@@ -8,6 +8,7 @@ pub struct Update<'a, M> {
 }
 
 impl<'a, M: Model> Update<'a, M> {
+    /*
     pub fn new<S>(selection: S) -> Update<'a, M>
     where
         S: IntoSelect<'a, Model = M>,
@@ -16,6 +17,7 @@ impl<'a, M: Model> Update<'a, M> {
         stmt.untyped.selection = selection.into_select().untyped;
         stmt
     }
+    */
 
     pub const fn from_untyped(untyped: stmt::Update<'a>) -> Update<'a, M> {
         Update {
@@ -41,12 +43,14 @@ impl<'a, M: Model> Update<'a, M> {
         todo!()
     }
 
+    /*
     pub fn set_selection<S>(&mut self, selection: S)
     where
         S: IntoSelect<'a, Model = M>,
     {
         self.untyped.selection = selection.into_select().untyped;
     }
+    */
 
     pub fn fields(&self) -> &stmt::PathFieldSet {
         &self.untyped.assignments.fields
@@ -66,8 +70,9 @@ impl<'a, M: Model> Default for Update<'a, M> {
     fn default() -> Self {
         Update {
             untyped: stmt::Update {
-                selection: stmt::Query::unit(),
+                target: stmt::UpdateTarget::Model(M::ID),
                 assignments: stmt::Assignments::default(),
+                filter: stmt::Expr::from(false),
                 condition: None,
                 returning: true,
             },

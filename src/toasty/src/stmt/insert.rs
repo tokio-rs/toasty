@@ -8,6 +8,7 @@ pub struct Insert<'a, M: ?Sized> {
 }
 
 impl<'a, M: Model> Insert<'a, M> {
+    /*
     /// Create an insertion statement that inserts an empty record (all fields are null).
     ///
     /// This insertion statement is not guaranteed to be valid.
@@ -24,6 +25,7 @@ impl<'a, M: Model> Insert<'a, M> {
             _p: PhantomData,
         }
     }
+    */
 
     pub const fn from_untyped(untyped: stmt::Insert<'a>) -> Insert<'a, M> {
         Insert {
@@ -60,10 +62,13 @@ impl<'a, M: Model> Insert<'a, M> {
 
     /// Returns the current record being updated
     fn current_mut(&mut self) -> &mut stmt::ExprRecord<'a> {
+        /*
         let stmt::Expr::Record(expr_record) = &mut self.untyped.values else {
             todo!()
         };
         expr_record.last_mut().unwrap().as_record_mut()
+        */
+        todo!()
     }
 
     pub fn into_list_expr(self) -> Expr<'a, [M]> {

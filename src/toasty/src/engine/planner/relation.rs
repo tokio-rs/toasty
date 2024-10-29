@@ -115,10 +115,13 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         match stmt {
             stmt::Statement::Insert(mut insert) => {
+                todo!("validate {insert:#?}");
+                /*
                 assert!(
                     matches!(&insert.values, stmt::Expr::Record(r) if r.len() == 1),
                     "only one belongs_to should be specified"
                 );
+                */
 
                 // Previous value of returning does nothing in this
                 // context
