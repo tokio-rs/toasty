@@ -22,6 +22,12 @@ struct Formatter<'a, T> {
     params: &'a mut T,
 }
 
+impl<'stmt> Params<'stmt> for Vec<stmt::Value<'stmt>> {
+    fn push(&mut self, value: &stmt::Value<'stmt>) {
+        self.push(value.clone());
+    }
+}
+
 impl<'a> Serializer<'a> {
     pub fn new(schema: &'a Schema) -> Serializer<'a> {
         Serializer { schema }
@@ -32,7 +38,16 @@ impl<'a> Serializer<'a> {
         stmt: &Statement<'stmt>,
         params: &mut impl Params<'stmt>,
     ) -> String {
-        todo!()
+        let mut ret = String::new();
+
+        let mut fmt = Formatter {
+            dst: &mut ret,
+            schema: self.schema,
+            params,
+        };
+
+        fmt.statement(stmt).unwrap();
+        ret
     }
 }
 

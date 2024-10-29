@@ -65,13 +65,13 @@ impl Driver for Sqlite {
         }
 
         let mut params = vec![];
-        let sql_str = sql.to_sql_string(schema, &mut params);
+        let sql_str = stmt::sql::Serializer::new(schema).serialize(sql, &mut params);
 
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
         if ty.is_none() {
             let exec = match sql {
-                sql::Statement::Update(u) if u.pre_condition.is_some() => false,
+                stmt::Statement::Update(u) if u.pre_condition.is_some() => false,
                 _ => true,
             };
 
