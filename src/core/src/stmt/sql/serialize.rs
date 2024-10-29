@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::stmt::Statement as DataStatement;
+
 use std::fmt::{self, Write};
 
 pub trait Params<'stmt> {
@@ -33,9 +35,9 @@ impl<'a> Serializer<'a> {
         Serializer { schema }
     }
 
-    pub fn serialize<'stmt>(
+    pub fn serialize_stmt<'stmt>(
         &self,
-        stmt: &Statement<'stmt>,
+        stmt: &DataStatement<'stmt>,
         params: &mut impl Params<'stmt>,
     ) -> String {
         let mut ret = String::new();
@@ -49,15 +51,48 @@ impl<'a> Serializer<'a> {
         fmt.statement(stmt).unwrap();
         ret
     }
+
+    pub fn serialize_sql_stmt<'stmt>(
+        &self,
+        stmt: &Statement<'stmt>,
+        params: &mut impl Params<'stmt>,
+    ) -> String {
+        let mut ret = String::new();
+
+        let mut fmt = Formatter {
+            dst: &mut ret,
+            schema: self.schema,
+            params,
+        };
+
+        fmt.sql_statement(stmt).unwrap();
+        ret
+    }
 }
 
 impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
-    fn statement(&mut self, statement: &Statement<'stmt>) -> fmt::Result {
+    fn statement(&mut self, statement: &DataStatement<'stmt>) -> fmt::Result {
         match statement {
             /*
             Statement::CreateIndex(stmt) => self.create_index(stmt)?,
             Statement::CreateTable(stmt) => self.create_table(stmt)?,
             */
+            DataStatement::Delete(stmt) => self.delete(stmt)?,
+            DataStatement::Insert(stmt) => self.insert(stmt)?,
+            DataStatement::Query(stmt) => self.query(stmt)?,
+            DataStatement::Update(stmt) => self.update(stmt)?,
+            _ => todo!("stmt = {statement:#?}"),
+        }
+
+        write!(self.dst, ";")?;
+
+        Ok(())
+    }
+
+    fn sql_statement(&mut self, statement: &Statement<'stmt>) -> fmt::Result {
+        match statement {
+            Statement::CreateIndex(stmt) => self.create_index(stmt)?,
+            Statement::CreateTable(stmt) => self.create_table(stmt)?,
             Statement::Delete(stmt) => self.delete(stmt)?,
             Statement::Insert(stmt) => self.insert(stmt)?,
             Statement::Query(stmt) => self.query(stmt)?,
@@ -70,7 +105,6 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    /*
     fn create_index(&mut self, stmt: &CreateIndex<'stmt>) -> fmt::Result {
         write!(
             self.dst,
@@ -136,7 +170,6 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         self.ty(&stmt.ty)?;
         Ok(())
     }
-    */
 
     fn query(&mut self, query: &Query<'stmt>) -> fmt::Result {
         match &*query.body {
@@ -421,16 +454,14 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    /*
     fn ty(&mut self, stmt: &Type) -> fmt::Result {
         write!(
             self.dst,
             "{}",
             match stmt {
-                Type::Bool => "BOOLEAN",
-                Type::I64 => "INTEGER",
-                Type::String => "TEXT",
-                _ => todo!("ty={stmt:#?}"),
+                Type::Boolean => "BOOLEAN",
+                Type::Integer => "INTEGER",
+                Type::Text => "TEXT",
             }
         )
     }
@@ -454,5 +485,4 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         write!(self.dst, "\"{ident}\"")?;
         Ok(())
     }
-    */
 }

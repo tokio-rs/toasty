@@ -16,6 +16,9 @@ pub use name::Name;
 mod serialize;
 pub use serialize::{Params, Serializer};
 
+mod statement;
+pub use statement::Statement;
+
 mod ty;
 pub use ty::Type;
 
