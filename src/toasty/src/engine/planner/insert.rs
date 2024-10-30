@@ -17,7 +17,10 @@ impl<'stmt> Planner<'_, 'stmt> {
             assert!(!values.is_empty(), "stmt={stmt:#?}");
         }
 
-        // let filter = &stmt.target.body.as_select().filter;
+        let filter = match &stmt.target {
+            stmt::InsertTarget::Scope(query) => Some(&query.body.as_select().filter),
+            _ => None,
+        };
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -95,19 +98,24 @@ impl<'stmt> Planner<'_, 'stmt> {
             None
         };
 
-        let records = match stmt.values {
-            stmt::Expr::Record(records) => records,
+        let records = match &*stmt.source.body {
+            stmt::ExprSet::Values(values) => &values.rows,
             _ => todo!("stmt={:#?}", stmt),
         };
 
         for mut entry in records {
-            if !filter.is_true() {
-                self.apply_insert_scope(&mut entry, filter);
+            if let Some(filter) = filter {
+                todo!()
+                // self.apply_insert_scope(&mut entry, filter);
             }
 
-            self.plan_insert_record(model, entry, action, returning_pk.as_mut());
+            // self.plan_insert_record(model, entry, action, returning_pk.as_mut());
+            todo!()
         }
+        */
+        todo!();
 
+        /*
         let output_var;
         let output_plan;
 
