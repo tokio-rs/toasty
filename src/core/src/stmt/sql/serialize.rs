@@ -320,15 +320,24 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
+    fn expr_as_list(&mut self, expr: &Expr<'stmt>) -> fmt::Result {
+        let Expr::Record(expr_list) = expr else {
+            todo!()
+        };
+        self.expr_list(expr_list)?;
+        Ok(())
+    }
+
     fn expr(&mut self, expr: &Expr<'stmt>) -> fmt::Result {
-        /*
         match expr {
-            Expr::BeginsWith(ExprBeginsWith { expr, pattern }) => {
-                let str = pattern.as_value().expect_string();
-                let pattern = format!("{str}%");
-                self.expr(expr)?;
-                write!(self.dst, " LIKE ")?;
-                self.expr(&Expr::Value(pattern.into()))?;
+            Expr::And(ExprAnd { operands }) => {
+                let mut s = "";
+
+                for expr in operands {
+                    write!(self.dst, "{s}")?;
+                    self.expr(expr)?;
+                    s = " AND ";
+                }
             }
             Expr::BinaryOp(ExprBinaryOp { lhs, op, rhs }) => {
                 self.expr(&*lhs)?;
@@ -337,23 +346,11 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
                 write!(self.dst, " ")?;
                 self.expr(&rhs)?;
             }
-            Expr::Value(value) => self.value(value)?,
-            Expr::Column(column_id) => {
+            Expr::Column(expr) => {
                 // TODO: at some point we need to conditionally scope the column
                 // name.
-                let column = self.schema.column(*column_id);
+                let column = self.schema.column(expr.column);
                 self.ident_str(&column.name)?;
-                /*
-                let table = self.schema.table(column_id.table);
-                let column = self.schema.column(*column_id);
-
-                write!(self.dst, "\"{}\".\"{}\"", table.name, column.name)?;
-                */
-            }
-            Expr::Like(ExprLike { expr, pattern }) => {
-                self.expr(expr)?;
-                write!(self.dst, " LIKE ")?;
-                self.expr(pattern)?;
             }
             Expr::InList(ExprInList { expr, list }) => {
                 self.expr(expr)?;
@@ -361,6 +358,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
 
                 let mut s = "";
 
+                /*
                 match list {
                     ExprList::Expr(exprs) => {
                         for e in exprs {
@@ -380,28 +378,17 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
                         todo!("PLACEHOLDER");
                     }
                 }
+                */
+                todo!("expr={expr:#?}");
 
                 write!(self.dst, ")")?;
             }
-            Expr::InSubquery(ExprInSubquery { expr, subquery }) => {
+            Expr::InSubquery(ExprInSubquery { expr, query }) => {
                 self.expr(expr)?;
                 write!(self.dst, " IN (")?;
 
-                self.query(&subquery)?;
+                self.query(query)?;
                 write!(self.dst, ")")?;
-            }
-            Expr::IsNotNull(expr) => {
-                self.expr(expr)?;
-                write!(self.dst, " IS NOT NULL")?;
-            }
-            Expr::And(ExprAnd { operands }) => {
-                let mut s = "";
-
-                for expr in operands {
-                    write!(self.dst, "{s}")?;
-                    self.expr(expr)?;
-                    s = " AND ";
-                }
             }
             Expr::Or(ExprOr { operands }) => {
                 let mut s = "";
@@ -412,11 +399,11 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
                     s = " OR ";
                 }
             }
-            Expr::Tuple(expr_tuple) => {
+            Expr::Record(expr_record) => {
                 write!(self.dst, "(")?;
 
                 let mut s = "";
-                for expr in &expr_tuple.exprs {
+                for expr in expr_record {
                     write!(self.dst, "{s}")?;
                     self.expr(expr)?;
                     s = ", ";
@@ -424,12 +411,29 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
 
                 write!(self.dst, ")")?;
             }
+            Expr::Value(value) => self.value(value)?,
+            /*
+            Expr::BeginsWith(ExprBeginsWith { expr, pattern }) => {
+                let str = pattern.as_value().expect_string();
+                let pattern = format!("{str}%");
+                self.expr(expr)?;
+                write!(self.dst, " LIKE ")?;
+                self.expr(&Expr::Value(pattern.into()))?;
+            }
+            Expr::Like(ExprLike { expr, pattern }) => {
+                self.expr(expr)?;
+                write!(self.dst, " LIKE ")?;
+                self.expr(pattern)?;
+            }
+            Expr::IsNotNull(expr) => {
+                self.expr(expr)?;
+                write!(self.dst, " IS NOT NULL")?;
+            }
+            */
             _ => todo!("expr = {:#?}", expr),
         }
 
         Ok(())
-        */
-        todo!()
     }
 
     fn binary_op(&mut self, binary_op: &BinaryOp) -> fmt::Result {

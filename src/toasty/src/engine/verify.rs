@@ -19,26 +19,6 @@ pub(crate) fn apply<'stmt>(schema: &'stmt Schema, stmt: &Statement<'stmt>) {
 }
 
 impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
-    fn visit_stmt_insert(&mut self, i: &stmt::Insert<'stmt>) {
-        /*
-            let model = match &i.target {
-                stmt::InsertTarget::Scope(query) => {
-                    self.visit_stmt_query(query);
-                    query.body.as_select().source.as_model_id()
-                }
-                stmt::InsertTarget::Model(model) => *model,
-                _ => todo!(),
-            };
-
-            VerifyExpr {
-                schema: self.schema,
-                model,
-            }
-            .visit(&i.values);
-        */
-        todo!("stmt={i:#?}");
-    }
-
     fn visit_stmt_select(&mut self, i: &stmt::Select<'stmt>) {
         VerifyExpr {
             schema: self.schema,
@@ -48,27 +28,15 @@ impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
     }
 
     fn visit_stmt_update(&mut self, i: &stmt::Update<'stmt>) {
-        todo!("stmt={i:#?}");
-        /*
-        self.visit_stmt_query(&i.selection);
-
         // Is not an empty update
         assert!(!i.assignments.is_empty(), "stmt = {i:#?}");
 
-        // TODO: VERIFY THIS
+        let mut verify_expr = VerifyExpr {
+            schema: self.schema,
+            model: i.target.as_model_id(),
+        };
 
-        // let model = self.schema.model(stmt.selection.source);
-
-        // TODO: verify this better
-        // self.verify_model_expr_record(model, &*stmt.values);
-
-        // Verify the update expression matches the type of the field being
-        // updated.
-        for (field_path, expr) in stmt.fields.iter().zip(stmt.values.iter()) {
-            let field = &model.fields[field_path.as_index()];
-            assert!(expr.ty().casts_to(&field.expr_ty()));
-        }
-        */
+        verify_expr.visit_stmt_update(i);
     }
 
     fn visit_expr(&mut self, _i: &stmt::Expr<'stmt>) {
