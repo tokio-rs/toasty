@@ -75,6 +75,22 @@ impl<'stmt> Node<'stmt> for Insert<'stmt> {
     }
 }
 
+impl<'stmt> InsertTarget<'stmt> {
+    pub fn as_model_id(&self) -> ModelId {
+        match self {
+            InsertTarget::Scope(query) => query.body.as_select().source.as_model_id(),
+            InsertTarget::Model(model_id) => *model_id,
+            _ => todo!(),
+        }
+    }
+}
+
+impl<'stmt> From<InsertTable> for InsertTarget<'stmt> {
+    fn from(value: InsertTable) -> Self {
+        InsertTarget::Table(value)
+    }
+}
+
 impl<'stmt> From<&InsertTable> for TableId {
     fn from(value: &InsertTable) -> Self {
         value.table

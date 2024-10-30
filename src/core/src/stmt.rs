@@ -76,7 +76,7 @@ mod id;
 pub use id::Id;
 
 mod insert;
-pub use insert::{Insert, InsertTarget};
+pub use insert::{Insert, InsertTable, InsertTarget};
 
 mod link;
 pub use link::Link;

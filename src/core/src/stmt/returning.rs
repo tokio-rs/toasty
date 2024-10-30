@@ -15,3 +15,9 @@ impl<'stmt> Returning<'stmt> {
         matches!(self, Returning::Star)
     }
 }
+
+impl<'stmt> From<Expr<'stmt>> for Returning<'stmt> {
+    fn from(value: Expr<'stmt>) -> Self {
+        Returning::Expr(value)
+    }
+}

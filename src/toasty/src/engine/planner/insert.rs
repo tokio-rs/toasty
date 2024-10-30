@@ -11,14 +11,13 @@ impl<'stmt> Planner<'_, 'stmt> {
     pub(super) fn plan_insert(&mut self, mut stmt: stmt::Insert<'stmt>) -> Option<plan::VarId> {
         self.simplify_stmt_insert(&mut stmt);
 
-        /*
-        let model = self.model(stmt.target.body.as_select().source.as_model_id());
+        let model = self.model(stmt.target.as_model_id());
 
-        if let stmt::Expr::Record(record) = &stmt.values {
-            assert!(!record.is_empty());
+        if let stmt::ExprSet::Values(values) = &*stmt.source.body {
+            assert!(!values.is_empty(), "stmt={stmt:#?}");
         }
 
-        let filter = &stmt.target.body.as_select().filter;
+        // let filter = &stmt.target.body.as_select().filter;
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -51,17 +50,20 @@ impl<'stmt> Planner<'_, 'stmt> {
                 e.insert(Insertion { action });
 
                 for column in &model.lowering.columns {
-                    returning.push(sql::Expr::column(column));
+                    returning.push(stmt::Expr::column(column));
                 }
 
                 self.push_write_action(plan::Insert {
                     input: vec![],
                     output: None,
-                    stmt: sql::Insert {
-                        table: model.lowering.table,
-                        columns: model.lowering.columns.clone(),
-                        source: Box::new(sql::Query::values(sql::Values::default())),
-                        returning: Some(returning),
+                    stmt: stmt::Insert {
+                        target: stmt::InsertTable {
+                            table: model.lowering.table,
+                            columns: model.lowering.columns.clone(),
+                        }
+                        .into(),
+                        source: stmt::Values::default().into(),
+                        returning: Some(stmt::Expr::record(returning).into()),
                     },
                 });
 
@@ -69,6 +71,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             }
         };
 
+        /*
         // This entire thing is bogus
         let mut returning_pk = if let Some(stmt::Returning::Expr(e)) = &stmt.returning {
             match e {
