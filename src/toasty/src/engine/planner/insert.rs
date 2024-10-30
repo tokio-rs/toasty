@@ -74,7 +74,6 @@ impl<'stmt> Planner<'_, 'stmt> {
             }
         };
 
-        /*
         // This entire thing is bogus
         let mut returning_pk = if let Some(stmt::Returning::Expr(e)) = &stmt.returning {
             match e {
@@ -98,22 +97,18 @@ impl<'stmt> Planner<'_, 'stmt> {
             None
         };
 
-        let records = match &*stmt.source.body {
-            stmt::ExprSet::Values(values) => &values.rows,
+        let rows = match *stmt.source.body {
+            stmt::ExprSet::Values(values) => values.rows,
             _ => todo!("stmt={:#?}", stmt),
         };
 
-        for mut entry in records {
+        for mut row in rows {
             if let Some(filter) = filter {
-                todo!()
-                // self.apply_insert_scope(&mut entry, filter);
+                self.apply_insert_scope(&mut row, filter);
             }
 
-            // self.plan_insert_record(model, entry, action, returning_pk.as_mut());
-            todo!()
+            self.plan_insert_record(model, row, action, returning_pk.as_mut());
         }
-        */
-        todo!();
 
         /*
         let output_var;

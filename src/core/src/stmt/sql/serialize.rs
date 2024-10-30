@@ -300,7 +300,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         let mut s = "VALUES";
         for record in &values.rows {
             write!(self.dst, "{s} (")?;
-            self.expr_list(record)?;
+            self.expr_as_list(record)?;
             write!(self.dst, ")")?;
             s = ",";
         }

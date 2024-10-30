@@ -39,8 +39,8 @@ impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
         verify_expr.visit_stmt_update(i);
     }
 
-    fn visit_expr(&mut self, _i: &stmt::Expr<'stmt>) {
-        panic!("should not reach this point")
+    fn visit_expr(&mut self, i: &stmt::Expr<'stmt>) {
+        assert!(i.is_const(), "expr={i:#?}");
     }
 }
 

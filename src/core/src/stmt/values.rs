@@ -2,11 +2,11 @@ use super::*;
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Values<'stmt> {
-    pub rows: Vec<Vec<Expr<'stmt>>>,
+    pub rows: Vec<Expr<'stmt>>,
 }
 
 impl<'stmt> Values<'stmt> {
-    pub fn new(rows: Vec<Vec<Expr<'stmt>>>) -> Values<'stmt> {
+    pub fn new(rows: Vec<Expr<'stmt>>) -> Values<'stmt> {
         Values { rows }
     }
 
@@ -15,11 +15,14 @@ impl<'stmt> Values<'stmt> {
     }
 
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input<'stmt>) {
+        /*
         for row in &mut self.rows {
             for item in row {
                 item.substitute_ref(input);
             }
         }
+        */
+        todo!()
     }
 }
 

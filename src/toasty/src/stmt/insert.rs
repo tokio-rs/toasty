@@ -18,7 +18,9 @@ impl<'a, M: Model> Insert<'a, M> {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::ID),
                 source: stmt::Query {
-                    body: Box::new(stmt::ExprSet::Values(stmt::Values::new(vec![vec![]]))),
+                    body: Box::new(stmt::ExprSet::Values(stmt::Values::new(vec![
+                        stmt::ExprRecord::from_vec(vec![]).into(),
+                    ]))),
                 },
                 returning: Some(stmt::Returning::Star),
             },

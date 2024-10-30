@@ -150,8 +150,9 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
         .visit_mut(&mut i.filter);
     }
 
-    fn visit_expr_mut(&mut self, _i: &mut stmt::Expr<'stmt>) {
-        panic!("should not be reached")
+    fn visit_expr_mut(&mut self, i: &mut stmt::Expr<'stmt>) {
+        // TODO: actually simplify
+        assert!(i.is_const(), "expr={i:#?}");
     }
 }
 

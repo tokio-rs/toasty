@@ -538,10 +538,8 @@ pub fn visit_values_mut<'stmt, V>(v: &mut V, node: &mut Values<'stmt>)
 where
     V: VisitMut<'stmt> + ?Sized,
 {
-    for row in &mut node.rows {
-        for expr in row {
-            v.visit_expr_mut(expr);
-        }
+    for expr in &mut node.rows {
+        v.visit_expr_mut(expr);
     }
 }
 

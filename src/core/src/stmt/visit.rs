@@ -550,10 +550,8 @@ pub fn visit_values<'stmt, V>(v: &mut V, node: &Values<'stmt>)
 where
     V: Visit<'stmt> + ?Sized,
 {
-    for row in &node.rows {
-        for item in row {
-            v.visit_expr(item);
-        }
+    for expr in &node.rows {
+        v.visit_expr(expr);
     }
 }
 

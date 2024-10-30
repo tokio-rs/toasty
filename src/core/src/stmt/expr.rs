@@ -185,6 +185,15 @@ impl<'stmt> Expr<'stmt> {
         }
     }
 
+    /// Returns `true` if the expression is a constant expression.
+    pub fn is_const(&self) -> bool {
+        match self {
+            Expr::Value(_) => true,
+            Expr::Record(expr_record) => expr_record.iter().all(|expr| expr.is_const()),
+            _ => false,
+        }
+    }
+
     pub fn simplify(&mut self) {
         visit_mut::for_each_expr_mut(self, move |expr| {
             let maybe_expr = match expr {
