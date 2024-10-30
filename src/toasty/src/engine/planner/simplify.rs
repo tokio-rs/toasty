@@ -125,37 +125,21 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
             _ => todo!(),
         };
 
-        /*
         let mut simplify_expr = SimplifyExpr {
             model: self.schema.model(model),
             schema: self.schema,
         };
 
-        simplify_expr.visit_expr_mut(&mut i.values);
-        */
-        todo!("stmt={i:#?}");
+        simplify_expr.visit_stmt_insert_mut(i);
     }
 
     fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update<'stmt>) {
-        /*
-        self.visit_stmt_query_mut(&mut i.selection);
-
         let mut simplify_expr = SimplifyExpr {
-            model: self
-                .schema
-                .model(i.selection.body.as_select().source.as_model_id()),
+            model: self.schema.model(i.target.as_model_id()),
             schema: self.schema,
         };
 
-        for expr in i.expr.iter_mut() {
-            simplify_expr.visit_expr_mut(expr);
-        }
-
-        if let Some(expr) = &mut i.condition {
-            simplify_expr.visit_expr_mut(expr);
-        }
-        */
-        todo!("stmt={i:#?}");
+        simplify_expr.visit_stmt_update_mut(i);
     }
 
     fn visit_stmt_select_mut(&mut self, i: &mut stmt::Select<'stmt>) {

@@ -142,6 +142,10 @@ pub trait VisitMut<'stmt>: Sized {
     fn visit_value_mut(&mut self, i: &mut Value<'stmt>) {
         visit_value_mut(self, i);
     }
+
+    fn visit_values_mut(&mut self, i: &mut Values<'stmt>) {
+        visit_values_mut(self, i);
+    }
 }
 
 impl<'stmt, V: VisitMut<'stmt>> VisitMut<'stmt> for &mut V {
@@ -371,7 +375,7 @@ where
     match node {
         ExprSet::Select(expr) => v.visit_stmt_select_mut(expr),
         ExprSet::SetOp(expr) => v.visit_expr_set_op_mut(expr),
-        ExprSet::Values(_) => todo!(),
+        ExprSet::Values(expr) => v.visit_values_mut(expr),
     }
 }
 
@@ -528,6 +532,17 @@ pub fn visit_value_mut<'stmt, V>(v: &mut V, node: &mut Value<'stmt>)
 where
     V: VisitMut<'stmt> + ?Sized,
 {
+}
+
+pub fn visit_values_mut<'stmt, V>(v: &mut V, node: &mut Values<'stmt>)
+where
+    V: VisitMut<'stmt> + ?Sized,
+{
+    for row in &mut node.rows {
+        for expr in row {
+            v.visit_expr_mut(expr);
+        }
+    }
 }
 
 pub fn for_each_expr_mut<'stmt, F>(node: &mut impl Node<'stmt>, f: F)

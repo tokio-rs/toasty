@@ -143,12 +143,12 @@ pub trait Visit<'stmt>: Sized {
         visit_value(self, i);
     }
 
-    fn visit_values(&mut self, i: &Values<'stmt>) {
-        visit_values(self, i);
-    }
-
     fn visit_value_record(&mut self, i: &Record<'stmt>) {
         visit_value_record(self, i);
+    }
+
+    fn visit_values(&mut self, i: &Values<'stmt>) {
+        visit_values(self, i);
     }
 }
 
