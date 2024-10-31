@@ -37,6 +37,14 @@ impl<'stmt> ExprSet<'stmt> {
         }
     }
 
+    #[track_caller]
+    pub fn as_values_mut(&mut self) -> &mut Values<'stmt> {
+        match self {
+            ExprSet::Values(expr) => expr,
+            _ => todo!(),
+        }
+    }
+
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input<'stmt>) {
         match self {
             ExprSet::Select(expr) => expr.substitute_ref(input),

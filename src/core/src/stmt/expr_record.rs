@@ -38,6 +38,10 @@ impl<'stmt> ExprRecord<'stmt> {
         self.fields.push(expr)
     }
 
+    pub fn resize(&mut self, new_len: usize, value: impl Into<stmt::Expr<'stmt>>) {
+        self.fields.resize(new_len, value.into());
+    }
+
     pub(crate) fn simplify(&mut self) -> Option<Expr<'stmt>> {
         let mut all_values = true;
 

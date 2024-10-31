@@ -163,25 +163,29 @@ impl<'stmt> Planner<'_, 'stmt> {
         self.verify_non_nullable_fields_have_values(model, &mut expr);
         self.apply_fk_association(model, &expr, returning_pk);
 
-        /*
-        let lowered = self.lower_insert_expr(model, expr);
+        self.lower_insert_expr(model, &mut expr);
 
         self.write_actions[action]
             .as_insert_mut()
             .stmt
             .source
+            .body
             .as_values_mut()
             .rows
-            .push(lowered);
-        */
-        todo!()
+            .push(expr);
     }
 
     // Checks all fields of a record and handles nulls
     fn apply_insertion_defaults(&mut self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
         // TODO: make this smarter.. a lot smarter
 
-        // First, we have to find all belongs-to fields and normalize them to FK values
+        // First, we pad the record to account for all fields
+        if let stmt::Expr::Record(expr_record) = expr {
+            expr_record.resize(model.fields.len(), stmt::Value::Null);
+        }
+
+        // Next, we have to find all belongs-to fields and normalize them to FK
+        // values
         for field in &model.fields {
             if let FieldTy::BelongsTo(rel) = &field.ty {
                 let field_expr = expr.resolve_mut(field.id);

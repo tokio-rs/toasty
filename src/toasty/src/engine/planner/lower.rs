@@ -12,34 +12,23 @@ impl<'stmt> Planner<'_, 'stmt> {
         todo!()
     }
 
-    /*
-    pub(crate) fn lower_insert_expr(
-        &self,
-        model: &Model,
-        mut expr: stmt::Expr<'stmt>,
-    ) -> Vec<sql::Expr<'stmt>> {
-        self.lower_expr2(model, &mut expr);
+    pub(crate) fn lower_insert_expr(&self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
+        self.lower_expr2(model, expr);
 
-        let record = match expr {
-            stmt::Expr::Record(record) => record,
-            _ => todo!(),
+        let stmt::Expr::Record(record) = expr else {
+            todo!()
         };
 
         let mut lowered = vec![];
 
         for lowering in &model.lowering.model_to_table {
             let mut lowering = lowering.clone();
-            lowering.substitute(stmt::substitute::ModelToTable(&record));
-            lowered.push(sql::Expr::from_stmt(
-                self.schema,
-                model.lowering.table,
-                lowering,
-            ));
+            lowering.substitute(stmt::substitute::ModelToTable(&*record));
+            lowered.push(lowering);
         }
 
-        lowered
+        *expr = stmt::ExprRecord::from_vec(lowered).into();
     }
-    */
 
     /*
     pub(crate) fn lower_update_expr(
