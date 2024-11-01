@@ -4,8 +4,7 @@ use std::path::PathBuf;
 use db::{Todo, User};
 
 use toasty::Db;
-// use toasty_sqlite::Sqlite;
-use toasty_dynamodb::DynamoDB;
+use toasty_sqlite::Sqlite;
 
 fn assert_sync_send<T: Send>(_: T) {}
 
@@ -16,9 +15,8 @@ async fn main() {
 
     println!("{schema:#?}");
 
-    // Use the in-memory toasty driver
-    // let driver = Sqlite::new();
-    let driver = DynamoDB::from_env().await.unwrap();
+    // Use the in-memory sqlite driver
+    let driver = Sqlite::in_memory();
 
     let db = Db::new(schema, driver).await;
     // For now, reset!s
