@@ -3,14 +3,17 @@ mod db;
 use std::path::PathBuf;
 
 use toasty::Db;
-use toasty_dynamodb::DynamoDB;
+use toasty_sqlite::Sqlite;
 
 #[tokio::main]
 async fn main() {
     let schema_file: PathBuf = std::env::current_dir().unwrap().join("schema.toasty");
 
     let schema = toasty::schema::from_file(schema_file).unwrap();
-    let driver = DynamoDB::from_env().await.unwrap();
+
+    // Use the in-memory sqlite driver
+    let driver = Sqlite::in_memory();
+
     let db = Db::new(schema, driver).await;
 
     // For now, reset!s
