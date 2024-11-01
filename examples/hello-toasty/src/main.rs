@@ -16,12 +16,14 @@ async fn main() {
     println!("PATH={schema_file:#?}");
     let schema_file = schema_file.canonicalize().unwrap();
 
+    /*
     let schema_file = [file!(), "..", "..", "schema.toasty"]
         .iter()
         .collect::<PathBuf>()
         .canonicalize()
         .unwrap();
     println!("PATH={schema_file:#?}");
+    */
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
     println!("{schema:#?}");
