@@ -12,6 +12,12 @@ fn assert_sync_send<T: Send>(_: T) {}
 async fn main() {
     let schema_file = [file!(), "..", "..", "schema.toasty"]
         .iter()
+        .collect::<PathBuf>();
+    println!("PATH={schema_file:#?}");
+    let schema_file = schema_file.canonicalize().unwrap();
+
+    let schema_file = [file!(), "..", "..", "schema.toasty"]
+        .iter()
         .collect::<PathBuf>()
         .canonicalize()
         .unwrap();
