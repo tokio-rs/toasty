@@ -108,7 +108,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             self.push_write_action(plan::DeleteByKey {
                 input: vec![plan::Input::from_var(pk_by_index_out)],
                 table: table.id,
-                keys: eval::Expr::project([0]),
+                keys: eval::Expr::project(eval::Expr::arg(0), [0]),
                 filter: index_plan.result_filter.map(|mut expr| {
                     self.lower_expr2(model, &mut expr);
                     expr

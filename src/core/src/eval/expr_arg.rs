@@ -1,8 +1,16 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ExprArg {
     pub position: usize,
+}
+
+impl ExprArg {
+    pub(crate) fn from_stmt(stmt: stmt::ExprArg) -> ExprArg {
+        ExprArg {
+            position: stmt.position,
+        }
+    }
 }
 
 impl<'stmt> Expr<'stmt> {

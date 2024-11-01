@@ -70,15 +70,10 @@ impl Projection {
         self.steps.resolve_field(schema, expr_self)
     }
 
-    // TODO: unify with above
-    pub fn resolve_value<'a, 'stmt>(&self, expr_self: &'a [Value<'stmt>]) -> &'a Value<'stmt> {
-        let [first, rest @ ..] = self.as_slice() else {
-            todo!()
-        };
+    pub fn resolve_value<'a, 'stmt>(&self, expr_self: &'a Value<'stmt>) -> &'a Value<'stmt> {
+        let mut ret = expr_self;
 
-        let mut ret = &expr_self[first.into_usize()];
-
-        for step in rest {
+        for step in self.as_slice() {
             match ret {
                 Value::Record(record) => ret = &record[step.into_usize()],
                 Value::Enum(value_enum) => {

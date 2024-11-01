@@ -110,13 +110,14 @@ impl<'stmt> Planner<'_, 'stmt> {
             self.plan_insert_record(model, row, action, returning_pk.as_mut());
         }
 
-        /*
         let output_var;
         let output_plan;
 
         match &stmt.returning {
             Some(stmt::Returning::Star) => {
-                let project = eval::Expr::from_stmt(model.lowering.table_to_model.clone().into());
+                let mut project: stmt::Expr<'_> = model.lowering.table_to_model.clone().into();
+                project.substitute(stmt::substitute::TableToModel((model, &model.lowering.columns[..])));
+                let project = eval::Expr::from_stmt(project);
 
                 // TODO: cache this
                 let ty = stmt::Type::Record(
@@ -147,8 +148,6 @@ impl<'stmt> Planner<'_, 'stmt> {
         self.write_actions[action].as_insert_mut().output = output_plan;
 
         output_var
-        */
-        todo!()
     }
 
     fn plan_insert_record(

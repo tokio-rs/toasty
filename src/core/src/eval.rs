@@ -1,6 +1,9 @@
 mod expr_and;
 pub use expr_and::ExprAnd;
 
+mod expr_arg;
+pub use expr_arg::ExprArg;
+
 mod expr_binary_op;
 pub use expr_binary_op::ExprBinaryOp;
 
@@ -14,7 +17,7 @@ mod expr_or;
 pub use expr_or::ExprOr;
 
 mod expr_project;
-pub use expr_project::{ExprProject, ProjectBase};
+pub use expr_project::ExprProject;
 
 mod expr_record;
 pub use expr_record::ExprRecord;
@@ -29,6 +32,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum Expr<'stmt> {
     And(ExprAnd<'stmt>),
+    Arg(ExprArg),
     BinaryOp(ExprBinaryOp<'stmt>),
     List(ExprList<'stmt>),
     Map(ExprMap<'stmt>),
@@ -40,6 +44,7 @@ pub enum Expr<'stmt> {
 impl<'stmt> Expr<'stmt> {
     pub fn from_stmt(stmt: stmt::Expr<'stmt>) -> Expr<'stmt> {
         match stmt {
+            stmt::Expr::Arg(expr) => ExprArg::from_stmt(expr).into(),
             stmt::Expr::And(expr) => ExprAnd::from_stmt(expr).into(),
             stmt::Expr::BinaryOp(expr) => ExprBinaryOp::from_stmt(expr).into(),
             stmt::Expr::List(expr) => ExprList::from_stmt(expr).into(),
@@ -87,6 +92,7 @@ impl<'stmt> Expr<'stmt> {
 
                 Ok(true.into())
             }
+            Expr::Arg(_) => todo!(),
             Expr::Value(value) => Ok(value.clone()),
             Expr::BinaryOp(expr_binary_op) => {
                 let lhs = expr_binary_op.lhs.eval_ref(input)?;
@@ -105,12 +111,10 @@ impl<'stmt> Expr<'stmt> {
             }
             .into()),
             */
-            Expr::Project(expr_project) => match expr_project.base {
-                ProjectBase::ExprSelf => {
-                    Ok(input.resolve_self_projection(&expr_project.projection))
-                }
-                _ => todo!(),
-            },
+            Expr::Project(expr_project) => {
+                let base = expr_project.base.eval_ref(input)?;
+                Ok(expr_project.projection.resolve_value(&base).clone())
+            }
             Expr::Record(expr_record) => Ok(expr_record.eval_ref(input)?.into()),
             Expr::List(exprs) => {
                 let mut applied = vec![];
@@ -122,8 +126,11 @@ impl<'stmt> Expr<'stmt> {
                 Ok(Value::List(applied))
             }
             Expr::Map(expr_map) => {
+                /*
                 let base = expr_map.base.eval_ref(input)?;
                 expr_map.map.eval(&base)
+                */
+                todo!()
             }
         }
     }

@@ -222,8 +222,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
                 todo!("returning={returning:#?}")
             };
             write!(self.dst, " RETURNING ")?;
-            // self.expr_list(returning)?;
-            todo!("returning={returning:#?}");
+            self.expr_as_list(returning)?;
         }
 
         Ok(())

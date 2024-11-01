@@ -227,8 +227,8 @@ impl<'stmt> Planner<'_, 'stmt> {
                     input: vec![plan::Input::project_var_ref(
                         input,
                         eval::Expr::map(
-                            eval::Expr::project([0]),
-                            eval::Expr::project(fk_field.target),
+                            eval::Expr::arg(0),
+                            eval::Expr::project(eval::Expr::arg(0), fk_field.target),
                         ),
                     )],
                 };
@@ -252,8 +252,8 @@ impl<'stmt> Planner<'_, 'stmt> {
                     input: vec![plan::Input::project_var_ref(
                         input,
                         eval::Expr::map(
-                            eval::Expr::project([0]),
-                            eval::Expr::project(fk_field.source),
+                            eval::Expr::arg(0),
+                            eval::Expr::project(eval::Expr::arg(0), fk_field.source),
                         ),
                     )],
                 };

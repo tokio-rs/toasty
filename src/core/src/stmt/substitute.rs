@@ -22,6 +22,21 @@ impl<'stmt> Input<'stmt> for TableToModel<&ExprRecord<'stmt>> {
     }
 }
 
+// TODO: a bit of a hack
+impl<'stmt> Input<'stmt> for TableToModel<(&Model, &[ColumnId])> {
+    fn resolve_column(&mut self, expr_column: &ExprColumn) -> Option<Expr<'stmt>> {
+        let (index, _) = self
+            .0
+             .1
+            .iter()
+            .enumerate()
+            .find(|(_, column_id)| **column_id == expr_column.column)
+            .unwrap();
+
+        Some(stmt::Expr::project(stmt::Expr::arg(0), [index]))
+    }
+}
+
 pub struct ModelToTable<T>(pub T);
 
 impl<'stmt> Input<'stmt> for ModelToTable<&ExprRecord<'stmt>> {

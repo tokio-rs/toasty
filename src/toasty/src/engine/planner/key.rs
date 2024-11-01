@@ -117,7 +117,7 @@ impl<'a> TryConvert<'a> {
 
     fn expr_arg_to_project<'stmt>(&self, expr: &stmt::Expr<'stmt>) -> eval::Expr<'stmt> {
         match expr {
-            stmt::Expr::Arg(arg) => eval::Expr::project([arg.position]),
+            // stmt::Expr::Arg(arg) => eval::Expr::project([arg.position]),
             // TODO: ok for now I guess, but enum should be gone before this point.
             stmt::Expr::Enum(expr_enum) => {
                 let fields = eval::Expr::from_stmt(expr_enum.fields.clone().into());
