@@ -10,7 +10,11 @@ fn assert_sync_send<T: Send>(_: T) {}
 
 #[tokio::main]
 async fn main() {
-    let schema_file: PathBuf = std::env::current_dir().unwrap().join("schema.toasty");
+    let schema_file = [file!(), "..", "..", "schema.toasty"]
+        .iter()
+        .collect::<PathBuf>()
+        .canonicalize()
+        .unwrap();
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
     println!("{schema:#?}");

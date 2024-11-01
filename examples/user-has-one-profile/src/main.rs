@@ -7,7 +7,11 @@ use toasty_sqlite::Sqlite;
 
 #[tokio::main]
 async fn main() {
-    let schema_file: PathBuf = std::env::current_dir().unwrap().join("schema.toasty");
+    let schema_file = [file!(), "..", "..", "schema.toasty"]
+        .iter()
+        .collect::<PathBuf>()
+        .canonicalize()
+        .unwrap();
 
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
