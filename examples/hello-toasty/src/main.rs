@@ -1,5 +1,5 @@
 mod db;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use db::{Todo, User};
 
@@ -10,9 +10,16 @@ fn assert_sync_send<T: Send>(_: T) {}
 
 #[tokio::main]
 async fn main() {
+    let schema_file = Path::new(file!())
+        .parent()
+        .unwrap()
+        .join(["..", "..", "schema.toasty"].iter().collect::<PathBuf>());
+    /*
+    println!("{schema_file:#?}");
     let schema_file = [file!(), "..", "..", "schema.toasty"]
         .iter()
         .collect::<PathBuf>();
+    */
     println!("PATH={schema_file:#?}");
     let schema_file = schema_file.canonicalize().unwrap();
 
