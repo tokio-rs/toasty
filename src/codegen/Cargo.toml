@@ -6,9 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-toasty-core = { path = "../core" }
-std-util = { path = "../std-util" }
-
-syn = "1.0.92"
-proc-macro2 = "1.0.37"
-quote = "1.0.18"
+proc-macro2.workspace = true
+quote.workspace = true
+std-util.workspace = true
+syn.workspace = true
+toasty-core.workspace = true
