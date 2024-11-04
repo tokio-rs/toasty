@@ -13,7 +13,8 @@ async fn main() {
     let schema_file: PathBuf = std::env::current_dir().unwrap().join("schema.toasty");
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
-    println!("{schema:#?}");
+    // NOTE enable this to see the enstire structure in STDOUT
+    // println!("{schema:#?}");
 
     // Use the in-memory sqlite driver
     let driver = Sqlite::in_memory();
@@ -65,8 +66,8 @@ async fn main() {
     );
 
     // Load the user again
-    let user = User::find_by_id(&u2.id).get(&db).await.unwrap();
-    println!("  reloaded -> {user:#?}");
+    let user = User::find_by_id(&u1.id).get(&db).await.unwrap();
+    println!("  reloaded, notice change to the user's name -> {user:#?}");
 
     println!(" ~~~~~~~~~~~ CREATE TODOs ~~~~~~~~~~~~");
 
@@ -94,6 +95,7 @@ async fn main() {
     // let mut todos = db::Todo::find_by_user(&u2.id).all(&db).await.unwrap();
 
     // Delete user
+    let user = User::find_by_id(&u2.id).get(&db).await.unwrap();
     user.delete(&db).await.unwrap();
     assert!(User::find_by_id(&u2.id).get(&db).await.is_err());
 
