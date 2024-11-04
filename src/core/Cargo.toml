@@ -5,10 +5,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
-anyhow = "1"
-async-trait = "0.1"
-std-util = { path = "../std-util" }
-tokio-stream = { version = "0.1.12", default-features = false }
+anyhow.workspace = true
+async-trait.workspace = true
+std-util.workspace = true
+tokio-stream.workspace = true
 
 [dev-dependencies]
-pretty_assertions = "1.2"
+pretty_assertions.workspace = true

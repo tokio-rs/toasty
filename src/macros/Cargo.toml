@@ -8,9 +8,8 @@ publish = false
 proc-macro = true
 
 [dependencies]
-toasty-codegen = { path = "../codegen" }
-toasty-core = { path = "../core" }
-
-proc-macro2 = "1.0.38"
-quote = "1.0.18"
-syn = { version = "1.0.93", features = ["parsing"] }
+proc-macro2.workspace = true
+quote.workspace = true
+syn.workspace = true
+toasty-core.workspace = true
+toasty-codegen.workspace = true
