@@ -1,5 +1,5 @@
 mod db;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use db::{Todo, User};
 
@@ -10,7 +10,7 @@ fn assert_sync_send<T: Send>(_: T) {}
 
 #[tokio::main]
 async fn main() {
-    let schema_file = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("examples")
         .join("hello-toasty")
         .join("schema.toasty");
