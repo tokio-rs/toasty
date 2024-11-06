@@ -22,10 +22,13 @@ pub use expr_project::ExprProject;
 mod expr_record;
 pub use expr_record::ExprRecord;
 
+mod input;
+pub use input::{args, const_input, Input};
+
 mod value;
 
 use crate::{
-    stmt::{self, eval, BinaryOp, Record, Value},
+    stmt::{self, BinaryOp, Projection, Record, Value},
     Result,
 };
 
@@ -55,7 +58,7 @@ impl<'stmt> Expr<'stmt> {
         }
     }
 
-    pub fn eval(&self, mut input: impl eval::Input<'stmt>) -> crate::Result<Value<'stmt>> {
+    pub fn eval(&self, mut input: impl Input<'stmt>) -> crate::Result<Value<'stmt>> {
         self.eval_ref(&mut input)
     }
 
@@ -65,21 +68,21 @@ impl<'stmt> Expr<'stmt> {
     ///
     /// `eval_const` panics if the expression is not constant
     pub fn eval_const(&self) -> Value<'stmt> {
-        self.eval_ref(&mut eval::const_input()).unwrap()
+        self.eval_ref(&mut const_input()).unwrap()
     }
 
-    pub fn eval_bool(&self, mut input: impl eval::Input<'stmt>) -> Result<bool> {
+    pub fn eval_bool(&self, mut input: impl Input<'stmt>) -> Result<bool> {
         self.eval_bool_ref(&mut input)
     }
 
-    pub(crate) fn eval_bool_ref(&self, input: &mut impl eval::Input<'stmt>) -> Result<bool> {
+    pub(crate) fn eval_bool_ref(&self, input: &mut impl Input<'stmt>) -> Result<bool> {
         match self.eval_ref(input)? {
             Value::Bool(ret) => Ok(ret),
             _ => todo!(),
         }
     }
 
-    pub(crate) fn eval_ref(&self, input: &mut impl eval::Input<'stmt>) -> Result<Value<'stmt>> {
+    pub(crate) fn eval_ref(&self, input: &mut impl Input<'stmt>) -> Result<Value<'stmt>> {
         match self {
             Expr::And(expr_and) => {
                 debug_assert!(!expr_and.operands.is_empty());
@@ -92,7 +95,7 @@ impl<'stmt> Expr<'stmt> {
 
                 Ok(true.into())
             }
-            Expr::Arg(_) => todo!(),
+            Expr::Arg(expr_arg) => Ok(input.resolve_arg(expr_arg, &Projection::identity())),
             Expr::Value(value) => Ok(value.clone()),
             Expr::BinaryOp(expr_binary_op) => {
                 let lhs = expr_binary_op.lhs.eval_ref(input)?;
@@ -112,8 +115,12 @@ impl<'stmt> Expr<'stmt> {
             .into()),
             */
             Expr::Project(expr_project) => {
-                let base = expr_project.base.eval_ref(input)?;
-                Ok(expr_project.projection.resolve_value(&base).clone())
+                if let Expr::Arg(expr_arg) = &*expr_project.base {
+                    Ok(input.resolve_arg(expr_arg, &expr_project.projection))
+                } else {
+                    let base = expr_project.base.eval_ref(input)?;
+                    Ok(expr_project.projection.resolve_value(&base).clone())
+                }
             }
             Expr::Record(expr_record) => Ok(expr_record.eval_ref(input)?.into()),
             Expr::List(exprs) => {

@@ -21,11 +21,7 @@ impl<'stmt> Exec<'_, 'stmt> {
             .driver
             .exec(
                 &self.db.schema,
-                operation::QuerySql {
-                    stmt: stmt.into(),
-                    ty,
-                }
-                .into(),
+                operation::QuerySql { stmt: stmt.into() }.into(),
             )
             .await?;
 
@@ -47,8 +43,7 @@ impl<'stmt> Exec<'_, 'stmt> {
         let res = ValueStream::from_stream(async_stream::try_stream! {
             for await value in res {
                 let value = value?;
-                let stmt::Value::Record(record) = value else { todo!() };
-                let record = project.eval(&*record)?;
+                let record = project.eval(eval::args(&[value][..]))?;
                 yield record.into();
             }
         });

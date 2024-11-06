@@ -16,49 +16,33 @@ impl<'stmt> Planner<'_, 'stmt> {
 
     fn plan_select2(&mut self, cx: &Context<'stmt>, mut stmt: stmt::Query<'stmt>) -> plan::VarId {
         self.simplify_stmt_query(&mut stmt);
-        self.plan_simplified_select(cx, &stmt)
+        self.plan_simplified_select(cx, stmt)
     }
 
     pub(super) fn plan_simplified_select(
         &mut self,
         cx: &Context<'stmt>,
-        stmt: &stmt::Query<'stmt>,
+        stmt: stmt::Query<'stmt>,
     ) -> plan::VarId {
-        let stmt = stmt.body.as_select();
-
-        let source_model = stmt.source.as_model();
+        // TODO: don't clone?
+        let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.model(source_model.model);
 
-        // TODO: inefficient projection. The full table is selected, but not
-        // always used in the projection.
-        let project;
-
-        match &stmt.returning {
-            stmt::Returning::Star => {
-                project = eval::Expr::from_stmt(model.lowering.table_to_model.clone().into());
-            }
-            stmt::Returning::Expr(returning) => {
-                let mut stmt = returning.clone();
-                stmt.substitute(stmt::substitute::TableToModel(
-                    &model.lowering.table_to_model,
-                ));
-                project = eval::Expr::from_stmt(stmt)
-            }
-        }
-
         let ret = if self.capability.is_sql() {
-            self.plan_select_sql(cx, project, stmt)
+            self.plan_select_sql(cx, model, stmt)
         } else {
-            self.plan_select_kv(cx, project, stmt)
+            self.plan_select_kv(cx, model, stmt)
         };
 
         if !source_model.include.is_empty() {
             // For now, the full model must be selected
-            assert!(stmt.returning.is_star());
+            // assert!(stmt.returning.is_star());
+            todo!()
         }
 
         for include in &source_model.include {
-            self.plan_select_include(stmt.source.as_model_id(), include, ret);
+            // self.plan_select_include(stmt.source.as_model_id(), include, ret);
+            todo!()
         }
 
         ret
@@ -67,34 +51,12 @@ impl<'stmt> Planner<'_, 'stmt> {
     fn plan_select_sql(
         &mut self,
         cx: &Context<'stmt>,
-        project: eval::Expr<'stmt>,
-        stmt: &stmt::Select<'stmt>,
+        model: &Model,
+        mut stmt: stmt::Query<'stmt>,
     ) -> plan::VarId {
-        let model = self.schema.model(stmt.source.as_model_id());
         let table = self.schema.table(model.lowering.table);
 
-        // TODO: don't clone?
-        let mut filter = stmt.filter.clone();
-
-        self.lower_select(table, model, &mut filter);
-
-        let mut sql_project = vec![];
-        let mut sql_ty = vec![];
-
-        for column_id in &model.lowering.columns {
-            let column = table.column(column_id);
-
-            sql_project.push(stmt::Expr::column(column));
-            sql_ty.push(column.ty.clone());
-        }
-
-        /*
-        let sql = sql::Statement::query(
-            self.schema,
-            table.id,
-            stmt::Expr::record(sql_project),
-            filter,
-        );
+        let lowering = self.lower_stmt_query(table, model, &mut stmt);
 
         let output = self.var_table.register_var();
 
@@ -102,25 +64,22 @@ impl<'stmt> Planner<'_, 'stmt> {
             input: cx.input.clone(),
             output: Some(plan::QuerySqlOutput {
                 var: output,
-                ty: stmt::Type::Record(sql_ty),
-                project,
+                project: lowering.project,
             }),
-            stmt: sql,
+            stmt: stmt.into(),
         });
 
         output
-        */
-        todo!()
     }
 
     fn plan_select_kv(
         &mut self,
         cx: &Context<'stmt>,
-        project: eval::Expr<'stmt>,
-        stmt: &stmt::Select<'stmt>,
+        model: &Model,
+        stmt: stmt::Query<'stmt>,
     ) -> plan::VarId {
-        let model = self.schema.model(stmt.source.as_model_id());
         let table = self.schema.table(model.lowering.table);
+        /*
 
         // TODO: don't clone
         let filter = stmt.filter.clone();
@@ -135,7 +94,6 @@ impl<'stmt> Planner<'_, 'stmt> {
             self.lower_expr2(model, result_filter);
         }
 
-        /*
         if index_plan.index.primary_key {
             // Is the index filter a set of keys
             if let Some(keys) = self.try_build_key_filter(index, &index_filter) {

@@ -14,20 +14,11 @@ pub trait Input<'stmt> {
     }
 }
 
-pub struct TableToModel<T>(pub T);
-
-impl<'stmt> Input<'stmt> for TableToModel<&ExprRecord<'stmt>> {
-    fn resolve_column(&mut self, expr_column: &ExprColumn) -> Option<Expr<'stmt>> {
-        todo!("column = {:#?}; self={:#?}", expr_column, self.0);
-    }
-}
-
-// TODO: a bit of a hack
-impl<'stmt> Input<'stmt> for TableToModel<(&Model, &[ColumnId])> {
+impl<'stmt> Input<'stmt> for &Model {
     fn resolve_column(&mut self, expr_column: &ExprColumn) -> Option<Expr<'stmt>> {
         let (index, _) = self
-            .0
-             .1
+            .lowering
+            .columns
             .iter()
             .enumerate()
             .find(|(_, column_id)| **column_id == expr_column.column)
@@ -35,7 +26,21 @@ impl<'stmt> Input<'stmt> for TableToModel<(&Model, &[ColumnId])> {
 
         Some(stmt::Expr::project(stmt::Expr::arg(0), [index]))
     }
+
+    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr<'stmt>> {
+        todo!()
+    }
 }
+
+pub struct TableToModel<T>(pub T);
+
+/*
+impl<'stmt> Input<'stmt> for TableToModel<&ExprRecord<'stmt>> {
+    fn resolve_column(&mut self, expr_column: &ExprColumn) -> Option<Expr<'stmt>> {
+        todo!("column = {:#?}; self={:#?}", expr_column, self.0);
+    }
+}
+    */
 
 pub struct ModelToTable<T>(pub T);
 

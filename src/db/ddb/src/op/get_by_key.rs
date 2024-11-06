@@ -6,6 +6,7 @@ impl DynamoDB {
         schema: &schema::Schema,
         op: operation::GetByKey<'stmt>,
     ) -> Result<stmt::ValueStream<'stmt>> {
+        /*
         let table = schema.table(op.table);
 
         if op.keys.len() == 1 {
@@ -96,5 +97,7 @@ impl DynamoDB {
                 },
             )))
         }
+        */
+        todo!()
     }
 }

@@ -50,16 +50,13 @@ impl Driver for Sqlite {
         let connection = self.connection.lock().unwrap();
 
         let sql;
-        let ty;
 
         match &op {
             QuerySql(op) => {
                 sql = &op.stmt;
-                ty = op.ty.as_ref();
             }
             Insert(op) => {
                 sql = op;
-                ty = None;
             }
             _ => todo!(),
         }
@@ -69,17 +66,34 @@ impl Driver for Sqlite {
 
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
-        if ty.is_none() {
-            let exec = !matches!(sql, stmt::Statement::Update(u) if u.condition.is_some());
-
-            if exec {
-                stmt.execute(rusqlite::params_from_iter(
-                    params.iter().map(value_from_param),
-                ))
-                .unwrap();
-
-                return Ok(stmt::ValueStream::new());
+        let width = match sql {
+            stmt::Statement::Query(stmt) => match &*stmt.body {
+                stmt::ExprSet::Select(stmt) => Some(stmt.returning.as_expr().as_record().len()),
+                _ => todo!(),
+            },
+            stmt::Statement::Insert(stmt) => stmt
+                .returning
+                .as_ref()
+                .map(|returning| returning.as_expr().as_record().len()),
+            stmt::Statement::Delete(stmt) => stmt
+                .returning
+                .as_ref()
+                .map(|returning| returning.as_expr().as_record().len()),
+            stmt::Statement::Update(u) => {
+                assert!(u.condition.is_none());
+                None
             }
+            _ => todo!(),
+        };
+
+        if width.is_none() {
+            println!("SQL={sql_str}");
+            stmt.execute(rusqlite::params_from_iter(
+                params.iter().map(value_from_param),
+            ))
+            .unwrap();
+
+            return Ok(stmt::ValueStream::new());
         }
 
         let mut rows = stmt
@@ -88,29 +102,20 @@ impl Driver for Sqlite {
             ))
             .unwrap();
 
-        let ty = match ty {
-            Some(ty) => ty,
-            None => &stmt::Type::Bool,
-        };
-
         let mut ret = vec![];
 
         loop {
             match rows.next() {
                 Ok(Some(row)) => {
-                    if let stmt::Type::Record(tys) = ty {
-                        let mut items = vec![];
+                    let mut items = vec![];
 
-                        for (index, ty) in tys.iter().enumerate() {
-                            items.push(load(row, index, ty));
-                        }
+                    let width = width.unwrap();
 
-                        ret.push(stmt::Record::from_vec(items).into());
-                    } else if let stmt::Type::Bool = ty {
-                        ret.push(stmt::Record::from_vec(vec![]).into());
-                    } else {
-                        todo!()
+                    for index in 0..width {
+                        items.push(load(row, index));
                     }
+
+                    ret.push(stmt::Record::from_vec(items).into());
                 }
                 Ok(None) => break,
                 Err(err) => {
@@ -209,9 +214,20 @@ fn value_from_param<'a>(value: &'a stmt::Value<'a>) -> rusqlite::types::ToSqlOut
     }
 }
 
-fn load<'stmt>(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt::Value<'stmt> {
+fn load<'stmt>(row: &rusqlite::Row, index: usize) -> stmt::Value<'stmt> {
+    use rusqlite::types::Value as SqlValue;
     use std::borrow::Cow;
 
+    let value: Option<SqlValue> = row.get(index).unwrap();
+
+    match value {
+        Some(SqlValue::Null) => stmt::Value::Null,
+        Some(SqlValue::Integer(value)) => stmt::Value::I64(value),
+        Some(SqlValue::Text(value)) => stmt::Value::String(value.into()),
+        _ => todo!("value={value:#?}"),
+    }
+
+    /*
     match ty {
         stmt::Type::Id(mid) => {
             let s: Option<String> = row.get(index).unwrap();
@@ -271,4 +287,5 @@ fn load<'stmt>(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt::Valu
         }
         ty => todo!("column.ty = {:#?}", ty),
     }
+    */
 }

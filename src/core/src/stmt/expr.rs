@@ -123,31 +123,6 @@ impl<'stmt> Expr<'stmt> {
         Expr::List(items.into_iter().map(Into::into).collect())
     }
 
-    pub fn record<T>(items: impl IntoIterator<Item = T>) -> Expr<'stmt>
-    where
-        T: Into<Expr<'stmt>>,
-    {
-        Expr::Record(ExprRecord::from_iter(items.into_iter()))
-    }
-
-    pub fn is_record(&self) -> bool {
-        matches!(self, Expr::Record(_))
-    }
-
-    pub fn as_record(&self) -> &ExprRecord<'stmt> {
-        match self {
-            Expr::Record(expr_record) => expr_record,
-            _ => panic!(),
-        }
-    }
-
-    pub fn as_record_mut(&mut self) -> &mut ExprRecord<'stmt> {
-        match self {
-            Expr::Record(expr_record) => expr_record,
-            _ => panic!(),
-        }
-    }
-
     /// Returns true if the expression is the `true` boolean expression
     pub fn is_true(&self) -> bool {
         matches!(self, Expr::Value(Value::Bool(true)))

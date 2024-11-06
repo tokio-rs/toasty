@@ -9,6 +9,7 @@ impl<'stmt> Exec<'_, 'stmt> {
         let project = action.project.clone();
         let post_filter = action.post_filter.clone();
 
+        /*
         let res = ValueStream::from_stream(async_stream::try_stream! {
             for await value in res {
                 let value = value?;
@@ -25,6 +26,8 @@ impl<'stmt> Exec<'_, 'stmt> {
                 }
             }
         });
+        */
+        todo!();
 
         self.vars.store(action.output, res);
 

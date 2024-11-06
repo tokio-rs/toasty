@@ -18,10 +18,7 @@ impl<'stmt> ExprRecord<'stmt> {
         }
     }
 
-    pub(crate) fn eval_ref(
-        &self,
-        input: &mut impl eval::Input<'stmt>,
-    ) -> crate::Result<Record<'stmt>> {
+    pub(crate) fn eval_ref(&self, input: &mut impl Input<'stmt>) -> crate::Result<Record<'stmt>> {
         let mut applied = vec![];
 
         for expr in &self.fields {

@@ -30,6 +30,12 @@ impl Source {
         self.as_model().model
     }
 
+    pub fn table(table: impl Into<TableId>) -> Source {
+        Source::Table(vec![TableWithJoins {
+            table: table.into(),
+        }])
+    }
+
     pub fn as_table_with_joins(&self) -> &[TableWithJoins] {
         match self {
             Source::Table(source) => source,

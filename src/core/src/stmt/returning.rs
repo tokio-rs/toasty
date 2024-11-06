@@ -14,6 +14,13 @@ impl<'stmt> Returning<'stmt> {
     pub fn is_star(&self) -> bool {
         matches!(self, Returning::Star)
     }
+
+    pub fn as_expr(&self) -> &Expr<'stmt> {
+        match self {
+            Returning::Expr(expr) => expr,
+            _ => todo!(),
+        }
+    }
 }
 
 impl<'stmt> From<Expr<'stmt>> for Returning<'stmt> {

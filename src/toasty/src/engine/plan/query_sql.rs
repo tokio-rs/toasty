@@ -17,9 +17,6 @@ pub(crate) struct QuerySqlOutput<'stmt> {
     /// Variable to store the output in
     pub var: plan::VarId,
 
-    /// Type of the output
-    pub ty: stmt::Type,
-
     /// How to project the output returned by the driver
     pub project: eval::Expr<'stmt>,
 }

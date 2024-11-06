@@ -15,14 +15,7 @@ impl<'stmt> Exec<'_, 'stmt> {
         let res = self
             .db
             .driver
-            .exec(
-                &self.db.schema,
-                operation::QuerySql {
-                    stmt: sql,
-                    ty: action.output.as_ref().map(|o| o.ty.clone()),
-                }
-                .into(),
-            )
+            .exec(&self.db.schema, operation::QuerySql { stmt: sql }.into())
             .await?;
 
         let Some(out) = &action.output else {
@@ -34,12 +27,15 @@ impl<'stmt> Exec<'_, 'stmt> {
         // TODO: don't clone
         let project = out.project.clone();
 
+        /*
         let res = ValueStream::from_stream(async_stream::try_stream! {
             for await value in res {
                 let value = value?;
                 yield project.eval(&value)?;
             }
         });
+        */
+        todo!();
 
         self.vars.store(out.var, res);
 

@@ -17,6 +17,10 @@ impl<'stmt> Expr<'stmt> {
     pub fn arg(expr_arg: impl Into<ExprArg>) -> Expr<'stmt> {
         Expr::Arg(expr_arg.into())
     }
+
+    pub fn is_arg(&self) -> bool {
+        matches!(self, Expr::Arg(..))
+    }
 }
 
 impl From<usize> for ExprArg {

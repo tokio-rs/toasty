@@ -1,6 +1,105 @@
 use super::*;
 
+/// Result of the query statement lowering
+pub(crate) struct QueryLowering<'stmt> {
+    /// How to project the result
+    pub project: eval::Expr<'stmt>,
+}
+
 impl<'stmt> Planner<'_, 'stmt> {
+    pub(crate) fn lower_stmt_query(
+        &self,
+        table: &Table,
+        model: &Model,
+        stmt: &mut stmt::Query<'stmt>,
+    ) -> QueryLowering<'stmt> {
+        match &mut *stmt.body {
+            stmt::ExprSet::Select(stmt) => self.lower_stmt_select(table, model, stmt),
+            _ => todo!("stmt={stmt:#?}"),
+        }
+    }
+
+    fn lower_stmt_select(
+        &self,
+        table: &Table,
+        model: &Model,
+        stmt: &mut stmt::Select<'stmt>,
+    ) -> QueryLowering<'stmt> {
+        use std::mem;
+
+        // Lower the query source
+        stmt.source = stmt::Source::table(table.id);
+
+        let mut filter = mem::take(&mut stmt.filter);
+
+        // Lower the filter
+        self.lower_expr2(model, &mut filter);
+
+        // Include any column constraints that are constant as part of the
+        // lowering.
+        let mut operands = match filter {
+            stmt::Expr::And(expr_and) => expr_and.operands,
+            expr => vec![expr],
+        };
+
+        for column in table.primary_key_columns() {
+            let expr_enum = match &model.lowering.model_to_table[column.id.index] {
+                stmt::Expr::Enum(expr_enum) => expr_enum,
+                _ => continue,
+            };
+
+            assert_eq!(model.lowering.columns[column.id.index], column.id);
+
+            operands.push(stmt::Expr::is_a(
+                stmt::Expr::column(column),
+                stmt::ExprTy {
+                    ty: column.ty.clone(),
+                    variant: Some(expr_enum.variant),
+                },
+            ))
+        }
+
+        stmt.filter = if operands.len() == 1 {
+            operands.into_iter().next().unwrap()
+        } else {
+            stmt::ExprAnd { operands: operands }.into()
+        };
+
+        // Lower the returning statement.
+        let project = match &stmt.returning {
+            stmt::Returning::Star => {
+                // Only select columns that are needed to populate the model
+                let columns = model
+                    .lowering
+                    .columns
+                    .iter()
+                    .cloned()
+                    .map(Into::into)
+                    .map(stmt::Expr::Column)
+                    .collect::<Vec<_>>();
+
+                stmt.returning = stmt::Returning::Expr(stmt::Expr::record(columns));
+
+                let mut stmt: stmt::Expr<'_> = model.lowering.table_to_model.clone().into();
+                stmt.substitute(model);
+
+                eval::Expr::from_stmt(stmt)
+            }
+            stmt::Returning::Expr(returning) => {
+                /*
+                let mut stmt = returning.clone();
+                stmt.substitute(stmt::substitute::TableToModel(
+                    &model.lowering.table_to_model,
+                ));
+                project = Some(eval::Expr::from_stmt(stmt));
+                */
+                todo!("{returning:#?}");
+            }
+        };
+
+        QueryLowering { project }
+    }
+
     pub(crate) fn lower_delete_stmt(&self, model: &Model, stmt: &mut stmt::Delete<'stmt>) {
         /*
         let mut filter = stmt.selection.body.as_select().filter.clone();
@@ -114,41 +213,6 @@ impl<'stmt> Planner<'_, 'stmt> {
         .visit_mut(expr);
     }
 
-    pub(crate) fn lower_select(&self, table: &Table, model: &Model, expr: &mut stmt::Expr<'stmt>) {
-        use std::mem;
-
-        self.lower_expr2(model, expr);
-
-        // Lets try something...
-        let mut operands = match mem::take(expr) {
-            stmt::Expr::And(expr_and) => expr_and.operands,
-            expr => vec![expr],
-        };
-
-        for column in table.primary_key_columns() {
-            let expr_enum = match &model.lowering.model_to_table[column.id.index] {
-                stmt::Expr::Enum(expr_enum) => expr_enum,
-                _ => continue,
-            };
-
-            assert_eq!(model.lowering.columns[column.id.index], column.id);
-
-            operands.push(stmt::Expr::is_a(
-                stmt::Expr::column(column),
-                stmt::ExprTy {
-                    ty: column.ty.clone(),
-                    variant: Some(expr_enum.variant),
-                },
-            ))
-        }
-
-        *expr = if operands.len() == 1 {
-            operands.into_iter().next().unwrap()
-        } else {
-            stmt::ExprAnd { operands: operands }.into()
-        };
-    }
-
     pub(crate) fn lower_index_filter(
         &self,
         table: &Table,
@@ -238,12 +302,15 @@ impl<'a, 'stmt> VisitMut<'stmt> for LowerExpr2<'a> {
         use stmt::Expr::*;
 
         match (&mut *i.lhs, &mut *i.rhs) {
-            (Project(lhs), rhs) => {
-                self.lower_expr(&mut lhs.projection, rhs);
-            }
-            (lhs, Project(rhs)) => {
+            (Field(lhs), rhs) => {
                 assert!(i.op.is_eq(), "op={:#?}", i.op);
-                self.lower_expr(&mut rhs.projection, lhs);
+                let lowered_lhs = self.lower_field_expr(lhs.field, rhs);
+                *i.lhs = lowered_lhs;
+            }
+            (lhs, Field(rhs)) => {
+                assert!(i.op.is_eq(), "op={:#?}", i.op);
+                let lowered_rhs = self.lower_field_expr(rhs.field, lhs);
+                *i.rhs = lowered_rhs;
             }
             _ => todo!("expr = {:#?}", i),
         }
@@ -256,7 +323,8 @@ impl<'a, 'stmt> VisitMut<'stmt> for LowerExpr2<'a> {
 
         match (&mut *i.expr, &mut *i.list) {
             (Project(lhs), rhs) => {
-                self.lower_expr(&mut lhs.projection, rhs);
+                // self.lower_expr(&mut lhs.projection, rhs);
+                todo!()
             }
             (Record(lhs), List(_)) => {
                 // TODO: implement for real
@@ -288,48 +356,52 @@ impl<'a, 'stmt> VisitMut<'stmt> for LowerExpr2<'a> {
         let stmt::Returning::Expr(returning) = &mut select.returning else {
             todo!()
         };
+        /*
         returning.substitute(stmt::substitute::TableToModel(
             &model.lowering.table_to_model,
         ));
+        */
+        todo!()
 
         // TODO: do the rest of the lowering...
     }
 }
 
 impl<'a> LowerExpr2<'a> {
-    fn lower_expr<'stmt>(
+    fn lower_field_expr<'stmt>(
         &mut self,
-        projection: &mut stmt::Projection,
+        field_id: FieldId,
         expr: &mut stmt::Expr<'stmt>,
-    ) {
+    ) -> stmt::Expr<'stmt> {
         // This is an input for a targeted substitution. Only a single
         // projection should be substituted here
         struct Input<'a, 'stmt> {
-            projection: &'a stmt::Projection,
-            expr: &'a mut stmt::Expr<'stmt>,
+            field_id: FieldId,
+            expr: &'a stmt::Expr<'stmt>,
         }
 
-        impl<'a, 'stmt> stmt::substitute::Input<'stmt> for Input<'a, 'stmt> {}
+        impl<'a, 'stmt> stmt::substitute::Input<'stmt> for Input<'a, 'stmt> {
+            fn resolve_field(&mut self, expr_field: &stmt::ExprField) -> Option<stmt::Expr<'stmt>> {
+                assert_eq!(expr_field.field, self.field_id);
+                Some(self.expr.clone())
+            }
+        }
 
         // Find the referenced model field.
-        let field = projection.resolve_field(self.schema, self.model);
+        let field = self.schema.field(field_id);
 
         // Column the field is mapped to
         let lowering_idx = match &field.ty {
             FieldTy::Primitive(primitive) => primitive.lowering,
-            _ => todo!(
-                "field = {:#?}; projection={:#?}; expr={:#?}",
-                field,
-                projection,
-                expr
-            ),
+            _ => todo!("field = {:#?}; expr={:#?}", field, expr),
         };
 
         let mut lowered = self.model.lowering.model_to_table[lowering_idx].clone();
-        lowered.substitute(Input { projection, expr });
+        lowered.substitute(Input {
+            field_id,
+            expr: &*expr,
+        });
 
-        *projection = stmt::Projection::single(self.model.lowering.columns[lowering_idx]);
-
-        *expr = lowered;
+        stmt::Expr::column(self.model.lowering.columns[lowering_idx])
     }
 }

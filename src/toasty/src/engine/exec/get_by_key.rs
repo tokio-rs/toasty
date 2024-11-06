@@ -22,6 +22,7 @@ impl<'stmt> Exec<'_, 'stmt> {
             // TODO: don't clone
             let project = action.project.clone();
 
+            /*
             ValueStream::from_stream(async_stream::try_stream! {
                 for await value in res {
                     let value = value?;
@@ -29,6 +30,8 @@ impl<'stmt> Exec<'_, 'stmt> {
                     yield value.into();
                 }
             })
+            */
+            todo!()
         };
 
         self.vars.store(action.output, res);

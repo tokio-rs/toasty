@@ -26,9 +26,10 @@ impl<'stmt> stmt::Visit<'stmt> for PlanSubqueries<'_, '_, 'stmt> {
         stmt::visit::visit_expr_in_subquery(self, i);
 
         // The subquery has already been simplified
+        // TODO: don't clone
         let output = self
             .planner
-            .plan_simplified_select(&select::Context::default(), &*i.query);
+            .plan_simplified_select(&select::Context::default(), (*i.query).clone());
 
         // Track the output of the subquery
         self.planner

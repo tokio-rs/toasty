@@ -5,7 +5,7 @@ use std::{fmt, ops};
 /// Describes a traversal through fields.
 ///
 /// The root is not specified as part of the struct.
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Path {
     /// Model the path originates from
     pub root: ModelId,
@@ -39,8 +39,21 @@ impl Path {
         }
     }
 
-    pub fn into_self_project_expr<'stmt>(self) -> Expr<'stmt> {
-        todo!("delete this")
+    pub fn into_stmt<'stmt>(self) -> Expr<'stmt> {
+        let [field, project @ ..] = self.projection.as_slice() else {
+            todo!("path={self:#?}")
+        };
+
+        let mut ret = stmt::Expr::field(FieldId {
+            model: self.root,
+            index: field.into_usize(),
+        });
+
+        if !project.is_empty() {
+            ret = stmt::Expr::project(ret, project);
+        }
+
+        ret
     }
 }
 
@@ -49,13 +62,5 @@ impl ops::Deref for Path {
 
     fn deref(&self) -> &Self::Target {
         self.projection.deref()
-    }
-}
-
-impl fmt::Debug for Path {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut f = f.debug_tuple("Path");
-
-        f.finish()
     }
 }

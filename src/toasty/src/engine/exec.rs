@@ -78,7 +78,8 @@ impl<'a, 'stmt> Exec<'a, 'stmt> {
             let record = res?;
 
             if let Some(project) = &input.project {
-                ret.push(project.eval(&[record][..])?);
+                todo!("project={project:#?}; record={record:#?}");
+                // ret.push(project.eval(&[record][..])?);
             } else {
                 ret.push(record);
             }
@@ -98,8 +99,9 @@ impl<'a, 'stmt> Exec<'a, 'stmt> {
         match &input[..] {
             [input] => {
                 for value in self.collect_input(input).await? {
-                    let key = key_expr.eval(&[value][..])?;
-                    keys.push(key);
+                    todo!("key_expr={key_expr:#?}; value={value:#?}");
+                    // let key = key_expr.eval(&[value][..])?;
+                    // keys.push(key);
                 }
             }
             [] => match key_expr {

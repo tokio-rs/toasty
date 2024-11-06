@@ -9,7 +9,7 @@ pub struct Projection {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Steps {
-    /// References `self`
+    /// References the projection base
     Identity,
 
     /// One field step
@@ -28,7 +28,7 @@ impl Projection {
         }
     }
 
-    /// The path references the root (i.e. `self`)
+    /// The path references the root (i.e. the projection base)
     pub const fn is_identity(&self) -> bool {
         matches!(self.steps, Steps::Identity)
     }

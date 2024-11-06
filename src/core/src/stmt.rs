@@ -7,8 +7,6 @@ pub use delete::Delete;
 mod direction;
 pub use direction::Direction;
 
-pub mod eval;
-
 mod expr;
 pub use expr::Expr;
 
