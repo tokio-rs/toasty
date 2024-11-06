@@ -30,5 +30,13 @@ done
 # Main loop to execute the command for each directory
 for dir in "${directories[@]}"; do
     cargo run -p toasty-cli -- gen --schema "examples/$dir/schema.toasty" "examples/$dir/src/db"
-    cargo check -p example-$dir
+
+    case "$@" in
+    run)
+        cargo run -p example-$dir
+        ;;
+    *)
+        cargo check -p example-$dir
+        ;;
+    esac
 done
