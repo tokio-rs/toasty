@@ -4,15 +4,15 @@ use std::path::PathBuf;
 use db::*;
 
 use toasty::Db;
-use toasty_dynamodb::DynamoDB;
+use toasty_sqlite::Sqlite;
 
 #[tokio::main]
 async fn main() {
-    let schema_file: PathBuf = std::env::current_dir().unwrap().join("schema.toasty");
+    let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
-    // Use the in-memory toasty driver
-    let driver = DynamoDB::from_env().await.unwrap();
+    // Use the in-memory sqlite driver
+    let driver = Sqlite::in_memory();
 
     let db = Db::new(schema, driver).await;
     // For now, reset!s
@@ -63,6 +63,7 @@ async fn main() {
         .await;
     println!("packages = {packages:#?}");
 
+    /*
     // Find the user again, this should not include the package
     println!("==> User::find_by_id(&u1.id)");
     let users = User::find_by_id(&u1.id)
@@ -77,4 +78,5 @@ async fn main() {
     for user in users {
         println!("USER = {user:#?}");
     }
+    */
 }
