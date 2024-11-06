@@ -6,6 +6,7 @@ impl DynamoDB {
         schema: &schema::Schema,
         op: operation::UpdateByKey<'a>,
     ) -> Result<stmt::ValueStream<'a>> {
+        /*
         let table = schema.table(op.table);
 
         let mut expr_attrs = ExprAttrs::default();
@@ -379,5 +380,7 @@ impl DynamoDB {
         } else {
             stmt::ValueStream::new()
         })
+        */
+        todo!()
     }
 }

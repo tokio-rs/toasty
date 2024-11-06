@@ -116,7 +116,10 @@ impl<'stmt> Planner<'_, 'stmt> {
         match &stmt.returning {
             Some(stmt::Returning::Star) => {
                 let mut project: stmt::Expr<'_> = model.lowering.table_to_model.clone().into();
-                project.substitute(stmt::substitute::TableToModel((model, &model.lowering.columns[..])));
+                project.substitute(stmt::substitute::TableToModel((
+                    model,
+                    &model.lowering.columns[..],
+                )));
                 let project = eval::Expr::from_stmt(project);
 
                 // TODO: cache this

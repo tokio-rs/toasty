@@ -7,7 +7,7 @@ use toasty_core::{
         Capability, Driver,
     },
     schema::{self, Column, ColumnId},
-    sql, stmt, Schema,
+    stmt, Schema,
 };
 
 use anyhow::Result;
@@ -95,6 +95,7 @@ impl DynamoDB {
         schema: &Schema,
         op: Operation<'stmt>,
     ) -> Result<stmt::ValueStream<'stmt>> {
+        /*
         use Operation::*;
 
         match op {
@@ -109,6 +110,8 @@ impl DynamoDB {
                 _ => todo!("op={:#?}", op),
             },
         }
+        */
+        todo!()
     }
 
     fn table_name(&self, table: &schema::Table) -> String {
@@ -279,8 +282,9 @@ fn ddb_expression<'a>(
     schema: &'a Schema,
     attrs: &mut ExprAttrs,
     primary: bool,
-    expr: &sql::Expr<'_>,
+    expr: &stmt::Expr<'_>,
 ) -> String {
+    /*
     match expr {
         sql::Expr::BinaryOp(expr_binary_op) => {
             let lhs = ddb_expression(schema, attrs, primary, &expr_binary_op.lhs);
@@ -327,6 +331,8 @@ fn ddb_expression<'a>(
         */
         _ => todo!("FILTER = {:#?}", expr),
     }
+    */
+    todo!()
 }
 
 #[derive(Default)]

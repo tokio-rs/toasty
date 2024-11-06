@@ -4,8 +4,9 @@ impl DynamoDB {
     pub(crate) async fn exec_insert<'stmt>(
         &self,
         schema: &schema::Schema,
-        insert: sql::Insert<'stmt>,
+        insert: stmt::Insert<'stmt>,
     ) -> Result<stmt::ValueStream<'stmt>> {
+        /*
         let table = &schema.table(insert.table);
 
         let unique_indices = table
@@ -163,5 +164,7 @@ impl DynamoDB {
         }
 
         Ok(stmt::ValueStream::from_vec(ret))
+        */
+        todo!()
     }
 }
