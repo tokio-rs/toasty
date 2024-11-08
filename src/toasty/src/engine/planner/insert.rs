@@ -1,3 +1,5 @@
+use stmt::ValueStream;
+
 use super::*;
 
 use std::collections::hash_map::Entry;
@@ -17,46 +19,41 @@ impl<'stmt> Planner<'_, 'stmt> {
             assert!(!values.is_empty(), "stmt={stmt:#?}");
         }
 
+        // If the statement `Returning` is constant (i.e. does not depend on the
+        // database evaluating the statement), then extract it here.
+        let const_returning = self.extract_const_returning(&mut stmt);
+
         let filter = match &stmt.target {
             stmt::InsertTarget::Scope(query) => Some(&query.body.as_select().filter),
             _ => None,
         };
 
+        let mut output_var = None;
+
+        // First, lower the returning part of the statement
+        let lowered_returning = stmt
+            .returning
+            .as_mut()
+            .map(|returning| self.lower_returning(model, returning));
+
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
-                // Lol, clean this up
-                if let Some(returning) = &stmt.returning {
-                    let stmt::Returning::Expr(expr) = returning else {
-                        todo!("handle other returning")
-                    };
-
-                    match &model.primary_key.fields[..] {
-                        [pk_field] => {
-                            let stmt::Expr::Project(expr_project) = expr else {
-                                todo!()
-                            };
-                            let [step] = expr_project.projection.as_slice() else {
-                                todo!()
-                            };
-                            assert_eq!(step.into_usize(), pk_field.index);
-                        }
-                        _ => todo!(),
-                    }
-                }
-
+                // TODO
+                assert!(!matches!(stmt.returning, Some(stmt::Returning::Expr(_))));
+                assert_eq!(
+                    self.write_actions[e.get().action]
+                        .as_insert()
+                        .stmt
+                        .returning,
+                    stmt.returning
+                );
                 e.get().action
             }
             Entry::Vacant(e) => {
+                // TODO: don't always return values if none are needed.
                 let action = self.write_actions.len();
-                let mut returning = vec![];
 
-                e.insert(Insertion { action });
-
-                for column in &model.lowering.columns {
-                    returning.push(stmt::Expr::column(column));
-                }
-
-                self.push_write_action(plan::Insert {
+                let mut plan = plan::Insert {
                     input: vec![],
                     output: None,
                     stmt: stmt::Insert {
@@ -66,35 +63,26 @@ impl<'stmt> Planner<'_, 'stmt> {
                         }
                         .into(),
                         source: stmt::Values::default().into(),
-                        returning: Some(stmt::Expr::record(returning).into()),
+                        returning: None,
                     },
-                });
+                };
+
+                if let Some(lowered_returning) = lowered_returning {
+                    let var = self.var_table.register_var();
+                    plan.output = Some(plan::InsertOutput {
+                        var,
+                        project: lowered_returning.project,
+                    });
+                    plan.stmt.returning = stmt.returning.take();
+
+                    output_var = Some(var);
+                }
+
+                e.insert(Insertion { action });
+                self.push_write_action(plan);
 
                 action
             }
-        };
-
-        // This entire thing is bogus
-        let mut returning_pk = if let Some(stmt::Returning::Expr(e)) = &stmt.returning {
-            match e {
-                stmt::Expr::Project(expr_project) => {
-                    let [step] = &expr_project.projection[..] else {
-                        todo!()
-                    };
-                    let [pk] = &model.primary_key.fields[..] else {
-                        todo!()
-                    };
-
-                    if step.into_usize() == pk.index {
-                        Some(vec![])
-                    } else {
-                        todo!()
-                    }
-                }
-                _ => todo!(),
-            }
-        } else {
-            None
         };
 
         let rows = match *stmt.source.body {
@@ -107,60 +95,16 @@ impl<'stmt> Planner<'_, 'stmt> {
                 self.apply_insert_scope(&mut row, filter);
             }
 
-            self.plan_insert_record(model, row, action, returning_pk.as_mut());
+            self.plan_insert_record(model, row, action);
         }
-
-        let output_var;
-        let output_plan;
-
-        match &stmt.returning {
-            Some(stmt::Returning::Star) => {
-                let mut project: stmt::Expr<'_> = model.lowering.table_to_model.clone().into();
-                project.substitute(model);
-                let project = eval::Expr::from_stmt(project);
-
-                // TODO: cache this
-                let ty = stmt::Type::Record(
-                    model
-                        .lowering
-                        .columns
-                        .iter()
-                        .map(|column_id| self.schema.column(column_id).ty.clone())
-                        .collect(),
-                );
-
-                let var = self.var_table.register_var();
-                output_plan = Some(plan::InsertOutput { var, project, ty });
-                output_var = Some(var);
-            }
-            Some(stmt::Returning::Expr(_)) => {
-                // TODO: this isn't actually correct
-                output_var = Some(self.set_var(returning_pk.unwrap()));
-                output_plan = None;
-            }
-            None => {
-                output_var = None;
-                output_plan = None;
-            }
-        };
-
-        let action = self.insertions[&model.id].action;
-        self.write_actions[action].as_insert_mut().output = output_plan;
 
         output_var
     }
 
-    fn plan_insert_record(
-        &mut self,
-        model: &Model,
-        mut expr: stmt::Expr<'stmt>,
-        action: usize,
-        returning_pk: Option<&mut Vec<stmt::Value<'stmt>>>,
-    ) {
+    fn plan_insert_record(&mut self, model: &Model, mut expr: stmt::Expr<'stmt>, action: usize) {
         self.apply_insertion_defaults(model, &mut expr);
         self.plan_insert_relation_stmts(model, &mut expr);
         self.verify_non_nullable_fields_have_values(model, &mut expr);
-        self.apply_fk_association(model, &expr, returning_pk);
 
         self.lower_insert_expr(model, &mut expr);
 
@@ -313,25 +257,6 @@ impl<'stmt> Planner<'_, 'stmt> {
         }
     }
 
-    fn apply_fk_association(
-        &self,
-        model: &Model,
-        expr: &stmt::Expr<'stmt>,
-        returning_pk: Option<&mut Vec<stmt::Value<'stmt>>>,
-    ) {
-        if let Some(keys) = returning_pk {
-            let mut pk = model.primary_key_fields();
-
-            if pk.len() == 1 {
-                let i = pk.next().unwrap().id.index;
-                // TODO: clean this up
-                keys.push(eval::Expr::from_stmt(expr[i].clone()).eval_const());
-            } else {
-                todo!("TODO: batch insert relations with composite PK");
-            }
-        }
-    }
-
     /// Returns a select statement that will select the newly inserted record
     fn inserted_query_stmt(&self, model: &Model, expr: &stmt::Expr<'stmt>) -> stmt::Query<'stmt> {
         // The owner's primary key
@@ -347,6 +272,17 @@ impl<'stmt> Planner<'_, 'stmt> {
 
     fn apply_insert_scope(&mut self, expr: &mut stmt::Expr<'stmt>, scope: &stmt::Expr<'stmt>) {
         ApplyInsertScope { expr }.apply(scope);
+    }
+
+    fn extract_const_returning(
+        &self,
+        stmt: &mut stmt::Insert<'stmt>,
+    ) -> Option<ValueStream<'stmt>> {
+        if matches!(stmt.returning, Some(stmt::Returning::Expr(_))) {
+            todo!("stmt={stmt:#?}");
+        }
+
+        None
     }
 }
 

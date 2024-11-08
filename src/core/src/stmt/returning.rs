@@ -15,6 +15,10 @@ impl<'stmt> Returning<'stmt> {
         matches!(self, Returning::Star)
     }
 
+    pub fn is_expr(&self) -> bool {
+        matches!(self, Returning::Expr(_))
+    }
+
     pub fn as_expr(&self) -> &Expr<'stmt> {
         match self {
             Returning::Expr(expr) => expr,

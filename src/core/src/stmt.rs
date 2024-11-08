@@ -22,6 +22,9 @@ pub use expr_begins_with::ExprBeginsWith;
 mod expr_binary_op;
 pub use expr_binary_op::ExprBinaryOp;
 
+mod expr_cast;
+pub use expr_cast::ExprCast;
+
 mod expr_column;
 pub use expr_column::ExprColumn;
 

@@ -9,12 +9,6 @@ impl<'stmt> Exec<'_, 'stmt> {
         assert!(action.input.is_empty(), "todo");
 
         let mut stmt = action.stmt.clone();
-        let ty = action.output.as_ref().map(|output| output.ty.clone());
-
-        // TODO: bit of a hack, this should be fixed before this point
-        if ty.is_none() {
-            stmt.returning = None;
-        }
 
         let mut res = self
             .db

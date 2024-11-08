@@ -13,6 +13,9 @@ pub enum Expr<'stmt> {
     /// Binary expression
     BinaryOp(ExprBinaryOp<'stmt>),
 
+    /// Cast an expression to a different type
+    Cast(ExprCast<'stmt>),
+
     /// References a column from a table in the statement
     Column(ExprColumn),
 
@@ -172,11 +175,9 @@ impl<'stmt> Expr<'stmt> {
     pub fn simplify(&mut self) {
         visit_mut::for_each_expr_mut(self, move |expr| {
             let maybe_expr = match expr {
-                // Simplification step. If the original expression is an "in
-                // list" op, but the right-hand side is a record with a single
-                // entry, then simplify the expression to an equality.
-                Expr::InList(e) => e.simplify(),
-                Expr::Record(expr_record) => expr_record.simplify(),
+                Expr::Cast(expr) => expr.simplify(),
+                Expr::InList(expr) => expr.simplify(),
+                Expr::Record(expr) => expr.simplify(),
                 _ => None,
             };
 

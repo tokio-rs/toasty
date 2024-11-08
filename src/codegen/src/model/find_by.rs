@@ -469,14 +469,7 @@ impl<'a> Generator<'a> {
 
                 quote!(#lhs . in_query ( #subquery ))
             }
-            stmt::Expr::Pattern(_)
-            | stmt::Expr::Column(_)
-            | stmt::Expr::Concat(_)
-            | stmt::Expr::Stmt(_)
-            | stmt::Expr::Type(_)
-            | stmt::Expr::Enum(_) => {
-                todo!()
-            }
+            expr => todo!("expr={expr:#?}"),
         }
     }
 

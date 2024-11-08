@@ -31,6 +31,10 @@ pub trait VisitMut<'stmt>: Sized {
         visit_expr_binary_op_mut(self, i);
     }
 
+    fn visit_expr_cast_mut(&mut self, i: &mut ExprCast<'stmt>) {
+        visit_expr_cast_mut(self, i);
+    }
+
     fn visit_expr_column_mut(&mut self, i: &mut ExprColumn) {
         visit_expr_column_mut(self, i);
     }
@@ -241,6 +245,7 @@ where
         Expr::And(expr) => v.visit_expr_and_mut(expr),
         Expr::Arg(expr) => v.visit_expr_arg_mut(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op_mut(expr),
+        Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
         Expr::Column(expr) => v.visit_expr_column_mut(expr),
         Expr::Concat(expr) => v.visit_expr_concat_mut(expr),
         Expr::Enum(expr) => v.visit_expr_enum_mut(expr),
@@ -287,6 +292,13 @@ where
 {
     v.visit_expr_mut(&mut node.lhs);
     v.visit_expr_mut(&mut node.rhs);
+}
+
+pub fn visit_expr_cast_mut<'stmt, V>(v: &mut V, node: &mut ExprCast<'stmt>)
+where
+    V: VisitMut<'stmt> + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
 }
 
 pub fn visit_expr_column_mut<'stmt, V>(v: &mut V, node: &mut ExprColumn)

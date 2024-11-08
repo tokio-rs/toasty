@@ -7,6 +7,9 @@ pub use expr_arg::ExprArg;
 mod expr_binary_op;
 pub use expr_binary_op::ExprBinaryOp;
 
+mod expr_cast;
+pub use expr_cast::ExprCast;
+
 mod expr_list;
 pub use expr_list::ExprList;
 
@@ -37,6 +40,7 @@ pub enum Expr<'stmt> {
     And(ExprAnd<'stmt>),
     Arg(ExprArg),
     BinaryOp(ExprBinaryOp<'stmt>),
+    Cast(ExprCast<'stmt>),
     List(ExprList<'stmt>),
     Map(ExprMap<'stmt>),
     Project(ExprProject<'stmt>),
@@ -50,6 +54,7 @@ impl<'stmt> Expr<'stmt> {
             stmt::Expr::Arg(expr) => ExprArg::from_stmt(expr).into(),
             stmt::Expr::And(expr) => ExprAnd::from_stmt(expr).into(),
             stmt::Expr::BinaryOp(expr) => ExprBinaryOp::from_stmt(expr).into(),
+            stmt::Expr::Cast(expr) => ExprCast::from_stmt(expr).into(),
             stmt::Expr::List(expr) => ExprList::from_stmt(expr).into(),
             stmt::Expr::Project(expr) => ExprProject::from_stmt(expr).into(),
             stmt::Expr::Record(expr) => ExprRecord::from_stmt(expr).into(),
@@ -107,6 +112,7 @@ impl<'stmt> Expr<'stmt> {
                     _ => todo!("{:#?}", self),
                 }
             }
+            Expr::Cast(expr_cast) => expr_cast.ty.cast(expr_cast.expr.eval_ref(input)?),
             /*
             Expr::Enum(expr_enum) => Ok(ValueEnum {
                 variant: expr_enum.variant,
@@ -139,6 +145,7 @@ impl<'stmt> Expr<'stmt> {
                 */
                 todo!()
             }
+            _ => todo!("expr={self:#?}"),
         }
     }
 }

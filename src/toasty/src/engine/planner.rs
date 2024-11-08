@@ -96,6 +96,7 @@ pub(crate) fn apply<'stmt>(
 impl<'a, 'stmt> Planner<'a, 'stmt> {
     /// Entry point to plan the root statement.
     fn plan_stmt(&mut self, stmt: stmt::Statement<'stmt>) {
+        println!("plan={stmt:#?}");
         match stmt {
             stmt::Statement::Delete(stmt) => self.plan_delete(stmt),
             stmt::Statement::Link(stmt) => self.plan_link(stmt),

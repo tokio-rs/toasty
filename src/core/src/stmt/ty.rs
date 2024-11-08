@@ -50,6 +50,17 @@ impl Type {
         matches!(self, Self::Model(_))
     }
 
+    pub fn cast<'stmt>(&self, value: Value<'stmt>) -> Result<Value<'stmt>> {
+        match value {
+            stmt::Value::Id(value) => value.cast(self),
+            stmt::Value::String(value) => match self {
+                Type::Id(ty) => Ok(Value::Id(Id::from_string(*ty, value.into()))),
+                _ => todo!("value={value:#?}; ty={self:#?}"),
+            },
+            _ => todo!("value={value:#?}; ty={self:#?}"),
+        }
+    }
+
     pub fn casts_to(&self, other: &Type) -> bool {
         match self {
             Type::Null => true,
@@ -95,6 +106,12 @@ impl Type {
             },
             _ => todo!("op = {:#?}", op),
         }
+    }
+}
+
+impl From<&Type> for Type {
+    fn from(value: &Type) -> Self {
+        value.clone()
     }
 }
 

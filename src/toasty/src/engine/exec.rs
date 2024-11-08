@@ -33,6 +33,7 @@ impl<'a, 'stmt> Exec<'a, 'stmt> {
         &mut self,
         pipeline: &plan::Pipeline<'stmt>,
     ) -> Result<ValueStream<'stmt>> {
+        println!("exec={pipeline:#?}");
         for step in &pipeline.actions {
             self.exec_step(step).await?;
         }

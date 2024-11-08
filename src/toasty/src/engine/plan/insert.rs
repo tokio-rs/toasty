@@ -19,9 +19,6 @@ pub(crate) struct InsertOutput<'stmt> {
 
     /// How to project it before storing
     pub project: eval::Expr<'stmt>,
-
-    /// The type of the returned value
-    pub ty: stmt::Type,
 }
 
 impl<'stmt> From<Insert<'stmt>> for Action<'stmt> {

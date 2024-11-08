@@ -49,7 +49,7 @@ impl<'stmt> Planner<'_, 'stmt> {
     }
 
     fn plan_delete_sql(&mut self, model: &Model, mut stmt: stmt::Delete<'stmt>) {
-        self.lower_delete_stmt(model, &mut stmt);
+        self.lower_stmt_delete(model, &mut stmt);
 
         self.push_action(plan::QuerySql {
             output: None,

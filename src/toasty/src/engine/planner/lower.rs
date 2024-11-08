@@ -1,22 +1,73 @@
 use super::*;
 
-/// Result of the query statement lowering
-pub(crate) struct QueryLowering<'stmt> {
+/// Result of lowering a `Returning` statement
+pub(crate) struct LoweredReturning<'stmt> {
     /// How to project the result
     pub project: eval::Expr<'stmt>,
 }
 
 impl<'stmt> Planner<'_, 'stmt> {
+    pub(crate) fn lower_stmt_delete(&self, model: &Model, stmt: &mut stmt::Delete<'stmt>) {
+        /*
+        let mut filter = stmt.selection.body.as_select().filter.clone();
+
+        self.lower_expr2(model, &mut filter);
+
+        let sql = sql::Statement::delete(self.schema, model.lowering.table, filter);
+        */
+        todo!()
+    }
+
     pub(crate) fn lower_stmt_query(
         &self,
         table: &Table,
         model: &Model,
         stmt: &mut stmt::Query<'stmt>,
-    ) -> QueryLowering<'stmt> {
+    ) -> LoweredReturning<'stmt> {
         match &mut *stmt.body {
             stmt::ExprSet::Select(stmt) => self.lower_stmt_select(table, model, stmt),
             _ => todo!("stmt={stmt:#?}"),
         }
+    }
+
+    pub(crate) fn lower_returning(
+        &self,
+        model: &Model,
+        stmt: &mut stmt::Returning<'stmt>,
+    ) -> LoweredReturning<'stmt> {
+        // Lower the returning statement.
+        let project = match &stmt {
+            stmt::Returning::Star => {
+                // Only select columns that are needed to populate the model
+                let columns = model
+                    .lowering
+                    .columns
+                    .iter()
+                    .cloned()
+                    .map(Into::into)
+                    .map(stmt::Expr::Column)
+                    .collect::<Vec<_>>();
+
+                *stmt = stmt::Returning::Expr(stmt::Expr::record(columns));
+
+                let mut stmt: stmt::Expr<'_> = model.lowering.table_to_model.clone().into();
+                stmt.substitute(model);
+
+                eval::Expr::from_stmt(stmt)
+            }
+            stmt::Returning::Expr(returning) => {
+                /*
+                let mut stmt = returning.clone();
+                stmt.substitute(stmt::substitute::TableToModel(
+                    &model.lowering.table_to_model,
+                ));
+                project = Some(eval::Expr::from_stmt(stmt));
+                */
+                todo!("{returning:#?}");
+            }
+        };
+
+        LoweredReturning { project }
     }
 
     fn lower_stmt_select(
@@ -24,7 +75,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         table: &Table,
         model: &Model,
         stmt: &mut stmt::Select<'stmt>,
-    ) -> QueryLowering<'stmt> {
+    ) -> LoweredReturning<'stmt> {
         use std::mem;
 
         // Lower the query source
@@ -65,50 +116,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             stmt::ExprAnd { operands: operands }.into()
         };
 
-        // Lower the returning statement.
-        let project = match &stmt.returning {
-            stmt::Returning::Star => {
-                // Only select columns that are needed to populate the model
-                let columns = model
-                    .lowering
-                    .columns
-                    .iter()
-                    .cloned()
-                    .map(Into::into)
-                    .map(stmt::Expr::Column)
-                    .collect::<Vec<_>>();
-
-                stmt.returning = stmt::Returning::Expr(stmt::Expr::record(columns));
-
-                let mut stmt: stmt::Expr<'_> = model.lowering.table_to_model.clone().into();
-                stmt.substitute(model);
-
-                eval::Expr::from_stmt(stmt)
-            }
-            stmt::Returning::Expr(returning) => {
-                /*
-                let mut stmt = returning.clone();
-                stmt.substitute(stmt::substitute::TableToModel(
-                    &model.lowering.table_to_model,
-                ));
-                project = Some(eval::Expr::from_stmt(stmt));
-                */
-                todo!("{returning:#?}");
-            }
-        };
-
-        QueryLowering { project }
-    }
-
-    pub(crate) fn lower_delete_stmt(&self, model: &Model, stmt: &mut stmt::Delete<'stmt>) {
-        /*
-        let mut filter = stmt.selection.body.as_select().filter.clone();
-
-        self.lower_expr2(model, &mut filter);
-
-        let sql = sql::Statement::delete(self.schema, model.lowering.table, filter);
-        */
-        todo!()
+        self.lower_returning(model, &mut stmt.returning)
     }
 
     pub(crate) fn lower_insert_expr(&self, model: &Model, expr: &mut stmt::Expr<'stmt>) {

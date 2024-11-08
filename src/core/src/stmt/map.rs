@@ -23,6 +23,10 @@ pub trait Map<'stmt>: Sized {
         map_expr_binary_op(self, i)
     }
 
+    fn map_expr_cast(&mut self, i: &ExprCast<'stmt>) -> ExprCast<'stmt> {
+        map_expr_cast(self, i)
+    }
+
     fn map_expr_column(&mut self, i: &ExprColumn) -> ExprColumn {
         map_expr_column(self, i)
     }
@@ -140,6 +144,7 @@ where
         Expr::And(expr) => v.map_expr_and(expr).into(),
         Expr::Arg(expr) => v.map_expr_arg(expr).into(),
         Expr::BinaryOp(expr) => v.map_expr_binary_op(expr).into(),
+        Expr::Cast(expr) => v.map_expr_cast(expr).into(),
         Expr::Column(expr) => v.map_expr_column(expr).into(),
         Expr::Concat(expr) => v.map_expr_concat(expr).into(),
         Expr::Enum(expr) => v.map_expr_enum(expr).into(),
@@ -185,6 +190,16 @@ where
         lhs: v.map_expr(&node.lhs).into(),
         rhs: v.map_expr(&node.rhs).into(),
         op: node.op,
+    }
+}
+
+pub fn map_expr_cast<'stmt, V>(v: &mut V, node: &ExprCast<'stmt>) -> ExprCast<'stmt>
+where
+    V: Map<'stmt> + ?Sized,
+{
+    ExprCast {
+        expr: Box::new(v.map_expr(&*node.expr)),
+        ty: node.ty.clone(),
     }
 }
 

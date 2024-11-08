@@ -59,6 +59,13 @@ impl Id {
             Repr::String(id) => id.into(),
         }
     }
+
+    pub fn cast<'stmt>(self, ty: &Type) -> Result<Value<'stmt>> {
+        match (self.repr, ty) {
+            (Repr::String(id), Type::String) => Ok(id.into()),
+            (repr, _) => todo!("id={repr:#?}; ty={ty:#?}"),
+        }
+    }
 }
 
 impl<'stmt> From<Id> for Expr<'stmt> {

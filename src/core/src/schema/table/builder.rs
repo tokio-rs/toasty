@@ -172,7 +172,7 @@ impl<'a> LowerModels<'a> {
                 // TODO: null probably isn't the right type... maybe `ty` should
                 // be Option<Type> if we don't know what it is yet.
                 let ty = match ty {
-                    Some(ty) => ty,
+                    Some(ty) => stmt_ty_to_table(ty),
                     None => {
                         let mut ty_enum = stmt::TypeEnum::default();
                         ty_enum.insert_variant();
@@ -298,7 +298,7 @@ impl<'a> LowerModels<'a> {
                 index: self.table.columns.len(),
             },
             name,
-            ty: primitive.ty.clone(),
+            ty: stmt_ty_to_table(primitive.ty.clone()),
             nullable,
             primary_key: false,
         };
@@ -409,7 +409,7 @@ impl<'a> ModelLoweringBuilder<'a> {
         model.lowering.model_pk_to_table = if self.model_pk_to_table.len() == 1 {
             let mut expr = self.model_pk_to_table.into_iter().next().unwrap();
 
-            debug_assert!(expr.is_field(), "expr={:#?}", expr);
+            debug_assert!(expr.is_field() || expr.is_cast(), "expr={:#?}", expr);
 
             expr
         } else {
@@ -452,29 +452,26 @@ impl<'a> ModelLoweringBuilder<'a> {
 
         assert_ne!(stmt::Type::Null, *ty);
 
-        if column.ty == *ty {
-            expr
-        } else {
-            match &column.ty {
-                stmt::Type::Enum(ty_enum) => {
-                    let variant = ty_enum
-                        .variants
-                        .iter()
-                        .find(|variant| match &variant.fields[..] {
-                            [field_ty] if field_ty == ty => true,
-                            _ => false,
-                        })
-                        .unwrap();
+        match &column.ty {
+            column_ty if column_ty == ty => expr,
+            stmt::Type::Enum(ty_enum) => {
+                let variant = ty_enum
+                    .variants
+                    .iter()
+                    .find(|variant| match &variant.fields[..] {
+                        [field_ty] if field_ty == ty => true,
+                        _ => false,
+                    })
+                    .unwrap();
 
-                    stmt::ExprEnum {
-                        variant: variant.discriminant,
-                        fields: stmt::ExprRecord::from_vec(vec![expr.into()]),
-                    }
-                    .into()
+                stmt::ExprEnum {
+                    variant: variant.discriminant,
+                    fields: stmt::ExprRecord::from_vec(vec![expr.into()]),
                 }
-                // Not reachable
-                _ => todo!(),
+                .into()
             }
+            stmt::Type::String if ty.is_id() => stmt::Expr::cast(expr, &column.ty),
+            _ => todo!("column={column:#?}"),
         }
     }
 
@@ -482,25 +479,33 @@ impl<'a> ModelLoweringBuilder<'a> {
         let column_id = primitive.column;
         let column = self.table.column(column_id);
 
-        if column.ty == primitive.ty {
-            stmt::Expr::column(column)
-        } else {
-            // Project the enum to the model
-            let ty_enum = match &column.ty {
-                stmt::Type::Enum(ty_enum) => ty_enum,
-                _ => todo!(),
-            };
+        match &column.ty {
+            c_ty if *c_ty == primitive.ty => stmt::Expr::column(column),
+            stmt::Type::Enum(ty_enum) => {
+                let variant = ty_enum
+                    .variants
+                    .iter()
+                    .find(|variant| match &variant.fields[..] {
+                        [field_ty] => *field_ty == primitive.ty,
+                        _ => false,
+                    })
+                    .unwrap();
 
-            let variant = ty_enum
-                .variants
-                .iter()
-                .find(|variant| match &variant.fields[..] {
-                    [field_ty] => *field_ty == primitive.ty,
-                    _ => false,
-                })
-                .unwrap();
-
-            stmt::Expr::project(column, [variant.discriminant])
+                stmt::Expr::project(column, [variant.discriminant])
+            }
+            stmt::Type::String if primitive.ty.is_id() => {
+                stmt::Expr::cast(stmt::Expr::column(column), &primitive.ty)
+            }
+            _ => todo!("column={column:#?}; primitive={primitive:#?}"),
         }
+    }
+}
+
+fn stmt_ty_to_table(ty: stmt::Type) -> stmt::Type {
+    match ty {
+        stmt::Type::I64 => stmt::Type::I64,
+        stmt::Type::String => stmt::Type::String,
+        stmt::Type::Id(_) => stmt::Type::String,
+        _ => todo!("{ty:#?}"),
     }
 }

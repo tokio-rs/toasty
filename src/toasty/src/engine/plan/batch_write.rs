@@ -14,6 +14,13 @@ pub(crate) enum WriteAction<'stmt> {
 }
 
 impl<'stmt> WriteAction<'stmt> {
+    pub(crate) fn as_insert(&self) -> &Insert<'stmt> {
+        match self {
+            WriteAction::Insert(action) => action,
+            _ => panic!(),
+        }
+    }
+
     pub(crate) fn as_insert_mut(&mut self) -> &mut Insert<'stmt> {
         match self {
             WriteAction::Insert(action) => action,
