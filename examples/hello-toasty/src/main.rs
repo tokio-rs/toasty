@@ -1,5 +1,5 @@
 mod db;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use db::{Todo, User};
 
@@ -10,15 +10,24 @@ fn assert_sync_send<T: Send>(_: T) {}
 
 #[tokio::main]
 async fn main() {
-    let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
+    let args: Vec<String> = env::args().collect();
+    let flag = "--persist-to-file";
 
+    let driver = if args.len() > 1 && args[1] == flag {
+        let filename = "toasty.db3";
+        let file_path = format!("./{}", filename);
+        let file = PathBuf::from(file_path.as_str());
+        Sqlite::open(file).unwrap()
+    } else {
+        // Use the in-memory sqlite driver
+        Sqlite::in_memory()
+    };
+
+    let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
     let schema = toasty::schema::from_file(schema_file).unwrap();
 
     // NOTE enable this to see the enstire structure in STDOUT
     // println!("{schema:#?}");
-
-    // Use the in-memory sqlite driver
-    let driver = Sqlite::in_memory();
 
     let db = Db::new(schema, driver).await;
     // For now, reset!s
