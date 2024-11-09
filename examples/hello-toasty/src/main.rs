@@ -11,9 +11,11 @@ fn assert_sync_send<T: Send>(_: T) {}
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = env::args().collect();
-    let flag = "--persist-to-file";
 
+    // CLI flag required to persist DB to local file, instead of using the in-memory sqlite driver.
+    let flag = "--persist-to-file";
     let driver = if args.len() > 1 && args[1] == flag {
+        // Persist to local file
         let filename = "toasty.db3";
         let file_path = format!("./{}", filename);
         let file = PathBuf::from(file_path.as_str());
