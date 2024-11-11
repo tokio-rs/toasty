@@ -10,20 +10,22 @@ impl<'stmt> Planner<'_, 'stmt> {
     // method returns the var in which it will be stored.
     pub(super) fn plan_update(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
         self.simplify_stmt_update(&mut stmt);
-        /*
 
-        let model = self.model(stmt.selection.body.as_select().source.as_model_id());
+        let model = self.model(stmt.target.as_model_id());
 
         // Make sure the update statement isn't empty
-        assert!(!stmt.fields.is_empty(), "update must update some columns");
+        assert!(
+            !stmt.assignments.is_empty(),
+            "update must update some columns"
+        );
 
         // Handle any relation updates
         for (i, field) in model.fields.iter().enumerate() {
-            if !stmt.fields.contains(i) {
+            if !stmt.assignments.contains(i) {
                 continue;
             }
 
-            self.plan_mut_relation_field(field, &mut stmt.expr[i], &stmt.selection, false);
+            self.plan_mut_relation_field(field, &mut stmt.assignments[i], &stmt.selection, false);
 
             // TODO: this should be moved into the above method, but that method
             // is not well suited right now because it doesn't take in the full
@@ -31,29 +33,25 @@ impl<'stmt> Planner<'_, 'stmt> {
 
             // Map the belongs_to statement to the foreign key fields
             if let FieldTy::BelongsTo(belongs_to) = &field.ty {
-                stmt.fields.unset(i);
-
-                let stmt::Expr::Value(value) = stmt.expr[i].take() else {
+                let stmt::Expr::Value(value) = stmt.assignments.take(i) else {
                     todo!()
                 };
 
                 match value {
                     stmt::Value::Null => {
                         for fk_field in &belongs_to.foreign_key.fields {
-                            stmt.fields.insert(fk_field.source);
-                            stmt.expr[fk_field.source.index] = stmt::Expr::null();
+                            stmt.assignments.set(fk_field.source, stmt::Expr::null());
                         }
                     }
                     value => {
                         let [fk_field] = &belongs_to.foreign_key.fields[..] else {
                             todo!("composite keys")
                         };
-                        stmt.fields.insert(fk_field.source);
-                        stmt.expr[fk_field.source.index] = value.into();
+                        stmt.assignments.set(fk_field.source, value);
                     }
                 }
             } else if field.is_relation() {
-                stmt.fields.unset(i);
+                stmt.assignments.unset(i);
             }
         }
 
@@ -64,8 +62,6 @@ impl<'stmt> Planner<'_, 'stmt> {
         } else {
             self.plan_update_kv(stmt)
         }
-        */
-        todo!()
     }
 
     fn plan_update_sql(&mut self, stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
