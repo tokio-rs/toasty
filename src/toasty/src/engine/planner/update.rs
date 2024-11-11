@@ -19,13 +19,15 @@ impl<'stmt> Planner<'_, 'stmt> {
             "update must update some columns"
         );
 
+        let scope = stmt::Query::filter(model, stmt.filter.as_ref().unwrap().clone());
+
         // Handle any relation updates
         for (i, field) in model.fields.iter().enumerate() {
             if !stmt.assignments.contains(i) {
                 continue;
             }
 
-            self.plan_mut_relation_field(field, &mut stmt.assignments[i], &stmt.selection, false);
+            self.plan_mut_relation_field(field, &mut stmt.assignments[i], &scope, false);
 
             // TODO: this should be moved into the above method, but that method
             // is not well suited right now because it doesn't take in the full
