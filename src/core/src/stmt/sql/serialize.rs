@@ -273,26 +273,25 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
     }
 
     fn select(&mut self, select: &Select<'stmt>) -> fmt::Result {
-        /*
         write!(self.dst, "SELECT ")?;
 
-        self.expr_list(&select.project)?;
+        match &select.returning {
+            Returning::Expr(returning) => self.expr_as_list(returning)?,
+            Returning::Star => todo!(),
+        }
 
         write!(self.dst, " FROM ")?;
 
-        for table_with_join in &select.from {
+        for table_with_join in select.source.as_table_with_joins() {
             let table = self.schema.table(table_with_join.table);
             write!(self.dst, "\"{}\"", table.name)?;
         }
 
         write!(self.dst, " WHERE ")?;
 
-        let selection = select.selection.as_ref().unwrap();
-        self.expr(selection)?;
+        self.expr(&select.filter)?;
 
         Ok(())
-        */
-        todo!("stmt={select:#?}");
     }
 
     fn values(&mut self, values: &Values<'stmt>) -> fmt::Result {

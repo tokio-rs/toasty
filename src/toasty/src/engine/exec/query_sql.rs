@@ -27,15 +27,12 @@ impl<'stmt> Exec<'_, 'stmt> {
         // TODO: don't clone
         let project = out.project.clone();
 
-        /*
         let res = ValueStream::from_stream(async_stream::try_stream! {
             for await value in res {
                 let value = value?;
-                yield project.eval(&value)?;
+                yield project.eval(eval::args(&[value][..]))?;
             }
         });
-        */
-        todo!();
 
         self.vars.store(out.var, res);
 

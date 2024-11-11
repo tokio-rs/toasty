@@ -115,6 +115,14 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
         stmt::visit_mut::visit_expr_set_mut(self, i);
     }
 
+    fn visit_stmt_delete_mut(&mut self, i: &mut stmt::Delete<'stmt>) {
+        SimplifyExpr {
+            model: self.schema.model(i.from.as_model_id()),
+            schema: self.schema,
+        }
+        .visit_mut(&mut i.filter);
+    }
+
     fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert<'stmt>) {
         let model = match &mut i.target {
             stmt::InsertTarget::Scope(query) => {

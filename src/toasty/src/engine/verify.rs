@@ -19,6 +19,14 @@ pub(crate) fn apply<'stmt>(schema: &'stmt Schema, stmt: &Statement<'stmt>) {
 }
 
 impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
+    fn visit_stmt_delete(&mut self, i: &stmt::Delete<'stmt>) {
+        VerifyExpr {
+            schema: self.schema,
+            model: i.from.as_model_id(),
+        }
+        .verify_filter(&i.filter);
+    }
+
     fn visit_stmt_select(&mut self, i: &stmt::Select<'stmt>) {
         VerifyExpr {
             schema: self.schema,
