@@ -8,14 +8,14 @@ pub(crate) struct LoweredReturning<'stmt> {
 
 impl<'stmt> Planner<'_, 'stmt> {
     pub(crate) fn lower_stmt_delete(&self, model: &Model, stmt: &mut stmt::Delete<'stmt>) {
-        /*
-        let mut filter = stmt.selection.body.as_select().filter.clone();
+        let table = self.schema.table(model.lowering.table);
 
-        self.lower_expr2(model, &mut filter);
+        // Lower the query source
+        stmt.from = stmt::Source::table(table.id);
 
-        let sql = sql::Statement::delete(self.schema, model.lowering.table, filter);
-        */
-        todo!()
+        self.lower_stmt_filter(table, model, &mut stmt.filter);
+
+        assert!(stmt.returning.is_none(), "TODO; stmt={stmt:#?}");
     }
 
     pub(crate) fn lower_stmt_query(
@@ -81,14 +81,24 @@ impl<'stmt> Planner<'_, 'stmt> {
         // Lower the query source
         stmt.source = stmt::Source::table(table.id);
 
-        let mut filter = mem::take(&mut stmt.filter);
+        // Lower the selection filter
+        self.lower_stmt_filter(table, model, &mut stmt.filter);
+
+        self.lower_returning(model, &mut stmt.returning)
+    }
+
+    /// Lower the filter portion of a statement
+    fn lower_stmt_filter(&self, table: &Table, model: &Model, filter: &mut stmt::Expr<'stmt>) {
+        use std::mem;
+
+        let mut expr = mem::take(filter);
 
         // Lower the filter
-        self.lower_expr2(model, &mut filter);
+        self.lower_expr2(model, &mut expr);
 
         // Include any column constraints that are constant as part of the
         // lowering.
-        let mut operands = match filter {
+        let mut operands = match expr {
             stmt::Expr::And(expr_and) => expr_and.operands,
             expr => vec![expr],
         };
@@ -110,13 +120,11 @@ impl<'stmt> Planner<'_, 'stmt> {
             ))
         }
 
-        stmt.filter = if operands.len() == 1 {
+        *filter = if operands.len() == 1 {
             operands.into_iter().next().unwrap()
         } else {
             stmt::ExprAnd { operands: operands }.into()
         };
-
-        self.lower_returning(model, &mut stmt.returning)
     }
 
     pub(crate) fn lower_insert_expr(&self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
