@@ -1,11 +1,5 @@
 use super::*;
 
-/// Result of lowering a `Returning` statement
-pub(crate) struct LoweredReturning<'stmt> {
-    /// How to project the result
-    pub project: eval::Expr<'stmt>,
-}
-
 impl<'stmt> Planner<'_, 'stmt> {
     pub(crate) fn lower_stmt_delete(&self, model: &Model, stmt: &mut stmt::Delete<'stmt>) {
         let table = self.schema.table(model.lowering.table);
@@ -23,58 +17,28 @@ impl<'stmt> Planner<'_, 'stmt> {
         table: &Table,
         model: &Model,
         stmt: &mut stmt::Query<'stmt>,
-    ) -> LoweredReturning<'stmt> {
+    ) {
         match &mut *stmt.body {
             stmt::ExprSet::Select(stmt) => self.lower_stmt_select(table, model, stmt),
             _ => todo!("stmt={stmt:#?}"),
         }
     }
 
-    pub(crate) fn lower_returning(
-        &self,
-        model: &Model,
-        stmt: &mut stmt::Returning<'stmt>,
-    ) -> LoweredReturning<'stmt> {
-        // Lower the returning statement.
-        let project = match stmt {
+    pub(crate) fn lower_returning(&self, model: &Model, stmt: &mut stmt::Returning<'stmt>) {
+        match stmt {
             stmt::Returning::Star => {
-                /*
-                // Only select columns that are needed to populate the model
-                let columns = model
-                    .lowering
-                    .columns
-                    .iter()
-                    .cloned()
-                    .map(Into::into)
-                    .map(stmt::Expr::Column)
-                    .collect::<Vec<_>>();
+                let mut returning: stmt::Expr<'_> = model.lowering.table_to_model.clone().into();
+                returning.substitute(model);
 
-                *stmt = stmt::Returning::Expr(stmt::Expr::record(columns));
-
-                let mut stmt: stmt::Expr<'_> = model.lowering.table_to_model.clone().into();
-                stmt.substitute(model);
-
-                eval::Expr::from_stmt(stmt)
-                */
-                todo!()
+                *stmt = stmt::Returning::Expr(returning);
             }
             stmt::Returning::Expr(returning) => {
                 returning.substitute(stmt::substitute::ModelToTable(model));
-
-                // TODO: needed?
-                eval::Expr::arg(0)
             }
-        };
-
-        LoweredReturning { project }
+        }
     }
 
-    fn lower_stmt_select(
-        &self,
-        table: &Table,
-        model: &Model,
-        stmt: &mut stmt::Select<'stmt>,
-    ) -> LoweredReturning<'stmt> {
+    fn lower_stmt_select(&self, table: &Table, model: &Model, stmt: &mut stmt::Select<'stmt>) {
         use std::mem;
 
         // Lower the query source
@@ -83,7 +47,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         // Lower the selection filter
         self.lower_stmt_filter(table, model, &mut stmt.filter);
 
-        self.lower_returning(model, &mut stmt.returning)
+        self.lower_returning(model, &mut stmt.returning);
     }
 
     /// Lower the filter portion of a statement
@@ -145,11 +109,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         *expr = stmt::ExprRecord::from_vec(lowered).into();
     }
 
-    pub(crate) fn lower_update_stmt(
-        &self,
-        model: &Model,
-        stmt: &mut stmt::Update<'stmt>,
-    ) -> Option<LoweredReturning<'stmt>> {
+    pub(crate) fn lower_update_stmt(&self, model: &Model, stmt: &mut stmt::Update<'stmt>) {
         let table = self.schema.table(model.lowering.table);
 
         stmt.target = stmt::UpdateTarget::table(table.id);
@@ -187,125 +147,9 @@ impl<'stmt> Planner<'_, 'stmt> {
         }
 
         if let Some(returning) = &mut stmt.returning {
-            Some(self.lower_returning(model, returning))
-        } else {
-            None
-        }
-
-        /*
-        let mut selection = stmt.selection.body.as_select().filter.clone();
-
-        self.lower_expr2(model, &mut selection);
-
-        let pre_condition = match &stmt.condition {
-            Some(expr) => {
-                let mut expr = expr.clone();
-                self.lower_expr2(model, &mut expr);
-                Some(sql::Expr::from_stmt(
-                    self.schema,
-                    model.lowering.table,
-                    expr,
-                ))
-            }
-            None => None,
-        };
-
-        sql::Update {
-            assignments,
-            table: sql::TableWithJoins {
-                table: model.lowering.table,
-                alias: 0,
-            },
-            selection: Some(sql::Expr::from_stmt(
-                self.schema,
-                model.lowering.table,
-                selection,
-            )),
-            pre_condition: pre_condition,
-            returning: if stmt.returning {
-                Some(returning)
-            } else {
-                None
-            },
-        }
-        */
-    }
-
-    /*
-    pub(crate) fn lower_update_expr(
-        &self,
-        model: &Model,
-        stmt: &stmt::Update<'stmt>,
-    ) -> sql::Update<'stmt> {
-        // TODO: handle
-        let mut returning = vec![];
-
-        let mut assignments = vec![];
-
-        for updated_field in stmt.fields.iter() {
-            let field = &model.fields[updated_field.into_usize()];
-
-            if field.primary_key {
-                todo!("updating PK not supported yet");
-            }
-
-            match &field.ty {
-                FieldTy::Primitive(primitive) => {
-                    let mut lowered = model.lowering.model_to_table[primitive.lowering].clone();
-                    lowered.substitute(stmt::substitute::ModelToTable(&stmt.expr));
-
-                    assignments.push(sql::Assignment {
-                        target: primitive.column,
-                        value: sql::Expr::from_stmt(self.schema, model.lowering.table, lowered),
-                    });
-
-                    if stmt.returning {
-                        returning.push(sql::Expr::Column(primitive.column));
-                    }
-                }
-                _ => {
-                    todo!("field = {:#?}; stmt={:#?}", field, stmt);
-                }
-            }
-        }
-
-        let mut selection = stmt.selection.body.as_select().filter.clone();
-
-        self.lower_expr2(model, &mut selection);
-
-        let pre_condition = match &stmt.condition {
-            Some(expr) => {
-                let mut expr = expr.clone();
-                self.lower_expr2(model, &mut expr);
-                Some(sql::Expr::from_stmt(
-                    self.schema,
-                    model.lowering.table,
-                    expr,
-                ))
-            }
-            None => None,
-        };
-
-        sql::Update {
-            assignments,
-            table: sql::TableWithJoins {
-                table: model.lowering.table,
-                alias: 0,
-            },
-            selection: Some(sql::Expr::from_stmt(
-                self.schema,
-                model.lowering.table,
-                selection,
-            )),
-            pre_condition: pre_condition,
-            returning: if stmt.returning {
-                Some(returning)
-            } else {
-                None
-            },
+            self.lower_returning(model, returning);
         }
     }
-    */
 
     pub(crate) fn lower_expr2(&self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
         LowerExpr2 {

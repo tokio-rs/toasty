@@ -80,7 +80,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             return Some(self.set_var(vec![record.into()]));
         }
 
-        let lowered_returning = self.lower_update_stmt(model, &mut stmt);
+        self.lower_update_stmt(model, &mut stmt);
 
         /*
         let output = if stmt.returning {
@@ -112,10 +112,7 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         output_var
         */
-        todo!(
-            "stmt={stmt:#?}; project={:#?}",
-            lowered_returning.unwrap().project
-        );
+        todo!("stmt={stmt:#?}");
     }
 
     fn plan_update_kv(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {

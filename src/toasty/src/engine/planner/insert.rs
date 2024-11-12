@@ -31,10 +31,9 @@ impl<'stmt> Planner<'_, 'stmt> {
         let mut output_var = None;
 
         // First, lower the returning part of the statement
-        let lowered_returning = stmt
-            .returning
-            .as_mut()
-            .map(|returning| self.lower_returning(model, returning));
+        if let Some(returning) = &mut stmt.returning {
+            self.lower_returning(model, returning);
+        }
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -67,7 +66,8 @@ impl<'stmt> Planner<'_, 'stmt> {
                     },
                 };
 
-                if let Some(lowered_returning) = lowered_returning {
+                if let Some(returning) = stmt.returning {
+                    /*
                     let var = self.var_table.register_var();
                     plan.output = Some(plan::InsertOutput {
                         var,
@@ -76,6 +76,8 @@ impl<'stmt> Planner<'_, 'stmt> {
                     plan.stmt.returning = stmt.returning.take();
 
                     output_var = Some(var);
+                    */
+                    todo!()
                 }
 
                 e.insert(Insertion { action });

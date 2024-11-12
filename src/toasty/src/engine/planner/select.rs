@@ -56,7 +56,7 @@ impl<'stmt> Planner<'_, 'stmt> {
     ) -> plan::VarId {
         let table = self.schema.table(model.lowering.table);
 
-        let lowering = self.lower_stmt_query(table, model, &mut stmt);
+        self.lower_stmt_query(table, model, &mut stmt);
 
         let output = self.var_table.register_var();
 
@@ -64,7 +64,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             input: cx.input.clone(),
             output: Some(plan::QuerySqlOutput {
                 var: output,
-                project: lowering.project,
+                project: todo!(),
             }),
             stmt: stmt.into(),
         });
