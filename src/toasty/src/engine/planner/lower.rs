@@ -36,8 +36,9 @@ impl<'stmt> Planner<'_, 'stmt> {
         stmt: &mut stmt::Returning<'stmt>,
     ) -> LoweredReturning<'stmt> {
         // Lower the returning statement.
-        let project = match &stmt {
+        let project = match stmt {
             stmt::Returning::Star => {
+                /*
                 // Only select columns that are needed to populate the model
                 let columns = model
                     .lowering
@@ -54,16 +55,14 @@ impl<'stmt> Planner<'_, 'stmt> {
                 stmt.substitute(model);
 
                 eval::Expr::from_stmt(stmt)
+                */
+                todo!()
             }
             stmt::Returning::Expr(returning) => {
-                /*
-                let mut stmt = returning.clone();
-                stmt.substitute(stmt::substitute::TableToModel(
-                    &model.lowering.table_to_model,
-                ));
-                project = Some(eval::Expr::from_stmt(stmt));
-                */
-                todo!("{returning:#?}");
+                returning.substitute(stmt::substitute::ModelToTable(model));
+
+                // TODO: needed?
+                eval::Expr::arg(0)
             }
         };
 
@@ -94,7 +93,8 @@ impl<'stmt> Planner<'_, 'stmt> {
         let mut expr = mem::take(filter);
 
         // Lower the filter
-        self.lower_expr2(model, &mut expr);
+        // self.lower_expr2(model, &mut expr);
+        expr.substitute(stmt::substitute::ModelToTable(model));
 
         // Include any column constraints that are constant as part of the
         // lowering.
@@ -143,6 +143,92 @@ impl<'stmt> Planner<'_, 'stmt> {
         }
 
         *expr = stmt::ExprRecord::from_vec(lowered).into();
+    }
+
+    pub(crate) fn lower_update_stmt(
+        &self,
+        model: &Model,
+        stmt: &mut stmt::Update<'stmt>,
+    ) -> Option<LoweredReturning<'stmt>> {
+        let table = self.schema.table(model.lowering.table);
+
+        stmt.target = stmt::UpdateTarget::table(table.id);
+
+        let mut assignments = stmt::Assignments::default();
+
+        for (index, update_expr) in stmt.assignments.iter() {
+            let field = &model.fields[index];
+
+            if field.primary_key {
+                todo!("updating PK not supported yet");
+            }
+
+            match &field.ty {
+                FieldTy::Primitive(primitive) => {
+                    let mut lowered = model.lowering.model_to_table[primitive.lowering].clone();
+                    lowered.substitute(stmt::substitute::ModelToTable((field.id, &*update_expr)));
+                    assignments.set(index, lowered);
+                }
+                _ => {
+                    todo!("field = {:#?};", field);
+                }
+            }
+        }
+
+        stmt.assignments = assignments;
+
+        if let Some(filter) = &mut stmt.filter {
+            self.lower_stmt_filter(table, model, filter);
+        }
+
+        if let Some(condition) = &mut stmt.condition {
+            // self.lower_expr2(model, condition);
+            todo!("condition={condition:#?}");
+        }
+
+        if let Some(returning) = &mut stmt.returning {
+            Some(self.lower_returning(model, returning))
+        } else {
+            None
+        }
+
+        /*
+        let mut selection = stmt.selection.body.as_select().filter.clone();
+
+        self.lower_expr2(model, &mut selection);
+
+        let pre_condition = match &stmt.condition {
+            Some(expr) => {
+                let mut expr = expr.clone();
+                self.lower_expr2(model, &mut expr);
+                Some(sql::Expr::from_stmt(
+                    self.schema,
+                    model.lowering.table,
+                    expr,
+                ))
+            }
+            None => None,
+        };
+
+        sql::Update {
+            assignments,
+            table: sql::TableWithJoins {
+                table: model.lowering.table,
+                alias: 0,
+            },
+            selection: Some(sql::Expr::from_stmt(
+                self.schema,
+                model.lowering.table,
+                selection,
+            )),
+            pre_condition: pre_condition,
+            returning: if stmt.returning {
+                Some(returning)
+            } else {
+                None
+            },
+        }
+        */
     }
 
     /*
@@ -295,25 +381,18 @@ struct LowerExpr2<'a> {
 }
 
 impl<'a, 'stmt> VisitMut<'stmt> for LowerExpr2<'a> {
-    /*
-    TODO: lowering here requires prefixing
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr<'stmt>) {
-        stmt::visit_mut::visit_expr_mut(self, &mut *i);
+        stmt::visit_mut::visit_expr_mut(self, i);
 
         match i {
-            stmt::Expr::Enum(expr_enum) => {
-                // TODO: optimize
-                if expr_enum.fields.len() == 1 {
-                    *i = expr_enum.fields[0].clone();
-                } else {
-                    *i = expr_enum.fields.clone().into();
-                }
+            stmt::Expr::Field(expr) => {
+                *i = self.model.lowering.model_to_table[expr.field.index].clone();
             }
             _ => {}
         }
     }
-    */
 
+    /*
     fn visit_expr_binary_op_mut(&mut self, i: &mut stmt::ExprBinaryOp<'stmt>) {
         use stmt::Expr::*;
 
@@ -333,8 +412,10 @@ impl<'a, 'stmt> VisitMut<'stmt> for LowerExpr2<'a> {
 
         stmt::visit_mut::visit_expr_binary_op_mut(self, i);
     }
+    */
 
     fn visit_expr_in_list_mut(&mut self, i: &mut stmt::ExprInList<'stmt>) {
+        /*
         use stmt::Expr::*;
 
         match (&mut *i.expr, &mut *i.list) {
@@ -357,9 +438,12 @@ impl<'a, 'stmt> VisitMut<'stmt> for LowerExpr2<'a> {
             }
             _ => todo!("expr={:#?}", i),
         }
+        */
+        todo!()
     }
 
     fn visit_expr_in_subquery_mut(&mut self, i: &mut stmt::ExprInSubquery<'stmt>) {
+        /*
         stmt::visit_mut::visit_expr_mut(self, &mut *i.expr);
         stmt::visit_mut::visit_stmt_query_mut(self, &mut *i.query);
 
@@ -380,6 +464,8 @@ impl<'a, 'stmt> VisitMut<'stmt> for LowerExpr2<'a> {
         todo!()
 
         // TODO: do the rest of the lowering...
+        */
+        todo!()
     }
 }
 

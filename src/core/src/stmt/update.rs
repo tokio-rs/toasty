@@ -37,6 +37,12 @@ impl UpdateTarget {
         }
     }
 
+    pub fn table(table: impl Into<TableId>) -> UpdateTarget {
+        UpdateTarget::Table(TableWithJoins {
+            table: table.into(),
+        })
+    }
+
     pub fn as_table(&self) -> &TableWithJoins {
         match self {
             UpdateTarget::Table(table) => table,

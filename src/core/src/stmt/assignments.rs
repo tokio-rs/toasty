@@ -50,11 +50,19 @@ impl<'stmt> Assignments<'stmt> {
         self.exprs[field.into_usize()].take().unwrap()
     }
 
+    // TODO: probably should create an `assignment::Entry` type
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (usize, &'a Expr<'stmt>)> + '_ {
         self.fields.iter().map(|path_step| {
             let index = path_step.into_usize();
             (index, self.exprs[index].as_ref().unwrap())
         })
+    }
+
+    pub fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = (usize, &'a mut Expr<'stmt>)> + '_ {
+        self.exprs
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(i, entry)| entry.as_mut().map(|e| (i, e)))
     }
 }
 

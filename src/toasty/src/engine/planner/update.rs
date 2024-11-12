@@ -66,12 +66,11 @@ impl<'stmt> Planner<'_, 'stmt> {
         }
     }
 
-    fn plan_update_sql(&mut self, stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
-        /*
-        let model = self.model(stmt.selection.body.as_select().source.as_model_id());
+    fn plan_update_sql(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
+        let model = self.model(stmt.target.as_model_id());
 
-        if stmt.fields.is_empty() {
-            if !stmt.returning {
+        if stmt.assignments.is_empty() {
+            if stmt.returning.is_none() {
                 return None;
             }
 
@@ -81,8 +80,9 @@ impl<'stmt> Planner<'_, 'stmt> {
             return Some(self.set_var(vec![record.into()]));
         }
 
-        let sql = self.lower_update_expr(model, &stmt).into();
+        let lowered_returning = self.lower_update_stmt(model, &mut stmt);
 
+        /*
         let output = if stmt.returning {
             // TODO: this correct?
             let mut ty = vec![];
@@ -112,7 +112,10 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         output_var
         */
-        todo!()
+        todo!(
+            "stmt={stmt:#?}; project={:#?}",
+            lowered_returning.unwrap().project
+        );
     }
 
     fn plan_update_kv(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {

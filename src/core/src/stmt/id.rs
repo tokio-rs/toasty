@@ -53,10 +53,10 @@ impl Id {
         }
     }
 
-    pub fn to_primitive(&self) -> stmt::Value<'_> {
+    pub fn to_primitive<'stmt>(&self) -> stmt::Value<'stmt> {
         match &self.repr {
             Repr::Int(_) => todo!(),
-            Repr::String(id) => id.into(),
+            Repr::String(id) => id.clone().into(),
         }
     }
 

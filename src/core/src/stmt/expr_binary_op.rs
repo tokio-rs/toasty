@@ -83,6 +83,21 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
+impl<'stmt> ExprBinaryOp<'stmt> {
+    pub(crate) fn simplify(&mut self) -> Option<Expr<'stmt>> {
+        match (&mut *self.lhs, &mut *self.rhs) {
+            (Expr::Cast(lhs), Expr::Value(Value::Id(rhs))) if lhs.ty.is_id() => {
+                // TODO: don't clone
+                *self.lhs = (*lhs.expr).clone();
+                *self.rhs = rhs.to_primitive().into();
+            }
+            _ => {}
+        }
+
+        None
+    }
+}
+
 impl<'stmt> From<ExprBinaryOp<'stmt>> for Expr<'stmt> {
     fn from(value: ExprBinaryOp<'stmt>) -> Self {
         Expr::BinaryOp(value)

@@ -72,6 +72,7 @@ impl<'a> Serializer<'a> {
 
 impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
     fn statement(&mut self, statement: &DataStatement<'stmt>) -> fmt::Result {
+        println!("SERIALIZE = {statement:#?}");
         match statement {
             /*
             Statement::CreateIndex(stmt) => self.create_index(stmt)?,

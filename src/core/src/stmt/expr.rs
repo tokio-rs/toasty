@@ -175,6 +175,7 @@ impl<'stmt> Expr<'stmt> {
     pub fn simplify(&mut self) {
         visit_mut::for_each_expr_mut(self, move |expr| {
             let maybe_expr = match expr {
+                Expr::BinaryOp(expr) => expr.simplify(),
                 Expr::Cast(expr) => expr.simplify(),
                 Expr::InList(expr) => expr.simplify(),
                 Expr::Record(expr) => expr.simplify(),
