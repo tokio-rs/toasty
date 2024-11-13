@@ -33,6 +33,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         // First, lower the returning part of the statement
         if let Some(returning) = &mut stmt.returning {
             self.lower_returning(model, returning);
+            println!("RETURNING = {returning:#?}");
         }
 
         let action = match self.insertions.entry(model.id) {
@@ -66,7 +67,11 @@ impl<'stmt> Planner<'_, 'stmt> {
                     },
                 };
 
-                if let Some(returning) = stmt.returning {
+                if let Some(returning) = &mut stmt.returning {
+                    let stmt::Returning::Expr(returning) = returning else {
+                        todo!()
+                    };
+                    let project = self.partition_output(returning);
                     /*
                     let var = self.var_table.register_var();
                     plan.output = Some(plan::InsertOutput {
@@ -77,7 +82,7 @@ impl<'stmt> Planner<'_, 'stmt> {
 
                     output_var = Some(var);
                     */
-                    todo!()
+                    todo!("returning={returning:#?}; project={project:#?}");
                 }
 
                 e.insert(Insertion { action });

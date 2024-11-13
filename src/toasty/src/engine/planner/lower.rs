@@ -28,7 +28,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         match stmt {
             stmt::Returning::Star => {
                 let mut returning: stmt::Expr<'_> = model.lowering.table_to_model.clone().into();
-                returning.substitute(model);
+                returning.substitute(stmt::substitute::ModelToTable(model));
 
                 *stmt = stmt::Returning::Expr(returning);
             }

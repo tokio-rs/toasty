@@ -5,6 +5,7 @@ mod insert;
 mod key;
 mod link;
 mod lower;
+mod output;
 mod relation;
 mod select;
 mod simplify;
