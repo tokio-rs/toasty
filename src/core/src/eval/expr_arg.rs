@@ -18,6 +18,13 @@ impl<'stmt> Expr<'stmt> {
         Expr::Arg(expr_arg.into())
     }
 
+    pub fn arg_project(
+        expr_arg: impl Into<ExprArg>,
+        projection: impl Into<stmt::Projection>,
+    ) -> Expr<'stmt> {
+        Expr::project(Expr::arg(expr_arg), projection)
+    }
+
     pub fn is_arg(&self) -> bool {
         matches!(self, Expr::Arg(..))
     }

@@ -25,6 +25,13 @@ impl<'stmt> Returning<'stmt> {
             _ => todo!(),
         }
     }
+
+    pub fn as_expr_mut(&mut self) -> &mut Expr<'stmt> {
+        match self {
+            Returning::Expr(expr) => expr,
+            _ => todo!(),
+        }
+    }
 }
 
 impl<'stmt> From<Expr<'stmt>> for Returning<'stmt> {

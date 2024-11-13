@@ -30,11 +30,12 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         let mut output_var = None;
 
-        // First, lower the returning part of the statement
-        if let Some(returning) = &mut stmt.returning {
+        // First, lower the returning part of the statement and get any
+        // necessary in-memory projection.
+        let project = stmt.returning.as_mut().map(|returning| {
             self.lower_returning(model, returning);
-            println!("RETURNING = {returning:#?}");
-        }
+            self.partition_returning(returning.as_expr_mut())
+        });
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -67,22 +68,12 @@ impl<'stmt> Planner<'_, 'stmt> {
                     },
                 };
 
-                if let Some(returning) = &mut stmt.returning {
-                    let stmt::Returning::Expr(returning) = returning else {
-                        todo!()
-                    };
-                    let project = self.partition_output(returning);
-                    /*
+                if let Some(project) = project {
                     let var = self.var_table.register_var();
-                    plan.output = Some(plan::InsertOutput {
-                        var,
-                        project: lowered_returning.project,
-                    });
+                    plan.output = Some(plan::InsertOutput { var, project });
                     plan.stmt.returning = stmt.returning.take();
 
                     output_var = Some(var);
-                    */
-                    todo!("returning={returning:#?}; project={project:#?}");
                 }
 
                 e.insert(Insertion { action });

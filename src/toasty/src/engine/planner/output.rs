@@ -1,13 +1,37 @@
 use super::*;
 
 impl<'stmt> Planner<'_, 'stmt> {
-    /// Partition an output statement into
-    pub(crate) fn partition_output(&self, stmt: &mut stmt::Expr<'stmt>) -> eval::Expr<'stmt> {
-        let partition = partition_output(stmt, &mut vec![]);
+    pub(crate) fn partition_returning(&self, stmt: &mut stmt::Expr<'stmt>) -> eval::Expr<'stmt> {
+        use Partition::*;
 
-        match partition {
-            Partition::Stmt => eval::Expr::arg(0),
-            Partition::Eval(expr) => expr,
+        let stmt::Expr::Record(stmt_record) = stmt else {
+            todo!()
+        };
+
+        let mut eval_fields = vec![];
+        let mut stmt_fields = vec![];
+        let mut identity = true;
+
+        for field in stmt_record.fields.drain(..) {
+            match partition_returning(&field, &mut stmt_fields) {
+                Stmt => {
+                    let i = stmt_fields.len();
+                    stmt_fields.push(field);
+                    eval_fields.push(eval::Expr::arg_project(0, [i]));
+                }
+                Eval(eval) => {
+                    identity = false;
+                    eval_fields.push(eval);
+                }
+            }
+        }
+
+        stmt_record.fields = stmt_fields;
+
+        if identity {
+            eval::Expr::arg(0)
+        } else {
+            eval::Expr::record_from_vec(eval_fields)
         }
     }
 }
@@ -17,77 +41,25 @@ enum Partition<'stmt> {
     Eval(eval::Expr<'stmt>),
 }
 
-fn partition_output<'stmt>(
-    stmt: &mut stmt::Expr<'stmt>,
-    steps: &mut Vec<stmt::PathStep>,
+fn partition_returning<'stmt>(
+    stmt: &stmt::Expr<'stmt>,
+    returning: &mut Vec<stmt::Expr<'stmt>>,
 ) -> Partition<'stmt> {
     use Partition::*;
 
     match stmt {
-        stmt::Expr::Cast(expr) => match partition_output(&mut *expr.expr, steps) {
+        stmt::Expr::Cast(expr) => match partition_returning(&expr.expr, returning) {
             Stmt => {
-                let eval = eval::Expr::cast(
-                    eval::Expr::project(eval::Expr::arg(0), steps.clone()),
+                let i = returning.len();
+                returning.push((*expr.expr).clone());
+                Eval(eval::Expr::cast(
+                    eval::Expr::arg_project(0, [i]),
                     expr.ty.clone(),
-                );
-
-                *stmt = expr.expr.take();
-                Eval(eval)
+                ))
             }
             Eval(eval) => Eval(eval::Expr::cast(eval, expr.ty.clone())),
         },
-        stmt::Expr::Record(expr) => {
-            let mut ret = Stmt;
-
-            for (i, expr) in expr.iter_mut().enumerate() {
-                steps.push(i.into());
-                let partition = partition_output(expr, steps);
-                steps.pop();
-
-                match (&mut ret, partition) {
-                    (Stmt, Eval(e)) => {
-                        let mut eval = (0..i)
-                            .map(|step| {
-                                let mut steps = steps.clone();
-                                steps.push(step.into());
-                                eval::Expr::project(eval::Expr::arg(0), steps)
-                            })
-                            .collect::<Vec<_>>();
-
-                        let mut steps = steps.clone();
-                        steps.push(i.into());
-                        eval.push(eval::Expr::project(eval::Expr::arg(0), steps));
-
-                        ret = Eval(eval::Expr::record_from_vec(eval));
-                    }
-                    (Eval(eval), Stmt) => {
-                        let eval::Expr::Record(eval) = eval else {
-                            todo!()
-                        };
-                        let mut steps = steps.clone();
-                        steps.push(i.into());
-                        eval.fields
-                            .push(eval::Expr::project(eval::Expr::arg(0), steps));
-                    }
-                    (Eval(eval), Eval(expr)) => {
-                        let eval::Expr::Record(eval) = eval else {
-                            todo!()
-                        };
-                        eval.fields.push(expr);
-                    }
-                    (Stmt, Stmt) => {}
-                }
-            }
-
-            ret
-        }
         stmt::Expr::Column(_) => Stmt,
         _ => todo!("stmt={stmt:#?}"),
-    }
-}
-
-impl Partition<'_> {
-    fn is_stmt(&self) -> bool {
-        matches!(self, Partition::Stmt)
     }
 }
