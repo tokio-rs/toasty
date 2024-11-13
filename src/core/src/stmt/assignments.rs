@@ -25,6 +25,16 @@ impl<'stmt> Assignments<'stmt> {
         self.fields.contains(field)
     }
 
+    pub fn get(&self, field: impl Into<PathStep>) -> Option<&Expr<'stmt>> {
+        let index = field.into().into_usize();
+
+        if index >= self.exprs.len() {
+            None
+        } else {
+            self.exprs[index].as_ref()
+        }
+    }
+
     pub fn set(&mut self, field: impl Into<PathStep>, expr: impl Into<Expr<'stmt>>) {
         let index = field.into().into_usize();
         self.fields.insert(index);

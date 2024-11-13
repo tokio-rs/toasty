@@ -149,3 +149,9 @@ impl<'stmt> Expr<'stmt> {
         }
     }
 }
+
+impl<'stmt> From<stmt::Value<'stmt>> for Expr<'stmt> {
+    fn from(value: stmt::Value<'stmt>) -> Self {
+        Expr::Value(value)
+    }
+}

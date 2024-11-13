@@ -16,15 +16,20 @@ impl<'stmt> Planner<'_, 'stmt> {
         let mut identity = true;
 
         for field in stmt_record.fields.drain(..) {
-            match partition_returning(&field, &mut stmt_fields) {
-                Stmt => {
-                    let i = stmt_fields.len();
-                    stmt_fields.push(field);
-                    eval_fields.push(eval::Expr::arg_project(0, [i]));
-                }
-                Eval(eval) => {
-                    identity = false;
-                    eval_fields.push(eval);
+            if let stmt::Expr::Value(value) = field {
+                identity = false;
+                eval_fields.push(value.into());
+            } else {
+                match partition_returning(&field, &mut stmt_fields) {
+                    Stmt => {
+                        let i = stmt_fields.len();
+                        stmt_fields.push(field);
+                        eval_fields.push(eval::Expr::arg_project(0, [i]));
+                    }
+                    Eval(eval) => {
+                        identity = false;
+                        eval_fields.push(eval);
+                    }
                 }
             }
         }
@@ -36,6 +41,20 @@ impl<'stmt> Planner<'_, 'stmt> {
         } else {
             eval::Expr::record_from_vec(eval_fields)
         }
+    }
+
+    pub fn partition_maybe_returning(
+        &self,
+        stmt: &mut Option<stmt::Returning<'stmt>>,
+    ) -> Option<eval::Expr<'stmt>> {
+        let Some(returning) = stmt else { return None };
+        let project = self.partition_returning(returning);
+
+        if returning.as_expr().as_record().is_empty() {
+            *stmt = None;
+        }
+
+        Some(project)
     }
 }
 
@@ -62,7 +81,7 @@ fn partition_returning<'stmt>(
             }
             Eval(eval) => Eval(eval::Expr::cast(eval, expr.ty.clone())),
         },
-        stmt::Expr::Column(_) => Stmt,
+        stmt::Expr::Column(_) | stmt::Expr::Value(_) => Stmt,
         _ => todo!("stmt={stmt:#?}"),
     }
 }

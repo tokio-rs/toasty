@@ -80,6 +80,7 @@ impl Driver for Sqlite {
                 .as_ref()
                 .map(|returning| returning.as_expr().as_record().len()),
             stmt::Statement::Update(u) => {
+                assert!(u.returning.is_none());
                 assert!(u.condition.is_none());
                 None
             }

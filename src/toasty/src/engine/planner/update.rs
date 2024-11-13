@@ -1,3 +1,5 @@
+use stmt::Update;
+
 use super::*;
 
 // Strategy:
@@ -81,38 +83,24 @@ impl<'stmt> Planner<'_, 'stmt> {
         }
 
         self.lower_update_stmt(model, &mut stmt);
+        self.constantize_update_returning(&mut stmt);
 
-        /*
-        let output = if stmt.returning {
-            // TODO: this correct?
-            let mut ty = vec![];
-
-            for updated_field in stmt.fields.iter() {
-                let field = &model.fields[updated_field.into_usize()];
-
-                ty.push(field.ty.expect_primitive().ty.clone());
-            }
-
-            Some(plan::QuerySqlOutput {
+        let output = self
+            .partition_maybe_returning(&mut stmt.returning)
+            .map(|project| plan::QuerySqlOutput {
                 var: self.var_table.register_var(),
-                ty: stmt::Type::Record(ty),
-                project: eval::Expr::identity(),
-            })
-        } else {
-            None
-        };
+                project,
+            });
 
         let output_var = output.as_ref().map(|o| o.var);
 
         self.push_action(plan::QuerySql {
             output,
             input: vec![],
-            stmt: sql,
+            stmt: stmt.into(),
         });
 
         output_var
-        */
-        todo!("stmt={stmt:#?}");
     }
 
     fn plan_update_kv(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
@@ -292,5 +280,22 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         */
         todo!();
+    }
+
+    fn constantize_update_returning(&self, stmt: &mut Update<'stmt>) {
+        if let Some(stmt::Returning::Expr(returning)) = &mut stmt.returning {
+            stmt::visit_mut::for_each_expr_mut(returning, |expr| {
+                let stmt::Expr::Column(expr_column) = expr else {
+                    return;
+                };
+                let Some(stmt::Expr::Value(assignment)) =
+                    stmt.assignments.get(expr_column.column.index)
+                else {
+                    return;
+                };
+
+                *expr = assignment.clone().into();
+            });
+        }
     }
 }
