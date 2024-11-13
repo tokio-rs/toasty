@@ -450,7 +450,7 @@ where
     V: Visit<'stmt> + ?Sized,
 {
     match node {
-        Returning::Star => {}
+        Returning::Star | Returning::Changed => {}
         Returning::Expr(expr) => v.visit_expr(expr),
     }
 }

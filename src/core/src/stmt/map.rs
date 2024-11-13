@@ -354,7 +354,7 @@ where
     V: Map<'stmt> + ?Sized,
 {
     match node {
-        Returning::Star => Returning::Star,
+        Returning::Star | Returning::Changed => node.clone(),
         Returning::Expr(expr) => Returning::Expr(v.map_expr(expr)),
     }
 }

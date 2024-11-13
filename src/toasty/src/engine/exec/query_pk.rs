@@ -29,7 +29,7 @@ impl<'stmt> Exec<'_, 'stmt> {
         */
         todo!();
 
-        self.vars.store(action.output, res);
+        self.vars.store(action.output, res.rows.into_values());
 
         Ok(())
     }

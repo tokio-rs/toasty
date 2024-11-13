@@ -1,14 +1,13 @@
 pub mod capability;
 pub use capability::Capability;
 
+mod response;
+pub use response::{Response, Rows};
+
 pub mod operation;
 pub use operation::Operation;
 
-use crate::{
-    async_trait, eval,
-    stmt::{self, ValueStream},
-    Schema,
-};
+use crate::{async_trait, eval, stmt, Schema};
 
 use std::fmt::Debug;
 
@@ -25,7 +24,7 @@ pub trait Driver: Debug + Send + Sync + 'static {
         &self,
         schema: &Schema,
         plan: Operation<'stmt>,
-    ) -> crate::Result<ValueStream<'stmt>>;
+    ) -> crate::Result<Response<'stmt>>;
 
     /// TODO: this will probably go away
     async fn reset_db(&self, _schema: &Schema) -> crate::Result<()> {

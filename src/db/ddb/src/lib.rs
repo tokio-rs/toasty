@@ -4,7 +4,7 @@ use toasty_core::{
     driver::{
         capability,
         operation::{self, Operation},
-        Capability, Driver,
+        Capability, Driver, Response,
     },
     schema::{self, Column, ColumnId},
     stmt, Schema,
@@ -72,12 +72,9 @@ impl Driver for DynamoDB {
         Ok(())
     }
 
-    async fn exec<'stmt>(
-        &self,
-        schema: &Schema,
-        op: Operation<'stmt>,
-    ) -> Result<stmt::ValueStream<'stmt>> {
-        self.exec2(schema, op).await
+    async fn exec<'stmt>(&self, schema: &Schema, op: Operation<'stmt>) -> Result<Response<'stmt>> {
+        // self.exec2(schema, op).await
+        todo!()
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {

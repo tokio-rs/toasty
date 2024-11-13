@@ -108,7 +108,7 @@ impl<'stmt> Value<'stmt> {
     pub fn to_string(self) -> Result<String> {
         match self {
             Self::String(v) => Ok(v.into_owned()),
-            _ => anyhow::bail!("cannot convert value to String"),
+            _ => anyhow::bail!("cannot convert value to String {self:#?}"),
         }
     }
 

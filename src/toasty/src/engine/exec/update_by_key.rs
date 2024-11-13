@@ -22,12 +22,12 @@ impl<'stmt> Exec<'_, 'stmt> {
             action.apply()?
         };
 
-        let records = self.db.driver.exec(&self.db.schema, op.into()).await?;
+        let res = self.db.driver.exec(&self.db.schema, op.into()).await?;
 
         if let Some(output) = action.output {
-            self.vars.store(output, records);
+            self.vars.store(output, res.rows.into_values());
         } else {
-            let _ = records.collect().await?;
+            assert!(res.rows.is_count());
         }
 
         Ok(())

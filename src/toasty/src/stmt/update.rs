@@ -32,24 +32,6 @@ impl<'a, M: Model> Update<'a, M> {
 
     pub fn set_expr(&mut self, field: usize, expr: impl Into<stmt::Expr<'a>>) {
         self.untyped.assignments.set(field, expr);
-
-        // TODO: a bit of a hack
-        if let Some(returning) = &mut self.untyped.returning {
-            let stmt::Returning::Expr(stmt::Expr::Record(returning)) = returning else {
-                todo!()
-            };
-
-            while returning.len() <= field {
-                returning.push(stmt::Expr::default());
-            }
-
-            let model = self.untyped.target.as_model_id();
-
-            returning[field] = stmt::Expr::field(FieldId {
-                model,
-                index: field,
-            });
-        }
     }
 
     pub fn push_expr(&mut self, field: usize, expr: impl Into<stmt::Expr<'a>>) {
@@ -100,7 +82,7 @@ impl<'a, M: Model> Default for Update<'a, M> {
                 assignments: stmt::Assignments::default(),
                 filter: Some(stmt::Expr::from(false)),
                 condition: None,
-                returning: Some(stmt::Returning::Expr(stmt::ExprRecord::default().into())),
+                returning: Some(stmt::Returning::Changed),
             },
             _p: PhantomData,
         }

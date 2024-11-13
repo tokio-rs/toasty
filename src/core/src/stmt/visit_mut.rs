@@ -442,7 +442,7 @@ where
     V: VisitMut<'stmt> + ?Sized,
 {
     match node {
-        Returning::Star => {}
+        Returning::Star | Returning::Changed => {}
         Returning::Expr(expr) => v.visit_expr_mut(expr),
     }
 }

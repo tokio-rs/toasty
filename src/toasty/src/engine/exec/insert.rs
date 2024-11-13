@@ -22,20 +22,25 @@ impl<'stmt> Exec<'_, 'stmt> {
         let output = match &action.output {
             Some(output) => output,
             None => {
+                /*
                 // TODO: process in the background
                 while let Some(res) = res.next().await {
                     res?;
                 }
 
                 return Ok(());
+                */
+                todo!()
             }
         };
+
+        let rows = res.rows.into_values();
 
         // TODO: don't clone
         let project = output.project.clone();
 
         let res = ValueStream::from_stream(async_stream::try_stream! {
-            for await value in res {
+            for await value in rows {
                 let value = value?;
                 let record = project.eval(eval::args(&[value][..]))?;
                 yield record.into();

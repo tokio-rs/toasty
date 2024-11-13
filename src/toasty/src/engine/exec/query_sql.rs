@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::driver::Rows;
+
 impl<'stmt> Exec<'_, 'stmt> {
     pub(super) async fn exec_query_sql(&mut self, action: &plan::QuerySql<'stmt>) -> Result<()> {
         let mut sql = action.stmt.clone();
@@ -19,20 +21,27 @@ impl<'stmt> Exec<'_, 'stmt> {
             .await?;
 
         let Some(out) = &action.output else {
-            // Should be no output
-            let _ = res.collect().await;
+            assert!(res.rows.is_count());
             return Ok(());
         };
 
         // TODO: don't clone
         let project = out.project.clone();
 
-        let res = ValueStream::from_stream(async_stream::try_stream! {
-            for await value in res {
-                let value = value?;
-                yield project.eval(eval::args(&[value][..]))?;
-            }
-        });
+        let res = match res.rows {
+            Rows::Count(count) => ValueStream::from_stream(async_stream::try_stream! {
+                for _ in 0..count {
+                    let row = project.eval_const();
+                    yield row;
+                }
+            }),
+            Rows::Values(rows) => ValueStream::from_stream(async_stream::try_stream! {
+                for await value in rows {
+                    let value = value?;
+                    yield project.eval(eval::args(&[value][..]))?;
+                }
+            }),
+        };
 
         self.vars.store(out.var, res);
 

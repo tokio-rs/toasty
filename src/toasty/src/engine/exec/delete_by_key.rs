@@ -19,6 +19,7 @@ impl<'stmt> Exec<'_, 'stmt> {
                 filter: action.filter.clone(),
             };
 
+            /*
             // TODO: do something with the result
             let _ = self
                 .db
@@ -27,6 +28,8 @@ impl<'stmt> Exec<'_, 'stmt> {
                 .await?
                 .collect()
                 .await?;
+            */
+            todo!()
         }
 
         Ok(())

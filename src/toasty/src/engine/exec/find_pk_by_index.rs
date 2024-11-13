@@ -35,7 +35,7 @@ impl<'stmt> Exec<'_, 'stmt> {
 
         let res = self.db.driver.exec(&self.db.schema, op.into()).await?;
 
-        self.vars.store(action.output, res);
+        self.vars.store(action.output, res.rows.into_values());
         Ok(())
     }
 }

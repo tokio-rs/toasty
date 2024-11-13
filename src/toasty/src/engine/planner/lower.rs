@@ -35,6 +35,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             stmt::Returning::Expr(returning) => {
                 returning.substitute(stmt::substitute::ModelToTable(model));
             }
+            _ => todo!(),
         }
     }
 

@@ -6,6 +6,8 @@ pub enum Returning<'stmt> {
     // TODO: rename this `Model` as it returns the full model?
     Star,
 
+    Changed,
+
     /// Return an expression
     Expr(Expr<'stmt>),
 }
@@ -13,6 +15,10 @@ pub enum Returning<'stmt> {
 impl<'stmt> Returning<'stmt> {
     pub fn is_star(&self) -> bool {
         matches!(self, Returning::Star)
+    }
+
+    pub fn is_changed(&self) -> bool {
+        matches!(self, Returning::Changed)
     }
 
     pub fn is_expr(&self) -> bool {

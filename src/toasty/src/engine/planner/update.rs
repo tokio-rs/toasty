@@ -21,6 +21,22 @@ impl<'stmt> Planner<'_, 'stmt> {
             "update must update some columns"
         );
 
+        // TODO: clean & move somewhere else?
+        if let Some(returning) = &mut stmt.returning {
+            if returning.is_changed() {
+                let mut fields = vec![];
+
+                for i in stmt.assignments.fields.iter() {
+                    fields.push(stmt::Expr::field(FieldId {
+                        model: model.id,
+                        index: i.into_usize(),
+                    }));
+                }
+
+                *returning = stmt::Returning::Expr(stmt::ExprRecord::from_vec(fields).into());
+            }
+        }
+
         let scope = stmt::Query::filter(model, stmt.filter.as_ref().unwrap().clone());
 
         // Handle any relation updates

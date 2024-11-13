@@ -1,5 +1,5 @@
 use toasty_core::{
-    driver::{operation::Operation, Capability, Driver},
+    driver::{operation::Operation, Capability, Driver, Response},
     schema, stmt, Schema,
 };
 
@@ -40,11 +40,7 @@ impl Driver for Sqlite {
         Ok(())
     }
 
-    async fn exec<'stmt>(
-        &self,
-        schema: &Schema,
-        op: Operation<'stmt>,
-    ) -> Result<stmt::ValueStream<'stmt>> {
+    async fn exec<'stmt>(&self, schema: &Schema, op: Operation<'stmt>) -> Result<Response<'stmt>> {
         use Operation::*;
 
         let connection = self.connection.lock().unwrap();
@@ -88,13 +84,13 @@ impl Driver for Sqlite {
         };
 
         if width.is_none() {
-            println!("SQL={sql_str}");
-            stmt.execute(rusqlite::params_from_iter(
-                params.iter().map(value_from_param),
-            ))
-            .unwrap();
+            let count = stmt
+                .execute(rusqlite::params_from_iter(
+                    params.iter().map(value_from_param),
+                ))
+                .unwrap();
 
-            return Ok(stmt::ValueStream::new());
+            return Ok(Response::from_count(count));
         }
 
         let mut rows = stmt
@@ -132,11 +128,14 @@ impl Driver for Sqlite {
                 // need to make this transactional later.
                 anyhow::bail!("pre condition failed");
             } else if update.returning.is_none() {
-                return Ok(stmt::ValueStream::new());
+                // return Ok(stmt::ValueStream::new());
+                todo!();
             }
         }
 
-        Ok(stmt::ValueStream::from_vec(ret))
+        Ok(Response::from_value_stream(stmt::ValueStream::from_vec(
+            ret,
+        )))
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
