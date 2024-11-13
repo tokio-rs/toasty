@@ -34,7 +34,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         // necessary in-memory projection.
         let project = stmt.returning.as_mut().map(|returning| {
             self.lower_returning(model, returning);
-            self.partition_returning(returning.as_expr_mut())
+            self.partition_returning(returning)
         });
 
         let action = match self.insertions.entry(model.id) {

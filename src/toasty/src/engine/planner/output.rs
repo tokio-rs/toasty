@@ -1,11 +1,14 @@
 use super::*;
 
 impl<'stmt> Planner<'_, 'stmt> {
-    pub(crate) fn partition_returning(&self, stmt: &mut stmt::Expr<'stmt>) -> eval::Expr<'stmt> {
+    pub(crate) fn partition_returning(
+        &self,
+        stmt: &mut stmt::Returning<'stmt>,
+    ) -> eval::Expr<'stmt> {
         use Partition::*;
 
-        let stmt::Expr::Record(stmt_record) = stmt else {
-            todo!()
+        let stmt::Returning::Expr(stmt::Expr::Record(stmt_record)) = stmt else {
+            todo!("returning={stmt:#?}");
         };
 
         let mut eval_fields = vec![];

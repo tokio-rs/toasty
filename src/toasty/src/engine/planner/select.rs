@@ -57,6 +57,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         let table = self.schema.table(model.lowering.table);
 
         self.lower_stmt_query(table, model, &mut stmt);
+        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
 
         let output = self.var_table.register_var();
 
@@ -64,7 +65,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             input: cx.input.clone(),
             output: Some(plan::QuerySqlOutput {
                 var: output,
-                project: todo!(),
+                project,
             }),
             stmt: stmt.into(),
         });
