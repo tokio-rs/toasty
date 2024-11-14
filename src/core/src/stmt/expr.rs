@@ -287,37 +287,23 @@ impl<'stmt> Default for Expr<'stmt> {
     }
 }
 
-impl<'stmt> ops::Index<usize> for Expr<'stmt> {
+impl<'stmt, I: Into<PathStep>> ops::Index<I> for Expr<'stmt> {
     type Output = Expr<'stmt>;
 
-    fn index(&self, index: usize) -> &Self::Output {
+    fn index(&self, index: I) -> &Self::Output {
         match self {
-            Expr::Record(expr_record) => expr_record.index(index),
+            Expr::Record(expr_record) => expr_record.index(index.into().into_usize()),
             _ => todo!(),
         }
     }
 }
 
-impl<'stmt> ops::IndexMut<usize> for Expr<'stmt> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+impl<'stmt, I: Into<PathStep>> ops::IndexMut<I> for Expr<'stmt> {
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
         match self {
-            Expr::Record(expr_record) => expr_record.index_mut(index),
+            Expr::Record(expr_record) => expr_record.index_mut(index.into().into_usize()),
             _ => todo!("trying to index {:#?}", self),
         }
-    }
-}
-
-impl<'stmt> ops::Index<PathStep> for Expr<'stmt> {
-    type Output = Expr<'stmt>;
-
-    fn index(&self, index: PathStep) -> &Self::Output {
-        self.index(index.into_usize())
-    }
-}
-
-impl<'stmt> ops::IndexMut<PathStep> for Expr<'stmt> {
-    fn index_mut(&mut self, index: PathStep) -> &mut Self::Output {
-        self.index_mut(index.into_usize())
     }
 }
 

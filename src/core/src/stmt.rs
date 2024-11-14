@@ -118,8 +118,6 @@ pub use record_cow::RecordCow;
 mod record_stream;
 pub use record_stream::RecordStream;
 
-pub(crate) mod resolve;
-
 mod returning;
 pub use returning::Returning;
 

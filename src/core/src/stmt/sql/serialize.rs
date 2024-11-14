@@ -276,7 +276,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
 
         match &select.returning {
             Returning::Expr(returning) => self.expr_as_list(returning)?,
-            _ => todo!(),
+            _ => todo!("select={select:#?}"),
         }
 
         write!(self.dst, " FROM ")?;

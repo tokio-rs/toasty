@@ -129,7 +129,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         // values
         for field in &model.fields {
             if let FieldTy::BelongsTo(rel) = &field.ty {
-                let field_expr = expr.resolve_mut(field.id);
+                let field_expr = &mut expr[field.id.index];
 
                 if !field_expr.is_value() || field_expr.is_null() {
                     continue;
@@ -149,7 +149,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         // We have to handle auto fields first because they are often the
         // identifier which may be referenced to handle associations.
         for field in &model.fields {
-            let field_expr = expr.resolve_mut(field.id);
+            let field_expr = &mut expr[field.id.index];
 
             if field_expr.is_null() {
                 // If the field is defined to be auto-populated, then populate
@@ -176,7 +176,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                 continue;
             }
 
-            let field_expr = expr.resolve_mut(field.id);
+            let field_expr = &expr[field.id.index];
 
             if field_expr.is_null() {
                 // Relations are handled differently
@@ -297,11 +297,11 @@ impl<'a, 'stmt> ApplyInsertScope<'a, 'stmt> {
                 }
             }
             stmt::Expr::BinaryOp(e) if e.op.is_eq() => match (&*e.lhs, &*e.rhs) {
-                (stmt::Expr::Project(lhs), stmt::Expr::Value(rhs)) => {
-                    self.apply_eq_const(&lhs.projection, rhs, set);
+                (stmt::Expr::Field(lhs), stmt::Expr::Value(rhs)) => {
+                    self.apply_eq_const(lhs.field, rhs, set);
                 }
-                (stmt::Expr::Value(lhs), stmt::Expr::Project(rhs)) => {
-                    self.apply_eq_const(&rhs.projection, lhs, set);
+                (stmt::Expr::Value(lhs), stmt::Expr::Field(rhs)) => {
+                    self.apply_eq_const(rhs.field, lhs, set);
                 }
                 _ => todo!(),
             },
@@ -311,13 +311,8 @@ impl<'a, 'stmt> ApplyInsertScope<'a, 'stmt> {
         }
     }
 
-    fn apply_eq_const(
-        &mut self,
-        projection: &stmt::Projection,
-        val: &stmt::Value<'stmt>,
-        set: bool,
-    ) {
-        let existing = self.expr.resolve_mut(projection);
+    fn apply_eq_const(&mut self, field: FieldId, val: &stmt::Value<'stmt>, set: bool) {
+        let existing = &mut self.expr[field];
 
         if !existing.is_null() {
             if let stmt::Expr::Value(existing) = existing {

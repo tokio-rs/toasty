@@ -51,6 +51,12 @@ impl<'stmt> Input<'stmt> for ModelToTable<(FieldId, &Expr<'stmt>)> {
 
 impl<'stmt> Input<'stmt> for ModelToTable<&Model> {
     fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr<'stmt>> {
+        assert!(
+            !self.0.lowering.table_to_model[expr_field.field.index].is_null(),
+            "field={expr_field:#?}; lowering={:#?}; ty={:#?}",
+            self.0.lowering.table_to_model,
+            self.0.fields[expr_field.field.index].ty,
+        );
         Some(self.0.lowering.table_to_model[expr_field.field.index].clone())
     }
 }

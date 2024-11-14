@@ -16,18 +16,15 @@ impl<'db> SimplifyExpr<'db> {
         query: &stmt::Query<'stmt>,
     ) -> Option<stmt::Expr<'stmt>> {
         // The expression is a path expression referencing a relation.
-        let projection = match expr {
-            stmt::Expr::Project(expr_project) => &expr_project.projection,
+        let field = match expr {
+            stmt::Expr::Project(expr_project) => {
+                todo!()
+            }
+            stmt::Expr::Field(expr) => self.schema.field(expr.field),
             _ => {
                 return None;
             }
         };
-
-        if projection.len() == 0 {
-            todo!()
-        }
-
-        let field = projection.resolve_field(self.schema, root);
 
         // If the field is not a belongs_to relation, abort
         match &field.ty {
@@ -66,6 +63,7 @@ impl<'db> SimplifyExpr<'db> {
         lift.visit(filter);
 
         if lift.fail {
+            /*
             let [fk_fields] = &belongs_to.foreign_key.fields[..] else {
                 todo!("composite keys")
             };
@@ -78,6 +76,8 @@ impl<'db> SimplifyExpr<'db> {
                 stmt::Expr::field(fk_fields.source),
                 subquery,
             ))
+            */
+            todo!("subquery={query:#?}")
         } else {
             Some(if lift.operands.len() == 1 {
                 lift.operands.into_iter().next().unwrap()
@@ -132,41 +132,19 @@ impl<'db> SimplifyExpr<'db> {
 impl<'a, 'stmt> stmt::Visit<'stmt> for LiftBelongsTo<'a, 'stmt> {
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp<'stmt>) {
         match (&*i.lhs, &*i.rhs) {
-            (stmt::Expr::Project(expr_project), other)
-            | (other, stmt::Expr::Project(expr_project)) => {
+            (stmt::Expr::Field(expr_field), other) | (other, stmt::Expr::Field(expr_field)) => {
                 assert!(i.op.is_eq());
-                self.lift_fk_constraint(&expr_project.projection, other);
+                self.lift_fk_constraint(expr_field.field, other);
             }
             _ => {}
         }
     }
-
-    /*
-    fn visit_expr_mut(&mut self, i: &mut stmt::Expr<'stmt>) {
-        stmt::visit_mut::visit_expr_mut(self, i);
-
-        if !self.fail {
-            match i {
-                stmt::Expr::BinaryOp(e) if e.lhs.is_project() => self.cast_expr_to_key(&mut *e.rhs),
-                stmt::Expr::BinaryOp(e) if e.rhs.is_project() => {
-                    self.cast_expr_to_key(&mut *e.lhs);
-                }
-                _ => {}
-            }
-        }
-    }
-    */
 }
 
 impl<'a, 'stmt> LiftBelongsTo<'a, 'stmt> {
-    fn lift_fk_constraint(&mut self, projection: &stmt::Projection, expr: &stmt::Expr<'stmt>) {
-        let [step] = &projection[..] else {
-            self.fail = true;
-            return;
-        };
-
+    fn lift_fk_constraint(&mut self, field: FieldId, expr: &stmt::Expr<'stmt>) {
         for (i, fk_field) in self.belongs_to.foreign_key.fields.iter().enumerate() {
-            if fk_field.target.index == step.into_usize() {
+            if fk_field.target == field {
                 if self.fk_field_matches[i] {
                     todo!("not handled");
                 }
