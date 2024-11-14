@@ -12,7 +12,11 @@ pub struct Delete<'stmt> {
     pub returning: Option<Returning<'stmt>>,
 }
 
-impl<'stmt> Delete<'stmt> {}
+impl<'stmt> Delete<'stmt> {
+    pub fn selection(&self) -> Query<'stmt> {
+        stmt::Query::filter(self.from.as_model_id(), self.filter.clone())
+    }
+}
 
 impl<'stmt> From<Delete<'stmt>> for Statement<'stmt> {
     fn from(src: Delete<'stmt>) -> Statement<'stmt> {

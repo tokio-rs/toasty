@@ -37,7 +37,7 @@ impl<'stmt> Planner<'_, 'stmt> {
             }
         }
 
-        let scope = stmt::Query::filter(model, stmt.filter.as_ref().unwrap().clone());
+        let scope = stmt.selection();
 
         // Handle any relation updates
         for (i, field) in model.fields.iter().enumerate() {

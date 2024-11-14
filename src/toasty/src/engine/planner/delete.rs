@@ -17,14 +17,11 @@ impl<'stmt> Planner<'_, 'stmt> {
                 }
             } else if let Some(rel) = field.ty.as_has_many() {
                 let pair = self.schema.field(rel.pair);
+                let selection = stmt.selection();
 
-                todo!("{stmt:#?}");
-                /*
                 // TODO: can this be unified with update?
-                let query = stmt::Query::filter(
-                    rel.target,
-                    stmt::Expr::in_subquery(rel.pair, stmt.selection.clone()),
-                );
+                let query =
+                    stmt::Query::filter(rel.target, stmt::Expr::in_subquery(rel.pair, selection));
 
                 if pair.nullable {
                     let mut update = query.update(self.schema);
@@ -34,7 +31,6 @@ impl<'stmt> Planner<'_, 'stmt> {
                 } else {
                     self.plan_delete(query.delete());
                 }
-                */
             }
         }
 

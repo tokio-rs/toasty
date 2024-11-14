@@ -27,7 +27,14 @@ pub enum UpdateTarget {
     Table(TableWithJoins),
 }
 
-impl<'stmt> Update<'stmt> {}
+impl<'stmt> Update<'stmt> {
+    pub fn selection(&self) -> Query<'stmt> {
+        stmt::Query::filter(
+            self.target.as_model_id(),
+            self.filter.as_ref().unwrap().clone(),
+        )
+    }
+}
 
 impl UpdateTarget {
     pub fn as_model_id(&self) -> ModelId {
