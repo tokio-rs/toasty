@@ -59,6 +59,7 @@ impl<'stmt> Planner<'_, 'stmt> {
     }
 
     fn plan_delete_kv(&mut self, model: &Model, mut stmt: stmt::Delete<'stmt>) {
+        /*
         let table = self.schema.table(model.lowering.table);
 
         let filter = &mut stmt.filter;
@@ -115,5 +116,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                 }),
             });
         }
+        */
+        todo!()
     }
 }

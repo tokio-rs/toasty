@@ -318,11 +318,11 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
     }
 
     fn expr_as_list(&mut self, expr: &Expr<'stmt>) -> fmt::Result {
-        let Expr::Record(expr_list) = expr else {
-            todo!()
-        };
-        self.expr_list(expr_list)?;
-        Ok(())
+        match expr {
+            Expr::Record(expr) => self.expr_list(expr),
+            Expr::List(expr) => self.expr_list(expr),
+            _ => todo!("expr={expr:#?}"),
+        }
     }
 
     fn expr(&mut self, expr: &Expr<'stmt>) -> fmt::Result {
@@ -352,32 +352,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
             Expr::InList(ExprInList { expr, list }) => {
                 self.expr(expr)?;
                 write!(self.dst, " IN (")?;
-
-                let mut s = "";
-
-                /*
-                match list {
-                    ExprList::Expr(exprs) => {
-                        for e in exprs {
-                            write!(self.dst, "{s}")?;
-                            self.expr(e)?;
-                            s = ", ";
-                        }
-                    }
-                    ExprList::Value(values) => {
-                        for v in values {
-                            write!(self.dst, "{s}")?;
-                            self.value(v)?;
-                            s = ", ";
-                        }
-                    }
-                    ExprList::Placeholder(_) => {
-                        todo!("PLACEHOLDER");
-                    }
-                }
-                */
-                todo!("expr={expr:#?}");
-
+                self.expr_as_list(list)?;
                 write!(self.dst, ")")?;
             }
             Expr::InSubquery(ExprInSubquery { expr, query }) => {
@@ -450,6 +425,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
     }
 
     fn value(&mut self, value: &Value<'stmt>) -> fmt::Result {
+        assert!(!value.is_id());
         self.params.push(value);
         write!(self.dst, "?")?;
         Ok(())

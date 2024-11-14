@@ -58,7 +58,6 @@ impl<'stmt> Planner<'_, 'stmt> {
         let mut expr = mem::take(filter);
 
         // Lower the filter
-        // self.lower_expr2(model, &mut expr);
         expr.substitute(stmt::substitute::ModelToTable(model));
 
         // Include any column constraints that are constant as part of the
@@ -90,11 +89,11 @@ impl<'stmt> Planner<'_, 'stmt> {
         } else {
             stmt::ExprAnd { operands: operands }.into()
         };
+
+        self.lower_expr(filter);
     }
 
     pub(crate) fn lower_insert_expr(&self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
-        self.lower_expr2(model, expr);
-
         let stmt::Expr::Record(record) = expr else {
             todo!()
         };
@@ -104,6 +103,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         for lowering in &model.lowering.model_to_table {
             let mut lowering = lowering.clone();
             lowering.substitute(stmt::substitute::ModelToTable(&*record));
+            self.lower_expr(&mut lowering);
             lowered.push(lowering);
         }
 
@@ -152,6 +152,11 @@ impl<'stmt> Planner<'_, 'stmt> {
         }
     }
 
+    pub(crate) fn lower_expr(&self, expr: &mut stmt::Expr<'stmt>) {
+        LowerExpr {}.visit_mut(expr);
+    }
+
+    /*
     pub(crate) fn lower_expr2(&self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
         LowerExpr2 {
             schema: self.schema,
@@ -159,6 +164,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         }
         .visit_mut(expr);
     }
+    */
 
     pub(crate) fn lower_index_filter(
         &self,
@@ -172,7 +178,8 @@ impl<'stmt> Planner<'_, 'stmt> {
         let lowering = &model_index.lowering;
         let index = &table.indices[lowering.index.index];
 
-        self.lower_expr2(model, expr);
+        // self.lower_expr2(model, expr);
+        todo!();
 
         // Lets try something...
         let mut operands = vec![mem::take(expr)];
@@ -220,135 +227,31 @@ fn is_constrained(expr: &stmt::Expr<'_>, column: &Column) -> bool {
     }
 }
 
-struct LowerExpr2<'a> {
-    schema: &'a Schema,
-    model: &'a Model,
-}
+struct LowerExpr {}
 
-impl<'a, 'stmt> VisitMut<'stmt> for LowerExpr2<'a> {
+impl<'stmt> VisitMut<'stmt> for LowerExpr {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr<'stmt>) {
         stmt::visit_mut::visit_expr_mut(self, i);
 
         match i {
-            stmt::Expr::Field(expr) => {
-                *i = self.model.lowering.model_to_table[expr.field.index].clone();
+            stmt::Expr::Cast(expr) => {
+                if expr.ty.is_id() {
+                    // Get rid of the cast
+                    *i = expr.expr.take();
+                }
             }
             _ => {}
         }
     }
 
-    /*
-    fn visit_expr_binary_op_mut(&mut self, i: &mut stmt::ExprBinaryOp<'stmt>) {
-        use stmt::Expr::*;
+    fn visit_value_mut(&mut self, i: &mut stmt::Value<'stmt>) {
+        stmt::visit_mut::visit_value_mut(self, i);
 
-        match (&mut *i.lhs, &mut *i.rhs) {
-            (Field(lhs), rhs) => {
-                assert!(i.op.is_eq(), "op={:#?}", i.op);
-                let lowered_lhs = self.lower_field_expr(lhs.field, rhs);
-                *i.lhs = lowered_lhs;
+        match i {
+            stmt::Value::Id(value) => {
+                *i = value.to_primitive();
             }
-            (lhs, Field(rhs)) => {
-                assert!(i.op.is_eq(), "op={:#?}", i.op);
-                let lowered_rhs = self.lower_field_expr(rhs.field, lhs);
-                *i.rhs = lowered_rhs;
-            }
-            _ => todo!("expr = {:#?}", i),
+            _ => {}
         }
-
-        stmt::visit_mut::visit_expr_binary_op_mut(self, i);
-    }
-    */
-
-    fn visit_expr_in_list_mut(&mut self, i: &mut stmt::ExprInList<'stmt>) {
-        /*
-        use stmt::Expr::*;
-
-        match (&mut *i.expr, &mut *i.list) {
-            (Project(lhs), rhs) => {
-                // self.lower_expr(&mut lhs.projection, rhs);
-                todo!()
-            }
-            (Record(lhs), List(_)) => {
-                // TODO: implement for real
-                for lhs in lhs {
-                    let Project(expr_project) = lhs else {
-                        todo!("expr={:#?}", i)
-                    };
-                    let field = expr_project
-                        .projection
-                        .resolve_field(self.schema, self.model);
-                    let lowering = field.ty.expect_primitive().lowering;
-                    assert_eq!(*lhs, self.model.lowering.table_to_model[lowering]);
-                }
-            }
-            _ => todo!("expr={:#?}", i),
-        }
-        */
-        todo!()
-    }
-
-    fn visit_expr_in_subquery_mut(&mut self, i: &mut stmt::ExprInSubquery<'stmt>) {
-        /*
-        stmt::visit_mut::visit_expr_mut(self, &mut *i.expr);
-        stmt::visit_mut::visit_stmt_query_mut(self, &mut *i.query);
-
-        let stmt::ExprSet::Select(select) = &mut *i.query.body else {
-            todo!()
-        };
-
-        let model = self.schema.model(select.source.as_model_id());
-
-        let stmt::Returning::Expr(returning) = &mut select.returning else {
-            todo!()
-        };
-        /*
-        returning.substitute(stmt::substitute::TableToModel(
-            &model.lowering.table_to_model,
-        ));
-        */
-        todo!()
-
-        // TODO: do the rest of the lowering...
-        */
-        todo!()
-    }
-}
-
-impl<'a> LowerExpr2<'a> {
-    fn lower_field_expr<'stmt>(
-        &mut self,
-        field_id: FieldId,
-        expr: &mut stmt::Expr<'stmt>,
-    ) -> stmt::Expr<'stmt> {
-        // This is an input for a targeted substitution. Only a single
-        // projection should be substituted here
-        struct Input<'a, 'stmt> {
-            field_id: FieldId,
-            expr: &'a stmt::Expr<'stmt>,
-        }
-
-        impl<'a, 'stmt> stmt::substitute::Input<'stmt> for Input<'a, 'stmt> {
-            fn resolve_field(&mut self, expr_field: &stmt::ExprField) -> Option<stmt::Expr<'stmt>> {
-                assert_eq!(expr_field.field, self.field_id);
-                Some(self.expr.clone())
-            }
-        }
-
-        // Find the referenced model field.
-        let field = self.schema.field(field_id);
-
-        // Column the field is mapped to
-        let lowering_idx = match &field.ty {
-            FieldTy::Primitive(primitive) => primitive.lowering,
-            _ => todo!("field = {:#?}; expr={:#?}", field, expr),
-        };
-
-        let mut lowered = self.model.lowering.model_to_table[lowering_idx].clone();
-        lowered.substitute(Input {
-            field_id,
-            expr: &*expr,
-        });
-
-        stmt::Expr::column(self.model.lowering.columns[lowering_idx])
     }
 }
