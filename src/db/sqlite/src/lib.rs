@@ -58,7 +58,9 @@ impl Driver for Sqlite {
         }
 
         let mut params = vec![];
+        println!("OP={op:#?}");
         let sql_str = stmt::sql::Serializer::new(schema).serialize_stmt(sql, &mut params);
+        println!("SQL={sql_str:#?}; params={params:#?}");
 
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
@@ -84,11 +86,9 @@ impl Driver for Sqlite {
         };
 
         if width.is_none() {
-            let count = stmt
-                .execute(rusqlite::params_from_iter(
-                    params.iter().map(value_from_param),
-                ))
-                .unwrap();
+            let count = stmt.execute(rusqlite::params_from_iter(
+                params.iter().map(value_from_param),
+            ))?;
 
             return Ok(Response::from_count(count));
         }
@@ -224,6 +224,7 @@ fn load<'stmt>(row: &rusqlite::Row, index: usize) -> stmt::Value<'stmt> {
         Some(SqlValue::Null) => stmt::Value::Null,
         Some(SqlValue::Integer(value)) => stmt::Value::I64(value),
         Some(SqlValue::Text(value)) => stmt::Value::String(value.into()),
+        None => stmt::Value::Null,
         _ => todo!("value={value:#?}"),
     }
 
