@@ -128,7 +128,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                 FieldTy::Primitive(primitive) => {
                     let mut lowered = model.lowering.model_to_table[primitive.lowering].clone();
                     lowered.substitute(stmt::substitute::ModelToTable((field.id, &*update_expr)));
-                    assignments.set(index, lowered);
+                    assignments.set(primitive.column, lowered);
                 }
                 _ => {
                     todo!("field = {:#?};", field);
