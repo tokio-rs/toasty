@@ -25,7 +25,6 @@ impl<'stmt> Planner<'_, 'stmt> {
     }
 
     pub(crate) fn lower_returning(&self, model: &Model, stmt: &mut stmt::Returning<'stmt>) {
-        println!("LOWER_RETURNING = {stmt:#?}");
         match stmt {
             stmt::Returning::Star => {
                 let mut returning: stmt::Expr<'_> = model.lowering.table_to_model.clone().into();

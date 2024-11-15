@@ -1,5 +1,13 @@
 use super::*;
 
+pub(crate) enum PartitionedReturning<'stmt> {
+    /// How to project values returned by the database statement
+    Expr(eval::Expr<'stmt>),
+
+    /// The statement returns a constant value.
+    Value(stmt::Value<'stmt>),
+}
+
 impl<'stmt> Planner<'_, 'stmt> {
     pub(crate) fn partition_returning(
         &self,

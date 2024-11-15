@@ -25,7 +25,7 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         // If the statement `Returning` is constant (i.e. does not depend on the
         // database evaluating the statement), then extract it here.
-        let const_returning = self.extract_const_returning(&mut stmt);
+        let const_returning = self.constantize_insert_returning(&mut stmt);
 
         let mut output_var = None;
 
@@ -293,7 +293,8 @@ impl<'stmt> Planner<'_, 'stmt> {
         ApplyInsertScope { expr }.apply(scope);
     }
 
-    fn extract_const_returning(
+    // TODO: unify with update?
+    fn constantize_insert_returning(
         &self,
         stmt: &mut stmt::Insert<'stmt>,
     ) -> Option<Vec<stmt::Value<'stmt>>> {

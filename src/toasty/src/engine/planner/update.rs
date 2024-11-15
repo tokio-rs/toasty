@@ -1,3 +1,4 @@
+use output::PartitionedReturning;
 use stmt::Update;
 
 use super::*;
@@ -20,22 +21,6 @@ impl<'stmt> Planner<'_, 'stmt> {
             !stmt.assignments.is_empty(),
             "update must update some columns"
         );
-
-        // TODO: clean & move somewhere else?
-        if let Some(returning) = &mut stmt.returning {
-            if returning.is_changed() {
-                let mut fields = vec![];
-
-                for i in stmt.assignments.fields.iter() {
-                    fields.push(stmt::Expr::field(FieldId {
-                        model: model.id,
-                        index: i.into_usize(),
-                    }));
-                }
-
-                *returning = stmt::Returning::Expr(stmt::ExprRecord::from_vec(fields).into());
-            }
-        }
 
         let scope = stmt.selection();
 
@@ -67,11 +52,33 @@ impl<'stmt> Planner<'_, 'stmt> {
                         let [fk_field] = &belongs_to.foreign_key.fields[..] else {
                             todo!("composite keys")
                         };
+
                         stmt.assignments.set(fk_field.source, value);
                     }
                 }
             } else if field.is_relation() {
                 stmt.assignments.unset(i);
+            }
+        }
+
+        // TODO: clean & move somewhere else? Maybe lowering?
+        if let Some(returning) = &mut stmt.returning {
+            if returning.is_changed() {
+                let mut fields = vec![];
+
+                for i in stmt.assignments.fields.iter() {
+                    let i = i.into_usize();
+                    let field = &model.fields[i];
+
+                    assert!(field.ty.is_primitive(), "field={field:#?}");
+
+                    fields.push(stmt::Expr::field(FieldId {
+                        model: model.id,
+                        index: i,
+                    }));
+                }
+
+                *returning = stmt::Returning::Expr(stmt::ExprRecord::from_vec(fields).into());
             }
         }
 
@@ -97,6 +104,8 @@ impl<'stmt> Planner<'_, 'stmt> {
             let record = stmt::Record::from_vec(vec![stmt::Value::Null; model.fields.len()]);
             return Some(self.set_var(vec![record.into()]));
         }
+
+        println!("ABOUT TO LOWER = {stmt:#?}");
 
         self.lower_update_stmt(model, &mut stmt);
         self.constantize_update_returning(&mut stmt);
@@ -299,6 +308,9 @@ impl<'stmt> Planner<'_, 'stmt> {
     }
 
     fn constantize_update_returning(&self, stmt: &mut Update<'stmt>) {
+        // TODO: probably not worth doing because we have to issue the update
+        // statement regardless
+        /*
         if let Some(stmt::Returning::Expr(returning)) = &mut stmt.returning {
             stmt::visit_mut::for_each_expr_mut(returning, |expr| {
                 let stmt::Expr::Column(expr_column) = expr else {
@@ -313,5 +325,6 @@ impl<'stmt> Planner<'_, 'stmt> {
                 *expr = assignment.clone().into();
             });
         }
+        */
     }
 }

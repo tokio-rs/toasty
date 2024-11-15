@@ -77,10 +77,11 @@ impl Driver for Sqlite {
                 .returning
                 .as_ref()
                 .map(|returning| returning.as_expr().as_record().len()),
-            stmt::Statement::Update(u) => {
-                assert!(u.returning.is_none());
-                assert!(u.condition.is_none());
-                None
+            stmt::Statement::Update(stmt) => {
+                assert!(stmt.condition.is_none());
+                stmt.returning
+                    .as_ref()
+                    .map(|returning| returning.as_expr().as_record().len())
             }
             _ => todo!(),
         };

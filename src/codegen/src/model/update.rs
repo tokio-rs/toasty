@@ -33,6 +33,7 @@ impl<'a> Generator<'a> {
                         quote!(#i => self.model.#name = into_iter.next().unwrap().#conv()?,)
                     }
                 }
+                /*
                 FieldTy::BelongsTo(rel) => {
                     match &rel.foreign_key.fields[..] {
                         [fk_field] => {
@@ -62,6 +63,8 @@ impl<'a> Generator<'a> {
                     // TODO: something to do here?
                     quote!(#i => {})
                 }
+                */
+                _ => quote!(#i => todo!("should not be set"),)
             }
 
         });

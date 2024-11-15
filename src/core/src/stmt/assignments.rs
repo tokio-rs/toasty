@@ -2,7 +2,7 @@ use super::*;
 
 use std::ops;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Assignments<'stmt> {
     pub fields: PathFieldSet,
 
@@ -98,5 +98,19 @@ impl<'stmt, I: Into<PathStep>> ops::IndexMut<I> for Assignments<'stmt> {
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         let index = index.into().into_usize();
         self.exprs[index].as_mut().unwrap()
+    }
+}
+
+impl<'stmt> fmt::Debug for Assignments<'stmt> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut fmt = f.debug_struct("Assignments");
+
+        for (i, expr) in self.exprs.iter().enumerate() {
+            if let Some(expr) = expr {
+                fmt.field(&format!("{i}"), expr);
+            }
+        }
+
+        fmt.finish()
     }
 }
