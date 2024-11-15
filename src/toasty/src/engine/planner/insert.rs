@@ -19,14 +19,13 @@ impl<'stmt> Planner<'_, 'stmt> {
             assert!(!values.is_empty(), "stmt={stmt:#?}");
         }
 
+        // Do initial pre-processing of insertion values (apply defaults, apply
+        // scope, check constraints, ...)
+        self.preprocess_insert_values(model, &mut stmt);
+
         // If the statement `Returning` is constant (i.e. does not depend on the
         // database evaluating the statement), then extract it here.
         let const_returning = self.extract_const_returning(&mut stmt);
-
-        let filter = match &stmt.target {
-            stmt::InsertTarget::Scope(query) => Some(&query.body.as_select().filter),
-            _ => None,
-        };
 
         let mut output_var = None;
 
@@ -89,19 +88,41 @@ impl<'stmt> Planner<'_, 'stmt> {
         };
 
         for mut row in rows {
-            if let Some(filter) = filter {
-                self.apply_insert_scope(&mut row, filter);
-            }
-
             self.plan_insert_record(model, row, action);
+        }
+
+        if let Some(const_returning) = const_returning {
+            assert!(output_var.is_none());
+
+            output_var = Some(self.set_var(const_returning));
         }
 
         output_var
     }
 
+    fn preprocess_insert_values(&mut self, model: &Model, stmt: &mut stmt::Insert<'stmt>) {
+        let stmt::ExprSet::Values(values) = &mut *stmt.source.body else {
+            todo!()
+        };
+
+        let scope_expr = match &stmt.target {
+            stmt::InsertTarget::Scope(query) => Some(&query.body.as_select().filter),
+            _ => None,
+        };
+
+        for row in &mut values.rows {
+            if let Some(scope_expr) = scope_expr {
+                self.apply_insert_scope(row, scope_expr);
+            }
+
+            self.apply_insertion_defaults(model, row);
+        }
+    }
+
     fn plan_insert_record(&mut self, model: &Model, mut expr: stmt::Expr<'stmt>, action: usize) {
-        self.apply_insertion_defaults(model, &mut expr);
         self.plan_insert_relation_stmts(model, &mut expr);
+        // TODO: move this to pre-processing step, but it currently depends on
+        // planning relation statements which cannot be in preprocessing.
         self.verify_non_nullable_fields_have_values(model, &mut expr);
 
         self.lower_insert_expr(model, &mut expr);
@@ -261,7 +282,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         let mut args = vec![];
 
         for pk_field in model.primary_key_fields() {
-            let expr = eval::Expr::from_stmt(expr[pk_field.id.index].clone());
+            let expr = eval::Expr::from(expr[pk_field.id.index].clone());
             args.push(expr.eval_const());
         }
 
@@ -275,12 +296,38 @@ impl<'stmt> Planner<'_, 'stmt> {
     fn extract_const_returning(
         &self,
         stmt: &mut stmt::Insert<'stmt>,
-    ) -> Option<ValueStream<'stmt>> {
-        if matches!(stmt.returning, Some(stmt::Returning::Expr(_))) {
-            todo!("stmt={stmt:#?}");
+    ) -> Option<Vec<stmt::Value<'stmt>>> {
+        let Some(stmt::Returning::Expr(returning)) = &stmt.returning else {
+            return None;
+        };
+
+        let stmt::ExprSet::Values(values) = &*stmt.source.body else {
+            return None;
+        };
+
+        struct ConstReturning;
+
+        impl<'stmt> eval::Convert<'stmt> for ConstReturning {
+            fn convert_expr_field(&mut self, field: stmt::ExprField) -> Option<eval::Expr<'stmt>> {
+                Some(eval::Expr::arg_project(0, [field.field.index]))
+            }
         }
 
-        None
+        let returning = eval::Expr::convert_stmt(returning.clone(), ConstReturning).unwrap();
+
+        let mut rows = vec![];
+
+        // TODO: OPTIMIZE!
+        for row in &values.rows {
+            let evaled = returning.eval([row]).unwrap();
+            rows.push(evaled);
+        }
+
+        // The returning portion of the statement has been extracted as a const.
+        // We do not need to receive it from the database anymore.
+        stmt.returning = None;
+
+        Some(rows)
     }
 }
 

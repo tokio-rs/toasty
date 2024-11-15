@@ -6,9 +6,16 @@ pub struct ExprAnd<'stmt> {
 }
 
 impl<'stmt> ExprAnd<'stmt> {
-    pub(crate) fn from_stmt(stmt: stmt::ExprAnd<'stmt>) -> ExprAnd<'stmt> {
+    pub(crate) fn from_stmt(
+        stmt: stmt::ExprAnd<'stmt>,
+        convert: &mut impl Convert<'stmt>,
+    ) -> ExprAnd<'stmt> {
         ExprAnd {
-            operands: stmt.operands.into_iter().map(Expr::from_stmt).collect(),
+            operands: stmt
+                .operands
+                .into_iter()
+                .map(|expr| Expr::from_stmt_by_ref(expr, convert))
+                .collect(),
         }
     }
 }

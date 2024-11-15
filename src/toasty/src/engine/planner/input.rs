@@ -121,7 +121,7 @@ fn do_extract<'stmt>(
                 project: if e.is_arg() {
                     None
                 } else {
-                    Some(eval::Expr::from_stmt(e))
+                    Some(eval::Expr::from(e))
                 },
             });
         }

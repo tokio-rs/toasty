@@ -133,6 +133,21 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
             _ => todo!(),
         };
 
+        // Make sure rows are the right size
+        if let stmt::ExprSet::Values(values) = &mut *i.source.body {
+            let model = self.schema.model(model);
+
+            for row in &mut values.rows {
+                let stmt::Expr::Record(row) = row else {
+                    todo!()
+                };
+
+                while row.len() < model.fields.len() {
+                    row.push(stmt::Expr::default());
+                }
+            }
+        }
+
         let mut simplify_expr = SimplifyExpr {
             model: self.schema.model(model),
             schema: self.schema,
@@ -156,11 +171,6 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
             schema: self.schema,
         }
         .visit_mut(&mut i.filter);
-    }
-
-    fn visit_expr_mut(&mut self, i: &mut stmt::Expr<'stmt>) {
-        // TODO: actually simplify
-        assert!(i.is_const(), "expr={i:#?}");
     }
 }
 

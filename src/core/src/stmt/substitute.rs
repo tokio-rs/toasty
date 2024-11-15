@@ -65,6 +65,6 @@ pub struct Args<T>(pub T);
 
 impl<'stmt> Input<'stmt> for Args<&[Value<'stmt>]> {
     fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Option<Expr<'stmt>> {
-        todo!("arg = {:#?}; self={:#?}", expr_arg, self.0);
+        Some(self.0[expr_arg.position].clone().into())
     }
 }

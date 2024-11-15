@@ -20,9 +20,12 @@ impl<'stmt> Expr<'stmt> {
 }
 
 impl<'stmt> ExprCast<'stmt> {
-    pub(crate) fn from_stmt(stmt: stmt::ExprCast<'stmt>) -> ExprCast<'stmt> {
+    pub(crate) fn from_stmt(
+        stmt: stmt::ExprCast<'stmt>,
+        convert: &mut impl Convert<'stmt>,
+    ) -> ExprCast<'stmt> {
         ExprCast {
-            expr: Box::new(Expr::from_stmt(*stmt.expr)),
+            expr: Box::new(Expr::from_stmt_by_ref(*stmt.expr, convert)),
             ty: stmt.ty,
         }
     }

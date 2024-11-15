@@ -8,11 +8,14 @@ pub struct ExprBinaryOp<'stmt> {
 }
 
 impl<'stmt> ExprBinaryOp<'stmt> {
-    pub(crate) fn from_stmt(expr: stmt::ExprBinaryOp<'stmt>) -> ExprBinaryOp<'stmt> {
+    pub(crate) fn from_stmt(
+        expr: stmt::ExprBinaryOp<'stmt>,
+        convert: &mut impl Convert<'stmt>,
+    ) -> ExprBinaryOp<'stmt> {
         ExprBinaryOp {
-            lhs: Box::new(Expr::from_stmt(*expr.lhs)),
+            lhs: Box::new(Expr::from_stmt_by_ref(*expr.lhs, convert)),
             op: expr.op,
-            rhs: Box::new(Expr::from_stmt(*expr.rhs)),
+            rhs: Box::new(Expr::from_stmt_by_ref(*expr.rhs, convert)),
         }
     }
 }

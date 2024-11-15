@@ -12,9 +12,16 @@ impl<'stmt> Expr<'stmt> {
 }
 
 impl<'stmt> ExprRecord<'stmt> {
-    pub(crate) fn from_stmt(stmt: stmt::ExprRecord<'stmt>) -> ExprRecord<'stmt> {
+    pub(crate) fn from_stmt(
+        stmt: stmt::ExprRecord<'stmt>,
+        convert: &mut impl Convert<'stmt>,
+    ) -> ExprRecord<'stmt> {
         ExprRecord {
-            fields: stmt.fields.into_iter().map(Expr::from_stmt).collect(),
+            fields: stmt
+                .fields
+                .into_iter()
+                .map(|stmt| Expr::from_stmt_by_ref(stmt, convert))
+                .collect(),
         }
     }
 

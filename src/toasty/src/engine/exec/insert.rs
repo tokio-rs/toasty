@@ -22,15 +22,8 @@ impl<'stmt> Exec<'_, 'stmt> {
         let output = match &action.output {
             Some(output) => output,
             None => {
-                /*
-                // TODO: process in the background
-                while let Some(res) = res.next().await {
-                    res?;
-                }
-
+                assert!(action.stmt.returning.is_none());
                 return Ok(());
-                */
-                todo!()
             }
         };
 

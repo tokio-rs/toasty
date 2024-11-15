@@ -28,3 +28,12 @@ impl<'stmt> Input<'stmt> for Args<&[Value<'stmt>]> {
         projection.resolve_value(&self.0[expr_arg.position]).clone()
     }
 }
+
+impl<'stmt, const N: usize> Input<'stmt> for [&stmt::Expr<'stmt>; N] {
+    fn resolve_arg(&mut self, expr_arg: &ExprArg, projection: &Projection) -> Value<'stmt> {
+        match projection.resolve_expr(&self[expr_arg.position]) {
+            stmt::Expr::Value(value) => value.clone(),
+            _ => todo!(),
+        }
+    }
+}

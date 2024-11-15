@@ -94,6 +94,19 @@ impl Projection {
         ret
     }
 
+    pub fn resolve_expr<'a, 'stmt>(&self, base: &'a Expr<'stmt>) -> &'a Expr<'stmt> {
+        let mut ret = base;
+
+        for step in self.as_slice() {
+            match ret {
+                Expr::Record(expr) => ret = &expr[step.into_usize()],
+                _ => todo!("ret={ret:#?}; base={base:#?}"),
+            }
+        }
+
+        ret
+    }
+
     pub fn resolves_to(&self, field: impl Into<PathStep>) -> bool {
         let field = field.into();
         let [step] = &self[..] else { return false };

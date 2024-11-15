@@ -187,6 +187,12 @@ impl<'stmt> Default for Value<'stmt> {
     }
 }
 
+impl<'stmt> AsRef<Value<'stmt>> for Value<'stmt> {
+    fn as_ref(&self) -> &Value<'stmt> {
+        self
+    }
+}
+
 impl<'stmt> From<bool> for Value<'stmt> {
     fn from(src: bool) -> Value<'stmt> {
         Value::Bool(src)

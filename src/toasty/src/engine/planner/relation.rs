@@ -115,13 +115,14 @@ impl<'stmt> Planner<'_, 'stmt> {
 
         match stmt {
             stmt::Statement::Insert(mut insert) => {
-                todo!("validate {insert:#?}");
-                /*
-                assert!(
-                    matches!(&insert.values, stmt::Expr::Record(r) if r.len() == 1),
-                    "only one belongs_to should be specified"
-                );
-                */
+                if let stmt::ExprSet::Values(values) = &*insert.source.body {
+                    assert_eq!(1, values.rows.len());
+                }
+
+                // Only returning that makes sense here as that is the type that
+                // "belongs" in this field. We translate it to the key to set
+                // the FK fields in the source model.
+                assert!(matches!(insert.returning, Some(stmt::Returning::Star)));
 
                 // Previous value of returning does nothing in this
                 // context

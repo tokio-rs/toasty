@@ -1,3 +1,6 @@
+mod convert;
+pub use convert::Convert;
+
 mod expr_and;
 pub use expr_and::ExprAnd;
 
@@ -49,15 +52,26 @@ pub enum Expr<'stmt> {
 }
 
 impl<'stmt> Expr<'stmt> {
-    pub fn from_stmt(stmt: stmt::Expr<'stmt>) -> Expr<'stmt> {
+    pub fn convert_stmt(
+        stmt: stmt::Expr<'stmt>,
+        mut convert: impl Convert<'stmt>,
+    ) -> Option<Expr<'stmt>> {
+        Some(Expr::from_stmt_by_ref(stmt, &mut convert))
+    }
+
+    pub(crate) fn from_stmt_by_ref(
+        stmt: stmt::Expr<'stmt>,
+        convert: &mut impl Convert<'stmt>,
+    ) -> Expr<'stmt> {
         match stmt {
             stmt::Expr::Arg(expr) => ExprArg::from_stmt(expr).into(),
-            stmt::Expr::And(expr) => ExprAnd::from_stmt(expr).into(),
-            stmt::Expr::BinaryOp(expr) => ExprBinaryOp::from_stmt(expr).into(),
-            stmt::Expr::Cast(expr) => ExprCast::from_stmt(expr).into(),
-            stmt::Expr::List(expr) => ExprList::from_stmt(expr).into(),
-            stmt::Expr::Project(expr) => ExprProject::from_stmt(expr).into(),
-            stmt::Expr::Record(expr) => ExprRecord::from_stmt(expr).into(),
+            stmt::Expr::And(expr) => ExprAnd::from_stmt(expr, convert).into(),
+            stmt::Expr::BinaryOp(expr) => ExprBinaryOp::from_stmt(expr, convert).into(),
+            stmt::Expr::Cast(expr) => ExprCast::from_stmt(expr, convert).into(),
+            stmt::Expr::Field(expr) => convert.convert_expr_field(expr).unwrap(),
+            stmt::Expr::List(expr) => ExprList::from_stmt(expr, convert).into(),
+            stmt::Expr::Project(expr) => ExprProject::from_stmt(expr, convert).into(),
+            stmt::Expr::Record(expr) => ExprRecord::from_stmt(expr, convert).into(),
             stmt::Expr::Value(expr) => Expr::Value(expr),
             _ => todo!("stmt={:#?}", stmt),
         }
@@ -150,8 +164,8 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt> From<stmt::Value<'stmt>> for Expr<'stmt> {
-    fn from(value: stmt::Value<'stmt>) -> Self {
-        Expr::Value(value)
+impl<'stmt, T: Into<stmt::Expr<'stmt>>> From<T> for Expr<'stmt> {
+    fn from(value: T) -> Self {
+        Expr::from_stmt_by_ref(value.into(), &mut convert::Const)
     }
 }

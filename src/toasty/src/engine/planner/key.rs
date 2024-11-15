@@ -120,7 +120,7 @@ impl<'a> TryConvert<'a> {
             // stmt::Expr::Arg(arg) => eval::Expr::project([arg.position]),
             // TODO: ok for now I guess, but enum should be gone before this point.
             stmt::Expr::Enum(expr_enum) => {
-                let fields = eval::Expr::from_stmt(expr_enum.fields.clone().into());
+                let fields = eval::Expr::from(expr_enum.fields.clone());
                 let stmt::Value::Record(fields) = fields.eval_const() else {
                     todo!()
                 };
@@ -129,7 +129,7 @@ impl<'a> TryConvert<'a> {
                     fields: fields.into_owned(),
                 }))
             }
-            stmt::Expr::List(_) => eval::Expr::from_stmt(expr.clone()),
+            stmt::Expr::List(_) => eval::Expr::from(expr.clone()),
             stmt::Expr::Value(value) => eval::Expr::Value(value.clone()),
             _ => todo!("expr={:#?}", expr),
         }
