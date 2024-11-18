@@ -13,7 +13,7 @@ impl<T: Model> BelongsTo<T> {
         Ok(match input {
             Value::Null => BelongsTo::default(),
             Value::Record(record) => BelongsTo {
-                value: Some(T::load(record.into_owned())?),
+                value: Some(T::load(record)?),
             },
             _ => todo!(),
         })

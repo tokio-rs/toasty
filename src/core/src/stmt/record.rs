@@ -1,46 +1,26 @@
-mod into_iter;
-pub use into_iter::IntoIter;
-
-use crate::stmt::Value;
+use super::*;
 
 use std::ops;
 
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct Record<'stmt> {
-    fields: Vec<Value<'stmt>>,
+#[derive(Debug, Clone)]
+pub enum Record<'stmt> {
+    Borrowed(&'stmt [Value<'stmt>]),
+    Owned(Vec<Value<'stmt>>),
 }
 
 impl<'stmt> Record<'stmt> {
-    pub fn new(width: usize) -> Record<'stmt> {
-        Record::from_vec(vec![Value::Null; width])
+    pub fn new() -> Record<'stmt> {
+        Record::Owned(vec![])
     }
 
     pub fn from_vec(fields: Vec<Value<'stmt>>) -> Record<'stmt> {
-        Record { fields }
+        Record::Owned(fields)
     }
 
-    /// Consume a value.
-    ///
-    /// Attempts to get the same field in the future will return `None`.
-    pub fn take(&mut self, index: usize) -> Value<'stmt> {
-        std::mem::take(&mut self.fields[index])
-    }
-
-    pub fn fields(&self) -> impl ExactSizeIterator<Item = &Value<'stmt>> {
-        self.fields.iter()
-    }
-
-    pub fn into_fields(self) -> IntoIter<'stmt> {
-        self.into_iter()
-    }
-
-    pub fn to_static<'b>(&self) -> Record<'b> {
-        todo!("self={:#?}", self)
-    }
-
-    pub fn into_owned(self) -> Record<'static> {
-        Record {
-            fields: self.fields.into_iter().map(Value::into_owned).collect(),
+    pub fn to_fields(self) -> Vec<Value<'stmt>> {
+        match self {
+            Record::Borrowed(fields) => fields.to_vec(),
+            Record::Owned(fields) => fields,
         }
     }
 }
@@ -49,22 +29,23 @@ impl<'stmt> ops::Deref for Record<'stmt> {
     type Target = [Value<'stmt>];
 
     fn deref(&self) -> &Self::Target {
-        self.fields.deref()
+        match self {
+            Self::Borrowed(v) => v,
+            Self::Owned(v) => v,
+        }
     }
 }
 
 impl<'stmt> ops::DerefMut for Record<'stmt> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.fields.deref_mut()
-    }
-}
+        if let Record::Borrowed(fields) = self {
+            *self = Record::Owned(fields.to_vec());
+        }
 
-impl<'stmt> IntoIterator for Record<'stmt> {
-    type Item = Value<'stmt>;
-    type IntoIter = IntoIter<'stmt>;
-
-    fn into_iter(self) -> IntoIter<'stmt> {
-        IntoIter::new(self.fields)
+        match self {
+            Record::Owned(record) => record,
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -73,6 +54,21 @@ impl<'a, 'stmt> IntoIterator for &'a Record<'stmt> {
     type IntoIter = std::slice::Iter<'a, Value<'stmt>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.fields.iter()
+        self.iter()
+    }
+}
+
+impl<'a, 'stmt> IntoIterator for &'a mut Record<'stmt> {
+    type Item = &'a mut Value<'stmt>;
+    type IntoIter = std::slice::IterMut<'a, Value<'stmt>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
+impl<'stmt> PartialEq for Record<'stmt> {
+    fn eq(&self, other: &Self) -> bool {
+        **self == **other
     }
 }

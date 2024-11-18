@@ -109,14 +109,8 @@ pub use projection::Projection;
 mod query;
 pub use query::Query;
 
-pub mod record;
+mod record;
 pub use record::Record;
-
-mod record_cow;
-pub use record_cow::RecordCow;
-
-mod record_stream;
-pub use record_stream::RecordStream;
 
 mod returning;
 pub use returning::Returning;

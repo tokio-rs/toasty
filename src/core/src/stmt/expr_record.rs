@@ -86,7 +86,7 @@ impl<'stmt> ExprRecord<'stmt> {
                 values.push(value);
             }
 
-            Some(Expr::Value(Value::Record(Record::from_vec(values).into())))
+            Some(Expr::Value(Value::record_from_vec(values)))
         } else {
             None
         }
@@ -165,12 +165,6 @@ impl<'a, 'stmt> IntoIterator for &'a mut ExprRecord<'stmt> {
 impl<'stmt> AsRef<[Expr<'stmt>]> for ExprRecord<'stmt> {
     fn as_ref(&self) -> &[Expr<'stmt>] {
         self.fields.as_ref()
-    }
-}
-
-impl<'stmt> From<Record<'stmt>> for ExprRecord<'stmt> {
-    fn from(src: Record<'stmt>) -> ExprRecord<'stmt> {
-        ExprRecord::from_vec(src.into_iter().map(Into::into).collect())
     }
 }
 

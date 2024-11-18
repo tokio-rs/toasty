@@ -14,12 +14,12 @@ impl<T: Model> HasMany<T> {
             Value::Record(record) => {
                 let mut values = vec![];
 
-                for value in record.into_owned() {
+                for value in record.to_fields() {
                     let Value::Record(record) = value else {
                         panic!("unexpected input; value={value:#?}")
                     };
 
-                    values.push(T::load(record.into_owned())?);
+                    values.push(T::load(record)?);
                 }
 
                 Ok(HasMany {

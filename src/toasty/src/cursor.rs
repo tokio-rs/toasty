@@ -24,7 +24,7 @@ impl<'stmt, M: Model> Cursor<'stmt, M> {
         Some(match self.values.next().await? {
             Ok(stmt::Value::Record(row)) => {
                 self.validate_row(&row);
-                M::load(row.into_owned())
+                M::load(row)
             }
             Ok(_) => todo!(),
             Err(e) => Err(e),

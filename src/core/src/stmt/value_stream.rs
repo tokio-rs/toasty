@@ -116,21 +116,6 @@ impl<'stmt> ValueStream<'stmt> {
         Ok(ret)
     }
 
-    pub async fn collect_records(mut self) -> crate::Result<Vec<Record<'stmt>>> {
-        let mut ret = Vec::with_capacity(self.min_len());
-
-        while let Some(res) = self.next().await {
-            let value = res?;
-
-            ret.push(match value {
-                Value::Record(record) => record.into_owned(),
-                value => Record::from_vec(vec![value]),
-            });
-        }
-
-        Ok(ret)
-    }
-
     pub async fn dup(&mut self) -> crate::Result<ValueStream<'stmt>> {
         self.buffer().await?;
 

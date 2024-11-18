@@ -190,13 +190,13 @@ fn ddb_val(val: &stmt::Value<'_>) -> AttributeValue {
     }
 }
 
-fn ddb_to_val<'a>(ty: &stmt::Type, val: &'a AttributeValue) -> stmt::Value<'a> {
+fn ddb_to_val<'stmt>(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value<'stmt> {
     use stmt::Type;
     use AttributeValue::*;
 
     match (ty, val) {
         (Type::Bool, Bool(val)) => stmt::Value::from(*val),
-        (Type::String, S(val)) => stmt::Value::from(val),
+        (Type::String, S(val)) => stmt::Value::from(val.clone()),
         (Type::I64, N(val)) => stmt::Value::from(val.parse::<i64>().unwrap()),
         (Type::Id(model), S(val)) => stmt::Value::from(stmt::Id::from_string(*model, val.clone())),
         (Type::Enum(..), S(val)) => {
@@ -266,7 +266,7 @@ fn item_to_record<'a, 'stmt>(
         columns
             .map(|column| {
                 if let Some(value) = item.get(&column.name) {
-                    ddb_to_val(&column.ty, value).into_owned()
+                    ddb_to_val(&column.ty, value)
                 } else {
                     stmt::Value::Null
                 }

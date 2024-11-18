@@ -28,7 +28,7 @@ impl<'stmt> ExprInList<'stmt> {
                     return None;
                 }
 
-                Expr::Value(record[0].clone().into_owned())
+                Expr::Value(record[0].clone())
             }
             Expr::Record(expr_record) => {
                 if expr_record.len() != 1 {

@@ -21,7 +21,7 @@ pub enum Value<'stmt> {
     Null,
 
     /// Record value, either borrowed or owned
-    Record(RecordCow<'stmt>),
+    Record(Record<'stmt>),
 
     /// A list of values of the same type
     List(Vec<Value<'stmt>>),
@@ -48,6 +48,10 @@ impl<'stmt> Value<'stmt> {
         matches!(self, Value::Record(_))
     }
 
+    pub fn record_from_vec(fields: Vec<Value<'stmt>>) -> Value<'stmt> {
+        Record::from_vec(fields).into()
+    }
+
     /// The value's type. `None` if the value is null
     pub fn ty(&self) -> Type {
         match self {
@@ -65,21 +69,6 @@ impl<'stmt> Value<'stmt> {
     /// Create a `ValueCow` representing the given boolean value
     pub const fn from_bool(src: bool) -> Value<'stmt> {
         Value::Bool(src)
-    }
-
-    pub fn into_owned(self) -> Value<'static> {
-        match self {
-            Value::Bool(value) => Value::Bool(value),
-            Value::Enum(value) => Value::Enum(value.into_owned()),
-            Value::I64(value) => Value::I64(value),
-            Value::Id(value) => Value::Id(value),
-            Value::Null => Value::Null,
-            Value::Record(value) => Value::Record(value.into_static()),
-            Value::String(value) => Value::String(Cow::Owned(value.into_owned())),
-            Value::List(values) => {
-                Value::List(values.into_iter().map(|v| v.into_owned()).collect())
-            }
-        }
     }
 
     // TODO: switch these to `Option`
@@ -127,7 +116,7 @@ impl<'stmt> Value<'stmt> {
         }
     }
 
-    pub fn to_record(self) -> Result<RecordCow<'stmt>> {
+    pub fn to_record(self) -> Result<Record<'stmt>> {
         match self {
             Self::Record(record) => Ok(record),
             _ => anyhow::bail!("canot convert value to record"),
@@ -150,28 +139,28 @@ impl<'stmt> Value<'stmt> {
 
     pub fn as_record(&self) -> Option<&Record<'_>> {
         match self {
-            Self::Record(record_cow) => Some(&**record_cow),
+            Self::Record(record) => Some(record),
             _ => None,
         }
     }
 
     pub fn expect_record(&self) -> &Record<'stmt> {
         match self {
-            Value::Record(record) => &**record,
+            Value::Record(record) => record,
             _ => panic!(),
         }
     }
 
     pub fn expect_record_mut(&mut self) -> &mut Record<'stmt> {
         match self {
-            Value::Record(record) => &mut **record,
+            Value::Record(record) => record,
             _ => panic!(),
         }
     }
 
     pub fn into_record(self) -> Record<'stmt> {
         match self {
-            Value::Record(record) => record.into_owned(),
+            Value::Record(record) => record,
             _ => panic!(),
         }
     }
@@ -231,6 +220,6 @@ impl<'stmt> From<&i64> for Value<'stmt> {
 
 impl<'stmt> From<Record<'stmt>> for Value<'stmt> {
     fn from(value: Record<'stmt>) -> Self {
-        Value::Record(RecordCow::Owned(value))
+        Value::Record(value)
     }
 }

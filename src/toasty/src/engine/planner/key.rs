@@ -126,7 +126,7 @@ impl<'a> TryConvert<'a> {
                 };
                 eval::Expr::Value(stmt::Value::Enum(stmt::ValueEnum {
                     variant: expr_enum.variant,
-                    fields: fields.into_owned(),
+                    fields: fields,
                 }))
             }
             stmt::Expr::List(_) => eval::Expr::from(expr.clone()),
