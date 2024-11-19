@@ -3,7 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct SetVar {
     pub var: VarId,
-    pub value: Vec<stmt::Value<'static>>,
+    pub value: Vec<stmt::Value>,
 }
 
 /// Identifies a pipeline variable slot

@@ -8,10 +8,10 @@ use super::*;
 // * Queries might mix `insert`, `update`, and `delete`
 // * Since Update may insert, it could trigger the full insertion planning path.
 
-impl<'stmt> Planner<'stmt> {
+impl Planner<'_> {
     // If the update statement requested the result to be returned, then this
     // method returns the var in which it will be stored.
-    pub(super) fn plan_update(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
+    pub(super) fn plan_update(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
         self.simplify_stmt_update(&mut stmt);
 
         let model = self.model(stmt.target.as_model_id());
@@ -91,7 +91,7 @@ impl<'stmt> Planner<'stmt> {
         }
     }
 
-    fn plan_update_sql(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
+    fn plan_update_sql(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
         let model = self.model(stmt.target.as_model_id());
 
         if stmt.assignments.is_empty() {
@@ -128,7 +128,7 @@ impl<'stmt> Planner<'stmt> {
         output_var
     }
 
-    fn plan_update_kv(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
+    fn plan_update_kv(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
         /*
         let model = self.model(stmt.selection.body.as_select().source.as_model_id());
         let table = self.schema.table(model.lowering.table);
@@ -307,7 +307,7 @@ impl<'stmt> Planner<'stmt> {
         todo!();
     }
 
-    fn constantize_update_returning(&self, stmt: &mut Update<'stmt>) {
+    fn constantize_update_returning(&self, stmt: &mut Update) {
         // TODO: probably not worth doing because we have to issue the update
         // statement regardless
         /*

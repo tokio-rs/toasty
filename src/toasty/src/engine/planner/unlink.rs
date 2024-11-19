@@ -1,7 +1,7 @@
 use super::*;
 
-impl<'stmt> Planner<'stmt> {
-    pub(super) fn plan_unlink(&mut self, mut stmt: stmt::Unlink<'stmt>) {
+impl Planner<'_> {
+    pub(super) fn plan_unlink(&mut self, mut stmt: stmt::Unlink) {
         self.simplify_stmt_unlink(&mut stmt);
 
         let model = self.model(stmt.field.model);

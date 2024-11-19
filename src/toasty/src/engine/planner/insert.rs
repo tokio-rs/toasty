@@ -5,12 +5,12 @@ use super::*;
 use std::collections::hash_map::Entry;
 
 /// Process the scope component of an insert statement.
-struct ApplyInsertScope<'a, 'stmt> {
-    expr: &'a mut stmt::Expr<'stmt>,
+struct ApplyInsertScope<'a> {
+    expr: &'a mut stmt::Expr,
 }
 
-impl<'stmt> Planner<'stmt> {
-    pub(super) fn plan_insert(&mut self, mut stmt: stmt::Insert<'stmt>) -> Option<plan::VarId> {
+impl Planner<'_> {
+    pub(super) fn plan_insert(&mut self, mut stmt: stmt::Insert) -> Option<plan::VarId> {
         self.simplify_stmt_insert(&mut stmt);
 
         let model = self.model(stmt.target.as_model_id());
@@ -100,7 +100,7 @@ impl<'stmt> Planner<'stmt> {
         output_var
     }
 
-    fn preprocess_insert_values(&mut self, model: &Model, stmt: &mut stmt::Insert<'stmt>) {
+    fn preprocess_insert_values(&mut self, model: &Model, stmt: &mut stmt::Insert) {
         let stmt::ExprSet::Values(values) = &mut *stmt.source.body else {
             todo!()
         };
@@ -119,7 +119,7 @@ impl<'stmt> Planner<'stmt> {
         }
     }
 
-    fn plan_insert_record(&mut self, model: &Model, mut expr: stmt::Expr<'stmt>, action: usize) {
+    fn plan_insert_record(&mut self, model: &Model, mut expr: stmt::Expr, action: usize) {
         self.plan_insert_relation_stmts(model, &mut expr);
         // TODO: move this to pre-processing step, but it currently depends on
         // planning relation statements which cannot be in preprocessing.
@@ -138,7 +138,7 @@ impl<'stmt> Planner<'stmt> {
     }
 
     // Checks all fields of a record and handles nulls
-    fn apply_insertion_defaults(&mut self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
+    fn apply_insertion_defaults(&mut self, model: &Model, expr: &mut stmt::Expr) {
         // TODO: make this smarter.. a lot smarter
 
         // First, we pad the record to account for all fields
@@ -187,11 +187,7 @@ impl<'stmt> Planner<'stmt> {
         }
     }
 
-    fn verify_non_nullable_fields_have_values(
-        &mut self,
-        model: &Model,
-        expr: &mut stmt::Expr<'stmt>,
-    ) {
+    fn verify_non_nullable_fields_have_values(&mut self, model: &Model, expr: &mut stmt::Expr) {
         for field in &model.fields {
             if field.nullable {
                 continue;
@@ -214,7 +210,7 @@ impl<'stmt> Planner<'stmt> {
         }
     }
 
-    fn plan_insert_relation_stmts(&mut self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
+    fn plan_insert_relation_stmts(&mut self, model: &Model, expr: &mut stmt::Expr) {
         for (i, field) in model.fields.iter().enumerate() {
             if expr[i].is_null() {
                 if !field.nullable && field.ty.is_has_one() {
@@ -277,7 +273,7 @@ impl<'stmt> Planner<'stmt> {
     }
 
     /// Returns a select statement that will select the newly inserted record
-    fn inserted_query_stmt(&self, model: &Model, expr: &stmt::Expr<'stmt>) -> stmt::Query<'stmt> {
+    fn inserted_query_stmt(&self, model: &Model, expr: &stmt::Expr) -> stmt::Query {
         // The owner's primary key
         let mut args = vec![];
 
@@ -289,15 +285,12 @@ impl<'stmt> Planner<'stmt> {
         model.find_by_id(self.schema, stmt::substitute::Args(&args[..]))
     }
 
-    fn apply_insert_scope(&mut self, expr: &mut stmt::Expr<'stmt>, scope: &stmt::Expr<'stmt>) {
+    fn apply_insert_scope(&mut self, expr: &mut stmt::Expr, scope: &stmt::Expr) {
         ApplyInsertScope { expr }.apply(scope);
     }
 
     // TODO: unify with update?
-    fn constantize_insert_returning(
-        &self,
-        stmt: &mut stmt::Insert<'stmt>,
-    ) -> Option<Vec<stmt::Value<'static>>> {
+    fn constantize_insert_returning(&self, stmt: &mut stmt::Insert) -> Option<Vec<stmt::Value>> {
         let Some(stmt::Returning::Expr(returning)) = &stmt.returning else {
             return None;
         };
@@ -308,8 +301,8 @@ impl<'stmt> Planner<'stmt> {
 
         struct ConstReturning;
 
-        impl<'stmt> eval::Convert<'stmt> for ConstReturning {
-            fn convert_expr_field(&mut self, field: stmt::ExprField) -> Option<eval::Expr<'stmt>> {
+        impl eval::Convert for ConstReturning {
+            fn convert_expr_field(&mut self, field: stmt::ExprField) -> Option<eval::Expr> {
                 Some(eval::Expr::arg_project(0, [field.field.index]))
             }
         }
@@ -332,12 +325,12 @@ impl<'stmt> Planner<'stmt> {
     }
 }
 
-impl<'a, 'stmt> ApplyInsertScope<'a, 'stmt> {
-    fn apply(&mut self, expr: &stmt::Expr<'stmt>) {
+impl ApplyInsertScope<'_> {
+    fn apply(&mut self, expr: &stmt::Expr) {
         self.apply_expr(expr, true);
     }
 
-    fn apply_expr(&mut self, stmt: &stmt::Expr<'stmt>, set: bool) {
+    fn apply_expr(&mut self, stmt: &stmt::Expr, set: bool) {
         match stmt {
             stmt::Expr::And(exprs) => {
                 for expr in exprs {
@@ -359,7 +352,7 @@ impl<'a, 'stmt> ApplyInsertScope<'a, 'stmt> {
         }
     }
 
-    fn apply_eq_const(&mut self, field: FieldId, val: &stmt::Value<'stmt>, set: bool) {
+    fn apply_eq_const(&mut self, field: FieldId, val: &stmt::Value, set: bool) {
         let existing = &mut self.expr[field];
 
         if !existing.is_null() {

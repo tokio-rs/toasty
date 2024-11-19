@@ -1,20 +1,20 @@
 use super::*;
 
-struct LiftBelongsTo<'a, 'stmt> {
+struct LiftBelongsTo<'a> {
     belongs_to: &'a BelongsTo,
     // TODO: switch to bit field set
     fk_field_matches: Vec<bool>,
     fail: bool,
-    operands: Vec<stmt::Expr<'stmt>>,
+    operands: Vec<stmt::Expr>,
 }
 
-impl<'db> SimplifyExpr<'db> {
-    pub(crate) fn lift_in_subquery<'stmt>(
+impl<'a> SimplifyExpr<'a> {
+    pub(crate) fn lift_in_subquery(
         &self,
         root: &Model,
-        expr: &stmt::Expr<'stmt>,
-        query: &stmt::Query<'stmt>,
-    ) -> Option<stmt::Expr<'stmt>> {
+        expr: &stmt::Expr,
+        query: &stmt::Query,
+    ) -> Option<stmt::Expr> {
         // The expression is a path expression referencing a relation.
         let field = match expr {
             stmt::Expr::Project(expr_project) => {
@@ -36,11 +36,11 @@ impl<'db> SimplifyExpr<'db> {
         }
     }
 
-    fn lift_belongs_to_in_subquery<'stmt>(
+    fn lift_belongs_to_in_subquery(
         &self,
         belongs_to: &BelongsTo,
-        query: &stmt::Query<'stmt>,
-    ) -> Option<stmt::Expr<'stmt>> {
+        query: &stmt::Query,
+    ) -> Option<stmt::Expr> {
         if belongs_to.target != query.body.as_select().source.as_model_id() {
             return None;
         }
@@ -91,11 +91,11 @@ impl<'db> SimplifyExpr<'db> {
     }
 
     /// Rewrite the `HasOne` in subquery expression to reference the foreign key.
-    fn lift_has_one_in_subquery<'stmt>(
+    fn lift_has_one_in_subquery(
         &self,
         has_one: &HasOne,
-        query: &stmt::Query<'stmt>,
-    ) -> Option<stmt::Expr<'stmt>> {
+        query: &stmt::Query,
+    ) -> Option<stmt::Expr> {
         if has_one.target != query.body.as_select().source.as_model_id() {
             return None;
         }
@@ -129,8 +129,8 @@ impl<'db> SimplifyExpr<'db> {
     }
 }
 
-impl<'a, 'stmt> stmt::Visit<'stmt> for LiftBelongsTo<'a, 'stmt> {
-    fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp<'stmt>) {
+impl stmt::Visit for LiftBelongsTo<'_> {
+    fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         match (&*i.lhs, &*i.rhs) {
             (stmt::Expr::Field(expr_field), other) | (other, stmt::Expr::Field(expr_field)) => {
                 assert!(i.op.is_eq());
@@ -141,8 +141,8 @@ impl<'a, 'stmt> stmt::Visit<'stmt> for LiftBelongsTo<'a, 'stmt> {
     }
 }
 
-impl<'a, 'stmt> LiftBelongsTo<'a, 'stmt> {
-    fn lift_fk_constraint(&mut self, field: FieldId, expr: &stmt::Expr<'stmt>) {
+impl LiftBelongsTo<'_> {
+    fn lift_fk_constraint(&mut self, field: FieldId, expr: &stmt::Expr) {
         for (i, fk_field) in self.belongs_to.foreign_key.fields.iter().enumerate() {
             if fk_field.target == field {
                 if self.fk_field_matches[i] {

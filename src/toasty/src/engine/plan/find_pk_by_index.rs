@@ -17,7 +17,7 @@ pub(crate) struct FindPkByIndex {
     pub index: IndexId,
 
     /// Filter to apply to index
-    pub filter: stmt::Expr<'static>,
+    pub filter: stmt::Expr,
 }
 
 impl FindPkByIndex {

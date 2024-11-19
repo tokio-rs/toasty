@@ -1,7 +1,7 @@
 use super::*;
 
-impl<'stmt> Exec<'stmt> {
-    pub(super) async fn exec_get_by_key(&mut self, action: &plan::GetByKey<'stmt>) -> Result<()> {
+impl Exec<'_> {
+    pub(super) async fn exec_get_by_key(&mut self, action: &plan::GetByKey) -> Result<()> {
         // Compute the keys to get
         let keys = self
             .collect_keys_from_input(&action.keys, &action.input)

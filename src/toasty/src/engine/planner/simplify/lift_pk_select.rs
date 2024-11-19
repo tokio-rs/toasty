@@ -3,11 +3,11 @@ use super::*;
 use toasty_core::schema::*;
 
 // TODO: move this to a better location
-pub(crate) fn lift_key_select<'stmt>(
+pub(crate) fn lift_key_select(
     schema: &Schema,
     key: &[FieldId],
-    stmt: &stmt::Query<'stmt>,
-) -> Option<stmt::Expr<'stmt>> {
+    stmt: &stmt::Query,
+) -> Option<stmt::Expr> {
     let stmt::ExprSet::Select(select) = &*stmt.body else {
         return None;
     };

@@ -2,8 +2,8 @@ use super::*;
 
 use crate::driver::Rows;
 
-impl<'stmt> Exec<'stmt> {
-    pub(super) async fn exec_query_sql(&mut self, action: &plan::QuerySql<'stmt>) -> Result<()> {
+impl Exec<'_> {
+    pub(super) async fn exec_query_sql(&mut self, action: &plan::QuerySql) -> Result<()> {
         let mut sql = action.stmt.clone();
 
         if !action.input.is_empty() {

@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'stmt> Planner<'stmt> {
+impl Planner<'_> {
     pub(super) fn verify_action(&self, action: &plan::Action) {
         use plan::Action::*;
 
@@ -40,15 +40,15 @@ impl<'stmt> Planner<'stmt> {
 
     fn verify_find_pk_by_index(&self, _action: &plan::FindPkByIndex) {}
 
-    fn verify_get_by_key(&self, _action: &plan::GetByKey<'stmt>) {}
+    fn verify_get_by_key(&self, _action: &plan::GetByKey) {}
 
-    fn verify_insert(&self, _action: &plan::Insert<'stmt>) {}
+    fn verify_insert(&self, _action: &plan::Insert) {}
 
-    fn verify_query_pk(&self, _action: &plan::QueryPk<'stmt>) {}
+    fn verify_query_pk(&self, _action: &plan::QueryPk) {}
 
-    fn verify_query_sql(&self, _action: &plan::QuerySql<'stmt>) {}
+    fn verify_query_sql(&self, _action: &plan::QuerySql) {}
 
-    fn verify_update_by_key(&self, _action: &plan::UpdateByKey<'stmt>) {}
+    fn verify_update_by_key(&self, _action: &plan::UpdateByKey) {}
 
-    fn verify_set_var(&self, _action: &plan::SetVar<'stmt>) {}
+    fn verify_set_var(&self, _action: &plan::SetVar) {}
 }

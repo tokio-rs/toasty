@@ -3,39 +3,39 @@ use super::*;
 use std::{fmt, marker::PhantomData};
 
 // TODO: rename to Query?
-pub struct Select<'a, M> {
+pub struct Select<M> {
     /// How to filter the data source
-    pub(crate) untyped: stmt::Query<'a>,
+    pub(crate) untyped: stmt::Query,
 
     _p: PhantomData<M>,
 }
 
-impl<'a, M: Model> Select<'a, M> {
-    pub fn unit() -> Select<'a, M> {
+impl<M: Model> Select<M> {
+    pub fn unit() -> Select<M> {
         Select {
             untyped: stmt::Query::unit(),
             _p: PhantomData,
         }
     }
 
-    pub(crate) const fn from_untyped(untyped: stmt::Query<'a>) -> Select<'a, M> {
+    pub(crate) const fn from_untyped(untyped: stmt::Query) -> Select<M> {
         Select {
             untyped,
             _p: PhantomData,
         }
     }
 
-    pub fn from_expr(expr: Expr<'a, bool>) -> Select<'a, M> {
+    pub fn from_expr(expr: Expr<bool>) -> Select<M> {
         Select::from_untyped(stmt::Query::filter(M::ID, expr.untyped))
     }
 
     // TODO: why are these by value?
-    pub fn and(mut self, filter: Expr<'a, bool>) -> Select<'a, M> {
+    pub fn and(mut self, filter: Expr<bool>) -> Select<M> {
         self.untyped.and(filter.untyped);
         self
     }
 
-    pub fn union(mut self, other: Select<'a, M>) -> Select<'a, M> {
+    pub fn union(mut self, other: Select<M>) -> Select<M> {
         self.untyped.union(other.untyped);
         self
     }
@@ -46,27 +46,27 @@ impl<'a, M: Model> Select<'a, M> {
     }
 
     // TODO: not quite right
-    pub fn delete(self) -> Statement<'a, M> {
+    pub fn delete(self) -> Statement<M> {
         Delete::from_untyped(self.untyped.delete()).into()
     }
 }
 
-impl<M: Model> Select<'static, M> {
-    pub fn all() -> Select<'static, M> {
+impl<M: Model> Select<M> {
+    pub fn all() -> Select<M> {
         let filter = stmt::Expr::Value(Value::from_bool(true));
         Select::from_untyped(stmt::Query::filter(M::ID, filter))
     }
 }
 
-impl<'a, M: Model> IntoSelect<'a> for &'a Select<'_, M> {
+impl<M: Model> IntoSelect for &Select<M> {
     type Model = M;
 
-    fn into_select(self) -> Select<'a, M> {
+    fn into_select(self) -> Select<M> {
         self.clone()
     }
 }
 
-impl<M> Clone for Select<'_, M> {
+impl<M> Clone for Select<M> {
     fn clone(&self) -> Self {
         Select {
             untyped: self.untyped.clone(),
@@ -75,7 +75,7 @@ impl<M> Clone for Select<'_, M> {
     }
 }
 
-impl<'a, M> fmt::Debug for Select<'a, M> {
+impl<M> fmt::Debug for Select<M> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.untyped.fmt(fmt)
     }

@@ -32,12 +32,12 @@ use std::collections::HashMap;
 use super::exec;
 
 #[derive(Debug)]
-struct Planner<'stmt> {
+struct Planner<'a> {
     /// Database schema
-    schema: &'stmt Schema,
+    schema: &'a Schema,
 
     /// Database capabilities
-    capability: &'stmt Capability,
+    capability: &'a Capability,
 
     /// Table of record stream slots. Used to figure out where to store outputs
     /// of actions.
@@ -73,11 +73,7 @@ struct Insertion {
     action: usize,
 }
 
-pub(crate) fn apply<'stmt>(
-    capability: &Capability,
-    schema: &Schema,
-    stmt: stmt::Statement<'stmt>,
-) -> Plan {
+pub(crate) fn apply(capability: &Capability, schema: &Schema, stmt: stmt::Statement) -> Plan {
     let mut planner = Planner {
         capability,
         schema,
@@ -94,9 +90,9 @@ pub(crate) fn apply<'stmt>(
     planner.build()
 }
 
-impl<'stmt> Planner<'stmt> {
+impl<'a> Planner<'a> {
     /// Entry point to plan the root statement.
-    fn plan_stmt(&mut self, stmt: stmt::Statement<'stmt>) {
+    fn plan_stmt(&mut self, stmt: stmt::Statement) {
         match stmt {
             stmt::Statement::Delete(stmt) => self.plan_delete(stmt),
             stmt::Statement::Link(stmt) => self.plan_link(stmt),
@@ -150,7 +146,7 @@ impl<'stmt> Planner<'stmt> {
         }
     }
 
-    fn set_var(&mut self, value: Vec<stmt::Value<'static>>) -> plan::VarId {
+    fn set_var(&mut self, value: Vec<stmt::Value>) -> plan::VarId {
         let var = self.var_table.register_var();
 
         self.push_action(plan::SetVar { var, value });
@@ -170,7 +166,7 @@ impl<'stmt> Planner<'stmt> {
         self.write_actions.push(action);
     }
 
-    pub(crate) fn take_const_var(&mut self, var: plan::VarId) -> Vec<stmt::Value<'stmt>> {
+    pub(crate) fn take_const_var(&mut self, var: plan::VarId) -> Vec<stmt::Value> {
         let Some(action) = self.actions.pop() else {
             todo!()
         };
@@ -184,7 +180,7 @@ impl<'stmt> Planner<'stmt> {
         action.value
     }
 
-    fn model(&self, id: impl Into<ModelId>) -> &'stmt Model {
+    fn model(&self, id: impl Into<ModelId>) -> &'a Model {
         self.schema.model(id)
     }
 }

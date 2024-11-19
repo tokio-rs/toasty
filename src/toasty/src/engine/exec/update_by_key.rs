@@ -1,10 +1,7 @@
 use super::*;
 
-impl<'stmt> Exec<'stmt> {
-    pub(super) async fn exec_update_by_key(
-        &mut self,
-        action: &plan::UpdateByKey<'stmt>,
-    ) -> Result<()> {
+impl Exec<'_> {
+    pub(super) async fn exec_update_by_key(&mut self, action: &plan::UpdateByKey) -> Result<()> {
         let op = if let Some(input) = action.input {
             let mut input = self.vars.load(input);
 

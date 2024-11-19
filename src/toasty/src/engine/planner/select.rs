@@ -7,14 +7,14 @@ pub(super) struct Context {
     input: Vec<plan::Input>,
 }
 
-impl<'stmt> Planner<'stmt> {
+impl Planner<'_> {
     /// Plan a select statement, returning the variable ID where the output will
     /// be stored.
-    pub(super) fn plan_select(&mut self, stmt: stmt::Query<'stmt>) -> plan::VarId {
+    pub(super) fn plan_select(&mut self, stmt: stmt::Query) -> plan::VarId {
         self.plan_select2(&Context::default(), stmt)
     }
 
-    fn plan_select2(&mut self, cx: &Context, mut stmt: stmt::Query<'stmt>) -> plan::VarId {
+    fn plan_select2(&mut self, cx: &Context, mut stmt: stmt::Query) -> plan::VarId {
         self.simplify_stmt_query(&mut stmt);
         self.plan_simplified_select(cx, stmt)
     }
@@ -22,7 +22,7 @@ impl<'stmt> Planner<'stmt> {
     pub(super) fn plan_simplified_select(
         &mut self,
         cx: &Context,
-        stmt: stmt::Query<'stmt>,
+        stmt: stmt::Query,
     ) -> plan::VarId {
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
@@ -52,7 +52,7 @@ impl<'stmt> Planner<'stmt> {
         &mut self,
         cx: &Context,
         model: &Model,
-        mut stmt: stmt::Query<'stmt>,
+        mut stmt: stmt::Query,
     ) -> plan::VarId {
         let table = self.schema.table(model.lowering.table);
 
@@ -74,12 +74,7 @@ impl<'stmt> Planner<'stmt> {
         output
     }
 
-    fn plan_select_kv(
-        &mut self,
-        cx: &Context,
-        model: &Model,
-        stmt: stmt::Query<'stmt>,
-    ) -> plan::VarId {
+    fn plan_select_kv(&mut self, cx: &Context, model: &Model, stmt: stmt::Query) -> plan::VarId {
         let table = self.schema.table(model.lowering.table);
         /*
 

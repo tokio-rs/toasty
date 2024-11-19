@@ -34,49 +34,49 @@ impl<T: ?Sized> Path<T> {
         }
     }
 
-    pub fn eq<'a>(self, rhs: impl IntoExpr<'a, T>) -> Expr<'a, bool> {
+    pub fn eq(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::eq(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn ne<'a>(self, rhs: impl IntoExpr<'a, T>) -> Expr<'a, bool> {
+    pub fn ne(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::ne(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn gt<'a>(self, rhs: impl IntoExpr<'a, T>) -> Expr<'a, bool> {
+    pub fn gt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::gt(self.untyped.into_stmt(), rhs.into_expr().untyped).into(),
             _p: PhantomData,
         }
     }
 
-    pub fn ge<'a>(self, rhs: impl IntoExpr<'a, T>) -> Expr<'a, bool> {
+    pub fn ge(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::ge(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn lt<'a>(self, rhs: impl IntoExpr<'a, T>) -> Expr<'a, bool> {
+    pub fn lt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::lt(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn le<'a>(self, rhs: impl IntoExpr<'a, T>) -> Expr<'a, bool> {
+    pub fn le(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         Expr {
             untyped: stmt::Expr::le(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }
 
-    pub fn in_set<'a>(self, rhs: impl IntoExpr<'a, [T]>) -> Expr<'a, bool>
+    pub fn in_set(self, rhs: impl IntoExpr<[T]>) -> Expr<bool>
     where
         T: Sized,
     {
@@ -86,7 +86,7 @@ impl<T: ?Sized> Path<T> {
         }
     }
 
-    pub fn in_query<'a>(self, rhs: impl IntoSelect<'a, Model = T>) -> Expr<'a, bool>
+    pub fn in_query(self, rhs: impl IntoSelect<Model = T>) -> Expr<bool>
     where
         T: Sized,
     {
@@ -117,8 +117,8 @@ impl<M> Path<M> {
     */
 }
 
-impl<'stmt, T> IntoExpr<'stmt, T> for Path<T> {
-    fn into_expr(self) -> Expr<'stmt, T> {
+impl<T> IntoExpr<T> for Path<T> {
+    fn into_expr(self) -> Expr<T> {
         Expr {
             untyped: self.untyped.into_stmt(),
             _p: PhantomData,

@@ -16,12 +16,12 @@ pub(crate) struct UpdateByKey {
     pub key: eval::Expr,
 
     /// Assignments
-    pub assignments: stmt::Assignments<'static>,
+    pub assignments: stmt::Assignments,
 
     /// Only update keys that match the filter
-    pub filter: Option<stmt::Expr<'static>>,
+    pub filter: Option<stmt::Expr>,
 
-    pub condition: Option<stmt::Expr<'static>>,
+    pub condition: Option<stmt::Expr>,
 }
 
 impl UpdateByKey {

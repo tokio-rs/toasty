@@ -9,7 +9,7 @@ pub(crate) struct Insert {
     pub output: Option<InsertOutput>,
 
     /// The insert statement
-    pub stmt: stmt::Insert<'static>,
+    pub stmt: stmt::Insert,
 }
 
 #[derive(Debug)]

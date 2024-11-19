@@ -11,12 +11,12 @@ use std::collections::hash_map;
 
  */
 
-impl<'stmt> Planner<'stmt> {
-    pub(crate) fn plan_index_path2<'a>(
+impl<'a> Planner<'a> {
+    pub(crate) fn plan_index_path2(
         &mut self,
         model: &'a Model,
-        filter: &'a stmt::Expr<'stmt>,
-    ) -> IndexPlan<'a, 'stmt> {
+        filter: &'a stmt::Expr,
+    ) -> IndexPlan<'a> {
         let mut index_planner = IndexPlanner {
             model,
             filter,
@@ -60,45 +60,45 @@ impl<'stmt> Planner<'stmt> {
 }
 
 #[derive(Debug)]
-pub(crate) struct IndexPlan<'a, 'stmt> {
+pub(crate) struct IndexPlan<'a> {
     /// The index to use to execute the query
     pub(crate) index: &'a ModelIndex,
 
     /// Filter to apply to the index
-    pub(crate) index_filter: stmt::Expr<'stmt>,
+    pub(crate) index_filter: stmt::Expr,
 
     /// How to filter results after applying the index filter
-    pub(crate) result_filter: Option<stmt::Expr<'stmt>>,
+    pub(crate) result_filter: Option<stmt::Expr>,
 
     /// True if we have to apply the result filter our self
-    pub(crate) post_filter: Option<stmt::Expr<'stmt>>,
+    pub(crate) post_filter: Option<stmt::Expr>,
 }
 
-struct IndexPlanner<'a, 'stmt> {
+struct IndexPlanner<'a> {
     model: &'a Model,
 
     /// Query filter
-    filter: &'a stmt::Expr<'stmt>,
+    filter: &'a stmt::Expr,
 
     /// Matches clauses in the filter with available indices
-    index_matches: Vec<IndexMatch<'a, 'stmt>>,
+    index_matches: Vec<IndexMatch<'a>>,
 
     /// Possible ways to execute the query using one or more index
     index_paths: Vec<IndexPath>,
 }
 
 #[derive(Debug)]
-struct IndexMatch<'a, 'stmt> {
+struct IndexMatch<'a> {
     /// The index in question
     index: &'a ModelIndex,
 
     /// Restriction matches for each field
-    fields: Vec<IndexFieldMatch<'a, 'stmt>>,
+    fields: Vec<IndexFieldMatch<'a>>,
 }
 
 #[derive(Debug)]
-struct IndexFieldMatch<'a, 'stmt> {
-    exprs: HashMap<ByAddress<&'a stmt::Expr<'stmt>>, ExprMatch>,
+struct IndexFieldMatch<'a> {
+    exprs: HashMap<ByAddress<&'a stmt::Expr>, ExprMatch>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -112,14 +112,14 @@ struct IndexPath {
     cost: usize,
 }
 
-type ExprPair<'stmt> = (stmt::Expr<'stmt>, stmt::Expr<'stmt>);
+type ExprPair = (stmt::Expr, stmt::Expr);
 
 struct PartitionCtx<'a> {
     capability: &'a capability::KeyValue,
     apply_result_filter_on_results: bool,
 }
 
-impl<'a, 'stmt> IndexPlanner<'a, 'stmt> {
+impl<'a> IndexPlanner<'a> {
     fn plan_index_path(&mut self) -> IndexPath {
         // A preprocessing step that matches filter clauses to various index fields.
         self.build_index_matches();
@@ -180,8 +180,8 @@ impl<'a, 'stmt> IndexPlanner<'a, 'stmt> {
     }
 }
 
-impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
-    fn match_restriction(&mut self, expr: &'a stmt::Expr<'stmt>) -> bool {
+impl<'a> IndexMatch<'a> {
+    fn match_restriction(&mut self, expr: &'a stmt::Expr) -> bool {
         use stmt::Expr::*;
 
         match expr {
@@ -264,7 +264,7 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
 
     /// Returns true if **any** expression in the provided list match with
     /// **any** index field.
-    fn match_all_restrictions(&mut self, exprs: &'a [stmt::Expr<'stmt>]) -> bool {
+    fn match_all_restrictions(&mut self, exprs: &'a [stmt::Expr]) -> bool {
         let mut matched = false;
 
         for expr in exprs {
@@ -274,11 +274,7 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
         matched
     }
 
-    fn match_expr_in_list(
-        &mut self,
-        lhs: &'a stmt::Expr<'stmt>,
-        expr: &'a stmt::Expr<'stmt>,
-    ) -> bool {
+    fn match_expr_in_list(&mut self, lhs: &'a stmt::Expr, expr: &'a stmt::Expr) -> bool {
         match lhs {
             stmt::Expr::Project(path) => {
                 self.match_expr_binary_op_project(path, expr, stmt::BinaryOp::Eq)
@@ -315,7 +311,7 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
     fn match_expr_binary_op_project(
         &mut self,
         project: &stmt::ExprProject,
-        expr: &'a stmt::Expr<'stmt>,
+        expr: &'a stmt::Expr,
         op: stmt::BinaryOp,
     ) -> bool {
         let mut matched = false;
@@ -343,7 +339,7 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
     }
 
     /// Copute the cost of using this index match to execute the query.
-    fn compute_cost(&self, filter: &stmt::Expr<'stmt>) -> usize {
+    fn compute_cost(&self, filter: &stmt::Expr) -> usize {
         // TODO: factor in post query in-memory filtering.
         if self.index.unique {
             let mut cost = 0;
@@ -367,11 +363,7 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
         }
     }
 
-    fn partition_filter(
-        &self,
-        ctx: &mut PartitionCtx<'_>,
-        expr: &stmt::Expr<'stmt>,
-    ) -> ExprPair<'stmt> {
+    fn partition_filter(&self, ctx: &mut PartitionCtx<'_>, expr: &stmt::Expr) -> ExprPair {
         use stmt::Expr::*;
 
         match expr {

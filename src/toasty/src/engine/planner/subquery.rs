@@ -1,39 +1,29 @@
 use super::*;
 
-struct PlanSubqueries<'a, 'stmt> {
-    planner: &'a mut Planner<'stmt>,
-}
-
-impl<'stmt> Planner<'stmt> {
+impl Planner<'_> {
     /// Walk the statement, find subqueries, and plan them independently.
     ///
     /// At this point, the expression should have been simplified to the point
     /// that subqueries are actually required to be executed separately.
-    pub(super) fn plan_subqueries<T: stmt::Node<'stmt>>(&mut self, stmt: &T) {
-        PlanSubqueries { planner: self }.visit(stmt);
+    pub(super) fn plan_subqueries<T: stmt::Node>(&mut self, stmt: &T) {
+        stmt::visit::for_each_expr(stmt, |expr| {
+            if let stmt::Expr::InSubquery(expr) = expr {
+                // The subquery has already been simplified
+                // TODO: don't clone
+                let output =
+                    self.plan_simplified_select(&select::Context::default(), (*expr.query).clone());
+
+                // Track the output of the subquery
+                self.subqueries
+                    .insert(&*expr.query as *const _ as usize, output);
+            }
+        });
     }
 
-    pub(super) fn subquery_var(&self, subquery: &stmt::Query<'stmt>) -> plan::VarId {
+    pub(super) fn subquery_var(&self, subquery: &stmt::Query) -> plan::VarId {
         self.subqueries
             .get(&(subquery as *const _ as usize))
             .copied()
             .unwrap()
-    }
-}
-
-impl<'stmt> stmt::Visit<'stmt> for PlanSubqueries<'_, 'stmt> {
-    fn visit_expr_in_subquery(&mut self, i: &stmt::ExprInSubquery<'stmt>) {
-        stmt::visit::visit_expr_in_subquery(self, i);
-
-        // The subquery has already been simplified
-        // TODO: don't clone
-        let output = self
-            .planner
-            .plan_simplified_select(&select::Context::default(), (*i.query).clone());
-
-        // Track the output of the subquery
-        self.planner
-            .subqueries
-            .insert(&*i.query as *const _ as usize, output);
     }
 }

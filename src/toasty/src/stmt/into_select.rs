@@ -1,32 +1,32 @@
 use super::*;
 
-pub trait IntoSelect<'stmt> {
+pub trait IntoSelect {
     type Model: Model;
 
-    fn into_select(self) -> Select<'stmt, Self::Model>;
+    fn into_select(self) -> Select<Self::Model>;
 }
 
 pub trait AsSelect {
     type Model: Model;
 
-    fn as_select(&self) -> Select<'_, Self::Model>;
+    fn as_select(&self) -> Select<Self::Model>;
 }
 
-impl<'stmt, M: Model> IntoSelect<'stmt> for Select<'stmt, M> {
+impl<M: Model> IntoSelect for Select<M> {
     type Model = M;
 
-    fn into_select(self) -> Select<'stmt, Self::Model> {
+    fn into_select(self) -> Select<Self::Model> {
         self
     }
 }
 
-impl<'a, T> IntoSelect<'a> for &'a [T]
+impl<T> IntoSelect for &[T]
 where
     T: AsSelect,
 {
     type Model = T::Model;
 
-    fn into_select(self) -> Select<'a, Self::Model> {
+    fn into_select(self) -> Select<Self::Model> {
         match self.len() {
             0 => todo!(),
             1 => self[0].as_select(),
@@ -38,13 +38,13 @@ where
 }
 
 // TODO: make this a macro
-impl<'a, T> IntoSelect<'a> for &'a [T; 3]
+impl<T, const N: usize> IntoSelect for &[T; N]
 where
     T: AsSelect,
 {
     type Model = T::Model;
 
-    fn into_select(self) -> Select<'a, Self::Model> {
+    fn into_select(self) -> Select<Self::Model> {
         (&self[..]).into_select()
     }
 }

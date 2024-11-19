@@ -2,17 +2,17 @@ use super::*;
 
 use std::{fmt, marker::PhantomData};
 
-pub struct Link<'stmt, M: ?Sized> {
-    pub(crate) untyped: stmt::Link<'stmt>,
+pub struct Link<M: ?Sized> {
+    pub(crate) untyped: stmt::Link,
     _p: PhantomData<M>,
 }
 
-impl<'stmt, M: Model + ?Sized> Link<'stmt, M> {
+impl<M: Model + ?Sized> Link<M> {
     pub fn new<T: Model>(
-        source: impl IntoSelect<'stmt, Model = M>,
+        source: impl IntoSelect<Model = M>,
         path: impl Into<Path<[T]>>,
-        expr: impl IntoSelect<'stmt, Model = T>,
-    ) -> Link<'stmt, M> {
+        expr: impl IntoSelect<Model = T>,
+    ) -> Link<M> {
         let path = path.into();
         let source = source.into_select().untyped;
         let target = expr.into_select().untyped;
@@ -28,8 +28,8 @@ impl<'stmt, M: Model + ?Sized> Link<'stmt, M> {
     }
 }
 
-impl<'a, M> From<Link<'a, M>> for Statement<'a, M> {
-    fn from(value: Link<'a, M>) -> Self {
+impl<M> From<Link<M>> for Statement<M> {
+    fn from(value: Link<M>) -> Self {
         Statement {
             untyped: value.untyped.into(),
             _p: PhantomData,
@@ -37,7 +37,7 @@ impl<'a, M> From<Link<'a, M>> for Statement<'a, M> {
     }
 }
 
-impl<'a, M> fmt::Debug for Link<'a, M> {
+impl<M> fmt::Debug for Link<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.untyped.fmt(f)
     }

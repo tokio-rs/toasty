@@ -9,12 +9,12 @@ pub struct HasMany<T> {
 }
 
 impl<T: Model> HasMany<T> {
-    pub fn load(input: Value<'_>) -> crate::Result<HasMany<T>> {
+    pub fn load(input: Value) -> crate::Result<HasMany<T>> {
         match input {
             Value::Record(record) => {
                 let mut values = vec![];
 
-                for value in record.to_fields() {
+                for value in record.fields {
                     let Value::Record(record) = value else {
                         panic!("unexpected input; value={value:#?}")
                     };

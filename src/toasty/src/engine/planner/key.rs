@@ -5,20 +5,20 @@ struct TryConvert<'a> {
     index: &'a Index,
 }
 
-impl<'stmt> Planner<'stmt> {
+impl Planner<'_> {
     /// If the expression is shaped like a key expression, then convert it to
     /// one.
     pub(crate) fn try_build_key_filter(
         &self,
         index: &Index,
-        expr: &stmt::Expr<'stmt>,
+        expr: &stmt::Expr,
     ) -> Option<eval::Expr> {
         TryConvert { index }.try_convert(expr)
     }
 }
 
 impl<'a> TryConvert<'a> {
-    fn try_convert<'stmt>(&self, expr: &stmt::Expr<'stmt>) -> Option<eval::Expr> {
+    fn try_convert(&self, expr: &stmt::Expr) -> Option<eval::Expr> {
         use stmt::Expr::*;
 
         match expr {
@@ -115,7 +115,7 @@ impl<'a> TryConvert<'a> {
         }
     }
 
-    fn expr_arg_to_project<'stmt>(&self, expr: &stmt::Expr<'stmt>) -> eval::Expr {
+    fn expr_arg_to_project(&self, expr: &stmt::Expr) -> eval::Expr {
         match expr {
             // stmt::Expr::Arg(arg) => eval::Expr::project([arg.position]),
             // TODO: ok for now I guess, but enum should be gone before this point.
@@ -135,7 +135,7 @@ impl<'a> TryConvert<'a> {
         }
     }
 
-    fn is_key_projection(&self, expr: &stmt::Expr<'_>) -> bool {
+    fn is_key_projection(&self, expr: &stmt::Expr) -> bool {
         match expr {
             stmt::Expr::Project(_) if self.index.columns.len() == 1 => true,
             stmt::Expr::Record(expr_record) if self.index.columns.len() == expr_record.len() => {

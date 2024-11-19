@@ -1,10 +1,7 @@
 use super::*;
 
-impl<'stmt> Exec<'stmt> {
-    pub(super) async fn exec_batch_write(
-        &mut self,
-        action: &plan::BatchWrite<'stmt>,
-    ) -> Result<()> {
+impl Exec<'_> {
+    pub(super) async fn exec_batch_write(&mut self, action: &plan::BatchWrite) -> Result<()> {
         // TODO: actually batch!
         for step in &action.items {
             match step {

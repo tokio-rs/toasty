@@ -3,22 +3,22 @@ use toasty_core::schema::FieldId;
 
 use std::{fmt, marker::PhantomData};
 
-pub struct Update<'a, M> {
-    pub(crate) untyped: stmt::Update<'a>,
+pub struct Update<M> {
+    pub(crate) untyped: stmt::Update,
     _p: PhantomData<M>,
 }
 
-impl<'a, M: Model> Update<'a, M> {
-    pub fn new<S>(selection: S) -> Update<'a, M>
+impl<M: Model> Update<M> {
+    pub fn new<S>(selection: S) -> Update<M>
     where
-        S: IntoSelect<'a, Model = M>,
+        S: IntoSelect<Model = M>,
     {
         let mut stmt = Update::default();
         stmt.set_selection(selection);
         stmt
     }
 
-    pub const fn from_untyped(untyped: stmt::Update<'a>) -> Update<'a, M> {
+    pub const fn from_untyped(untyped: stmt::Update) -> Update<M> {
         Update {
             untyped,
             _p: PhantomData,
@@ -26,15 +26,15 @@ impl<'a, M: Model> Update<'a, M> {
     }
 
     /// Set the value of a specific field
-    pub fn set(&mut self, field: usize, value: stmt::Value<'a>) {
+    pub fn set(&mut self, field: usize, value: stmt::Value) {
         self.set_expr(field, value);
     }
 
-    pub fn set_expr(&mut self, field: usize, expr: impl Into<stmt::Expr<'a>>) {
+    pub fn set_expr(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.set(field, expr);
     }
 
-    pub fn push_expr(&mut self, field: usize, expr: impl Into<stmt::Expr<'a>>) {
+    pub fn push_expr(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
         /*
         self.untyped.fields.insert(field);
         self.untyped.expr[field].push(expr);
@@ -44,7 +44,7 @@ impl<'a, M: Model> Update<'a, M> {
 
     pub fn set_selection<S>(&mut self, selection: S)
     where
-        S: IntoSelect<'a, Model = M>,
+        S: IntoSelect<Model = M>,
     {
         let select = selection.into_select().untyped;
 
@@ -65,7 +65,7 @@ impl<'a, M: Model> Update<'a, M> {
     }
 }
 
-impl<M> Clone for Update<'_, M> {
+impl<M> Clone for Update<M> {
     fn clone(&self) -> Self {
         Update {
             untyped: self.untyped.clone(),
@@ -74,7 +74,7 @@ impl<M> Clone for Update<'_, M> {
     }
 }
 
-impl<'a, M: Model> Default for Update<'a, M> {
+impl<M: Model> Default for Update<M> {
     fn default() -> Self {
         Update {
             untyped: stmt::Update {
@@ -89,19 +89,19 @@ impl<'a, M: Model> Default for Update<'a, M> {
     }
 }
 
-impl<'a, M> AsRef<stmt::Update<'a>> for Update<'a, M> {
-    fn as_ref(&self) -> &stmt::Update<'a> {
+impl<M> AsRef<stmt::Update> for Update<M> {
+    fn as_ref(&self) -> &stmt::Update {
         &self.untyped
     }
 }
 
-impl<'a, M> AsMut<stmt::Update<'a>> for Update<'a, M> {
-    fn as_mut(&mut self) -> &mut stmt::Update<'a> {
+impl<M> AsMut<stmt::Update> for Update<M> {
+    fn as_mut(&mut self) -> &mut stmt::Update {
         &mut self.untyped
     }
 }
 
-impl<'a, M> fmt::Debug for Update<'a, M> {
+impl<M> fmt::Debug for Update<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.untyped.fmt(f)
     }

@@ -372,7 +372,7 @@ impl<'a> Generator<'a> {
         &self,
         mid: ModelId,
         args: &[TokenStream],
-        filter: &stmt::Expr<'static>,
+        filter: &stmt::Expr,
         depth: usize,
     ) -> TokenStream {
         let model = self.schema.model(mid);
@@ -477,7 +477,7 @@ impl<'a> Generator<'a> {
         &self,
         model_id: ModelId,
         args: &[TokenStream],
-        exprs: &[stmt::Expr<'static>],
+        exprs: &[stmt::Expr],
         f: TokenStream,
         depth: usize,
     ) -> TokenStream {

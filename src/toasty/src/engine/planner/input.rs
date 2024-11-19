@@ -1,9 +1,9 @@
 use super::*;
 
-impl<'stmt> Planner<'stmt> {
+impl Planner<'_> {
     pub(crate) fn extract_input(
         &mut self,
-        expr: &mut stmt::Expr<'stmt>,
+        expr: &mut stmt::Expr,
         sources: &[plan::InputSource],
         in_subquery: bool,
     ) -> Vec<plan::Input> {
@@ -15,7 +15,7 @@ impl<'stmt> Planner<'stmt> {
     fn extract_input_into(
         &mut self,
         inputs: &mut Vec<plan::Input>,
-        expr: &mut stmt::Expr<'stmt>,
+        expr: &mut stmt::Expr,
         sources: &[plan::InputSource],
         in_subquery: bool,
     ) -> Extract {
@@ -102,9 +102,9 @@ enum Extract {
     Field,
 }
 
-fn do_extract<'stmt>(
+fn do_extract(
     inputs: &mut Vec<plan::Input>,
-    expr: &mut stmt::Expr<'stmt>,
+    expr: &mut stmt::Expr,
     sources: &[plan::InputSource],
     action: Extract,
 ) {

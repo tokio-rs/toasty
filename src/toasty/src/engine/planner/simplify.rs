@@ -15,32 +15,32 @@ struct SimplifyExpr<'a> {
     schema: &'a Schema,
 }
 
-impl<'stmt> Planner<'stmt> {
-    pub(crate) fn simplify_stmt_delete(&self, stmt: &mut stmt::Delete<'stmt>) {
+impl Planner<'_> {
+    pub(crate) fn simplify_stmt_delete(&self, stmt: &mut stmt::Delete) {
         self.simplify_stmt(stmt);
     }
 
-    pub(crate) fn simplify_stmt_link(&self, stmt: &mut stmt::Link<'stmt>) {
+    pub(crate) fn simplify_stmt_link(&self, stmt: &mut stmt::Link) {
         self.simplify_stmt(stmt);
     }
 
-    pub(crate) fn simplify_stmt_insert(&self, stmt: &mut stmt::Insert<'stmt>) {
+    pub(crate) fn simplify_stmt_insert(&self, stmt: &mut stmt::Insert) {
         self.simplify_stmt(stmt);
     }
 
-    pub(crate) fn simplify_stmt_query(&self, stmt: &mut stmt::Query<'stmt>) {
+    pub(crate) fn simplify_stmt_query(&self, stmt: &mut stmt::Query) {
         self.simplify_stmt(stmt);
     }
 
-    pub(crate) fn simplify_stmt_unlink(&self, stmt: &mut stmt::Unlink<'stmt>) {
+    pub(crate) fn simplify_stmt_unlink(&self, stmt: &mut stmt::Unlink) {
         self.simplify_stmt(stmt);
     }
 
-    pub(crate) fn simplify_stmt_update(&self, stmt: &mut stmt::Update<'stmt>) {
+    pub(crate) fn simplify_stmt_update(&self, stmt: &mut stmt::Update) {
         self.simplify_stmt(stmt);
     }
 
-    fn simplify_stmt<T: stmt::Node<'stmt>>(&self, stmt: &mut T) {
+    fn simplify_stmt<T: stmt::Node>(&self, stmt: &mut T) {
         SimplifyStmt {
             schema: self.schema,
         }
@@ -50,10 +50,10 @@ impl<'stmt> Planner<'stmt> {
 
 impl SimplifyStmt<'_> {
     /// Returns the source model
-    fn flatten_nested_unions<'stmt>(
+    fn flatten_nested_unions(
         &self,
-        expr_set_op: &mut stmt::ExprSetOp<'stmt>,
-        operands: &mut Vec<stmt::ExprSet<'stmt>>,
+        expr_set_op: &mut stmt::ExprSetOp,
+        operands: &mut Vec<stmt::ExprSet>,
     ) {
         assert!(expr_set_op.is_union());
 
@@ -90,8 +90,8 @@ impl SimplifyStmt<'_> {
     }
 }
 
-impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
-    fn visit_expr_set_mut(&mut self, i: &mut stmt::ExprSet<'stmt>) {
+impl<'a, 'stmt> VisitMut for SimplifyStmt<'_> {
+    fn visit_expr_set_mut(&mut self, i: &mut stmt::ExprSet) {
         match i {
             stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 0 => {
                 todo!("is there anything we do here?");
@@ -115,7 +115,7 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
         stmt::visit_mut::visit_expr_set_mut(self, i);
     }
 
-    fn visit_stmt_delete_mut(&mut self, i: &mut stmt::Delete<'stmt>) {
+    fn visit_stmt_delete_mut(&mut self, i: &mut stmt::Delete) {
         SimplifyExpr {
             model: self.schema.model(i.from.as_model_id()),
             schema: self.schema,
@@ -123,7 +123,7 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
         .visit_mut(&mut i.filter);
     }
 
-    fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert<'stmt>) {
+    fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert) {
         let model = match &mut i.target {
             stmt::InsertTarget::Scope(query) => {
                 self.visit_stmt_query_mut(query);
@@ -156,7 +156,7 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
         simplify_expr.visit_stmt_insert_mut(i);
     }
 
-    fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update<'stmt>) {
+    fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update) {
         let mut simplify_expr = SimplifyExpr {
             model: self.schema.model(i.target.as_model_id()),
             schema: self.schema,
@@ -165,7 +165,7 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
         simplify_expr.visit_stmt_update_mut(i);
     }
 
-    fn visit_stmt_select_mut(&mut self, i: &mut stmt::Select<'stmt>) {
+    fn visit_stmt_select_mut(&mut self, i: &mut stmt::Select) {
         SimplifyExpr {
             model: self.schema.model(i.source.as_model_id()),
             schema: self.schema,
@@ -176,12 +176,12 @@ impl<'a, 'stmt> VisitMut<'stmt> for SimplifyStmt<'_> {
 
 impl SimplifyExpr<'_> {
     /// Recursively walk a binary expression in parallel
-    fn simplify_binary_op<'stmt>(
+    fn simplify_binary_op(
         &mut self,
         op: stmt::BinaryOp,
-        lhs: &mut stmt::Expr<'stmt>,
-        rhs: &mut stmt::Expr<'stmt>,
-    ) -> Option<stmt::Expr<'stmt>> {
+        lhs: &mut stmt::Expr,
+        rhs: &mut stmt::Expr,
+    ) -> Option<stmt::Expr> {
         match (&mut *lhs, &mut *rhs) {
             (stmt::Expr::Project(expr_project), other)
             | (other, stmt::Expr::Project(expr_project)) => {
@@ -262,16 +262,16 @@ impl SimplifyExpr<'_> {
     }
 }
 
-impl<'stmt> VisitMut<'stmt> for SimplifyExpr<'_> {
-    fn visit_stmt_mut(&mut self, _i: &mut stmt::Statement<'stmt>) {
+impl VisitMut for SimplifyExpr<'_> {
+    fn visit_stmt_mut(&mut self, _i: &mut stmt::Statement) {
         panic!("should not be reached");
     }
 
-    fn visit_expr_project_mut(&mut self, i: &mut stmt::ExprProject<'stmt>) {
+    fn visit_expr_project_mut(&mut self, i: &mut stmt::ExprProject) {
         assert!(i.projection.len() <= 1);
     }
 
-    fn visit_expr_mut(&mut self, i: &mut stmt::Expr<'stmt>) {
+    fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         // First, simplify the expression.
         stmt::visit_mut::visit_expr_mut(self, i);
 
@@ -319,14 +319,14 @@ impl<'stmt> VisitMut<'stmt> for SimplifyExpr<'_> {
         }
     }
 
-    fn visit_expr_stmt_mut(&mut self, i: &mut stmt::ExprStmt<'stmt>) {
+    fn visit_expr_stmt_mut(&mut self, i: &mut stmt::ExprStmt) {
         SimplifyStmt {
             schema: self.schema,
         }
         .visit_stmt_mut(&mut *i.stmt);
     }
 
-    fn visit_stmt_query_mut(&mut self, i: &mut stmt::Query<'stmt>) {
+    fn visit_stmt_query_mut(&mut self, i: &mut stmt::Query) {
         SimplifyStmt {
             schema: self.schema,
         }

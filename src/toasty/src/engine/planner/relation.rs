@@ -2,12 +2,12 @@ use super::*;
 
 use std::mem;
 
-impl<'stmt> Planner<'stmt> {
+impl Planner<'_> {
     pub(super) fn plan_mut_relation_field(
         &mut self,
         field: &Field,
-        expr: &mut stmt::Expr<'stmt>,
-        selection: &stmt::Query<'stmt>,
+        expr: &mut stmt::Expr,
+        selection: &stmt::Query,
         is_insert: bool,
     ) {
         match &field.ty {
@@ -42,8 +42,8 @@ impl<'stmt> Planner<'stmt> {
     pub(super) fn plan_mut_belongs_to_expr(
         &mut self,
         field: &Field,
-        expr: &mut stmt::Expr<'stmt>,
-        scope: &stmt::Query<'stmt>,
+        expr: &mut stmt::Expr,
+        scope: &stmt::Query,
         is_insert: bool,
     ) {
         match expr {
@@ -62,8 +62,8 @@ impl<'stmt> Planner<'stmt> {
     pub fn plan_mut_belongs_to_value(
         &mut self,
         field: &Field,
-        value: &mut stmt::Value<'stmt>,
-        scope: &stmt::Query<'stmt>,
+        value: &mut stmt::Value,
+        scope: &stmt::Query,
         is_insert: bool,
     ) {
         if value.is_null() {
@@ -106,9 +106,9 @@ impl<'stmt> Planner<'stmt> {
     pub(super) fn plan_mut_belongs_to_stmt(
         &mut self,
         field: &Field,
-        stmt: stmt::Statement<'stmt>,
-        expr: &mut stmt::Expr<'stmt>,
-        scope: &stmt::Query<'stmt>,
+        stmt: stmt::Statement,
+        expr: &mut stmt::Expr,
+        scope: &stmt::Query,
         is_insert: bool,
     ) {
         let belongs_to = field.ty.expect_belongs_to();
@@ -171,7 +171,7 @@ impl<'stmt> Planner<'stmt> {
         }
     }
 
-    fn plan_mut_belongs_to_nullify(&mut self, field: &Field, scope: &stmt::Query<'stmt>) {
+    fn plan_mut_belongs_to_nullify(&mut self, field: &Field, scope: &stmt::Query) {
         self.relation_step(field, |planner| {
             let belongs_to = field.ty.expect_belongs_to();
             let pair = planner.schema.field(belongs_to.pair);
@@ -201,8 +201,8 @@ impl<'stmt> Planner<'stmt> {
     pub(super) fn plan_mut_has_many_expr(
         &mut self,
         has_many: &HasMany,
-        expr: stmt::Expr<'stmt>,
-        scope: &stmt::Query<'stmt>,
+        expr: stmt::Expr,
+        scope: &stmt::Query,
     ) {
         match expr {
             stmt::Expr::Stmt(expr_stmt) => {
@@ -223,8 +223,8 @@ impl<'stmt> Planner<'stmt> {
     fn plan_mut_has_many_stmt(
         &mut self,
         has_many: &HasMany,
-        stmt: stmt::Statement<'stmt>,
-        scope: &stmt::Query<'stmt>,
+        stmt: stmt::Statement,
+        scope: &stmt::Query,
     ) {
         match stmt {
             stmt::Statement::Insert(stmt) => self.plan_mut_has_many_insert(has_many, stmt, scope),
@@ -235,8 +235,8 @@ impl<'stmt> Planner<'stmt> {
     fn plan_mut_has_many_value(
         &mut self,
         has_many: &HasMany,
-        value: stmt::Value<'stmt>,
-        scope: &stmt::Query<'stmt>,
+        value: stmt::Value,
+        scope: &stmt::Query,
     ) {
         todo!("value={:#?}", value);
         let mut stmt = stmt::Query::filter(
@@ -258,9 +258,9 @@ impl<'stmt> Planner<'stmt> {
         // Has one association with the base model as the source
         has_one: &HasOne,
         // Expression to use as the value for the field.
-        expr: stmt::Expr<'stmt>,
+        expr: stmt::Expr,
         // Which instances of the base model to update
-        filter: &stmt::Expr<'stmt>,
+        filter: &stmt::Expr,
         // If the mutation is from an insert or update
         is_insert: bool,
     ) {
@@ -282,8 +282,8 @@ impl<'stmt> Planner<'stmt> {
         &mut self,
         model: &Model,
         has_one: &HasOne,
-        stmt: stmt::Statement<'stmt>,
-        filter: &stmt::Expr<'stmt>,
+        stmt: stmt::Statement,
+        filter: &stmt::Expr,
         is_insert: bool,
     ) {
         match stmt {
@@ -298,7 +298,7 @@ impl<'stmt> Planner<'stmt> {
         &mut self,
         model: &Model,
         has_one: &HasOne,
-        filter: &stmt::Expr<'stmt>,
+        filter: &stmt::Expr,
     ) {
         let pair_scope = self.relation_pair_scope(model, has_one.pair, filter);
 
@@ -316,8 +316,8 @@ impl<'stmt> Planner<'stmt> {
         &mut self,
         model: &Model,
         has_one: &HasOne,
-        value: stmt::Value<'stmt>,
-        filter: &stmt::Expr<'stmt>,
+        value: stmt::Value,
+        filter: &stmt::Expr,
         is_insert: bool,
     ) {
         // Only nullify if calling from an update context
@@ -346,8 +346,8 @@ impl<'stmt> Planner<'stmt> {
     fn plan_mut_has_many_insert(
         &mut self,
         has_many: &HasMany,
-        mut stmt: stmt::Insert<'stmt>,
-        scope: &stmt::Query<'stmt>,
+        mut stmt: stmt::Insert,
+        scope: &stmt::Query,
     ) {
         // Returning does nothing in this context.
         stmt.returning = None;
@@ -369,8 +369,8 @@ impl<'stmt> Planner<'stmt> {
         &mut self,
         model: &Model,
         has_one: &HasOne,
-        mut stmt: stmt::Insert<'stmt>,
-        filter: &stmt::Expr<'stmt>,
+        mut stmt: stmt::Insert,
+        filter: &stmt::Expr,
         is_insert: bool,
     ) {
         // Returning does nothing in this context
@@ -401,13 +401,13 @@ impl<'stmt> Planner<'stmt> {
         &self,
         model: &Model,
         pair: FieldId,
-        filter: &stmt::Expr<'stmt>,
-    ) -> stmt::Query<'stmt> {
+        filter: &stmt::Expr,
+    ) -> stmt::Query {
         let scope = stmt::Query::filter(model, filter.clone());
         stmt::Query::filter(pair.model, stmt::ExprInSubquery::new(pair, scope))
     }
 
-    fn relation_step(&mut self, field: &Field, f: impl FnOnce(&mut Planner<'stmt>)) {
+    fn relation_step(&mut self, field: &Field, f: impl FnOnce(&mut Planner)) {
         if let Some(pair) = field.pair() {
             if self.relations.last().copied() == Some(pair) {
                 return;

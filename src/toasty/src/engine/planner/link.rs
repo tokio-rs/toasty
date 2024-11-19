@@ -1,7 +1,7 @@
 use super::*;
 
-impl<'stmt> Planner<'stmt> {
-    pub(super) fn plan_link(&mut self, mut stmt: stmt::Link<'stmt>) {
+impl Planner<'_> {
+    pub(super) fn plan_link(&mut self, mut stmt: stmt::Link) {
         self.simplify_stmt_link(&mut stmt);
 
         // TODO: this should be heavily optimized to avoid multiple queries if
@@ -11,7 +11,7 @@ impl<'stmt> Planner<'stmt> {
         self.plan_link_kv(stmt);
     }
 
-    fn plan_link_kv(&mut self, stmt: stmt::Link<'stmt>) {
+    fn plan_link_kv(&mut self, stmt: stmt::Link) {
         // TODO: this should be heavily optimized to avoid multiple queries if
         // possible...
 

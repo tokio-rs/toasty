@@ -1,10 +1,7 @@
 use super::*;
 
-impl<'stmt> Exec<'stmt> {
-    pub(super) async fn exec_delete_by_key(
-        &mut self,
-        action: &plan::DeleteByKey<'stmt>,
-    ) -> Result<()> {
+impl Exec<'_> {
+    pub(super) async fn exec_delete_by_key(&mut self, action: &plan::DeleteByKey) -> Result<()> {
         let keys = self
             .collect_keys_from_input(&action.keys, &action.input)
             .await?;

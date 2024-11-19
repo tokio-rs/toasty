@@ -1,7 +1,7 @@
 use super::*;
 
-impl<'stmt> Planner<'stmt> {
-    pub(crate) fn lower_stmt_delete(&self, model: &Model, stmt: &mut stmt::Delete<'stmt>) {
+impl Planner<'_> {
+    pub(crate) fn lower_stmt_delete(&self, model: &Model, stmt: &mut stmt::Delete) {
         let table = self.schema.table(model.lowering.table);
 
         // Lower the query source
@@ -12,22 +12,17 @@ impl<'stmt> Planner<'stmt> {
         assert!(stmt.returning.is_none(), "TODO; stmt={stmt:#?}");
     }
 
-    pub(crate) fn lower_stmt_query(
-        &self,
-        table: &Table,
-        model: &Model,
-        stmt: &mut stmt::Query<'stmt>,
-    ) {
+    pub(crate) fn lower_stmt_query(&self, table: &Table, model: &Model, stmt: &mut stmt::Query) {
         match &mut *stmt.body {
             stmt::ExprSet::Select(stmt) => self.lower_stmt_select(table, model, stmt),
             _ => todo!("stmt={stmt:#?}"),
         }
     }
 
-    pub(crate) fn lower_returning(&self, model: &Model, stmt: &mut stmt::Returning<'stmt>) {
+    pub(crate) fn lower_returning(&self, model: &Model, stmt: &mut stmt::Returning) {
         match stmt {
             stmt::Returning::Star => {
-                let mut returning: stmt::Expr<'_> = model.lowering.table_to_model.clone().into();
+                let mut returning: stmt::Expr = model.lowering.table_to_model.clone().into();
                 returning.substitute(stmt::substitute::ModelToTable(model));
 
                 *stmt = stmt::Returning::Expr(returning);
@@ -39,7 +34,7 @@ impl<'stmt> Planner<'stmt> {
         }
     }
 
-    fn lower_stmt_select(&self, table: &Table, model: &Model, stmt: &mut stmt::Select<'stmt>) {
+    fn lower_stmt_select(&self, table: &Table, model: &Model, stmt: &mut stmt::Select) {
         use std::mem;
 
         // Lower the query source
@@ -52,7 +47,7 @@ impl<'stmt> Planner<'stmt> {
     }
 
     /// Lower the filter portion of a statement
-    fn lower_stmt_filter(&self, table: &Table, model: &Model, filter: &mut stmt::Expr<'stmt>) {
+    fn lower_stmt_filter(&self, table: &Table, model: &Model, filter: &mut stmt::Expr) {
         use std::mem;
 
         let mut expr = mem::take(filter);
@@ -93,7 +88,7 @@ impl<'stmt> Planner<'stmt> {
         self.lower_expr(filter);
     }
 
-    pub(crate) fn lower_insert_expr(&self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
+    pub(crate) fn lower_insert_expr(&self, model: &Model, expr: &mut stmt::Expr) {
         let stmt::Expr::Record(record) = expr else {
             todo!()
         };
@@ -110,7 +105,7 @@ impl<'stmt> Planner<'stmt> {
         *expr = stmt::ExprRecord::from_vec(lowered).into();
     }
 
-    pub(crate) fn lower_update_stmt(&self, model: &Model, stmt: &mut stmt::Update<'stmt>) {
+    pub(crate) fn lower_update_stmt(&self, model: &Model, stmt: &mut stmt::Update) {
         let table = self.schema.table(model.lowering.table);
 
         stmt.target = stmt::UpdateTarget::table(table.id);
@@ -152,12 +147,12 @@ impl<'stmt> Planner<'stmt> {
         }
     }
 
-    pub(crate) fn lower_expr(&self, expr: &mut stmt::Expr<'stmt>) {
+    pub(crate) fn lower_expr(&self, expr: &mut stmt::Expr) {
         LowerExpr {}.visit_mut(expr);
     }
 
     /*
-    pub(crate) fn lower_expr2(&self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
+    pub(crate) fn lower_expr2(&self, model: &Model, expr: &mut stmt::Expr) {
         LowerExpr2 {
             schema: self.schema,
             model,
@@ -171,7 +166,7 @@ impl<'stmt> Planner<'stmt> {
         table: &Table,
         model: &Model,
         model_index: &ModelIndex,
-        expr: &mut stmt::Expr<'stmt>,
+        expr: &mut stmt::Expr,
     ) {
         use std::mem;
 
@@ -215,7 +210,7 @@ impl<'stmt> Planner<'stmt> {
     }
 }
 
-fn is_constrained(expr: &stmt::Expr<'_>, column: &Column) -> bool {
+fn is_constrained(expr: &stmt::Expr, column: &Column) -> bool {
     match expr {
         stmt::Expr::And(expr) => expr.iter().any(|expr| is_constrained(expr, column)),
         stmt::Expr::Or(expr) => expr.iter().all(|expr| is_constrained(expr, column)),
@@ -229,8 +224,8 @@ fn is_constrained(expr: &stmt::Expr<'_>, column: &Column) -> bool {
 
 struct LowerExpr {}
 
-impl<'stmt> VisitMut<'stmt> for LowerExpr {
-    fn visit_expr_mut(&mut self, i: &mut stmt::Expr<'stmt>) {
+impl VisitMut for LowerExpr {
+    fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         stmt::visit_mut::visit_expr_mut(self, i);
 
         match i {
@@ -244,7 +239,7 @@ impl<'stmt> VisitMut<'stmt> for LowerExpr {
         }
     }
 
-    fn visit_value_mut(&mut self, i: &mut stmt::Value<'stmt>) {
+    fn visit_value_mut(&mut self, i: &mut stmt::Value) {
         stmt::visit_mut::visit_value_mut(self, i);
 
         match i {

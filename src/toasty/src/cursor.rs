@@ -46,7 +46,7 @@ impl<M: Model> Cursor<M> {
     }
 
     #[track_caller]
-    fn validate_row(&self, record: &stmt::Record<'_>) {
+    fn validate_row(&self, record: &stmt::Record) {
         if cfg!(debug_assertions) {
             let expect_num_columns = self.schema.model(M::ID).fields.len();
 

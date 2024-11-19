@@ -15,21 +15,21 @@ use crate::{driver::operation, engine::*, Result};
 
 use toasty_core::stmt;
 
-struct Exec<'stmt> {
-    db: &'stmt Db,
+struct Exec<'a> {
+    db: &'a Db,
     vars: VarStore,
 }
 
-pub(crate) async fn exec<'stmt>(
+pub(crate) async fn exec(
     db: &Db,
-    pipeline: &plan::Pipeline<'stmt>,
+    pipeline: &plan::Pipeline,
     vars: VarStore,
 ) -> Result<ValueStream> {
     Exec { db, vars }.exec_pipeline(pipeline).await
 }
 
-impl<'stmt> Exec<'stmt> {
-    async fn exec_pipeline(&mut self, pipeline: &plan::Pipeline<'stmt>) -> Result<ValueStream> {
+impl Exec<'_> {
+    async fn exec_pipeline(&mut self, pipeline: &plan::Pipeline) -> Result<ValueStream> {
         for step in &pipeline.actions {
             self.exec_step(step).await?;
         }
@@ -41,7 +41,7 @@ impl<'stmt> Exec<'stmt> {
         })
     }
 
-    async fn exec_step(&mut self, action: &Action<'stmt>) -> Result<()> {
+    async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {
             Action::Associate(action) => self.exec_associate(action).await,
             Action::BatchWrite(action) => self.exec_batch_write(action).await,
@@ -60,10 +60,7 @@ impl<'stmt> Exec<'stmt> {
         }
     }
 
-    async fn collect_input(
-        &mut self,
-        input: &plan::Input<'stmt>,
-    ) -> Result<Vec<stmt::Value<'stmt>>> {
+    async fn collect_input(&mut self, input: &plan::Input) -> Result<Vec<stmt::Value>> {
         let mut ret = vec![];
 
         let mut value_stream = match input.source {
@@ -87,9 +84,9 @@ impl<'stmt> Exec<'stmt> {
 
     async fn collect_keys_from_input(
         &mut self,
-        key_expr: &eval::Expr<'stmt>,
-        input: &[plan::Input<'stmt>],
-    ) -> Result<Vec<stmt::Value<'stmt>>> {
+        key_expr: &eval::Expr,
+        input: &[plan::Input],
+    ) -> Result<Vec<stmt::Value>> {
         let mut keys = vec![];
 
         // For now, there is only one possible input entry

@@ -1,7 +1,7 @@
 use super::*;
 
-impl<'stmt> Planner<'stmt> {
-    pub(super) fn plan_delete(&mut self, mut stmt: stmt::Delete<'stmt>) {
+impl Planner<'_> {
+    pub(super) fn plan_delete(&mut self, mut stmt: stmt::Delete) {
         self.simplify_stmt_delete(&mut stmt);
 
         let model = self.model(stmt.from.as_model_id());
@@ -44,7 +44,7 @@ impl<'stmt> Planner<'stmt> {
         }
     }
 
-    fn plan_delete_sql(&mut self, model: &Model, mut stmt: stmt::Delete<'stmt>) {
+    fn plan_delete_sql(&mut self, model: &Model, mut stmt: stmt::Delete) {
         self.lower_stmt_delete(model, &mut stmt);
 
         self.push_action(plan::QuerySql {
@@ -54,7 +54,7 @@ impl<'stmt> Planner<'stmt> {
         });
     }
 
-    fn plan_delete_kv(&mut self, model: &Model, mut stmt: stmt::Delete<'stmt>) {
+    fn plan_delete_kv(&mut self, model: &Model, mut stmt: stmt::Delete) {
         /*
         let table = self.schema.table(model.lowering.table);
 

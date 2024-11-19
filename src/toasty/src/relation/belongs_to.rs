@@ -9,7 +9,7 @@ pub struct BelongsTo<T> {
 }
 
 impl<T: Model> BelongsTo<T> {
-    pub fn load(input: Value<'_>) -> crate::Result<BelongsTo<T>> {
+    pub fn load(input: Value) -> crate::Result<BelongsTo<T>> {
         Ok(match input {
             Value::Null => BelongsTo::default(),
             Value::Record(record) => BelongsTo {
