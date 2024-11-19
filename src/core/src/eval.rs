@@ -69,7 +69,7 @@ impl Expr {
             stmt::Expr::List(expr) => ExprList::from_stmt(expr, convert).into(),
             stmt::Expr::Project(expr) => ExprProject::from_stmt(expr, convert).into(),
             stmt::Expr::Record(expr) => ExprRecord::from_stmt(expr, convert).into(),
-            stmt::Expr::Value(expr) => Expr::Value(expr),
+            stmt::Expr::Value(expr) => Expr::Value(expr.into_owned()),
             _ => todo!("stmt={:#?}", stmt),
         }
     }

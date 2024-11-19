@@ -3,7 +3,7 @@ use super::*;
 use crate::schema::{IndexId, TableId};
 
 #[derive(Debug)]
-pub struct FindPkByIndex<'stmt> {
+pub struct FindPkByIndex {
     /// Table to query
     pub table: TableId,
 
@@ -11,11 +11,11 @@ pub struct FindPkByIndex<'stmt> {
     pub index: IndexId,
 
     /// How to filter the index.
-    pub filter: stmt::Expr<'stmt>,
+    pub filter: stmt::Expr<'static>,
 }
 
-impl<'stmt> From<FindPkByIndex<'stmt>> for Operation<'stmt> {
-    fn from(value: FindPkByIndex<'stmt>) -> Operation<'stmt> {
+impl From<FindPkByIndex> for Operation {
+    fn from(value: FindPkByIndex) -> Operation {
         Operation::FindPkByIndex(value)
     }
 }
