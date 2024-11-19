@@ -2,7 +2,7 @@ use super::*;
 
 use crate::driver::Rows;
 
-impl<'stmt> Exec<'_, 'stmt> {
+impl<'stmt> Exec<'stmt> {
     pub(super) async fn exec_query_sql(&mut self, action: &plan::QuerySql<'stmt>) -> Result<()> {
         let mut sql = action.stmt.clone();
 

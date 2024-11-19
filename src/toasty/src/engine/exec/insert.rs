@@ -4,7 +4,7 @@ use toasty_core::*;
 use super::*;
 use crate::driver::operation;
 
-impl<'stmt> Exec<'_, 'stmt> {
+impl<'stmt> Exec<'stmt> {
     pub(super) async fn exec_insert(&mut self, action: &plan::Insert<'stmt>) -> Result<()> {
         assert!(action.input.is_empty(), "todo");
 

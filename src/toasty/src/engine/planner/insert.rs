@@ -297,7 +297,7 @@ impl<'stmt> Planner<'_, 'stmt> {
     fn constantize_insert_returning(
         &self,
         stmt: &mut stmt::Insert<'stmt>,
-    ) -> Option<Vec<stmt::Value<'stmt>>> {
+    ) -> Option<Vec<stmt::Value<'static>>> {
         let Some(stmt::Returning::Expr(returning)) = &stmt.returning else {
             return None;
         };

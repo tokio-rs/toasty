@@ -1,7 +1,7 @@
 use super::*;
 
-impl<'stmt> Expr<'stmt> {
-    pub fn null() -> Expr<'stmt> {
+impl Expr {
+    pub fn null() -> Expr {
         Expr::Value(Value::Null)
     }
 

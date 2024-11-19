@@ -39,30 +39,27 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub enum Expr<'stmt> {
-    And(ExprAnd<'stmt>),
+pub enum Expr {
+    And(ExprAnd),
     Arg(ExprArg),
-    BinaryOp(ExprBinaryOp<'stmt>),
-    Cast(ExprCast<'stmt>),
-    List(ExprList<'stmt>),
-    Map(ExprMap<'stmt>),
-    Project(ExprProject<'stmt>),
-    Record(ExprRecord<'stmt>),
-    Value(Value<'stmt>),
+    BinaryOp(ExprBinaryOp),
+    Cast(ExprCast),
+    List(ExprList),
+    Map(ExprMap),
+    Project(ExprProject),
+    Record(ExprRecord),
+    Value(Value<'static>),
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn convert_stmt(
-        stmt: stmt::Expr<'stmt>,
-        mut convert: impl Convert<'stmt>,
-    ) -> Option<Expr<'stmt>> {
+impl Expr {
+    pub fn convert_stmt(stmt: stmt::Expr, mut convert: impl Convert) -> Option<Expr> {
         Some(Expr::from_stmt_by_ref(stmt, &mut convert))
     }
 
-    pub(crate) fn from_stmt_by_ref(
+    pub(crate) fn from_stmt_by_ref<'stmt>(
         stmt: stmt::Expr<'stmt>,
-        convert: &mut impl Convert<'stmt>,
-    ) -> Expr<'stmt> {
+        convert: &mut impl Convert,
+    ) -> Expr {
         match stmt {
             stmt::Expr::Arg(expr) => ExprArg::from_stmt(expr).into(),
             stmt::Expr::And(expr) => ExprAnd::from_stmt(expr, convert).into(),
@@ -77,7 +74,7 @@ impl<'stmt> Expr<'stmt> {
         }
     }
 
-    pub fn eval(&self, mut input: impl Input<'stmt>) -> crate::Result<Value<'stmt>> {
+    pub fn eval(&self, mut input: impl Input) -> crate::Result<Value<'static>> {
         self.eval_ref(&mut input)
     }
 
@@ -86,22 +83,22 @@ impl<'stmt> Expr<'stmt> {
     /// # Panics
     ///
     /// `eval_const` panics if the expression is not constant
-    pub fn eval_const(&self) -> Value<'stmt> {
+    pub fn eval_const(&self) -> Value<'static> {
         self.eval_ref(&mut const_input()).unwrap()
     }
 
-    pub fn eval_bool(&self, mut input: impl Input<'stmt>) -> Result<bool> {
+    pub fn eval_bool(&self, mut input: impl Input) -> Result<bool> {
         self.eval_bool_ref(&mut input)
     }
 
-    pub(crate) fn eval_bool_ref(&self, input: &mut impl Input<'stmt>) -> Result<bool> {
+    pub(crate) fn eval_bool_ref(&self, input: &mut impl Input) -> Result<bool> {
         match self.eval_ref(input)? {
             Value::Bool(ret) => Ok(ret),
             _ => todo!(),
         }
     }
 
-    pub(crate) fn eval_ref(&self, input: &mut impl Input<'stmt>) -> Result<Value<'stmt>> {
+    pub(crate) fn eval_ref(&self, input: &mut impl Input) -> Result<Value<'static>> {
         match self {
             Expr::And(expr_and) => {
                 debug_assert!(!expr_and.operands.is_empty());
@@ -115,7 +112,7 @@ impl<'stmt> Expr<'stmt> {
                 Ok(true.into())
             }
             Expr::Arg(expr_arg) => Ok(input.resolve_arg(expr_arg, &Projection::identity())),
-            Expr::Value(value) => Ok(value.clone()),
+            Expr::Value(value) => Ok(value.clone().into_owned()),
             Expr::BinaryOp(expr_binary_op) => {
                 let lhs = expr_binary_op.lhs.eval_ref(input)?;
                 let rhs = expr_binary_op.rhs.eval_ref(input)?;
@@ -164,7 +161,7 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt, T: Into<stmt::Expr<'stmt>>> From<T> for Expr<'stmt> {
+impl<'stmt, T: Into<stmt::Expr<'stmt>>> From<T> for Expr {
     fn from(value: T) -> Self {
         Expr::from_stmt_by_ref(value.into(), &mut convert::Const)
     }

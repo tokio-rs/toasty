@@ -97,7 +97,7 @@ impl<'a> Generator<'a> {
 
                         let mut records = db.exec::<#struct_name>(stmt.into()).await?;
                         // TODO: try to avoid the vec clone from turning a record static
-                        into_iter = records.next().await.unwrap()?.into_record().into_owned().into_iter();
+                        into_iter = records.next().await.unwrap()?.into_record().into_iter();
                     }
 
                     for field in fields.iter() {

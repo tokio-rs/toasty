@@ -20,11 +20,8 @@ pub trait Driver: Debug + Send + Sync + 'static {
     async fn register_schema(&mut self, schema: &Schema) -> crate::Result<()>;
 
     /// Execute a database operation
-    async fn exec<'stmt>(
-        &self,
-        schema: &Schema,
-        plan: Operation<'stmt>,
-    ) -> crate::Result<Response<'stmt>>;
+    async fn exec<'stmt>(&self, schema: &Schema, plan: Operation<'stmt>)
+        -> crate::Result<Response>;
 
     /// TODO: this will probably go away
     async fn reset_db(&self, _schema: &Schema) -> crate::Result<()> {

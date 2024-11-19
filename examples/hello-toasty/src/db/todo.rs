@@ -216,13 +216,7 @@ impl<'a> UpdateTodo<'a> {
             fields = stmt.fields().clone();
             stmt.set_selection(&*self.model);
             let mut records = db.exec::<Todo>(stmt.into()).await?;
-            into_iter = records
-                .next()
-                .await
-                .unwrap()?
-                .into_record()
-                .into_owned()
-                .into_iter();
+            into_iter = records.next().await.unwrap()?.into_record().into_iter();
         }
         for field in fields.iter() {
             match field.into_usize() {
@@ -230,9 +224,7 @@ impl<'a> UpdateTodo<'a> {
                 1 => {
                     self.model.user_id = stmt::Id::from_untyped(into_iter.next().unwrap().to_id()?)
                 }
-                2 => {
-                    self.model.user_id = stmt::Id::from_untyped(into_iter.next().unwrap().to_id()?)
-                }
+                2 => todo!("should not be set"),
                 3 => self.model.title = into_iter.next().unwrap().to_string()?,
                 _ => todo!("handle unknown field id in reload after update"),
             }

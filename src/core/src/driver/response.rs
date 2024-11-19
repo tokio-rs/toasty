@@ -1,39 +1,39 @@
 use crate::stmt::ValueStream;
 
 #[derive(Debug)]
-pub struct Response<'stmt> {
-    pub rows: Rows<'stmt>,
+pub struct Response {
+    pub rows: Rows,
 }
 
 #[derive(Debug)]
-pub enum Rows<'stmt> {
+pub enum Rows {
     /// Number of rows impacted by the operation
     Count(usize),
 
     /// Operation result, as a stream of rows
-    Values(ValueStream<'stmt>),
+    Values(ValueStream),
 }
 
-impl<'stmt> Response<'stmt> {
-    pub fn from_count(count: usize) -> Response<'stmt> {
+impl Response {
+    pub fn from_count(count: usize) -> Response {
         Response {
             rows: Rows::Count(count),
         }
     }
 
-    pub fn from_value_stream(values: ValueStream<'stmt>) -> Response<'stmt> {
+    pub fn from_value_stream(values: ValueStream) -> Response {
         Response {
             rows: Rows::Values(values),
         }
     }
 }
 
-impl<'stmt> Rows<'stmt> {
+impl Rows {
     pub fn is_count(&self) -> bool {
         matches!(self, Rows::Count(_))
     }
 
-    pub fn into_values(self) -> ValueStream<'stmt> {
+    pub fn into_values(self) -> ValueStream {
         match self {
             Rows::Values(values) => values,
             _ => todo!(),

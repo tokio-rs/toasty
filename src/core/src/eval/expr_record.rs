@@ -1,21 +1,18 @@
 use super::*;
 
 #[derive(Clone, Debug)]
-pub struct ExprRecord<'stmt> {
-    pub fields: Vec<Expr<'stmt>>,
+pub struct ExprRecord {
+    pub fields: Vec<Expr>,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn record_from_vec(fields: Vec<Expr<'stmt>>) -> Expr<'stmt> {
+impl Expr {
+    pub fn record_from_vec(fields: Vec<Expr>) -> Expr {
         ExprRecord { fields }.into()
     }
 }
 
-impl<'stmt> ExprRecord<'stmt> {
-    pub(crate) fn from_stmt(
-        stmt: stmt::ExprRecord<'stmt>,
-        convert: &mut impl Convert<'stmt>,
-    ) -> ExprRecord<'stmt> {
+impl ExprRecord {
+    pub(crate) fn from_stmt(stmt: stmt::ExprRecord, convert: &mut impl Convert) -> ExprRecord {
         ExprRecord {
             fields: stmt
                 .fields
@@ -25,7 +22,7 @@ impl<'stmt> ExprRecord<'stmt> {
         }
     }
 
-    pub(crate) fn eval_ref(&self, input: &mut impl Input<'stmt>) -> crate::Result<Record<'stmt>> {
+    pub(crate) fn eval_ref(&self, input: &mut impl Input) -> crate::Result<Record<'static>> {
         let mut applied = vec![];
 
         for expr in &self.fields {
@@ -36,8 +33,8 @@ impl<'stmt> ExprRecord<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprRecord<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprRecord<'stmt>) -> Self {
+impl From<ExprRecord> for Expr {
+    fn from(value: ExprRecord) -> Self {
         Expr::Record(value)
     }
 }

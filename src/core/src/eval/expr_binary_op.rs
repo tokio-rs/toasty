@@ -1,17 +1,14 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-pub struct ExprBinaryOp<'stmt> {
-    pub lhs: Box<Expr<'stmt>>,
+pub struct ExprBinaryOp {
+    pub lhs: Box<Expr>,
     pub op: stmt::BinaryOp,
-    pub rhs: Box<Expr<'stmt>>,
+    pub rhs: Box<Expr>,
 }
 
-impl<'stmt> ExprBinaryOp<'stmt> {
-    pub(crate) fn from_stmt(
-        expr: stmt::ExprBinaryOp<'stmt>,
-        convert: &mut impl Convert<'stmt>,
-    ) -> ExprBinaryOp<'stmt> {
+impl ExprBinaryOp {
+    pub(crate) fn from_stmt(expr: stmt::ExprBinaryOp, convert: &mut impl Convert) -> ExprBinaryOp {
         ExprBinaryOp {
             lhs: Box::new(Expr::from_stmt_by_ref(*expr.lhs, convert)),
             op: expr.op,
@@ -20,8 +17,8 @@ impl<'stmt> ExprBinaryOp<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprBinaryOp<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprBinaryOp<'stmt>) -> Self {
+impl From<ExprBinaryOp> for Expr {
+    fn from(value: ExprBinaryOp) -> Self {
         Expr::BinaryOp(value)
     }
 }

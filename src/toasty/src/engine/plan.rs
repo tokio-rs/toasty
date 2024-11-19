@@ -25,6 +25,9 @@ pub(crate) use query_pk::QueryPk;
 mod query_sql;
 pub(crate) use query_sql::{QuerySql, QuerySqlOutput};
 
+mod set_var;
+pub(crate) use set_var::SetVar;
+
 mod update_by_key;
 pub(crate) use update_by_key::UpdateByKey;
 
@@ -34,7 +37,7 @@ use std::fmt;
 #[derive(Debug)]
 pub(crate) struct Plan<'stmt> {
     /// Arguments seeding the plan
-    pub(crate) vars: exec::VarStore<'stmt>,
+    pub(crate) vars: exec::VarStore,
 
     /// Pipeline of steps
     pub(crate) pipeline: Pipeline<'stmt>,
@@ -74,31 +77,10 @@ pub(crate) enum Action<'stmt> {
     UpdateByKey(UpdateByKey<'stmt>),
 
     /// Set a variable to a const
-    SetVar(SetVar<'stmt>),
+    SetVar(SetVar),
 
     /// Issue a SQL query
     QuerySql(QuerySql<'stmt>),
-}
-
-#[derive(Debug)]
-pub(crate) struct SetVar<'stmt> {
-    pub var: VarId,
-    pub value: Vec<toasty_core::stmt::Value<'stmt>>,
-}
-
-impl<'stmt> Action<'stmt> {
-    pub(crate) fn into_set_var(self) -> SetVar<'stmt> {
-        match self {
-            Action::SetVar(action) => action,
-            _ => panic!(),
-        }
-    }
-}
-
-impl<'a> From<SetVar<'a>> for Action<'a> {
-    fn from(src: SetVar<'a>) -> Action<'a> {
-        Action::SetVar(src)
-    }
 }
 
 /// Identifies a pipeline variable slot

@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'stmt> Exec<'_, 'stmt> {
+impl<'stmt> Exec<'stmt> {
     pub(super) async fn exec_update_by_key(
         &mut self,
         action: &plan::UpdateByKey<'stmt>,

@@ -52,6 +52,19 @@ impl<'stmt> Value<'stmt> {
         Record::from_vec(fields).into()
     }
 
+    pub fn into_owned(self) -> Value<'static> {
+        match self {
+            Value::Bool(value) => Value::Bool(value),
+            Value::Enum(value) => Value::Enum(value.into_owned()),
+            Value::I64(value) => Value::I64(value),
+            Value::Id(value) => Value::Id(value),
+            Value::Null => Value::Null,
+            Value::Record(value) => Value::Record(value.into_owned()),
+            Value::String(value) => Value::String(value.into_owned().into()),
+            Value::List(value) => Value::List(todo!()),
+        }
+    }
+
     /// The value's type. `None` if the value is null
     pub fn ty(&self) -> Type {
         match self {

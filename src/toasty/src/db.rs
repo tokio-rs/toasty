@@ -63,7 +63,7 @@ impl Db {
     pub async fn exec<'stmt, M: Model>(
         &self,
         statement: Statement<'stmt, M>,
-    ) -> Result<ValueStream<'stmt>> {
+    ) -> Result<ValueStream> {
         // Create a plan to execute the statement
         let mut res = engine::exec(self, statement.untyped).await?;
 

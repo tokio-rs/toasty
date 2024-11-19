@@ -2,10 +2,10 @@ use super::*;
 
 pub(crate) struct Const;
 
-pub trait Convert<'stmt> {
-    fn convert_expr_field(&mut self, field: stmt::ExprField) -> Option<Expr<'stmt>> {
+pub trait Convert {
+    fn convert_expr_field(&mut self, field: stmt::ExprField) -> Option<Expr> {
         None
     }
 }
 
-impl<'stmt> Convert<'stmt> for Const {}
+impl Convert for Const {}

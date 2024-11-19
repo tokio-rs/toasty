@@ -1,21 +1,21 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-pub struct ExprList<'stmt> {
-    pub items: Vec<Expr<'stmt>>,
+pub struct ExprList {
+    pub items: Vec<Expr>,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn list_from_vec(items: Vec<Expr<'stmt>>) -> Expr<'stmt> {
+impl Expr {
+    pub fn list_from_vec(items: Vec<Expr>) -> Expr {
         ExprList { items }.into()
     }
 }
 
-impl<'stmt> ExprList<'stmt> {
-    pub(crate) fn from_stmt(
+impl ExprList {
+    pub(crate) fn from_stmt<'stmt>(
         stmt: Vec<stmt::Expr<'stmt>>,
-        convert: &mut impl Convert<'stmt>,
-    ) -> ExprList<'stmt> {
+        convert: &mut impl Convert,
+    ) -> ExprList {
         ExprList {
             items: stmt
                 .into_iter()
@@ -25,8 +25,8 @@ impl<'stmt> ExprList<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprList<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprList<'stmt>) -> Self {
+impl From<ExprList> for Expr {
+    fn from(value: ExprList) -> Self {
         Expr::List(value)
     }
 }

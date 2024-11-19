@@ -1,16 +1,13 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-pub struct ExprProject<'stmt> {
-    pub base: Box<Expr<'stmt>>,
+pub struct ExprProject {
+    pub base: Box<Expr>,
     pub projection: stmt::Projection,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn project(
-        base: impl Into<Expr<'stmt>>,
-        projection: impl Into<stmt::Projection>,
-    ) -> Expr<'stmt> {
+impl Expr {
+    pub fn project(base: impl Into<Expr>, projection: impl Into<stmt::Projection>) -> Expr {
         ExprProject {
             base: Box::new(base.into()),
             projection: projection.into(),
@@ -23,11 +20,11 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt> ExprProject<'stmt> {
-    pub(crate) fn from_stmt(
+impl ExprProject {
+    pub(crate) fn from_stmt<'stmt>(
         expr: stmt::ExprProject<'stmt>,
-        convert: &mut impl Convert<'stmt>,
-    ) -> ExprProject<'stmt> {
+        convert: &mut impl Convert,
+    ) -> ExprProject {
         ExprProject {
             base: Box::new(Expr::from_stmt_by_ref(*expr.base, convert)),
             projection: expr.projection,
@@ -35,8 +32,8 @@ impl<'stmt> ExprProject<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprProject<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprProject<'stmt>) -> Self {
+impl From<ExprProject> for Expr {
+    fn from(value: ExprProject) -> Self {
         Expr::Project(value)
     }
 }

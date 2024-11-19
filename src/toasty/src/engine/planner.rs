@@ -150,7 +150,7 @@ impl<'a, 'stmt> Planner<'a, 'stmt> {
         }
     }
 
-    fn set_var(&mut self, value: Vec<toasty_core::stmt::Value<'stmt>>) -> plan::VarId {
+    fn set_var(&mut self, value: Vec<stmt::Value<'static>>) -> plan::VarId {
         let var = self.var_table.register_var();
 
         self.push_action(plan::SetVar { var, value });

@@ -18,7 +18,7 @@ pub struct GetByKey<'stmt> {
 
     /// How to filter the result before returning it to the caller.
     /// TODO: this needs to be moved to the engine
-    pub post_filter: Option<eval::Expr<'stmt>>,
+    pub post_filter: Option<eval::Expr>,
 }
 
 impl<'stmt> From<GetByKey<'stmt>> for Operation<'stmt> {

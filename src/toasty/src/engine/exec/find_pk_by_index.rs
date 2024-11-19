@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'stmt> Exec<'_, 'stmt> {
+impl<'stmt> Exec<'stmt> {
     pub(super) async fn exec_find_pk_by_index(
         &mut self,
         action: &plan::FindPkByIndex<'stmt>,

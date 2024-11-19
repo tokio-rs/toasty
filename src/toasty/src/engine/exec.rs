@@ -15,24 +15,21 @@ use crate::{driver::operation, engine::*, Result};
 
 use toasty_core::stmt;
 
-struct Exec<'a, 'stmt> {
-    db: &'a Db,
-    vars: VarStore<'stmt>,
+struct Exec<'stmt> {
+    db: &'stmt Db,
+    vars: VarStore,
 }
 
 pub(crate) async fn exec<'stmt>(
     db: &Db,
     pipeline: &plan::Pipeline<'stmt>,
-    vars: VarStore<'stmt>,
-) -> Result<ValueStream<'stmt>> {
+    vars: VarStore,
+) -> Result<ValueStream> {
     Exec { db, vars }.exec_pipeline(pipeline).await
 }
 
-impl<'a, 'stmt> Exec<'a, 'stmt> {
-    async fn exec_pipeline(
-        &mut self,
-        pipeline: &plan::Pipeline<'stmt>,
-    ) -> Result<ValueStream<'stmt>> {
+impl<'stmt> Exec<'stmt> {
+    async fn exec_pipeline(&mut self, pipeline: &plan::Pipeline<'stmt>) -> Result<ValueStream> {
         for step in &pipeline.actions {
             self.exec_step(step).await?;
         }
@@ -56,8 +53,8 @@ impl<'a, 'stmt> Exec<'a, 'stmt> {
             Action::QuerySql(action) => self.exec_query_sql(action).await,
             Action::UpdateByKey(action) => self.exec_update_by_key(action).await,
             Action::SetVar(action) => {
-                let stream = ValueStream::from_vec(action.value.clone());
-                self.vars.store(action.var, stream);
+                self.vars
+                    .store(action.var, ValueStream::from_vec(action.value.clone()));
                 Ok(())
             }
         }

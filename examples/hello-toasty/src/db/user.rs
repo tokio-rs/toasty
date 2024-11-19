@@ -228,20 +228,14 @@ impl<'a> UpdateUser<'a> {
             fields = stmt.fields().clone();
             stmt.set_selection(&*self.model);
             let mut records = db.exec::<User>(stmt.into()).await?;
-            into_iter = records
-                .next()
-                .await
-                .unwrap()?
-                .into_record()
-                .into_owned()
-                .into_iter();
+            into_iter = records.next().await.unwrap()?.into_record().into_iter();
         }
         for field in fields.iter() {
             match field.into_usize() {
                 0 => self.model.id = stmt::Id::from_untyped(into_iter.next().unwrap().to_id()?),
                 1 => self.model.name = into_iter.next().unwrap().to_string()?,
                 2 => self.model.email = into_iter.next().unwrap().to_string()?,
-                3 => {}
+                3 => todo!("should not be set"),
                 4 => self.model.moto = into_iter.next().unwrap().to_option_string()?,
                 _ => todo!("handle unknown field id in reload after update"),
             }

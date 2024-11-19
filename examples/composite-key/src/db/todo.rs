@@ -41,7 +41,7 @@ impl Model for Todo {
     const ID: ModelId = ModelId(1);
     const FIELD_COUNT: usize = 5;
     type Key = (Id<super::user::User>, Id<Todo>);
-    fn load(mut record: Record<'_>) -> Result<Self, Error> {
+    fn load(mut record: RecordOld<'_>) -> Result<Self, Error> {
         Ok(Todo {
             id: Id::from_untyped(record[0].take().to_id()?),
             title: record[1].take().to_string()?,

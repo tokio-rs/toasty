@@ -23,6 +23,13 @@ impl<'stmt> Record<'stmt> {
             Record::Owned(fields) => fields,
         }
     }
+
+    pub fn into_owned(self) -> Record<'static> {
+        Record::from_vec(match self {
+            Record::Borrowed(_) => todo!(),
+            Record::Owned(fields) => fields.into_iter().map(|field| field.into_owned()).collect(),
+        })
+    }
 }
 
 impl<'stmt> ops::Deref for Record<'stmt> {

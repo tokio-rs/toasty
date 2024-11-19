@@ -36,7 +36,7 @@ impl Model for User {
     const ID: ModelId = ModelId(0);
     const FIELD_COUNT: usize = 3;
     type Key = Id<User>;
-    fn load(mut record: Record<'_>) -> Result<Self, Error> {
+    fn load(mut record: RecordOld<'_>) -> Result<Self, Error> {
         Ok(User {
             id: Id::from_untyped(record[0].take().to_id()?),
             name: record[1].take().to_string()?,

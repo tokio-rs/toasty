@@ -1,15 +1,12 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-pub struct ExprAnd<'stmt> {
-    pub operands: Vec<Expr<'stmt>>,
+pub struct ExprAnd {
+    pub operands: Vec<Expr>,
 }
 
-impl<'stmt> ExprAnd<'stmt> {
-    pub(crate) fn from_stmt(
-        stmt: stmt::ExprAnd<'stmt>,
-        convert: &mut impl Convert<'stmt>,
-    ) -> ExprAnd<'stmt> {
+impl ExprAnd {
+    pub(crate) fn from_stmt(stmt: stmt::ExprAnd, convert: &mut impl Convert) -> ExprAnd {
         ExprAnd {
             operands: stmt
                 .operands
@@ -20,8 +17,8 @@ impl<'stmt> ExprAnd<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprAnd<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprAnd<'stmt>) -> Self {
+impl From<ExprAnd> for Expr {
+    fn from(value: ExprAnd) -> Self {
         Expr::And(value)
     }
 }

@@ -1,16 +1,16 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-pub struct ExprMap<'stmt> {
+pub struct ExprMap {
     /// Expression to map
-    pub base: Box<Expr<'stmt>>,
+    pub base: Box<Expr>,
 
     /// How to map. This expression's self will be the result of `base`
-    pub map: Box<Expr<'stmt>>,
+    pub map: Box<Expr>,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn map(base: impl Into<Expr<'stmt>>, map: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+impl Expr {
+    pub fn map(base: impl Into<Expr>, map: impl Into<Expr>) -> Expr {
         ExprMap {
             base: Box::new(base.into()),
             map: Box::new(map.into()),
@@ -19,8 +19,8 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprMap<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprMap<'stmt>) -> Self {
+impl From<ExprMap> for Expr {
+    fn from(value: ExprMap) -> Self {
         Expr::Map(value)
     }
 }

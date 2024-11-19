@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'stmt> Exec<'_, 'stmt> {
+impl<'stmt> Exec<'stmt> {
     pub(super) async fn exec_delete_by_key(
         &mut self,
         action: &plan::DeleteByKey<'stmt>,
