@@ -40,7 +40,7 @@ impl Driver for Sqlite {
         Ok(())
     }
 
-    async fn exec<'stmt>(&self, schema: &Schema, op: Operation<'stmt>) -> Result<Response<'stmt>> {
+    async fn exec(&self, schema: &Schema, op: Operation) -> Result<Response> {
         use Operation::*;
 
         let connection = self.connection.lock().unwrap();
@@ -183,7 +183,7 @@ enum V {
     Id(usize, String),
 }
 
-fn value_from_param<'a>(value: &'a stmt::Value<'a>) -> rusqlite::types::ToSqlOutput<'a> {
+fn value_from_param<'a>(value: &'a stmt::Value) -> rusqlite::types::ToSqlOutput<'a> {
     use rusqlite::types::{ToSqlOutput, Value, ValueRef};
     use stmt::Value::*;
 
@@ -215,7 +215,7 @@ fn value_from_param<'a>(value: &'a stmt::Value<'a>) -> rusqlite::types::ToSqlOut
     }
 }
 
-fn load<'stmt>(row: &rusqlite::Row, index: usize) -> stmt::Value<'stmt> {
+fn load(row: &rusqlite::Row, index: usize) -> stmt::Value {
     use rusqlite::types::Value as SqlValue;
     use std::borrow::Cow;
 
