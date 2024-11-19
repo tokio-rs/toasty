@@ -1,21 +1,21 @@
 use super::*;
 
-pub trait Input<'stmt> {
-    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr<'stmt>> {
+pub trait Input {
+    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr> {
         None
     }
 
-    fn resolve_column(&mut self, expr_column: &ExprColumn) -> Option<Expr<'stmt>> {
+    fn resolve_column(&mut self, expr_column: &ExprColumn) -> Option<Expr> {
         None
     }
 
-    fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Option<Expr<'stmt>> {
+    fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Option<Expr> {
         None
     }
 }
 
-impl<'stmt> Input<'stmt> for &Model {
-    fn resolve_column(&mut self, expr_column: &ExprColumn) -> Option<Expr<'stmt>> {
+impl Input for &Model {
+    fn resolve_column(&mut self, expr_column: &ExprColumn) -> Option<Expr> {
         let (index, _) = self
             .lowering
             .columns
@@ -27,7 +27,7 @@ impl<'stmt> Input<'stmt> for &Model {
         Some(stmt::Expr::project(stmt::Expr::arg(0), [index]))
     }
 
-    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr<'stmt>> {
+    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr> {
         todo!()
     }
 }
@@ -36,21 +36,21 @@ pub struct TableToModel<T>(pub T);
 
 pub struct ModelToTable<T>(pub T);
 
-impl<'stmt> Input<'stmt> for ModelToTable<&ExprRecord<'stmt>> {
-    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr<'stmt>> {
+impl Input for ModelToTable<&ExprRecord> {
+    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr> {
         Some(self.0[expr_field.field.index].clone())
     }
 }
 
-impl<'stmt> Input<'stmt> for ModelToTable<(FieldId, &Expr<'stmt>)> {
-    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr<'stmt>> {
+impl Input for ModelToTable<(FieldId, &Expr)> {
+    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr> {
         assert_eq!(self.0 .0, expr_field.field);
         Some(self.0 .1.clone())
     }
 }
 
-impl<'stmt> Input<'stmt> for ModelToTable<&Model> {
-    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr<'stmt>> {
+impl Input for ModelToTable<&Model> {
+    fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr> {
         assert!(
             !self.0.lowering.table_to_model[expr_field.field.index].is_null(),
             "field={expr_field:#?}; lowering={:#?}; ty={:#?}",
@@ -63,8 +63,8 @@ impl<'stmt> Input<'stmt> for ModelToTable<&Model> {
 
 pub struct Args<T>(pub T);
 
-impl<'stmt> Input<'stmt> for Args<&[Value<'stmt>]> {
-    fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Option<Expr<'stmt>> {
+impl Input for Args<&[Value]> {
+    fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Option<Expr> {
         Some(self.0[expr_arg.position].clone().into())
     }
 }

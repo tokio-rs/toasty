@@ -1,33 +1,33 @@
 use super::*;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Unlink<'stmt> {
+pub struct Unlink {
     /// The source of the association
-    pub source: Query<'stmt>,
+    pub source: Query,
 
     /// The association field to unlink
     pub field: FieldId,
 
     /// Models to disassociate
-    pub target: Query<'stmt>,
+    pub target: Query,
 }
 
-impl<'stmt> From<Unlink<'stmt>> for Statement<'stmt> {
-    fn from(value: Unlink<'stmt>) -> Self {
+impl From<Unlink> for Statement {
+    fn from(value: Unlink) -> Self {
         Statement::Unlink(value)
     }
 }
 
-impl<'stmt> Node<'stmt> for Unlink<'stmt> {
-    fn map<V: Map<'stmt>>(&self, visit: &mut V) -> Self {
+impl Node for Unlink {
+    fn map<V: Map>(&self, visit: &mut V) -> Self {
         visit.map_stmt_unlink(self)
     }
 
-    fn visit<V: Visit<'stmt>>(&self, mut visit: V) {
+    fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_unlink(self);
     }
 
-    fn visit_mut<V: VisitMut<'stmt>>(&mut self, mut visit: V) {
+    fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
         visit.visit_stmt_unlink_mut(self);
     }
 }

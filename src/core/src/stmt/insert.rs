@@ -1,23 +1,23 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Insert<'stmt> {
+pub struct Insert {
     /// Where to insert the values
-    pub target: InsertTarget<'stmt>,
+    pub target: InsertTarget,
 
     /// Source of values to insert
-    pub source: Query<'stmt>,
+    pub source: Query,
 
     /// Optionally return data from the insertion
-    pub returning: Option<Returning<'stmt>>,
+    pub returning: Option<Returning>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum InsertTarget<'stmt> {
+pub enum InsertTarget {
     /// Inserting into a scope implies that the inserted value should be
     /// included by the query after insertion. This could be a combination of
     /// setting default field values or validating existing ones.
-    Scope(Query<'stmt>),
+    Scope(Query),
 
     /// Insert a model
     Model(ModelId),
@@ -35,8 +35,8 @@ pub struct InsertTable {
     pub columns: Vec<ColumnId>,
 }
 
-impl<'stmt> Insert<'stmt> {
-    pub fn merge(&mut self, other: Insert<'stmt>) {
+impl Insert {
+    pub fn merge(&mut self, other: Insert) {
         /*
         if self.target != other.target {
             todo!("handle this case");
@@ -55,27 +55,27 @@ impl<'stmt> Insert<'stmt> {
     }
 }
 
-impl<'stmt> From<Insert<'stmt>> for Statement<'stmt> {
-    fn from(src: Insert<'stmt>) -> Statement<'stmt> {
+impl From<Insert> for Statement {
+    fn from(src: Insert) -> Statement {
         Statement::Insert(src)
     }
 }
 
-impl<'stmt> Node<'stmt> for Insert<'stmt> {
-    fn map<V: Map<'stmt>>(&self, visit: &mut V) -> Self {
+impl Node for Insert {
+    fn map<V: Map>(&self, visit: &mut V) -> Self {
         visit.map_stmt_insert(self)
     }
 
-    fn visit<V: Visit<'stmt>>(&self, mut visit: V) {
+    fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_insert(self);
     }
 
-    fn visit_mut<V: VisitMut<'stmt>>(&mut self, mut visit: V) {
+    fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
         visit.visit_stmt_insert_mut(self);
     }
 }
 
-impl<'stmt> InsertTarget<'stmt> {
+impl InsertTarget {
     pub fn as_model_id(&self) -> ModelId {
         match self {
             InsertTarget::Scope(query) => query.body.as_select().source.as_model_id(),
@@ -85,13 +85,13 @@ impl<'stmt> InsertTarget<'stmt> {
     }
 }
 
-impl<'stmt> From<InsertTable> for InsertTarget<'stmt> {
+impl From<InsertTable> for InsertTarget {
     fn from(value: InsertTable) -> Self {
         InsertTarget::Table(value)
     }
 }
 
-impl<'stmt> From<&InsertTable> for TableId {
+impl From<&InsertTable> for TableId {
     fn from(value: &InsertTable) -> Self {
         value.table
     }

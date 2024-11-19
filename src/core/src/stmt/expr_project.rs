@@ -1,13 +1,13 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprProject<'stmt> {
-    pub base: Box<Expr<'stmt>>,
+pub struct ExprProject {
+    pub base: Box<Expr>,
     pub projection: Projection,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn project(base: impl Into<Expr<'stmt>>, projection: impl Into<Projection>) -> Expr<'stmt> {
+impl Expr {
+    pub fn project(base: impl Into<Expr>, projection: impl Into<Projection>) -> Expr {
         ExprProject {
             base: Box::new(base.into()),
             projection: projection.into(),
@@ -19,7 +19,7 @@ impl<'stmt> Expr<'stmt> {
         matches!(self, Expr::Project(..))
     }
 
-    pub fn as_project(&self) -> &ExprProject<'stmt> {
+    pub fn as_project(&self) -> &ExprProject {
         match self {
             Expr::Project(expr_project) => expr_project,
             _ => panic!(),
@@ -27,10 +27,10 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt> ExprProject<'stmt> {}
+impl ExprProject {}
 
-impl<'stmt> From<ExprProject<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprProject<'stmt>) -> Self {
+impl From<ExprProject> for Expr {
+    fn from(value: ExprProject) -> Self {
         Expr::Project(value)
     }
 }

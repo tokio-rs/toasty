@@ -1,16 +1,16 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprInSubquery<'stmt> {
-    pub expr: Box<Expr<'stmt>>,
-    pub query: Box<Query<'stmt>>,
+pub struct ExprInSubquery {
+    pub expr: Box<Expr>,
+    pub query: Box<Query>,
 }
 
-impl<'stmt> ExprInSubquery<'stmt> {
-    pub fn new<A, B>(expr: A, query: B) -> ExprInSubquery<'stmt>
+impl ExprInSubquery {
+    pub fn new<A, B>(expr: A, query: B) -> ExprInSubquery
     where
-        A: Into<Expr<'stmt>>,
-        B: Into<Query<'stmt>>,
+        A: Into<Expr>,
+        B: Into<Query>,
     {
         ExprInSubquery {
             expr: Box::new(expr.into()),
@@ -19,8 +19,8 @@ impl<'stmt> ExprInSubquery<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprInSubquery<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprInSubquery<'stmt>) -> Self {
+impl From<ExprInSubquery> for Expr {
+    fn from(value: ExprInSubquery) -> Self {
         Expr::InSubquery(value)
     }
 }

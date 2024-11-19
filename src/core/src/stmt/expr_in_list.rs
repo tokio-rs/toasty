@@ -1,13 +1,13 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprInList<'stmt> {
-    pub expr: Box<Expr<'stmt>>,
-    pub list: Box<Expr<'stmt>>,
+pub struct ExprInList {
+    pub expr: Box<Expr>,
+    pub list: Box<Expr>,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn in_list(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+impl Expr {
+    pub fn in_list(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
         ExprInList {
             expr: Box::new(lhs.into()),
             list: Box::new(rhs.into()),
@@ -16,8 +16,8 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt> ExprInList<'stmt> {
-    pub(crate) fn simplify(&mut self) -> Option<Expr<'stmt>> {
+impl ExprInList {
+    pub(crate) fn simplify(&mut self) -> Option<Expr> {
         use std::mem;
 
         let rhs = match &mut *self.list {
@@ -46,8 +46,8 @@ impl<'stmt> ExprInList<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprInList<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprInList<'stmt>) -> Self {
+impl From<ExprInList> for Expr {
+    fn from(value: ExprInList) -> Self {
         Expr::InList(value)
     }
 }

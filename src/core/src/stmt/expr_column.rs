@@ -5,8 +5,8 @@ pub struct ExprColumn {
     pub column: ColumnId,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn column(column: impl Into<ColumnId>) -> Expr<'stmt> {
+impl Expr {
+    pub fn column(column: impl Into<ColumnId>) -> Expr {
         ExprColumn {
             column: column.into(),
         }
@@ -14,31 +14,31 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprColumn> for Expr<'stmt> {
+impl From<ExprColumn> for Expr {
     fn from(value: ExprColumn) -> Self {
         Expr::Column(value)
     }
 }
 
-impl<'stmt> From<&Column> for ExprColumn {
+impl From<&Column> for ExprColumn {
     fn from(value: &Column) -> Self {
         ExprColumn { column: value.id }
     }
 }
 
-impl<'stmt> From<&Column> for Expr<'stmt> {
+impl From<&Column> for Expr {
     fn from(value: &Column) -> Self {
         Expr::column(value.id)
     }
 }
 
-impl<'stmt> From<ColumnId> for ExprColumn {
+impl From<ColumnId> for ExprColumn {
     fn from(value: ColumnId) -> Self {
         ExprColumn { column: value }
     }
 }
 
-impl<'stmt> From<ColumnId> for Expr<'stmt> {
+impl From<ColumnId> for Expr {
     fn from(value: ColumnId) -> Self {
         Expr::column(value)
     }

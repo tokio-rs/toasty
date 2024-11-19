@@ -5,8 +5,8 @@ pub struct ExprField {
     pub field: FieldId,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn field(field: impl Into<FieldId>) -> Expr<'stmt> {
+impl Expr {
+    pub fn field(field: impl Into<FieldId>) -> Expr {
         ExprField {
             field: field.into(),
         }
@@ -18,31 +18,31 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprField> for Expr<'stmt> {
+impl From<ExprField> for Expr {
     fn from(value: ExprField) -> Self {
         Expr::Field(value)
     }
 }
 
-impl<'stmt> From<&Field> for ExprField {
+impl From<&Field> for ExprField {
     fn from(value: &Field) -> Self {
         ExprField { field: value.id }
     }
 }
 
-impl<'stmt> From<&Field> for Expr<'stmt> {
+impl From<&Field> for Expr {
     fn from(value: &Field) -> Self {
         Expr::field(value)
     }
 }
 
-impl<'stmt> From<FieldId> for ExprField {
+impl From<FieldId> for ExprField {
     fn from(value: FieldId) -> Self {
         ExprField { field: value }
     }
 }
 
-impl<'stmt> From<FieldId> for Expr<'stmt> {
+impl From<FieldId> for Expr {
     fn from(value: FieldId) -> Self {
         Expr::field(value)
     }

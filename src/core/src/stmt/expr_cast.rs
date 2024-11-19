@@ -1,16 +1,16 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprCast<'stmt> {
+pub struct ExprCast {
     /// Expression to cast
-    pub expr: Box<Expr<'stmt>>,
+    pub expr: Box<Expr>,
 
     /// Type to cast to
     pub ty: Type,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn cast(expr: impl Into<Expr<'stmt>>, ty: impl Into<Type>) -> Expr<'stmt> {
+impl Expr {
+    pub fn cast(expr: impl Into<Expr>, ty: impl Into<Type>) -> Expr {
         ExprCast {
             expr: Box::new(expr.into()),
             ty: ty.into(),
@@ -23,8 +23,8 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt> ExprCast<'stmt> {
-    pub(crate) fn simplify(&mut self) -> Option<Expr<'stmt>> {
+impl ExprCast {
+    pub(crate) fn simplify(&mut self) -> Option<Expr> {
         if let Expr::Value(value) = &mut *self.expr {
             // TODO: if the unwrap fails, it is a validation bug
             let cast = self.ty.cast(value.take()).unwrap();
@@ -35,8 +35,8 @@ impl<'stmt> ExprCast<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprCast<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprCast<'stmt>) -> Self {
+impl From<ExprCast> for Expr {
+    fn from(value: ExprCast) -> Self {
         Expr::Cast(value)
     }
 }

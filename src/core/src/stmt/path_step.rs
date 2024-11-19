@@ -13,15 +13,15 @@ impl PathStep {
     }
 }
 
-impl<'stmt> std::ops::Index<PathStep> for [Expr<'stmt>] {
-    type Output = Expr<'stmt>;
+impl std::ops::Index<PathStep> for [Expr] {
+    type Output = Expr;
 
     fn index(&self, index: PathStep) -> &Self::Output {
         self.index(index.into_usize())
     }
 }
 
-impl<'stmt> std::ops::IndexMut<PathStep> for [Expr<'stmt>] {
+impl std::ops::IndexMut<PathStep> for [Expr] {
     fn index_mut(&mut self, index: PathStep) -> &mut Self::Output {
         self.index_mut(index.into_usize())
     }

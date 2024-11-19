@@ -1,13 +1,13 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprEnum<'stmt> {
+pub struct ExprEnum {
     pub variant: usize,
-    pub fields: ExprRecord<'stmt>,
+    pub fields: ExprRecord,
 }
 
-impl<'stmt> From<ExprEnum<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprEnum<'stmt>) -> Self {
+impl From<ExprEnum> for Expr {
+    fn from(value: ExprEnum) -> Self {
         Expr::Enum(value)
     }
 }

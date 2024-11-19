@@ -3,62 +3,62 @@ use super::*;
 use std::ops;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprOr<'stmt> {
-    pub operands: Vec<Expr<'stmt>>,
+pub struct ExprOr {
+    pub operands: Vec<Expr>,
 }
 
-impl<'stmt> ExprOr<'stmt> {
-    pub fn new(operands: Vec<Expr<'stmt>>) -> ExprOr<'stmt> {
+impl ExprOr {
+    pub fn new(operands: Vec<Expr>) -> ExprOr {
         ExprOr { operands }
     }
 
-    pub fn new_binary<A, B>(lhs: A, rhs: B) -> ExprOr<'stmt>
+    pub fn new_binary<A, B>(lhs: A, rhs: B) -> ExprOr
     where
-        A: Into<Expr<'stmt>>,
-        B: Into<Expr<'stmt>>,
+        A: Into<Expr>,
+        B: Into<Expr>,
     {
         ExprOr {
             operands: vec![lhs.into(), rhs.into()],
         }
     }
 
-    pub fn extend(&mut self, rhs: ExprOr<'stmt>) {
+    pub fn extend(&mut self, rhs: ExprOr) {
         self.operands.extend(rhs.operands);
     }
 
-    pub fn push(&mut self, expr: Expr<'stmt>) {
+    pub fn push(&mut self, expr: Expr) {
         self.operands.push(expr);
     }
 }
 
-impl<'stmt> ops::Deref for ExprOr<'stmt> {
-    type Target = [Expr<'stmt>];
+impl ops::Deref for ExprOr {
+    type Target = [Expr];
 
     fn deref(&self) -> &Self::Target {
         self.operands.deref()
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a ExprOr<'stmt> {
-    type IntoIter = std::slice::Iter<'a, Expr<'stmt>>;
-    type Item = &'a Expr<'stmt>;
+impl<'a, 'stmt> IntoIterator for &'a ExprOr {
+    type IntoIter = std::slice::Iter<'a, Expr>;
+    type Item = &'a Expr;
 
     fn into_iter(self) -> Self::IntoIter {
         self.operands.iter()
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a mut ExprOr<'stmt> {
-    type IntoIter = std::slice::IterMut<'a, Expr<'stmt>>;
-    type Item = &'a mut Expr<'stmt>;
+impl<'a, 'stmt> IntoIterator for &'a mut ExprOr {
+    type IntoIter = std::slice::IterMut<'a, Expr>;
+    type Item = &'a mut Expr;
 
     fn into_iter(self) -> Self::IntoIter {
         self.operands.iter_mut()
     }
 }
 
-impl<'stmt> From<ExprOr<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprOr<'stmt>) -> Self {
+impl From<ExprOr> for Expr {
+    fn from(value: ExprOr) -> Self {
         Expr::Or(value)
     }
 }

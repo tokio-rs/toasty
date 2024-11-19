@@ -25,9 +25,9 @@ struct LowerModels<'a> {
 struct ModelLoweringBuilder<'a> {
     table: &'a mut Table,
     lowering_columns: Vec<ColumnId>,
-    model_to_table: Vec<stmt::Expr<'static>>,
-    model_pk_to_table: Vec<stmt::Expr<'static>>,
-    table_to_model: Vec<stmt::Expr<'static>>,
+    model_to_table: Vec<stmt::Expr>,
+    model_pk_to_table: Vec<stmt::Expr>,
+    table_to_model: Vec<stmt::Expr>,
 }
 
 impl<'a> LowerModels<'a> {
@@ -429,11 +429,7 @@ impl<'a> ModelLoweringBuilder<'a> {
         }
     }
 
-    fn map_primitive(
-        &mut self,
-        expr: impl Into<stmt::Expr<'static>>,
-        primitive: &mut FieldPrimitive,
-    ) {
+    fn map_primitive(&mut self, expr: impl Into<stmt::Expr>, primitive: &mut FieldPrimitive) {
         let lowering = self.encode_column(primitive.column, &primitive.ty, expr);
         primitive.lowering = self.model_to_table.len();
 
@@ -445,8 +441,8 @@ impl<'a> ModelLoweringBuilder<'a> {
         &self,
         column_id: ColumnId,
         ty: &stmt::Type,
-        expr: impl Into<stmt::Expr<'static>>,
-    ) -> stmt::Expr<'static> {
+        expr: impl Into<stmt::Expr>,
+    ) -> stmt::Expr {
         let expr = expr.into();
         let column = self.table.column(column_id);
 
@@ -475,7 +471,7 @@ impl<'a> ModelLoweringBuilder<'a> {
         }
     }
 
-    fn map_table_column_to_model(&mut self, primitive: &FieldPrimitive) -> stmt::Expr<'static> {
+    fn map_table_column_to_model(&mut self, primitive: &FieldPrimitive) -> stmt::Expr {
         let column_id = primitive.column;
         let column = self.table.column(column_id);
 

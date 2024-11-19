@@ -15,7 +15,7 @@ impl ExprTy {
     }
 }
 
-impl<'stmt> From<ExprTy> for Expr<'stmt> {
+impl From<ExprTy> for Expr {
     fn from(value: ExprTy) -> Self {
         Expr::Type(value)
     }

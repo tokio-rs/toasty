@@ -4,8 +4,8 @@ use crate::stmt::Statement as DataStatement;
 
 use std::fmt::{self, Write};
 
-pub trait Params<'stmt> {
-    fn push(&mut self, param: &stmt::Value<'stmt>);
+pub trait Params {
+    fn push(&mut self, param: &stmt::Value);
 }
 
 /// Serialize a statement to a SQL string
@@ -24,8 +24,8 @@ struct Formatter<'a, T> {
     params: &'a mut T,
 }
 
-impl<'stmt> Params<'stmt> for Vec<stmt::Value<'stmt>> {
-    fn push(&mut self, value: &stmt::Value<'stmt>) {
+impl Params for Vec<stmt::Value> {
+    fn push(&mut self, value: &stmt::Value) {
         self.push(value.clone());
     }
 }
@@ -35,11 +35,7 @@ impl<'a> Serializer<'a> {
         Serializer { schema }
     }
 
-    pub fn serialize_stmt<'stmt>(
-        &self,
-        stmt: &DataStatement<'stmt>,
-        params: &mut impl Params<'stmt>,
-    ) -> String {
+    pub fn serialize_stmt(&self, stmt: &DataStatement, params: &mut impl Params) -> String {
         let mut ret = String::new();
 
         let mut fmt = Formatter {
@@ -52,11 +48,7 @@ impl<'a> Serializer<'a> {
         ret
     }
 
-    pub fn serialize_sql_stmt<'stmt>(
-        &self,
-        stmt: &Statement<'stmt>,
-        params: &mut impl Params<'stmt>,
-    ) -> String {
+    pub fn serialize_sql_stmt(&self, stmt: &Statement, params: &mut impl Params) -> String {
         let mut ret = String::new();
 
         let mut fmt = Formatter {
@@ -70,8 +62,8 @@ impl<'a> Serializer<'a> {
     }
 }
 
-impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
-    fn statement(&mut self, statement: &DataStatement<'stmt>) -> fmt::Result {
+impl<'a, 'stmt, T: Params> Formatter<'a, T> {
+    fn statement(&mut self, statement: &DataStatement) -> fmt::Result {
         match statement {
             /*
             Statement::CreateIndex(stmt) => self.create_index(stmt)?,
@@ -89,7 +81,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    fn sql_statement(&mut self, statement: &Statement<'stmt>) -> fmt::Result {
+    fn sql_statement(&mut self, statement: &Statement) -> fmt::Result {
         match statement {
             Statement::CreateIndex(stmt) => self.create_index(stmt)?,
             Statement::CreateTable(stmt) => self.create_table(stmt)?,
@@ -105,7 +97,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    fn create_index(&mut self, stmt: &CreateIndex<'stmt>) -> fmt::Result {
+    fn create_index(&mut self, stmt: &CreateIndex) -> fmt::Result {
         write!(
             self.dst,
             "CREATE {}INDEX ",
@@ -144,7 +136,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    fn create_table(&mut self, stmt: &CreateTable<'stmt>) -> fmt::Result {
+    fn create_table(&mut self, stmt: &CreateTable) -> fmt::Result {
         write!(self.dst, "CREATE TABLE ")?;
         self.name(&stmt.name)?;
 
@@ -171,7 +163,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    fn query(&mut self, query: &Query<'stmt>) -> fmt::Result {
+    fn query(&mut self, query: &Query) -> fmt::Result {
         match &*query.body {
             ExprSet::Select(select) => self.select(select),
             ExprSet::Values(values) => self.values(values),
@@ -179,7 +171,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         }
     }
 
-    fn delete(&mut self, delete: &Delete<'stmt>) -> fmt::Result {
+    fn delete(&mut self, delete: &Delete) -> fmt::Result {
         write!(self.dst, "DELETE FROM ")?;
 
         assert!(delete.returning.is_none());
@@ -196,7 +188,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    fn insert(&mut self, stmt: &Insert<'stmt>) -> fmt::Result {
+    fn insert(&mut self, stmt: &Insert) -> fmt::Result {
         let InsertTarget::Table(insert_target) = &stmt.target else {
             todo!()
         };
@@ -228,7 +220,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    fn update(&mut self, update: &Update<'stmt>) -> fmt::Result {
+    fn update(&mut self, update: &Update) -> fmt::Result {
         let table = self.schema.table(update.target.as_table().table);
 
         write!(self.dst, "UPDATE \"{}\" SET", table.name)?;
@@ -271,7 +263,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    fn select(&mut self, select: &Select<'stmt>) -> fmt::Result {
+    fn select(&mut self, select: &Select) -> fmt::Result {
         write!(self.dst, "SELECT ")?;
 
         match &select.returning {
@@ -293,7 +285,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    fn values(&mut self, values: &Values<'stmt>) -> fmt::Result {
+    fn values(&mut self, values: &Values) -> fmt::Result {
         let mut s = "VALUES";
         for record in &values.rows {
             write!(self.dst, "{s} (")?;
@@ -305,7 +297,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    fn expr_list(&mut self, exprs: &[Expr<'stmt>]) -> fmt::Result {
+    fn expr_list(&mut self, exprs: &[Expr]) -> fmt::Result {
         let mut s = "";
 
         for expr in exprs {
@@ -317,7 +309,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         Ok(())
     }
 
-    fn expr_as_list(&mut self, expr: &Expr<'stmt>) -> fmt::Result {
+    fn expr_as_list(&mut self, expr: &Expr) -> fmt::Result {
         match expr {
             Expr::Record(expr) => self.expr_list(expr),
             Expr::List(expr) => self.expr_list(expr),
@@ -325,7 +317,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         }
     }
 
-    fn expr(&mut self, expr: &Expr<'stmt>) -> fmt::Result {
+    fn expr(&mut self, expr: &Expr) -> fmt::Result {
         match expr {
             Expr::And(ExprAnd { operands }) => {
                 let mut s = "";
@@ -424,7 +416,7 @@ impl<'a, 'stmt, T: Params<'stmt>> Formatter<'a, T> {
         )
     }
 
-    fn value(&mut self, value: &Value<'stmt>) -> fmt::Result {
+    fn value(&mut self, value: &Value) -> fmt::Result {
         assert!(!value.is_id());
         self.params.push(value);
         write!(self.dst, "?")?;

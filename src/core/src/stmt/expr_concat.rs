@@ -3,61 +3,61 @@ use super::*;
 use std::ops;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprConcat<'stmt> {
-    pub exprs: Vec<Expr<'stmt>>,
+pub struct ExprConcat {
+    pub exprs: Vec<Expr>,
 }
 
-impl<'stmt> ExprConcat<'stmt> {
-    pub fn new(exprs: Vec<Expr<'stmt>>) -> ExprConcat<'stmt> {
+impl ExprConcat {
+    pub fn new(exprs: Vec<Expr>) -> ExprConcat {
         ExprConcat { exprs }
     }
 
-    pub fn extend(&mut self, rhs: ExprConcat<'stmt>) {
+    pub fn extend(&mut self, rhs: ExprConcat) {
         self.exprs.extend(rhs.exprs);
     }
 
-    pub fn push(&mut self, expr: Expr<'stmt>) {
+    pub fn push(&mut self, expr: Expr) {
         self.exprs.push(expr);
     }
 }
 
-impl<'stmt> ops::Deref for ExprConcat<'stmt> {
-    type Target = [Expr<'stmt>];
+impl ops::Deref for ExprConcat {
+    type Target = [Expr];
 
     fn deref(&self) -> &Self::Target {
         self.exprs.deref()
     }
 }
 
-impl<'stmt> IntoIterator for ExprConcat<'stmt> {
-    type IntoIter = std::vec::IntoIter<Expr<'stmt>>;
-    type Item = Expr<'stmt>;
+impl IntoIterator for ExprConcat {
+    type IntoIter = std::vec::IntoIter<Expr>;
+    type Item = Expr;
 
     fn into_iter(self) -> Self::IntoIter {
         self.exprs.into_iter()
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a ExprConcat<'stmt> {
-    type IntoIter = std::slice::Iter<'a, Expr<'stmt>>;
-    type Item = &'a Expr<'stmt>;
+impl<'a, 'stmt> IntoIterator for &'a ExprConcat {
+    type IntoIter = std::slice::Iter<'a, Expr>;
+    type Item = &'a Expr;
 
     fn into_iter(self) -> Self::IntoIter {
         self.exprs.iter()
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a mut ExprConcat<'stmt> {
-    type IntoIter = std::slice::IterMut<'a, Expr<'stmt>>;
-    type Item = &'a mut Expr<'stmt>;
+impl<'a, 'stmt> IntoIterator for &'a mut ExprConcat {
+    type IntoIter = std::slice::IterMut<'a, Expr>;
+    type Item = &'a mut Expr;
 
     fn into_iter(self) -> Self::IntoIter {
         self.exprs.iter_mut()
     }
 }
 
-impl<'stmt> From<ExprConcat<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprConcat<'stmt>) -> Self {
+impl From<ExprConcat> for Expr {
+    fn from(value: ExprConcat) -> Self {
         Expr::Concat(value)
     }
 }

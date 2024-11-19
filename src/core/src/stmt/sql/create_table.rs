@@ -3,7 +3,7 @@ use super::*;
 use crate::schema::Table;
 
 #[derive(Debug, Clone)]
-pub struct CreateTable<'stmt> {
+pub struct CreateTable {
     /// Name of the table
     pub name: Name,
 
@@ -11,11 +11,11 @@ pub struct CreateTable<'stmt> {
     pub columns: Vec<ColumnDef>,
 
     /// Primary key clause
-    pub primary_key: Option<Box<Expr<'stmt>>>,
+    pub primary_key: Option<Box<Expr>>,
 }
 
-impl<'stmt> Statement<'stmt> {
-    pub fn create_table(table: &Table) -> Statement<'stmt> {
+impl Statement {
+    pub fn create_table(table: &Table) -> Statement {
         CreateTable {
             name: Name::from(&table.name[..]),
             columns: table.columns.iter().map(ColumnDef::from_schema).collect(),
@@ -27,8 +27,8 @@ impl<'stmt> Statement<'stmt> {
     }
 }
 
-impl<'stmt> From<CreateTable<'stmt>> for Statement<'stmt> {
-    fn from(value: CreateTable<'stmt>) -> Self {
+impl From<CreateTable> for Statement {
+    fn from(value: CreateTable) -> Self {
         Statement::CreateTable(value)
     }
 }

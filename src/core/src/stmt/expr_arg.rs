@@ -5,8 +5,8 @@ pub struct ExprArg {
     pub position: usize,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn arg(expr_arg: impl Into<ExprArg>) -> Expr<'stmt> {
+impl Expr {
+    pub fn arg(expr_arg: impl Into<ExprArg>) -> Expr {
         Expr::Arg(expr_arg.into())
     }
 }
@@ -17,7 +17,7 @@ impl From<usize> for ExprArg {
     }
 }
 
-impl<'stmt> From<ExprArg> for Expr<'stmt> {
+impl From<ExprArg> for Expr {
     fn from(value: ExprArg) -> Self {
         Expr::Arg(value)
     }

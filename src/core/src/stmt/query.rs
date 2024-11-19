@@ -1,24 +1,24 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Query<'stmt> {
-    pub body: Box<ExprSet<'stmt>>,
+pub struct Query {
+    pub body: Box<ExprSet>,
 }
 
-impl<'stmt> Query<'stmt> {
-    pub fn unit() -> Query<'stmt> {
+impl Query {
+    pub fn unit() -> Query {
         Query {
             body: Box::new(ExprSet::Values(Values::default())),
         }
     }
 
-    pub fn filter(source: impl Into<Source>, filter: impl Into<Expr<'stmt>>) -> Query<'stmt> {
+    pub fn filter(source: impl Into<Source>, filter: impl Into<Expr>) -> Query {
         Query {
             body: Box::new(ExprSet::Select(Select::new(source, filter))),
         }
     }
 
-    pub fn update(self, schema: &Schema) -> Update<'stmt> {
+    pub fn update(self, schema: &Schema) -> Update {
         let ExprSet::Select(select) = *self.body else {
             todo!()
         };
@@ -33,7 +33,7 @@ impl<'stmt> Query<'stmt> {
         }
     }
 
-    pub fn delete(self) -> Delete<'stmt> {
+    pub fn delete(self) -> Delete {
         match *self.body {
             ExprSet::Select(select) => Delete {
                 from: select.source,
@@ -44,11 +44,11 @@ impl<'stmt> Query<'stmt> {
         }
     }
 
-    pub fn and(&mut self, expr: impl Into<Expr<'stmt>>) {
+    pub fn and(&mut self, expr: impl Into<Expr>) {
         self.body.as_select_mut().and(expr);
     }
 
-    pub fn union(&mut self, query: impl Into<Query<'stmt>>) {
+    pub fn union(&mut self, query: impl Into<Query>) {
         use std::mem;
 
         let rhs = query.into();
@@ -76,31 +76,31 @@ impl<'stmt> Query<'stmt> {
         }
     }
 
-    pub fn substitute(&mut self, mut input: impl substitute::Input<'stmt>) {
+    pub fn substitute(&mut self, mut input: impl substitute::Input) {
         self.substitute_ref(&mut input);
     }
 
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input<'stmt>) {
+    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
         self.body.substitute_ref(input);
     }
 }
 
-impl<'stmt> From<Query<'stmt>> for Statement<'stmt> {
-    fn from(value: Query<'stmt>) -> Self {
+impl From<Query> for Statement {
+    fn from(value: Query) -> Self {
         Statement::Query(value)
     }
 }
 
-impl<'stmt> Node<'stmt> for Query<'stmt> {
-    fn map<V: Map<'stmt>>(&self, visit: &mut V) -> Self {
+impl Node for Query {
+    fn map<V: Map>(&self, visit: &mut V) -> Self {
         visit.map_stmt_query(self)
     }
 
-    fn visit<V: Visit<'stmt>>(&self, mut visit: V) {
+    fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_query(self);
     }
 
-    fn visit_mut<V: VisitMut<'stmt>>(&mut self, mut visit: V) {
+    fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
         visit.visit_stmt_query_mut(self);
     }
 }

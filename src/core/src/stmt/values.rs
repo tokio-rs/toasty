@@ -1,12 +1,12 @@
 use super::*;
 
 #[derive(Debug, Default, Clone, PartialEq)]
-pub struct Values<'stmt> {
-    pub rows: Vec<Expr<'stmt>>,
+pub struct Values {
+    pub rows: Vec<Expr>,
 }
 
-impl<'stmt> Values<'stmt> {
-    pub fn new(rows: Vec<Expr<'stmt>>) -> Values<'stmt> {
+impl Values {
+    pub fn new(rows: Vec<Expr>) -> Values {
         Values { rows }
     }
 
@@ -14,7 +14,7 @@ impl<'stmt> Values<'stmt> {
         self.rows.is_empty()
     }
 
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input<'stmt>) {
+    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
         /*
         for row in &mut self.rows {
             for item in row {
@@ -26,14 +26,14 @@ impl<'stmt> Values<'stmt> {
     }
 }
 
-impl<'stmt> From<Values<'stmt>> for ExprSet<'stmt> {
-    fn from(value: Values<'stmt>) -> Self {
+impl From<Values> for ExprSet {
+    fn from(value: Values) -> Self {
         ExprSet::Values(value)
     }
 }
 
-impl<'stmt> From<Values<'stmt>> for Query<'stmt> {
-    fn from(value: Values<'stmt>) -> Self {
+impl From<Values> for Query {
+    fn from(value: Values) -> Self {
         Query {
             body: Box::new(value.into()),
         }

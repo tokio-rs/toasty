@@ -50,7 +50,7 @@ impl Type {
         matches!(self, Self::Model(_))
     }
 
-    pub fn cast<'stmt>(&self, value: Value<'stmt>) -> Result<Value<'stmt>> {
+    pub fn cast(&self, value: Value) -> Result<Value> {
         match value {
             stmt::Value::Id(value) => value.cast(self),
             stmt::Value::String(value) => match self {

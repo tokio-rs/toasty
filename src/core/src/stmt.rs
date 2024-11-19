@@ -166,27 +166,27 @@ use crate::{
 use std::fmt;
 
 #[derive(Clone, PartialEq)]
-pub enum Statement<'stmt> {
+pub enum Statement {
     /// Delete one or more existing records
-    Delete(Delete<'stmt>),
+    Delete(Delete),
 
     /// Link one or more associations
-    Link(Link<'stmt>),
+    Link(Link),
 
     /// Create one or more instances of a model
-    Insert(Insert<'stmt>),
+    Insert(Insert),
 
     /// Query the database
-    Query(Query<'stmt>),
+    Query(Query),
 
     /// Unlink one or more associations
-    Unlink(Unlink<'stmt>),
+    Unlink(Unlink),
 
     /// Update one or more existing records
-    Update(Update<'stmt>),
+    Update(Update),
 }
 
-impl<'stmt> Statement<'stmt> {
+impl Statement {
     pub fn inputs(&self) -> Vec<Path> {
         todo!()
     }
@@ -203,21 +203,21 @@ impl<'stmt> Statement<'stmt> {
     */
 }
 
-impl<'stmt> Node<'stmt> for Statement<'stmt> {
-    fn map<V: Map<'stmt>>(&self, visit: &mut V) -> Self {
+impl Node for Statement {
+    fn map<V: Map>(&self, visit: &mut V) -> Self {
         visit.map_stmt(self)
     }
 
-    fn visit<V: Visit<'stmt>>(&self, mut visit: V) {
+    fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt(self);
     }
 
-    fn visit_mut<V: VisitMut<'stmt>>(&mut self, mut visit: V) {
+    fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
         visit.visit_stmt_mut(self);
     }
 }
 
-impl<'a> fmt::Debug for Statement<'a> {
+impl fmt::Debug for Statement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Statement::Delete(v) => v.fmt(f),

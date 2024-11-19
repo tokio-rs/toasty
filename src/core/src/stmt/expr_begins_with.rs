@@ -1,16 +1,13 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprBeginsWith<'stmt> {
-    pub expr: Box<Expr<'stmt>>,
-    pub pattern: Box<Expr<'stmt>>,
+pub struct ExprBeginsWith {
+    pub expr: Box<Expr>,
+    pub pattern: Box<Expr>,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn begins_with(
-        expr: impl Into<Expr<'stmt>>,
-        pattern: impl Into<Expr<'stmt>>,
-    ) -> Expr<'stmt> {
+impl Expr {
+    pub fn begins_with(expr: impl Into<Expr>, pattern: impl Into<Expr>) -> Expr {
         ExprBeginsWith {
             expr: Box::new(expr.into()),
             pattern: Box::new(pattern.into()),
@@ -19,14 +16,14 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprBeginsWith<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprBeginsWith<'stmt>) -> Self {
+impl From<ExprBeginsWith> for Expr {
+    fn from(value: ExprBeginsWith) -> Self {
         Expr::Pattern(value.into())
     }
 }
 
-impl<'stmt> From<ExprBeginsWith<'stmt>> for ExprPattern<'stmt> {
-    fn from(value: ExprBeginsWith<'stmt>) -> Self {
+impl From<ExprBeginsWith> for ExprPattern {
+    fn from(value: ExprBeginsWith) -> Self {
         ExprPattern::BeginsWith(value)
     }
 }

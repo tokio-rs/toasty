@@ -3,44 +3,44 @@ use super::*;
 use std::ops;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprAnd<'stmt> {
-    pub operands: Vec<Expr<'stmt>>,
+pub struct ExprAnd {
+    pub operands: Vec<Expr>,
 }
 
-impl<'stmt> ExprAnd<'stmt> {
-    pub fn new(operands: Vec<Expr<'stmt>>) -> ExprAnd<'stmt> {
+impl ExprAnd {
+    pub fn new(operands: Vec<Expr>) -> ExprAnd {
         ExprAnd { operands }
     }
 }
 
-impl<'stmt> ops::Deref for ExprAnd<'stmt> {
-    type Target = [Expr<'stmt>];
+impl ops::Deref for ExprAnd {
+    type Target = [Expr];
 
     fn deref(&self) -> &Self::Target {
         self.operands.deref()
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a ExprAnd<'stmt> {
-    type IntoIter = std::slice::Iter<'a, Expr<'stmt>>;
-    type Item = &'a Expr<'stmt>;
+impl<'a> IntoIterator for &'a ExprAnd {
+    type IntoIter = std::slice::Iter<'a, Expr>;
+    type Item = &'a Expr;
 
     fn into_iter(self) -> Self::IntoIter {
         self.operands.iter()
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a mut ExprAnd<'stmt> {
-    type IntoIter = std::slice::IterMut<'a, Expr<'stmt>>;
-    type Item = &'a mut Expr<'stmt>;
+impl<'a> IntoIterator for &'a mut ExprAnd {
+    type IntoIter = std::slice::IterMut<'a, Expr>;
+    type Item = &'a mut Expr;
 
     fn into_iter(self) -> Self::IntoIter {
         self.operands.iter_mut()
     }
 }
 
-impl<'stmt> From<ExprAnd<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprAnd<'stmt>) -> Self {
+impl From<ExprAnd> for Expr {
+    fn from(value: ExprAnd) -> Self {
         Expr::And(value)
     }
 }

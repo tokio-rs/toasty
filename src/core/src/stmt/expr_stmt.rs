@@ -1,14 +1,14 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprStmt<'stmt> {
-    pub stmt: Box<Statement<'stmt>>,
+pub struct ExprStmt {
+    pub stmt: Box<Statement>,
 }
 
-impl<'stmt> ExprStmt<'stmt> {
-    pub fn new<T>(stmt: T) -> ExprStmt<'stmt>
+impl ExprStmt {
+    pub fn new<T>(stmt: T) -> ExprStmt
     where
-        T: Into<Statement<'stmt>>,
+        T: Into<Statement>,
     {
         ExprStmt {
             stmt: Box::new(stmt.into()),
@@ -16,20 +16,20 @@ impl<'stmt> ExprStmt<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprStmt<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprStmt<'stmt>) -> Self {
+impl From<ExprStmt> for Expr {
+    fn from(value: ExprStmt) -> Self {
         Expr::Stmt(value)
     }
 }
 
-impl<'stmt> From<Statement<'stmt>> for ExprStmt<'stmt> {
-    fn from(value: Statement<'stmt>) -> Self {
+impl From<Statement> for ExprStmt {
+    fn from(value: Statement) -> Self {
         ExprStmt { stmt: value.into() }
     }
 }
 
-impl<'stmt> From<Insert<'stmt>> for ExprStmt<'stmt> {
-    fn from(value: Insert<'stmt>) -> Self {
+impl From<Insert> for ExprStmt {
+    fn from(value: Insert) -> Self {
         ExprStmt {
             stmt: Box::new(Statement::from(value)),
         }

@@ -24,7 +24,7 @@ pub struct Query {
     pub ret: ModelId,
 
     /// Implementation
-    pub stmt: stmt::Query<'static>,
+    pub stmt: stmt::Query,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -79,8 +79,8 @@ enum FindByArgType {
 }
 
 impl Query {
-    pub fn apply<'stmt>(&self, input: impl stmt::substitute::Input<'stmt>) -> stmt::Query<'stmt> {
-        let mut stmt: stmt::Query<'stmt> = self.stmt.clone();
+    pub fn apply(&self, input: impl stmt::substitute::Input) -> stmt::Query {
+        let mut stmt: stmt::Query = self.stmt.clone();
 
         stmt.substitute(input);
         stmt
@@ -223,7 +223,7 @@ impl<'a> FindByBuilder<'a> {
         args
     }
 
-    fn query_body(&self) -> stmt::Query<'static> {
+    fn query_body(&self) -> stmt::Query {
         let mut exprs = vec![];
 
         for find_by_arg in &self.args {
@@ -257,7 +257,7 @@ impl<'a> FindByBuilder<'a> {
         stmt::Query::filter(self.model.id, filter)
     }
 
-    fn many_query_body(&self) -> stmt::Query<'static> {
+    fn many_query_body(&self) -> stmt::Query {
         let mut exprs = vec![];
         let mut tys = vec![];
 

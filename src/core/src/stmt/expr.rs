@@ -3,64 +3,64 @@ use super::*;
 use std::ops;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expr<'stmt> {
+pub enum Expr {
     /// AND a set of binary expressions
-    And(ExprAnd<'stmt>),
+    And(ExprAnd),
 
     /// An argument when the expression is a function body
     Arg(ExprArg),
 
     /// Binary expression
-    BinaryOp(ExprBinaryOp<'stmt>),
+    BinaryOp(ExprBinaryOp),
 
     /// Cast an expression to a different type
-    Cast(ExprCast<'stmt>),
+    Cast(ExprCast),
 
     /// References a column from a table in the statement
     Column(ExprColumn),
 
     /// Concat multiple expressions together
-    Concat(ExprConcat<'stmt>),
+    Concat(ExprConcat),
 
     /// Return an enum value
-    Enum(ExprEnum<'stmt>),
+    Enum(ExprEnum),
 
     /// References a field in the statement
     Field(ExprField),
 
     /// In list
-    InList(ExprInList<'stmt>),
+    InList(ExprInList),
 
     /// The expression is contained by the given subquery
-    InSubquery(ExprInSubquery<'stmt>),
+    InSubquery(ExprInSubquery),
 
     /// OR a set of binary expressi5nos
-    Or(ExprOr<'stmt>),
+    Or(ExprOr),
 
     /// Checks if an expression matches a pattern.
-    Pattern(ExprPattern<'stmt>),
+    Pattern(ExprPattern),
 
     /// Project an expression
-    Project(ExprProject<'stmt>),
+    Project(ExprProject),
 
     /// Evaluates to a tuple value
-    Record(ExprRecord<'stmt>),
+    Record(ExprRecord),
 
     /// A list of expressions of the same type
-    List(Vec<Expr<'stmt>>),
+    List(Vec<Expr>),
 
     /// Evaluate a sub-statement
-    Stmt(ExprStmt<'stmt>),
+    Stmt(ExprStmt),
 
     /// A type reference. This is used by the "is a" expression
     Type(ExprTy),
 
     /// Evaluates to a constant value reference
-    Value(Value<'stmt>),
+    Value(Value),
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn and(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+impl Expr {
+    pub fn and(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
         let mut lhs = lhs.into();
         let rhs = rhs.into();
 
@@ -81,7 +81,7 @@ impl<'stmt> Expr<'stmt> {
         }
     }
 
-    pub fn or(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+    pub fn or(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
         let mut lhs = lhs.into();
         let rhs = rhs.into();
 
@@ -102,7 +102,7 @@ impl<'stmt> Expr<'stmt> {
         }
     }
 
-    pub fn null() -> Expr<'stmt> {
+    pub fn null() -> Expr {
         Expr::Value(Value::Null)
     }
 
@@ -111,7 +111,7 @@ impl<'stmt> Expr<'stmt> {
         matches!(self, Expr::Value(Value::Null))
     }
 
-    pub fn in_subquery(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Query<'stmt>>) -> Expr<'stmt> {
+    pub fn in_subquery(lhs: impl Into<Expr>, rhs: impl Into<Query>) -> Expr {
         ExprInSubquery {
             expr: Box::new(lhs.into()),
             query: Box::new(rhs.into()),
@@ -119,9 +119,9 @@ impl<'stmt> Expr<'stmt> {
         .into()
     }
 
-    pub fn list<T>(items: impl IntoIterator<Item = T>) -> Expr<'stmt>
+    pub fn list<T>(items: impl IntoIterator<Item = T>) -> Expr
     where
-        T: Into<Expr<'stmt>>,
+        T: Into<Expr>,
     {
         Expr::List(items.into_iter().map(Into::into).collect())
     }
@@ -149,14 +149,14 @@ impl<'stmt> Expr<'stmt> {
         matches!(self, Expr::Arg(_))
     }
 
-    pub fn into_value(self) -> Value<'stmt> {
+    pub fn into_value(self) -> Value {
         match self {
             Expr::Value(value) => value,
             _ => todo!(),
         }
     }
 
-    pub fn into_stmt(self) -> ExprStmt<'stmt> {
+    pub fn into_stmt(self) -> ExprStmt {
         match self {
             Expr::Stmt(stmt) => stmt,
             _ => todo!(),
@@ -188,11 +188,11 @@ impl<'stmt> Expr<'stmt> {
         });
     }
 
-    pub fn substitute(&mut self, mut input: impl substitute::Input<'stmt>) {
+    pub fn substitute(&mut self, mut input: impl substitute::Input) {
         self.substitute_ref(&mut input);
     }
 
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input<'stmt>) {
+    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
         visit_mut::for_each_expr_mut(self, move |expr| match expr {
             Expr::Arg(expr_arg) => {
                 if let Some(sub) = input.resolve_arg(expr_arg) {
@@ -224,10 +224,10 @@ impl<'stmt> Expr<'stmt> {
         self.simplify();
     }
 
-    pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Expr<'stmt> {
+    pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Expr {
         struct MapProjections<T>(T);
 
-        impl<'stmt, T: FnMut(&Projection) -> Projection> VisitMut<'stmt> for MapProjections<T> {
+        impl<'stmt, T: FnMut(&Projection) -> Projection> VisitMut for MapProjections<T> {
             fn visit_projection_mut(&mut self, i: &mut Projection) {
                 *i = self.0(i);
             }
@@ -242,7 +242,7 @@ impl<'stmt> Expr<'stmt> {
     /// evaluation to include the given expression.
     ///
     /// TODO: maybe split up the ops and instead have `expr.as_or_cast_to_concat().push()`
-    pub fn push(&mut self, expr: impl Into<Expr<'stmt>>) {
+    pub fn push(&mut self, expr: impl Into<Expr>) {
         use std::mem;
 
         match self {
@@ -257,7 +257,7 @@ impl<'stmt> Expr<'stmt> {
         }
     }
 
-    pub fn take(&mut self) -> Expr<'stmt> {
+    pub fn take(&mut self) -> Expr {
         std::mem::replace(self, Expr::Value(Value::Null))
     }
 
@@ -281,14 +281,14 @@ impl<'stmt> Expr<'stmt> {
     */
 }
 
-impl<'stmt> Default for Expr<'stmt> {
+impl Default for Expr {
     fn default() -> Self {
         Expr::Value(Value::default())
     }
 }
 
-impl<'stmt, I: Into<PathStep>> ops::Index<I> for Expr<'stmt> {
-    type Output = Expr<'stmt>;
+impl<'stmt, I: Into<PathStep>> ops::Index<I> for Expr {
+    type Output = Expr;
 
     fn index(&self, index: I) -> &Self::Output {
         match self {
@@ -298,7 +298,7 @@ impl<'stmt, I: Into<PathStep>> ops::Index<I> for Expr<'stmt> {
     }
 }
 
-impl<'stmt, I: Into<PathStep>> ops::IndexMut<I> for Expr<'stmt> {
+impl<'stmt, I: Into<PathStep>> ops::IndexMut<I> for Expr {
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         match self {
             Expr::Record(expr_record) => expr_record.index_mut(index.into().into_usize()),
@@ -307,64 +307,64 @@ impl<'stmt, I: Into<PathStep>> ops::IndexMut<I> for Expr<'stmt> {
     }
 }
 
-impl<'stmt> Node<'stmt> for Expr<'stmt> {
-    fn map<V: Map<'stmt>>(&self, visit: &mut V) -> Self {
+impl Node for Expr {
+    fn map<V: Map>(&self, visit: &mut V) -> Self {
         visit.map_expr(self)
     }
 
-    fn visit<V: Visit<'stmt>>(&self, mut visit: V) {
+    fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_expr(self);
     }
 
-    fn visit_mut<V: VisitMut<'stmt>>(&mut self, mut visit: V) {
+    fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
         visit.visit_expr_mut(self);
     }
 }
 
 // === Conversions ===
 
-impl<'stmt> From<bool> for Expr<'stmt> {
-    fn from(value: bool) -> Expr<'stmt> {
+impl From<bool> for Expr {
+    fn from(value: bool) -> Expr {
         Expr::Value(Value::from(value))
     }
 }
 
-impl<'stmt> From<i64> for Expr<'stmt> {
+impl From<i64> for Expr {
     fn from(value: i64) -> Self {
         Expr::Value(value.into())
     }
 }
 
-impl<'stmt> From<&i64> for Expr<'stmt> {
+impl From<&i64> for Expr {
     fn from(value: &i64) -> Self {
         Expr::Value(value.into())
     }
 }
 
-impl<'stmt> From<String> for Expr<'stmt> {
+impl From<String> for Expr {
     fn from(value: String) -> Self {
         Expr::Value(value.into())
     }
 }
 
-impl<'stmt> From<&'stmt String> for Expr<'stmt> {
-    fn from(value: &'stmt String) -> Self {
+impl From<&String> for Expr {
+    fn from(value: &String) -> Self {
         Expr::Value(value.into())
     }
 }
 
-impl<'stmt> From<Value<'stmt>> for Expr<'stmt> {
-    fn from(value: Value<'stmt>) -> Expr<'stmt> {
+impl From<Value> for Expr {
+    fn from(value: Value) -> Expr {
         Expr::Value(value)
     }
 }
 
-impl<'stmt, E1, E2> From<(E1, E2)> for Expr<'stmt>
+impl<'stmt, E1, E2> From<(E1, E2)> for Expr
 where
-    E1: Into<Expr<'stmt>>,
-    E2: Into<Expr<'stmt>>,
+    E1: Into<Expr>,
+    E2: Into<Expr>,
 {
-    fn from(value: (E1, E2)) -> Expr<'stmt> {
+    fn from(value: (E1, E2)) -> Expr {
         Expr::Record(value.into())
     }
 }

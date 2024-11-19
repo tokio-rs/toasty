@@ -3,78 +3,53 @@ use super::*;
 use std::ops;
 
 #[derive(Debug, Clone)]
-pub enum Record<'stmt> {
-    Borrowed(&'stmt [Value<'stmt>]),
-    Owned(Vec<Value<'stmt>>),
+pub struct Record {
+    pub fields: Vec<Value>,
 }
 
-impl<'stmt> Record<'stmt> {
-    pub fn new() -> Record<'stmt> {
-        Record::Owned(vec![])
+impl Record {
+    pub fn new() -> Record {
+        Record { fields: vec![] }
     }
 
-    pub fn from_vec(fields: Vec<Value<'stmt>>) -> Record<'stmt> {
-        Record::Owned(fields)
-    }
-
-    pub fn to_fields(self) -> Vec<Value<'stmt>> {
-        match self {
-            Record::Borrowed(fields) => fields.to_vec(),
-            Record::Owned(fields) => fields,
-        }
-    }
-
-    pub fn into_owned(self) -> Record<'static> {
-        Record::from_vec(match self {
-            Record::Borrowed(_) => todo!(),
-            Record::Owned(fields) => fields.into_iter().map(|field| field.into_owned()).collect(),
-        })
+    pub fn from_vec(fields: Vec<Value>) -> Record {
+        Record { fields }
     }
 }
 
-impl<'stmt> ops::Deref for Record<'stmt> {
-    type Target = [Value<'stmt>];
+impl ops::Deref for Record {
+    type Target = [Value];
 
     fn deref(&self) -> &Self::Target {
-        match self {
-            Self::Borrowed(v) => v,
-            Self::Owned(v) => v,
-        }
+        &self.fields[..]
     }
 }
 
-impl<'stmt> ops::DerefMut for Record<'stmt> {
+impl ops::DerefMut for Record {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        if let Record::Borrowed(fields) = self {
-            *self = Record::Owned(fields.to_vec());
-        }
-
-        match self {
-            Record::Owned(record) => record,
-            _ => unreachable!(),
-        }
+        &mut self.fields[..]
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a Record<'stmt> {
-    type Item = &'a Value<'stmt>;
-    type IntoIter = std::slice::Iter<'a, Value<'stmt>>;
+impl<'a> IntoIterator for &'a Record {
+    type Item = &'a Value;
+    type IntoIter = std::slice::Iter<'a, Value>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a mut Record<'stmt> {
-    type Item = &'a mut Value<'stmt>;
-    type IntoIter = std::slice::IterMut<'a, Value<'stmt>>;
+impl<'a> IntoIterator for &'a mut Record {
+    type Item = &'a mut Value;
+    type IntoIter = std::slice::IterMut<'a, Value>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
     }
 }
 
-impl<'stmt> PartialEq for Record<'stmt> {
+impl PartialEq for Record {
     fn eq(&self, other: &Self) -> bool {
         **self == **other
     }

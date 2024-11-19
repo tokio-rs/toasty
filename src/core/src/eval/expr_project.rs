@@ -21,10 +21,7 @@ impl Expr {
 }
 
 impl ExprProject {
-    pub(crate) fn from_stmt<'stmt>(
-        expr: stmt::ExprProject<'stmt>,
-        convert: &mut impl Convert,
-    ) -> ExprProject {
+    pub(crate) fn from_stmt(expr: stmt::ExprProject, convert: &mut impl Convert) -> ExprProject {
         ExprProject {
             base: Box::new(Expr::from_stmt_by_ref(*expr.base, convert)),
             projection: expr.projection,

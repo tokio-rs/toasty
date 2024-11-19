@@ -3,7 +3,7 @@ use super::*;
 use crate::schema::{self, Index, TableId};
 
 #[derive(Debug, Clone)]
-pub struct CreateIndex<'stmt> {
+pub struct CreateIndex {
     /// Name of the index
     pub name: Name,
 
@@ -11,14 +11,14 @@ pub struct CreateIndex<'stmt> {
     pub on: TableId,
 
     /// The columns to index
-    pub columns: Vec<ExprOrderBy<'stmt>>,
+    pub columns: Vec<ExprOrderBy>,
 
     /// When true, the index is unique
     pub unique: bool,
 }
 
-impl<'stmt> Statement<'stmt> {
-    pub fn create_index(index: &Index) -> Statement<'stmt> {
+impl Statement {
+    pub fn create_index(index: &Index) -> Statement {
         CreateIndex {
             name: Name::from(&index.name[..]),
             on: index.on,
@@ -39,8 +39,8 @@ impl<'stmt> Statement<'stmt> {
     }
 }
 
-impl<'stmt> From<CreateIndex<'stmt>> for Statement<'stmt> {
-    fn from(value: CreateIndex<'stmt>) -> Self {
+impl From<CreateIndex> for Statement {
+    fn from(value: CreateIndex) -> Self {
         Statement::CreateIndex(value)
     }
 }

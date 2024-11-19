@@ -39,7 +39,7 @@ impl Path {
         }
     }
 
-    pub fn into_stmt<'stmt>(self) -> Expr<'stmt> {
+    pub fn into_stmt(self) -> Expr {
         let [field, project @ ..] = self.projection.as_slice() else {
             todo!("path={self:#?}")
         };

@@ -3,14 +3,14 @@ use super::*;
 use std::ops;
 
 #[derive(Clone, PartialEq)]
-pub struct Assignments<'stmt> {
+pub struct Assignments {
     pub fields: PathFieldSet,
 
-    pub exprs: Vec<Option<Expr<'stmt>>>,
+    pub exprs: Vec<Option<Expr>>,
 }
 
-impl<'stmt> Assignments<'stmt> {
-    pub fn with_capacity(capacity: usize) -> Assignments<'stmt> {
+impl Assignments {
+    pub fn with_capacity(capacity: usize) -> Assignments {
         Assignments {
             fields: PathFieldSet::new(),
             exprs: Vec::with_capacity(capacity),
@@ -25,7 +25,7 @@ impl<'stmt> Assignments<'stmt> {
         self.fields.contains(field)
     }
 
-    pub fn get(&self, field: impl Into<PathStep>) -> Option<&Expr<'stmt>> {
+    pub fn get(&self, field: impl Into<PathStep>) -> Option<&Expr> {
         let index = field.into().into_usize();
 
         if index >= self.exprs.len() {
@@ -35,7 +35,7 @@ impl<'stmt> Assignments<'stmt> {
         }
     }
 
-    pub fn set(&mut self, field: impl Into<PathStep>, expr: impl Into<Expr<'stmt>>) {
+    pub fn set(&mut self, field: impl Into<PathStep>, expr: impl Into<Expr>) {
         let index = field.into().into_usize();
         self.fields.insert(index);
 
@@ -53,7 +53,7 @@ impl<'stmt> Assignments<'stmt> {
         self.exprs[field.into_usize()] = None;
     }
 
-    pub fn take(&mut self, field: impl Into<PathStep>) -> stmt::Expr<'stmt> {
+    pub fn take(&mut self, field: impl Into<PathStep>) -> stmt::Expr {
         let field = field.into();
         self.fields.unset(field);
 
@@ -61,14 +61,14 @@ impl<'stmt> Assignments<'stmt> {
     }
 
     // TODO: probably should create an `assignment::Entry` type
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (usize, &'a Expr<'stmt>)> + '_ {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (usize, &'a Expr)> + '_ {
         self.fields.iter().map(|path_step| {
             let index = path_step.into_usize();
             (index, self.exprs[index].as_ref().unwrap())
         })
     }
 
-    pub fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = (usize, &'a mut Expr<'stmt>)> + '_ {
+    pub fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = (usize, &'a mut Expr)> + '_ {
         self.exprs
             .iter_mut()
             .enumerate()
@@ -76,7 +76,7 @@ impl<'stmt> Assignments<'stmt> {
     }
 }
 
-impl<'stmt> Default for Assignments<'stmt> {
+impl Default for Assignments {
     fn default() -> Self {
         Assignments {
             fields: PathFieldSet::new(),
@@ -85,8 +85,8 @@ impl<'stmt> Default for Assignments<'stmt> {
     }
 }
 
-impl<'stmt, I: Into<PathStep>> ops::Index<I> for Assignments<'stmt> {
-    type Output = Expr<'stmt>;
+impl<I: Into<PathStep>> ops::Index<I> for Assignments {
+    type Output = Expr;
 
     fn index(&self, index: I) -> &Self::Output {
         let index = index.into().into_usize();
@@ -94,14 +94,14 @@ impl<'stmt, I: Into<PathStep>> ops::Index<I> for Assignments<'stmt> {
     }
 }
 
-impl<'stmt, I: Into<PathStep>> ops::IndexMut<I> for Assignments<'stmt> {
+impl<I: Into<PathStep>> ops::IndexMut<I> for Assignments {
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         let index = index.into().into_usize();
         self.exprs[index].as_mut().unwrap()
     }
 }
 
-impl<'stmt> fmt::Debug for Assignments<'stmt> {
+impl fmt::Debug for Assignments {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut fmt = f.debug_struct("Assignments");
 

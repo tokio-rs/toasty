@@ -24,11 +24,11 @@ struct Iter<'stmt, I> {
 #[derive(Clone)]
 enum Buffer {
     Empty,
-    One(Value<'static>),
-    Many(VecDeque<Value<'static>>),
+    One(Value),
+    Many(VecDeque<Value>),
 }
 
-type DynStream = Pin<Box<dyn Stream<Item = crate::Result<Value<'static>>> + Send + 'static>>;
+type DynStream = Pin<Box<dyn Stream<Item = crate::Result<Value>> + Send + 'static>>;
 
 impl ValueStream {
     pub fn new() -> ValueStream {
@@ -38,14 +38,14 @@ impl ValueStream {
         }
     }
 
-    pub fn from_value(value: impl Into<Value<'static>>) -> ValueStream {
+    pub fn from_value(value: impl Into<Value>) -> ValueStream {
         ValueStream {
             buffer: Buffer::One(value.into()),
             stream: None,
         }
     }
 
-    pub fn from_stream<T: Stream<Item = crate::Result<Value<'static>>> + Send + 'static>(
+    pub fn from_stream<T: Stream<Item = crate::Result<Value>> + Send + 'static>(
         stream: T,
     ) -> ValueStream {
         ValueStream {
@@ -54,7 +54,7 @@ impl ValueStream {
         }
     }
 
-    pub fn from_vec(records: Vec<Value<'static>>) -> ValueStream {
+    pub fn from_vec(records: Vec<Value>) -> ValueStream {
         ValueStream {
             buffer: Buffer::Many(records.into()),
             stream: None,
@@ -63,7 +63,7 @@ impl ValueStream {
 
     pub fn from_iter<T, I>(iter: I) -> ValueStream
     where
-        T: Into<Value<'static>>,
+        T: Into<Value>,
         I: Iterator<Item = crate::Result<T>> + Send + 'static,
     {
         ValueStream::from_stream(Iter {
@@ -73,12 +73,12 @@ impl ValueStream {
     }
 
     /// Returns the next record in the stream
-    pub async fn next(&mut self) -> Option<crate::Result<Value<'static>>> {
+    pub async fn next(&mut self) -> Option<crate::Result<Value>> {
         StreamExt::next(self).await
     }
 
     /// Peek at the next record in the stream
-    pub async fn peek(&mut self) -> Option<crate::Result<&Value<'static>>> {
+    pub async fn peek(&mut self) -> Option<crate::Result<&Value>> {
         if self.buffer.is_empty() {
             match self.next().await {
                 Some(Ok(value)) => self.buffer.push(value),
@@ -106,7 +106,7 @@ impl ValueStream {
         ret
     }
 
-    pub async fn collect(mut self) -> crate::Result<Vec<Value<'static>>> {
+    pub async fn collect(mut self) -> crate::Result<Vec<Value>> {
         let mut ret = Vec::with_capacity(self.min_len());
 
         while let Some(res) = self.next().await {
@@ -136,22 +136,20 @@ impl ValueStream {
         Ok(())
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Value<'static>> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Value> {
         assert!(self.stream.is_none());
 
         // TODO: don't box
         match &mut self.buffer {
             Buffer::Empty => Box::new(None.into_iter()),
             Buffer::One(v) => Box::new(Some(v).into_iter()),
-            Buffer::Many(v) => {
-                Box::new(v.iter_mut()) as Box<dyn Iterator<Item = &mut Value<'static>>>
-            }
+            Buffer::Many(v) => Box::new(v.iter_mut()) as Box<dyn Iterator<Item = &mut Value>>,
         }
     }
 }
 
 impl Stream for ValueStream {
-    type Item = crate::Result<Value<'static>>;
+    type Item = crate::Result<Value>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Some(next) = self.buffer.next() {
@@ -181,8 +179,8 @@ impl Stream for ValueStream {
     }
 }
 
-impl From<Value<'static>> for ValueStream {
-    fn from(src: Value<'static>) -> ValueStream {
+impl From<Value> for ValueStream {
+    fn from(src: Value) -> ValueStream {
         ValueStream {
             buffer: Buffer::One(src),
             stream: None,
@@ -190,8 +188,8 @@ impl From<Value<'static>> for ValueStream {
     }
 }
 
-impl From<Vec<Value<'static>>> for ValueStream {
-    fn from(value: Vec<Value<'static>>) -> Self {
+impl From<Vec<Value>> for ValueStream {
+    fn from(value: Vec<Value>) -> Self {
         ValueStream::from_vec(value)
     }
 }
@@ -201,9 +199,9 @@ impl<'stmt, I> Unpin for Iter<'stmt, I> {}
 impl<'stmt, T, I> Stream for Iter<'stmt, I>
 where
     I: Iterator<Item = crate::Result<T>>,
-    T: Into<Value<'stmt>>,
+    T: Into<Value>,
 {
-    type Item = crate::Result<Value<'stmt>>;
+    type Item = crate::Result<Value>;
 
     fn poll_next(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         Poll::Ready(self.iter.next().map(|res| res.map(|item| item.into())))
@@ -233,7 +231,7 @@ impl Buffer {
         }
     }
 
-    fn first(&self) -> Option<&Value<'static>> {
+    fn first(&self) -> Option<&Value> {
         match self {
             Buffer::Empty => None,
             Buffer::One(value) => Some(value),
@@ -241,7 +239,7 @@ impl Buffer {
         }
     }
 
-    fn next(&mut self) -> Option<Value<'static>> {
+    fn next(&mut self) -> Option<Value> {
         match self {
             Buffer::Empty => None,
             Buffer::One(_) => {
@@ -254,7 +252,7 @@ impl Buffer {
         }
     }
 
-    fn push(&mut self, value: Value<'static>) {
+    fn push(&mut self, value: Value) {
         match self {
             Buffer::Empty => {
                 *self = Buffer::One(value);

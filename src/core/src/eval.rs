@@ -48,7 +48,7 @@ pub enum Expr {
     Map(ExprMap),
     Project(ExprProject),
     Record(ExprRecord),
-    Value(Value<'static>),
+    Value(Value),
 }
 
 impl Expr {
@@ -56,10 +56,7 @@ impl Expr {
         Some(Expr::from_stmt_by_ref(stmt, &mut convert))
     }
 
-    pub(crate) fn from_stmt_by_ref<'stmt>(
-        stmt: stmt::Expr<'stmt>,
-        convert: &mut impl Convert,
-    ) -> Expr {
+    pub(crate) fn from_stmt_by_ref(stmt: stmt::Expr, convert: &mut impl Convert) -> Expr {
         match stmt {
             stmt::Expr::Arg(expr) => ExprArg::from_stmt(expr).into(),
             stmt::Expr::And(expr) => ExprAnd::from_stmt(expr, convert).into(),
@@ -69,12 +66,12 @@ impl Expr {
             stmt::Expr::List(expr) => ExprList::from_stmt(expr, convert).into(),
             stmt::Expr::Project(expr) => ExprProject::from_stmt(expr, convert).into(),
             stmt::Expr::Record(expr) => ExprRecord::from_stmt(expr, convert).into(),
-            stmt::Expr::Value(expr) => Expr::Value(expr.into_owned()),
+            stmt::Expr::Value(expr) => Expr::Value(expr),
             _ => todo!("stmt={:#?}", stmt),
         }
     }
 
-    pub fn eval(&self, mut input: impl Input) -> crate::Result<Value<'static>> {
+    pub fn eval(&self, mut input: impl Input) -> crate::Result<Value> {
         self.eval_ref(&mut input)
     }
 
@@ -83,7 +80,7 @@ impl Expr {
     /// # Panics
     ///
     /// `eval_const` panics if the expression is not constant
-    pub fn eval_const(&self) -> Value<'static> {
+    pub fn eval_const(&self) -> Value {
         self.eval_ref(&mut const_input()).unwrap()
     }
 
@@ -98,7 +95,7 @@ impl Expr {
         }
     }
 
-    pub(crate) fn eval_ref(&self, input: &mut impl Input) -> Result<Value<'static>> {
+    pub(crate) fn eval_ref(&self, input: &mut impl Input) -> Result<Value> {
         match self {
             Expr::And(expr_and) => {
                 debug_assert!(!expr_and.operands.is_empty());
@@ -112,7 +109,7 @@ impl Expr {
                 Ok(true.into())
             }
             Expr::Arg(expr_arg) => Ok(input.resolve_arg(expr_arg, &Projection::identity())),
-            Expr::Value(value) => Ok(value.clone().into_owned()),
+            Expr::Value(value) => Ok(value.clone()),
             Expr::BinaryOp(expr_binary_op) => {
                 let lhs = expr_binary_op.lhs.eval_ref(input)?;
                 let rhs = expr_binary_op.rhs.eval_ref(input)?;
@@ -161,7 +158,7 @@ impl Expr {
     }
 }
 
-impl<'stmt, T: Into<stmt::Expr<'stmt>>> From<T> for Expr {
+impl<'stmt, T: Into<stmt::Expr>> From<T> for Expr {
     fn from(value: T) -> Self {
         Expr::from_stmt_by_ref(value.into(), &mut convert::Const)
     }

@@ -1,21 +1,21 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Update<'stmt> {
+pub struct Update {
     /// What to update
     pub target: UpdateTarget,
 
     /// Assignments
-    pub assignments: Assignments<'stmt>,
+    pub assignments: Assignments,
 
     /// Which entries to update
-    pub filter: Option<Expr<'stmt>>,
+    pub filter: Option<Expr>,
 
     /// A condition that must be satisfied in order for the update to apply.
-    pub condition: Option<Expr<'stmt>>,
+    pub condition: Option<Expr>,
 
     /// Optionally return data from the update
-    pub returning: Option<Returning<'stmt>>,
+    pub returning: Option<Returning>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,8 +27,8 @@ pub enum UpdateTarget {
     Table(TableWithJoins),
 }
 
-impl<'stmt> Update<'stmt> {
-    pub fn selection(&self) -> Query<'stmt> {
+impl Update {
+    pub fn selection(&self) -> Query {
         stmt::Query::filter(
             self.target.as_model_id(),
             self.filter.as_ref().unwrap().clone(),
@@ -58,22 +58,22 @@ impl UpdateTarget {
     }
 }
 
-impl<'stmt> From<Update<'stmt>> for Statement<'stmt> {
-    fn from(src: Update<'stmt>) -> Statement<'stmt> {
+impl From<Update> for Statement {
+    fn from(src: Update) -> Statement {
         Statement::Update(src)
     }
 }
 
-impl<'stmt> Node<'stmt> for Update<'stmt> {
-    fn map<V: Map<'stmt>>(&self, visit: &mut V) -> Self {
+impl Node for Update {
+    fn map<V: Map>(&self, visit: &mut V) -> Self {
         visit.map_stmt_update(self)
     }
 
-    fn visit<V: Visit<'stmt>>(&self, mut visit: V) {
+    fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_update(self);
     }
 
-    fn visit_mut<V: VisitMut<'stmt>>(&mut self, mut visit: V) {
+    fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
         visit.visit_stmt_update_mut(self);
     }
 }

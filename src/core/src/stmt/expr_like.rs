@@ -2,13 +2,13 @@ use super::*;
 
 /// Tests if the string expression matches `pattern`.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprLike<'stmt> {
-    pub expr: Box<Expr<'stmt>>,
-    pub pattern: Box<Expr<'stmt>>,
+pub struct ExprLike {
+    pub expr: Box<Expr>,
+    pub pattern: Box<Expr>,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn like(expr: impl Into<Expr<'stmt>>, pattern: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+impl Expr {
+    pub fn like(expr: impl Into<Expr>, pattern: impl Into<Expr>) -> Expr {
         ExprLike {
             expr: Box::new(expr.into()),
             pattern: Box::new(pattern.into()),
@@ -17,14 +17,14 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprLike<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprLike<'stmt>) -> Self {
+impl From<ExprLike> for Expr {
+    fn from(value: ExprLike) -> Self {
         Expr::Pattern(value.into())
     }
 }
 
-impl<'stmt> From<ExprLike<'stmt>> for ExprPattern<'stmt> {
-    fn from(value: ExprLike<'stmt>) -> Self {
+impl From<ExprLike> for ExprPattern {
+    fn from(value: ExprLike) -> Self {
         ExprPattern::Like(value)
     }
 }

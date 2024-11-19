@@ -70,7 +70,7 @@ impl Projection {
         self.steps.resolve_field(schema, expr_self)
     }
 
-    pub fn resolve_value<'a, 'stmt>(&self, expr_self: &'a Value<'stmt>) -> &'a Value<'stmt> {
+    pub fn resolve_value<'a, 'stmt>(&self, expr_self: &'a Value) -> &'a Value {
         let mut ret = expr_self;
 
         for step in self.as_slice() {
@@ -94,7 +94,7 @@ impl Projection {
         ret
     }
 
-    pub fn resolve_expr<'a, 'stmt>(&self, base: &'a Expr<'stmt>) -> &'a Expr<'stmt> {
+    pub fn resolve_expr<'a, 'stmt>(&self, base: &'a Expr) -> &'a Expr {
         let mut ret = base;
 
         for step in self.as_slice() {
