@@ -6,7 +6,11 @@ pub(crate) struct SetVar {
     pub value: Vec<stmt::Value<'static>>,
 }
 
-impl<'stmt> Action<'stmt> {
+/// Identifies a pipeline variable slot
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub(crate) struct VarId(pub(crate) usize);
+
+impl Action {
     pub(crate) fn into_set_var(self) -> SetVar {
         match self {
             Action::SetVar(action) => action,
@@ -15,8 +19,8 @@ impl<'stmt> Action<'stmt> {
     }
 }
 
-impl<'stmt> From<SetVar> for Action<'stmt> {
-    fn from(src: SetVar) -> Action<'stmt> {
+impl From<SetVar> for Action {
+    fn from(src: SetVar) -> Action {
         Action::SetVar(src)
     }
 }

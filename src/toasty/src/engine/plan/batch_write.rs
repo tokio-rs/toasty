@@ -1,27 +1,27 @@
 use super::*;
 
 #[derive(Debug, Default)]
-pub(crate) struct BatchWrite<'stmt> {
+pub(crate) struct BatchWrite {
     /// Items being batch written.
-    pub items: Vec<WriteAction<'stmt>>,
+    pub items: Vec<WriteAction>,
 }
 
 #[derive(Debug)]
-pub(crate) enum WriteAction<'stmt> {
-    DeleteByKey(DeleteByKey<'stmt>),
-    Insert(Insert<'stmt>),
-    UpdateByKey(UpdateByKey<'stmt>),
+pub(crate) enum WriteAction {
+    DeleteByKey(DeleteByKey),
+    Insert(Insert),
+    UpdateByKey(UpdateByKey),
 }
 
-impl<'stmt> WriteAction<'stmt> {
-    pub(crate) fn as_insert(&self) -> &Insert<'stmt> {
+impl WriteAction {
+    pub(crate) fn as_insert(&self) -> &Insert {
         match self {
             WriteAction::Insert(action) => action,
             _ => panic!(),
         }
     }
 
-    pub(crate) fn as_insert_mut(&mut self) -> &mut Insert<'stmt> {
+    pub(crate) fn as_insert_mut(&mut self) -> &mut Insert {
         match self {
             WriteAction::Insert(action) => action,
             _ => panic!(),
@@ -29,8 +29,8 @@ impl<'stmt> WriteAction<'stmt> {
     }
 }
 
-impl<'stmt> From<WriteAction<'stmt>> for Action<'stmt> {
-    fn from(value: WriteAction<'stmt>) -> Self {
+impl From<WriteAction> for Action {
+    fn from(value: WriteAction) -> Self {
         match value {
             WriteAction::DeleteByKey(stage) => Action::DeleteByKey(stage),
             WriteAction::Insert(stage) => Action::Insert(stage),
@@ -39,26 +39,26 @@ impl<'stmt> From<WriteAction<'stmt>> for Action<'stmt> {
     }
 }
 
-impl<'stmt> From<BatchWrite<'stmt>> for Action<'stmt> {
-    fn from(value: BatchWrite<'stmt>) -> Self {
+impl From<BatchWrite> for Action {
+    fn from(value: BatchWrite) -> Self {
         Action::BatchWrite(value)
     }
 }
 
-impl<'stmt> From<DeleteByKey<'stmt>> for WriteAction<'stmt> {
-    fn from(value: DeleteByKey<'stmt>) -> Self {
+impl From<DeleteByKey> for WriteAction {
+    fn from(value: DeleteByKey) -> Self {
         WriteAction::DeleteByKey(value)
     }
 }
 
-impl<'stmt> From<Insert<'stmt>> for WriteAction<'stmt> {
-    fn from(value: Insert<'stmt>) -> Self {
+impl From<Insert> for WriteAction {
+    fn from(value: Insert) -> Self {
         WriteAction::Insert(value)
     }
 }
 
-impl<'stmt> From<UpdateByKey<'stmt>> for WriteAction<'stmt> {
-    fn from(value: UpdateByKey<'stmt>) -> Self {
+impl From<UpdateByKey> for WriteAction {
+    fn from(value: UpdateByKey) -> Self {
         WriteAction::UpdateByKey(value)
     }
 }

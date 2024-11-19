@@ -24,15 +24,12 @@ impl Db {
     }
 
     /// Execute a query, returning all matching records
-    pub async fn all<'stmt, M: Model>(
-        &self,
-        query: stmt::Select<'stmt, M>,
-    ) -> Result<Cursor<'stmt, M>> {
+    pub async fn all<M: Model>(&self, query: stmt::Select<'_, M>) -> Result<Cursor<M>> {
         let records = self.exec(query.into()).await?;
         Ok(Cursor::new(self.schema.clone(), records))
     }
 
-    pub async fn first<'stmt, M: Model>(&self, query: stmt::Select<'stmt, M>) -> Result<Option<M>> {
+    pub async fn first<M: Model>(&self, query: stmt::Select<'_, M>) -> Result<Option<M>> {
         let mut res = self.all(query).await?;
         match res.next().await {
             Some(Ok(value)) => Ok(Some(value)),
@@ -41,7 +38,7 @@ impl Db {
         }
     }
 
-    pub async fn get<'stmt, M: Model>(&self, query: stmt::Select<'stmt, M>) -> Result<M> {
+    pub async fn get<M: Model>(&self, query: stmt::Select<'_, M>) -> Result<M> {
         let mut res = self.all(query).await?;
 
         match res.next().await {

@@ -15,7 +15,7 @@ struct SimplifyExpr<'a> {
     schema: &'a Schema,
 }
 
-impl<'stmt> Planner<'_, 'stmt> {
+impl<'stmt> Planner<'stmt> {
     pub(crate) fn simplify_stmt_delete(&self, stmt: &mut stmt::Delete<'stmt>) {
         self.simplify_stmt(stmt);
     }

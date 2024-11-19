@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'stmt> Planner<'_, 'stmt> {
+impl<'stmt> Planner<'stmt> {
     pub(super) fn plan_unlink(&mut self, mut stmt: stmt::Unlink<'stmt>) {
         self.simplify_stmt_unlink(&mut stmt);
 

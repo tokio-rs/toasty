@@ -2,7 +2,7 @@ use super::*;
 use crate::{driver::*, schema::*};
 
 #[derive(Debug)]
-pub(crate) struct QueryPk<'stmt> {
+pub(crate) struct QueryPk {
     /// Where to store the result
     pub output: plan::VarId,
 
@@ -13,20 +13,20 @@ pub(crate) struct QueryPk<'stmt> {
     pub columns: Vec<ColumnId>,
 
     /// How to filter the index.
-    pub pk_filter: stmt::Expr<'stmt>,
+    pub pk_filter: stmt::Expr<'static>,
 
     /// How to project the result returned by the driver
-    pub project: eval::Expr<'stmt>,
+    pub project: eval::Expr,
 
     /// Filter to pass to the database
-    pub filter: Option<stmt::Expr<'stmt>>,
+    pub filter: Option<stmt::Expr<'static>>,
 
     /// Filter to apply in-memory
-    pub post_filter: Option<eval::Expr<'stmt>>,
+    pub post_filter: Option<eval::Expr>,
 }
 
-impl<'stmt> QueryPk<'stmt> {
-    pub(crate) fn apply(&self) -> Result<operation::QueryPk<'stmt>> {
+impl QueryPk {
+    pub(crate) fn apply(&self) -> Result<operation::QueryPk> {
         Ok(operation::QueryPk {
             table: self.table,
             select: self.columns.clone(),
@@ -36,8 +36,8 @@ impl<'stmt> QueryPk<'stmt> {
     }
 }
 
-impl<'stmt> From<QueryPk<'stmt>> for Action<'stmt> {
-    fn from(value: QueryPk<'stmt>) -> Self {
+impl From<QueryPk> for Action {
+    fn from(value: QueryPk) -> Self {
         Action::QueryPk(value)
     }
 }

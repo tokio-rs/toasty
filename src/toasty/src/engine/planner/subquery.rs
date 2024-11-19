@@ -1,10 +1,10 @@
 use super::*;
 
-struct PlanSubqueries<'a, 'b, 'stmt> {
-    planner: &'b mut Planner<'a, 'stmt>,
+struct PlanSubqueries<'a, 'stmt> {
+    planner: &'a mut Planner<'stmt>,
 }
 
-impl<'a, 'stmt> Planner<'a, 'stmt> {
+impl<'stmt> Planner<'stmt> {
     /// Walk the statement, find subqueries, and plan them independently.
     ///
     /// At this point, the expression should have been simplified to the point
@@ -21,7 +21,7 @@ impl<'a, 'stmt> Planner<'a, 'stmt> {
     }
 }
 
-impl<'stmt> stmt::Visit<'stmt> for PlanSubqueries<'_, '_, 'stmt> {
+impl<'stmt> stmt::Visit<'stmt> for PlanSubqueries<'_, 'stmt> {
     fn visit_expr_in_subquery(&mut self, i: &stmt::ExprInSubquery<'stmt>) {
         stmt::visit::visit_expr_in_subquery(self, i);
 

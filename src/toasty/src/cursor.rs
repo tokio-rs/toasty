@@ -1,9 +1,9 @@
 use crate::{Error, Model};
 use toasty_core::{stmt, Schema};
 
-pub struct Cursor<'stmt, M> {
+pub struct Cursor<M> {
     schema: Schema,
-    values: stmt::ValueStream<'stmt>,
+    values: stmt::ValueStream,
     _p: std::marker::PhantomData<M>,
 }
 
@@ -11,8 +11,8 @@ pub trait FromCursor<A>: Extend<A> + Default {}
 
 impl<A, T: Extend<A> + Default> FromCursor<A> for T {}
 
-impl<'stmt, M: Model> Cursor<'stmt, M> {
-    pub(crate) fn new(schema: Schema, values: stmt::ValueStream<'stmt>) -> Cursor<'stmt, M> {
+impl<M: Model> Cursor<M> {
+    pub(crate) fn new(schema: Schema, values: stmt::ValueStream) -> Cursor<M> {
         Cursor {
             schema,
             values,

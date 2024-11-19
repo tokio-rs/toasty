@@ -3,9 +3,9 @@ use crate::schema::*;
 
 /// Get a model by key
 #[derive(Debug)]
-pub(crate) struct GetByKey<'stmt> {
+pub(crate) struct GetByKey {
     /// Where to get arguments for this action.
-    pub input: Vec<Input<'stmt>>,
+    pub input: Vec<Input>,
 
     /// Where to store the result
     pub output: VarId,
@@ -17,18 +17,18 @@ pub(crate) struct GetByKey<'stmt> {
     pub columns: Vec<ColumnId>,
 
     /// Keys to get
-    pub keys: eval::Expr<'stmt>,
+    pub keys: eval::Expr,
 
     /// How to project the columns after receiving them from the database.
-    pub project: eval::Expr<'stmt>,
+    pub project: eval::Expr,
 
     /// Additional filtering done on the result before returning it to the
     /// caller.
-    pub post_filter: Option<eval::Expr<'stmt>>,
+    pub post_filter: Option<eval::Expr>,
 }
 
-impl<'stmt> From<GetByKey<'stmt>> for Action<'stmt> {
-    fn from(src: GetByKey<'stmt>) -> Action<'stmt> {
+impl From<GetByKey> for Action {
+    fn from(src: GetByKey) -> Action {
         Action::GetByKey(src)
     }
 }

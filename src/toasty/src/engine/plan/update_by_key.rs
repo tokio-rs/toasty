@@ -2,7 +2,7 @@ use super::*;
 use crate::{driver::*, schema::*};
 
 #[derive(Debug, Clone)]
-pub(crate) struct UpdateByKey<'stmt> {
+pub(crate) struct UpdateByKey {
     /// If specified, use the input to generate the list of keys to update
     pub input: Option<VarId>,
 
@@ -13,19 +13,19 @@ pub(crate) struct UpdateByKey<'stmt> {
     pub table: TableId,
 
     /// Which key(s) to update
-    pub key: eval::Expr<'stmt>,
+    pub key: eval::Expr,
 
     /// Assignments
-    pub assignments: stmt::Assignments<'stmt>,
+    pub assignments: stmt::Assignments<'static>,
 
     /// Only update keys that match the filter
-    pub filter: Option<stmt::Expr<'stmt>>,
+    pub filter: Option<stmt::Expr<'static>>,
 
-    pub condition: Option<stmt::Expr<'stmt>>,
+    pub condition: Option<stmt::Expr<'static>>,
 }
 
-impl<'stmt> UpdateByKey<'stmt> {
-    pub(crate) fn apply(&self) -> Result<operation::UpdateByKey<'stmt>> {
+impl UpdateByKey {
+    pub(crate) fn apply(&self) -> Result<operation::UpdateByKey> {
         debug_assert!(!self.assignments.is_empty(), "plan = {self:#?}");
 
         let keys = match self.key.eval_const() {
@@ -45,8 +45,8 @@ impl<'stmt> UpdateByKey<'stmt> {
 
     pub(crate) async fn apply_with_input(
         &self,
-        mut input: ValueStream<'stmt>,
-    ) -> Result<operation::UpdateByKey<'stmt>> {
+        mut input: ValueStream,
+    ) -> Result<operation::UpdateByKey> {
         debug_assert!(!self.assignments.is_empty(), "plan = {self:#?}");
 
         let mut keys = vec![];
@@ -70,8 +70,8 @@ impl<'stmt> UpdateByKey<'stmt> {
     }
 }
 
-impl<'a> From<UpdateByKey<'a>> for Action<'a> {
-    fn from(src: UpdateByKey<'a>) -> Action<'a> {
+impl From<UpdateByKey> for Action {
+    fn from(src: UpdateByKey) -> Action {
         Action::UpdateByKey(src)
     }
 }

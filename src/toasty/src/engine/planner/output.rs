@@ -2,17 +2,14 @@ use super::*;
 
 pub(crate) enum PartitionedReturning<'stmt> {
     /// How to project values returned by the database statement
-    Expr(eval::Expr<'stmt>),
+    Expr(eval::Expr),
 
     /// The statement returns a constant value.
     Value(stmt::Value<'stmt>),
 }
 
-impl<'stmt> Planner<'_, 'stmt> {
-    pub(crate) fn partition_returning(
-        &self,
-        stmt: &mut stmt::Returning<'stmt>,
-    ) -> eval::Expr<'stmt> {
+impl<'stmt> Planner<'stmt> {
+    pub(crate) fn partition_returning(&self, stmt: &mut stmt::Returning<'stmt>) -> eval::Expr {
         use Partition::*;
 
         let stmt::Returning::Expr(stmt::Expr::Record(stmt_record)) = stmt else {
@@ -54,7 +51,7 @@ impl<'stmt> Planner<'_, 'stmt> {
     pub fn partition_maybe_returning(
         &self,
         stmt: &mut Option<stmt::Returning<'stmt>>,
-    ) -> Option<eval::Expr<'stmt>> {
+    ) -> Option<eval::Expr> {
         let Some(returning) = stmt else { return None };
         let project = self.partition_returning(returning);
 
@@ -66,15 +63,15 @@ impl<'stmt> Planner<'_, 'stmt> {
     }
 }
 
-enum Partition<'stmt> {
+enum Partition {
     Stmt,
-    Eval(eval::Expr<'stmt>),
+    Eval(eval::Expr),
 }
 
 fn partition_returning<'stmt>(
     stmt: &stmt::Expr<'stmt>,
     returning: &mut Vec<stmt::Expr<'stmt>>,
-) -> Partition<'stmt> {
+) -> Partition {
     use Partition::*;
 
     match stmt {

@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'stmt> Planner<'_, 'stmt> {
+impl<'stmt> Planner<'stmt> {
     pub(super) fn plan_delete(&mut self, mut stmt: stmt::Delete<'stmt>) {
         self.simplify_stmt_delete(&mut stmt);
 

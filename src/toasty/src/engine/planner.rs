@@ -32,22 +32,22 @@ use std::collections::HashMap;
 use super::exec;
 
 #[derive(Debug)]
-struct Planner<'a, 'stmt> {
+struct Planner<'stmt> {
     /// Database schema
-    schema: &'a Schema,
+    schema: &'stmt Schema,
 
     /// Database capabilities
-    capability: &'a Capability,
+    capability: &'stmt Capability,
 
     /// Table of record stream slots. Used to figure out where to store outputs
     /// of actions.
     var_table: VarTable,
 
     /// Actions that will end up in the pipeline.
-    actions: Vec<plan::Action<'stmt>>,
+    actions: Vec<plan::Action>,
 
     /// In-progress write batch. This will be empty for read-only statements.
-    write_actions: Vec<plan::WriteAction<'stmt>>,
+    write_actions: Vec<plan::WriteAction>,
 
     /// Variable to return as the result of the pipeline execution
     returning: Option<plan::VarId>,
@@ -77,7 +77,7 @@ pub(crate) fn apply<'stmt>(
     capability: &Capability,
     schema: &Schema,
     stmt: stmt::Statement<'stmt>,
-) -> Plan<'stmt> {
+) -> Plan {
     let mut planner = Planner {
         capability,
         schema,
@@ -94,7 +94,7 @@ pub(crate) fn apply<'stmt>(
     planner.build()
 }
 
-impl<'a, 'stmt> Planner<'a, 'stmt> {
+impl<'stmt> Planner<'stmt> {
     /// Entry point to plan the root statement.
     fn plan_stmt(&mut self, stmt: stmt::Statement<'stmt>) {
         match stmt {
@@ -122,7 +122,7 @@ impl<'a, 'stmt> Planner<'a, 'stmt> {
         }
     }
 
-    fn build(mut self) -> Plan<'stmt> {
+    fn build(mut self) -> Plan {
         let vars = exec::VarStore::new();
 
         match self.write_actions.len() {
@@ -158,13 +158,13 @@ impl<'a, 'stmt> Planner<'a, 'stmt> {
         var
     }
 
-    fn push_action(&mut self, action: impl Into<plan::Action<'stmt>>) {
+    fn push_action(&mut self, action: impl Into<plan::Action>) {
         let action = action.into();
         self.verify_action(&action);
         self.actions.push(action);
     }
 
-    fn push_write_action(&mut self, action: impl Into<plan::WriteAction<'stmt>>) {
+    fn push_write_action(&mut self, action: impl Into<plan::WriteAction>) {
         let action = action.into();
         self.verify_write_action(&action);
         self.write_actions.push(action);
@@ -184,7 +184,7 @@ impl<'a, 'stmt> Planner<'a, 'stmt> {
         action.value
     }
 
-    fn model(&self, id: impl Into<ModelId>) -> &'a Model {
+    fn model(&self, id: impl Into<ModelId>) -> &'stmt Model {
         self.schema.model(id)
     }
 }

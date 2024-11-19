@@ -5,20 +5,20 @@ struct TryConvert<'a> {
     index: &'a Index,
 }
 
-impl<'stmt> Planner<'_, 'stmt> {
+impl<'stmt> Planner<'stmt> {
     /// If the expression is shaped like a key expression, then convert it to
     /// one.
     pub(crate) fn try_build_key_filter(
         &self,
         index: &Index,
         expr: &stmt::Expr<'stmt>,
-    ) -> Option<eval::Expr<'stmt>> {
+    ) -> Option<eval::Expr> {
         TryConvert { index }.try_convert(expr)
     }
 }
 
 impl<'a> TryConvert<'a> {
-    fn try_convert<'stmt>(&self, expr: &stmt::Expr<'stmt>) -> Option<eval::Expr<'stmt>> {
+    fn try_convert<'stmt>(&self, expr: &stmt::Expr<'stmt>) -> Option<eval::Expr> {
         use stmt::Expr::*;
 
         match expr {
@@ -115,7 +115,7 @@ impl<'a> TryConvert<'a> {
         }
     }
 
-    fn expr_arg_to_project<'stmt>(&self, expr: &stmt::Expr<'stmt>) -> eval::Expr<'stmt> {
+    fn expr_arg_to_project<'stmt>(&self, expr: &stmt::Expr<'stmt>) -> eval::Expr {
         match expr {
             // stmt::Expr::Arg(arg) => eval::Expr::project([arg.position]),
             // TODO: ok for now I guess, but enum should be gone before this point.

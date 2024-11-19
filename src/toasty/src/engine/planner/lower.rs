@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'stmt> Planner<'_, 'stmt> {
+impl<'stmt> Planner<'stmt> {
     pub(crate) fn lower_stmt_delete(&self, model: &Model, stmt: &mut stmt::Delete<'stmt>) {
         let table = self.schema.table(model.lowering.table);
 

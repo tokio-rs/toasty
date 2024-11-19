@@ -1,12 +1,12 @@
 use super::*;
 
-impl<'stmt> Planner<'_, 'stmt> {
+impl<'stmt> Planner<'stmt> {
     pub(crate) fn extract_input(
         &mut self,
         expr: &mut stmt::Expr<'stmt>,
         sources: &[plan::InputSource],
         in_subquery: bool,
-    ) -> Vec<plan::Input<'stmt>> {
+    ) -> Vec<plan::Input> {
         let mut inputs = vec![];
         self.extract_input_into(&mut inputs, expr, sources, in_subquery);
         inputs
@@ -14,7 +14,7 @@ impl<'stmt> Planner<'_, 'stmt> {
 
     fn extract_input_into(
         &mut self,
-        inputs: &mut Vec<plan::Input<'stmt>>,
+        inputs: &mut Vec<plan::Input>,
         expr: &mut stmt::Expr<'stmt>,
         sources: &[plan::InputSource],
         in_subquery: bool,
@@ -103,7 +103,7 @@ enum Extract {
 }
 
 fn do_extract<'stmt>(
-    inputs: &mut Vec<plan::Input<'stmt>>,
+    inputs: &mut Vec<plan::Input>,
     expr: &mut stmt::Expr<'stmt>,
     sources: &[plan::InputSource],
     action: Extract,

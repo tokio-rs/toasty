@@ -2,7 +2,7 @@ use super::*;
 
 use std::mem;
 
-impl<'stmt> Planner<'_, 'stmt> {
+impl<'stmt> Planner<'stmt> {
     pub(super) fn plan_mut_relation_field(
         &mut self,
         field: &Field,
@@ -407,7 +407,7 @@ impl<'stmt> Planner<'_, 'stmt> {
         stmt::Query::filter(pair.model, stmt::ExprInSubquery::new(pair, scope))
     }
 
-    fn relation_step(&mut self, field: &Field, f: impl FnOnce(&mut Planner<'_, 'stmt>)) {
+    fn relation_step(&mut self, field: &Field, f: impl FnOnce(&mut Planner<'stmt>)) {
         if let Some(pair) = field.pair() {
             if self.relations.last().copied() == Some(pair) {
                 return;

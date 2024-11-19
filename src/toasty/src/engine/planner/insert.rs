@@ -9,7 +9,7 @@ struct ApplyInsertScope<'a, 'stmt> {
     expr: &'a mut stmt::Expr<'stmt>,
 }
 
-impl<'stmt> Planner<'_, 'stmt> {
+impl<'stmt> Planner<'stmt> {
     pub(super) fn plan_insert(&mut self, mut stmt: stmt::Insert<'stmt>) -> Option<plan::VarId> {
         self.simplify_stmt_insert(&mut stmt);
 

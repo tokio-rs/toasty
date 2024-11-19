@@ -1,12 +1,12 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-pub(crate) struct Input<'stmt> {
+pub(crate) struct Input {
     /// Source of the input
     pub(crate) source: InputSource,
 
     /// If needed, how to project the input
-    pub(crate) project: Option<eval::Expr<'stmt>>,
+    pub(crate) project: Option<eval::Expr>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -19,15 +19,15 @@ pub(crate) enum InputSource {
     Ref(VarId),
 }
 
-impl<'stmt> Input<'stmt> {
-    pub(crate) fn from_var(var: VarId) -> Input<'stmt> {
+impl Input {
+    pub(crate) fn from_var(var: VarId) -> Input {
         Input {
             source: InputSource::Value(var),
             project: None,
         }
     }
 
-    pub(crate) fn project_var_ref(var: VarId, expr: eval::Expr<'stmt>) -> Input<'stmt> {
+    pub(crate) fn project_var_ref(var: VarId, expr: eval::Expr) -> Input {
         Input {
             source: InputSource::Ref(var),
             project: Some(expr),

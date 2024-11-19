@@ -3,9 +3,9 @@ use crate::{driver::*, schema::*};
 
 /// Schema: `self` references [index-fields, input-fields] flattened
 #[derive(Debug)]
-pub(crate) struct FindPkByIndex<'stmt> {
+pub(crate) struct FindPkByIndex {
     /// How to access input from the variable table.
-    pub input: Vec<Input<'stmt>>,
+    pub input: Vec<Input>,
 
     /// Where to store the output
     pub output: VarId,
@@ -17,11 +17,11 @@ pub(crate) struct FindPkByIndex<'stmt> {
     pub index: IndexId,
 
     /// Filter to apply to index
-    pub filter: stmt::Expr<'stmt>,
+    pub filter: stmt::Expr<'static>,
 }
 
-impl<'stmt> FindPkByIndex<'stmt> {
-    pub(crate) fn apply(&self) -> Result<operation::FindPkByIndex<'stmt>> {
+impl FindPkByIndex {
+    pub(crate) fn apply(&self) -> Result<operation::FindPkByIndex> {
         Ok(operation::FindPkByIndex {
             table: self.table,
             index: self.index,
@@ -31,8 +31,8 @@ impl<'stmt> FindPkByIndex<'stmt> {
     }
 }
 
-impl<'stmt> From<FindPkByIndex<'stmt>> for Action<'stmt> {
-    fn from(src: FindPkByIndex<'stmt>) -> Action<'stmt> {
+impl From<FindPkByIndex> for Action {
+    fn from(src: FindPkByIndex) -> Action {
         Action::FindPkByIndex(src)
     }
 }
