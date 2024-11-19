@@ -301,7 +301,7 @@ impl<'a> Generator<'a> {
                     }
                 }
 
-                impl #relation_struct_name {
+                impl #relation_struct_name<'_> {
                     /// Get the relation
                     pub async fn get(self, db: &Db) -> Result<#get_ret_ty> {
                         db.#get_db_fn(self.into_select()).await

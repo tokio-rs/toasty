@@ -10,22 +10,18 @@ impl Profile {
     pub const USER: self::fields::User =
         self::fields::User::from_path(Path::from_field_index::<Self>(1));
     pub const USER_ID: Path<Id<super::user::User>> = Path::from_field_index::<Self>(2);
-    pub fn create<'a>() -> CreateProfile<'a> {
+    pub fn create() -> CreateProfile {
         CreateProfile::default()
     }
-    pub fn create_many<'a>() -> CreateMany<'a, Profile> {
+    pub fn create_many() -> CreateMany<Profile> {
         CreateMany::default()
     }
-    pub fn filter<'a>(expr: stmt::Expr<'a, bool>) -> Query<'a> {
+    pub fn filter(expr: stmt::Expr<bool>) -> Query {
         Query::from_stmt(stmt::Select::from_expr(expr))
     }
-    pub fn update<'a>(&'a mut self) -> UpdateProfile<'a> {
-        UpdateProfile {
-            model: self,
-            query: UpdateQuery {
-                stmt: stmt::Update::default(),
-            },
-        }
+    pub fn update(&mut self) -> UpdateProfile<'_> {
+        let query = UpdateQuery::from(self.into_select());
+        UpdateProfile { model: self, query }
     }
     pub async fn delete(self, db: &Db) -> Result<()> {
         let stmt = self.into_select().delete();
@@ -35,9 +31,8 @@ impl Profile {
 }
 impl Model for Profile {
     const ID: ModelId = ModelId(1);
-    const FIELD_COUNT: usize = 3;
     type Key = Id<Profile>;
-    fn load(mut record: RecordOld<'_>) -> Result<Self, Error> {
+    fn load(mut record: Record) -> Result<Self, Error> {
         Ok(Profile {
             id: Id::from_untyped(record[0].take().to_id()?),
             user: BelongsTo::load(record[1].take())?,
@@ -45,43 +40,49 @@ impl Model for Profile {
         })
     }
 }
-impl<'a> stmt::IntoSelect<'a> for &'a Profile {
+impl stmt::IntoSelect for &Profile {
     type Model = Profile;
-    fn into_select(self) -> stmt::Select<'a, Self::Model> {
+    fn into_select(self) -> stmt::Select<Self::Model> {
         Profile::find_by_id(&self.id).into_select()
+    }
+}
+impl stmt::IntoSelect for &mut Profile {
+    type Model = Profile;
+    fn into_select(self) -> stmt::Select<Self::Model> {
+        (&*self).into_select()
     }
 }
 impl stmt::AsSelect for Profile {
     type Model = Profile;
-    fn as_select(&self) -> stmt::Select<'_, Self::Model> {
+    fn as_select(&self) -> stmt::Select<Self::Model> {
         Profile::find_by_id(&self.id).into_select()
     }
 }
-impl stmt::IntoSelect<'static> for Profile {
+impl stmt::IntoSelect for Profile {
     type Model = Profile;
-    fn into_select(self) -> stmt::Select<'static, Self::Model> {
+    fn into_select(self) -> stmt::Select<Self::Model> {
         Profile::find_by_id(self.id).into_select()
     }
 }
-impl<'a> stmt::IntoExpr<'a, Profile> for &'a Profile {
-    fn into_expr(self) -> stmt::Expr<'a, Profile> {
+impl stmt::IntoExpr<Profile> for &Profile {
+    fn into_expr(self) -> stmt::Expr<Profile> {
         stmt::Key::from_expr(&self.id).into()
     }
 }
-impl<'a> stmt::IntoExpr<'a, [Profile]> for &'a Profile {
-    fn into_expr(self) -> stmt::Expr<'a, [Profile]> {
+impl stmt::IntoExpr<[Profile]> for &Profile {
+    fn into_expr(self) -> stmt::Expr<[Profile]> {
         stmt::Key::from_expr(&self.id).into()
     }
 }
 #[derive(Debug)]
-pub struct Query<'a> {
-    stmt: stmt::Select<'a, Profile>,
+pub struct Query {
+    stmt: stmt::Select<Profile>,
 }
-impl<'a> Query<'a> {
-    pub const fn from_stmt(stmt: stmt::Select<'a, Profile>) -> Query<'a> {
+impl Query {
+    pub const fn from_stmt(stmt: stmt::Select<Profile>) -> Query {
         Query { stmt }
     }
-    pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, Profile>> {
+    pub async fn all(self, db: &Db) -> Result<Cursor<Profile>> {
         db.all(self.stmt).await
     }
     pub async fn first(self, db: &Db) -> Result<Option<Profile>> {
@@ -90,57 +91,57 @@ impl<'a> Query<'a> {
     pub async fn get(self, db: &Db) -> Result<Profile> {
         db.get(self.stmt).await
     }
-    pub fn update(self) -> UpdateQuery<'a> {
+    pub fn update(self) -> UpdateQuery {
         UpdateQuery::from(self)
     }
     pub async fn delete(self, db: &Db) -> Result<()> {
         db.exec(self.stmt.delete()).await?;
         Ok(())
     }
-    pub async fn collect<A>(self, db: &'a Db) -> Result<A>
+    pub async fn collect<A>(self, db: &Db) -> Result<A>
     where
         A: FromCursor<Profile>,
     {
         self.all(db).await?.collect().await
     }
-    pub fn filter(self, expr: stmt::Expr<'a, bool>) -> Query<'a> {
+    pub fn filter(self, expr: stmt::Expr<bool>) -> Query {
         Query {
             stmt: self.stmt.and(expr),
         }
     }
-    pub fn user(mut self) -> super::user::Query<'a> {
+    pub fn user(mut self) -> super::user::Query {
         todo!()
     }
 }
-impl<'a> stmt::IntoSelect<'a> for Query<'a> {
+impl stmt::IntoSelect for Query {
     type Model = Profile;
-    fn into_select(self) -> stmt::Select<'a, Profile> {
+    fn into_select(self) -> stmt::Select<Profile> {
         self.stmt
     }
 }
-impl<'a> stmt::IntoSelect<'a> for &Query<'a> {
+impl stmt::IntoSelect for &Query {
     type Model = Profile;
-    fn into_select(self) -> stmt::Select<'a, Profile> {
+    fn into_select(self) -> stmt::Select<Profile> {
         self.stmt.clone()
     }
 }
-impl Default for Query<'static> {
-    fn default() -> Query<'static> {
+impl Default for Query {
+    fn default() -> Query {
         Query {
             stmt: stmt::Select::all(),
         }
     }
 }
 #[derive(Debug)]
-pub struct CreateProfile<'a> {
-    pub(super) stmt: stmt::Insert<'a, Profile>,
+pub struct CreateProfile {
+    pub(super) stmt: stmt::Insert<Profile>,
 }
-impl<'a> CreateProfile<'a> {
+impl CreateProfile {
     pub fn id(mut self, id: impl Into<Id<Profile>>) -> Self {
         self.stmt.set_value(0, id.into());
         self
     }
-    pub fn user<'b>(mut self, user: impl IntoExpr<'a, self::relation::User<'b>>) -> Self {
+    pub fn user<'b>(mut self, user: impl IntoExpr<self::relation::User<'b>>) -> Self {
         self.stmt.set_expr(1, user.into_expr());
         self
     }
@@ -148,28 +149,28 @@ impl<'a> CreateProfile<'a> {
         self.stmt.set_value(2, user_id.into());
         self
     }
-    pub async fn exec(self, db: &'a Db) -> Result<Profile> {
+    pub async fn exec(self, db: &Db) -> Result<Profile> {
         db.exec_insert_one::<Profile>(self.stmt).await
     }
 }
-impl<'a> IntoInsert<'a> for CreateProfile<'a> {
+impl IntoInsert for CreateProfile {
     type Model = Profile;
-    fn into_insert(self) -> stmt::Insert<'a, Profile> {
+    fn into_insert(self) -> stmt::Insert<Profile> {
         self.stmt
     }
 }
-impl<'a> IntoExpr<'a, Profile> for CreateProfile<'a> {
-    fn into_expr(self) -> stmt::Expr<'a, Profile> {
+impl IntoExpr<Profile> for CreateProfile {
+    fn into_expr(self) -> stmt::Expr<Profile> {
         self.stmt.into()
     }
 }
-impl<'a> IntoExpr<'a, [Profile]> for CreateProfile<'a> {
-    fn into_expr(self) -> stmt::Expr<'a, [Profile]> {
+impl IntoExpr<[Profile]> for CreateProfile {
+    fn into_expr(self) -> stmt::Expr<[Profile]> {
         self.stmt.into_list_expr()
     }
 }
-impl<'a> Default for CreateProfile<'a> {
-    fn default() -> CreateProfile<'a> {
+impl Default for CreateProfile {
+    fn default() -> CreateProfile {
         CreateProfile {
             stmt: stmt::Insert::blank(),
         }
@@ -178,18 +179,18 @@ impl<'a> Default for CreateProfile<'a> {
 #[derive(Debug)]
 pub struct UpdateProfile<'a> {
     model: &'a mut Profile,
-    query: UpdateQuery<'a>,
+    query: UpdateQuery,
 }
 #[derive(Debug)]
-pub struct UpdateQuery<'a> {
-    stmt: stmt::Update<'a, Profile>,
+pub struct UpdateQuery {
+    stmt: stmt::Update<Profile>,
 }
-impl<'a> UpdateProfile<'a> {
+impl UpdateProfile<'_> {
     pub fn id(mut self, id: impl Into<Id<Profile>>) -> Self {
         self.query.set_id(id);
         self
     }
-    pub fn user<'b>(mut self, user: impl IntoExpr<'a, self::relation::User<'b>>) -> Self {
+    pub fn user<'b>(mut self, user: impl IntoExpr<self::relation::User<'b>>) -> Self {
         self.query.set_user(user);
         self
     }
@@ -206,45 +207,13 @@ impl<'a> UpdateProfile<'a> {
         self
     }
     pub async fn exec(self, db: &Db) -> Result<()> {
-        let fields;
-        let mut into_iter;
-        {
-            let mut stmt = self.query.stmt;
-            fields = stmt.fields().clone();
-            stmt.set_selection(&*self.model);
-            let mut records = db.exec::<Profile>(stmt.into()).await?;
-            into_iter = records
-                .next()
-                .await
-                .unwrap()?
-                .into_record()
-                .into_owned()
-                .into_iter();
-        }
-        for field in fields.iter() {
-            match field.into_usize() {
-                0 => self.model.id = stmt::Id::from_untyped(into_iter.next().unwrap().to_id()?),
-                1 => {
-                    self.model.user_id = into_iter
-                        .next()
-                        .unwrap()
-                        .to_option_id()?
-                        .map(stmt::Id::from_untyped)
-                }
-                2 => {
-                    self.model.user_id = into_iter
-                        .next()
-                        .unwrap()
-                        .to_option_id()?
-                        .map(stmt::Id::from_untyped)
-                }
-                _ => todo!("handle unknown field id in reload after update"),
-            }
-        }
-        Ok(())
+        let mut stmt = self.query.stmt;
+        stmt.set_selection(&*self.model);
+        let mut result = db.exec::<Profile>(stmt.into()).await?;
+        todo!("update model")
     }
 }
-impl<'a> UpdateQuery<'a> {
+impl UpdateQuery {
     pub fn id(mut self, id: impl Into<Id<Profile>>) -> Self {
         self.set_id(id);
         self
@@ -253,11 +222,11 @@ impl<'a> UpdateQuery<'a> {
         self.stmt.set_expr(0, id.into());
         self
     }
-    pub fn user<'b>(mut self, user: impl IntoExpr<'a, self::relation::User<'b>>) -> Self {
+    pub fn user<'b>(mut self, user: impl IntoExpr<self::relation::User<'b>>) -> Self {
         self.set_user(user);
         self
     }
-    pub fn set_user<'b>(&mut self, user: impl IntoExpr<'a, self::relation::User<'b>>) -> &mut Self {
+    pub fn set_user<'b>(&mut self, user: impl IntoExpr<self::relation::User<'b>>) -> &mut Self {
         self.stmt.set_expr(1, user.into_expr());
         self
     }
@@ -283,15 +252,15 @@ impl<'a> UpdateQuery<'a> {
         Ok(())
     }
 }
-impl<'a> From<Query<'a>> for UpdateQuery<'a> {
-    fn from(value: Query<'a>) -> UpdateQuery<'a> {
+impl From<Query> for UpdateQuery {
+    fn from(value: Query) -> UpdateQuery {
         UpdateQuery {
             stmt: stmt::Update::new(value),
         }
     }
 }
-impl<'a> From<stmt::Select<'a, Profile>> for UpdateQuery<'a> {
-    fn from(src: stmt::Select<'a, Profile>) -> UpdateQuery<'a> {
+impl From<stmt::Select<Profile>> for UpdateQuery {
+    fn from(src: stmt::Select<Profile>) -> UpdateQuery {
         UpdateQuery {
             stmt: stmt::Update::new(src),
         }
@@ -316,15 +285,15 @@ pub mod fields {
             let path = self.path.chain(super::super::user::User::PROFILE);
             super::super::user::fields::Profile::from_path(path)
         }
-        pub fn eq<'a, 'b, T>(self, rhs: T) -> stmt::Expr<'a, bool>
+        pub fn eq<'a, T>(self, rhs: T) -> stmt::Expr<bool>
         where
-            T: toasty::stmt::IntoExpr<'a, super::relation::user::User<'b>>,
+            T: toasty::stmt::IntoExpr<super::relation::user::User<'a>>,
         {
             self.path.eq(rhs.into_expr().cast())
         }
-        pub fn in_query<'a, Q>(self, rhs: Q) -> toasty::stmt::Expr<'a, bool>
+        pub fn in_query<Q>(self, rhs: Q) -> toasty::stmt::Expr<bool>
         where
-            Q: stmt::IntoSelect<'a, Model = super::super::user::User>,
+            Q: stmt::IntoSelect<Model = super::super::user::User>,
         {
             self.path.in_query(rhs)
         }
@@ -334,8 +303,8 @@ pub mod fields {
             val.path
         }
     }
-    impl<'stmt> stmt::IntoExpr<'stmt, super::relation::user::User<'stmt>> for User {
-        fn into_expr(self) -> stmt::Expr<'stmt, super::relation::user::User<'stmt>> {
+    impl<'a> stmt::IntoExpr<super::relation::user::User<'a>> for User {
+        fn into_expr(self) -> stmt::Expr<super::relation::user::User<'a>> {
             todo!("into_expr for {} (field path struct)", stringify!(User));
         }
     }
@@ -354,14 +323,14 @@ pub mod relation {
                 User { scope: self }
             }
         }
-        impl<'a> User<'a> {
+        impl User<'_> {
             pub fn get(&self) -> &super::super::super::user::User {
                 self.scope.user.get()
             }
         }
-        impl<'a> stmt::IntoSelect<'a> for &'a User<'_> {
+        impl stmt::IntoSelect for &User<'_> {
             type Model = super::super::super::user::User;
-            fn into_select(self) -> stmt::Select<'a, Self::Model> {
+            fn into_select(self) -> stmt::Select<Self::Model> {
                 super::super::super::user::User::find_by_id(
                     self.scope
                         .user_id
@@ -371,8 +340,8 @@ pub mod relation {
                 .into_select()
             }
         }
-        impl<'stmt, 'a> stmt::IntoExpr<'stmt, User<'a>> for User<'a> {
-            fn into_expr(self) -> stmt::Expr<'stmt, User<'a>> {
+        impl<'a> stmt::IntoExpr<User<'a>> for User<'a> {
+            fn into_expr(self) -> stmt::Expr<User<'a>> {
                 todo!(
                     "stmt::IntoExpr for {} (belongs_to Fk struct) - self = {:#?}",
                     stringify!(User),
@@ -380,8 +349,8 @@ pub mod relation {
                 );
             }
         }
-        impl<'stmt, 'a> stmt::IntoExpr<'stmt, User<'a>> for &'stmt User<'a> {
-            fn into_expr(self) -> stmt::Expr<'stmt, User<'a>> {
+        impl<'a> stmt::IntoExpr<User<'a>> for &User<'a> {
+            fn into_expr(self) -> stmt::Expr<User<'a>> {
                 todo!(
                     "stmt::IntoExpr for &'a {} (belongs_to Fk struct) - self = {:#?}",
                     stringify!(User),
@@ -389,18 +358,18 @@ pub mod relation {
                 );
             }
         }
-        impl<'stmt, 'a> stmt::IntoExpr<'stmt, User<'a>> for &'stmt super::super::super::user::User {
-            fn into_expr(self) -> stmt::Expr<'stmt, User<'a>> {
+        impl<'a> stmt::IntoExpr<User<'a>> for &super::super::super::user::User {
+            fn into_expr(self) -> stmt::Expr<User<'a>> {
                 stmt::Expr::from_untyped(&self.id)
             }
         }
-        impl<'stmt, 'a> stmt::IntoExpr<'stmt, User<'a>> for super::super::super::user::CreateUser<'stmt> {
-            fn into_expr(self) -> stmt::Expr<'stmt, User<'a>> {
-                let expr: stmt::Expr<'stmt, super::super::super::user::User> = self.stmt.into();
+        impl<'a> stmt::IntoExpr<User<'a>> for super::super::super::user::CreateUser {
+            fn into_expr(self) -> stmt::Expr<User<'a>> {
+                let expr: stmt::Expr<super::super::super::user::User> = self.stmt.into();
                 expr.cast()
             }
         }
-        impl<'a> User<'a> {
+        impl User<'_> {
             pub async fn find(&self, db: &Db) -> Result<Option<super::super::super::user::User>> {
                 db.first(self.into_select()).await
             }
@@ -411,17 +380,17 @@ pub mod relation {
 pub mod queries {
     use super::*;
     impl super::Profile {
-        pub fn find_by_id<'a>(id: impl stmt::IntoExpr<'a, Id<Profile>>) -> FindById<'a> {
+        pub fn find_by_id(id: impl stmt::IntoExpr<Id<Profile>>) -> FindById {
             FindById {
                 query: Query::from_stmt(stmt::Select::from_expr(Profile::ID.eq(id))),
             }
         }
     }
-    pub struct FindById<'a> {
-        query: Query<'a>,
+    pub struct FindById {
+        query: Query,
     }
-    impl<'a> FindById<'a> {
-        pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, super::Profile>> {
+    impl FindById {
+        pub async fn all(self, db: &Db) -> Result<Cursor<super::Profile>> {
             self.query.all(db).await
         }
         pub async fn first(self, db: &Db) -> Result<Option<super::Profile>> {
@@ -430,48 +399,48 @@ pub mod queries {
         pub async fn get(self, db: &Db) -> Result<super::Profile> {
             self.query.get(db).await
         }
-        pub fn update(self) -> super::UpdateQuery<'a> {
+        pub fn update(self) -> super::UpdateQuery {
             super::UpdateQuery::from(self.query)
         }
         pub async fn delete(self, db: &Db) -> Result<()> {
             self.query.delete(db).await
         }
-        pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> FindById<'a> {
+        pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> FindById {
             let path = path.into();
             self.query.stmt.include(path);
             self
         }
-        pub fn filter(self, filter: stmt::Expr<'a, bool>) -> Query<'a> {
+        pub fn filter(self, filter: stmt::Expr<bool>) -> Query {
             let stmt = self.into_select();
             Query::from_stmt(stmt.and(filter))
         }
-        pub async fn collect<A>(self, db: &'a Db) -> Result<A>
+        pub async fn collect<A>(self, db: &Db) -> Result<A>
         where
             A: FromCursor<super::Profile>,
         {
             self.all(db).await?.collect().await
         }
     }
-    impl<'a> stmt::IntoSelect<'a> for FindById<'a> {
+    impl stmt::IntoSelect for FindById {
         type Model = super::Profile;
-        fn into_select(self) -> stmt::Select<'a, Self::Model> {
+        fn into_select(self) -> stmt::Select<Self::Model> {
             self.query.into_select()
         }
     }
     impl super::Profile {
-        pub fn find_many_by_id<'a>() -> FindManyById<'a> {
+        pub fn find_many_by_id() -> FindManyById {
             FindManyById { items: vec![] }
         }
     }
-    pub struct FindManyById<'a> {
-        items: Vec<stmt::Expr<'a, Id<Profile>>>,
+    pub struct FindManyById {
+        items: Vec<stmt::Expr<Id<Profile>>>,
     }
-    impl<'a> FindManyById<'a> {
-        pub fn item(mut self, id: impl stmt::IntoExpr<'a, Id<Profile>>) -> Self {
+    impl FindManyById {
+        pub fn item(mut self, id: impl stmt::IntoExpr<Id<Profile>>) -> Self {
             self.items.push(id.into_expr());
             self
         }
-        pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, super::Profile>> {
+        pub async fn all(self, db: &Db) -> Result<Cursor<super::Profile>> {
             db.all(self.into_select()).await
         }
         pub async fn first(self, db: &Db) -> Result<Option<super::Profile>> {
@@ -480,43 +449,43 @@ pub mod queries {
         pub async fn get(self, db: &Db) -> Result<super::Profile> {
             db.get(self.into_select()).await
         }
-        pub fn update(self) -> super::UpdateQuery<'a> {
+        pub fn update(self) -> super::UpdateQuery {
             super::UpdateQuery::from(self.into_select())
         }
         pub async fn delete(self, db: &Db) -> Result<()> {
             db.delete(self.into_select()).await
         }
-        pub fn filter(self, filter: stmt::Expr<'a, bool>) -> Query<'a> {
+        pub fn filter(self, filter: stmt::Expr<bool>) -> Query {
             let stmt = self.into_select();
             Query::from_stmt(stmt.and(filter))
         }
-        pub async fn collect<A>(self, db: &'a Db) -> Result<A>
+        pub async fn collect<A>(self, db: &Db) -> Result<A>
         where
             A: FromCursor<super::Profile>,
         {
             self.all(db).await?.collect().await
         }
     }
-    impl<'a> stmt::IntoSelect<'a> for FindManyById<'a> {
+    impl stmt::IntoSelect for FindManyById {
         type Model = super::Profile;
-        fn into_select(self) -> stmt::Select<'a, Self::Model> {
+        fn into_select(self) -> stmt::Select<Self::Model> {
             stmt::Select::from_expr(stmt::in_set(Profile::ID, self.items))
         }
     }
     impl super::Profile {
-        pub fn find_by_user_id<'a>(
-            user_id: impl stmt::IntoExpr<'a, Id<super::super::user::User>>,
-        ) -> FindByUserId<'a> {
+        pub fn find_by_user_id(
+            user_id: impl stmt::IntoExpr<Id<super::super::user::User>>,
+        ) -> FindByUserId {
             FindByUserId {
                 query: Query::from_stmt(stmt::Select::from_expr(Profile::USER_ID.eq(user_id))),
             }
         }
     }
-    pub struct FindByUserId<'a> {
-        query: Query<'a>,
+    pub struct FindByUserId {
+        query: Query,
     }
-    impl<'a> FindByUserId<'a> {
-        pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, super::Profile>> {
+    impl FindByUserId {
+        pub async fn all(self, db: &Db) -> Result<Cursor<super::Profile>> {
             self.query.all(db).await
         }
         pub async fn first(self, db: &Db) -> Result<Option<super::Profile>> {
@@ -525,51 +494,48 @@ pub mod queries {
         pub async fn get(self, db: &Db) -> Result<super::Profile> {
             self.query.get(db).await
         }
-        pub fn update(self) -> super::UpdateQuery<'a> {
+        pub fn update(self) -> super::UpdateQuery {
             super::UpdateQuery::from(self.query)
         }
         pub async fn delete(self, db: &Db) -> Result<()> {
             self.query.delete(db).await
         }
-        pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> FindByUserId<'a> {
+        pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> FindByUserId {
             let path = path.into();
             self.query.stmt.include(path);
             self
         }
-        pub fn filter(self, filter: stmt::Expr<'a, bool>) -> Query<'a> {
+        pub fn filter(self, filter: stmt::Expr<bool>) -> Query {
             let stmt = self.into_select();
             Query::from_stmt(stmt.and(filter))
         }
-        pub async fn collect<A>(self, db: &'a Db) -> Result<A>
+        pub async fn collect<A>(self, db: &Db) -> Result<A>
         where
             A: FromCursor<super::Profile>,
         {
             self.all(db).await?.collect().await
         }
     }
-    impl<'a> stmt::IntoSelect<'a> for FindByUserId<'a> {
+    impl stmt::IntoSelect for FindByUserId {
         type Model = super::Profile;
-        fn into_select(self) -> stmt::Select<'a, Self::Model> {
+        fn into_select(self) -> stmt::Select<Self::Model> {
             self.query.into_select()
         }
     }
     impl super::Profile {
-        pub fn find_many_by_user_id<'a>() -> FindManyByUserId<'a> {
+        pub fn find_many_by_user_id() -> FindManyByUserId {
             FindManyByUserId { items: vec![] }
         }
     }
-    pub struct FindManyByUserId<'a> {
-        items: Vec<stmt::Expr<'a, Id<super::super::user::User>>>,
+    pub struct FindManyByUserId {
+        items: Vec<stmt::Expr<Id<super::super::user::User>>>,
     }
-    impl<'a> FindManyByUserId<'a> {
-        pub fn item(
-            mut self,
-            user_id: impl stmt::IntoExpr<'a, Id<super::super::user::User>>,
-        ) -> Self {
+    impl FindManyByUserId {
+        pub fn item(mut self, user_id: impl stmt::IntoExpr<Id<super::super::user::User>>) -> Self {
             self.items.push(user_id.into_expr());
             self
         }
-        pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, super::Profile>> {
+        pub async fn all(self, db: &Db) -> Result<Cursor<super::Profile>> {
             db.all(self.into_select()).await
         }
         pub async fn first(self, db: &Db) -> Result<Option<super::Profile>> {
@@ -578,26 +544,26 @@ pub mod queries {
         pub async fn get(self, db: &Db) -> Result<super::Profile> {
             db.get(self.into_select()).await
         }
-        pub fn update(self) -> super::UpdateQuery<'a> {
+        pub fn update(self) -> super::UpdateQuery {
             super::UpdateQuery::from(self.into_select())
         }
         pub async fn delete(self, db: &Db) -> Result<()> {
             db.delete(self.into_select()).await
         }
-        pub fn filter(self, filter: stmt::Expr<'a, bool>) -> Query<'a> {
+        pub fn filter(self, filter: stmt::Expr<bool>) -> Query {
             let stmt = self.into_select();
             Query::from_stmt(stmt.and(filter))
         }
-        pub async fn collect<A>(self, db: &'a Db) -> Result<A>
+        pub async fn collect<A>(self, db: &Db) -> Result<A>
         where
             A: FromCursor<super::Profile>,
         {
             self.all(db).await?.collect().await
         }
     }
-    impl<'a> stmt::IntoSelect<'a> for FindManyByUserId<'a> {
+    impl stmt::IntoSelect for FindManyByUserId {
         type Model = super::Profile;
-        fn into_select(self) -> stmt::Select<'a, Self::Model> {
+        fn into_select(self) -> stmt::Select<Self::Model> {
             stmt::Select::from_expr(stmt::in_set(Profile::USER_ID, self.items))
         }
     }
