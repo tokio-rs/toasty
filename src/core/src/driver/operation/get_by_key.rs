@@ -14,7 +14,7 @@ pub struct GetByKey {
     pub select: Vec<ColumnId>,
 
     /// Which keys to fetch
-    pub keys: Vec<stmt::Value<'static>>,
+    pub keys: Vec<stmt::Value>,
 
     /// How to filter the result before returning it to the caller.
     /// TODO: this needs to be moved to the engine

@@ -7,10 +7,10 @@ pub struct DeleteByKey {
     pub table: TableId,
 
     /// Which keys to delete
-    pub keys: Vec<stmt::Value<'static>>,
+    pub keys: Vec<stmt::Value>,
 
     /// Only delete keys that match the filter
-    pub filter: Option<stmt::Expr<'static>>,
+    pub filter: Option<stmt::Expr>,
 }
 
 impl From<DeleteByKey> for Operation {

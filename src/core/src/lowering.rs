@@ -11,13 +11,13 @@ pub struct Lowering {
     /// Table columns used to represent the model.
     pub columns: Vec<ColumnId>,
 
-    pub model_to_table: stmt::ExprRecord<'static>,
+    pub model_to_table: stmt::ExprRecord,
 
     /// How to map the model's primary key to the table's primary key
-    pub model_pk_to_table: stmt::Expr<'static>,
+    pub model_pk_to_table: stmt::Expr,
 
     /// How to map table records to model records
-    pub table_to_model: stmt::ExprRecord<'static>,
+    pub table_to_model: stmt::ExprRecord,
 }
 
 /// Describes how to lower a model index to a table index

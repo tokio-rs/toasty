@@ -5,7 +5,7 @@ use crate::stmt;
 #[derive(Debug)]
 pub struct QuerySql {
     /// The SQL query to execute
-    pub stmt: stmt::Statement<'static>,
+    pub stmt: stmt::Statement,
 }
 
 impl From<QuerySql> for Operation {

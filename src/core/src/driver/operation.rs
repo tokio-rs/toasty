@@ -21,7 +21,7 @@ use super::*;
 #[derive(Debug)]
 pub enum Operation {
     /// Create a new record. This will always be a lowered `stmt::Insert`
-    Insert(stmt::Statement<'static>),
+    Insert(stmt::Statement),
 
     /// Delete records identified by the given keys.
     DeleteByKey(DeleteByKey),

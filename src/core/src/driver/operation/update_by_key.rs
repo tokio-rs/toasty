@@ -8,16 +8,16 @@ pub struct UpdateByKey {
     pub table: TableId,
 
     /// Which keys to update
-    pub keys: Vec<stmt::Value<'static>>,
+    pub keys: Vec<stmt::Value>,
 
     /// How to update the table
-    pub assignments: stmt::Assignments<'static>,
+    pub assignments: stmt::Assignments,
 
     /// Only update keys that match the filter
-    pub filter: Option<stmt::Expr<'static>>,
+    pub filter: Option<stmt::Expr>,
 
     /// Any conditions that must hold to apply the update
-    pub condition: Option<stmt::Expr<'static>>,
+    pub condition: Option<stmt::Expr>,
 
     /// If true, then the driver should return a record for each instance of the
     /// model that was updated.

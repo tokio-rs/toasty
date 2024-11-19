@@ -11,7 +11,7 @@ pub struct FindPkByIndex {
     pub index: IndexId,
 
     /// How to filter the index.
-    pub filter: stmt::Expr<'static>,
+    pub filter: stmt::Expr,
 }
 
 impl From<FindPkByIndex> for Operation {

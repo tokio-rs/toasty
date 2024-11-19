@@ -11,11 +11,11 @@ pub struct QueryPk {
     pub select: Vec<ColumnId>,
 
     /// How to filter the index.
-    pub pk_filter: stmt::Expr<'static>,
+    pub pk_filter: stmt::Expr,
 
     /// Additional filtering done on the result before returning it to the
     /// caller.
-    pub filter: Option<stmt::Expr<'static>>,
+    pub filter: Option<stmt::Expr>,
 }
 
 impl From<QueryPk> for Operation {
