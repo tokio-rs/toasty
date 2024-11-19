@@ -59,18 +59,18 @@ impl<'a> Generator<'a> {
                 }
 
                 #[derive(Debug)]
-                pub struct Query<'a> {
-                    pub(super) scope: super::Query<'a>,
+                pub struct Query {
+                    pub(super) scope: super::Query,
                 }
 
                 #[derive(Debug)]
-                pub struct Remove<'a> {
-                    stmt: stmt::Unlink<'a, super::#model_struct_name>,
+                pub struct Remove {
+                    stmt: stmt::Unlink<super::#model_struct_name>,
                 }
 
                 #[derive(Debug)]
-                pub struct Add<'a> {
-                    stmt: stmt::Link<'a, super::#model_struct_name>,
+                pub struct Add {
+                    stmt: stmt::Link<super::#model_struct_name>,
                 }
 
                 impl super::#model_struct_name {
@@ -79,23 +79,23 @@ impl<'a> Generator<'a> {
                     }
                 }
 
-                impl<'a> super::Query<'a> {
-                    pub fn #field_name(self) -> Query<'a> {
+                impl super::Query {
+                    pub fn #field_name(self) -> Query {
                         Query::with_scope(self)
                     }
                 }
 
-                impl<'a> #relation_struct_name<'a> {
+                impl #relation_struct_name<'_> {
                     pub fn get(&self) -> &[#target_struct_name] {
                         self.scope.#field_name.get()
                     }
 
                     /// Iterate all entries in the relation
-                    pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, #target_struct_name>> {
+                    pub async fn all(self, db: &Db) -> Result<Cursor<#target_struct_name>> {
                         db.all(self.into_select()).await
                     }
 
-                    pub async fn collect<A>(self, db: &'a Db) -> Result<A>
+                    pub async fn collect<A>(self, db: &Db) -> Result<A>
                     where
                         A: FromCursor<#target_struct_name>
                     {
@@ -103,7 +103,7 @@ impl<'a> Generator<'a> {
                     }
 
                     /// Create a new associated record
-                    pub fn create(self) -> #target_create_struct_path<'a> {
+                    pub fn create(self) -> #target_create_struct_path {
                         let mut builder = #target_create_struct_path::default();
                         builder.stmt.set_scope(self);
                         builder
@@ -111,14 +111,14 @@ impl<'a> Generator<'a> {
 
                     pub fn query(
                         self,
-                        filter: stmt::Expr<'a, bool>
-                    ) -> #target_mod_name::Query<'a> {
+                        filter: stmt::Expr<bool>
+                    ) -> #target_mod_name::Query {
                         let query = self.into_select();
                         #target_mod_name::Query::from_stmt(query.and(filter))
                     }
 
                     /// Add an item to the association
-                    pub fn add(self, #field_name: impl IntoSelect<'a, Model = #target_struct_name>) -> Add<'a> {
+                    pub fn add(self, #field_name: impl IntoSelect<Model = #target_struct_name>) -> Add {
                         Add {
                             stmt: stmt::Link::new(self.scope,
                                 super::#model_struct_name::#field_const_name,
@@ -128,7 +128,7 @@ impl<'a> Generator<'a> {
                     }
 
                     /// Remove items from the association
-                    pub fn remove(self, #field_name: impl IntoSelect<'a, Model = #target_struct_name>) -> Remove<'a> {
+                    pub fn remove(self, #field_name: impl IntoSelect<Model = #target_struct_name>) -> Remove {
                         Remove {
                             stmt: stmt::Unlink::new(
                                 self.scope,
@@ -141,21 +141,21 @@ impl<'a> Generator<'a> {
                     #scoped_query_method_defs
                 }
 
-                impl<'a> stmt::IntoSelect<'a> for #relation_struct_name<'a> {
+                impl stmt::IntoSelect for #relation_struct_name<'_> {
                     type Model = #target_struct_name;
 
-                    fn into_select(self) -> stmt::Select<'a, #target_struct_name> {
+                    fn into_select(self) -> stmt::Select<#target_struct_name> {
                         #target_struct_name::filter(
                             #target_struct_name::#pair_field_const_name.in_query(self.scope)
                         ).into_select()
                     }
                 }
 
-                impl<'a> Query<'a> {
+                impl Query {
                     // TODO: rename `from_stmt`?
-                    pub fn with_scope<S>(scope: S) -> Query<'a>
+                    pub fn with_scope<S>(scope: S) -> Query
                     where
-                        S: IntoSelect<'a, Model = #model_struct_name>,
+                        S: IntoSelect<Model = #model_struct_name>,
                     {
                         Query { scope: super::Query::from_stmt(scope.into_select()) }
                     }
@@ -163,16 +163,16 @@ impl<'a> Generator<'a> {
                     #scoped_query_method_defs
                 }
 
-                impl<'a> Add<'a> {
-                    pub async fn exec(self, db: &'a Db) -> Result<()> {
+                impl Add {
+                    pub async fn exec(self, db: &Db) -> Result<()> {
                         let mut cursor = db.exec(self.stmt.into()).await?;
                         assert!(cursor.next().await.is_none());
                         Ok(())
                     }
                 }
 
-                impl<'a> Remove<'a> {
-                    pub async fn exec(self, db: &'a Db) -> Result<()> {
+                impl Remove {
+                    pub async fn exec(self, db: &Db) -> Result<()> {
                         let mut cursor = db.exec(self.stmt.into()).await?;
                         assert!(cursor.next().await.is_none());
                         Ok(())
@@ -200,26 +200,26 @@ impl<'a> Generator<'a> {
         };
 
         let relation_struct = if field.ty.is_belongs_to() {
-            quote!(#relation_struct_name<'stmt>)
+            quote!(#relation_struct_name<'a>)
         } else {
-            quote!(#relation_struct_name<'stmt>)
+            quote!(#relation_struct_name<'a>)
         };
 
         let op_methods = if field.ty.is_belongs_to() {
             quote! {
-                pub fn eq<'a, 'b, T>(
+                pub fn eq<'a, T>(
                     self,
                     rhs: T
-                ) -> stmt::Expr<'a, bool>
+                ) -> stmt::Expr<bool>
                 where
-                    T: toasty::stmt::IntoExpr<'a, super::relation::#field_name::#relation_struct_name<'b>>,
+                    T: toasty::stmt::IntoExpr<super::relation::#field_name::#relation_struct_name<'a>>,
                 {
                     self.path.eq(rhs.into_expr().cast())
                 }
 
-                pub fn in_query<'a, Q>(self, rhs: Q) -> toasty::stmt::Expr<'a, bool>
+                pub fn in_query<Q>(self, rhs: Q) -> toasty::stmt::Expr<bool>
                 where
-                    Q: stmt::IntoSelect<'a, Model = #target_struct_name>,
+                    Q: stmt::IntoSelect<Model = #target_struct_name>,
                 {
                     self.path.in_query(rhs)
                 }
@@ -249,8 +249,8 @@ impl<'a> Generator<'a> {
                 }
             }
 
-            impl<'stmt> stmt::IntoExpr<'stmt, super::relation::#field_name::#relation_struct> for #relation_struct_name {
-                fn into_expr(self) -> stmt::Expr<'stmt, super::relation::#field_name::#relation_struct> {
+            impl<'a> stmt::IntoExpr<super::relation::#field_name::#relation_struct> for #relation_struct_name {
+                fn into_expr(self) -> stmt::Expr<super::relation::#field_name::#relation_struct> {
                     todo!("into_expr for {} (field path struct)", stringify!(#relation_struct_name));
                 }
             }
@@ -285,8 +285,8 @@ impl<'a> Generator<'a> {
                 }
 
                 #[derive(Debug)]
-                pub struct Query<'a> {
-                    pub(super) scope: super::Query<'a>,
+                pub struct Query {
+                    pub(super) scope: super::Query,
                 }
 
                 impl super::#model_struct_name {
@@ -295,41 +295,41 @@ impl<'a> Generator<'a> {
                     }
                 }
 
-                impl<'a> super::Query<'a> {
-                    pub fn #field_name(self) -> Query<'a> {
+                impl super::Query {
+                    pub fn #field_name(self) -> Query {
                         Query::with_scope(self)
                     }
                 }
 
-                impl<'a> #relation_struct_name<'a> {
+                impl #relation_struct_name {
                     /// Get the relation
-                    pub async fn get(self, db: &'a Db) -> Result<#get_ret_ty> {
+                    pub async fn get(self, db: &Db) -> Result<#get_ret_ty> {
                         db.#get_db_fn(self.into_select()).await
                     }
 
                     /// Create a new associated record
-                    pub fn create(self) -> #target_create_struct_path<'a> {
+                    pub fn create(self) -> #target_create_struct_path {
                         let mut builder = #target_create_struct_path::default();
                         builder.stmt.set_scope(self);
                         builder
                     }
                 }
 
-                impl<'a> stmt::IntoSelect<'a> for #relation_struct_name<'a> {
+                impl<'a> stmt::IntoSelect for #relation_struct_name<'a> {
                     type Model = #target_struct_name;
 
-                    fn into_select(self) -> stmt::Select<'a, #target_struct_name> {
+                    fn into_select(self) -> stmt::Select<#target_struct_name> {
                         #target_struct_name::filter(
                             #target_struct_name::#pair_field_const_name.in_query(self.scope)
                         ).into_select()
                     }
                 }
 
-                impl<'stmt> Query<'stmt> {
+                impl Query {
                     // TODO: rename `from_stmt`?
-                    pub fn with_scope<S>(scope: S) -> Query<'stmt>
+                    pub fn with_scope<S>(scope: S) -> Query
                     where
-                        S: IntoSelect<'stmt, Model = #model_struct_name>,
+                        S: IntoSelect<Model = #model_struct_name>,
                     {
                         Query { scope: super::Query::from_stmt(scope.into_select()) }
                     }
@@ -406,49 +406,49 @@ impl<'a> Generator<'a> {
                     }
                 }
 
-                impl<'a> #relation_struct_name<'a> {
+                impl #relation_struct_name<'_> {
                     pub fn get(&self) -> &#target_struct_name {
                         self.scope.#field_name.get()
                     }
                 }
 
-                impl<'a> stmt::IntoSelect<'a> for &'a #relation_struct_name<'_> {
+                impl stmt::IntoSelect for &#relation_struct_name<'_> {
                     type Model = #target_struct_name;
 
-                    fn into_select(self) -> stmt::Select<'a, Self::Model> {
+                    fn into_select(self) -> stmt::Select<Self::Model> {
                         #rel_struct_into_select_impl
                     }
                 }
 
-                impl<'stmt, 'a> stmt::IntoExpr<'stmt, #relation_struct_name<'a>> for #relation_struct_name<'a> {
-                    fn into_expr(self) -> stmt::Expr<'stmt, #relation_struct_name<'a>> {
+                impl<'a> stmt::IntoExpr<#relation_struct_name<'a>> for #relation_struct_name<'a> {
+                    fn into_expr(self) -> stmt::Expr<#relation_struct_name<'a>> {
                         // #rel_struct_into_expr_impl
                         todo!("stmt::IntoExpr for {} (belongs_to Fk struct) - self = {:#?}", stringify!(#relation_struct_name), self);
                     }
                 }
 
-                impl<'stmt, 'a> stmt::IntoExpr<'stmt, #relation_struct_name<'a>> for &'stmt #relation_struct_name<'a> {
-                    fn into_expr(self) -> stmt::Expr<'stmt, #relation_struct_name<'a>> {
+                impl<'a> stmt::IntoExpr<#relation_struct_name<'a>> for &#relation_struct_name<'a> {
+                    fn into_expr(self) -> stmt::Expr<#relation_struct_name<'a>> {
                         todo!("stmt::IntoExpr for &'a {} (belongs_to Fk struct) - self = {:#?}", stringify!(#relation_struct_name), self);
                     }
                 }
 
-                impl<'stmt, 'a> stmt::IntoExpr<'stmt, #relation_struct_name<'a>> for &'stmt #target_struct_name {
-                    fn into_expr(self) -> stmt::Expr<'stmt, #relation_struct_name<'a>> {
+                impl<'a> stmt::IntoExpr<#relation_struct_name<'a>> for &#target_struct_name {
+                    fn into_expr(self) -> stmt::Expr<#relation_struct_name<'a>> {
                         #target_struct_ref_into_expr_impl
                     }
                 }
 
-                impl<'stmt, 'a> stmt::IntoExpr<'stmt, #relation_struct_name<'a>> for #target_create_struct_path<'stmt> {
-                    fn into_expr(self) -> stmt::Expr<'stmt, #relation_struct_name<'a>> {
-                        let expr: stmt::Expr<'stmt, #target_struct_name> = self.stmt.into();
+                impl<'a> stmt::IntoExpr<#relation_struct_name<'a>> for #target_create_struct_path {
+                    fn into_expr(self) -> stmt::Expr<#relation_struct_name<'a>> {
+                        let expr: stmt::Expr<#target_struct_name> = self.stmt.into();
                         expr.cast()
                     }
                 }
 
                 // #field_into_expr
 
-                impl<'a> #relation_struct_name<'a> {
+                impl #relation_struct_name<'_> {
                     // TODO: make this return a query type?
                     pub async fn find(&self, db: &Db) -> Result<#find_ret_ty> {
                         db.#find_db_fn(self.into_select()).await
