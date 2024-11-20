@@ -187,60 +187,42 @@ impl SimplifyExpr<'_> {
                 assert!(op.is_eq());
                 Some(self.rewrite_root_path_expr(other.take()))
             }
-            (stmt::Expr::Project(expr_project), other)
-            | (other, stmt::Expr::Project(expr_project)) => {
-                todo!("expr_project={:#?}", expr_project);
+            (stmt::Expr::Field(expr_field), other) | (other, stmt::Expr::Field(expr_field)) => {
+                let field = self.schema.field(expr_field.field);
 
-                /*
-                if todo!("expr_project={:#?}", expr_project) {
-                    // if expr_project.is_identity() {
-                    assert!(op.is_eq());
+                match &field.ty {
+                    FieldTy::Primitive(_) => None,
+                    // TODO: Do anything here?
+                    FieldTy::HasMany(_) | FieldTy::HasOne(_) => None,
+                    FieldTy::BelongsTo(rel) => match op {
+                        stmt::BinaryOp::Ne => {
+                            let [fk_field, ..] = &rel.foreign_key.fields[..] else {
+                                todo!()
+                            };
 
-                    Some(self.rewrite_root_path_expr(other.clone()))
-                } else {
-                    // todo!(expr_project.base.is_expr_self());
+                            assert!(other.is_null());
 
-                    let field = expr_project
-                        .projection
-                        .resolve_field(self.schema, self.model);
+                            expr_field.field = fk_field.source;
 
-                    match &field.ty {
-                        FieldTy::Primitive(_) => None,
-                        // TODO: Do anything here?
-                        FieldTy::HasMany(_) | FieldTy::HasOne(_) => None,
-                        FieldTy::BelongsTo(rel) => match op {
-                            stmt::BinaryOp::Ne => {
-                                let [fk_field, ..] = &rel.foreign_key.fields[..] else {
-                                    todo!()
-                                };
+                            None
+                        }
+                        stmt::BinaryOp::Eq => {
+                            let [fk_field] = &rel.foreign_key.fields[..] else {
+                                todo!()
+                            };
 
-                                assert!(other.is_null());
+                            expr_field.field = fk_field.source;
 
-                                expr_project.projection =
-                                    stmt::Projection::from_index(fk_field.source.index);
+                            *other = match other.take() {
+                                stmt::Expr::Record(_) => todo!(),
+                                other => other,
+                            };
 
-                                None
-                            }
-                            stmt::BinaryOp::Eq => {
-                                let [fk_field] = &rel.foreign_key.fields[..] else {
-                                    todo!()
-                                };
-
-                                expr_project.projection =
-                                    stmt::Projection::from_index(fk_field.source.index);
-
-                                *other = match other.take() {
-                                    stmt::Expr::Record(_) => todo!(),
-                                    other => other,
-                                };
-
-                                None
-                            }
-                            _ => todo!("op = {:#?}; lhs={:#?}; rhs={:#?}", op, lhs, rhs),
-                        },
-                    }
+                            None
+                        }
+                        _ => todo!("op = {:#?}; lhs={:#?}; rhs={:#?}", op, lhs, rhs),
+                    },
                 }
-                */
             }
             _ => {
                 // For now, just make sure there are no relations in the expression
