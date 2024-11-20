@@ -85,6 +85,12 @@ impl InsertTarget {
     }
 }
 
+impl From<Query> for InsertTarget {
+    fn from(value: Query) -> Self {
+        InsertTarget::Scope(value)
+    }
+}
+
 impl From<InsertTable> for InsertTarget {
     fn from(value: InsertTable) -> Self {
         InsertTarget::Table(value)

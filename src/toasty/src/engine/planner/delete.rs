@@ -5,6 +5,7 @@ impl Planner<'_> {
         self.simplify_stmt_delete(&mut stmt);
 
         let model = self.model(stmt.from.as_model_id());
+        let selection = stmt.selection();
 
         // Handle any cascading deletes
         for field in model.fields.iter() {
@@ -12,16 +13,17 @@ impl Planner<'_> {
                 // HAX: unify w/ relation planner
                 if self.relations.last().copied() != Some(rel.pair) {
                     self.relations.push(field.id);
-                    self.plan_mut_has_one_nullify(model, rel, &stmt.filter);
+                    self.plan_mut_has_one_nullify(rel, &selection);
                     self.relations.pop();
                 }
             } else if let Some(rel) = field.ty.as_has_many() {
                 let pair = self.schema.field(rel.pair);
-                let selection = stmt.selection();
 
                 // TODO: can this be unified with update?
-                let query =
-                    stmt::Query::filter(rel.target, stmt::Expr::in_subquery(rel.pair, selection));
+                let query = stmt::Query::filter(
+                    rel.target,
+                    stmt::Expr::in_subquery(rel.pair, selection.clone()),
+                );
 
                 if pair.nullable {
                     let mut update = query.update(self.schema);
