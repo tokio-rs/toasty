@@ -329,6 +329,9 @@ impl<'a, 'stmt, T: Params> Formatter<'a, T> {
                 }
             }
             Expr::BinaryOp(ExprBinaryOp { lhs, op, rhs }) => {
+                assert!(!lhs.is_null());
+                assert!(!rhs.is_null());
+
                 self.expr(&*lhs)?;
                 write!(self.dst, " ")?;
                 self.binary_op(op)?;
@@ -376,24 +379,21 @@ impl<'a, 'stmt, T: Params> Formatter<'a, T> {
                 write!(self.dst, ")")?;
             }
             Expr::Value(value) => self.value(value)?,
-            /*
-            Expr::BeginsWith(ExprBeginsWith { expr, pattern }) => {
-                let str = pattern.as_value().expect_string();
-                let pattern = format!("{str}%");
-                self.expr(expr)?;
+            Expr::Pattern(ExprPattern::BeginsWith(expr)) => {
+                let Expr::Value(pattern) = &*expr.pattern else {
+                    todo!()
+                };
+                let pattern = pattern.expect_string();
+                let pattern = format!("{pattern}%");
+                self.expr(&expr.expr)?;
                 write!(self.dst, " LIKE ")?;
                 self.expr(&Expr::Value(pattern.into()))?;
             }
-            Expr::Like(ExprLike { expr, pattern }) => {
-                self.expr(expr)?;
-                write!(self.dst, " LIKE ")?;
-                self.expr(pattern)?;
+            Expr::ConcatStr(ExprConcatStr { exprs }) => {
+                write!(self.dst, "concat(")?;
+                self.expr_list(exprs)?;
+                write!(self.dst, ")")?;
             }
-            Expr::IsNotNull(expr) => {
-                self.expr(expr)?;
-                write!(self.dst, " IS NOT NULL")?;
-            }
-            */
             _ => todo!("expr = {:#?}", expr),
         }
 

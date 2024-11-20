@@ -212,7 +212,7 @@ impl UpdateProfile<'_> {
         for (field, value) in result.into_sparse_record().into_iter() {
             match field.into_usize() {
                 0 => self.model.id = stmt::Id::from_untyped(value.to_id()?),
-                1 => todo!("should not be set"),
+                1 => todo!("should not be set; {} = {value:#?}", 1),
                 2 => self.model.user_id = value.to_option_id()?.map(stmt::Id::from_untyped),
                 _ => todo!("handle unknown field id in reload after update"),
             }

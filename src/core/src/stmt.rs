@@ -31,6 +31,9 @@ pub use expr_column::ExprColumn;
 mod expr_concat;
 pub use expr_concat::ExprConcat;
 
+mod expr_concat_str;
+pub use expr_concat_str::ExprConcatStr;
+
 mod expr_enum;
 pub use expr_enum::ExprEnum;
 
@@ -192,22 +195,7 @@ pub enum Statement {
     Update(Update),
 }
 
-impl Statement {
-    pub fn inputs(&self) -> Vec<Path> {
-        todo!()
-    }
-
-    /*
-    pub fn is_select(&self) -> bool {
-        use Statement::*;
-        matches!(self, Select(_))
-    }
-
-    pub fn is_write(&self) -> bool {
-        !self.is_select()
-    }
-    */
-}
+impl Statement {}
 
 impl Node for Statement {
     fn map<V: Map>(&self, visit: &mut V) -> Self {

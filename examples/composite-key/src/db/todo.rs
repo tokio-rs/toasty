@@ -228,7 +228,7 @@ impl UpdateTodo<'_> {
                 0 => self.model.id = stmt::Id::from_untyped(value.to_id()?),
                 1 => self.model.title = value.to_string()?,
                 2 => self.model.order = value.to_i64()?,
-                3 => todo!("should not be set"),
+                3 => todo!("should not be set; {} = {value:#?}", 3),
                 4 => self.model.user_id = stmt::Id::from_untyped(value.to_id()?),
                 _ => todo!("handle unknown field id in reload after update"),
             }

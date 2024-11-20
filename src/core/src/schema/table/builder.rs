@@ -330,13 +330,9 @@ impl<'a> ModelLoweringBuilder<'a> {
                     .unwrap();
 
                 self.lowering_columns.push(*pk);
-                self.model_to_table.push(
-                    stmt::ExprEnum {
-                        variant: variant.discriminant,
-                        fields: stmt::ExprRecord::from_vec(vec![]),
-                    }
-                    .into(),
-                );
+                // TODO: this should not be hard coded
+                self.model_to_table
+                    .push(format!("{}#", variant.discriminant).into());
             }
         }
 
@@ -460,11 +456,7 @@ impl<'a> ModelLoweringBuilder<'a> {
                     })
                     .unwrap();
 
-                stmt::ExprEnum {
-                    variant: variant.discriminant,
-                    fields: stmt::ExprRecord::from_vec(vec![expr.into()]),
-                }
-                .into()
+                stmt::Expr::concat_str((variant.discriminant.to_string(), "#", expr))
             }
             stmt::Type::String if ty.is_id() => stmt::Expr::cast(expr, &column.ty),
             _ => todo!("column={column:#?}"),
@@ -487,7 +479,11 @@ impl<'a> ModelLoweringBuilder<'a> {
                     })
                     .unwrap();
 
-                stmt::Expr::project(column, [variant.discriminant])
+                stmt::Expr::DecodeEnum(
+                    Box::new(stmt::Expr::column(column)),
+                    primitive.ty.clone(),
+                    variant.discriminant,
+                )
             }
             stmt::Type::String if primitive.ty.is_id() => {
                 stmt::Expr::cast(stmt::Expr::column(column), &primitive.ty)

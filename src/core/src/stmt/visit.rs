@@ -273,6 +273,7 @@ where
         Expr::Stmt(expr) => v.visit_expr_stmt(expr),
         Expr::Type(expr) => v.visit_expr_ty(expr),
         Expr::Value(expr) => v.visit_value(expr),
+        _ => todo!(),
     }
 }
 

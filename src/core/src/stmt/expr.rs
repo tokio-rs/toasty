@@ -20,7 +20,11 @@ pub enum Expr {
     Column(ExprColumn),
 
     /// Concat multiple expressions together
+    /// TODO: name this something different?
     Concat(ExprConcat),
+
+    /// Concat strings
+    ConcatStr(ExprConcatStr),
 
     /// Return an enum value
     Enum(ExprEnum),
@@ -60,6 +64,9 @@ pub enum Expr {
 
     /// Evaluates to a constant value reference
     Value(Value),
+
+    // TODO: get rid of this?
+    DecodeEnum(Box<Expr>, Type, usize),
 }
 
 impl Expr {
@@ -212,15 +219,6 @@ impl Expr {
                     *expr = sub;
                 }
             }
-            Expr::Project(expr) => todo!("project = {:#?}", expr),
-            /*
-            Expr::Project(expr_project) => match &expr_project.base {
-                ProjectBase::ExprSelf => {
-                    *expr = input.resolve_self_projection(&expr_project.projection);
-                }
-                _ => {}
-            },
-            */
             _ => {}
         });
 
@@ -352,6 +350,12 @@ impl From<String> for Expr {
 
 impl From<&String> for Expr {
     fn from(value: &String) -> Self {
+        Expr::Value(value.into())
+    }
+}
+
+impl From<&str> for Expr {
+    fn from(value: &str) -> Self {
         Expr::Value(value.into())
     }
 }

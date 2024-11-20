@@ -216,7 +216,7 @@ impl UpdateTodo<'_> {
             match field.into_usize() {
                 0 => self.model.id = stmt::Id::from_untyped(value.to_id()?),
                 1 => self.model.user_id = stmt::Id::from_untyped(value.to_id()?),
-                2 => todo!("should not be set"),
+                2 => todo!("should not be set; {} = {value:#?}", 2),
                 3 => self.model.title = value.to_string()?,
                 _ => todo!("handle unknown field id in reload after update"),
             }

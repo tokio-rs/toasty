@@ -57,7 +57,6 @@ impl Planner<'_> {
         let table = self.schema.table(model.lowering.table);
 
         self.lower_stmt_query(table, model, &mut stmt);
-        println!("LOWERED={stmt:#?}");
         let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
 
         let output = self.var_table.register_var();

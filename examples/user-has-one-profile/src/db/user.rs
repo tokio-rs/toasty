@@ -204,7 +204,7 @@ impl UpdateUser<'_> {
             match field.into_usize() {
                 0 => self.model.id = stmt::Id::from_untyped(value.to_id()?),
                 1 => self.model.name = value.to_string()?,
-                2 => todo!("should not be set"),
+                2 => todo!("should not be set; {} = {value:#?}", 2),
                 _ => todo!("handle unknown field id in reload after update"),
             }
         }

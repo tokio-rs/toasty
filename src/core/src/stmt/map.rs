@@ -153,17 +153,16 @@ where
         Expr::Concat(expr) => v.map_expr_concat(expr).into(),
         Expr::Enum(expr) => v.map_expr_enum(expr).into(),
         Expr::Field(expr) => v.map_expr_field(expr).into(),
-        Expr::InList(expr) => todo!(),
         Expr::InSubquery(expr) => v.map_expr_in_subquery(expr).into(),
         Expr::Key(expr) => v.map_expr_key(expr).into(),
         Expr::Or(expr) => v.map_expr_or(expr).into(),
-        Expr::Pattern(_) => todo!(),
         Expr::Project(expr) => v.map_expr_project(expr).into(),
         Expr::Record(expr) => v.map_expr_record(expr).into(),
         Expr::List(expr) => Expr::List(v.map_expr_list(expr)),
         Expr::Stmt(expr) => v.map_expr_stmt(expr).into(),
         Expr::Type(expr) => v.map_expr_ty(expr).into(),
         Expr::Value(expr) => v.map_value(expr).into(),
+        _ => todo!(),
     }
 }
 

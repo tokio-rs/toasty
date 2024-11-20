@@ -84,6 +84,24 @@ fn partition_returning(stmt: &stmt::Expr, returning: &mut Vec<stmt::Expr>) -> Pa
             Eval(eval) => Eval(eval::Expr::cast(eval, expr.ty.clone())),
         },
         stmt::Expr::Column(_) | stmt::Expr::Value(_) => Stmt,
+        stmt::Expr::Project(expr) => match partition_returning(&expr.base, returning) {
+            Stmt => {
+                let i = returning.len();
+                returning.push((*expr.base).clone());
+                let base = eval::Expr::arg_project(0, [i]);
+                Eval(eval::Expr::project(base, expr.projection.clone()))
+            }
+            Eval(eval) => Eval(eval::Expr::project(eval, expr.projection.clone())),
+        },
+        stmt::Expr::DecodeEnum(expr, ty, ..) => match partition_returning(expr, returning) {
+            Stmt => {
+                let i = returning.len();
+                returning.push((**expr).clone());
+                let base = eval::Expr::arg_project(0, [i]);
+                Eval(eval::Expr::DecodeEnum(Box::new(base), ty.clone()))
+            }
+            Eval(eval) => Eval(eval::Expr::DecodeEnum(Box::new(eval), ty.clone())),
+        },
         _ => todo!("stmt={stmt:#?}"),
     }
 }

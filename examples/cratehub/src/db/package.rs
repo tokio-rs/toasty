@@ -214,7 +214,7 @@ impl UpdatePackage<'_> {
         let mut result = db.exec_one(stmt.into()).await?;
         for (field, value) in result.into_sparse_record().into_iter() {
             match field.into_usize() {
-                0 => todo!("should not be set"),
+                0 => todo!("should not be set; {} = {value:#?}", 0),
                 1 => self.model.user_id = stmt::Id::from_untyped(value.to_id()?),
                 2 => self.model.id = stmt::Id::from_untyped(value.to_id()?),
                 3 => self.model.name = value.to_string()?,

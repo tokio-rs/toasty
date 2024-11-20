@@ -229,7 +229,7 @@ impl UpdateUser<'_> {
                 0 => self.model.id = stmt::Id::from_untyped(value.to_id()?),
                 1 => self.model.name = value.to_string()?,
                 2 => self.model.email = value.to_string()?,
-                3 => todo!("should not be set"),
+                3 => todo!("should not be set; {} = {value:#?}", 3),
                 4 => self.model.moto = value.to_option_string()?,
                 _ => todo!("handle unknown field id in reload after update"),
             }

@@ -265,6 +265,14 @@ where
         Expr::Stmt(expr) => v.visit_expr_stmt_mut(expr),
         Expr::Type(expr) => v.visit_expr_ty_mut(expr),
         Expr::Value(expr) => v.visit_value_mut(expr),
+        // HAX
+        Expr::ConcatStr(expr) => {
+            for expr in &mut expr.exprs {
+                v.visit_expr_mut(expr);
+            }
+        }
+        Expr::DecodeEnum(base, ..) => v.visit_expr_mut(base),
+        _ => todo!("{node:#?}"),
     }
 }
 

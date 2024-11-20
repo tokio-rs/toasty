@@ -49,6 +49,8 @@ pub enum Expr {
     Project(ExprProject),
     Record(ExprRecord),
     Value(Value),
+    // Hax
+    DecodeEnum(Box<Expr>, stmt::Type),
 }
 
 impl Expr {
@@ -152,6 +154,13 @@ impl Expr {
                 expr_map.map.eval(&base)
                 */
                 todo!()
+            }
+            Expr::DecodeEnum(expr, ty) => {
+                let Value::String(base) = expr.eval_ref(input)? else {
+                    todo!()
+                };
+                let (variant, rest) = base.split_once("#").unwrap();
+                ty.cast(rest.into())
             }
             _ => todo!("expr={self:#?}"),
         }

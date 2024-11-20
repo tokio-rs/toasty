@@ -63,13 +63,29 @@ impl Planner<'_> {
         };
 
         for column in table.primary_key_columns() {
-            let expr_enum = match &model.lowering.model_to_table[column.id.index] {
-                stmt::Expr::Enum(expr_enum) => expr_enum,
+            // TODO: don't hard code
+            let pattern = match &model.lowering.model_to_table[column.id.index] {
+                // stmt::Expr::Enum(expr_enum) => expr_enum,
+                // stmt::Expr::DecodeEnum(..) => todo!(),
+                stmt::Expr::ConcatStr(expr) => {
+                    // hax
+                    let stmt::Expr::Value(stmt::Value::String(a)) = &expr.exprs[0] else {
+                        todo!()
+                    };
+                    let stmt::Expr::Value(stmt::Value::String(b)) = &expr.exprs[1] else {
+                        todo!()
+                    };
+
+                    format!("{}{}", a, b)
+                }
+                stmt::Expr::Value(value) => todo!(),
                 _ => continue,
             };
 
             assert_eq!(model.lowering.columns[column.id.index], column.id);
 
+            operands.push(stmt::Expr::begins_with(stmt::Expr::column(column), pattern));
+            /*
             operands.push(stmt::Expr::is_a(
                 stmt::Expr::column(column),
                 stmt::ExprTy {
@@ -77,6 +93,7 @@ impl Planner<'_> {
                     variant: Some(expr_enum.variant),
                 },
             ))
+            */
         }
 
         *filter = if operands.len() == 1 {
@@ -170,16 +187,6 @@ impl Planner<'_> {
         LowerExpr {}.visit_mut(expr);
     }
 
-    /*
-    pub(crate) fn lower_expr2(&self, model: &Model, expr: &mut stmt::Expr) {
-        LowerExpr2 {
-            schema: self.schema,
-            model,
-        }
-        .visit_mut(expr);
-    }
-    */
-
     pub(crate) fn lower_index_filter(
         &self,
         table: &Table,
@@ -243,6 +250,28 @@ fn is_constrained(expr: &stmt::Expr, column: &Column) -> bool {
 
 struct LowerExpr {}
 
+impl LowerExpr {
+    fn lower_binary_op(
+        &mut self,
+        op: stmt::BinaryOp,
+        lhs: &mut stmt::Expr,
+        rhs: &mut stmt::Expr,
+    ) -> Option<stmt::Expr> {
+        match (&mut *lhs, &mut *rhs) {
+            (stmt::Expr::DecodeEnum(base, _, variant), other)
+            | (other, stmt::Expr::DecodeEnum(base, _, variant)) => {
+                assert!(op.is_eq());
+
+                Some(stmt::Expr::eq(
+                    (**base).clone(),
+                    stmt::Expr::concat_str((variant.to_string(), "#", other.clone())),
+                ))
+            }
+            _ => None,
+        }
+    }
+}
+
 impl VisitMut for LowerExpr {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         stmt::visit_mut::visit_expr_mut(self, i);
@@ -252,6 +281,11 @@ impl VisitMut for LowerExpr {
                 if expr.ty.is_id() {
                     // Get rid of the cast
                     *i = expr.expr.take();
+                }
+            }
+            stmt::Expr::BinaryOp(expr) => {
+                if let Some(expr) = self.lower_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs) {
+                    *i = expr;
                 }
             }
             _ => {}
