@@ -56,7 +56,7 @@ impl<'a> Generator<'a> {
 
                 pub async fn exec(self, db: &Db) -> Result<()> {
                     let mut stmt = self.query.stmt;
-                    let mut result = db.exec_one::<#struct_name>(stmt.into()).await?;
+                    let mut result = db.exec_one(stmt.into()).await?;
 
                     for (field, value) in result.into_sparse_record().into_iter() {
                         match field.into_usize() {

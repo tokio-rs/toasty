@@ -150,7 +150,7 @@ impl CreateProfile {
         self
     }
     pub async fn exec(self, db: &Db) -> Result<Profile> {
-        db.exec_insert_one::<Profile>(self.stmt).await
+        db.exec_insert_one(self.stmt).await
     }
 }
 impl IntoInsert for CreateProfile {
@@ -208,8 +208,16 @@ impl UpdateProfile<'_> {
     }
     pub async fn exec(self, db: &Db) -> Result<()> {
         let mut stmt = self.query.stmt;
-        let mut result = db.exec::<Profile>(stmt.into()).await?;
-        todo!("update model")
+        let mut result = db.exec_one(stmt.into()).await?;
+        for (field, value) in result.into_sparse_record().into_iter() {
+            match field.into_usize() {
+                0 => self.model.id = stmt::Id::from_untyped(value.to_id()?),
+                1 => todo!("should not be set"),
+                2 => self.model.user_id = value.to_option_id()?.map(stmt::Id::from_untyped),
+                _ => todo!("handle unknown field id in reload after update"),
+            }
+        }
+        Ok(())
     }
 }
 impl UpdateQuery {

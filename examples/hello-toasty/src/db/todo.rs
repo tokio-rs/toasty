@@ -157,7 +157,7 @@ impl CreateTodo {
         self
     }
     pub async fn exec(self, db: &Db) -> Result<Todo> {
-        db.exec_insert_one::<Todo>(self.stmt).await
+        db.exec_insert_one(self.stmt).await
     }
 }
 impl IntoInsert for CreateTodo {
@@ -211,7 +211,7 @@ impl UpdateTodo<'_> {
     }
     pub async fn exec(self, db: &Db) -> Result<()> {
         let mut stmt = self.query.stmt;
-        let mut result = db.exec_one::<Todo>(stmt.into()).await?;
+        let mut result = db.exec_one(stmt.into()).await?;
         for (field, value) in result.into_sparse_record().into_iter() {
             match field.into_usize() {
                 0 => self.model.id = stmt::Id::from_untyped(value.to_id()?),

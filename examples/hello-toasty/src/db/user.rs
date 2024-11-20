@@ -161,7 +161,7 @@ impl CreateUser {
         self
     }
     pub async fn exec(self, db: &Db) -> Result<User> {
-        db.exec_insert_one::<User>(self.stmt).await
+        db.exec_insert_one(self.stmt).await
     }
 }
 impl IntoInsert for CreateUser {
@@ -223,7 +223,7 @@ impl UpdateUser<'_> {
     }
     pub async fn exec(self, db: &Db) -> Result<()> {
         let mut stmt = self.query.stmt;
-        let mut result = db.exec_one::<User>(stmt.into()).await?;
+        let mut result = db.exec_one(stmt.into()).await?;
         for (field, value) in result.into_sparse_record().into_iter() {
             match field.into_usize() {
                 0 => self.model.id = stmt::Id::from_untyped(value.to_id()?),

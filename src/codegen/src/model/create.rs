@@ -16,7 +16,7 @@ impl<'a> Generator<'a> {
                 #create_methods
 
                 pub async fn exec(self, db: &Db) -> Result<#struct_name> {
-                    db.exec_insert_one::<#struct_name>(self.stmt).await
+                    db.exec_insert_one(self.stmt).await
                 }
             }
 

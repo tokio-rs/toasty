@@ -157,7 +157,7 @@ impl CreatePackage {
         self
     }
     pub async fn exec(self, db: &Db) -> Result<Package> {
-        db.exec_insert_one::<Package>(self.stmt).await
+        db.exec_insert_one(self.stmt).await
     }
 }
 impl IntoInsert for CreatePackage {
@@ -211,8 +211,17 @@ impl UpdatePackage<'_> {
     }
     pub async fn exec(self, db: &Db) -> Result<()> {
         let mut stmt = self.query.stmt;
-        let mut result = db.exec::<Package>(stmt.into()).await?;
-        todo!("update model")
+        let mut result = db.exec_one(stmt.into()).await?;
+        for (field, value) in result.into_sparse_record().into_iter() {
+            match field.into_usize() {
+                0 => todo!("should not be set"),
+                1 => self.model.user_id = stmt::Id::from_untyped(value.to_id()?),
+                2 => self.model.id = stmt::Id::from_untyped(value.to_id()?),
+                3 => self.model.name = value.to_string()?,
+                _ => todo!("handle unknown field id in reload after update"),
+            }
+        }
+        Ok(())
     }
 }
 impl UpdateQuery {
