@@ -35,6 +35,8 @@ pub enum Type {
 
     /// The null type can be cast to any type.
     Null,
+
+    SparseRecord(PathFieldSet),
 }
 
 impl Type {
@@ -51,14 +53,16 @@ impl Type {
     }
 
     pub fn cast(&self, value: Value) -> Result<Value> {
-        match value {
-            stmt::Value::Id(value) => value.cast(self),
-            stmt::Value::String(value) => match self {
-                Type::Id(ty) => Ok(Value::Id(Id::from_string(*ty, value.into()))),
-                _ => todo!("value={value:#?}; ty={self:#?}"),
-            },
-            _ => todo!("value={value:#?}; ty={self:#?}"),
-        }
+        use stmt::Value;
+
+        Ok(match (value, self) {
+            (Value::Id(value), _) => value.cast(self)?,
+            (Value::String(value), Type::Id(ty)) => Value::Id(Id::from_string(*ty, value.into())),
+            (Value::Record(record), Type::SparseRecord(fields)) => {
+                Value::sparse_record(fields.clone(), record)
+            }
+            (value, _) => todo!("value={value:#?}; ty={self:#?}"),
+        })
     }
 
     pub fn casts_to(&self, other: &Type) -> bool {
@@ -97,12 +101,12 @@ impl Type {
                 Null => false,
                 List(ty) => ty.applies_binary_op(op),
                 Record(tys) => tys.iter().all(|ty| ty.applies_binary_op(op)),
-                Enum(_) => todo!(),
+                Enum(_) | SparseRecord(_) => todo!(),
             },
             Ge | Gt | Le | Lt => match self {
                 I64 => true,
                 Bool | String | Id(_) | Key(_) | Model(_) | ForeignKey(_) | Null | List(_)
-                | Record(_) | Enum(_) => false,
+                | Record(_) | Enum(_) | SparseRecord(_) => false,
             },
             _ => todo!("op = {:#?}", op),
         }

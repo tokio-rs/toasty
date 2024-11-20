@@ -87,8 +87,6 @@ impl<'a> Generator<'a> {
 
                 pub async fn exec(self, db: &Db) -> Result<()> {
                     let mut stmt = self.query.stmt;
-                    stmt.set_selection(&*self.model);
-
                     let mut result = db.exec::<#struct_name>(stmt.into()).await?;
 
                     /*

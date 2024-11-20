@@ -208,7 +208,6 @@ impl UpdateProfile<'_> {
     }
     pub async fn exec(self, db: &Db) -> Result<()> {
         let mut stmt = self.query.stmt;
-        stmt.set_selection(&*self.model);
         let mut result = db.exec::<Profile>(stmt.into()).await?;
         todo!("update model")
     }

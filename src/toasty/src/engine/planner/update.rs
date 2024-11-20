@@ -99,22 +99,24 @@ impl Planner<'_> {
                 return None;
             }
 
-            // This probably isn't exactly correct because we need to return the
-            // right number of rows matching the selection.
-            let record = stmt::Record::from_vec(vec![stmt::Value::Null; model.fields.len()]);
-            return Some(self.set_var(vec![record.into()]));
+            let value = stmt::Value::empty_sparse_record();
+            return Some(self.set_var(vec![value]));
         }
-
-        println!("ABOUT TO LOWER = {stmt:#?}");
 
         self.lower_update_stmt(model, &mut stmt);
         self.constantize_update_returning(&mut stmt);
 
         let output = self
             .partition_maybe_returning(&mut stmt.returning)
-            .map(|project| plan::QuerySqlOutput {
-                var: self.var_table.register_var(),
-                project,
+            .map(|project| {
+                let project = eval::Expr::cast(
+                    project,
+                    stmt::Type::SparseRecord(stmt.assignments.fields.clone()),
+                );
+                plan::QuerySqlOutput {
+                    var: self.var_table.register_var(),
+                    project,
+                }
             });
 
         let output_var = output.as_ref().map(|o| o.var);

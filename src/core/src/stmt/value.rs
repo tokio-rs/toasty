@@ -1,3 +1,5 @@
+use sparse_record::SparseRecord;
+
 use super::*;
 use crate::Result;
 
@@ -16,6 +18,9 @@ pub enum Value {
 
     /// A unique model identifier
     Id(Id),
+
+    /// A typed record
+    SparseRecord(SparseRecord),
 
     /// Null value
     Null,
@@ -50,20 +55,6 @@ impl Value {
 
     pub fn record_from_vec(fields: Vec<Value>) -> Value {
         Record::from_vec(fields).into()
-    }
-
-    /// The value's type. `None` if the value is null
-    pub fn ty(&self) -> Type {
-        match self {
-            Value::Bool(_) => Type::Bool,
-            Value::Enum { .. } => todo!("can't generate the type from here"),
-            Value::I64(_) => Type::I64,
-            Value::Id(id) => Type::Id(id.model_id()),
-            Value::Null => Type::Null,
-            Value::Record(_) => todo!(),
-            Value::String(_) => Type::String,
-            Value::List(_) => todo!(),
-        }
     }
 
     /// Create a `ValueCow` representing the given boolean value

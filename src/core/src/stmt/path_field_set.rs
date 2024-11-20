@@ -2,7 +2,7 @@ use crate::*;
 
 use std::collections::HashSet;
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PathFieldSet {
     // TODO: rewrite as a bitfield set
     container: HashSet<stmt::PathStep>,
