@@ -43,6 +43,9 @@ pub use expr_in_list::ExprInList;
 mod expr_in_subquery;
 pub use expr_in_subquery::ExprInSubquery;
 
+mod expr_key;
+pub use expr_key::ExprKey;
+
 mod expr_like;
 pub use expr_like::ExprLike;
 

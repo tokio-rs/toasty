@@ -16,6 +16,13 @@ impl Expr {
     pub fn is_field(&self) -> bool {
         matches!(self, Expr::Field(_))
     }
+
+    pub fn as_field(&self) -> &ExprField {
+        match self {
+            Expr::Field(field) => field,
+            _ => todo!(),
+        }
+    }
 }
 
 impl From<ExprField> for Expr {

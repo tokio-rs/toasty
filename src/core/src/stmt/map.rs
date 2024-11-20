@@ -47,6 +47,10 @@ pub trait Map: Sized {
         map_expr_in_subquery(self, i)
     }
 
+    fn map_expr_key(&mut self, i: &ExprKey) -> ExprKey {
+        map_expr_key(self, i)
+    }
+
     fn map_expr_or(&mut self, i: &ExprOr) -> ExprOr {
         map_expr_or(self, i)
     }
@@ -151,6 +155,7 @@ where
         Expr::Field(expr) => v.map_expr_field(expr).into(),
         Expr::InList(expr) => todo!(),
         Expr::InSubquery(expr) => v.map_expr_in_subquery(expr).into(),
+        Expr::Key(expr) => v.map_expr_key(expr).into(),
         Expr::Or(expr) => v.map_expr_or(expr).into(),
         Expr::Pattern(_) => todo!(),
         Expr::Project(expr) => v.map_expr_project(expr).into(),
@@ -244,6 +249,13 @@ where
         expr: v.map_expr(&node.expr).into(),
         query: v.map_stmt_query(&node.query).into(),
     }
+}
+
+pub fn map_expr_key<'stmt, V>(v: &mut V, node: &ExprKey) -> ExprKey
+where
+    V: Map + ?Sized,
+{
+    node.clone()
 }
 
 pub fn map_expr_or<'stmt, V>(v: &mut V, node: &ExprOr) -> ExprOr

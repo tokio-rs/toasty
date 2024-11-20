@@ -34,6 +34,9 @@ pub enum Expr {
     /// The expression is contained by the given subquery
     InSubquery(ExprInSubquery),
 
+    /// References a model's primary key
+    Key(ExprKey),
+
     /// OR a set of binary expressi5nos
     Or(ExprOr),
 

@@ -54,7 +54,7 @@ impl<M: Model> Insert<M> {
 
     /// Extend the expression for `field` with the given expression
     pub fn push_expr(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
-        self.current_mut()[field].push(expr);
+        self.expr_mut(field).push(expr);
     }
 
     pub(crate) fn merge(&mut self, stmt: Insert<M>) {

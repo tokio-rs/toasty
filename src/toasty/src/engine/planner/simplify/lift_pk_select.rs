@@ -24,11 +24,7 @@ pub(crate) fn lift_key_select(
                 return None;
             };
 
-            let lhs_field = expr_binary_op
-                .lhs
-                .as_project()
-                .projection
-                .resolve_field(schema, model);
+            let lhs_field = schema.field(expr_binary_op.lhs.as_field().field);
 
             if *key_field == lhs_field.id {
                 if let stmt::Expr::Value(value) = &*expr_binary_op.rhs {

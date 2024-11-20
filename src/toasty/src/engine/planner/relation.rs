@@ -238,11 +238,9 @@ impl Planner<'_> {
         value: stmt::Value,
         scope: &stmt::Query,
     ) {
-        todo!("value={:#?}", value);
         let mut stmt = stmt::Query::filter(
             has_many.target,
-            // stmt::Expr::eq(stmt::Expr::self_expr(), value),
-            stmt::Expr::default(),
+            stmt::Expr::eq(stmt::Expr::key(has_many.target), value),
         )
         .update(self.schema);
 

@@ -183,10 +183,15 @@ impl SimplifyExpr<'_> {
         rhs: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
         match (&mut *lhs, &mut *rhs) {
+            (stmt::Expr::Key(expr_key), other) | (other, stmt::Expr::Key(expr_key)) => {
+                assert!(op.is_eq());
+                Some(self.rewrite_root_path_expr(other.take()))
+            }
             (stmt::Expr::Project(expr_project), other)
             | (other, stmt::Expr::Project(expr_project)) => {
                 todo!("expr_project={:#?}", expr_project);
 
+                /*
                 if todo!("expr_project={:#?}", expr_project) {
                     // if expr_project.is_identity() {
                     assert!(op.is_eq());
@@ -235,6 +240,7 @@ impl SimplifyExpr<'_> {
                         },
                     }
                 }
+                */
             }
             _ => {
                 // For now, just make sure there are no relations in the expression
