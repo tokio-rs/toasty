@@ -36,14 +36,7 @@ impl Assignments {
     }
 
     pub fn set(&mut self, field: impl Into<PathStep>, expr: impl Into<Expr>) {
-        let index = field.into().into_usize();
-        self.fields.insert(index);
-
-        if self.exprs.len() <= index {
-            self.exprs.resize(index + 1, None);
-        }
-
-        self.exprs[index] = Some(expr.into());
+        *self.slot(field.into().into_usize()) = expr.into();
     }
 
     pub fn unset(&mut self, field: impl Into<PathStep>) {
@@ -51,6 +44,10 @@ impl Assignments {
         self.fields.unset(field);
 
         self.exprs[field.into_usize()] = None;
+    }
+
+    pub fn push(&mut self, field: impl Into<PathStep>, expr: impl Into<Expr>) {
+        self.slot(field.into().into_usize()).push(expr.into());
     }
 
     pub fn take(&mut self, field: impl Into<PathStep>) -> stmt::Expr {
@@ -73,6 +70,20 @@ impl Assignments {
             .iter_mut()
             .enumerate()
             .filter_map(|(i, entry)| entry.as_mut().map(|e| (i, e)))
+    }
+
+    fn slot(&mut self, index: usize) -> &mut Expr {
+        self.fields.insert(index);
+
+        if self.exprs.len() <= index {
+            self.exprs.resize(index + 1, None);
+        }
+
+        if self.exprs[index].is_none() {
+            self.exprs[index] = Some(Expr::default());
+        }
+
+        self.exprs[index].as_mut().unwrap()
     }
 }
 

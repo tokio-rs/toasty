@@ -35,11 +35,7 @@ impl<M: Model> Update<M> {
     }
 
     pub fn push_expr(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
-        /*
-        self.untyped.fields.insert(field);
-        self.untyped.expr[field].push(expr);
-        */
-        todo!()
+        self.untyped.assignments.push(field, expr);
     }
 
     pub fn set_selection<S>(&mut self, selection: S)
