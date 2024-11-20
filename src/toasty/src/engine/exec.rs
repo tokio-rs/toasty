@@ -30,6 +30,7 @@ pub(crate) async fn exec(
 
 impl Exec<'_> {
     async fn exec_pipeline(&mut self, pipeline: &plan::Pipeline) -> Result<ValueStream> {
+        println!("PIPELINE = {pipeline:#?}");
         for step in &pipeline.actions {
             self.exec_step(step).await?;
         }

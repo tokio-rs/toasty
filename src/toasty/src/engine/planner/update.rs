@@ -61,27 +61,6 @@ impl Planner<'_> {
             }
         }
 
-        // TODO: clean & move somewhere else? Maybe lowering?
-        if let Some(returning) = &mut stmt.returning {
-            if returning.is_changed() {
-                let mut fields = vec![];
-
-                for i in stmt.assignments.fields.iter() {
-                    let i = i.into_usize();
-                    let field = &model.fields[i];
-
-                    assert!(field.ty.is_primitive(), "field={field:#?}");
-
-                    fields.push(stmt::Expr::field(FieldId {
-                        model: model.id,
-                        index: i,
-                    }));
-                }
-
-                *returning = stmt::Returning::Expr(stmt::ExprRecord::from_vec(fields).into());
-            }
-        }
-
         self.plan_subqueries(&mut stmt);
 
         if self.capability.is_sql() {
@@ -103,16 +82,22 @@ impl Planner<'_> {
             return Some(self.set_var(vec![value]));
         }
 
+        let sparse_returning = if matches!(stmt.returning, Some(stmt::Returning::Changed)) {
+            Some(stmt.assignments.fields.clone())
+        } else {
+            None
+        };
+
         self.lower_update_stmt(model, &mut stmt);
         self.constantize_update_returning(&mut stmt);
 
         let output = self
             .partition_maybe_returning(&mut stmt.returning)
-            .map(|project| {
-                let project = eval::Expr::cast(
-                    project,
-                    stmt::Type::SparseRecord(stmt.assignments.fields.clone()),
-                );
+            .map(|mut project| {
+                if let Some(fields) = sparse_returning {
+                    project = eval::Expr::cast(project, stmt::Type::SparseRecord(fields));
+                }
+
                 plan::QuerySqlOutput {
                     var: self.var_table.register_var(),
                     project,

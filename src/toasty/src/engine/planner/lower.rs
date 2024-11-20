@@ -110,6 +110,29 @@ impl Planner<'_> {
 
         stmt.target = stmt::UpdateTarget::table(table.id);
 
+        // Lower returning first so `Returning::Changed` can be handled.
+        if let Some(returning) = &mut stmt.returning {
+            if returning.is_changed() {
+                let mut fields = vec![];
+
+                for i in stmt.assignments.fields.iter() {
+                    let i = i.into_usize();
+                    let field = &model.fields[i];
+
+                    assert!(field.ty.is_primitive(), "field={field:#?}");
+
+                    fields.push(stmt::Expr::field(FieldId {
+                        model: model.id,
+                        index: i,
+                    }));
+                }
+
+                *returning = stmt::Returning::Expr(stmt::ExprRecord::from_vec(fields).into());
+            }
+
+            self.lower_returning(model, returning);
+        }
+
         let mut assignments = stmt::Assignments::default();
 
         for (index, update_expr) in stmt.assignments.iter() {
@@ -140,10 +163,6 @@ impl Planner<'_> {
         if let Some(condition) = &mut stmt.condition {
             // self.lower_expr2(model, condition);
             todo!("condition={condition:#?}");
-        }
-
-        if let Some(returning) = &mut stmt.returning {
-            self.lower_returning(model, returning);
         }
     }
 

@@ -33,7 +33,7 @@ impl<'a> Generator<'a> {
                         quote!(#i => self.model.#name = value.#conv()?,)
                     }
                 }
-                _ => quote!(#i => todo!("should not be set"),)
+                _ => quote!(#i => todo!("should not be set; {} = {value:#?}", #i),)
             }
 
         });
