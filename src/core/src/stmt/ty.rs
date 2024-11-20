@@ -55,6 +55,11 @@ impl Type {
     pub fn cast(&self, value: Value) -> Result<Value> {
         use stmt::Value;
 
+        // Null values are passed through
+        if value.is_null() {
+            return Ok(value);
+        }
+
         Ok(match (value, self) {
             (Value::Id(value), _) => value.cast(self)?,
             (Value::String(value), Type::Id(ty)) => Value::Id(Id::from_string(*ty, value.into())),
