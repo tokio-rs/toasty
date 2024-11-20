@@ -223,8 +223,18 @@ impl UpdateUser<'_> {
     }
     pub async fn exec(self, db: &Db) -> Result<()> {
         let mut stmt = self.query.stmt;
-        let mut result = db.exec::<User>(stmt.into()).await?;
-        todo!("update model")
+        let mut result = db.exec_one::<User>(stmt.into()).await?;
+        for (field, value) in result.into_sparse_record().into_iter() {
+            match field.into_usize() {
+                0 => self.model.id = stmt::Id::from_untyped(value.to_id()?),
+                1 => self.model.name = value.to_string()?,
+                2 => self.model.email = value.to_string()?,
+                3 => todo!("should not be set"),
+                4 => self.model.moto = value.to_option_string()?,
+                _ => todo!("handle unknown field id in reload after update"),
+            }
+        }
+        Ok(())
     }
 }
 impl UpdateQuery {

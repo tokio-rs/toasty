@@ -41,9 +41,11 @@ pub use unlink::Unlink;
 mod update;
 pub use update::Update;
 
+pub use toasty_core::stmt::Value;
+
 use crate::Model;
 
-use toasty_core::stmt::{self, Value};
+use toasty_core::stmt;
 
 use std::{fmt, marker::PhantomData};
 

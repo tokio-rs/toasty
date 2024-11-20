@@ -37,6 +37,28 @@ impl Value {
 
         SparseRecord { fields, values }.into()
     }
+
+    pub fn into_sparse_record(self) -> SparseRecord {
+        match self {
+            Value::SparseRecord(value) => value,
+            _ => todo!(),
+        }
+    }
+}
+
+impl SparseRecord {
+    pub fn into_iter(self) -> impl Iterator<Item = (PathStep, Value)> {
+        self.values
+            .into_iter()
+            .enumerate()
+            .flat_map(move |(i, value)| {
+                if self.fields.contains(i) {
+                    Some((i.into(), value))
+                } else {
+                    None
+                }
+            })
+    }
 }
 
 impl From<SparseRecord> for Value {

@@ -57,7 +57,7 @@ impl Db {
     }
 
     /// Execute a statement
-    pub async fn exec<'stmt, M: Model>(&self, statement: Statement<M>) -> Result<ValueStream> {
+    pub async fn exec<M: Model>(&self, statement: Statement<M>) -> Result<ValueStream> {
         // Create a plan to execute the statement
         let mut res = engine::exec(self, statement.untyped).await?;
 
@@ -66,6 +66,20 @@ impl Db {
 
         // Return the typed result
         Ok(res)
+    }
+
+    /// Execute a statement, assume only one record is returned
+    #[doc(hidden)]
+    pub async fn exec_one<M: Model>(&self, statement: Statement<M>) -> Result<stmt::Value> {
+        let mut res = self.exec(statement).await?;
+        let Some(ret) = res.next().await else {
+            anyhow::bail!("empty result set")
+        };
+        let None = res.next().await else {
+            anyhow::bail!("more than one record")
+        };
+
+        ret
     }
 
     /// Execute model creation

@@ -25,45 +25,14 @@ impl<'a> Generator<'a> {
 
                     if let stmt::Type::Id(_) = primitive.ty {
                         if field.nullable {
-                            quote!(#i => self.model.#name = into_iter.next().unwrap().#conv()?.map(stmt::Id::from_untyped),)
+                            quote!(#i => self.model.#name = value.#conv()?.map(stmt::Id::from_untyped),)
                         } else {
-                            quote!(#i => self.model.#name = stmt::Id::from_untyped(into_iter.next().unwrap().#conv()?),)
+                            quote!(#i => self.model.#name = stmt::Id::from_untyped(value.#conv()?),)
                         }
                     } else {
-                        quote!(#i => self.model.#name = into_iter.next().unwrap().#conv()?,)
+                        quote!(#i => self.model.#name = value.#conv()?,)
                     }
                 }
-                /*
-                FieldTy::BelongsTo(rel) => {
-                    match &rel.foreign_key.fields[..] {
-                        [fk_field] => {
-                            let source = self.schema.field(fk_field.source);
-                            let primitive = source.ty.expect_primitive();
-                            let name = self.field_name(fk_field.source);
-                            let conv = self.value_to_ty_fn(&primitive.ty, source.nullable);
-
-                            if let stmt::Type::Id(_) = primitive.ty {
-                                if field.nullable {
-                                    quote!(#i => self.model.#name = into_iter.next().unwrap().#conv()?.map(stmt::Id::from_untyped),)
-                                } else {
-                                    quote!(#i => self.model.#name = stmt::Id::from_untyped(into_iter.next().unwrap().#conv()?),)
-                                }
-                            } else {
-                                quote!(#i => self.model.#name = into_iter.next().unwrap().#conv()?,)
-                            }
-                        }
-                        _ => todo!(),
-                    }
-                }
-                FieldTy::HasMany(..) => {
-                    // TODO: something to do here?
-                    quote!(#i => {})
-                }
-                FieldTy::HasOne(..) => {
-                    // TODO: something to do here?
-                    quote!(#i => {})
-                }
-                */
                 _ => quote!(#i => todo!("should not be set"),)
             }
 
@@ -87,10 +56,9 @@ impl<'a> Generator<'a> {
 
                 pub async fn exec(self, db: &Db) -> Result<()> {
                     let mut stmt = self.query.stmt;
-                    let mut result = db.exec::<#struct_name>(stmt.into()).await?;
+                    let mut result = db.exec_one::<#struct_name>(stmt.into()).await?;
 
-                    /*
-                    for field in fields.iter() {
+                    for (field, value) in result.into_sparse_record().into_iter() {
                         match field.into_usize() {
                             #( #reload )*
                             _ => todo!("handle unknown field id in reload after update"),
@@ -98,8 +66,6 @@ impl<'a> Generator<'a> {
                     }
 
                     Ok(())
-                    */
-                    todo!("update model")
                 }
             }
 
