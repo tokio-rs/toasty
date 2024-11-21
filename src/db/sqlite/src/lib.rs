@@ -45,24 +45,39 @@ impl Driver for Sqlite {
 
         let connection = self.connection.lock().unwrap();
 
-        let sql;
-
-        match &op {
-            QuerySql(op) => {
-                sql = &op.stmt;
-            }
-            Insert(op) => {
-                sql = op;
-            }
+        let mut sql = match op {
+            QuerySql(op) => op.stmt,
+            Insert(op) => op,
             _ => todo!(),
-        }
+        };
+
+        // SQL doesn't handle pre-condition. This should be moved into toasty's planner.
+        let pre_condition = match &mut sql {
+            stmt::Statement::Update(update) => {
+                if let Some(condition) = update.condition.take() {
+                    update.filter = Some(match update.filter.take() {
+                        Some(filter) => stmt::Expr::and(filter, condition),
+                        None => condition,
+                    });
+
+                    assert!(update.returning.is_none());
+
+                    update.returning = Some(stmt::Returning::Expr(stmt::Expr::record([true])));
+
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
 
         let mut params = vec![];
-        let sql_str = stmt::sql::Serializer::new(schema).serialize_stmt(sql, &mut params);
+        let sql_str = stmt::sql::Serializer::new(schema).serialize_stmt(&sql, &mut params);
 
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
-        let width = match sql {
+        let width = match &sql {
             stmt::Statement::Query(stmt) => match &*stmt.body {
                 stmt::ExprSet::Select(stmt) => Some(stmt.returning.as_expr().as_record().len()),
                 _ => todo!(),
@@ -76,7 +91,7 @@ impl Driver for Sqlite {
                 .as_ref()
                 .map(|returning| returning.as_expr().as_record().len()),
             stmt::Statement::Update(stmt) => {
-                assert!(stmt.condition.is_none());
+                assert!(stmt.condition.is_none(), "stmt={stmt:#?}");
                 stmt.returning
                     .as_ref()
                     .map(|returning| returning.as_expr().as_record().len())
@@ -122,13 +137,14 @@ impl Driver for Sqlite {
 
         // Some special handling
         if let stmt::Statement::Update(update) = sql {
-            if update.condition.is_some() && ret.is_empty() {
-                // Just assume the precondition failed here... we will
-                // need to make this transactional later.
-                anyhow::bail!("pre condition failed");
-            } else if update.returning.is_none() {
-                // return Ok(stmt::ValueStream::new());
-                todo!();
+            if pre_condition {
+                if ret.is_empty() {
+                    // Just assume the precondition failed here... we will
+                    // need to make this transactional later.
+                    anyhow::bail!("pre condition failed");
+                } else {
+                    return Ok(Response::from_count(ret.len()));
+                }
             }
         }
 
@@ -186,6 +202,8 @@ fn value_from_param<'a>(value: &'a stmt::Value) -> rusqlite::types::ToSqlOutput<
     use stmt::Value::*;
 
     match value {
+        Bool(true) => ToSqlOutput::Owned(Value::Integer(1)),
+        Bool(false) => ToSqlOutput::Owned(Value::Integer(0)),
         Id(v) => ToSqlOutput::Owned(v.to_string().into()),
         I64(v) => ToSqlOutput::Owned(Value::Integer(*v)),
         String(v) => ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes())),

@@ -232,24 +232,14 @@ impl<'a, 'stmt, T: Params> Formatter<'a, T> {
             self.expr(expr)?;
         }
 
-        if update.filter.is_some() || update.condition.is_some() {
-            write!(self.dst, " WHERE ")?;
-        }
+        assert!(
+            update.condition.is_none(),
+            "SQL doesn't support update conditions yo"
+        );
 
         if let Some(filter) = &update.filter {
+            write!(self.dst, " WHERE ")?;
             self.expr(filter)?;
-        }
-
-        if let Some(condition) = &update.condition {
-            if update.filter.is_some() {
-                write!(self.dst, " AND ")?;
-            }
-
-            self.expr(condition)?;
-
-            if update.returning.is_none() {
-                write!(self.dst, " RETURNING true")?;
-            }
         }
 
         if let Some(returning) = &update.returning {

@@ -35,13 +35,8 @@ impl Planner<'_> {
 
                     self.plan_update(stmt);
                 } else {
-                    /*
                     // TODO: include a deletion condition
-                    self.plan_delete(stmt::Delete {
-                        selection: stmt.target,
-                    });
-                    */
-                    todo!("{stmt:#?}");
+                    self.plan_delete(stmt.target.delete());
                 }
             }
             ty => todo!("ty={:#?}", ty),

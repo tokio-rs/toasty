@@ -85,15 +85,6 @@ impl Planner<'_> {
             assert_eq!(model.lowering.columns[column.id.index], column.id);
 
             operands.push(stmt::Expr::begins_with(stmt::Expr::column(column), pattern));
-            /*
-            operands.push(stmt::Expr::is_a(
-                stmt::Expr::column(column),
-                stmt::ExprTy {
-                    ty: column.ty.clone(),
-                    variant: Some(expr_enum.variant),
-                },
-            ))
-            */
         }
 
         *filter = if operands.len() == 1 {
@@ -103,6 +94,17 @@ impl Planner<'_> {
         };
 
         self.lower_expr(filter);
+    }
+
+    pub(crate) fn lower_stmt_condition(
+        &self,
+        table: &Table,
+        model: &Model,
+        condition: &mut stmt::Expr,
+    ) {
+        // Lower the filter
+        condition.substitute(stmt::substitute::ModelToTable(model));
+        self.lower_expr(condition);
     }
 
     pub(crate) fn lower_insert_expr(&self, model: &Model, expr: &mut stmt::Expr) {
@@ -178,64 +180,13 @@ impl Planner<'_> {
         }
 
         if let Some(condition) = &mut stmt.condition {
-            // self.lower_expr2(model, condition);
-            todo!("condition={condition:#?}");
+            self.lower_stmt_condition(table, model, condition);
         }
     }
 
     pub(crate) fn lower_expr(&self, expr: &mut stmt::Expr) {
         LowerExpr {}.visit_mut(expr);
     }
-
-    /*
-    pub(crate) fn lower_index_filter(
-        &self,
-        table: &Table,
-        model: &Model,
-        model_index: &ModelIndex,
-        expr: &mut stmt::Expr,
-    ) {
-        use std::mem;
-
-        let lowering = &model_index.lowering;
-        let index = &table.indices[lowering.index.index];
-
-        // self.lower_expr2(model, expr);
-        todo!("expr={expr:#?}");
-
-        // Lets try something...
-        let mut operands = vec![mem::take(expr)];
-
-        for index_column in &index.columns {
-            let column = self.schema.column(index_column.column);
-
-            // If the expression is already constraining the index column, we
-            // don't need to add an additional type constraint.
-            if is_constrained(&operands[0], column) {
-                continue;
-            }
-
-            let expr_enum = match &model.lowering.model_to_table[column.id.index] {
-                stmt::Expr::Enum(expr_enum) => expr_enum,
-                _ => continue,
-            };
-
-            operands.push(stmt::Expr::is_a(
-                stmt::Expr::column(column),
-                stmt::ExprTy {
-                    ty: column.ty.clone(),
-                    variant: Some(expr_enum.variant),
-                },
-            ))
-        }
-
-        *expr = if operands.len() == 1 {
-            operands.into_iter().next().unwrap()
-        } else {
-            stmt::ExprAnd { operands: operands }.into()
-        };
-    }
-    */
 }
 
 fn is_constrained(expr: &stmt::Expr, column: &Column) -> bool {
