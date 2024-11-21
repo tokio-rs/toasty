@@ -22,13 +22,16 @@ impl ExprInList {
 
         let rhs = match &mut *self.list {
             Expr::Value(value) => {
-                let record = value.expect_record();
+                let values = match value {
+                    Value::List(value) => &value[..],
+                    _ => todo!("{value:#?}"),
+                };
 
-                if record.len() != 1 {
+                if values.len() != 1 {
                     return None;
                 }
 
-                Expr::Value(record[0].clone())
+                Expr::Value(values[0].clone())
             }
             Expr::Record(expr_record) => {
                 if expr_record.len() != 1 {

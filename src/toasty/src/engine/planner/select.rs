@@ -28,21 +28,31 @@ impl Planner<'_> {
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.model(source_model.model);
 
+        let source_model = match &*stmt.body {
+            stmt::ExprSet::Select(select) => {
+                match &select.source {
+                    stmt::Source::Model(source_model) => {
+                        if !source_model.include.is_empty() {
+                            // For now, the full model must be selected
+                            assert!(matches!(select.returning, stmt::Returning::Star));
+                        }
+
+                        source_model.clone()
+                    }
+                    _ => todo!(),
+                }
+            }
+            _ => todo!(),
+        };
+
         let ret = if self.capability.is_sql() {
             self.plan_select_sql(cx, model, stmt)
         } else {
             self.plan_select_kv(cx, model, stmt)
         };
 
-        if !source_model.include.is_empty() {
-            // For now, the full model must be selected
-            // assert!(stmt.returning.is_star());
-            todo!()
-        }
-
         for include in &source_model.include {
-            // self.plan_select_include(stmt.source.as_model_id(), include, ret);
-            todo!()
+            self.plan_select_include(source_model.model, include, ret);
         }
 
         ret
@@ -180,10 +190,7 @@ impl Planner<'_> {
                 let cx = Context {
                     input: vec![plan::Input::project_var_ref(
                         input,
-                        eval::Expr::map(
-                            eval::Expr::arg(0),
-                            eval::Expr::project(eval::Expr::arg(0), fk_field.target),
-                        ),
+                        eval::Expr::project(eval::Expr::arg(0), fk_field.target),
                     )],
                 };
 
@@ -205,10 +212,7 @@ impl Planner<'_> {
                 let cx = Context {
                     input: vec![plan::Input::project_var_ref(
                         input,
-                        eval::Expr::map(
-                            eval::Expr::arg(0),
-                            eval::Expr::project(eval::Expr::arg(0), fk_field.source),
-                        ),
+                        eval::Expr::project(eval::Expr::arg(0), fk_field.source),
                     )],
                 };
 

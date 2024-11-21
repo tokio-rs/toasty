@@ -72,8 +72,8 @@ impl Exec<'_> {
             let record = res?;
 
             if let Some(project) = &input.project {
-                todo!("project={project:#?}; record={record:#?}");
-                // ret.push(project.eval(&[record][..])?);
+                // todo!("input={input:#?}; record={record:#?}");
+                ret.push(project.eval(&[record])?);
             } else {
                 ret.push(record);
             }

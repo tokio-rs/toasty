@@ -29,7 +29,7 @@ mod expr_record;
 pub use expr_record::ExprRecord;
 
 mod input;
-pub use input::{args, const_input, Input};
+pub use input::{const_input, Input};
 
 mod value;
 

@@ -68,3 +68,9 @@ impl Input for Args<&[Value]> {
         Some(self.0[expr_arg.position].clone().into())
     }
 }
+
+impl<const N: usize> Input for Args<&[Value; N]> {
+    fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Option<Expr> {
+        Some(self.0[expr_arg.position].clone().into())
+    }
+}

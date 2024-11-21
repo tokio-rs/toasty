@@ -138,7 +138,7 @@ impl Value {
     pub fn expect_record(&self) -> &Record {
         match self {
             Value::Record(record) => record,
-            _ => panic!(),
+            _ => panic!("{self:#?}"),
         }
     }
 

@@ -35,7 +35,7 @@ impl Exec<'_> {
         let res = ValueStream::from_stream(async_stream::try_stream! {
             for await value in rows {
                 let value = value?;
-                let record = project.eval(eval::args(&[value][..]))?;
+                let record = project.eval(&[value])?;
                 yield record.into();
             }
         });

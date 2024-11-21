@@ -10,8 +10,7 @@ impl Exec<'_> {
             assert_eq!(action.input.len(), 1);
 
             let input = self.collect_input(&action.input[0]).await?;
-
-            todo!("input = {input:#?}");
+            sql.substitute(stmt::substitute::Args(&[stmt::Value::List(input)]));
         }
 
         let res = self
@@ -38,7 +37,7 @@ impl Exec<'_> {
             Rows::Values(rows) => ValueStream::from_stream(async_stream::try_stream! {
                 for await value in rows {
                     let value = value?;
-                    yield project.eval(eval::args(&[value][..]))?;
+                    yield project.eval(&[value])?;
                 }
             }),
         };
