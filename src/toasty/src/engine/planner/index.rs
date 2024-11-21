@@ -186,12 +186,12 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
         match expr {
             BinaryOp(e) => match (&*e.lhs, &*e.rhs) {
-                (Project(lhs), Value(..)) => self.match_expr_binary_op_project(lhs, expr, e.op),
-                (Value(..), Project(rhs)) => {
+                (Field(lhs), Value(..)) => self.match_expr_binary_op_field(lhs, expr, e.op),
+                (Value(..), Field(rhs)) => {
                     let mut op = e.op;
                     op.reverse();
 
-                    self.match_expr_binary_op_project(rhs, expr, op)
+                    self.match_expr_binary_op_field(rhs, expr, op)
                 }
                 _ => todo!("expr={:#?}", expr),
             },
@@ -276,18 +276,18 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
     fn match_expr_in_list(&mut self, lhs: &'stmt stmt::Expr, expr: &'stmt stmt::Expr) -> bool {
         match lhs {
-            stmt::Expr::Project(path) => {
-                self.match_expr_binary_op_project(path, expr, stmt::BinaryOp::Eq)
+            stmt::Expr::Field(expr_field) => {
+                self.match_expr_binary_op_field(expr_field, expr, stmt::BinaryOp::Eq)
             }
             stmt::Expr::Record(expr_record) => {
                 let mut matched = false;
 
                 for sub_expr in expr_record {
-                    let stmt::Expr::Project(path) = sub_expr else {
+                    let stmt::Expr::Field(expr_field) = sub_expr else {
                         todo!()
                     };
                     matched |=
-                        self.match_expr_binary_op_project(path, sub_expr, stmt::BinaryOp::Eq);
+                        self.match_expr_binary_op_field(expr_field, sub_expr, stmt::BinaryOp::Eq);
                 }
 
                 if matched {
@@ -308,9 +308,9 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
         }
     }
 
-    fn match_expr_binary_op_project(
+    fn match_expr_binary_op_field(
         &mut self,
-        project: &stmt::ExprProject,
+        expr_field: &stmt::ExprField,
         expr: &'stmt stmt::Expr,
         op: stmt::BinaryOp,
     ) -> bool {
@@ -318,7 +318,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
         for (i, index_field) in self.index.fields.iter().enumerate() {
             // Check that the path matches an index field
-            if !project.projection.resolves_to(index_field.field) {
+            if expr_field.field != index_field.field {
                 continue;
             }
 
@@ -380,8 +380,8 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
                     // Normalize the expression to include the path on the LHS
                     let expr = match (&*binary_op.lhs, &*binary_op.rhs) {
-                        (Project(_), Value(_)) => expr.clone(),
-                        (Value(value), Project(path)) => {
+                        (Field(_), Value(_)) => expr.clone(),
+                        (Value(value), Field(path)) => {
                             let mut op = binary_op.op;
                             op.reverse();
 

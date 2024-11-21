@@ -47,7 +47,7 @@ impl Planner<'_> {
     }
 
     /// Lower the filter portion of a statement
-    fn lower_stmt_filter(&self, table: &Table, model: &Model, filter: &mut stmt::Expr) {
+    pub(crate) fn lower_stmt_filter(&self, table: &Table, model: &Model, filter: &mut stmt::Expr) {
         use std::mem;
 
         let mut expr = mem::take(filter);
@@ -187,6 +187,7 @@ impl Planner<'_> {
         LowerExpr {}.visit_mut(expr);
     }
 
+    /*
     pub(crate) fn lower_index_filter(
         &self,
         table: &Table,
@@ -200,7 +201,7 @@ impl Planner<'_> {
         let index = &table.indices[lowering.index.index];
 
         // self.lower_expr2(model, expr);
-        todo!();
+        todo!("expr={expr:#?}");
 
         // Lets try something...
         let mut operands = vec![mem::take(expr)];
@@ -234,6 +235,7 @@ impl Planner<'_> {
             stmt::ExprAnd { operands: operands }.into()
         };
     }
+    */
 }
 
 fn is_constrained(expr: &stmt::Expr, column: &Column) -> bool {

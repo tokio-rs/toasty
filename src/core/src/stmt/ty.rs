@@ -61,6 +61,7 @@ impl Type {
         }
 
         Ok(match (value, self) {
+            (value @ Value::String(_), Type::String) => value,
             (Value::Id(value), _) => value.cast(self)?,
             (Value::String(value), Type::Id(ty)) => Value::Id(Id::from_string(*ty, value.into())),
             (Value::Record(record), Type::SparseRecord(fields)) => {

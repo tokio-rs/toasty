@@ -11,7 +11,7 @@ impl Planner<'_> {
         self.plan_link_kv(stmt);
     }
 
-    fn plan_link_kv(&mut self, stmt: stmt::Link) {
+    fn plan_link_kv(&mut self, mut stmt: stmt::Link) {
         // TODO: this should be heavily optimized to avoid multiple queries if
         // possible...
 
@@ -47,11 +47,12 @@ impl Planner<'_> {
         let mut index_filter = index_plan.index_filter;
         let table = self.schema.table(model.lowering.table);
         let index = self.schema.index(index_plan.index.lowering.index);
-        self.lower_index_filter(table, model, index_plan.index, &mut index_filter);
+        self.lower_stmt_filter(table, model, &mut index_filter);
         let Some(key) = self.try_build_key_filter(index, &index_filter) else {
             todo!("stmt={:#?}", stmt)
         };
 
+        self.simplify_stmt_query(&mut stmt.target);
         let mut stmt = stmt.target.update(self.schema);
 
         match &field.ty {

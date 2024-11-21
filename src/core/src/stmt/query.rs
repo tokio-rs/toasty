@@ -20,7 +20,7 @@ impl Query {
 
     pub fn update(self, schema: &Schema) -> Update {
         let ExprSet::Select(select) = *self.body else {
-            todo!()
+            todo!("stmt={self:#?}");
         };
         let width = schema.model(select.source.as_model_id()).fields.len();
 
