@@ -4,7 +4,7 @@ use super::*;
 pub(super) struct Context {
     /// If the statement references any arguments (`stmt::ExprArg`), this
     /// informs the planner how to access those arguments.
-    input: Vec<plan::Input>,
+    input: Vec<plan::InputSource>,
 }
 
 impl Planner<'_> {
@@ -72,7 +72,11 @@ impl Planner<'_> {
         let output = self.var_table.register_var();
 
         self.push_action(plan::QuerySql {
-            input: cx.input.clone(),
+            input: if cx.input.is_empty() {
+                vec![]
+            } else {
+                todo!("stmt={stmt:#?}");
+            },
             output: Some(plan::QuerySqlOutput {
                 var: output,
                 project,
@@ -188,13 +192,17 @@ impl Planner<'_> {
                 };
 
                 let cx = Context {
-                    input: vec![plan::Input::project_var_ref(
-                        input,
-                        eval::Expr::project(eval::Expr::arg(0), fk_field.target),
-                    )],
+                    input: vec![plan::InputSource::Ref(input)],
                 };
 
-                let filter = stmt::Expr::in_list(fk_field.source, stmt::Expr::arg(0));
+                let filter = stmt::Expr::in_list(
+                    fk_field.source,
+                    stmt::Expr::map(
+                        stmt::Expr::arg(0),
+                        stmt::Expr::project(stmt::Expr::arg(0), fk_field.target),
+                    ),
+                );
+
                 let out = self.plan_select2(&cx, stmt::Query::filter(rel.target, filter));
 
                 // Associate target records with the source
@@ -210,13 +218,22 @@ impl Planner<'_> {
                 };
 
                 let cx = Context {
+                    input: vec![plan::InputSource::Ref(input)],
+                    /*
                     input: vec![plan::Input::project_var_ref(
                         input,
                         eval::Expr::project(eval::Expr::arg(0), fk_field.source),
                     )],
+                    */
                 };
 
-                let filter = stmt::Expr::in_list(fk_field.target, stmt::Expr::arg(0));
+                let filter = stmt::Expr::in_list(
+                    fk_field.target,
+                    stmt::Expr::map(
+                        stmt::Expr::arg(0),
+                        stmt::Expr::project(stmt::Expr::arg(0), fk_field.source),
+                    ),
+                );
                 let out = self.plan_select2(&cx, stmt::Query::filter(rel.target, filter));
 
                 // Associate target records with the source

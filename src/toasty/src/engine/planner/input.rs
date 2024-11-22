@@ -1,6 +1,7 @@
 use super::*;
 
 impl Planner<'_> {
+    /*
     pub(crate) fn extract_input(
         &mut self,
         expr: &mut stmt::Expr,
@@ -89,8 +90,10 @@ impl Planner<'_> {
             _ => todo!("expr = {:#?}", expr),
         }
     }
+    */
 }
 
+/*
 enum Extract {
     /// Constant
     Const,
@@ -128,3 +131,4 @@ fn do_extract(
         _ => {}
     }
 }
+*/

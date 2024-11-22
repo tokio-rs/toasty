@@ -52,6 +52,9 @@ pub use expr_key::ExprKey;
 mod expr_like;
 pub use expr_like::ExprLike;
 
+mod expr_map;
+pub use expr_map::ExprMap;
+
 mod expr_or;
 pub use expr_or::ExprOr;
 

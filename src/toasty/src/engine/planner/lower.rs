@@ -185,6 +185,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn lower_expr(&self, expr: &mut stmt::Expr) {
+        println!("lower_expr = {expr:#?}");
         LowerExpr {}.visit_mut(expr);
     }
 }
@@ -204,7 +205,7 @@ fn is_constrained(expr: &stmt::Expr, column: &Column) -> bool {
 struct LowerExpr {}
 
 impl LowerExpr {
-    fn lower_binary_op(
+    fn lower_expr_binary_op(
         &mut self,
         op: stmt::BinaryOp,
         lhs: &mut stmt::Expr,
@@ -220,7 +221,60 @@ impl LowerExpr {
                     stmt::Expr::concat_str((variant.to_string(), "#", other.clone())),
                 ))
             }
+            (stmt::Expr::Cast(expr_cast), other) if expr_cast.ty.is_id() => {
+                // TODO: don't hard code this cast... and probably recurse
+                self.uncast_id(lhs);
+                self.uncast_id(other);
+                None
+            }
+            (stmt::Expr::Cast(_), stmt::Expr::Cast(_)) => todo!(),
             _ => None,
+        }
+    }
+
+    fn lower_expr_in_list(
+        &mut self,
+        expr: &mut stmt::Expr,
+        list: &mut stmt::Expr,
+    ) -> Option<stmt::Expr> {
+        match (&mut *expr, list) {
+            (expr, stmt::Expr::Map(expr_map)) => {
+                assert!(expr_map.base.is_arg(), "TODO");
+                let maybe_res =
+                    self.lower_expr_binary_op(stmt::BinaryOp::Eq, expr, &mut expr_map.map);
+
+                assert!(maybe_res.is_none(), "TODO");
+                None
+            }
+            (stmt::Expr::Cast(expr_cast), list) if expr_cast.ty.is_id() => {
+                self.uncast_id(expr);
+
+                match list {
+                    stmt::Expr::List(expr_list) => {
+                        println!("list = {expr_list:#?}");
+                        for expr in expr_list {
+                            self.uncast_id(expr);
+                        }
+                    }
+                    _ => todo!("list={list:#?}"),
+                }
+
+                None
+            }
+            (expr, list) => todo!("expr={expr:#?}; list={list:#?}"),
+        }
+    }
+
+    fn uncast_id(&self, expr: &mut stmt::Expr) {
+        match expr {
+            stmt::Expr::Value(value) if value.is_id() => {
+                let value = expr.take().into_value().into_id().into_primitive();
+                *expr = value.into();
+            }
+            stmt::Expr::Cast(expr_cast) if expr_cast.ty.is_id() => {
+                *expr = expr_cast.expr.take();
+            }
+            _ => todo!("{expr:#?}"),
         }
     }
 }
@@ -229,22 +283,20 @@ impl VisitMut for LowerExpr {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         stmt::visit_mut::visit_expr_mut(self, i);
 
-        match i {
-            stmt::Expr::Cast(expr) => {
-                if expr.ty.is_id() {
-                    // Get rid of the cast
-                    *i = expr.expr.take();
-                }
-            }
+        let maybe_expr = match i {
             stmt::Expr::BinaryOp(expr) => {
-                if let Some(expr) = self.lower_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs) {
-                    *i = expr;
-                }
+                self.lower_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
-            _ => {}
+            stmt::Expr::InList(expr) => self.lower_expr_in_list(&mut expr.expr, &mut expr.list),
+            _ => return,
+        };
+
+        if let Some(expr) = maybe_expr {
+            *i = expr;
         }
     }
 
+    /*
     fn visit_value_mut(&mut self, i: &mut stmt::Value) {
         stmt::visit_mut::visit_value_mut(self, i);
 
@@ -255,4 +307,5 @@ impl VisitMut for LowerExpr {
             _ => {}
         }
     }
+    */
 }

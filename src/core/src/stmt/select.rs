@@ -48,6 +48,7 @@ impl Select {
 
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
         self.filter.substitute_ref(input);
+        self.filter.simplify();
     }
 }
 

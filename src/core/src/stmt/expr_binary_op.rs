@@ -91,6 +91,9 @@ impl ExprBinaryOp {
                 *self.lhs = (*lhs.expr).clone();
                 *self.rhs = rhs.to_primitive().into();
             }
+            (Expr::Cast(lhs), rhs) => {
+                todo!("{self:#?}");
+            }
             _ => {}
         }
 

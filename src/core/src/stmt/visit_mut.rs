@@ -67,6 +67,10 @@ pub trait VisitMut: Sized {
         visit_expr_key_mut(self, i);
     }
 
+    fn visit_expr_map_mut(&mut self, i: &mut ExprMap) {
+        visit_expr_map_mut(self, i);
+    }
+
     fn visit_expr_or_mut(&mut self, i: &mut ExprOr) {
         visit_expr_or_mut(self, i);
     }
@@ -257,6 +261,7 @@ where
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
         Expr::Key(expr) => v.visit_expr_key_mut(expr),
+        Expr::Map(expr) => v.visit_expr_map_mut(expr),
         Expr::Or(expr) => v.visit_expr_or_mut(expr),
         Expr::Pattern(expr) => v.visit_expr_pattern_mut(expr),
         Expr::Project(expr) => v.visit_expr_project_mut(expr),
@@ -370,6 +375,14 @@ pub fn visit_expr_key_mut<'stmt, V>(v: &mut V, node: &mut ExprKey)
 where
     V: VisitMut + ?Sized,
 {
+}
+
+pub fn visit_expr_map_mut<'stmt, V>(v: &mut V, node: &mut ExprMap)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut *node.base);
+    v.visit_expr_mut(&mut *node.map);
 }
 
 pub fn visit_expr_or_mut<'stmt, V>(v: &mut V, node: &mut ExprOr)

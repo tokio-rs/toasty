@@ -45,10 +45,6 @@ impl Value {
         matches!(self, Value::Null)
     }
 
-    pub const fn is_id(&self) -> bool {
-        matches!(self, Value::Id(_))
-    }
-
     pub const fn is_record(&self) -> bool {
         matches!(self, Value::Record(_))
     }

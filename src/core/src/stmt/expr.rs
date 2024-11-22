@@ -41,6 +41,9 @@ pub enum Expr {
     /// References a model's primary key
     Key(ExprKey),
 
+    /// Apply an expression to each item in a list
+    Map(ExprMap),
+
     /// OR a set of binary expressi5nos
     Or(ExprOr),
 
@@ -200,6 +203,8 @@ impl Expr {
 
     pub fn substitute(&mut self, mut input: impl substitute::Input) {
         self.substitute_ref(&mut input);
+
+        self.simplify();
     }
 
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
@@ -221,8 +226,6 @@ impl Expr {
             }
             _ => {}
         });
-
-        self.simplify();
     }
 
     pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Expr {

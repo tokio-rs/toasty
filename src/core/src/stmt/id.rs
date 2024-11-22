@@ -17,6 +17,19 @@ enum Repr {
     String(String),
 }
 
+impl Value {
+    pub const fn is_id(&self) -> bool {
+        matches!(self, Value::Id(_))
+    }
+
+    pub fn into_id(self) -> Id {
+        match self {
+            Value::Id(id) => id,
+            _ => todo!(),
+        }
+    }
+}
+
 impl Id {
     pub fn from_int(model: ModelId, id: u64) -> Id {
         Id {
@@ -57,6 +70,13 @@ impl Id {
         match &self.repr {
             Repr::Int(_) => todo!(),
             Repr::String(id) => id.clone().into(),
+        }
+    }
+
+    pub fn into_primitive(self) -> stmt::Value {
+        match self.repr {
+            Repr::Int(_) => todo!(),
+            Repr::String(id) => id.into(),
         }
     }
 
