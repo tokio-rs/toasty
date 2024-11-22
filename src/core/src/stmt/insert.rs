@@ -37,21 +37,18 @@ pub struct InsertTable {
 
 impl Insert {
     pub fn merge(&mut self, other: Insert) {
-        /*
         if self.target != other.target {
             todo!("handle this case");
         }
 
-        match (&mut self.values, other.values) {
-            (Expr::Record(expr_record), Expr::Record(other)) => {
-                for expr in other {
-                    expr_record.push(expr);
+        match (&mut *self.source.body, *other.source.body) {
+            (stmt::ExprSet::Values(self_values), stmt::ExprSet::Values(other_values)) => {
+                for expr in other_values.rows {
+                    self_values.rows.push(expr);
                 }
             }
-            (self_values, other) => todo!("self={:#?}; other={:#?}", self_values, other),
+            (self_source, other) => todo!("self={:#?}; other={:#?}", self_source, other),
         }
-        */
-        todo!("self={self:#?} / other={other:#?}");
     }
 }
 
