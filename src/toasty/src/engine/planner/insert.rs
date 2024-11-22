@@ -236,11 +236,8 @@ impl Planner<'_> {
                 // For now, we need to keep this separate
                 assert!(!self.insertions.contains_key(&has_one.target));
 
-                /*
                 let scope = self.inserted_query_stmt(model, expr);
                 self.plan_mut_has_one_expr(has_one, expr[i].take(), &scope, true);
-                */
-                todo!()
             } else if let Some(belongs_to) = field.ty.as_belongs_to() {
                 if expr[i].is_stmt() {
                     let expr_stmt = expr[i].take().into_stmt();

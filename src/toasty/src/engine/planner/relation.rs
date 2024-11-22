@@ -180,12 +180,8 @@ impl Planner<'_> {
                         stmt::Expr::and(filter.take(), stmt::Expr::ne(field, stmt::Value::Null));
                 }
 
-                todo!();
-                /*
-                planner.plan_delete(stmt::Delete {
-                    selection: planner.relation_pair_scope(belongs_to.pair, scope.clone()),
-                });
-                */
+                let delete = planner.relation_pair_scope(belongs_to.pair, scope).delete();
+                planner.plan_delete(delete);
             }
         });
     }
@@ -308,13 +304,9 @@ impl Planner<'_> {
             self.plan_mut_has_one_nullify(has_one, scope);
         }
 
-        todo!("value = {:#?}", value);
-
-        /*
         let mut stmt = stmt::Query::filter(
             has_one.target,
-            // stmt::Expr::eq(stmt::Expr::self_expr(), value),
-            stmt::Expr::default(),
+            stmt::Expr::eq(stmt::Expr::key(has_one.target), value),
         )
         .update(self.schema);
 
@@ -322,7 +314,6 @@ impl Planner<'_> {
             .set(has_one.pair, stmt::ExprStmt::new(scope.clone()));
 
         self.plan_update(stmt);
-        */
     }
 
     fn plan_mut_has_many_insert(
