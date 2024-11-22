@@ -51,6 +51,8 @@ impl Driver for Sqlite {
             _ => todo!(),
         };
 
+        println!("SQL={sql:#?}");
+
         // SQL doesn't handle pre-condition. This should be moved into toasty's planner.
         let pre_condition = match &mut sql {
             stmt::Statement::Update(update) => {

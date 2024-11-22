@@ -65,8 +65,6 @@ impl Planner<'_> {
         for column in table.primary_key_columns() {
             // TODO: don't hard code
             let pattern = match &model.lowering.model_to_table[column.id.index] {
-                // stmt::Expr::Enum(expr_enum) => expr_enum,
-                // stmt::Expr::DecodeEnum(..) => todo!(),
                 stmt::Expr::ConcatStr(expr) => {
                     // hax
                     let stmt::Expr::Value(stmt::Value::String(a)) = &expr.exprs[0] else {
@@ -102,6 +100,10 @@ impl Planner<'_> {
         model: &Model,
         condition: &mut stmt::Expr,
     ) {
+        println!(
+            "LOWER STMT CONDITION = {condition:#?}; lowering={:#?}",
+            model.lowering.model_to_table
+        );
         // Lower the filter
         condition.substitute(stmt::substitute::ModelToTable(model));
         self.lower_expr(condition);
@@ -125,6 +127,7 @@ impl Planner<'_> {
     }
 
     pub(crate) fn lower_update_stmt(&self, model: &Model, stmt: &mut stmt::Update) {
+        println!("LOWER UPDATE= = {stmt:#?}");
         let table = self.schema.table(model.lowering.table);
 
         stmt.target = stmt::UpdateTarget::table(table.id);
@@ -185,7 +188,6 @@ impl Planner<'_> {
     }
 
     pub(crate) fn lower_expr(&self, expr: &mut stmt::Expr) {
-        println!("lower_expr = {expr:#?}");
         LowerExpr {}.visit_mut(expr);
     }
 }
@@ -216,6 +218,9 @@ impl LowerExpr {
             | (other, stmt::Expr::DecodeEnum(base, _, variant)) => {
                 assert!(op.is_eq());
 
+                stmt::visit_mut::visit_expr_mut(self, base);
+                stmt::visit_mut::visit_expr_mut(self, other);
+
                 Some(stmt::Expr::eq(
                     (**base).clone(),
                     stmt::Expr::concat_str((variant.to_string(), "#", other.clone())),
@@ -227,7 +232,11 @@ impl LowerExpr {
                 None
             }
             (stmt::Expr::Cast(_), stmt::Expr::Cast(_)) => todo!(),
-            _ => None,
+            _ => {
+                stmt::visit_mut::visit_expr_mut(self, lhs);
+                stmt::visit_mut::visit_expr_mut(self, rhs);
+                None
+            }
         }
     }
 
@@ -285,18 +294,25 @@ impl LowerExpr {
 
 impl VisitMut for LowerExpr {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
-        stmt::visit_mut::visit_expr_mut(self, i);
-
         let maybe_expr = match i {
             stmt::Expr::BinaryOp(expr) => {
                 self.lower_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
             stmt::Expr::InList(expr) => self.lower_expr_in_list(&mut expr.expr, &mut expr.list),
-            _ => return,
+            _ => {
+                stmt::visit_mut::visit_expr_mut(self, i);
+                return;
+            }
         };
 
         if let Some(expr) = maybe_expr {
             *i = expr;
+        }
+    }
+
+    fn visit_value_mut(&mut self, i: &mut stmt::Value) {
+        if let stmt::Value::Id(id) = i {
+            *i = id.to_primitive();
         }
     }
 }

@@ -29,7 +29,8 @@ impl Planner<'_> {
                 if pair.nullable {
                     let mut stmt = stmt.target.update(self.schema);
 
-                    // This protects against races.
+                    // This protects against races... also is kind of a big hax
+                    let key = stmt::Id::from_string(has_many.target, key.to_string().unwrap());
                     stmt.condition = Some(stmt::Expr::eq(has_many.pair, key));
                     stmt.assignments.set(has_many.pair, stmt::Value::Null);
 
