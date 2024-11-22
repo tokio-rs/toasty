@@ -319,8 +319,8 @@ impl<'a, 'stmt, T: Params> Formatter<'a, T> {
                 }
             }
             Expr::BinaryOp(ExprBinaryOp { lhs, op, rhs }) => {
-                assert!(!lhs.is_null());
-                assert!(!rhs.is_null());
+                assert!(!lhs.is_value_null());
+                assert!(!rhs.is_value_null());
 
                 self.expr(&*lhs)?;
                 write!(self.dst, " ")?;
@@ -346,6 +346,12 @@ impl<'a, 'stmt, T: Params> Formatter<'a, T> {
 
                 self.query(query)?;
                 write!(self.dst, ")")?;
+            }
+            Expr::IsNull(ExprIsNull { negate, expr }) => {
+                let not = if *negate { "NOT " } else { "" };
+
+                self.expr(expr)?;
+                write!(self.dst, "IS {}NULL", not)?;
             }
             Expr::Or(ExprOr { operands }) => {
                 let mut s = "";

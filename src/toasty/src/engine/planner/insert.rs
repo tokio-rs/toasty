@@ -152,7 +152,7 @@ impl Planner<'_> {
             if let FieldTy::BelongsTo(rel) = &field.ty {
                 let field_expr = &mut expr[field.id.index];
 
-                if !field_expr.is_value() || field_expr.is_null() {
+                if !field_expr.is_value() || field_expr.is_value_null() {
                     continue;
                 }
 
@@ -172,7 +172,7 @@ impl Planner<'_> {
         for field in &model.fields {
             let field_expr = &mut expr[field.id.index];
 
-            if field_expr.is_null() {
+            if field_expr.is_value_null() {
                 // If the field is defined to be auto-populated, then populate
                 // it here.
                 if let Some(auto) = &field.auto {
@@ -195,7 +195,7 @@ impl Planner<'_> {
 
             let field_expr = &expr[field.id.index];
 
-            if field_expr.is_null() {
+            if field_expr.is_value_null() {
                 // Relations are handled differently
                 if !field.ty.is_relation() {
                     panic!(
@@ -212,7 +212,7 @@ impl Planner<'_> {
 
     fn plan_insert_relation_stmts(&mut self, model: &Model, expr: &mut stmt::Expr) {
         for (i, field) in model.fields.iter().enumerate() {
-            if expr[i].is_null() {
+            if expr[i].is_value_null() {
                 if !field.nullable && field.ty.is_has_one() {
                     panic!(
                         "Insert missing non-nullable field; model={}; field={}; ty={:#?}; expr={:#?}",
@@ -352,7 +352,7 @@ impl ApplyInsertScope<'_> {
     fn apply_eq_const(&mut self, field: FieldId, val: &stmt::Value, set: bool) {
         let existing = &mut self.expr[field];
 
-        if !existing.is_null() {
+        if !existing.is_value_null() {
             if let stmt::Expr::Value(existing) = existing {
                 assert_eq!(existing, val);
             } else {

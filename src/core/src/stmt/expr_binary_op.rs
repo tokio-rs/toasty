@@ -86,10 +86,18 @@ impl Expr {
 impl ExprBinaryOp {
     pub(crate) fn simplify(&mut self) -> Option<Expr> {
         match (&mut *self.lhs, &mut *self.rhs) {
-            (Expr::Cast(lhs), Expr::Value(Value::Id(rhs))) if lhs.ty.is_id() => {
-                // TODO: don't clone
-                *self.lhs = (*lhs.expr).clone();
-                *self.rhs = rhs.to_primitive().into();
+            (Expr::Cast(lhs), Expr::Value(rhs)) if lhs.ty.is_id() => {
+                *self.lhs = lhs.expr.take();
+
+                match rhs {
+                    Value::Id(rhs) => {
+                        *self.rhs = rhs.to_primitive().into();
+                    }
+                    Value::Null => {
+                        // Nothing to do
+                    }
+                    _ => todo!("{rhs:#?}"),
+                }
             }
             (Expr::Cast(lhs), rhs) => {
                 todo!("{self:#?}");

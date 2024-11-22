@@ -52,7 +52,7 @@ impl Input for ModelToTable<(FieldId, &Expr)> {
 impl Input for ModelToTable<&Model> {
     fn resolve_field(&mut self, expr_field: &ExprField) -> Option<Expr> {
         assert!(
-            !self.0.lowering.table_to_model[expr_field.field.index].is_null(),
+            !self.0.lowering.table_to_model[expr_field.field.index].is_value_null(),
             "field={expr_field:#?}; lowering={:#?}; ty={:#?}",
             self.0.lowering.table_to_model,
             self.0.fields[expr_field.field.index].ty,

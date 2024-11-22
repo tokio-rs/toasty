@@ -38,6 +38,10 @@ pub enum Expr {
     /// The expression is contained by the given subquery
     InSubquery(ExprInSubquery),
 
+    /// Whether an expression is (or is not) null. This is different from a
+    /// binary expression because of how databases treat null comparisons.
+    IsNull(ExprIsNull),
+
     /// References a model's primary key
     Key(ExprKey),
 
@@ -120,7 +124,7 @@ impl Expr {
     }
 
     /// Is a value that evaluates to null
-    pub fn is_null(&self) -> bool {
+    pub fn is_value_null(&self) -> bool {
         matches!(self, Expr::Value(Value::Null))
     }
 

@@ -12,9 +12,36 @@ impl Planner<'_> {
     pub(crate) fn partition_returning(&self, stmt: &mut stmt::Returning) -> eval::Expr {
         use Partition::*;
 
-        let stmt::Returning::Expr(stmt::Expr::Record(stmt_record)) = stmt else {
-            todo!("returning={stmt:#?}");
-        };
+        println!("RETURNING = {stmt:#?}");
+
+        match stmt {
+            stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => {
+                // returning an expression record is special-cased because it
+                // might be able to be passed through to the database as an
+                // identity projection.
+                self.partition_returning_expr_record(expr_record)
+            }
+            stmt::Returning::Expr(expr) => self.partition_returning_expr(expr),
+            _ => todo!("returning={stmt:#?}"),
+        }
+    }
+
+    fn partition_returning_expr(&self, stmt: &mut stmt::Expr) -> eval::Expr {
+        let mut stmt_fields = vec![];
+
+        match partition_returning(stmt, &mut stmt_fields) {
+            Partition::Stmt => {
+                todo!()
+            }
+            Partition::Eval(eval) => {
+                *stmt = stmt::Expr::record_from_vec(stmt_fields);
+                eval
+            }
+        }
+    }
+
+    fn partition_returning_expr_record(&self, stmt_record: &mut stmt::ExprRecord) -> eval::Expr {
+        use Partition::*;
 
         let mut eval_fields = vec![];
         let mut stmt_fields = vec![];

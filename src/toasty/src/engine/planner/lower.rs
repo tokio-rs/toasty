@@ -214,6 +214,18 @@ impl LowerExpr {
         rhs: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
         match (&mut *lhs, &mut *rhs) {
+            (stmt::Expr::Value(value), other) | (other, stmt::Expr::Value(value))
+                if value.is_null() =>
+            {
+                let other = other.take();
+                assert!(!other.is_cast(), "{other:#?}");
+
+                Some(match op {
+                    stmt::BinaryOp::Eq => stmt::Expr::is_null(other),
+                    stmt::BinaryOp::Ne => stmt::Expr::is_not_null(other),
+                    _ => todo!(),
+                })
+            }
             (stmt::Expr::DecodeEnum(base, _, variant), other)
             | (other, stmt::Expr::DecodeEnum(base, _, variant)) => {
                 assert!(op.is_eq());

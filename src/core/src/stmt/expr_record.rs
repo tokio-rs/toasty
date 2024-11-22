@@ -15,6 +15,10 @@ impl Expr {
         Expr::Record(ExprRecord::from_iter(items.into_iter()))
     }
 
+    pub fn record_from_vec(fields: Vec<Expr>) -> Expr {
+        Expr::Record(ExprRecord::from_vec(fields))
+    }
+
     pub fn is_record(&self) -> bool {
         matches!(self, Expr::Record(_))
     }

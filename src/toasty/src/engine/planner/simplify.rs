@@ -200,7 +200,7 @@ impl SimplifyExpr<'_> {
                                 todo!()
                             };
 
-                            assert!(other.is_null());
+                            assert!(other.is_value_null());
 
                             expr_field.field = fk_field.source;
 
