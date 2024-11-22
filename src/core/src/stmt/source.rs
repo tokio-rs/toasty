@@ -30,6 +30,10 @@ impl Source {
         self.as_model().model
     }
 
+    pub fn is_table(&self) -> bool {
+        matches!(self, Source::Table(_))
+    }
+
     pub fn table(table: impl Into<TableId>) -> Source {
         Source::Table(vec![TableWithJoins {
             table: table.into(),

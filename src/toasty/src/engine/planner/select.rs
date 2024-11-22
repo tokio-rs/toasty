@@ -67,16 +67,18 @@ impl Planner<'_> {
         let table = self.schema.table(model.lowering.table);
 
         self.lower_stmt_query(table, model, &mut stmt);
-        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
 
+        let input = if cx.input.is_empty() {
+            vec![]
+        } else {
+            self.partition_query_input(&mut stmt, &cx.input)
+        };
+
+        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
         let output = self.var_table.register_var();
 
         self.push_action(plan::QuerySql {
-            input: if cx.input.is_empty() {
-                vec![]
-            } else {
-                todo!("stmt={stmt:#?}");
-            },
+            input,
             output: Some(plan::QuerySqlOutput {
                 var: output,
                 project,

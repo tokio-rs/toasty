@@ -222,7 +222,6 @@ impl LowerExpr {
                 ))
             }
             (stmt::Expr::Cast(expr_cast), other) if expr_cast.ty.is_id() => {
-                // TODO: don't hard code this cast... and probably recurse
                 self.uncast_id(lhs);
                 self.uncast_id(other);
                 None
@@ -274,6 +273,11 @@ impl LowerExpr {
             stmt::Expr::Cast(expr_cast) if expr_cast.ty.is_id() => {
                 *expr = expr_cast.expr.take();
             }
+            stmt::Expr::Project(_) => {
+                // TODO: don't always cast to a string...
+                let base = expr.take();
+                *expr = stmt::Expr::cast(base, stmt::Type::String);
+            }
             _ => todo!("{expr:#?}"),
         }
     }
@@ -295,17 +299,4 @@ impl VisitMut for LowerExpr {
             *i = expr;
         }
     }
-
-    /*
-    fn visit_value_mut(&mut self, i: &mut stmt::Value) {
-        stmt::visit_mut::visit_value_mut(self, i);
-
-        match i {
-            stmt::Value::Id(value) => {
-                *i = value.to_primitive();
-            }
-            _ => {}
-        }
-    }
-    */
 }
