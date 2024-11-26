@@ -19,6 +19,10 @@ pub struct SourceModel {
 }
 
 impl Source {
+    pub fn is_model(&self) -> bool {
+        matches!(self, Source::Model(_))
+    }
+
     pub fn as_model(&self) -> &SourceModel {
         match self {
             Source::Model(source) => source,

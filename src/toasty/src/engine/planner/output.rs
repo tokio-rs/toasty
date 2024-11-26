@@ -12,8 +12,6 @@ impl Planner<'_> {
     pub(crate) fn partition_returning(&self, stmt: &mut stmt::Returning) -> eval::Expr {
         use Partition::*;
 
-        println!("RETURNING = {stmt:#?}");
-
         match stmt {
             stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => {
                 // returning an expression record is special-cased because it

@@ -189,48 +189,51 @@ impl Expr {
         }
     }
 
-    pub fn simplify(&mut self) {
-        visit_mut::for_each_expr_mut(self, move |expr| {
-            let maybe_expr = match expr {
-                Expr::BinaryOp(expr) => expr.simplify(),
-                Expr::Cast(expr) => expr.simplify(),
-                Expr::InList(expr) => expr.simplify(),
-                Expr::Record(expr) => expr.simplify(),
-                _ => None,
-            };
+    // pub fn simplify2(&mut self) {
+    //     visit_mut::for_each_expr_mut(self, move |expr| {
+    //         let maybe_expr = match expr {
+    //             Expr::BinaryOp(expr) => expr.simplify(),
+    //             Expr::Cast(expr) => expr.simplify(),
+    //             Expr::InList(expr) => expr.simplify(),
+    //             Expr::Record(expr) => expr.simplify(),
+    //             _ => None,
+    //         };
 
-            if let Some(simplified) = maybe_expr {
-                *expr = simplified;
-            }
-        });
-    }
+    //         if let Some(simplified) = maybe_expr {
+    //             *expr = simplified;
+    //         }
+    //     });
 
-    pub fn substitute(&mut self, mut input: impl substitute::Input) {
-        self.substitute_ref(&mut input);
+    //     println!("SIMPLIFIED = {self:#?}");
+    // }
 
-        self.simplify();
-    }
+    // pub fn substitute(&mut self, mut input: impl substitute::Input) {
+    //     self.substitute_ref(&mut input);
 
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        visit_mut::for_each_expr_mut(self, move |expr| match expr {
-            Expr::Arg(expr_arg) => {
-                if let Some(sub) = input.resolve_arg(expr_arg) {
-                    *expr = sub;
-                }
-            }
-            Expr::Field(expr_field) => {
-                if let Some(sub) = input.resolve_field(expr_field) {
-                    *expr = sub;
-                }
-            }
-            Expr::Column(expr_column) => {
-                if let Some(sub) = input.resolve_column(expr_column) {
-                    *expr = sub;
-                }
-            }
-            _ => {}
-        });
-    }
+    //     self.simplify();
+    // }
+
+    // pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
+    //     visit_mut::for_each_expr_mut(self, move |expr| match expr {
+    //         Expr::Arg(expr_arg) => {
+    //             if let Some(sub) = input.resolve_arg(expr_arg) {
+    //                 *expr = sub;
+    //             }
+    //         }
+    //         Expr::Field(expr_field) => {
+    //             if let Some(sub) = input.resolve_field(expr_field) {
+    //                 *expr = sub;
+    //             }
+    //         }
+    //         Expr::Column(expr_column) => {
+    //             if let Some(sub) = input.resolve_column(expr_column) {
+    //                 *expr = sub;
+    //             }
+    //         }
+    //         Expr::InSubquery(_) => todo!(),
+    //         _ => {}
+    //     });
+    // }
 
     pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Expr {
         struct MapProjections<T>(T);

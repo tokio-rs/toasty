@@ -107,6 +107,10 @@ pub trait VisitMut: Sized {
         visit_expr_project_mut(self, i);
     }
 
+    fn visit_insert_target_mut(&mut self, i: &mut InsertTarget) {
+        visit_insert_target_mut(self, i);
+    }
+
     fn visit_projection_mut(&mut self, i: &mut Projection) {
         visit_projection_mut(self, i);
     }
@@ -151,6 +155,10 @@ pub trait VisitMut: Sized {
         visit_stmt_unlink_mut(self, i);
     }
 
+    fn visit_update_target_mut(&mut self, i: &mut UpdateTarget) {
+        visit_update_target_mut(self, i);
+    }
+
     fn visit_value_mut(&mut self, i: &mut Value) {
         visit_value_mut(self, i);
     }
@@ -160,7 +168,7 @@ pub trait VisitMut: Sized {
     }
 }
 
-impl<'stmt, V: VisitMut> VisitMut for &mut V {
+impl<V: VisitMut> VisitMut for &mut V {
     fn visit_expr_mut(&mut self, i: &mut Expr) {
         VisitMut::visit_expr_mut(&mut **self, i);
     }
@@ -234,7 +242,7 @@ impl<'stmt, V: VisitMut> VisitMut for &mut V {
     }
 }
 
-pub fn visit_assignments_mut<'stmt, V>(v: &mut V, node: &mut Assignments)
+pub fn visit_assignments_mut<V>(v: &mut V, node: &mut Assignments)
 where
     V: VisitMut + ?Sized,
 {
@@ -245,7 +253,7 @@ where
     }
 }
 
-pub fn visit_expr_mut<'stmt, V>(v: &mut V, node: &mut Expr)
+pub fn visit_expr_mut<V>(v: &mut V, node: &mut Expr)
 where
     V: VisitMut + ?Sized,
 {
@@ -281,7 +289,7 @@ where
     }
 }
 
-pub fn visit_expr_and_mut<'stmt, V>(v: &mut V, node: &mut ExprAnd)
+pub fn visit_expr_and_mut<V>(v: &mut V, node: &mut ExprAnd)
 where
     V: VisitMut + ?Sized,
 {
@@ -290,13 +298,13 @@ where
     }
 }
 
-pub fn visit_expr_arg_mut<'stmt, V>(v: &mut V, node: &mut ExprArg)
+pub fn visit_expr_arg_mut<V>(v: &mut V, node: &mut ExprArg)
 where
     V: VisitMut + ?Sized,
 {
 }
 
-pub fn visit_expr_begins_with_mut<'stmt, V>(v: &mut V, node: &mut ExprBeginsWith)
+pub fn visit_expr_begins_with_mut<V>(v: &mut V, node: &mut ExprBeginsWith)
 where
     V: VisitMut + ?Sized,
 {
@@ -304,7 +312,7 @@ where
     v.visit_expr_mut(&mut node.pattern);
 }
 
-pub fn visit_expr_binary_op_mut<'stmt, V>(v: &mut V, node: &mut ExprBinaryOp)
+pub fn visit_expr_binary_op_mut<V>(v: &mut V, node: &mut ExprBinaryOp)
 where
     V: VisitMut + ?Sized,
 {
@@ -312,20 +320,20 @@ where
     v.visit_expr_mut(&mut node.rhs);
 }
 
-pub fn visit_expr_cast_mut<'stmt, V>(v: &mut V, node: &mut ExprCast)
+pub fn visit_expr_cast_mut<V>(v: &mut V, node: &mut ExprCast)
 where
     V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.expr);
 }
 
-pub fn visit_expr_column_mut<'stmt, V>(v: &mut V, node: &mut ExprColumn)
+pub fn visit_expr_column_mut<V>(v: &mut V, node: &mut ExprColumn)
 where
     V: VisitMut + ?Sized,
 {
 }
 
-pub fn visit_expr_concat_mut<'stmt, V>(v: &mut V, node: &mut ExprConcat)
+pub fn visit_expr_concat_mut<V>(v: &mut V, node: &mut ExprConcat)
 where
     V: VisitMut + ?Sized,
 {
@@ -334,20 +342,20 @@ where
     }
 }
 
-pub fn visit_expr_enum_mut<'stmt, V>(v: &mut V, node: &mut ExprEnum)
+pub fn visit_expr_enum_mut<V>(v: &mut V, node: &mut ExprEnum)
 where
     V: VisitMut + ?Sized,
 {
     v.visit_expr_record_mut(&mut node.fields);
 }
 
-pub fn visit_expr_field_mut<'stmt, V>(_v: &mut V, _node: &mut ExprField)
+pub fn visit_expr_field_mut<V>(_v: &mut V, _node: &mut ExprField)
 where
     V: VisitMut + ?Sized,
 {
 }
 
-pub fn visit_expr_in_list_mut<'stmt, V>(v: &mut V, node: &mut ExprInList)
+pub fn visit_expr_in_list_mut<V>(v: &mut V, node: &mut ExprInList)
 where
     V: VisitMut + ?Sized,
 {
@@ -355,7 +363,7 @@ where
     v.visit_expr_mut(&mut node.list);
 }
 
-pub fn visit_expr_in_subquery_mut<'stmt, V>(v: &mut V, node: &mut ExprInSubquery)
+pub fn visit_expr_in_subquery_mut<V>(v: &mut V, node: &mut ExprInSubquery)
 where
     V: VisitMut + ?Sized,
 {
@@ -363,7 +371,7 @@ where
     v.visit_stmt_query_mut(&mut node.query);
 }
 
-pub fn visit_expr_like_mut<'stmt, V>(v: &mut V, node: &mut ExprLike)
+pub fn visit_expr_like_mut<V>(v: &mut V, node: &mut ExprLike)
 where
     V: VisitMut + ?Sized,
 {
@@ -371,13 +379,13 @@ where
     v.visit_expr_mut(&mut node.pattern);
 }
 
-pub fn visit_expr_key_mut<'stmt, V>(v: &mut V, node: &mut ExprKey)
+pub fn visit_expr_key_mut<V>(v: &mut V, node: &mut ExprKey)
 where
     V: VisitMut + ?Sized,
 {
 }
 
-pub fn visit_expr_map_mut<'stmt, V>(v: &mut V, node: &mut ExprMap)
+pub fn visit_expr_map_mut<V>(v: &mut V, node: &mut ExprMap)
 where
     V: VisitMut + ?Sized,
 {
@@ -385,7 +393,7 @@ where
     v.visit_expr_mut(&mut *node.map);
 }
 
-pub fn visit_expr_or_mut<'stmt, V>(v: &mut V, node: &mut ExprOr)
+pub fn visit_expr_or_mut<V>(v: &mut V, node: &mut ExprOr)
 where
     V: VisitMut + ?Sized,
 {
@@ -394,7 +402,7 @@ where
     }
 }
 
-pub fn visit_expr_list_mut<'stmt, V>(v: &mut V, node: &mut Vec<Expr>)
+pub fn visit_expr_list_mut<V>(v: &mut V, node: &mut Vec<Expr>)
 where
     V: VisitMut + ?Sized,
 {
@@ -403,7 +411,7 @@ where
     }
 }
 
-pub fn visit_expr_record_mut<'stmt, V>(v: &mut V, node: &mut ExprRecord)
+pub fn visit_expr_record_mut<V>(v: &mut V, node: &mut ExprRecord)
 where
     V: VisitMut + ?Sized,
 {
@@ -412,7 +420,7 @@ where
     }
 }
 
-pub fn visit_expr_set_mut<'stmt, V>(v: &mut V, node: &mut ExprSet)
+pub fn visit_expr_set_mut<V>(v: &mut V, node: &mut ExprSet)
 where
     V: VisitMut + ?Sized,
 {
@@ -423,7 +431,7 @@ where
     }
 }
 
-pub fn visit_expr_set_op_mut<'stmt, V>(v: &mut V, node: &mut ExprSetOp)
+pub fn visit_expr_set_op_mut<V>(v: &mut V, node: &mut ExprSetOp)
 where
     V: VisitMut + ?Sized,
 {
@@ -432,20 +440,20 @@ where
     }
 }
 
-pub fn visit_expr_stmt_mut<'stmt, V>(v: &mut V, node: &mut ExprStmt)
+pub fn visit_expr_stmt_mut<V>(v: &mut V, node: &mut ExprStmt)
 where
     V: VisitMut + ?Sized,
 {
     v.visit_stmt_mut(&mut node.stmt);
 }
 
-pub fn visit_expr_ty_mut<'stmt, V>(v: &mut V, node: &mut ExprTy)
+pub fn visit_expr_ty_mut<V>(v: &mut V, node: &mut ExprTy)
 where
     V: VisitMut + ?Sized,
 {
 }
 
-pub fn visit_expr_pattern_mut<'stmt, V>(v: &mut V, node: &mut ExprPattern)
+pub fn visit_expr_pattern_mut<V>(v: &mut V, node: &mut ExprPattern)
 where
     V: VisitMut + ?Sized,
 {
@@ -455,7 +463,7 @@ where
     }
 }
 
-pub fn visit_expr_project_mut<'stmt, V>(v: &mut V, node: &mut ExprProject)
+pub fn visit_expr_project_mut<V>(v: &mut V, node: &mut ExprProject)
 where
     V: VisitMut + ?Sized,
 {
@@ -463,13 +471,23 @@ where
     v.visit_projection_mut(&mut node.projection);
 }
 
-pub fn visit_projection_mut<'stmt, V>(v: &mut V, node: &mut Projection)
+pub fn visit_insert_target_mut<V>(v: &mut V, node: &mut InsertTarget)
+where
+    V: VisitMut + ?Sized,
+{
+    match node {
+        InsertTarget::Scope(stmt) => v.visit_stmt_query_mut(stmt),
+        _ => {}
+    }
+}
+
+pub fn visit_projection_mut<V>(v: &mut V, node: &mut Projection)
 where
     V: VisitMut + ?Sized,
 {
 }
 
-pub fn visit_returning_mut<'stmt, V>(v: &mut V, node: &mut Returning)
+pub fn visit_returning_mut<V>(v: &mut V, node: &mut Returning)
 where
     V: VisitMut + ?Sized,
 {
@@ -479,13 +497,13 @@ where
     }
 }
 
-pub fn visit_source_mut<'stmt, V>(_v: &mut V, _node: &mut Source)
+pub fn visit_source_mut<V>(_v: &mut V, _node: &mut Source)
 where
     V: VisitMut + ?Sized,
 {
 }
 
-pub fn visit_stmt_mut<'stmt, V>(v: &mut V, node: &mut Statement)
+pub fn visit_stmt_mut<V>(v: &mut V, node: &mut Statement)
 where
     V: VisitMut + ?Sized,
 {
@@ -499,7 +517,7 @@ where
     }
 }
 
-pub fn visit_stmt_select_mut<'stmt, V>(v: &mut V, node: &mut Select)
+pub fn visit_stmt_select_mut<V>(v: &mut V, node: &mut Select)
 where
     V: VisitMut + ?Sized,
 {
@@ -508,13 +526,11 @@ where
     v.visit_returning_mut(&mut node.returning);
 }
 
-pub fn visit_stmt_insert_mut<'stmt, V>(v: &mut V, node: &mut Insert)
+pub fn visit_stmt_insert_mut<V>(v: &mut V, node: &mut Insert)
 where
     V: VisitMut + ?Sized,
 {
-    if let InsertTarget::Scope(query) = &mut node.target {
-        v.visit_stmt_query_mut(query);
-    }
+    v.visit_insert_target_mut(&mut node.target);
     v.visit_stmt_query_mut(&mut node.source);
 
     if let Some(returning) = &mut node.returning {
@@ -522,17 +538,18 @@ where
     }
 }
 
-pub fn visit_stmt_query_mut<'stmt, V>(v: &mut V, node: &mut Query)
+pub fn visit_stmt_query_mut<V>(v: &mut V, node: &mut Query)
 where
     V: VisitMut + ?Sized,
 {
     v.visit_expr_set_mut(&mut node.body);
 }
 
-pub fn visit_stmt_update_mut<'stmt, V>(v: &mut V, node: &mut Update)
+pub fn visit_stmt_update_mut<V>(v: &mut V, node: &mut Update)
 where
     V: VisitMut + ?Sized,
 {
+    v.visit_update_target_mut(&mut node.target);
     v.visit_assignments_mut(&mut node.assignments);
 
     if let Some(expr) = &mut node.filter {
@@ -544,7 +561,7 @@ where
     }
 }
 
-pub fn visit_stmt_delete_mut<'stmt, V>(v: &mut V, node: &mut Delete)
+pub fn visit_stmt_delete_mut<V>(v: &mut V, node: &mut Delete)
 where
     V: VisitMut + ?Sized,
 {
@@ -556,7 +573,7 @@ where
     }
 }
 
-pub fn visit_stmt_link_mut<'stmt, V>(v: &mut V, node: &mut Link)
+pub fn visit_stmt_link_mut<V>(v: &mut V, node: &mut Link)
 where
     V: VisitMut + ?Sized,
 {
@@ -564,7 +581,7 @@ where
     v.visit_stmt_query_mut(&mut node.target);
 }
 
-pub fn visit_stmt_unlink_mut<'stmt, V>(v: &mut V, node: &mut Unlink)
+pub fn visit_stmt_unlink_mut<V>(v: &mut V, node: &mut Unlink)
 where
     V: VisitMut + ?Sized,
 {
@@ -572,13 +589,19 @@ where
     v.visit_stmt_query_mut(&mut node.target);
 }
 
-pub fn visit_value_mut<'stmt, V>(v: &mut V, node: &mut Value)
+pub fn visit_update_target_mut<V>(v: &mut V, node: &mut UpdateTarget)
 where
     V: VisitMut + ?Sized,
 {
 }
 
-pub fn visit_values_mut<'stmt, V>(v: &mut V, node: &mut Values)
+pub fn visit_value_mut<V>(v: &mut V, node: &mut Value)
+where
+    V: VisitMut + ?Sized,
+{
+}
+
+pub fn visit_values_mut<V>(v: &mut V, node: &mut Values)
 where
     V: VisitMut + ?Sized,
 {
@@ -587,7 +610,7 @@ where
     }
 }
 
-pub fn for_each_expr_mut<'stmt, F>(node: &mut impl Node, f: F)
+pub fn for_each_expr_mut<F>(node: &mut impl Node, f: F)
 where
     F: FnMut(&mut Expr),
 {
@@ -595,7 +618,7 @@ where
         f: F,
     }
 
-    impl<'stmt, F> VisitMut for ForEach<F>
+    impl<F> VisitMut for ForEach<F>
     where
         F: FnMut(&mut Expr),
     {

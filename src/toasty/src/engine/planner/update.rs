@@ -61,11 +61,10 @@ impl Planner<'_> {
             }
         }
 
-        self.plan_subqueries(&mut stmt);
-
         if self.capability.is_sql() {
             self.plan_update_sql(stmt)
         } else {
+            self.plan_subqueries(&mut stmt);
             self.plan_update_kv(stmt)
         }
     }
@@ -88,7 +87,7 @@ impl Planner<'_> {
             None
         };
 
-        self.lower_update_stmt(model, &mut stmt);
+        self.lower_stmt_update(model, &mut stmt);
         self.constantize_update_returning(&mut stmt);
 
         let output = self

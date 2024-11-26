@@ -73,28 +73,28 @@ impl ExprRecord {
         self.fields.resize(new_len, value.into());
     }
 
-    pub(crate) fn simplify(&mut self) -> Option<Expr> {
-        let mut all_values = true;
+    // pub(crate) fn simplify(&mut self) -> Option<Expr> {
+    //     let mut all_values = true;
 
-        for expr in &mut self.fields {
-            expr.simplify();
+    //     for expr in &mut self.fields {
+    //         expr.simplify();
 
-            all_values &= expr.is_value();
-        }
+    //         all_values &= expr.is_value();
+    //     }
 
-        if all_values {
-            let mut values = vec![];
+    //     if all_values {
+    //         let mut values = vec![];
 
-            for expr in self.fields.drain(..) {
-                let Expr::Value(value) = expr else { panic!() };
-                values.push(value);
-            }
+    //         for expr in self.fields.drain(..) {
+    //             let Expr::Value(value) = expr else { panic!() };
+    //             values.push(value);
+    //         }
 
-            Some(Expr::Value(Value::record_from_vec(values)))
-        } else {
-            None
-        }
-    }
+    //         Some(Expr::Value(Value::record_from_vec(values)))
+    //     } else {
+    //         None
+    //     }
+    // }
 }
 
 impl ops::Deref for ExprRecord {

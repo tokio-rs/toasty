@@ -36,12 +36,10 @@ impl Planner<'_> {
             }
         }
 
-        // Plan subqueries
-        self.plan_subqueries(&mut stmt);
-
         if self.capability.is_sql() {
             self.plan_delete_sql(model, stmt);
         } else {
+            self.plan_subqueries(&mut stmt);
             self.plan_delete_kv(model, stmt);
         }
     }

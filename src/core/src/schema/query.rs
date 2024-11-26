@@ -79,12 +79,12 @@ enum FindByArgType {
 }
 
 impl Query {
-    pub fn apply(&self, input: impl stmt::substitute::Input) -> stmt::Query {
-        let mut stmt: stmt::Query = self.stmt.clone();
+    // pub fn apply(&self, input: impl stmt::substitute::Input) -> stmt::Query {
+    //     let mut stmt: stmt::Query = self.stmt.clone();
 
-        stmt.substitute(input);
-        stmt
-    }
+    //     stmt.substitute(input);
+    //     stmt
+    // }
 
     pub(crate) fn find_by<'a>(id: QueryId, model: &'a Model, by_fk: bool) -> FindByBuilder<'a> {
         FindByBuilder {

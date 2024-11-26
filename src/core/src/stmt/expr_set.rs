@@ -45,13 +45,13 @@ impl ExprSet {
         }
     }
 
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        match self {
-            ExprSet::Select(expr) => expr.substitute_ref(input),
-            ExprSet::SetOp(expr) => expr.substitute_ref(input),
-            ExprSet::Values(expr) => expr.substitute_ref(input),
-        }
-    }
+    // pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
+    //     match self {
+    //         ExprSet::Select(expr) => expr.substitute_ref(input),
+    //         ExprSet::SetOp(expr) => expr.substitute_ref(input),
+    //         ExprSet::Values(expr) => expr.substitute_ref(input),
+    //     }
+    // }
 }
 
 impl Default for ExprSet {

@@ -27,14 +27,16 @@ impl Planner<'_> {
         // database evaluating the statement), then extract it here.
         let const_returning = self.constantize_insert_returning(&mut stmt);
 
+        self.lower_stmt_insert(model, &mut stmt);
+
         let mut output_var = None;
 
         // First, lower the returning part of the statement and get any
         // necessary in-memory projection.
-        let project = stmt.returning.as_mut().map(|returning| {
-            self.lower_returning(model, returning);
-            self.partition_returning(returning)
-        });
+        let project = stmt
+            .returning
+            .as_mut()
+            .map(|returning| self.partition_returning(returning));
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -57,21 +59,15 @@ impl Planner<'_> {
                     input: vec![],
                     output: None,
                     stmt: stmt::Insert {
-                        target: stmt::InsertTable {
-                            table: model.lowering.table,
-                            columns: model.lowering.columns.clone(),
-                        }
-                        .into(),
+                        target: stmt.target.clone(),
                         source: stmt::Values::default().into(),
-                        returning: None,
+                        returning: stmt.returning.take(),
                     },
                 };
 
                 if let Some(project) = project {
                     let var = self.var_table.register_var();
                     plan.output = Some(plan::InsertOutput { var, project });
-                    plan.stmt.returning = stmt.returning.take();
-
                     output_var = Some(var);
                 }
 
@@ -87,8 +83,16 @@ impl Planner<'_> {
             _ => todo!("stmt={:#?}", stmt),
         };
 
+        let dst = &mut self.write_actions[action]
+            .as_insert_mut()
+            .stmt
+            .source
+            .body
+            .as_values_mut()
+            .rows;
+
         for mut row in rows {
-            self.plan_insert_record(model, row, action);
+            dst.push(row);
         }
 
         if let Some(const_returning) = const_returning {
@@ -116,25 +120,9 @@ impl Planner<'_> {
             }
 
             self.apply_insertion_defaults(model, row);
+            self.plan_insert_relation_stmts(model, row);
+            self.verify_non_nullable_fields_have_values(model, row);
         }
-    }
-
-    fn plan_insert_record(&mut self, model: &Model, mut expr: stmt::Expr, action: usize) {
-        self.plan_insert_relation_stmts(model, &mut expr);
-        // TODO: move this to pre-processing step, but it currently depends on
-        // planning relation statements which cannot be in preprocessing.
-        self.verify_non_nullable_fields_have_values(model, &mut expr);
-
-        self.lower_insert_expr(model, &mut expr);
-
-        self.write_actions[action]
-            .as_insert_mut()
-            .stmt
-            .source
-            .body
-            .as_values_mut()
-            .rows
-            .push(expr);
     }
 
     // Checks all fields of a record and handles nulls
@@ -279,7 +267,8 @@ impl Planner<'_> {
             args.push(expr.eval_const());
         }
 
-        model.find_by_id(self.schema, stmt::substitute::Args(&args[..]))
+        // model.find_by_id(self.schema, stmt::substitute::Args(&args[..]))
+        todo!()
     }
 
     fn apply_insert_scope(&mut self, expr: &mut stmt::Expr, scope: &stmt::Expr) {

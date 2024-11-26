@@ -32,8 +32,6 @@ impl Input for &Model {
     }
 }
 
-pub struct TableToModel<T>(pub T);
-
 pub struct ModelToTable<T>(pub T);
 
 impl Input for ModelToTable<&ExprRecord> {

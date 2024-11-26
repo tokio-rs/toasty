@@ -64,9 +64,7 @@ impl Planner<'_> {
         model: &Model,
         mut stmt: stmt::Query,
     ) -> plan::VarId {
-        let table = self.schema.table(model.lowering.table);
-
-        self.lower_stmt_query(table, model, &mut stmt);
+        self.lower_stmt_query(model, &mut stmt);
 
         let input = if cx.input.is_empty() {
             vec![]

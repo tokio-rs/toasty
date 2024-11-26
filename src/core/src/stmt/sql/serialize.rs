@@ -303,7 +303,8 @@ impl<'a, 'stmt, T: Params> Formatter<'a, T> {
         match expr {
             Expr::Record(expr) => self.expr_list(expr),
             Expr::List(expr) => self.expr_list(expr),
-            _ => todo!("expr={expr:#?}"),
+            Expr::Value(Value::Record(expr)) => self.value_list(expr),
+            _ => self.expr(expr),
         }
     }
 
@@ -416,6 +417,18 @@ impl<'a, 'stmt, T: Params> Formatter<'a, T> {
         assert!(!value.is_id());
         self.params.push(value);
         write!(self.dst, "?")?;
+        Ok(())
+    }
+
+    fn value_list(&mut self, values: &[Value]) -> fmt::Result {
+        let mut s = "";
+
+        for value in values {
+            write!(self.dst, "{s}")?;
+            self.value(value)?;
+            s = ", ";
+        }
+
         Ok(())
     }
 

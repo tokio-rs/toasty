@@ -76,13 +76,13 @@ impl Query {
         }
     }
 
-    pub fn substitute(&mut self, mut input: impl substitute::Input) {
-        self.substitute_ref(&mut input);
-    }
+    // pub fn substitute(&mut self, mut input: impl substitute::Input) {
+    //     self.substitute_ref(&mut input);
+    // }
 
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        self.body.substitute_ref(input);
-    }
+    // pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
+    //     self.body.substitute_ref(input);
+    // }
 }
 
 impl From<Query> for Statement {

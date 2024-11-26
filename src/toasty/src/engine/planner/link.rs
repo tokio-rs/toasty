@@ -45,9 +45,8 @@ impl Planner<'_> {
         let index_plan = self.plan_index_path2(model, filter);
 
         let mut index_filter = index_plan.index_filter;
-        let table = self.schema.table(model.lowering.table);
         let index = self.schema.index(index_plan.index.lowering.index);
-        self.lower_stmt_filter(table, model, &mut index_filter);
+        self.lower_stmt_filter(model, &mut index_filter);
         let Some(key) = self.try_build_key_filter(index, &index_filter) else {
             todo!("stmt={:#?}", stmt)
         };
