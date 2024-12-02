@@ -2,23 +2,6 @@ use super::*;
 
 use stmt::Expr;
 
-pub(super) struct SimplifyExpr<'a> {
-    /// Schema the expression is referencing
-    pub(super) schema: &'a Schema,
-
-    /// The context in which the expression is evaluated. This is a model, table, etc...
-    pub(super) target: ExprTarget<'a>,
-}
-
-impl<'a> SimplifyExpr<'a> {
-    pub(super) fn new(schema: &'a Schema, target: impl Into<ExprTarget<'a>>) -> SimplifyExpr<'a> {
-        SimplifyExpr {
-            schema,
-            target: target.into(),
-        }
-    }
-}
-
 impl VisitMut for SimplifyExpr<'_> {
     fn visit_stmt_mut(&mut self, _i: &mut stmt::Statement) {
         panic!("should not be reached");

@@ -2,7 +2,7 @@ use super::*;
 
 use stmt::{Expr, Value};
 
-impl SimplifyExpr<'_> {
+impl Simplify<'_> {
     pub(super) fn simplify_expr_in_list(&self, expr: &mut stmt::ExprInList) -> Option<Expr> {
         let rhs = match &mut *expr.list {
             Expr::Value(value) => {

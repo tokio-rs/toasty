@@ -10,8 +10,8 @@ mod expr_cast;
 mod expr_in_list;
 mod expr_record;
 
-mod expr;
-use expr::SimplifyExpr;
+// mod expr;
+// use expr::SimplifyExpr;
 
 mod value;
 
@@ -22,8 +22,15 @@ mod rewrite_root_path_expr;
 
 use super::*;
 
-struct SimplifyStmt<'a> {
+use stmt::Expr;
+
+struct Simplify<'a> {
+    /// Schema the statement is referencing
     schema: &'a Schema,
+
+    /// The context in which expressions are evaluated. This is a model or
+    /// table.
+    target: ExprTarget<'a>,
 }
 
 // TODO: get rid of this
@@ -32,43 +39,159 @@ pub(crate) fn simplify_expr<'a>(
     target: impl Into<ExprTarget<'a>>,
     expr: &mut stmt::Expr,
 ) {
-    SimplifyExpr::new(schema, target).visit_expr_mut(expr);
+    // SimplifyExpr::new(schema, target).visit_expr_mut(expr);
+    todo!()
 }
 
 impl Planner<'_> {
     pub(crate) fn simplify_stmt_delete(&self, stmt: &mut stmt::Delete) {
-        self.simplify_stmt(stmt);
+        Simplify::new(self.schema).visit_stmt_delete_mut(stmt);
     }
 
     pub(crate) fn simplify_stmt_link(&self, stmt: &mut stmt::Link) {
-        self.simplify_stmt(stmt);
+        Simplify::new(self.schema).visit_stmt_link_mut(stmt);
     }
 
     pub(crate) fn simplify_stmt_insert(&self, stmt: &mut stmt::Insert) {
-        self.simplify_stmt(stmt);
+        Simplify::new(self.schema).visit_stmt_insert_mut(stmt);
     }
 
     pub(crate) fn simplify_stmt_query(&self, stmt: &mut stmt::Query) {
-        self.simplify_stmt(stmt);
+        Simplify::new(self.schema).visit_stmt_query_mut(stmt);
     }
 
     pub(crate) fn simplify_stmt_unlink(&self, stmt: &mut stmt::Unlink) {
-        self.simplify_stmt(stmt);
+        Simplify::new(self.schema).visit_stmt_unlink_mut(stmt);
     }
 
     pub(crate) fn simplify_stmt_update(&self, stmt: &mut stmt::Update) {
-        self.simplify_stmt(stmt);
-    }
-
-    fn simplify_stmt<T: stmt::Node>(&self, stmt: &mut T) {
-        SimplifyStmt {
-            schema: self.schema,
-        }
-        .visit_mut(stmt);
+        Simplify::new(self.schema).visit_stmt_update_mut(stmt);
     }
 }
 
-impl SimplifyStmt<'_> {
+impl<'a> VisitMut for Simplify<'_> {
+    fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
+        // First, simplify the expression.
+        stmt::visit_mut::visit_expr_mut(self, i);
+
+        // If an in-subquery expression, then try lifting it.
+        let maybe_expr = match i {
+            Expr::BinaryOp(expr_binary_op) => self.simplify_expr_binary_op(
+                expr_binary_op.op,
+                &mut *expr_binary_op.lhs,
+                &mut *expr_binary_op.rhs,
+            ),
+            Expr::Cast(expr) => self.simplify_expr_cast(expr),
+            Expr::InList(expr) => self.simplify_expr_in_list(expr),
+            Expr::InSubquery(expr_in_subquery) => {
+                self.lift_in_subquery(&expr_in_subquery.expr, &expr_in_subquery.query)
+            }
+            Expr::Record(expr) => self.simplify_expr_record(expr),
+            Expr::IsNull(_) => todo!(),
+            _ => None,
+        };
+
+        if let Some(expr) = maybe_expr {
+            *i = expr;
+        }
+    }
+
+    fn visit_expr_set_mut(&mut self, i: &mut stmt::ExprSet) {
+        match i {
+            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 0 => {
+                todo!("is there anything we do here?");
+            }
+            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 1 => {
+                let operand = expr_set_op.operands.drain(..).next().unwrap();
+                *i = operand;
+            }
+            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.is_union() => {
+                // First, simplify each sub-query in the union, then rewrite the
+                // query as a single disjuntive query.
+                let mut operands = vec![];
+
+                self.flatten_nested_unions(expr_set_op, &mut operands);
+
+                expr_set_op.operands = operands;
+            }
+            _ => {}
+        }
+
+        stmt::visit_mut::visit_expr_set_mut(self, i);
+    }
+
+    fn visit_stmt_delete_mut(&mut self, stmt: &mut stmt::Delete) {
+        self.target = ExprTarget::from_source(self.schema, &stmt.from);
+        stmt::visit_mut::visit_stmt_delete_mut(self, stmt);
+    }
+
+    fn visit_stmt_link_mut(&mut self, stmt: &mut stmt::Link) {
+        assert!(self.target.is_const());
+        stmt::visit_mut::visit_stmt_link_mut(self, stmt);
+    }
+
+    fn visit_stmt_insert_mut(&mut self, stmt: &mut stmt::Insert) {
+        self.target = ExprTarget::from_insert_target(self.schema, &stmt.target);
+        stmt::visit_mut::visit_stmt_insert_mut(self, stmt);
+    }
+
+    fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
+        self.target = ExprTarget::from_source(self.schema, &stmt.source);
+        stmt::visit_mut::visit_stmt_select_mut(self, stmt);
+    }
+
+    fn visit_stmt_unlink_mut(&mut self, stmt: &mut stmt::Unlink) {
+        assert!(self.target.is_const());
+        stmt::visit_mut::visit_stmt_unlink_mut(self, stmt);
+    }
+
+    fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
+        self.target = ExprTarget::from_update_target(self.schema, &stmt.target);
+        stmt::visit_mut::visit_stmt_update_mut(self, stmt);
+    }
+
+    fn visit_values_mut(&mut self, values: &mut stmt::Values) {
+        stmt::visit_mut::visit_values_mut(self, values);
+
+        let width = match &self.target {
+            ExprTarget::Const => todo!(),
+            ExprTarget::Model(model) => model.fields.len(),
+            ExprTarget::Table(table) => todo!(),
+            ExprTarget::TableWithColumns(_, columns) => columns.len(),
+        };
+
+        for row in &mut values.rows {
+            let actual = match row {
+                stmt::Expr::Record(row) => {
+                    while row.len() < width {
+                        row.push(stmt::Expr::default());
+                    }
+
+                    row.len()
+                }
+                stmt::Expr::Value(stmt::Value::Record(row)) => {
+                    while row.len() < width {
+                        row.fields.push(stmt::Value::default());
+                    }
+
+                    row.len()
+                }
+                _ => todo!("row={row:#?}"),
+            };
+
+            assert_eq!(actual, width);
+        }
+    }
+}
+
+impl<'a> Simplify<'a> {
+    fn new(schema: &'a Schema) -> Simplify<'a> {
+        Simplify {
+            schema,
+            target: ExprTarget::Const,
+        }
+    }
+
     /// Returns the source model
     fn flatten_nested_unions(
         &self,
@@ -107,98 +230,5 @@ impl SimplifyStmt<'_> {
                 _ => todo!("expr={:#?}", expr_set),
             }
         }
-    }
-}
-
-impl<'a> VisitMut for SimplifyStmt<'_> {
-    fn visit_expr_set_mut(&mut self, i: &mut stmt::ExprSet) {
-        match i {
-            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 0 => {
-                todo!("is there anything we do here?");
-            }
-            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 1 => {
-                let operand = expr_set_op.operands.drain(..).next().unwrap();
-                *i = operand;
-            }
-            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.is_union() => {
-                // First, simplify each sub-query in the union, then rewrite the
-                // query as a single disjuntive query.
-                let mut operands = vec![];
-
-                self.flatten_nested_unions(expr_set_op, &mut operands);
-
-                expr_set_op.operands = operands;
-            }
-            _ => {}
-        }
-
-        stmt::visit_mut::visit_expr_set_mut(self, i);
-    }
-
-    fn visit_stmt_delete_mut(&mut self, i: &mut stmt::Delete) {
-        SimplifyExpr::new(self.schema, self.schema.model(i.from.as_model_id()))
-            .visit_mut(&mut i.filter);
-    }
-
-    fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert) {
-        let target;
-        let width;
-
-        match &mut i.target {
-            stmt::InsertTarget::Scope(query) => {
-                self.visit_stmt_query_mut(query);
-                let model_id = query.body.as_select().source.as_model_id();
-                let model = self.schema.model(model_id);
-
-                target = ExprTarget::from(model);
-                width = model.fields.len();
-            }
-            stmt::InsertTarget::Model(model_id) => {
-                let model = self.schema.model(*model_id);
-                target = ExprTarget::from(model);
-                width = model.fields.len();
-            }
-            stmt::InsertTarget::Table(table_with_columns) => {
-                let table = self.schema.table(table_with_columns.table);
-                target = ExprTarget::Table(table);
-                width = table_with_columns.columns.len();
-            }
-        }
-
-        // Make sure rows are the right size
-        if let stmt::ExprSet::Values(values) = &mut *i.source.body {
-            for row in &mut values.rows {
-                let stmt::Expr::Record(row) = row else {
-                    todo!()
-                };
-
-                while row.len() < width {
-                    row.push(stmt::Expr::default());
-                }
-
-                assert_eq!(row.len(), width);
-            }
-        }
-
-        SimplifyExpr::new(self.schema, target).visit_stmt_insert_mut(i);
-    }
-
-    fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update) {
-        SimplifyExpr::new(self.schema, self.schema.model(i.target.as_model_id()))
-            .visit_stmt_update_mut(i);
-    }
-
-    fn visit_stmt_select_mut(&mut self, i: &mut stmt::Select) {
-        SimplifyExpr::new(self.schema, self.schema.model(i.source.as_model_id()))
-            .visit_mut(&mut i.filter);
-    }
-
-    fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
-        todo!()
-    }
-
-    fn visit_values_mut(&mut self, i: &mut stmt::Values) {
-        // SimplifyExpr::new(self.schema, todo!());
-        todo!()
     }
 }

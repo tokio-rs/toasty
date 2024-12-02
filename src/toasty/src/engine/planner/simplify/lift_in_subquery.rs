@@ -8,7 +8,7 @@ struct LiftBelongsTo<'a> {
     operands: Vec<stmt::Expr>,
 }
 
-impl<'a> SimplifyExpr<'a> {
+impl<'a> Simplify<'a> {
     pub(crate) fn lift_in_subquery(
         &mut self,
         expr: &stmt::Expr,

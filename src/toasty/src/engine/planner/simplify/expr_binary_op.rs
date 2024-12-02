@@ -2,7 +2,7 @@ use super::*;
 
 use stmt::Expr;
 
-impl SimplifyExpr<'_> {
+impl Simplify<'_> {
     /// Recursively walk a binary expression in parallel
     pub(super) fn simplify_expr_binary_op(
         &mut self,

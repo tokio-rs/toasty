@@ -2,7 +2,7 @@ use super::*;
 
 use stmt::Value;
 
-impl SimplifyExpr<'_> {
+impl Simplify<'_> {
     pub(super) fn uncast_value_id(&self, value: &mut stmt::Value) {
         match value {
             Value::Id(id) => {

@@ -1,6 +1,6 @@
 use super::*;
 
-impl SimplifyExpr<'_> {
+impl Simplify<'_> {
     pub(super) fn simplify_expr_record(
         &mut self,
         expr: &mut stmt::ExprRecord,
