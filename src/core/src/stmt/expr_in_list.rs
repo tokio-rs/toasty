@@ -16,39 +16,6 @@ impl Expr {
     }
 }
 
-impl ExprInList {
-    pub(crate) fn simplify(&mut self) -> Option<Expr> {
-        use std::mem;
-
-        let rhs = match &mut *self.list {
-            Expr::Value(value) => {
-                let values = match value {
-                    Value::List(value) => &value[..],
-                    _ => todo!("{value:#?}"),
-                };
-
-                if values.len() != 1 {
-                    return None;
-                }
-
-                Expr::Value(values[0].clone())
-            }
-            Expr::Record(expr_record) => {
-                if expr_record.len() != 1 {
-                    return None;
-                }
-
-                mem::take(&mut expr_record[0])
-            }
-            _ => return None,
-        };
-
-        let lhs = mem::take(&mut *self.expr);
-
-        Some(Expr::eq(lhs, rhs))
-    }
-}
-
 impl From<ExprInList> for Expr {
     fn from(value: ExprInList) -> Self {
         Expr::InList(value)

@@ -365,9 +365,8 @@ impl<'a> LowerStatement<'a> {
         Substitute(&mut *row).visit_expr_record_mut(&mut lowered);
         *expr = lowered.into();
 
-        // TODO: extract/refactor simplification
-        // expr.simplify();
-        todo!();
+        simplify::simplify_expr(self.schema, self.table, expr);
+        todo!("expr={expr:#?}");
     }
 
     fn uncast_id(&self, expr: &mut stmt::Expr) {

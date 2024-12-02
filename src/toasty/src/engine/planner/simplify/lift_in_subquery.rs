@@ -10,8 +10,7 @@ struct LiftBelongsTo<'a> {
 
 impl<'a> SimplifyExpr<'a> {
     pub(crate) fn lift_in_subquery(
-        &self,
-        root: &Model,
+        &mut self,
         expr: &stmt::Expr,
         query: &stmt::Query,
     ) -> Option<stmt::Expr> {
@@ -27,13 +26,19 @@ impl<'a> SimplifyExpr<'a> {
         };
 
         // If the field is not a belongs_to relation, abort
-        match &field.ty {
+        let mut maybe_expr = match &field.ty {
             FieldTy::BelongsTo(belongs_to) => self.lift_belongs_to_in_subquery(belongs_to, query),
             FieldTy::HasOne(has_one) => self.lift_has_one_in_subquery(has_one, query),
             _ => {
                 return None;
             }
+        };
+
+        if let Some(maybe_expr) = &mut maybe_expr {
+            stmt::visit_mut::visit_expr_mut(self, maybe_expr);
         }
+
+        maybe_expr
     }
 
     fn lift_belongs_to_in_subquery(

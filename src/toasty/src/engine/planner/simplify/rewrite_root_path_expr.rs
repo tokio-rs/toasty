@@ -6,8 +6,8 @@ impl<'db> SimplifyExpr<'db> {
     /// primary key.
     ///
     /// The caller must ensure it is an `eq` operation
-    pub(super) fn rewrite_root_path_expr(&mut self, val: stmt::Expr) -> stmt::Expr {
-        if let [field] = &self.model.primary_key.fields[..] {
+    pub(super) fn rewrite_root_path_expr(&mut self, model: &Model, val: stmt::Expr) -> stmt::Expr {
+        if let [field] = &model.primary_key.fields[..] {
             stmt::Expr::eq(*field, val)
         } else {
             todo!("composite primary keys")
