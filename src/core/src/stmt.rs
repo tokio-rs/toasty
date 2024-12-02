@@ -202,12 +202,12 @@ pub enum Statement {
 }
 
 impl Statement {
-    // pub fn substitute(&mut self, mut input: impl substitute::Input) {
-    //     match self {
-    //         Statement::Query(stmt) => stmt.substitute_ref(&mut input),
-    //         _ => todo!("stmt={self:#?}"),
-    //     }
-    // }
+    pub fn substitute(&mut self, mut input: impl substitute::Input) {
+        match self {
+            Statement::Query(stmt) => stmt.substitute_ref(&mut input),
+            _ => todo!("stmt={self:#?}"),
+        }
+    }
 }
 
 impl Node for Statement {

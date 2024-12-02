@@ -1,5 +1,6 @@
 use super::*;
 
+/// Set of values to insert
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Values {
     pub rows: Vec<Expr>,

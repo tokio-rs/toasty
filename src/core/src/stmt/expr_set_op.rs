@@ -11,9 +11,9 @@ impl ExprSetOp {
         matches!(self.op, SetOp::Union)
     }
 
-    // pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-    //     for operand in &mut self.operands {
-    //         operand.substitute_ref(input);
-    //     }
-    // }
+    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
+        for operand in &mut self.operands {
+            operand.substitute_ref(input);
+        }
+    }
 }

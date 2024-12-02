@@ -33,19 +33,24 @@ impl<'a> LowerStatement<'a> {
 
 impl Planner<'_> {
     pub(crate) fn lower_stmt_delete(&self, model: &Model, stmt: &mut stmt::Delete) {
+        println!("stmt={stmt:#?}");
         LowerStatement::from_model(self.schema, model).visit_stmt_delete_mut(stmt);
+        self.simplify_stmt_delete(stmt);
     }
 
     pub(crate) fn lower_stmt_query(&self, model: &Model, stmt: &mut stmt::Query) {
         LowerStatement::from_model(self.schema, model).visit_stmt_query_mut(stmt);
+        self.simplify_stmt_query(stmt);
     }
 
     pub(crate) fn lower_stmt_insert(&self, model: &Model, stmt: &mut stmt::Insert) {
         LowerStatement::from_model(self.schema, model).visit_stmt_insert_mut(stmt);
+        self.simplify_stmt_insert(stmt);
     }
 
     pub(crate) fn lower_stmt_update(&self, model: &Model, stmt: &mut stmt::Update) {
         LowerStatement::from_model(self.schema, model).visit_stmt_update_mut(stmt);
+        self.simplify_stmt_update(stmt);
     }
 
     // TODO: get rid of this
@@ -53,6 +58,7 @@ impl Planner<'_> {
         let mut lower = LowerStatement::from_model(self.schema, model);
         lower.visit_expr_mut(filter);
         lower.apply_lowering_filter_constraint(filter);
+        simplify::simplify_expr(self.schema, model, filter);
     }
 }
 
@@ -84,8 +90,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
                     let mut lowered =
                         self.model.lowering.model_to_table[primitive.lowering].clone();
                     Substitute(&*i).visit_expr_mut(&mut lowered);
-                    // lowered.simplify();
-                    todo!();
+                    todo!("field={field:#?}; lowered={lowered:#?}");
                     assignments.set(primitive.column, lowered);
                 }
                 _ => {
@@ -130,7 +135,6 @@ impl<'a> VisitMut for LowerStatement<'a> {
                 );
 
                 assert!(maybe_res.is_none(), "TODO");
-                todo!("stmt={expr:#?}");
 
                 return;
             }
@@ -297,7 +301,6 @@ impl<'a> LowerStatement<'a> {
                 if value.is_null() =>
             {
                 let other = other.take();
-                assert!(!other.is_cast(), "{other:#?}");
 
                 Some(match op {
                     stmt::BinaryOp::Eq => stmt::Expr::is_null(other),
@@ -364,9 +367,6 @@ impl<'a> LowerStatement<'a> {
         let mut lowered = self.model.lowering.model_to_table.clone();
         Substitute(&mut *row).visit_expr_record_mut(&mut lowered);
         *expr = lowered.into();
-
-        simplify::simplify_expr(self.schema, self.table, expr);
-        todo!("expr={expr:#?}");
     }
 
     fn uncast_id(&self, expr: &mut stmt::Expr) {

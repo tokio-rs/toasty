@@ -26,6 +26,7 @@ struct SimplifyStmt<'a> {
     schema: &'a Schema,
 }
 
+// TODO: get rid of this
 pub(crate) fn simplify_expr<'a>(
     schema: &'a Schema,
     target: impl Into<ExprTarget<'a>>,
@@ -140,31 +141,46 @@ impl<'a> VisitMut for SimplifyStmt<'_> {
     }
 
     fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert) {
-        let model = match &mut i.target {
+        let target;
+        let width;
+
+        match &mut i.target {
             stmt::InsertTarget::Scope(query) => {
                 self.visit_stmt_query_mut(query);
-                query.body.as_select().source.as_model_id()
+                let model_id = query.body.as_select().source.as_model_id();
+                let model = self.schema.model(model_id);
+
+                target = ExprTarget::from(model);
+                width = model.fields.len();
             }
-            stmt::InsertTarget::Model(model) => *model,
-            _ => todo!(),
-        };
+            stmt::InsertTarget::Model(model_id) => {
+                let model = self.schema.model(*model_id);
+                target = ExprTarget::from(model);
+                width = model.fields.len();
+            }
+            stmt::InsertTarget::Table(table_with_columns) => {
+                let table = self.schema.table(table_with_columns.table);
+                target = ExprTarget::Table(table);
+                width = table_with_columns.columns.len();
+            }
+        }
 
         // Make sure rows are the right size
         if let stmt::ExprSet::Values(values) = &mut *i.source.body {
-            let model = self.schema.model(model);
-
             for row in &mut values.rows {
                 let stmt::Expr::Record(row) = row else {
                     todo!()
                 };
 
-                while row.len() < model.fields.len() {
+                while row.len() < width {
                     row.push(stmt::Expr::default());
                 }
+
+                assert_eq!(row.len(), width);
             }
         }
 
-        SimplifyExpr::new(self.schema, self.schema.model(model)).visit_stmt_insert_mut(i);
+        SimplifyExpr::new(self.schema, target).visit_stmt_insert_mut(i);
     }
 
     fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update) {
@@ -175,5 +191,14 @@ impl<'a> VisitMut for SimplifyStmt<'_> {
     fn visit_stmt_select_mut(&mut self, i: &mut stmt::Select) {
         SimplifyExpr::new(self.schema, self.schema.model(i.source.as_model_id()))
             .visit_mut(&mut i.filter);
+    }
+
+    fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
+        todo!()
+    }
+
+    fn visit_values_mut(&mut self, i: &mut stmt::Values) {
+        // SimplifyExpr::new(self.schema, todo!());
+        todo!()
     }
 }

@@ -189,52 +189,6 @@ impl Expr {
         }
     }
 
-    // pub fn simplify2(&mut self) {
-    //     visit_mut::for_each_expr_mut(self, move |expr| {
-    //         let maybe_expr = match expr {
-    //             Expr::BinaryOp(expr) => expr.simplify(),
-    //             Expr::Cast(expr) => expr.simplify(),
-    //             Expr::InList(expr) => expr.simplify(),
-    //             Expr::Record(expr) => expr.simplify(),
-    //             _ => None,
-    //         };
-
-    //         if let Some(simplified) = maybe_expr {
-    //             *expr = simplified;
-    //         }
-    //     });
-
-    //     println!("SIMPLIFIED = {self:#?}");
-    // }
-
-    // pub fn substitute(&mut self, mut input: impl substitute::Input) {
-    //     self.substitute_ref(&mut input);
-
-    //     self.simplify();
-    // }
-
-    // pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-    //     visit_mut::for_each_expr_mut(self, move |expr| match expr {
-    //         Expr::Arg(expr_arg) => {
-    //             if let Some(sub) = input.resolve_arg(expr_arg) {
-    //                 *expr = sub;
-    //             }
-    //         }
-    //         Expr::Field(expr_field) => {
-    //             if let Some(sub) = input.resolve_field(expr_field) {
-    //                 *expr = sub;
-    //             }
-    //         }
-    //         Expr::Column(expr_column) => {
-    //             if let Some(sub) = input.resolve_column(expr_column) {
-    //                 *expr = sub;
-    //             }
-    //         }
-    //         Expr::InSubquery(_) => todo!(),
-    //         _ => {}
-    //     });
-    // }
-
     pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Expr {
         struct MapProjections<T>(T);
 
@@ -272,24 +226,15 @@ impl Expr {
         std::mem::replace(self, Expr::Value(Value::Null))
     }
 
-    /*
-    /// Updates the expression to assume a projected `expr_self`
-    ///
-    /// TODO: rename this... not a good name
-    pub fn project_self(&mut self, steps: usize) {
-        visit_mut::for_each_expr_mut(self, |expr| {
-            match expr {
-                Expr::Project(expr_project) => {
-                    assert!(expr_project.base.is_expr_self());
-
-                    // Trim the start of the projection
-                    expr_project.projection = Projection::from(&expr_project.projection[steps..]);
-                }
-                _ => {}
+    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
+        visit_mut::for_each_expr_mut(self, move |expr| match expr {
+            Expr::Arg(expr_arg) => {
+                *expr = input.resolve_arg(expr_arg);
             }
+            Expr::Map(_) => todo!(),
+            _ => {}
         });
     }
-    */
 }
 
 impl Default for Expr {

@@ -45,6 +45,7 @@ impl VisitMut for SimplifyExpr<'_> {
                 self.lift_in_subquery(&expr_in_subquery.expr, &expr_in_subquery.query)
             }
             Expr::Record(expr) => self.simplify_expr_record(expr),
+            Expr::IsNull(_) => todo!(),
             _ => None,
         };
 

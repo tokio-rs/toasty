@@ -62,9 +62,9 @@ impl Model {
         self.fields.iter_mut().find(|field| field.name == name)
     }
 
-    // pub fn find_by_id(&self, schema: &Schema, input: impl stmt::substitute::Input) -> stmt::Query {
-    //     schema.query(self.primary_key.query).apply(input)
-    // }
+    pub fn find_by_id(&self, schema: &Schema, input: impl stmt::substitute::Input) -> stmt::Query {
+        schema.query(self.primary_key.query).apply(input)
+    }
 
     /*
     pub fn update_stmt(&self, selection: stmt::Query) -> stmt::Update {

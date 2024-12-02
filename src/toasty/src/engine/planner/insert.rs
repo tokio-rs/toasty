@@ -267,8 +267,7 @@ impl Planner<'_> {
             args.push(expr.eval_const());
         }
 
-        // model.find_by_id(self.schema, stmt::substitute::Args(&args[..]))
-        todo!()
+        model.find_by_id(self.schema, &args)
     }
 
     fn apply_insert_scope(&mut self, expr: &mut stmt::Expr, scope: &stmt::Expr) {
