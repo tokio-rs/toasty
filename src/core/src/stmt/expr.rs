@@ -243,26 +243,6 @@ impl Default for Expr {
     }
 }
 
-impl<'stmt, I: Into<PathStep>> ops::Index<I> for Expr {
-    type Output = Expr;
-
-    fn index(&self, index: I) -> &Self::Output {
-        match self {
-            Expr::Record(expr_record) => expr_record.index(index.into().into_usize()),
-            _ => todo!(),
-        }
-    }
-}
-
-impl<'stmt, I: Into<PathStep>> ops::IndexMut<I> for Expr {
-    fn index_mut(&mut self, index: I) -> &mut Self::Output {
-        match self {
-            Expr::Record(expr_record) => expr_record.index_mut(index.into().into_usize()),
-            _ => todo!("trying to index {:#?}", self),
-        }
-    }
-}
-
 impl Node for Expr {
     fn map<V: Map>(&self, visit: &mut V) -> Self {
         visit.map_expr(self)

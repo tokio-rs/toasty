@@ -131,13 +131,21 @@ impl Planner<'_> {
 
         // First, we pad the record to account for all fields
         if let stmt::Expr::Record(expr_record) = expr {
-            expr_record.resize(model.fields.len(), stmt::Value::Null);
+            // TODO: get rid of this
+            assert_eq!(expr_record.len(), model.fields.len());
+            // expr_record.resize(model.fields.len(), stmt::Value::Null);
         }
 
         // Next, we have to find all belongs-to fields and normalize them to FK
         // values
         for field in &model.fields {
+            let index = field.id.index;
+
             if let FieldTy::BelongsTo(rel) = &field.ty {
+                let [fk_field] = &rel.foreign_key.fields[..] else {
+                    todo!()
+                };
+
                 let field_expr = &mut expr[field.id.index];
 
                 if !field_expr.is_value() || field_expr.is_value_null() {
