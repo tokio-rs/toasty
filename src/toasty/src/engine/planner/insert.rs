@@ -240,11 +240,14 @@ impl Planner<'_> {
                 if entry.is_statement() {
                     let expr_stmt = entry.take().into_stmt();
                     let scope = self.inserted_query_stmt(model, expr);
+                    let mut entry = expr.entry_mut(i);
+
+                    debug_assert!(entry.is_expr());
 
                     self.plan_mut_belongs_to_stmt(
                         field,
                         *expr_stmt.stmt,
-                        &mut expr[i], // TODO
+                        entry.as_expr_mut(),
                         &scope,
                         true,
                     );

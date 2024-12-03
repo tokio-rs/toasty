@@ -360,12 +360,8 @@ impl<'a> LowerStatement<'a> {
     }
 
     fn lower_insert_values(&self, expr: &mut stmt::Expr) {
-        let stmt::Expr::Record(row) = expr else {
-            todo!()
-        };
-
         let mut lowered = self.model.lowering.model_to_table.clone();
-        Substitute(&mut *row).visit_expr_record_mut(&mut lowered);
+        Substitute(&mut *expr).visit_expr_record_mut(&mut lowered);
         *expr = lowered.into();
     }
 
@@ -411,9 +407,9 @@ impl<I: Input> VisitMut for Substitute<I> {
     }
 }
 
-impl Input for &mut stmt::ExprRecord {
+impl Input for &mut stmt::Expr {
     fn resolve_field(&mut self, expr_field: &stmt::ExprField) -> stmt::Expr {
-        self[expr_field.field.index].clone()
+        self.entry(expr_field.field.index).to_expr()
     }
 }
 

@@ -59,6 +59,10 @@ pub trait VisitMut: Sized {
         visit_expr_in_subquery_mut(self, i);
     }
 
+    fn visit_expr_is_null_mut(&mut self, i: &mut ExprIsNull) {
+        visit_expr_is_null_mut(self, i);
+    }
+
     fn visit_expr_like_mut(&mut self, i: &mut ExprLike) {
         visit_expr_like_mut(self, i);
     }
@@ -268,6 +272,7 @@ where
         Expr::Field(expr) => v.visit_expr_field_mut(expr),
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
+        Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),
         Expr::Key(expr) => v.visit_expr_key_mut(expr),
         Expr::Map(expr) => v.visit_expr_map_mut(expr),
         Expr::Or(expr) => v.visit_expr_or_mut(expr),
@@ -369,6 +374,13 @@ where
 {
     v.visit_expr_mut(&mut node.expr);
     v.visit_stmt_query_mut(&mut node.query);
+}
+
+pub fn visit_expr_is_null_mut<V>(v: &mut V, node: &mut ExprIsNull)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
 }
 
 pub fn visit_expr_like_mut<V>(v: &mut V, node: &mut ExprLike)

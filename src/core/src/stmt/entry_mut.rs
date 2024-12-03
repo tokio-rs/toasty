@@ -6,6 +6,20 @@ pub enum EntryMut<'a> {
 }
 
 impl<'a> EntryMut<'a> {
+    pub fn as_expr(&self) -> &Expr {
+        match self {
+            EntryMut::Expr(e) => &*e,
+            _ => todo!(),
+        }
+    }
+
+    pub fn as_expr_mut(&mut self) -> &mut Expr {
+        match self {
+            EntryMut::Expr(e) => e,
+            _ => todo!(),
+        }
+    }
+
     pub fn is_expr(&self) -> bool {
         matches!(self, EntryMut::Expr(_))
     }

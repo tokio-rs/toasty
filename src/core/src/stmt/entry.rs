@@ -10,6 +10,13 @@ impl<'a> Entry<'a> {
         matches!(self, Entry::Expr(_))
     }
 
+    pub fn to_expr(&self) -> Expr {
+        match *self {
+            Entry::Expr(expr) => expr.clone(),
+            Entry::Value(value) => value.clone().into(),
+        }
+    }
+
     pub fn is_value(&self) -> bool {
         matches!(self, Entry::Value(_))
     }

@@ -24,7 +24,15 @@ impl<'a> ExprTarget<'a> {
                 let model = schema.model(source_model.model);
                 ExprTarget::from(model)
             }
-            _ => todo!(),
+            stmt::Source::Table(tables_with_joins) => {
+                let [table_with_joins] = &tables_with_joins[..] else {
+                    todo!("source={source:#?}")
+                };
+
+                let table = schema.table(table_with_joins.table);
+                ExprTarget::from(table)
+            }
+            _ => todo!("source={source:#?}"),
         }
     }
 
