@@ -10,8 +10,7 @@ impl Exec<'_> {
             assert_eq!(action.input.len(), 1);
 
             let input = self.collect_input(&action.input[0]).await?;
-            // sql.substitute(stmt::substitute::Args(&[stmt::Value::List(input)]));
-            todo!()
+            sql.substitute(&[stmt::Value::List(input)]);
         }
 
         let res = self

@@ -9,3 +9,9 @@ impl Input for &Vec<Value> {
         self[expr_arg.position].clone().into()
     }
 }
+
+impl<const N: usize> Input for &[Value; N] {
+    fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Expr {
+        self[expr_arg.position].clone().into()
+    }
+}
