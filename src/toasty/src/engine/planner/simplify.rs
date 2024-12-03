@@ -23,6 +23,7 @@ mod rewrite_root_path_expr;
 
 use super::*;
 
+use std::mem;
 use stmt::Expr;
 
 struct Simplify<'a> {
@@ -40,8 +41,11 @@ pub(crate) fn simplify_expr<'a>(
     target: impl Into<ExprTarget<'a>>,
     expr: &mut stmt::Expr,
 ) {
-    // SimplifyExpr::new(schema, target).visit_expr_mut(expr);
-    todo!()
+    Simplify {
+        schema,
+        target: target.into(),
+    }
+    .visit_expr_mut(expr);
 }
 
 impl Planner<'_> {
@@ -122,8 +126,12 @@ impl<'a> VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_delete_mut(&mut self, stmt: &mut stmt::Delete) {
-        self.target = ExprTarget::from_source(self.schema, &stmt.from);
+        let target = mem::replace(
+            &mut self.target,
+            ExprTarget::from_source(self.schema, &stmt.from),
+        );
         stmt::visit_mut::visit_stmt_delete_mut(self, stmt);
+        self.target = target;
     }
 
     fn visit_stmt_link_mut(&mut self, stmt: &mut stmt::Link) {
@@ -132,13 +140,21 @@ impl<'a> VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_insert_mut(&mut self, stmt: &mut stmt::Insert) {
-        self.target = ExprTarget::from_insert_target(self.schema, &stmt.target);
+        let target = mem::replace(
+            &mut self.target,
+            ExprTarget::from_insert_target(self.schema, &stmt.target),
+        );
         stmt::visit_mut::visit_stmt_insert_mut(self, stmt);
+        self.target = target;
     }
 
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
-        self.target = ExprTarget::from_source(self.schema, &stmt.source);
+        let target = mem::replace(
+            &mut self.target,
+            ExprTarget::from_source(self.schema, &stmt.source),
+        );
         stmt::visit_mut::visit_stmt_select_mut(self, stmt);
+        self.target = target;
     }
 
     fn visit_stmt_unlink_mut(&mut self, stmt: &mut stmt::Unlink) {
@@ -147,8 +163,12 @@ impl<'a> VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
-        self.target = ExprTarget::from_update_target(self.schema, &stmt.target);
+        let target = mem::replace(
+            &mut self.target,
+            ExprTarget::from_update_target(self.schema, &stmt.target),
+        );
         stmt::visit_mut::visit_stmt_update_mut(self, stmt);
+        self.target = target;
     }
 
     fn visit_values_mut(&mut self, values: &mut stmt::Values) {
@@ -180,7 +200,7 @@ impl<'a> VisitMut for Simplify<'_> {
                 _ => todo!("row={row:#?}"),
             };
 
-            assert_eq!(actual, width);
+            assert_eq!(actual, width, "target={:#?}", self.target);
         }
     }
 }

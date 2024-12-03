@@ -203,20 +203,38 @@ impl Expr {
         mapped
     }
 
-    pub fn entry(&self, index: usize) -> Entry<'_> {
-        match self {
-            Expr::Record(expr) => Entry::from(&expr[index]),
-            Expr::Value(Value::Record(expr)) => Entry::from(&expr[index]),
-            _ => todo!("expr={self:#?}"),
+    pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
+        let mut ret = Entry::Expr(self);
+
+        for step in path.step_iter() {
+            ret = match ret {
+                Entry::Expr(Expr::Record(expr)) => Entry::Expr(&expr[step.into_usize()]),
+                Entry::Value(Value::Record(record))
+                | Entry::Expr(Expr::Value(Value::Record(record))) => {
+                    Entry::Value(&record[step.into_usize()])
+                }
+                _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
+            }
         }
+
+        ret
     }
 
-    pub fn entry_mut(&mut self, index: usize) -> EntryMut<'_> {
-        match self {
-            Expr::Record(expr) => EntryMut::from(&mut expr[index]),
-            Expr::Value(Value::Record(expr)) => EntryMut::from(&mut expr[index]),
-            _ => todo!("expr={self:#?}"),
+    pub fn entry_mut(&mut self, path: impl EntryPath) -> EntryMut<'_> {
+        let mut ret = EntryMut::Expr(self);
+
+        for step in path.step_iter() {
+            ret = match ret {
+                EntryMut::Expr(Expr::Record(expr)) => EntryMut::Expr(&mut expr[step.into_usize()]),
+                EntryMut::Value(Value::Record(record))
+                | EntryMut::Expr(Expr::Value(Value::Record(record))) => {
+                    EntryMut::Value(&mut record[step.into_usize()])
+                }
+                _ => todo!("ret={ret:#?}; step={step:#?}"),
+            }
         }
+
+        ret
     }
 
     /// Assume the expression evaluates to a set of records and extend the

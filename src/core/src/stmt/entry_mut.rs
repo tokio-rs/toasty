@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Debug)]
 pub enum EntryMut<'a> {
     Expr(&'a mut Expr),
     Value(&'a mut Value),
@@ -29,11 +30,14 @@ impl<'a> EntryMut<'a> {
     }
 
     pub fn is_value(&self) -> bool {
-        matches!(self, EntryMut::Value(_))
+        matches!(self, EntryMut::Value(_) | EntryMut::Expr(Expr::Value(_)))
     }
 
     pub fn is_value_null(&self) -> bool {
-        matches!(self, EntryMut::Value(Value::Null))
+        matches!(
+            self,
+            EntryMut::Value(Value::Null) | EntryMut::Expr(Expr::Value(Value::Null))
+        )
     }
 
     pub fn take(&mut self) -> Expr {
@@ -56,10 +60,7 @@ impl<'a> EntryMut<'a> {
 
 impl<'a> From<&'a mut Expr> for EntryMut<'a> {
     fn from(value: &'a mut Expr) -> Self {
-        match value {
-            Expr::Value(value) => EntryMut::Value(value),
-            _ => EntryMut::Expr(value),
-        }
+        EntryMut::Expr(value)
     }
 }
 

@@ -242,7 +242,7 @@ impl Planner<'_> {
                     let scope = self.inserted_query_stmt(model, expr);
                     let mut entry = expr.entry_mut(i);
 
-                    debug_assert!(entry.is_expr());
+                    debug_assert!(entry.is_expr(), "entry={entry:#?}");
 
                     self.plan_mut_belongs_to_stmt(
                         field,

@@ -1,6 +1,7 @@
 use super::*;
 
 /// The "root" an expression is targetting. This can be a model, table, ...
+#[derive(Debug, Clone)]
 pub(crate) enum ExprTarget<'a> {
     /// Expressions are executed in a constant context (no references to models
     /// or fields).

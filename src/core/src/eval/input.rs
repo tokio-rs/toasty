@@ -18,10 +18,7 @@ pub fn const_input() -> impl Input {
 
 impl<'stmt, const N: usize> Input for [&stmt::Expr; N] {
     fn resolve_arg(&mut self, expr_arg: &ExprArg, projection: &Projection) -> Value {
-        match projection.resolve_expr(&self[expr_arg.position]) {
-            stmt::Expr::Value(value) => value.clone(),
-            _ => todo!(),
-        }
+        self[expr_arg.position].entry(projection).to_value()
     }
 }
 

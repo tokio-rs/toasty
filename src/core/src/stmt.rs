@@ -13,6 +13,9 @@ pub use entry::Entry;
 mod entry_mut;
 pub use entry_mut::EntryMut;
 
+mod entry_path;
+pub use entry_path::EntryPath;
+
 mod expr;
 pub use expr::Expr;
 

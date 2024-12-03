@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Debug)]
 pub enum Entry<'a> {
     Expr(&'a Expr),
     Value(&'a Value),
@@ -18,20 +19,27 @@ impl<'a> Entry<'a> {
     }
 
     pub fn is_value(&self) -> bool {
-        matches!(self, Entry::Value(_))
+        matches!(self, Entry::Value(_) | Entry::Expr(Expr::Value(_)))
     }
 
     pub fn is_value_null(&self) -> bool {
-        matches!(self, Entry::Value(Value::Null))
+        matches!(
+            self,
+            Entry::Value(Value::Null) | Entry::Expr(Expr::Value(Value::Null))
+        )
+    }
+
+    pub fn to_value(&self) -> Value {
+        match *self {
+            Entry::Expr(Expr::Value(value)) | Entry::Value(value) => value.clone(),
+            _ => todo!(),
+        }
     }
 }
 
 impl<'a> From<&'a Expr> for Entry<'a> {
     fn from(value: &'a Expr) -> Self {
-        match value {
-            Expr::Value(value) => Entry::Value(value),
-            _ => Entry::Expr(value),
-        }
+        Entry::Expr(value)
     }
 }
 
