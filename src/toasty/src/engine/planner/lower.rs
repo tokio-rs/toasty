@@ -301,7 +301,11 @@ impl<'a> LowerStatement<'a> {
 
                 Some(stmt::Expr::eq(
                     (**base).clone(),
-                    stmt::Expr::concat_str((variant.to_string(), "#", other.clone())),
+                    stmt::Expr::concat_str((
+                        variant.to_string(),
+                        "#",
+                        stmt::Expr::cast(other.clone(), stmt::Type::String),
+                    )),
                 ))
             }
             (stmt::Expr::Cast(expr_cast), other) if expr_cast.ty.is_id() => {
