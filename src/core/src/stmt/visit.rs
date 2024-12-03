@@ -273,7 +273,14 @@ where
         Expr::Stmt(expr) => v.visit_expr_stmt(expr),
         Expr::Type(expr) => v.visit_expr_ty(expr),
         Expr::Value(expr) => v.visit_value(expr),
-        _ => todo!(),
+        // HAX
+        Expr::ConcatStr(expr) => {
+            for expr in &expr.exprs {
+                v.visit_expr(expr);
+            }
+        }
+        Expr::DecodeEnum(base, ..) => v.visit_expr(base),
+        _ => todo!("{node:#?}"),
     }
 }
 

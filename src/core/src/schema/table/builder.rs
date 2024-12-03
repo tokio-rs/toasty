@@ -456,7 +456,11 @@ impl<'a> ModelLoweringBuilder<'a> {
                     })
                     .unwrap();
 
-                stmt::Expr::concat_str((variant.discriminant.to_string(), "#", expr))
+                stmt::Expr::concat_str((
+                    variant.discriminant.to_string(),
+                    "#",
+                    stmt::Expr::cast(expr, stmt::Type::String),
+                ))
             }
             stmt::Type::String if ty.is_id() => stmt::Expr::cast(expr, &column.ty),
             _ => todo!("column={column:#?}"),

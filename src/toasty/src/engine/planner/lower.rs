@@ -232,12 +232,6 @@ impl<'a> VisitMut for LowerStatement<'a> {
     fn visit_update_target_mut(&mut self, i: &mut stmt::UpdateTarget) {
         *i = stmt::UpdateTarget::table(self.table.id);
     }
-
-    fn visit_value_mut(&mut self, i: &mut stmt::Value) {
-        // if let stmt::Value::Id(id) = i {
-        //     *i = id.to_primitive();
-        // }
-    }
 }
 
 impl<'a> LowerStatement<'a> {
