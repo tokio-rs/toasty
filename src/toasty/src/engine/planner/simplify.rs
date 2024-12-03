@@ -8,6 +8,7 @@ pub(crate) mod lift_pk_select;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_in_list;
+mod expr_is_null;
 mod expr_record;
 
 // mod expr;
@@ -87,7 +88,7 @@ impl<'a> VisitMut for Simplify<'_> {
                 self.lift_in_subquery(&expr_in_subquery.expr, &expr_in_subquery.query)
             }
             Expr::Record(expr) => self.simplify_expr_record(expr),
-            Expr::IsNull(_) => todo!(),
+            Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
             _ => None,
         };
 

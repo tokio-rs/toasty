@@ -90,7 +90,6 @@ impl<'a> VisitMut for LowerStatement<'a> {
                     let mut lowered =
                         self.model.lowering.model_to_table[primitive.lowering].clone();
                     Substitute(&*i).visit_expr_mut(&mut lowered);
-                    todo!("field={field:#?}; lowered={lowered:#?}");
                     assignments.set(primitive.column, lowered);
                 }
                 _ => {
