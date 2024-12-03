@@ -350,16 +350,12 @@ impl Planner<'_> {
             self.plan_mut_has_one_nullify(has_one, scope);
         }
 
-        todo!("{stmt:#?}");
-
-        /*
-            stmt.target.and(
-                self.relation_pair_scope(has_one.pair, scope.clone())
-                    .body
-                    .into_select()
-                    .filter,
-            );
-        */
+        stmt.target.constrain(
+            self.relation_pair_scope(has_one.pair, scope.clone())
+                .body
+                .into_select()
+                .filter,
+        );
 
         self.plan_insert(stmt);
     }

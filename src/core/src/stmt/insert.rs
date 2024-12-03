@@ -80,6 +80,16 @@ impl InsertTarget {
             _ => todo!(),
         }
     }
+
+    pub fn constrain(&mut self, expr: impl Into<Expr>) {
+        match self {
+            InsertTarget::Scope(query) => query.and(expr),
+            InsertTarget::Model(model_id) => {
+                *self = InsertTarget::Scope(Query::filter(*model_id, expr));
+            }
+            _ => todo!("{self:#?}"),
+        }
+    }
 }
 
 impl From<Query> for InsertTarget {
