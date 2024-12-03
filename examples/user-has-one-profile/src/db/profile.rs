@@ -32,7 +32,7 @@ impl Profile {
 impl Model for Profile {
     const ID: ModelId = ModelId(1);
     type Key = Id<Profile>;
-    fn load(mut record: Record) -> Result<Self, Error> {
+    fn load(mut record: ValueRecord) -> Result<Self, Error> {
         Ok(Profile {
             id: Id::from_untyped(record[0].take().to_id()?),
             user: BelongsTo::load(record[1].take())?,

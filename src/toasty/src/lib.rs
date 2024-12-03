@@ -44,6 +44,6 @@ pub mod codegen_support {
     pub use toasty_core::{
         driver,
         schema::{self, ModelId},
-        stmt::{Record, Value, ValueStream},
+        stmt::{Value, ValueRecord, ValueStream},
     };
 }

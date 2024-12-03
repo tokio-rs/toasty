@@ -7,6 +7,12 @@ pub use delete::Delete;
 mod direction;
 pub use direction::Direction;
 
+mod entry;
+pub use entry::Entry;
+
+mod entry_mut;
+pub use entry_mut::EntryMut;
+
 mod expr;
 pub use expr::Expr;
 
@@ -121,9 +127,6 @@ pub use projection::Projection;
 mod query;
 pub use query::Query;
 
-mod record;
-pub use record::Record;
-
 mod returning;
 pub use returning::Returning;
 
@@ -163,6 +166,9 @@ pub use values::Values;
 
 mod value_enum;
 pub use value_enum::ValueEnum;
+
+mod value_record;
+pub use value_record::ValueRecord;
 
 pub mod visit_mut;
 pub use visit_mut::VisitMut;

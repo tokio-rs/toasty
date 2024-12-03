@@ -46,7 +46,8 @@ impl<'stmt> Exec<'stmt> {
                         }
                     }
 
-                    source_item[action.field.index] = stmt::Record::from_vec(associated).into();
+                    source_item[action.field.index] =
+                        stmt::ValueRecord::from_vec(associated).into();
                 }
             }
             _ => todo!(),

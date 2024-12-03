@@ -34,7 +34,7 @@ impl Package {
 impl Model for Package {
     const ID: ModelId = ModelId(1);
     type Key = (Id<super::user::User>, Id<Package>);
-    fn load(mut record: Record) -> Result<Self, Error> {
+    fn load(mut record: ValueRecord) -> Result<Self, Error> {
         Ok(Package {
             user: BelongsTo::load(record[0].take())?,
             user_id: Id::from_untyped(record[1].take().to_id()?),

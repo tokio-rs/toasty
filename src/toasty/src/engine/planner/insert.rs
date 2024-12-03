@@ -146,7 +146,7 @@ impl Planner<'_> {
                     todo!()
                 };
 
-                let field_expr = &mut expr[field.id.index];
+                let mut field_expr = expr.entry_mut(field.id.index);
 
                 if !field_expr.is_value() || field_expr.is_value_null() {
                     continue;
@@ -156,7 +156,7 @@ impl Planner<'_> {
                 match &rel.foreign_key.fields[..] {
                     [fk_field] => {
                         let e = field_expr.take();
-                        expr[fk_field.source.index] = e;
+                        expr.entry_mut(fk_field.source.index).insert(e);
                     }
                     _ => todo!(),
                 }
@@ -166,7 +166,7 @@ impl Planner<'_> {
         // We have to handle auto fields first because they are often the
         // identifier which may be referenced to handle associations.
         for field in &model.fields {
-            let field_expr = &mut expr[field.id.index];
+            let mut field_expr = expr.entry_mut(field.id.index);
 
             if field_expr.is_value_null() {
                 // If the field is defined to be auto-populated, then populate
@@ -175,7 +175,7 @@ impl Planner<'_> {
                     match auto {
                         Auto::Id => {
                             let id = uuid::Uuid::new_v4().to_string();
-                            *field_expr = stmt::Id::from_string(model.id, id).into();
+                            field_expr.insert(stmt::Id::from_string(model.id, id).into());
                         }
                     }
                 }
@@ -189,7 +189,7 @@ impl Planner<'_> {
                 continue;
             }
 
-            let field_expr = &expr[field.id.index];
+            let field_expr = expr.entry(field.id.index);
 
             if field_expr.is_value_null() {
                 // Relations are handled differently
@@ -208,7 +208,7 @@ impl Planner<'_> {
 
     fn plan_insert_relation_stmts(&mut self, model: &Model, expr: &mut stmt::Expr) {
         for (i, field) in model.fields.iter().enumerate() {
-            if expr[i].is_value_null() {
+            if expr.entry(i).is_value_null() {
                 if !field.nullable && field.ty.is_has_one() {
                     panic!(
                         "Insert missing non-nullable field; model={}; field={}; ty={:#?}; expr={:#?}",
@@ -227,27 +227,29 @@ impl Planner<'_> {
                 assert!(!self.insertions.contains_key(&has_many.target));
 
                 let scope = self.inserted_query_stmt(model, expr);
-                self.plan_mut_has_many_expr(has_many, expr[i].take(), &scope);
+                self.plan_mut_has_many_expr(has_many, expr.entry_mut(i).take(), &scope);
             } else if let Some(has_one) = field.ty.as_has_one() {
                 // For now, we need to keep this separate
                 assert!(!self.insertions.contains_key(&has_one.target));
 
                 let scope = self.inserted_query_stmt(model, expr);
-                self.plan_mut_has_one_expr(has_one, expr[i].take(), &scope, true);
+                self.plan_mut_has_one_expr(has_one, expr.entry_mut(i).take(), &scope, true);
             } else if let Some(belongs_to) = field.ty.as_belongs_to() {
-                if expr[i].is_stmt() {
-                    let expr_stmt = expr[i].take().into_stmt();
+                let mut entry = expr.entry_mut(i);
+
+                if entry.is_statement() {
+                    let expr_stmt = entry.take().into_stmt();
                     let scope = self.inserted_query_stmt(model, expr);
 
                     self.plan_mut_belongs_to_stmt(
                         field,
                         *expr_stmt.stmt,
-                        &mut expr[i],
+                        &mut expr[i], // TODO
                         &scope,
                         true,
                     );
 
-                    match expr[i].take() {
+                    match entry.take() {
                         stmt::Expr::Value(value) => match value {
                             stmt::Value::Null => {}
                             stmt::Value::Record(_) => todo!("composite key"),
@@ -255,7 +257,7 @@ impl Planner<'_> {
                                 let [fk_field] = &belongs_to.foreign_key.fields[..] else {
                                     todo!()
                                 };
-                                expr[fk_field.source.index] = value.into();
+                                expr.entry_mut(fk_field.source.index).insert(value.into());
                             }
                         },
                         e => todo!("expr={:#?}", e),
@@ -271,7 +273,7 @@ impl Planner<'_> {
         let mut args = vec![];
 
         for pk_field in model.primary_key_fields() {
-            let expr = eval::Expr::from(expr[pk_field.id.index].clone());
+            let expr = eval::Expr::from(expr.entry(pk_field.id.index));
             args.push(expr.eval_const());
         }
 
@@ -346,16 +348,16 @@ impl ApplyInsertScope<'_> {
     }
 
     fn apply_eq_const(&mut self, field: FieldId, val: &stmt::Value, set: bool) {
-        let existing = &mut self.expr[field];
+        let mut existing = self.expr.entry_mut(field.index);
 
         if !existing.is_value_null() {
-            if let stmt::Expr::Value(existing) = existing {
+            if let stmt::EntryMut::Value(existing) = existing {
                 assert_eq!(existing, val);
             } else {
                 todo!()
             }
         } else if set {
-            *existing = val.clone().into();
+            existing.insert(val.clone().into());
         } else {
             todo!()
         }

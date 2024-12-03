@@ -36,7 +36,7 @@ impl User {
 impl Model for User {
     const ID: ModelId = ModelId(0);
     type Key = Id<User>;
-    fn load(mut record: Record) -> Result<Self, Error> {
+    fn load(mut record: ValueRecord) -> Result<Self, Error> {
         Ok(User {
             id: Id::from_untyped(record[0].take().to_id()?),
             name: record[1].take().to_string()?,

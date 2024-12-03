@@ -26,7 +26,7 @@ pub enum Value {
     Null,
 
     /// Record value, either borrowed or owned
-    Record(Record),
+    Record(ValueRecord),
 
     /// A list of values of the same type
     List(Vec<Value>),
@@ -50,7 +50,7 @@ impl Value {
     }
 
     pub fn record_from_vec(fields: Vec<Value>) -> Value {
-        Record::from_vec(fields).into()
+        ValueRecord::from_vec(fields).into()
     }
 
     /// Create a `ValueCow` representing the given boolean value
@@ -103,7 +103,7 @@ impl Value {
         }
     }
 
-    pub fn to_record(self) -> Result<Record> {
+    pub fn to_record(self) -> Result<ValueRecord> {
         match self {
             Self::Record(record) => Ok(record),
             _ => anyhow::bail!("canot convert value to record"),
@@ -124,28 +124,28 @@ impl Value {
         }
     }
 
-    pub fn as_record(&self) -> Option<&Record> {
+    pub fn as_record(&self) -> Option<&ValueRecord> {
         match self {
             Self::Record(record) => Some(record),
             _ => None,
         }
     }
 
-    pub fn expect_record(&self) -> &Record {
+    pub fn expect_record(&self) -> &ValueRecord {
         match self {
             Value::Record(record) => record,
             _ => panic!("{self:#?}"),
         }
     }
 
-    pub fn expect_record_mut(&mut self) -> &mut Record {
+    pub fn expect_record_mut(&mut self) -> &mut ValueRecord {
         match self {
             Value::Record(record) => record,
             _ => panic!(),
         }
     }
 
-    pub fn into_record(self) -> Record {
+    pub fn into_record(self) -> ValueRecord {
         match self {
             Value::Record(record) => record,
             _ => panic!(),
@@ -205,8 +205,8 @@ impl From<&i64> for Value {
     }
 }
 
-impl From<Record> for Value {
-    fn from(value: Record) -> Self {
+impl From<ValueRecord> for Value {
+    fn from(value: ValueRecord) -> Self {
         Value::Record(value)
     }
 }

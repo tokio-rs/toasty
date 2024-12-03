@@ -203,6 +203,22 @@ impl Expr {
         mapped
     }
 
+    pub fn entry(&self, index: usize) -> Entry<'_> {
+        match self {
+            Expr::Record(expr) => Entry::from(&expr[index]),
+            Expr::Value(Value::Record(expr)) => Entry::from(&expr[index]),
+            _ => todo!("expr={self:#?}"),
+        }
+    }
+
+    pub fn entry_mut(&mut self, index: usize) -> EntryMut<'_> {
+        match self {
+            Expr::Record(expr) => EntryMut::from(&mut expr[index]),
+            Expr::Value(Value::Record(expr)) => EntryMut::from(&mut expr[index]),
+            _ => todo!("expr={self:#?}"),
+        }
+    }
+
     /// Assume the expression evaluates to a set of records and extend the
     /// evaluation to include the given expression.
     ///

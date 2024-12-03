@@ -20,7 +20,7 @@ impl Value {
         .into()
     }
 
-    pub fn sparse_record(fields: PathFieldSet, record: Record) -> Value {
+    pub fn sparse_record(fields: PathFieldSet, record: ValueRecord) -> Value {
         let mut values = vec![];
 
         for (i, value) in fields.iter().zip(record.fields.into_iter()) {

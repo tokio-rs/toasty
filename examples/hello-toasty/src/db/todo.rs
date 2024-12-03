@@ -34,7 +34,7 @@ impl Todo {
 impl Model for Todo {
     const ID: ModelId = ModelId(1);
     type Key = Id<Todo>;
-    fn load(mut record: Record) -> Result<Self, Error> {
+    fn load(mut record: ValueRecord) -> Result<Self, Error> {
         Ok(Todo {
             id: Id::from_untyped(record[0].take().to_id()?),
             user_id: Id::from_untyped(record[1].take().to_id()?),

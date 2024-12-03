@@ -3,21 +3,21 @@ use super::*;
 use std::ops;
 
 #[derive(Debug, Clone)]
-pub struct Record {
+pub struct ValueRecord {
     pub fields: Vec<Value>,
 }
 
-impl Record {
-    pub fn new() -> Record {
-        Record { fields: vec![] }
+impl ValueRecord {
+    pub fn new() -> ValueRecord {
+        ValueRecord { fields: vec![] }
     }
 
-    pub fn from_vec(fields: Vec<Value>) -> Record {
-        Record { fields }
+    pub fn from_vec(fields: Vec<Value>) -> ValueRecord {
+        ValueRecord { fields }
     }
 }
 
-impl ops::Deref for Record {
+impl ops::Deref for ValueRecord {
     type Target = [Value];
 
     fn deref(&self) -> &Self::Target {
@@ -25,13 +25,13 @@ impl ops::Deref for Record {
     }
 }
 
-impl ops::DerefMut for Record {
+impl ops::DerefMut for ValueRecord {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.fields[..]
     }
 }
 
-impl<'a> IntoIterator for &'a Record {
+impl<'a> IntoIterator for &'a ValueRecord {
     type Item = &'a Value;
     type IntoIter = std::slice::Iter<'a, Value>;
 
@@ -40,7 +40,7 @@ impl<'a> IntoIterator for &'a Record {
     }
 }
 
-impl<'a> IntoIterator for &'a mut Record {
+impl<'a> IntoIterator for &'a mut ValueRecord {
     type Item = &'a mut Value;
     type IntoIter = std::slice::IterMut<'a, Value>;
 
@@ -49,7 +49,7 @@ impl<'a> IntoIterator for &'a mut Record {
     }
 }
 
-impl PartialEq for Record {
+impl PartialEq for ValueRecord {
     fn eq(&self, other: &Self) -> bool {
         **self == **other
     }

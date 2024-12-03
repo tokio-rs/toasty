@@ -24,7 +24,7 @@ impl<M: Model> Key<M> {
                     }
                 }
 
-                stmt::Record::from_vec(f).into()
+                stmt::ValueRecord::from_vec(f).into()
             }
             _ => todo!(),
         };

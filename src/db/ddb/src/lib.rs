@@ -216,13 +216,13 @@ fn ddb_to_val<'stmt>(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value<'stmt
             if value.is_null() {
                 stmt::ValueEnum {
                     variant,
-                    fields: stmt::Record::from_vec(vec![]),
+                    fields: stmt::ValueRecord::from_vec(vec![]),
                 }
                 .into()
             } else {
                 stmt::ValueEnum {
                     variant,
-                    fields: stmt::Record::from_vec(vec![value]),
+                    fields: stmt::ValueRecord::from_vec(vec![value]),
                 }
                 .into()
             }
@@ -261,8 +261,8 @@ fn ddb_key_schema(
 fn item_to_record<'a, 'stmt>(
     item: &HashMap<String, AttributeValue>,
     columns: impl Iterator<Item = &'a schema::Column>,
-) -> Result<stmt::Record<'stmt>> {
-    Ok(stmt::Record::from_vec(
+) -> Result<stmt::ValueRecord<'stmt>> {
+    Ok(stmt::ValueRecord::from_vec(
         columns
             .map(|column| {
                 if let Some(value) = item.get(&column.name) {

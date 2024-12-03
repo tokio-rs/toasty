@@ -128,7 +128,7 @@ impl Driver for Sqlite {
                         items.push(load(row, index));
                     }
 
-                    ret.push(stmt::Record::from_vec(items).into());
+                    ret.push(stmt::ValueRecord::from_vec(items).into());
                 }
                 Ok(None) => break,
                 Err(err) => {

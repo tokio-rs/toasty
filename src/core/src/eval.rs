@@ -34,7 +34,7 @@ pub use input::{const_input, Input};
 mod value;
 
 use crate::{
-    stmt::{self, BinaryOp, Projection, Record, Value},
+    stmt::{self, BinaryOp, Projection, Value, ValueRecord},
     Result,
 };
 
@@ -167,7 +167,7 @@ impl Expr {
     }
 }
 
-impl<'stmt, T: Into<stmt::Expr>> From<T> for Expr {
+impl<T: Into<stmt::Expr>> From<T> for Expr {
     fn from(value: T) -> Self {
         Expr::from_stmt_by_ref(value.into(), &mut convert::Const)
     }

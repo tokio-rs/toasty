@@ -22,14 +22,14 @@ impl ExprRecord {
         }
     }
 
-    pub(crate) fn eval_ref(&self, input: &mut impl Input) -> crate::Result<Record> {
+    pub(crate) fn eval_ref(&self, input: &mut impl Input) -> crate::Result<ValueRecord> {
         let mut applied = vec![];
 
         for expr in &self.fields {
             applied.push(expr.eval_ref(input)?);
         }
 
-        Ok(Record::from_vec(applied))
+        Ok(ValueRecord::from_vec(applied))
     }
 }
 

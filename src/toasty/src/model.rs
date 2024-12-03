@@ -11,5 +11,5 @@ pub trait Model: Sized {
     type Key;
 
     /// Load an instance of the model, populating fields using the given row.
-    fn load(row: stmt::Record) -> Result<Self, Error>;
+    fn load(row: stmt::ValueRecord) -> Result<Self, Error>;
 }

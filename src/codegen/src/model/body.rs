@@ -68,7 +68,7 @@ impl<'a> Generator<'a> {
                 const ID: ModelId = ModelId(#model_id);
                 type Key = #key_ty;
 
-                fn load(mut record: Record) -> Result<Self, Error> {
+                fn load(mut record: ValueRecord) -> Result<Self, Error> {
                     Ok(#struct_name {
                         #struct_load_fields
                     })

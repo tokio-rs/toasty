@@ -151,7 +151,7 @@ pub trait Visit: Sized {
         visit_value(self, i);
     }
 
-    fn visit_value_record(&mut self, i: &Record) {
+    fn visit_value_record(&mut self, i: &ValueRecord) {
         visit_value_record(self, i);
     }
 
@@ -579,7 +579,7 @@ where
     }
 }
 
-pub fn visit_value_record<'stmt, V>(v: &mut V, node: &Record)
+pub fn visit_value_record<'stmt, V>(v: &mut V, node: &ValueRecord)
 where
     V: Visit + ?Sized,
 {
