@@ -571,6 +571,10 @@ where
     if let Some(expr) = &mut node.condition {
         v.visit_expr_mut(expr);
     }
+
+    if let Some(returning) = &mut node.returning {
+        v.visit_returning_mut(returning);
+    }
 }
 
 pub fn visit_stmt_delete_mut<V>(v: &mut V, node: &mut Delete)

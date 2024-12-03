@@ -33,7 +33,6 @@ impl<'a> LowerStatement<'a> {
 
 impl Planner<'_> {
     pub(crate) fn lower_stmt_delete(&self, model: &Model, stmt: &mut stmt::Delete) {
-        println!("stmt={stmt:#?}");
         LowerStatement::from_model(self.schema, model).visit_stmt_delete_mut(stmt);
         self.simplify_stmt_delete(stmt);
     }
@@ -162,16 +161,11 @@ impl<'a> VisitMut for LowerStatement<'a> {
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
-        match i {
-            stmt::Returning::Star => {
-                // Swap returning for an already lowered expression
-                *i = stmt::Returning::Expr(self.model.lowering.table_to_model.clone().into());
-            }
-            stmt::Returning::Expr(returning) => {
-                self.visit_expr_mut(returning);
-            }
-            _ => todo!("stmt={i:#?}"),
+        if let stmt::Returning::Star = *i {
+            *i = stmt::Returning::Expr(self.model.lowering.table_to_model.clone().into());
         }
+
+        stmt::visit_mut::visit_returning_mut(self, i);
     }
 
     fn visit_stmt_delete_mut(&mut self, i: &mut stmt::Delete) {
