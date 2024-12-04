@@ -310,7 +310,7 @@ impl Planner<'_> {
             }
         }
 
-        let returning = eval::Expr::convert_stmt(returning.clone(), ConstReturning).unwrap();
+        let returning = eval::Expr::try_from_stmt(returning.clone(), ConstReturning).unwrap();
 
         let mut rows = vec![];
 
