@@ -77,48 +77,6 @@ pub enum Expr {
 }
 
 impl Expr {
-    pub fn and(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
-        let mut lhs = lhs.into();
-        let rhs = rhs.into();
-
-        match (&mut lhs, rhs) {
-            (Expr::And(lhs_and), Expr::And(rhs_and)) => {
-                lhs_and.operands.extend(rhs_and.operands);
-                lhs
-            }
-            (Expr::And(lhs_and), rhs) => {
-                lhs_and.operands.push(rhs);
-                lhs
-            }
-            (_, Expr::And(mut rhs_and)) => {
-                rhs_and.operands.push(lhs);
-                rhs_and.into()
-            }
-            (_, rhs) => ExprAnd::new(vec![lhs, rhs]).into(),
-        }
-    }
-
-    pub fn or(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
-        let mut lhs = lhs.into();
-        let rhs = rhs.into();
-
-        match (&mut lhs, rhs) {
-            (Expr::Or(lhs_or), Expr::Or(rhs_or)) => {
-                lhs_or.operands.extend(rhs_or.operands);
-                lhs
-            }
-            (Expr::Or(lhs_or), rhs) => {
-                lhs_or.operands.push(rhs);
-                lhs
-            }
-            (_, Expr::Or(mut lhs_or)) => {
-                lhs_or.operands.push(lhs);
-                lhs_or.into()
-            }
-            (_, rhs) => ExprOr::new(vec![lhs, rhs]).into(),
-        }
-    }
-
     pub fn null() -> Expr {
         Expr::Value(Value::Null)
     }
@@ -126,14 +84,6 @@ impl Expr {
     /// Is a value that evaluates to null
     pub fn is_value_null(&self) -> bool {
         matches!(self, Expr::Value(Value::Null))
-    }
-
-    pub fn in_subquery(lhs: impl Into<Expr>, rhs: impl Into<Query>) -> Expr {
-        ExprInSubquery {
-            expr: Box::new(lhs.into()),
-            query: Box::new(rhs.into()),
-        }
-        .into()
     }
 
     pub fn list<T>(items: impl IntoIterator<Item = T>) -> Expr
@@ -203,6 +153,7 @@ impl Expr {
         mapped
     }
 
+    #[track_caller]
     pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
         let mut ret = Entry::Expr(self);
 
@@ -220,6 +171,7 @@ impl Expr {
         ret
     }
 
+    #[track_caller]
     pub fn entry_mut(&mut self, path: impl EntryPath) -> EntryMut<'_> {
         let mut ret = EntryMut::Expr(self);
 
@@ -258,6 +210,11 @@ impl Expr {
 
     pub fn take(&mut self) -> Expr {
         std::mem::replace(self, Expr::Value(Value::Null))
+    }
+
+    /// Compute the type of an expression
+    pub fn ty(&self, schema: &Schema) -> Type {
+        todo!()
     }
 
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {

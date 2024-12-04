@@ -4,8 +4,8 @@ impl DynamoDB {
     pub(crate) async fn exec_get_by_key<'stmt>(
         &self,
         schema: &schema::Schema,
-        op: operation::GetByKey<'stmt>,
-    ) -> Result<stmt::ValueStream<'stmt>> {
+        op: operation::GetByKey,
+    ) -> Result<stmt::ValueStream> {
         /*
         let table = schema.table(op.table);
 

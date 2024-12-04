@@ -1,11 +1,11 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_update_by_key<'a>(
+    pub(crate) async fn exec_update_by_key(
         &self,
         schema: &schema::Schema,
-        op: operation::UpdateByKey<'a>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        op: operation::UpdateByKey,
+    ) -> Result<stmt::ValueStream> {
         /*
         let table = schema.table(op.table);
 

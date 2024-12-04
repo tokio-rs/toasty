@@ -29,6 +29,13 @@ impl<'a> Entry<'a> {
         )
     }
 
+    pub fn as_value(&self) -> &Value {
+        match *self {
+            Entry::Expr(Expr::Value(value)) | Entry::Value(value) => value,
+            _ => todo!(),
+        }
+    }
+
     pub fn to_value(&self) -> Value {
         match *self {
             Entry::Expr(Expr::Value(value)) | Entry::Value(value) => value.clone(),

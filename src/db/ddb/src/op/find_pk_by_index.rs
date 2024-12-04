@@ -1,11 +1,11 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_find_pk_by_index<'stmt>(
+    pub(crate) async fn exec_find_pk_by_index(
         &self,
         schema: &schema::Schema,
-        op: operation::FindPkByIndex<'_>,
-    ) -> Result<stmt::ValueStream<'stmt>> {
+        op: operation::FindPkByIndex,
+    ) -> Result<stmt::ValueStream> {
         let table = schema.table(op.table);
         let index = schema.index(op.index);
 

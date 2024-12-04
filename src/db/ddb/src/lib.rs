@@ -72,9 +72,8 @@ impl Driver for DynamoDB {
         Ok(())
     }
 
-    async fn exec<'stmt>(&self, schema: &Schema, op: Operation<'stmt>) -> Result<Response<'stmt>> {
-        // self.exec2(schema, op).await
-        todo!()
+    async fn exec(&self, schema: &Schema, op: Operation) -> Result<Response> {
+        self.exec2(schema, op).await
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
@@ -87,28 +86,24 @@ impl Driver for DynamoDB {
 }
 
 impl DynamoDB {
-    async fn exec2<'stmt>(
-        &self,
-        schema: &Schema,
-        op: Operation<'stmt>,
-    ) -> Result<stmt::ValueStream<'stmt>> {
-        /*
+    async fn exec2(&self, schema: &Schema, op: Operation) -> Result<Response> {
         use Operation::*;
 
         match op {
+            /*
             Insert(op) => self.exec_insert(schema, op.into_insert()).await,
             GetByKey(op) => self.exec_get_by_key(schema, op).await,
             QueryPk(op) => self.exec_query_pk(schema, op).await,
             DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
             UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
             FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
+            */
             QuerySql(op) => match op.stmt {
-                sql::Statement::Insert(op) => self.exec_insert(schema, op).await,
+                stmt::Statement::Insert(op) => self.exec_insert(schema, op).await,
                 _ => todo!("op={:#?}", op),
             },
+            _ => todo!("op={op:#?}"),
         }
-        */
-        todo!()
     }
 
     fn table_name(&self, table: &schema::Table) -> String {
@@ -141,7 +136,7 @@ fn ddb_ty(ty: &stmt::Type) -> ScalarAttributeType {
     }
 }
 
-fn ddb_key(table: &schema::Table, key: &stmt::Value<'_>) -> HashMap<String, AttributeValue> {
+fn ddb_key(table: &schema::Table, key: &stmt::Value) -> HashMap<String, AttributeValue> {
     let mut ret = HashMap::new();
 
     for (index, column) in table.primary_key_columns().enumerate() {
@@ -165,7 +160,7 @@ enum V {
     Id(usize, String),
 }
 
-fn ddb_val(val: &stmt::Value<'_>) -> AttributeValue {
+fn ddb_val(val: &stmt::Value) -> AttributeValue {
     match val {
         stmt::Value::Bool(val) => AttributeValue::Bool(*val),
         stmt::Value::String(val) => AttributeValue::S(val.to_string()),
@@ -190,7 +185,7 @@ fn ddb_val(val: &stmt::Value<'_>) -> AttributeValue {
     }
 }
 
-fn ddb_to_val<'stmt>(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value<'stmt> {
+fn ddb_to_val<'stmt>(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
     use stmt::Type;
     use AttributeValue::*;
 
@@ -261,7 +256,7 @@ fn ddb_key_schema(
 fn item_to_record<'a, 'stmt>(
     item: &HashMap<String, AttributeValue>,
     columns: impl Iterator<Item = &'a schema::Column>,
-) -> Result<stmt::ValueRecord<'stmt>> {
+) -> Result<stmt::ValueRecord> {
     Ok(stmt::ValueRecord::from_vec(
         columns
             .map(|column| {
@@ -279,7 +274,7 @@ fn ddb_expression<'a>(
     schema: &'a Schema,
     attrs: &mut ExprAttrs,
     primary: bool,
-    expr: &stmt::Expr<'_>,
+    expr: &stmt::Expr,
 ) -> String {
     /*
     match expr {
@@ -353,7 +348,7 @@ impl ExprAttrs {
         }
     }
 
-    fn value(&mut self, val: &stmt::Value<'_>) -> String {
+    fn value(&mut self, val: &stmt::Value) -> String {
         self.ddb_value(ddb_val(val))
     }
 

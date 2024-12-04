@@ -251,7 +251,7 @@ impl<'a> FindByBuilder<'a> {
         let filter = if exprs.len() == 1 {
             exprs.pop().unwrap()
         } else {
-            stmt::ExprAnd::new(exprs).into()
+            stmt::ExprAnd { operands: exprs }.into()
         };
 
         stmt::Query::filter(self.model.id, filter)

@@ -31,10 +31,13 @@ impl Exec<'_> {
 
         // TODO: don't clone
         let project = output.project.clone();
+        let stmt = action.stmt.clone();
 
         let res = ValueStream::from_stream(async_stream::try_stream! {
+            println!("stmt={:#?}", stmt);
             for await value in rows {
                 let value = value?;
+                println!("{value:#?}");
                 let record = project.eval(&[value])?;
                 yield record.into();
             }

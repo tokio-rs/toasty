@@ -325,7 +325,7 @@ impl Planner<'_> {
         // Returning does nothing in this context.
         stmt.returning = None;
 
-        assert_eq!(stmt.target.as_model_id(), has_many.target);
+        assert_eq!(stmt.target.as_model(), has_many.target);
 
         stmt.target = self
             .relation_pair_scope(has_many.pair, scope.clone())
@@ -363,7 +363,7 @@ impl Planner<'_> {
     /// Translate a source model scope to a target model scope for a has_one
     /// relation.
     fn relation_pair_scope(&self, pair: FieldId, scope: stmt::Query) -> stmt::Query {
-        stmt::Query::filter(pair.model, stmt::ExprInSubquery::new(pair, scope))
+        stmt::Query::filter(pair.model, stmt::Expr::in_subquery(pair, scope))
     }
 
     fn relation_step(&mut self, field: &Field, f: impl FnOnce(&mut Planner)) {

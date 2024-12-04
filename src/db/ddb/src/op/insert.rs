@@ -1,13 +1,13 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_insert<'stmt>(
+    pub(crate) async fn exec_insert(
         &self,
         schema: &schema::Schema,
-        insert: stmt::Insert<'stmt>,
-    ) -> Result<stmt::ValueStream<'stmt>> {
-        /*
-        let table = &schema.table(insert.table);
+        insert: stmt::Insert,
+    ) -> Result<Response> {
+        let insert_table = insert.target.as_table();
+        let table = &schema.table(insert_table.table);
 
         let unique_indices = table
             .indices
@@ -17,7 +17,7 @@ impl DynamoDB {
                     // Don't update the index if the value is not included.
                     index.columns.iter().all(|index_column| {
                         let column = schema.column(index_column.column);
-                        insert
+                        insert_table
                             .columns
                             .iter()
                             .any(|column_id| *column_id == column.id)
@@ -32,26 +32,22 @@ impl DynamoDB {
         let mut insert_items = vec![];
         let mut ret = vec![];
 
-        let source = insert.source.into_values();
+        let source = insert.source.body.into_values();
 
         for row in source.rows {
             let mut values = vec![];
             let mut items = HashMap::new();
 
-            for (i, column_id) in insert.columns.iter().enumerate() {
+            for (i, column_id) in insert_table.columns.iter().enumerate() {
                 let column = schema.column(*column_id);
+                let entry = row.entry(i);
+                let value = entry.as_value();
 
-                if let Some(expr) = row.get(i) {
-                    let val = expr.as_value();
-
-                    if !val.is_null() {
-                        items.insert(column.name.clone(), ddb_val(val));
-                    }
-
-                    values.push(val.clone());
+                if !value.is_null() {
+                    items.insert(column.name.clone(), ddb_val(value));
                 }
             }
-            ret.push(stmt::Record::from_vec(values).into());
+            ret.push(stmt::ValueRecord::from_vec(values).into());
             insert_items.push(items);
         }
 
@@ -163,8 +159,8 @@ impl DynamoDB {
             _ => todo!(),
         }
 
-        Ok(stmt::ValueStream::from_vec(ret))
-        */
-        todo!()
+        Ok(Response::from_value_stream(stmt::ValueStream::from_vec(
+            ret,
+        )))
     }
 }

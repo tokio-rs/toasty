@@ -6,16 +6,13 @@ pub struct ExprInSubquery {
     pub query: Box<Query>,
 }
 
-impl ExprInSubquery {
-    pub fn new<A, B>(expr: A, query: B) -> ExprInSubquery
-    where
-        A: Into<Expr>,
-        B: Into<Query>,
-    {
+impl Expr {
+    pub fn in_subquery(lhs: impl Into<Expr>, rhs: impl Into<Query>) -> Expr {
         ExprInSubquery {
-            expr: Box::new(expr.into()),
-            query: Box::new(query.into()),
+            expr: Box::new(lhs.into()),
+            query: Box::new(rhs.into()),
         }
+        .into()
     }
 }
 

@@ -1,11 +1,11 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_delete_by_key<'a>(
+    pub(crate) async fn exec_delete_by_key(
         &self,
         schema: &schema::Schema,
-        op: operation::DeleteByKey<'_>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        op: operation::DeleteByKey,
+    ) -> Result<stmt::ValueStream> {
         use aws_sdk_dynamodb::operation::delete_item::DeleteItemError;
 
         let table = schema.table(op.table);

@@ -13,7 +13,7 @@ impl Planner<'_> {
     pub(super) fn plan_insert(&mut self, mut stmt: stmt::Insert) -> Option<plan::VarId> {
         self.simplify_stmt_insert(&mut stmt);
 
-        let model = self.model(stmt.target.as_model_id());
+        let model = self.model(stmt.target.as_model());
 
         if let stmt::ExprSet::Values(values) = &*stmt.source.body {
             assert!(!values.is_empty(), "stmt={stmt:#?}");
@@ -33,10 +33,12 @@ impl Planner<'_> {
 
         // First, lower the returning part of the statement and get any
         // necessary in-memory projection.
-        let project = stmt
-            .returning
-            .as_mut()
-            .map(|returning| self.partition_returning(returning));
+        let insert_output = stmt.returning.as_mut().map(|returning| {
+            let project = self.partition_returning(returning);
+            let ty = returning.as_expr().ty(self.schema);
+            todo!("ty={ty:#?}; {returning:#?}");
+            (ty, project)
+        });
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -65,9 +67,13 @@ impl Planner<'_> {
                     },
                 };
 
-                if let Some(project) = project {
+                if let Some((arg_ty, project)) = insert_output {
                     let var = self.var_table.register_var();
-                    plan.output = Some(plan::InsertOutput { var, project });
+                    plan.output = Some(plan::InsertOutput {
+                        var,
+                        arg_ty,
+                        project,
+                    });
                     output_var = Some(var);
                 }
 

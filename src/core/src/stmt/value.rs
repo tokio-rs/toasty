@@ -152,6 +152,20 @@ impl Value {
         }
     }
 
+    #[track_caller]
+    pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
+        let mut ret = Entry::Value(self);
+
+        for step in path.step_iter() {
+            ret = match ret {
+                Entry::Value(Value::Record(record)) => Entry::Value(&record[step.into_usize()]),
+                _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
+            }
+        }
+
+        ret
+    }
+
     pub fn take(&mut self) -> Value {
         std::mem::take(self)
     }

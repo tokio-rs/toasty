@@ -1,11 +1,11 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_query_pk<'stmt>(
+    pub(crate) async fn exec_query_pk(
         &self,
         schema: &schema::Schema,
-        op: operation::QueryPk<'stmt>,
-    ) -> Result<stmt::ValueStream<'stmt>> {
+        op: operation::QueryPk,
+    ) -> Result<stmt::ValueStream> {
         let table = schema.table(op.table);
 
         let mut expr_attrs = ExprAttrs::default();

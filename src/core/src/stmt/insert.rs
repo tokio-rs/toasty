@@ -12,29 +12,6 @@ pub struct Insert {
     pub returning: Option<Returning>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum InsertTarget {
-    /// Inserting into a scope implies that the inserted value should be
-    /// included by the query after insertion. This could be a combination of
-    /// setting default field values or validating existing ones.
-    Scope(Query),
-
-    /// Insert a model
-    Model(ModelId),
-
-    /// Insert into a table
-    Table(InsertTable),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct InsertTable {
-    /// Table identifier to insert into
-    pub table: TableId,
-
-    /// Columns to insert into
-    pub columns: Vec<ColumnId>,
-}
-
 impl Insert {
     pub fn merge(&mut self, other: Insert) {
         if self.target != other.target {
@@ -69,43 +46,5 @@ impl Node for Insert {
 
     fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
         visit.visit_stmt_insert_mut(self);
-    }
-}
-
-impl InsertTarget {
-    pub fn as_model_id(&self) -> ModelId {
-        match self {
-            InsertTarget::Scope(query) => query.body.as_select().source.as_model_id(),
-            InsertTarget::Model(model_id) => *model_id,
-            _ => todo!(),
-        }
-    }
-
-    pub fn constrain(&mut self, expr: impl Into<Expr>) {
-        match self {
-            InsertTarget::Scope(query) => query.and(expr),
-            InsertTarget::Model(model_id) => {
-                *self = InsertTarget::Scope(Query::filter(*model_id, expr));
-            }
-            _ => todo!("{self:#?}"),
-        }
-    }
-}
-
-impl From<Query> for InsertTarget {
-    fn from(value: Query) -> Self {
-        InsertTarget::Scope(value)
-    }
-}
-
-impl From<InsertTable> for InsertTarget {
-    fn from(value: InsertTable) -> Self {
-        InsertTarget::Table(value)
-    }
-}
-
-impl From<&InsertTable> for TableId {
-    fn from(value: &InsertTable) -> Self {
-        value.table
     }
 }

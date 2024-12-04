@@ -135,7 +135,7 @@ impl Expr {
                     Ok(input.resolve_arg(expr_arg, &expr_project.projection))
                 } else {
                     let base = expr_project.base.eval_ref(input)?;
-                    Ok(expr_project.projection.resolve_value(&base).clone())
+                    Ok(base.entry(&expr_project.projection).to_value())
                 }
             }
             Expr::Record(expr_record) => Ok(expr_record.eval_ref(input)?.into()),

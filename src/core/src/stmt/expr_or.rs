@@ -7,27 +7,29 @@ pub struct ExprOr {
     pub operands: Vec<Expr>,
 }
 
-impl ExprOr {
-    pub fn new(operands: Vec<Expr>) -> ExprOr {
-        ExprOr { operands }
-    }
+impl Expr {
+    pub fn or(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
+        let mut lhs = lhs.into();
+        let rhs = rhs.into();
 
-    pub fn new_binary<A, B>(lhs: A, rhs: B) -> ExprOr
-    where
-        A: Into<Expr>,
-        B: Into<Expr>,
-    {
-        ExprOr {
-            operands: vec![lhs.into(), rhs.into()],
+        match (&mut lhs, rhs) {
+            (Expr::Or(lhs_or), Expr::Or(rhs_or)) => {
+                lhs_or.operands.extend(rhs_or.operands);
+                lhs
+            }
+            (Expr::Or(lhs_or), rhs) => {
+                lhs_or.operands.push(rhs);
+                lhs
+            }
+            (_, Expr::Or(mut lhs_or)) => {
+                lhs_or.operands.push(lhs);
+                lhs_or.into()
+            }
+            (_, rhs) => ExprOr {
+                operands: vec![lhs, rhs],
+            }
+            .into(),
         }
-    }
-
-    pub fn extend(&mut self, rhs: ExprOr) {
-        self.operands.extend(rhs.operands);
-    }
-
-    pub fn push(&mut self, expr: Expr) {
-        self.operands.push(expr);
     }
 }
 

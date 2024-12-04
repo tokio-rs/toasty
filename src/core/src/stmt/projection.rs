@@ -70,6 +70,7 @@ impl Projection {
         self.steps.resolve_field(schema, expr_self)
     }
 
+    /*
     pub fn resolve_value<'a>(&self, expr_self: &'a Value) -> &'a Value {
         let mut ret = expr_self;
 
@@ -93,6 +94,7 @@ impl Projection {
 
         ret
     }
+    */
 
     pub fn resolves_to(&self, field: impl Into<PathStep>) -> bool {
         let field = field.into();

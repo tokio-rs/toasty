@@ -45,6 +45,14 @@ impl ExprSet {
         }
     }
 
+    #[track_caller]
+    pub fn into_values(self) -> Values {
+        match self {
+            ExprSet::Values(expr) => expr,
+            _ => todo!(),
+        }
+    }
+
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
         match self {
             ExprSet::Select(expr) => expr.substitute_ref(input),
