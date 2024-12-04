@@ -1,5 +1,7 @@
 use super::*;
 
+use stmt::{Projection, Value};
+
 pub trait Input {
     fn resolve_arg(&mut self, expr_arg: &ExprArg, projection: &Projection) -> Value;
 }

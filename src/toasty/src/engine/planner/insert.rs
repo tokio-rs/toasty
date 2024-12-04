@@ -36,7 +36,6 @@ impl Planner<'_> {
         let insert_output = stmt.returning.as_mut().map(|returning| {
             let project = self.partition_returning(returning);
             let ty = returning.as_expr().ty(self.schema);
-            todo!("ty={ty:#?}; {returning:#?}");
             (ty, project)
         });
 
@@ -282,8 +281,8 @@ impl Planner<'_> {
         let mut args = vec![];
 
         for pk_field in model.primary_key_fields() {
-            let expr = eval::Expr::from(expr.entry(pk_field.id.index));
-            args.push(expr.eval_const());
+            // let expr = eval::Expr::from(expr.entry(pk_field.id.index).to_value());
+            args.push(expr.entry(pk_field.id.index).to_value());
         }
 
         model.find_by_id(self.schema, &args)
@@ -306,8 +305,8 @@ impl Planner<'_> {
         struct ConstReturning;
 
         impl eval::Convert for ConstReturning {
-            fn convert_expr_field(&mut self, field: stmt::ExprField) -> Option<eval::Expr> {
-                Some(eval::Expr::arg_project(0, [field.field.index]))
+            fn convert_expr_field(&mut self, field: stmt::ExprField) -> eval::Expr {
+                eval::Expr::arg_project(0, [field.field.index])
             }
         }
 

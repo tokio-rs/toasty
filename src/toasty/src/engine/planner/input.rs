@@ -53,7 +53,7 @@ impl Partitioner<'_> {
                 // map, assuming that this is the top-level projection.
                 Partition::Eval {
                     source,
-                    project: Some(eval::Expr::from(expr.map.take())),
+                    project: eval::Expr::convert_stmt(expr.map.take(), ()),
                 }
             }
             _ => todo!("{expr:#?}"),

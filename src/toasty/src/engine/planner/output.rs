@@ -48,7 +48,7 @@ impl Planner<'_> {
         for field in stmt_record.fields.drain(..) {
             if let stmt::Expr::Value(value) = field {
                 identity = false;
-                eval_fields.push(value.into());
+                eval_fields.push(eval::Expr::Value(value));
             } else {
                 match partition_returning(&field, &mut stmt_fields) {
                     Stmt => {

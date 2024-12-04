@@ -1,5 +1,7 @@
 use super::*;
 
+use stmt::ValueRecord;
+
 #[derive(Clone, Debug)]
 pub struct ExprRecord {
     pub fields: Vec<Expr>,
