@@ -157,13 +157,13 @@ impl Value {
     }
 }
 
-impl<'stmt> Default for Value {
+impl Default for Value {
     fn default() -> Value {
         Value::Null
     }
 }
 
-impl<'stmt> AsRef<Value> for Value {
+impl AsRef<Value> for Value {
     fn as_ref(&self) -> &Value {
         self
     }

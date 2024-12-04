@@ -160,7 +160,7 @@ pub trait Visit: Sized {
     }
 }
 
-impl<'stmt, V: Visit> Visit for &mut V {
+impl<V: Visit> Visit for &mut V {
     fn visit_expr(&mut self, i: &Expr) {
         Visit::visit_expr(&mut **self, i);
     }
@@ -238,7 +238,7 @@ impl<'stmt, V: Visit> Visit for &mut V {
     }
 }
 
-pub fn visit_assignments<'stmt, V>(v: &mut V, node: &Assignments)
+pub fn visit_assignments<V>(v: &mut V, node: &Assignments)
 where
     V: Visit + ?Sized,
 {
@@ -249,7 +249,7 @@ where
     }
 }
 
-pub fn visit_expr<'stmt, V>(v: &mut V, node: &Expr)
+pub fn visit_expr<V>(v: &mut V, node: &Expr)
 where
     V: Visit + ?Sized,
 {
@@ -284,7 +284,7 @@ where
     }
 }
 
-pub fn visit_expr_and<'stmt, V>(v: &mut V, node: &ExprAnd)
+pub fn visit_expr_and<V>(v: &mut V, node: &ExprAnd)
 where
     V: Visit + ?Sized,
 {
@@ -293,13 +293,13 @@ where
     }
 }
 
-pub fn visit_expr_arg<'stmt, V>(v: &mut V, node: &ExprArg)
+pub fn visit_expr_arg<V>(v: &mut V, node: &ExprArg)
 where
     V: Visit + ?Sized,
 {
 }
 
-pub fn visit_expr_begins_with<'stmt, V>(v: &mut V, node: &ExprBeginsWith)
+pub fn visit_expr_begins_with<V>(v: &mut V, node: &ExprBeginsWith)
 where
     V: Visit + ?Sized,
 {
@@ -307,7 +307,7 @@ where
     v.visit_expr(&node.pattern);
 }
 
-pub fn visit_expr_binary_op<'stmt, V>(v: &mut V, node: &ExprBinaryOp)
+pub fn visit_expr_binary_op<V>(v: &mut V, node: &ExprBinaryOp)
 where
     V: Visit + ?Sized,
 {
@@ -315,20 +315,20 @@ where
     v.visit_expr(&node.rhs);
 }
 
-pub fn visit_expr_cast<'stmt, V>(v: &mut V, node: &ExprCast)
+pub fn visit_expr_cast<V>(v: &mut V, node: &ExprCast)
 where
     V: Visit + ?Sized,
 {
     v.visit_expr(&node.expr);
 }
 
-pub fn visit_expr_column<'stmt, V>(v: &mut V, node: &ExprColumn)
+pub fn visit_expr_column<V>(v: &mut V, node: &ExprColumn)
 where
     V: Visit + ?Sized,
 {
 }
 
-pub fn visit_expr_concat<'stmt, V>(v: &mut V, node: &ExprConcat)
+pub fn visit_expr_concat<V>(v: &mut V, node: &ExprConcat)
 where
     V: Visit + ?Sized,
 {
@@ -337,20 +337,20 @@ where
     }
 }
 
-pub fn visit_expr_enum<'stmt, V>(v: &mut V, node: &ExprEnum)
+pub fn visit_expr_enum<V>(v: &mut V, node: &ExprEnum)
 where
     V: Visit + ?Sized,
 {
     v.visit_expr_record(&node.fields);
 }
 
-pub fn visit_expr_field<'stmt, V>(_v: &mut V, _node: &ExprField)
+pub fn visit_expr_field<V>(_v: &mut V, _node: &ExprField)
 where
     V: Visit + ?Sized,
 {
 }
 
-pub fn visit_expr_in_list<'stmt, V>(v: &mut V, node: &ExprInList)
+pub fn visit_expr_in_list<V>(v: &mut V, node: &ExprInList)
 where
     V: Visit + ?Sized,
 {
@@ -358,7 +358,7 @@ where
     v.visit_expr(&node.list);
 }
 
-pub fn visit_expr_in_subquery<'stmt, V>(v: &mut V, node: &ExprInSubquery)
+pub fn visit_expr_in_subquery<V>(v: &mut V, node: &ExprInSubquery)
 where
     V: Visit + ?Sized,
 {
@@ -366,7 +366,7 @@ where
     v.visit_stmt_query(&node.query);
 }
 
-pub fn visit_expr_like<'stmt, V>(v: &mut V, node: &ExprLike)
+pub fn visit_expr_like<V>(v: &mut V, node: &ExprLike)
 where
     V: Visit + ?Sized,
 {
@@ -374,22 +374,13 @@ where
     v.visit_expr(&node.pattern);
 }
 
-pub fn visit_expr_key<'stmt, V>(v: &mut V, node: &ExprKey)
+pub fn visit_expr_key<V>(v: &mut V, node: &ExprKey)
 where
     V: Visit + ?Sized,
 {
 }
 
-pub fn visit_expr_or<'stmt, V>(v: &mut V, node: &ExprOr)
-where
-    V: Visit + ?Sized,
-{
-    for expr in node {
-        v.visit_expr(expr);
-    }
-}
-
-pub fn visit_expr_list<'stmt, V>(v: &mut V, node: &Vec<Expr>)
+pub fn visit_expr_or<V>(v: &mut V, node: &ExprOr)
 where
     V: Visit + ?Sized,
 {
@@ -398,7 +389,16 @@ where
     }
 }
 
-pub fn visit_expr_record<'stmt, V>(v: &mut V, node: &ExprRecord)
+pub fn visit_expr_list<V>(v: &mut V, node: &Vec<Expr>)
+where
+    V: Visit + ?Sized,
+{
+    for expr in node {
+        v.visit_expr(expr);
+    }
+}
+
+pub fn visit_expr_record<V>(v: &mut V, node: &ExprRecord)
 where
     V: Visit + ?Sized,
 {
@@ -407,7 +407,7 @@ where
     }
 }
 
-pub fn visit_expr_set<'stmt, V>(v: &mut V, node: &ExprSet)
+pub fn visit_expr_set<V>(v: &mut V, node: &ExprSet)
 where
     V: Visit + ?Sized,
 {
@@ -418,7 +418,7 @@ where
     }
 }
 
-pub fn visit_expr_set_op<'stmt, V>(v: &mut V, node: &ExprSetOp)
+pub fn visit_expr_set_op<V>(v: &mut V, node: &ExprSetOp)
 where
     V: Visit + ?Sized,
 {
@@ -427,20 +427,20 @@ where
     }
 }
 
-pub fn visit_expr_stmt<'stmt, V>(v: &mut V, node: &ExprStmt)
+pub fn visit_expr_stmt<V>(v: &mut V, node: &ExprStmt)
 where
     V: Visit + ?Sized,
 {
     v.visit_stmt(&node.stmt);
 }
 
-pub fn visit_expr_ty<'stmt, V>(v: &mut V, node: &ExprTy)
+pub fn visit_expr_ty<V>(v: &mut V, node: &ExprTy)
 where
     V: Visit + ?Sized,
 {
 }
 
-pub fn visit_expr_pattern<'stmt, V>(v: &mut V, node: &ExprPattern)
+pub fn visit_expr_pattern<V>(v: &mut V, node: &ExprPattern)
 where
     V: Visit + ?Sized,
 {
@@ -450,7 +450,7 @@ where
     }
 }
 
-pub fn visit_expr_project<'stmt, V>(v: &mut V, node: &ExprProject)
+pub fn visit_expr_project<V>(v: &mut V, node: &ExprProject)
 where
     V: Visit + ?Sized,
 {
@@ -458,13 +458,13 @@ where
     v.visit_projection(&node.projection);
 }
 
-pub fn visit_projection<'stmt, V>(v: &mut V, node: &Projection)
+pub fn visit_projection<V>(v: &mut V, node: &Projection)
 where
     V: Visit + ?Sized,
 {
 }
 
-pub fn visit_returning<'stmt, V>(v: &mut V, node: &Returning)
+pub fn visit_returning<V>(v: &mut V, node: &Returning)
 where
     V: Visit + ?Sized,
 {
@@ -474,13 +474,13 @@ where
     }
 }
 
-pub fn visit_source<'stmt, V>(_v: &mut V, _node: &Source)
+pub fn visit_source<V>(_v: &mut V, _node: &Source)
 where
     V: Visit + ?Sized,
 {
 }
 
-pub fn visit_stmt<'stmt, V>(v: &mut V, node: &Statement)
+pub fn visit_stmt<V>(v: &mut V, node: &Statement)
 where
     V: Visit + ?Sized,
 {
@@ -494,7 +494,7 @@ where
     }
 }
 
-pub fn visit_stmt_delete<'stmt, V>(v: &mut V, node: &Delete)
+pub fn visit_stmt_delete<V>(v: &mut V, node: &Delete)
 where
     V: Visit + ?Sized,
 {
@@ -506,7 +506,7 @@ where
     }
 }
 
-pub fn visit_stmt_link<'stmt, V>(v: &mut V, node: &Link)
+pub fn visit_stmt_link<V>(v: &mut V, node: &Link)
 where
     V: Visit + ?Sized,
 {
@@ -514,7 +514,7 @@ where
     v.visit_stmt_query(&node.target);
 }
 
-pub fn visit_stmt_insert<'stmt, V>(v: &mut V, node: &Insert)
+pub fn visit_stmt_insert<V>(v: &mut V, node: &Insert)
 where
     V: Visit + ?Sized,
 {
@@ -528,14 +528,14 @@ where
     }
 }
 
-pub fn visit_stmt_query<'stmt, V>(v: &mut V, node: &Query)
+pub fn visit_stmt_query<V>(v: &mut V, node: &Query)
 where
     V: Visit + ?Sized,
 {
     v.visit_expr_set(&node.body);
 }
 
-pub fn visit_stmt_select<'stmt, V>(v: &mut V, node: &Select)
+pub fn visit_stmt_select<V>(v: &mut V, node: &Select)
 where
     V: Visit + ?Sized,
 {
@@ -544,7 +544,7 @@ where
     v.visit_returning(&node.returning);
 }
 
-pub fn visit_stmt_unlink<'stmt, V>(v: &mut V, node: &Unlink)
+pub fn visit_stmt_unlink<V>(v: &mut V, node: &Unlink)
 where
     V: Visit + ?Sized,
 {
@@ -552,7 +552,7 @@ where
     v.visit_stmt_query(&node.target);
 }
 
-pub fn visit_stmt_update<'stmt, V>(v: &mut V, node: &Update)
+pub fn visit_stmt_update<V>(v: &mut V, node: &Update)
 where
     V: Visit + ?Sized,
 {
@@ -567,7 +567,7 @@ where
     }
 }
 
-pub fn visit_value<'stmt, V>(v: &mut V, node: &Value)
+pub fn visit_value<V>(v: &mut V, node: &Value)
 where
     V: Visit + ?Sized,
 {
@@ -577,7 +577,7 @@ where
     }
 }
 
-pub fn visit_values<'stmt, V>(v: &mut V, node: &Values)
+pub fn visit_values<V>(v: &mut V, node: &Values)
 where
     V: Visit + ?Sized,
 {
@@ -586,7 +586,7 @@ where
     }
 }
 
-pub fn visit_value_record<'stmt, V>(v: &mut V, node: &ValueRecord)
+pub fn visit_value_record<V>(v: &mut V, node: &ValueRecord)
 where
     V: Visit + ?Sized,
 {
@@ -595,7 +595,7 @@ where
     }
 }
 
-pub fn for_each_expr<'stmt, F>(node: &impl Node, f: F)
+pub fn for_each_expr<F>(node: &impl Node, f: F)
 where
     F: FnMut(&Expr),
 {
@@ -603,7 +603,7 @@ where
         f: F,
     }
 
-    impl<'stmt, F> Visit for ForEach<F>
+    impl<F> Visit for ForEach<F>
     where
         F: FnMut(&Expr),
     {

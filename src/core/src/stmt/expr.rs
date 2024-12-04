@@ -192,7 +192,7 @@ impl Expr {
     pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Expr {
         struct MapProjections<T>(T);
 
-        impl<'stmt, T: FnMut(&Projection) -> Projection> VisitMut for MapProjections<T> {
+        impl<T: FnMut(&Projection) -> Projection> VisitMut for MapProjections<T> {
             fn visit_projection_mut(&mut self, i: &mut Projection) {
                 *i = self.0(i);
             }
@@ -335,7 +335,7 @@ impl From<Value> for Expr {
     }
 }
 
-impl<'stmt, E1, E2> From<(E1, E2)> for Expr
+impl<E1, E2> From<(E1, E2)> for Expr
 where
     E1: Into<Expr>,
     E2: Into<Expr>,

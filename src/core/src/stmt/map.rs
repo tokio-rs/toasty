@@ -140,7 +140,7 @@ pub trait Map: Sized {
     }
 }
 
-pub fn map_expr<'stmt, V>(v: &mut V, node: &Expr) -> Expr
+pub fn map_expr<V>(v: &mut V, node: &Expr) -> Expr
 where
     V: Map + ?Sized,
 {
@@ -166,7 +166,7 @@ where
     }
 }
 
-pub fn map_expr_and<'stmt, V>(v: &mut V, node: &ExprAnd) -> ExprAnd
+pub fn map_expr_and<V>(v: &mut V, node: &ExprAnd) -> ExprAnd
 where
     V: Map + ?Sized,
 {
@@ -179,14 +179,14 @@ where
     }
 }
 
-pub fn map_expr_arg<'stmt, V>(v: &mut V, node: &ExprArg) -> ExprArg
+pub fn map_expr_arg<V>(v: &mut V, node: &ExprArg) -> ExprArg
 where
     V: Map + ?Sized,
 {
     node.clone()
 }
 
-pub fn map_expr_binary_op<'stmt, V>(v: &mut V, node: &ExprBinaryOp) -> ExprBinaryOp
+pub fn map_expr_binary_op<V>(v: &mut V, node: &ExprBinaryOp) -> ExprBinaryOp
 where
     V: Map + ?Sized,
 {
@@ -197,7 +197,7 @@ where
     }
 }
 
-pub fn map_expr_cast<'stmt, V>(v: &mut V, node: &ExprCast) -> ExprCast
+pub fn map_expr_cast<V>(v: &mut V, node: &ExprCast) -> ExprCast
 where
     V: Map + ?Sized,
 {
@@ -207,14 +207,14 @@ where
     }
 }
 
-pub fn map_expr_column<'stmt, V>(v: &mut V, node: &ExprColumn) -> ExprColumn
+pub fn map_expr_column<V>(v: &mut V, node: &ExprColumn) -> ExprColumn
 where
     V: Map + ?Sized,
 {
     node.clone()
 }
 
-pub fn map_expr_concat<'stmt, V>(v: &mut V, node: &ExprConcat) -> ExprConcat
+pub fn map_expr_concat<V>(v: &mut V, node: &ExprConcat) -> ExprConcat
 where
     V: Map + ?Sized,
 {
@@ -223,7 +223,7 @@ where
     }
 }
 
-pub fn map_expr_enum<'stmt, V>(v: &mut V, node: &ExprEnum) -> ExprEnum
+pub fn map_expr_enum<V>(v: &mut V, node: &ExprEnum) -> ExprEnum
 where
     V: Map + ?Sized,
 {
@@ -233,14 +233,14 @@ where
     }
 }
 
-pub fn map_expr_field<'stmt, V>(v: &mut V, node: &ExprField) -> ExprField
+pub fn map_expr_field<V>(v: &mut V, node: &ExprField) -> ExprField
 where
     V: Map + ?Sized,
 {
     node.clone()
 }
 
-pub fn map_expr_in_subquery<'stmt, V>(v: &mut V, node: &ExprInSubquery) -> ExprInSubquery
+pub fn map_expr_in_subquery<V>(v: &mut V, node: &ExprInSubquery) -> ExprInSubquery
 where
     V: Map + ?Sized,
 {
@@ -250,14 +250,14 @@ where
     }
 }
 
-pub fn map_expr_key<'stmt, V>(v: &mut V, node: &ExprKey) -> ExprKey
+pub fn map_expr_key<V>(v: &mut V, node: &ExprKey) -> ExprKey
 where
     V: Map + ?Sized,
 {
     node.clone()
 }
 
-pub fn map_expr_or<'stmt, V>(v: &mut V, node: &ExprOr) -> ExprOr
+pub fn map_expr_or<V>(v: &mut V, node: &ExprOr) -> ExprOr
 where
     V: Map + ?Sized,
 {
@@ -270,21 +270,21 @@ where
     }
 }
 
-pub fn map_expr_record<'stmt, V>(v: &mut V, node: &ExprRecord) -> ExprRecord
+pub fn map_expr_record<V>(v: &mut V, node: &ExprRecord) -> ExprRecord
 where
     V: Map + ?Sized,
 {
     ExprRecord::from_vec(node.iter().map(|expr| v.map_expr(expr)).collect())
 }
 
-pub fn map_expr_list<'stmt, V>(v: &mut V, node: &Vec<Expr>) -> Vec<Expr>
+pub fn map_expr_list<V>(v: &mut V, node: &Vec<Expr>) -> Vec<Expr>
 where
     V: Map + ?Sized,
 {
     todo!()
 }
 
-pub fn map_expr_set<'stmt, V>(v: &mut V, node: &ExprSet) -> ExprSet
+pub fn map_expr_set<V>(v: &mut V, node: &ExprSet) -> ExprSet
 where
     V: Map + ?Sized,
 {
@@ -295,7 +295,7 @@ where
     }
 }
 
-pub fn map_expr_set_op<'stmt, V>(v: &mut V, node: &ExprSetOp) -> ExprSetOp
+pub fn map_expr_set_op<V>(v: &mut V, node: &ExprSetOp) -> ExprSetOp
 where
     V: Map + ?Sized,
 {
@@ -309,28 +309,28 @@ where
     }
 }
 
-pub fn map_expr_stmt<'stmt, V>(v: &mut V, node: &ExprStmt) -> ExprStmt
+pub fn map_expr_stmt<V>(v: &mut V, node: &ExprStmt) -> ExprStmt
 where
     V: Map + ?Sized,
 {
     v.map_stmt(&node.stmt).into()
 }
 
-pub fn map_expr_ty<'stmt, V>(v: &mut V, node: &ExprTy) -> ExprTy
+pub fn map_expr_ty<V>(v: &mut V, node: &ExprTy) -> ExprTy
 where
     V: Map + ?Sized,
 {
     node.clone()
 }
 
-pub fn map_expr_path<'stmt, V>(v: &mut V, node: &Path) -> Path
+pub fn map_expr_path<V>(v: &mut V, node: &Path) -> Path
 where
     V: Map + ?Sized,
 {
     node.clone()
 }
 
-pub fn map_expr_project<'stmt, V>(v: &mut V, node: &ExprProject) -> ExprProject
+pub fn map_expr_project<V>(v: &mut V, node: &ExprProject) -> ExprProject
 where
     V: Map + ?Sized,
 {
@@ -340,7 +340,7 @@ where
     }
 }
 
-pub fn map_insert_target<'stmt, V>(v: &mut V, node: &InsertTarget) -> InsertTarget
+pub fn map_insert_target<V>(v: &mut V, node: &InsertTarget) -> InsertTarget
 where
     V: Map + ?Sized,
 {
@@ -350,14 +350,14 @@ where
     }
 }
 
-pub fn map_projection<'stmt, V>(v: &mut V, node: &Projection) -> Projection
+pub fn map_projection<V>(v: &mut V, node: &Projection) -> Projection
 where
     V: Map + ?Sized,
 {
     node.clone()
 }
 
-pub fn map_returning<'stmt, V>(v: &mut V, node: &Returning) -> Returning
+pub fn map_returning<V>(v: &mut V, node: &Returning) -> Returning
 where
     V: Map + ?Sized,
 {
@@ -367,14 +367,14 @@ where
     }
 }
 
-pub fn map_source<'stmt, V>(v: &mut V, node: &Source) -> Source
+pub fn map_source<V>(v: &mut V, node: &Source) -> Source
 where
     V: Map + ?Sized,
 {
     node.clone()
 }
 
-pub fn map_stmt<'stmt, V>(v: &mut V, node: &Statement) -> Statement
+pub fn map_stmt<V>(v: &mut V, node: &Statement) -> Statement
 where
     V: Map + ?Sized,
 {
@@ -388,7 +388,7 @@ where
     }
 }
 
-pub fn map_stmt_select<'stmt, V>(v: &mut V, node: &Select) -> Select
+pub fn map_stmt_select<V>(v: &mut V, node: &Select) -> Select
 where
     V: Map + ?Sized,
 {
@@ -399,7 +399,7 @@ where
     }
 }
 
-pub fn map_stmt_insert<'stmt, V>(v: &mut V, node: &Insert) -> Insert
+pub fn map_stmt_insert<V>(v: &mut V, node: &Insert) -> Insert
 where
     V: Map + ?Sized,
 {
@@ -413,7 +413,7 @@ where
     }
 }
 
-pub fn map_stmt_query<'stmt, V>(v: &mut V, node: &Query) -> Query
+pub fn map_stmt_query<V>(v: &mut V, node: &Query) -> Query
 where
     V: Map + ?Sized,
 {
@@ -422,14 +422,14 @@ where
     }
 }
 
-pub fn map_stmt_update<'stmt, V>(v: &mut V, node: &Update) -> Update
+pub fn map_stmt_update<V>(v: &mut V, node: &Update) -> Update
 where
     V: Map + ?Sized,
 {
     todo!()
 }
 
-pub fn map_stmt_delete<'stmt, V>(v: &mut V, node: &Delete) -> Delete
+pub fn map_stmt_delete<V>(v: &mut V, node: &Delete) -> Delete
 where
     V: Map + ?Sized,
 {
@@ -443,7 +443,7 @@ where
     }
 }
 
-pub fn map_stmt_link<'stmt, V>(v: &mut V, node: &Link) -> Link
+pub fn map_stmt_link<V>(v: &mut V, node: &Link) -> Link
 where
     V: Map + ?Sized,
 {
@@ -454,7 +454,7 @@ where
     }
 }
 
-pub fn map_stmt_unlink<'stmt, V>(v: &mut V, node: &Unlink) -> Unlink
+pub fn map_stmt_unlink<V>(v: &mut V, node: &Unlink) -> Unlink
 where
     V: Map + ?Sized,
 {
@@ -465,7 +465,7 @@ where
     }
 }
 
-pub fn map_value<'stmt, V>(v: &mut V, node: &Value) -> Value
+pub fn map_value<V>(v: &mut V, node: &Value) -> Value
 where
     V: Map + ?Sized,
 {

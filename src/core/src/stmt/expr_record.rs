@@ -125,7 +125,7 @@ impl IntoIterator for ExprRecord {
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a ExprRecord {
+impl<'a> IntoIterator for &'a ExprRecord {
     type Item = &'a Expr;
     type IntoIter = std::slice::Iter<'a, Expr>;
 
@@ -134,7 +134,7 @@ impl<'a, 'stmt> IntoIterator for &'a ExprRecord {
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a mut ExprRecord {
+impl<'a> IntoIterator for &'a mut ExprRecord {
     type Item = &'a mut Expr;
     type IntoIter = std::slice::IterMut<'a, Expr>;
 
@@ -155,7 +155,7 @@ impl From<ExprRecord> for Expr {
     }
 }
 
-impl<'stmt, E1, E2> From<(E1, E2)> for ExprRecord
+impl<E1, E2> From<(E1, E2)> for ExprRecord
 where
     E1: Into<Expr>,
     E2: Into<Expr>,

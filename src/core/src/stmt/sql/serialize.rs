@@ -62,7 +62,7 @@ impl<'a> Serializer<'a> {
     }
 }
 
-impl<'a, 'stmt, T: Params> Formatter<'a, T> {
+impl<'a, T: Params> Formatter<'a, T> {
     fn statement(&mut self, statement: &DataStatement) -> fmt::Result {
         match statement {
             /*

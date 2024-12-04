@@ -2,9 +2,7 @@ use super::*;
 
 use std::{
     collections::VecDeque,
-    fmt,
-    marker::PhantomData,
-    mem,
+    fmt, mem,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -16,9 +14,8 @@ pub struct ValueStream {
 }
 
 #[derive(Debug)]
-struct Iter<'stmt, I> {
+struct Iter<I> {
     iter: I,
-    _m: PhantomData<&'stmt ()>,
 }
 
 #[derive(Clone)]
@@ -66,10 +63,7 @@ impl ValueStream {
         T: Into<Value>,
         I: Iterator<Item = crate::Result<T>> + Send + 'static,
     {
-        ValueStream::from_stream(Iter {
-            iter,
-            _m: PhantomData,
-        })
+        ValueStream::from_stream(Iter { iter })
     }
 
     /// Returns the next record in the stream
@@ -194,9 +188,9 @@ impl From<Vec<Value>> for ValueStream {
     }
 }
 
-impl<'stmt, I> Unpin for Iter<'stmt, I> {}
+impl<I> Unpin for Iter<I> {}
 
-impl<'stmt, T, I> Stream for Iter<'stmt, I>
+impl<T, I> Stream for Iter<I>
 where
     I: Iterator<Item = crate::Result<T>>,
     T: Into<Value>,

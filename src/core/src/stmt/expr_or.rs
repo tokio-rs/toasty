@@ -39,7 +39,7 @@ impl ops::Deref for ExprOr {
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a ExprOr {
+impl<'a> IntoIterator for &'a ExprOr {
     type IntoIter = std::slice::Iter<'a, Expr>;
     type Item = &'a Expr;
 
@@ -48,7 +48,7 @@ impl<'a, 'stmt> IntoIterator for &'a ExprOr {
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a mut ExprOr {
+impl<'a> IntoIterator for &'a mut ExprOr {
     type IntoIter = std::slice::IterMut<'a, Expr>;
     type Item = &'a mut Expr;
 

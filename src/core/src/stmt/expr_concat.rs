@@ -38,7 +38,7 @@ impl IntoIterator for ExprConcat {
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a ExprConcat {
+impl<'a> IntoIterator for &'a ExprConcat {
     type IntoIter = std::slice::Iter<'a, Expr>;
     type Item = &'a Expr;
 
@@ -47,7 +47,7 @@ impl<'a, 'stmt> IntoIterator for &'a ExprConcat {
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a mut ExprConcat {
+impl<'a> IntoIterator for &'a mut ExprConcat {
     type IntoIter = std::slice::IterMut<'a, Expr>;
     type Item = &'a mut Expr;
 
