@@ -68,7 +68,6 @@ impl<'a> Simplify<'a> {
         lift.visit(filter);
 
         if lift.fail {
-            /*
             let [fk_fields] = &belongs_to.foreign_key.fields[..] else {
                 todo!("composite keys")
             };
@@ -81,8 +80,6 @@ impl<'a> Simplify<'a> {
                 stmt::Expr::field(fk_fields.source),
                 subquery,
             ))
-            */
-            todo!("subquery={query:#?}")
         } else {
             Some(if lift.operands.len() == 1 {
                 lift.operands.into_iter().next().unwrap()

@@ -12,6 +12,10 @@ impl Expr {
         }
         .into()
     }
+
+    pub fn is_column(&self) -> bool {
+        matches!(self, Expr::Column(_))
+    }
 }
 
 impl From<ExprColumn> for Expr {

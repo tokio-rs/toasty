@@ -76,6 +76,7 @@ impl Driver for Sqlite {
 
         let mut params = vec![];
         let sql_str = stmt::sql::Serializer::new(schema).serialize_stmt(&sql, &mut params);
+        println!("str={sql_str}");
 
         let mut stmt = connection.prepare(&sql_str).unwrap();
 

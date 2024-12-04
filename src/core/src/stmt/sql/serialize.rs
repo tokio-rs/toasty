@@ -415,9 +415,19 @@ impl<'a, 'stmt, T: Params> Formatter<'a, T> {
     }
 
     fn value(&mut self, value: &Value) -> fmt::Result {
-        assert!(!value.is_id());
-        self.params.push(value);
-        write!(self.dst, "?")?;
+        match value {
+            stmt::Value::Id(_) => todo!(),
+            stmt::Value::Record(record) => {
+                write!(self.dst, "(")?;
+                self.value_list(record)?;
+                write!(self.dst, ")")?;
+            }
+            _ => {
+                self.params.push(value);
+                write!(self.dst, "?")?;
+            }
+        }
+
         Ok(())
     }
 

@@ -346,6 +346,18 @@ impl<'a> LowerStatement<'a> {
 
                 None
             }
+            (stmt::Expr::Record(lhs), stmt::Expr::List(list)) => {
+                // TODO: implement for real
+                for lhs in lhs {
+                    assert!(lhs.is_column());
+                }
+
+                for item in list {
+                    assert!(item.is_value());
+                }
+
+                None
+            }
             (expr, list) => todo!("expr={expr:#?}; list={list:#?}"),
         }
     }
