@@ -33,11 +33,10 @@ impl Planner<'_> {
 
         // First, lower the returning part of the statement and get any
         // necessary in-memory projection.
-        let insert_output = stmt.returning.as_mut().map(|returning| {
-            let project = self.partition_returning(returning);
-            let ty = returning.as_expr().ty(self.schema);
-            (ty, project)
-        });
+        let project = stmt
+            .returning
+            .as_mut()
+            .map(|returning| self.partition_returning(returning));
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -66,13 +65,9 @@ impl Planner<'_> {
                     },
                 };
 
-                if let Some((arg_ty, project)) = insert_output {
-                    let var = self.var_table.register_var();
-                    plan.output = Some(plan::InsertOutput {
-                        var,
-                        arg_ty,
-                        project,
-                    });
+                if let Some(project) = project {
+                    let var = self.var_table.register_var(todo!());
+                    plan.output = Some(plan::InsertOutput { var, project });
                     output_var = Some(var);
                 }
 

@@ -10,7 +10,7 @@ pub(crate) struct VarTable {
 }
 
 impl VarTable {
-    pub fn register_var(&mut self) -> plan::VarId {
+    pub fn register_var(&mut self, ty: stmt::Type) -> plan::VarId {
         // Register a new slot
         let ret = self.vars.len();
         self.vars.push(());

@@ -31,36 +31,10 @@ pub use expr_project::ExprProject;
 mod expr_record;
 pub use expr_record::ExprRecord;
 
+mod func;
+pub use func::Func;
+
 mod input;
 pub use input::{const_input, Input};
 
 use crate::{stmt, Result};
-
-#[derive(Debug, Clone)]
-pub struct Eval {
-    /// Argument types
-    pub args: Vec<stmt::Type>,
-
-    /// Expression to evaluate
-    pub expr: Expr,
-}
-
-impl Eval {
-    pub fn eval(&self, mut input: impl Input) -> crate::Result<stmt::Value> {
-        self.expr.eval_ref(&mut input)
-    }
-
-    /// Special case of `eval` where the expression is a constant
-    ///
-    /// # Panics
-    ///
-    /// `eval_const` panics if the expression is not constant
-    pub fn eval_const(&self) -> stmt::Value {
-        assert!(self.args.is_empty());
-        self.expr.eval_ref(&mut const_input()).unwrap()
-    }
-
-    pub fn eval_bool(&self, mut input: impl Input) -> Result<bool> {
-        self.expr.eval_bool_ref(&mut input)
-    }
-}

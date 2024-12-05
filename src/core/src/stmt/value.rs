@@ -169,6 +169,19 @@ impl Value {
     pub fn take(&mut self) -> Value {
         std::mem::take(self)
     }
+
+    pub fn ty(&self) -> Type {
+        match self {
+            Value::Bool(_) => Type::Bool,
+            Value::I64(_) => Type::I64,
+            Value::Id(v) => Type::Id(v.model_id()),
+            Value::SparseRecord(v) => Type::SparseRecord(v.fields.clone()),
+            Value::Null => Type::Null,
+            Value::Record(v) => Type::Record(v.fields.iter().map(Value::ty).collect()),
+            Value::String(_) => Type::String,
+            _ => todo!("value={self:#?}"),
+        }
+    }
 }
 
 impl Default for Value {

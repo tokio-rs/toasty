@@ -73,7 +73,7 @@ impl Planner<'_> {
         };
 
         let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
-        let output = self.var_table.register_var();
+        let output = self.var_table.register_var(project.ret.clone());
 
         self.push_action(plan::QuerySql {
             input,

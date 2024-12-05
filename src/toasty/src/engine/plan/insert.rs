@@ -17,11 +17,8 @@ pub(crate) struct InsertOutput {
     /// Where to store the output
     pub var: VarId,
 
-    /// Expected argument type.
-    pub arg_ty: stmt::Type,
-
     /// How to project it before storing
-    pub project: eval::Expr,
+    pub project: eval::Func,
 }
 
 impl From<Insert> for Action {

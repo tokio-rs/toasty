@@ -1,6 +1,3 @@
-use output::PartitionedReturning;
-use stmt::Update;
-
 use super::*;
 
 // Strategy:
@@ -94,11 +91,12 @@ impl Planner<'_> {
             .partition_maybe_returning(&mut stmt.returning)
             .map(|mut project| {
                 if let Some(fields) = sparse_returning {
-                    project = eval::Expr::cast(project, stmt::Type::SparseRecord(fields));
+                    todo!()
+                    // project = eval::Expr::cast(project, stmt::Type::SparseRecord(fields));
                 }
 
                 plan::QuerySqlOutput {
-                    var: self.var_table.register_var(),
+                    var: self.var_table.register_var(todo!()),
                     project,
                 }
             });
@@ -293,7 +291,7 @@ impl Planner<'_> {
         todo!();
     }
 
-    fn constantize_update_returning(&self, stmt: &mut Update) {
+    fn constantize_update_returning(&self, stmt: &mut stmt::Update) {
         // TODO: probably not worth doing because we have to issue the update
         // statement regardless
         /*

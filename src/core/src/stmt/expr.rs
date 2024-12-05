@@ -212,39 +212,6 @@ impl Expr {
         std::mem::replace(self, Expr::Value(Value::Null))
     }
 
-    /// Compute the type of an expression
-    ///
-    /// TODO: some expressions cannot compute their own types, e.g. empty Expr::List
-    pub fn ty(&self, schema: &Schema) -> Type {
-        match self {
-            Expr::And(_) => Type::Bool,
-            // Expr::Arg(_) => todo!(),
-            Expr::BinaryOp(_) => todo!(),
-            Expr::Cast(expr) => expr.ty.clone(),
-            Expr::Column(expr) => schema.column(expr.column).ty.clone(),
-            // Expr::Concat(_) => todo!(),
-            Expr::ConcatStr(_) => Type::String,
-            // Expr::Enum(_) => todo!(),
-            // Expr::Field(expr) => schema.field(expr.field).ty,
-            Expr::InList(_) => Type::Bool,
-            Expr::InSubquery(_) => Type::Bool,
-            Expr::IsNull(_) => Type::Bool,
-            // Expr::Key(_) => todo!(),
-            // Expr::Map(_) => todo!(),
-            Expr::Or(_) => Type::Bool,
-            Expr::Pattern(_) => Type::Bool,
-            // Expr::Project(_) => todo!(),
-            Expr::Record(expr) => {
-                Type::Record(expr.fields.iter().map(|expr| expr.ty(schema)).collect())
-            }
-            // Expr::List(_) => todo!(), // Can't compute the type of this...
-            // Expr::Stmt(_) => todo!(),
-            // Expr::Type(_) => todo!(),
-            // Expr::Value(value) => value.ty(),
-            _ => todo!("expr={self:#?}"),
-        }
-    }
-
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
         visit_mut::for_each_expr_mut(self, move |expr| match expr {
             Expr::Arg(expr_arg) => {

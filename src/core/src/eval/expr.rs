@@ -137,4 +137,24 @@ impl Expr {
             _ => todo!("expr={self:#?}"),
         }
     }
+
+    pub(crate) fn ty(&self, args: &[stmt::Type]) -> stmt::Type {
+        match self {
+            Expr::And(_) => stmt::Type::Bool,
+            Expr::Arg(arg) => args[arg.position].clone(),
+            Expr::BinaryOp(_) => stmt::Type::Bool,
+            Expr::Cast(e) => e.ty.clone(),
+            Expr::List(_) => todo!("{self:#?}"),
+            Expr::Map(e) => {
+                let base = e.base.ty(args);
+                e.map.ty(&[base])
+            }
+            Expr::Project(e) => todo!("{self:#?}"),
+            Expr::Record(e) => {
+                stmt::Type::Record(e.fields.iter().map(|field| field.ty(args)).collect())
+            }
+            Expr::Value(value) => value.ty(),
+            _ => todo!("expr={self:#?}"),
+        }
+    }
 }

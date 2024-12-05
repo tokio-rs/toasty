@@ -18,7 +18,7 @@ pub(crate) struct QuerySqlOutput {
     pub var: plan::VarId,
 
     /// How to project the output returned by the driver
-    pub project: eval::Expr,
+    pub project: eval::Func,
 }
 
 impl From<QuerySql> for Action {

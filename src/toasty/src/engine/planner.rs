@@ -10,6 +10,7 @@ mod relation;
 mod select;
 mod simplify;
 mod subquery;
+mod ty;
 mod unlink;
 mod update;
 mod verify;
@@ -147,7 +148,7 @@ impl<'a> Planner<'a> {
     }
 
     fn set_var(&mut self, value: Vec<stmt::Value>) -> plan::VarId {
-        let var = self.var_table.register_var();
+        let var = self.var_table.register_var(todo!());
 
         self.push_action(plan::SetVar { var, value });
 
