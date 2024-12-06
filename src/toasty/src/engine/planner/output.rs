@@ -158,7 +158,20 @@ impl Partitioner<'_> {
                 if field_partition_res.iter().all(|res| res.is_stmt()) {
                     Stmt
                 } else {
-                    todo!()
+                    let mut fields = vec![];
+
+                    for (i, res) in field_partition_res.into_iter().enumerate() {
+                        match res {
+                            Stmt => {
+                                todo!()
+                            }
+                            Eval(eval) => {
+                                fields.push(eval);
+                            }
+                        }
+                    }
+
+                    Eval(eval::Expr::record_from_vec(fields))
                 }
             }
             stmt::Expr::Value(_) => Stmt,
