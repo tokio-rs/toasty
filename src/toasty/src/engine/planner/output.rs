@@ -1,8 +1,7 @@
 use super::*;
 
 struct Partitioner<'a> {
-    // Schema we are basing all statements on
-    schema: &'a Schema,
+    planner: &'a Planner<'a>,
 
     // Returning statement expressions. The returning statement will be a
     // record, these are the field expressions.
@@ -23,12 +22,10 @@ enum Partition {
 impl Planner<'_> {
     /// Partition a returning statement between what can be handled by the
     /// target database and what Toasty handles in-memory.
-    pub(crate) fn partition_returning(
-        &self,
-        stmt: &mut stmt::Returning,
-        ty: stmt::Type,
-    ) -> eval::Func {
+    pub(crate) fn partition_returning(&self, stmt: &mut stmt::Returning) -> eval::Func {
         use Partition::*;
+
+        let ty = self.infer_expr_ty(stmt.as_expr());
 
         match stmt {
             stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => {
@@ -67,7 +64,7 @@ impl Planner<'_> {
         use Partition::*;
 
         let mut partitioner = Partitioner {
-            schema: self.schema,
+            planner: self,
             stmt: vec![],
             ty: vec![],
         };
@@ -137,8 +134,8 @@ impl Partitioner<'_> {
                 }
                 Eval(eval) => Eval(eval::Expr::cast(eval, expr.ty.clone())),
             },
-            stmt::Expr::Column(expr) => Stmt(self.schema.column(expr.column).ty.clone()),
-            stmt::Expr::Value(expr) => Stmt(ty::value(expr)),
+            stmt::Expr::Column(_) => Stmt(self.planner.infer_expr_ty(stmt)),
+            stmt::Expr::Value(value) => Stmt(self.planner.infer_value_ty(value)),
             stmt::Expr::Project(expr) => match self.partition_expr(&expr.base) {
                 Stmt(ty) => {
                     let arg = self.push_stmt_field((*expr.base).clone(), ty);

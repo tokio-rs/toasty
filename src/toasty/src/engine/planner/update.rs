@@ -75,7 +75,7 @@ impl Planner<'_> {
             }
 
             let value = stmt::Value::empty_sparse_record();
-            return Some(self.set_var(vec![value]));
+            return Some(self.set_var(vec![value], stmt::Type::empty_sparse_record()));
         }
 
         let sparse_returning = if matches!(stmt.returning, Some(stmt::Returning::Changed)) {

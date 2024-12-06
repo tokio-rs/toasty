@@ -46,6 +46,16 @@ impl Value {
     }
 }
 
+impl Type {
+    pub fn sparse_record(fields: impl Into<PathFieldSet>) -> Type {
+        Type::SparseRecord(fields.into())
+    }
+
+    pub fn empty_sparse_record() -> Type {
+        Type::SparseRecord(PathFieldSet::default())
+    }
+}
+
 impl SparseRecord {
     pub fn into_iter(self) -> impl Iterator<Item = (PathStep, Value)> {
         self.values

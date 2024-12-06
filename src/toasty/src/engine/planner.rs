@@ -147,8 +147,8 @@ impl<'a> Planner<'a> {
         }
     }
 
-    fn set_var(&mut self, value: Vec<stmt::Value>) -> plan::VarId {
-        let var = self.var_table.register_var(todo!());
+    fn set_var(&mut self, value: Vec<stmt::Value>, ty: stmt::Type) -> plan::VarId {
+        let var = self.var_table.register_var(ty);
 
         self.push_action(plan::SetVar { var, value });
 

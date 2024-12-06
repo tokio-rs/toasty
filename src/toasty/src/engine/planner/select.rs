@@ -72,10 +72,7 @@ impl Planner<'_> {
             self.partition_query_input(&mut stmt, &cx.input)
         };
 
-        let project = self.partition_returning(
-            &mut stmt.body.as_select_mut().returning,
-            ty::model_record(model),
-        );
+        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
         let output = self.var_table.register_var(project.ret.clone());
 
         self.push_action(plan::QuerySql {

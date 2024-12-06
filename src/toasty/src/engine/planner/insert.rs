@@ -23,11 +23,6 @@ impl Planner<'_> {
         // scope, check constraints, ...)
         self.preprocess_insert_values(model, &mut stmt);
 
-        // TODO: is this true needed?
-        if let Some(returning) = &stmt.returning {
-            debug_assert_eq!(*returning, stmt::Returning::Star, "stmt={stmt:#?}");
-        }
-
         // If the statement `Returning` is constant (i.e. does not depend on the
         // database evaluating the statement), then extract it here.
         let const_returning = self.constantize_insert_returning(&mut stmt);
@@ -41,7 +36,7 @@ impl Planner<'_> {
         let project = stmt
             .returning
             .as_mut()
-            .map(|returning| self.partition_returning(returning, ty::model_record(model)));
+            .map(|returning| self.partition_returning(returning));
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -100,10 +95,10 @@ impl Planner<'_> {
             dst.push(row);
         }
 
-        if let Some(const_returning) = const_returning {
+        if let Some((values, ty)) = const_returning {
             assert!(output_var.is_none());
 
-            output_var = Some(self.set_var(const_returning));
+            output_var = Some(self.set_var(values, ty));
         }
 
         output_var
@@ -293,7 +288,10 @@ impl Planner<'_> {
     }
 
     // TODO: unify with update?
-    fn constantize_insert_returning(&self, stmt: &mut stmt::Insert) -> Option<Vec<stmt::Value>> {
+    fn constantize_insert_returning(
+        &self,
+        stmt: &mut stmt::Insert,
+    ) -> Option<(Vec<stmt::Value>, stmt::Type)> {
         let Some(stmt::Returning::Expr(returning)) = &stmt.returning else {
             return None;
         };
@@ -310,6 +308,7 @@ impl Planner<'_> {
             }
         }
 
+        let ty = self.infer_expr_ty(returning);
         let returning = eval::Expr::try_from_stmt(returning.clone(), ConstReturning).unwrap();
 
         let mut rows = vec![];
@@ -324,7 +323,7 @@ impl Planner<'_> {
         // We do not need to receive it from the database anymore.
         stmt.returning = None;
 
-        Some(rows)
+        Some((rows, ty))
     }
 }
 

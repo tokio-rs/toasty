@@ -5,15 +5,14 @@ use super::*;
 #[derive(Debug, Default)]
 pub(crate) struct VarTable {
     /// Variable slots used during plan execution
-    // vars: Vec<stmt::Type>,
-    vars: Vec<()>,
+    vars: Vec<stmt::Type>,
 }
 
 impl VarTable {
     pub fn register_var(&mut self, ty: stmt::Type) -> plan::VarId {
         // Register a new slot
         let ret = self.vars.len();
-        self.vars.push(());
+        self.vars.push(ty);
         plan::VarId(ret)
     }
 }
