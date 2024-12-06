@@ -23,6 +23,11 @@ impl Planner<'_> {
         // scope, check constraints, ...)
         self.preprocess_insert_values(model, &mut stmt);
 
+        // TODO: is this true needed?
+        if let Some(returning) = &stmt.returning {
+            debug_assert_eq!(*returning, stmt::Returning::Star, "stmt={stmt:#?}");
+        }
+
         // If the statement `Returning` is constant (i.e. does not depend on the
         // database evaluating the statement), then extract it here.
         let const_returning = self.constantize_insert_returning(&mut stmt);
@@ -36,7 +41,7 @@ impl Planner<'_> {
         let project = stmt
             .returning
             .as_mut()
-            .map(|returning| self.partition_returning(returning));
+            .map(|returning| self.partition_returning(returning, ty::model_record(model)));
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -66,7 +71,7 @@ impl Planner<'_> {
                 };
 
                 if let Some(project) = project {
-                    let var = self.var_table.register_var(todo!());
+                    let var = self.var_table.register_var(project.ret.clone());
                     plan.output = Some(plan::InsertOutput { var, project });
                     output_var = Some(var);
                 }

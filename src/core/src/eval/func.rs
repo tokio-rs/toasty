@@ -29,7 +29,7 @@ impl Func {
     }
 
     pub fn eval(&self, mut input: impl Input) -> Result<stmt::Value> {
-        todo!()
+        self.expr.eval(input)
     }
 
     /// Special case of `eval` where the expression is a constant

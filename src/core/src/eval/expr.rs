@@ -32,7 +32,7 @@ impl Expr {
 
     pub(crate) fn from_stmt_by_ref(stmt: stmt::Expr, convert: &mut impl Convert) -> Expr {
         match stmt {
-            // stmt::Expr::Arg(expr) => ExprArg::from_stmt(expr).into(),
+            stmt::Expr::Arg(expr) => ExprArg::from_stmt(expr).into(),
             stmt::Expr::And(expr) => ExprAnd::from_stmt(expr, convert).into(),
             stmt::Expr::BinaryOp(expr) => ExprBinaryOp::from_stmt(expr, convert).into(),
             stmt::Expr::Cast(expr) => ExprCast::from_stmt(expr, convert).into(),

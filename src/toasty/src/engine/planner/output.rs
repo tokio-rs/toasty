@@ -21,7 +21,13 @@ enum Partition {
 }
 
 impl Planner<'_> {
-    pub(crate) fn partition_returning(&self, stmt: &mut stmt::Returning) -> eval::Func {
+    /// Partition a returning statement between what can be handled by the
+    /// target database and what Toasty handles in-memory.
+    pub(crate) fn partition_returning(
+        &self,
+        stmt: &mut stmt::Returning,
+        ty: stmt::Type,
+    ) -> eval::Func {
         use Partition::*;
 
         match stmt {
@@ -29,7 +35,7 @@ impl Planner<'_> {
                 // returning an expression record is special-cased because it
                 // might be able to be passed through to the database as an
                 // identity projection.
-                self.partition_returning_expr_record(expr_record)
+                self.partition_returning_expr_record(expr_record, ty)
             }
             stmt::Returning::Expr(expr) => self.partition_returning_expr(expr),
             _ => todo!("returning={stmt:#?}"),
@@ -53,7 +59,11 @@ impl Planner<'_> {
         todo!()
     }
 
-    fn partition_returning_expr_record(&self, stmt_record: &mut stmt::ExprRecord) -> eval::Func {
+    fn partition_returning_expr_record(
+        &self,
+        stmt_record: &mut stmt::ExprRecord,
+        ty: stmt::Type,
+    ) -> eval::Func {
         use Partition::*;
 
         let mut partitioner = Partitioner {
@@ -72,38 +82,28 @@ impl Planner<'_> {
             } else {
                 match partitioner.partition_expr(&field) {
                     Stmt(ty) => {
-                        todo!()
+                        let arg = partitioner.push_stmt_field(field, ty);
+                        eval_fields.push(arg);
                     }
                     Eval(eval) => {
                         identity = false;
                         eval_fields.push(eval);
                     }
                 }
-                /*
-                match partition_returning(&field, &mut stmt_fields) {
-                    Stmt => {
-                        let i = stmt_fields.len();
-                        stmt_fields.push(field);
-                        eval_fields.push(eval::Expr::arg_project(0, [i]));
-                    }
-                    Eval(eval) => {
-                        identity = false;
-                        eval_fields.push(eval);
-                    }
-                }
-                */
             }
         }
 
         stmt_record.fields = partitioner.stmt;
 
         if identity {
-            eval::Func::identity(todo!())
+            eval::Func::identity(ty)
         } else {
             let expr = eval::Expr::record_from_vec(eval_fields);
-            let func = eval::Func::new(vec![stmt::Type::Record(partitioner.ty)], expr);
-
-            todo!("func={func:#?}");
+            eval::Func {
+                args: vec![stmt::Type::Record(partitioner.ty)],
+                ret: ty,
+                expr,
+            }
         }
     }
 
@@ -132,7 +132,7 @@ impl Partitioner<'_> {
         match stmt {
             stmt::Expr::Cast(expr) => match self.partition_expr(&expr.expr) {
                 Stmt(ty) => {
-                    let arg = self.field((*expr.expr).clone(), ty);
+                    let arg = self.push_stmt_field((*expr.expr).clone(), ty);
                     Eval(eval::Expr::cast(arg, expr.ty.clone()))
                 }
                 Eval(eval) => Eval(eval::Expr::cast(eval, expr.ty.clone())),
@@ -141,14 +141,14 @@ impl Partitioner<'_> {
             stmt::Expr::Value(expr) => Stmt(ty::value(expr)),
             stmt::Expr::Project(expr) => match self.partition_expr(&expr.base) {
                 Stmt(ty) => {
-                    let arg = self.field((*expr.base).clone(), ty);
+                    let arg = self.push_stmt_field((*expr.base).clone(), ty);
                     Eval(eval::Expr::project(arg, expr.projection.clone()))
                 }
                 Eval(eval) => Eval(eval::Expr::project(eval, expr.projection.clone())),
             },
             stmt::Expr::DecodeEnum(expr, ty, ..) => match self.partition_expr(expr) {
                 Stmt(base_ty) => {
-                    let base = self.field((**expr).clone(), base_ty);
+                    let base = self.push_stmt_field((**expr).clone(), base_ty);
                     Eval(eval::Expr::DecodeEnum(Box::new(base), ty.clone()))
                 }
                 Eval(eval) => Eval(eval::Expr::DecodeEnum(Box::new(eval), ty.clone())),
@@ -157,7 +157,7 @@ impl Partitioner<'_> {
         }
     }
 
-    fn field(&mut self, expr: stmt::Expr, ty: stmt::Type) -> eval::Expr {
+    fn push_stmt_field(&mut self, expr: stmt::Expr, ty: stmt::Type) -> eval::Expr {
         assert_eq!(self.stmt.len(), self.ty.len());
         let i = self.stmt.len();
         self.stmt.push(expr);
