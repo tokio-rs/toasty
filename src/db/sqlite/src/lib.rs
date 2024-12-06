@@ -51,8 +51,6 @@ impl Driver for Sqlite {
             _ => todo!(),
         };
 
-        println!("SQL={sql:#?}");
-
         // SQL doesn't handle pre-condition. This should be moved into toasty's planner.
         let pre_condition = match &mut sql {
             stmt::Statement::Update(update) => {
@@ -76,7 +74,6 @@ impl Driver for Sqlite {
 
         let mut params = vec![];
         let sql_str = stmt::sql::Serializer::new(schema).serialize_stmt(&sql, &mut params);
-        println!("str={sql_str}");
 
         let mut stmt = connection.prepare(&sql_str).unwrap();
 

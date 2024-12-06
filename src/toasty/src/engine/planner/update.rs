@@ -78,27 +78,14 @@ impl Planner<'_> {
             return Some(self.set_var(vec![value], stmt::Type::empty_sparse_record()));
         }
 
-        let sparse_returning = if matches!(stmt.returning, Some(stmt::Returning::Changed)) {
-            Some(stmt.assignments.fields.clone())
-        } else {
-            None
-        };
-
         self.lower_stmt_update(model, &mut stmt);
         self.constantize_update_returning(&mut stmt);
 
         let output = self
             .partition_maybe_returning(&mut stmt.returning)
-            .map(|mut project| {
-                if let Some(fields) = sparse_returning {
-                    todo!()
-                    // project = eval::Expr::cast(project, stmt::Type::SparseRecord(fields));
-                }
-
-                plan::QuerySqlOutput {
-                    var: self.var_table.register_var(todo!()),
-                    project,
-                }
+            .map(|mut project| plan::QuerySqlOutput {
+                var: self.var_table.register_var(project.ret.clone()),
+                project,
             });
 
         let output_var = output.as_ref().map(|o| o.var);

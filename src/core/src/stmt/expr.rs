@@ -2,7 +2,7 @@ use super::*;
 
 use std::ops;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Expr {
     /// AND a set of binary expressions
     And(ExprAnd),
@@ -294,5 +294,40 @@ where
 {
     fn from(value: (E1, E2)) -> Expr {
         Expr::Record(value.into())
+    }
+}
+
+impl fmt::Debug for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Expr::And(e) => e.fmt(f),
+            Expr::Arg(e) => e.fmt(f),
+            Expr::BinaryOp(e) => e.fmt(f),
+            Expr::Cast(e) => e.fmt(f),
+            Expr::Column(e) => e.fmt(f),
+            Expr::Concat(e) => e.fmt(f),
+            Expr::ConcatStr(e) => e.fmt(f),
+            Expr::Enum(e) => e.fmt(f),
+            Expr::Field(e) => e.fmt(f),
+            Expr::InList(e) => e.fmt(f),
+            Expr::InSubquery(e) => e.fmt(f),
+            Expr::IsNull(e) => e.fmt(f),
+            Expr::Key(e) => e.fmt(f),
+            Expr::Map(e) => e.fmt(f),
+            Expr::Or(e) => e.fmt(f),
+            Expr::Pattern(e) => e.fmt(f),
+            Expr::Project(e) => e.fmt(f),
+            Expr::Record(e) => e.fmt(f),
+            Expr::List(e) => e.fmt(f),
+            Expr::Stmt(e) => e.fmt(f),
+            Expr::Type(e) => e.fmt(f),
+            Expr::Value(e) => e.fmt(f),
+            Expr::DecodeEnum(expr, ty, variant) => f
+                .debug_tuple("DecodeEnum")
+                .field(expr)
+                .field(ty)
+                .field(variant)
+                .finish(),
+        }
     }
 }

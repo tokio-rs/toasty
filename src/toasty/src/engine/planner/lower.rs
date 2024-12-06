@@ -217,7 +217,10 @@ impl<'a> VisitMut for LowerStatement<'a> {
                     }));
                 }
 
-                *returning = stmt::Returning::Expr(stmt::ExprRecord::from_vec(fields).into());
+                *returning = stmt::Returning::Expr(stmt::Expr::cast(
+                    stmt::ExprRecord::from_vec(fields),
+                    stmt::Type::SparseRecord(i.assignments.fields.clone()),
+                ));
             }
         }
 
