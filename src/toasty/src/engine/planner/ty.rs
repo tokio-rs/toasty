@@ -18,6 +18,7 @@ impl Planner<'_> {
                     .map(|field| self.infer_expr_ty(field))
                     .collect(),
             ),
+            DecodeEnum(_, ty, _) => ty.clone(),
             _ => todo!("{expr:#?}"),
         }
     }
