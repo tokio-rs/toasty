@@ -4,9 +4,10 @@ use super::*;
 pub(crate) struct Input {
     /// Source of the input
     pub(crate) source: InputSource,
-
+    /*
     /// If needed, how to project the input
-    pub(crate) project: Option<eval::Expr>,
+    pub(crate) project: Option<eval::Func>,
+    */
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -23,14 +24,14 @@ impl Input {
     pub(crate) fn from_var(var: VarId) -> Input {
         Input {
             source: InputSource::Value(var),
-            project: None,
+            // project: None,
         }
     }
 
-    pub(crate) fn project_var_ref(var: VarId, expr: eval::Expr) -> Input {
+    pub(crate) fn project_var_ref(var: VarId, expr: eval::Func) -> Input {
         Input {
             source: InputSource::Ref(var),
-            project: Some(expr),
+            // project: Some(expr),
         }
     }
 }

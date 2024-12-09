@@ -42,4 +42,14 @@ impl Planner<'_> {
             _ => todo!("{value:#?}"),
         }
     }
+
+    pub(crate) fn model_record_ty(&self, model: &Model) -> stmt::Type {
+        stmt::Type::Record(
+            model
+                .fields
+                .iter()
+                .map(|field| field.expr_ty().clone())
+                .collect(),
+        )
+    }
 }

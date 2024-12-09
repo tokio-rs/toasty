@@ -3,6 +3,7 @@ use super::*;
 // fn partition_expr_input(expr: &mut stmt::Expr, sources: &[plan::InputSource])
 
 struct Partitioner<'a> {
+    planner: &'a Planner<'a>,
     sources: &'a [plan::InputSource],
     input: Vec<plan::Input>,
 }
@@ -33,9 +34,12 @@ impl Partitioner<'_> {
                 assert!(self.partition_expr(&mut *expr.expr).is_stmt(), "TODO");
 
                 if let Partition::Eval { source, project } = self.partition_expr(&mut *expr.list) {
+                    /*
                     let position = self.input.len();
                     self.input.push(plan::Input { source, project });
                     *expr.list = stmt::Expr::arg(position);
+                    */
+                    todo!()
                 }
 
                 Partition::Stmt
@@ -53,7 +57,7 @@ impl Partitioner<'_> {
                 // map, assuming that this is the top-level projection.
                 Partition::Eval {
                     source,
-                    project: Some(eval::Expr::try_from_stmt(expr.map.take(), ()).unwrap()),
+                    project: Some(eval::Expr::from_stmt(expr.map.take())),
                 }
             }
             _ => todo!("{expr:#?}"),
@@ -68,6 +72,7 @@ impl Planner<'_> {
         sources: &[plan::InputSource],
     ) -> Vec<plan::Input> {
         let mut partitioner = Partitioner {
+            planner: &*self,
             sources,
             input: vec![],
         };

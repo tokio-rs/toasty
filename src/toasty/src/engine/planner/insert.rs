@@ -25,7 +25,7 @@ impl Planner<'_> {
 
         // If the statement `Returning` is constant (i.e. does not depend on the
         // database evaluating the statement), then extract it here.
-        let const_returning = self.constantize_insert_returning(&mut stmt);
+        let const_returning = self.constantize_insert_returning(model, &mut stmt);
 
         self.lower_stmt_insert(model, &mut stmt);
 
@@ -290,6 +290,7 @@ impl Planner<'_> {
     // TODO: unify with update?
     fn constantize_insert_returning(
         &self,
+        model: &Model,
         stmt: &mut stmt::Insert,
     ) -> Option<(Vec<stmt::Value>, stmt::Type)> {
         let Some(stmt::Returning::Expr(returning)) = &stmt.returning else {
@@ -309,7 +310,11 @@ impl Planner<'_> {
         }
 
         let ty = self.infer_expr_ty(returning);
-        let returning = eval::Expr::try_from_stmt(returning.clone(), ConstReturning).unwrap();
+        let returning = eval::Func {
+            args: vec![self.model_record_ty(model)],
+            ret: ty.clone(),
+            expr: eval::Expr::try_convert_from_stmt(returning.clone(), ConstReturning).unwrap(),
+        };
 
         let mut rows = vec![];
 

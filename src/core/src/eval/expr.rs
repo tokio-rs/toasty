@@ -26,7 +26,11 @@ impl Expr {
         matches!(self, Expr::Value(Value::Null))
     }
 
-    pub fn try_from_stmt(stmt: stmt::Expr, mut convert: impl Convert) -> Option<Expr> {
+    pub fn from_stmt(stmt: stmt::Expr) -> Expr {
+        Expr::try_convert_from_stmt(stmt, convert::ConstExpr).expect("non-const expr")
+    }
+
+    pub fn try_convert_from_stmt(stmt: stmt::Expr, mut convert: impl Convert) -> Option<Expr> {
         Some(Expr::from_stmt_by_ref(stmt, &mut convert))
     }
 
@@ -45,9 +49,9 @@ impl Expr {
         }
     }
 
-    pub fn eval(&self, mut input: impl Input) -> crate::Result<stmt::Value> {
-        self.eval_ref(&mut input)
-    }
+    // pub fn eval(&self, mut input: impl Input) -> crate::Result<stmt::Value> {
+    //     self.eval_ref(&mut input)
+    // }
 
     /// Special case of `eval` where the expression is a constant
     ///
@@ -69,7 +73,7 @@ impl Expr {
         }
     }
 
-    pub(crate) fn eval_ref(&self, input: &mut impl Input) -> Result<Value> {
+    pub(super) fn eval_ref(&self, input: &mut impl Input) -> Result<Value> {
         match self {
             Expr::And(expr_and) => {
                 debug_assert!(!expr_and.operands.is_empty());

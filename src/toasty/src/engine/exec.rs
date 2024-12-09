@@ -62,6 +62,7 @@ impl Exec<'_> {
     }
 
     async fn collect_input(&mut self, input: &plan::Input) -> Result<Vec<stmt::Value>> {
+        /*
         let mut ret = vec![];
 
         let mut value_stream = match input.source {
@@ -81,8 +82,11 @@ impl Exec<'_> {
         }
 
         Ok(ret)
+        */
+        todo!()
     }
 
+    /*
     async fn collect_keys_from_input(
         &mut self,
         key_expr: &eval::Expr,
@@ -112,4 +116,5 @@ impl Exec<'_> {
 
         Ok(keys)
     }
+    */
 }
