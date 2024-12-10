@@ -6,10 +6,8 @@ impl Exec<'_> {
     pub(super) async fn exec_query_sql(&mut self, action: &plan::QuerySql) -> Result<()> {
         let mut sql = action.stmt.clone();
 
-        if !action.input.is_empty() {
-            assert_eq!(action.input.len(), 1);
-
-            let input = self.collect_input(&action.input[0]).await?;
+        if let Some(input) = &action.input {
+            let input = self.collect_input(input).await?;
             sql.substitute(&[stmt::Value::List(input)]);
         }
 

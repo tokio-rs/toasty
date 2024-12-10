@@ -15,4 +15,9 @@ impl VarTable {
         self.vars.push(ty);
         plan::VarId(ret)
     }
+
+    pub fn ty(&self, var: impl Into<plan::VarId>) -> &stmt::Type {
+        let var = var.into();
+        &self.vars[var.0]
+    }
 }

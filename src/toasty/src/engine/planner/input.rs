@@ -5,14 +5,14 @@ use super::*;
 struct Partitioner<'a> {
     planner: &'a Planner<'a>,
     sources: &'a [plan::InputSource],
-    input: Vec<plan::Input>,
+    input: Option<plan::Input>,
 }
 
 enum Partition {
     Stmt,
     Eval {
         source: plan::InputSource,
-        project: Option<eval::Expr>,
+        project: eval::Expr,
     },
 }
 
@@ -27,19 +27,21 @@ impl Partitioner<'_> {
         match expr {
             stmt::Expr::Arg(expr) => Partition::Eval {
                 source: self.sources[expr.position].clone(),
-                project: None,
+                project: eval::Expr::arg(0),
             },
             stmt::Expr::Column(_) => Partition::Stmt,
             stmt::Expr::InList(expr) => {
                 assert!(self.partition_expr(&mut *expr.expr).is_stmt(), "TODO");
 
                 if let Partition::Eval { source, project } = self.partition_expr(&mut *expr.list) {
-                    /*
-                    let position = self.input.len();
-                    self.input.push(plan::Input { source, project });
-                    *expr.list = stmt::Expr::arg(position);
-                    */
-                    todo!()
+                    assert!(self.input.is_none());
+                    let ty = self.planner.var_table.ty(&source).clone();
+
+                    self.input = Some(plan::Input {
+                        source,
+                        project: eval::Func::new(vec![ty], project),
+                    });
+                    *expr.list = stmt::Expr::arg(0);
                 }
 
                 Partition::Stmt
@@ -50,14 +52,14 @@ impl Partitioner<'_> {
                     todo!()
                 };
 
-                assert!(project.is_none());
+                assert!(project.is_arg());
 
                 // For now, assume the mapping is fine w/o checking it Also,
                 // this is a pretty mega hack since we are just removing the
                 // map, assuming that this is the top-level projection.
                 Partition::Eval {
                     source,
-                    project: Some(eval::Expr::from_stmt(expr.map.take())),
+                    project: eval::Expr::map(project, eval::Expr::from_stmt(expr.map.take())),
                 }
             }
             _ => todo!("{expr:#?}"),
@@ -70,11 +72,11 @@ impl Planner<'_> {
         &mut self,
         stmt: &mut stmt::Query,
         sources: &[plan::InputSource],
-    ) -> Vec<plan::Input> {
+    ) -> Option<plan::Input> {
         let mut partitioner = Partitioner {
             planner: &*self,
             sources,
-            input: vec![],
+            input: None,
         };
 
         match &mut *stmt.body {

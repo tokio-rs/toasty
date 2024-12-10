@@ -67,7 +67,7 @@ impl Planner<'_> {
         self.lower_stmt_query(model, &mut stmt);
 
         let input = if cx.input.is_empty() {
-            vec![]
+            None
         } else {
             self.partition_query_input(&mut stmt, &cx.input)
         };

@@ -92,7 +92,7 @@ impl Planner<'_> {
 
         self.push_action(plan::QuerySql {
             output,
-            input: vec![],
+            input: None,
             stmt: stmt.into(),
         });
 

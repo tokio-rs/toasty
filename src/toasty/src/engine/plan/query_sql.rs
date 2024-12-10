@@ -3,7 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct QuerySql {
     /// Where to get arguments for this action.
-    pub input: Vec<Input>,
+    pub input: Option<Input>,
 
     /// How to handle output
     pub output: Option<QuerySqlOutput>,
