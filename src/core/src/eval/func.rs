@@ -28,6 +28,10 @@ impl Func {
         }
     }
 
+    pub fn is_identity(&self) -> bool {
+        matches!(&self.expr, Expr::Arg(expr_arg) if expr_arg.position == 0)
+    }
+
     pub fn eval(&self, mut input: impl Input) -> Result<stmt::Value> {
         self.expr.eval_ref(&mut input)
     }

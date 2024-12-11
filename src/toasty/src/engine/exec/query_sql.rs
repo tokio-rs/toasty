@@ -8,7 +8,7 @@ impl Exec<'_> {
 
         if let Some(input) = &action.input {
             let input = self.collect_input(input).await?;
-            sql.substitute(&[stmt::Value::List(input)]);
+            sql.substitute(&[input]);
         }
 
         let res = self

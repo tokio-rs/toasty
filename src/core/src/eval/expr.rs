@@ -125,11 +125,18 @@ impl Expr {
                 Ok(Value::List(applied))
             }
             Expr::Map(expr_map) => {
-                /*
-                let base = expr_map.base.eval_ref(input)?;
-                expr_map.map.eval(&base)
-                */
-                todo!()
+                let mut base = expr_map.base.eval_ref(input)?;
+
+                let Value::List(ref mut items) = &mut base else {
+                    todo!("base={base:#?}")
+                };
+
+                for item in items.iter_mut() {
+                    let mut i = item.take();
+                    *item = expr_map.map.eval_ref(&mut &[i])?;
+                }
+
+                Ok(base)
             }
             Expr::DecodeEnum(expr, ty) => {
                 let Value::String(base) = expr.eval_ref(input)? else {

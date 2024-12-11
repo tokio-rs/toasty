@@ -61,60 +61,18 @@ impl Exec<'_> {
         }
     }
 
-    async fn collect_input(&mut self, input: &plan::Input) -> Result<Vec<stmt::Value>> {
-        /*
-        let mut ret = vec![];
-
+    async fn collect_input(&mut self, input: &plan::Input) -> Result<stmt::Value> {
         let mut value_stream = match input.source {
             plan::InputSource::Value(var_id) => self.vars.load(var_id),
             plan::InputSource::Ref(var_id) => self.vars.dup(var_id).await?,
         };
 
-        while let Some(res) = value_stream.next().await {
-            let record = res?;
+        let mut values = stmt::Value::List(value_stream.collect().await?);
 
-            if let Some(project) = &input.project {
-                // todo!("input={input:#?}; record={record:#?}");
-                ret.push(project.eval(&[record])?);
-            } else {
-                ret.push(record);
-            }
+        if !input.project.is_identity() {
+            values = input.project.eval(&[values])?;
         }
 
-        Ok(ret)
-        */
-        todo!()
+        Ok(values)
     }
-
-    /*
-    async fn collect_keys_from_input(
-        &mut self,
-        key_expr: &eval::Expr,
-        input: &[plan::Input],
-    ) -> Result<Vec<stmt::Value>> {
-        let mut keys = vec![];
-
-        // For now, there is only one possible input entry
-        match &input[..] {
-            [input] => {
-                for value in self.collect_input(input).await? {
-                    todo!("key_expr={key_expr:#?}; value={value:#?}");
-                    // let key = key_expr.eval(&[value][..])?;
-                    // keys.push(key);
-                }
-            }
-            [] => match key_expr {
-                eval::Expr::List(expr_list) => {
-                    for key_expr in &expr_list.items {
-                        keys.push(key_expr.eval_const());
-                    }
-                }
-                key_expr => keys.push(key_expr.eval_const()),
-            },
-            _ => todo!("key_expr={:#?}; input={:#?}", key_expr, input),
-        };
-
-        Ok(keys)
-    }
-    */
 }
