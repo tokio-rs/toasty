@@ -55,6 +55,13 @@ impl<'a> LowerModels<'a> {
             self.lower_model_fields(model);
         }
 
+        // Hax
+        for column in &mut self.table.columns {
+            if let stmt::Type::Enum(_) = column.ty {
+                column.ty = stmt::Type::String;
+            }
+        }
+
         self.update_index_names();
     }
 

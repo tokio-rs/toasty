@@ -7,6 +7,7 @@ pub(crate) mod lift_pk_select;
 
 mod expr_binary_op;
 mod expr_cast;
+mod expr_concat_str;
 mod expr_in_list;
 mod expr_is_null;
 mod expr_record;
@@ -87,6 +88,7 @@ impl<'a> VisitMut for Simplify<'_> {
                 &mut *expr_binary_op.rhs,
             ),
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
+            Expr::ConcatStr(expr) => self.simplify_expr_concat_str(expr),
             Expr::InList(expr) => self.simplify_expr_in_list(expr),
             Expr::InSubquery(expr_in_subquery) => {
                 self.lift_in_subquery(&expr_in_subquery.expr, &expr_in_subquery.query)
