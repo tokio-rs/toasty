@@ -75,7 +75,10 @@ impl Planner<'_> {
             }
 
             let value = stmt::Value::empty_sparse_record();
-            return Some(self.set_var(vec![value], stmt::Type::empty_sparse_record()));
+            return Some(self.set_var(
+                vec![value],
+                stmt::Type::list(stmt::Type::empty_sparse_record()),
+            ));
         }
 
         self.lower_stmt_update(model, &mut stmt);
@@ -84,7 +87,9 @@ impl Planner<'_> {
         let output = self
             .partition_maybe_returning(&mut stmt.returning)
             .map(|mut project| plan::QuerySqlOutput {
-                var: self.var_table.register_var(project.ret.clone()),
+                var: self
+                    .var_table
+                    .register_var(stmt::Type::list(project.ret.clone())),
                 project,
             });
 
