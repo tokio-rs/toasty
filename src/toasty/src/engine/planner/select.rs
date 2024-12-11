@@ -73,7 +73,13 @@ impl Planner<'_> {
         };
 
         let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
-        let output = self.var_table.register_var(project.ret.clone());
+        let output = self
+            .var_table
+            .register_var(stmt::Type::list(project.ret.clone()));
+
+        if let Some(input) = &input {
+            assert!(input.project.args[0].is_list(), "{input:#?}");
+        }
 
         self.push_action(plan::QuerySql {
             input,

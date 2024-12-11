@@ -154,12 +154,33 @@ impl Value {
 
     pub fn is_a(&self, ty: &Type) -> bool {
         match (self, ty) {
+            (Value::Null, _) => true,
             (Value::Bool(_), Type::Bool) => true,
             (Value::Bool(_), _) => false,
             (Value::I64(_), Type::I64) => true,
             (Value::I64(_), _) => false,
             (Value::Id(value), Type::Id(ty)) => value.model_id() == *ty,
             (Value::Id(_), _) => false,
+            (Value::List(value), Type::List(ty)) => {
+                if value.is_empty() {
+                    true
+                } else {
+                    value[0].is_a(ty)
+                }
+            }
+            (Value::List(_), _) => false,
+            (Value::Record(value), Type::Record(fields)) => {
+                if value.len() == fields.len() {
+                    value
+                        .fields
+                        .iter()
+                        .zip(fields.iter())
+                        .all(|(value, ty)| value.is_a(ty))
+                } else {
+                    false
+                }
+            }
+            (Value::Record(_), _) => false,
             (Value::String(_), Type::String) => true,
             (Value::String(_), _) => false,
             _ => todo!("value={self:#?}, ty={ty:#?}"),

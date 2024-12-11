@@ -7,6 +7,7 @@ impl Exec<'_> {
         let mut sql = action.stmt.clone();
 
         if let Some(input) = &action.input {
+            println!("PLAN = {action:#?}");
             let input = self.collect_input(input).await?;
             sql.substitute(&[input]);
         }

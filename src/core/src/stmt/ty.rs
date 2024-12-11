@@ -52,6 +52,10 @@ impl Type {
         matches!(self, Self::Model(_))
     }
 
+    pub fn is_list(&self) -> bool {
+        matches!(self, Self::List(_))
+    }
+
     pub fn cast(&self, value: Value) -> Result<Value> {
         use stmt::Value;
 

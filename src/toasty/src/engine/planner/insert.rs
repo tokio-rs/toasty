@@ -294,7 +294,6 @@ impl Planner<'_> {
         stmt: &mut stmt::Insert,
     ) -> Option<(Vec<stmt::Value>, stmt::Type)> {
         let Some(stmt::Returning::Expr(returning)) = &stmt.returning else {
-            todo!("stmt={stmt:#?}");
             return None;
         };
 
@@ -359,7 +358,7 @@ impl Planner<'_> {
         // We do not need to receive it from the database anymore.
         stmt.returning = None;
 
-        Some((rows, ret))
+        Some((rows, stmt::Type::list(ret)))
     }
 }
 

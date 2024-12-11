@@ -37,6 +37,8 @@ impl Partitioner<'_> {
                     assert!(self.input.is_none());
                     let ty = self.planner.var_table.ty(&source).clone();
 
+                    debug_assert!(ty.is_list(), "ty={ty:#?}");
+
                     self.input = Some(plan::Input {
                         source,
                         project: eval::Func::new(vec![ty], project),
