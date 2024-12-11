@@ -322,7 +322,6 @@ impl Planner<'_> {
             }
         }
 
-        println!("stmt={stmt:#?}");
         let expr = eval::Expr::try_convert_from_stmt(
             returning.clone(),
             ConstReturning {
@@ -349,7 +348,6 @@ impl Planner<'_> {
 
         // TODO: OPTIMIZE!
         for row in &values.rows {
-            println!("EVAL; expr={returning:#?}; args=[{row:#?}]");
             let evaled = returning.eval([row]).unwrap();
             rows.push(evaled);
         }

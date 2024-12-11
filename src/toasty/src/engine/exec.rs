@@ -42,7 +42,6 @@ impl Exec<'_> {
     }
 
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
-        println!("STEP = {action:#?}");
         match action {
             Action::Associate(action) => self.exec_associate(action).await,
             Action::BatchWrite(action) => self.exec_batch_write(action).await,

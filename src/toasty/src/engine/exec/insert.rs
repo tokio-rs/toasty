@@ -34,10 +34,8 @@ impl Exec<'_> {
         let stmt = action.stmt.clone();
 
         let res = ValueStream::from_stream(async_stream::try_stream! {
-            println!("stmt={:#?}", stmt);
             for await value in rows {
                 let value = value?;
-                println!("{value:#?}; project={project:#?}");
                 let record = project.eval(&[value])?;
                 yield record.into();
             }
