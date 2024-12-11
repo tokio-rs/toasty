@@ -12,8 +12,10 @@ impl Planner<'_> {
         &self,
         index: &Index,
         expr: &stmt::Expr,
-    ) -> Option<eval::Expr> {
-        TryConvert { index }.try_convert(expr)
+    ) -> Option<eval::Func> {
+        TryConvert { index }
+            .try_convert(expr)
+            .map(|expr| eval::Func::new(vec![], expr))
     }
 }
 
@@ -22,6 +24,7 @@ impl<'a> TryConvert<'a> {
         use stmt::Expr::*;
 
         match expr {
+            Arg(_) => todo!("{expr:#?}"),
             BinaryOp(e) => {
                 if e.op.is_eq() {
                     if self.index.columns.len() > 1 {
@@ -117,20 +120,6 @@ impl<'a> TryConvert<'a> {
 
     fn expr_arg_to_project(&self, expr: &stmt::Expr) -> eval::Expr {
         match expr {
-            /*
-            // TODO: ok for now I guess, but enum should be gone before this point.
-            stmt::Expr::Enum(expr_enum) => {
-                let fields = eval::Expr::from(expr_enum.fields.clone());
-                let stmt::Value::Record(fields) = fields.eval_const() else {
-                    todo!()
-                };
-                eval::Expr::Value(stmt::Value::Enum(stmt::ValueEnum {
-                    variant: expr_enum.variant,
-                    fields: fields,
-                }))
-            }
-            */
-            // stmt::Expr::List(_) => eval::Expr::from(expr.clone()),
             stmt::Expr::Value(value) => eval::Expr::Value(value.clone()),
             _ => todo!("expr={:#?}", expr),
         }

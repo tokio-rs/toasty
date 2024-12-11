@@ -49,19 +49,6 @@ impl Expr {
         }
     }
 
-    // pub fn eval(&self, mut input: impl Input) -> crate::Result<stmt::Value> {
-    //     self.eval_ref(&mut input)
-    // }
-
-    /// Special case of `eval` where the expression is a constant
-    ///
-    /// # Panics
-    ///
-    /// `eval_const` panics if the expression is not constant
-    pub fn eval_const(&self) -> stmt::Value {
-        self.eval_ref(&mut const_input()).unwrap()
-    }
-
     pub fn eval_bool(&self, mut input: impl Input) -> Result<bool> {
         self.eval_bool_ref(&mut input)
     }

@@ -26,6 +26,7 @@ pub(crate) struct UpdateByKey {
 
 impl UpdateByKey {
     pub(crate) fn apply(&self) -> Result<operation::UpdateByKey> {
+        /*
         debug_assert!(!self.assignments.is_empty(), "plan = {self:#?}");
 
         let keys = match self.key.eval_const() {
@@ -41,6 +42,8 @@ impl UpdateByKey {
             condition: self.condition.clone(),
             returning: self.output.is_some(),
         })
+        */
+        todo!()
     }
 
     pub(crate) async fn apply_with_input(
