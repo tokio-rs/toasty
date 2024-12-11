@@ -49,10 +49,6 @@ impl Expr {
         }
     }
 
-    pub fn eval_bool(&self, mut input: impl Input) -> Result<bool> {
-        self.eval_bool_ref(&mut input)
-    }
-
     pub(crate) fn eval_bool_ref(&self, input: &mut impl Input) -> Result<bool> {
         match self.eval_ref(input)? {
             Value::Bool(ret) => Ok(ret),
