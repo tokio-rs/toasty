@@ -13,6 +13,11 @@ pub struct Func {
     pub expr: Expr,
 }
 
+struct TypedInput<'a, I> {
+    input: &'a mut I,
+    tys: &'a [stmt::Type],
+}
+
 impl Func {
     pub fn new(args: Vec<stmt::Type>, expr: Expr) -> Func {
         let ret = expr.ty(&args);
@@ -33,6 +38,11 @@ impl Func {
     }
 
     pub fn eval(&self, mut input: impl Input) -> Result<stmt::Value> {
+        let mut input = TypedInput {
+            input: &mut input,
+            tys: &self.args,
+        };
+
         self.expr.eval_ref(&mut input)
     }
 
@@ -48,5 +58,26 @@ impl Func {
 
     pub fn eval_bool(&self, mut input: impl Input) -> Result<bool> {
         self.expr.eval_bool_ref(&mut input)
+    }
+}
+
+impl<'a, I: Input> Input for TypedInput<'a, I> {
+    fn resolve_arg(&mut self, expr_arg: &ExprArg, projection: &stmt::Projection) -> stmt::Value {
+        let value = self.input.resolve_arg(expr_arg, projection);
+
+        if !value.is_null() {
+            let mut ty = &self.tys[expr_arg.position];
+
+            for step in projection {
+                ty = match ty {
+                    stmt::Type::Record(tys) => &tys[step.into_usize()],
+                    _ => todo!("ty={ty:#?}"),
+                };
+            }
+
+            assert!(value.is_a(ty), "value={value:#?}; ty={ty:#?};");
+        }
+
+        value
     }
 }

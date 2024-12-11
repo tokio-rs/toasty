@@ -40,11 +40,15 @@ impl Expr {
             stmt::Expr::And(expr) => ExprAnd::from_stmt(expr, convert).into(),
             stmt::Expr::BinaryOp(expr) => ExprBinaryOp::from_stmt(expr, convert).into(),
             stmt::Expr::Cast(expr) => ExprCast::from_stmt(expr, convert).into(),
+            stmt::Expr::Column(expr) => convert.convert_expr_column(expr),
             stmt::Expr::Field(expr) => convert.convert_expr_field(expr),
             stmt::Expr::List(expr) => ExprList::from_stmt(expr, convert).into(),
             stmt::Expr::Project(expr) => ExprProject::from_stmt(expr, convert).into(),
             stmt::Expr::Record(expr) => ExprRecord::from_stmt(expr, convert).into(),
             stmt::Expr::Value(expr) => Expr::Value(expr),
+            stmt::Expr::DecodeEnum(base, ty, variant) => {
+                Expr::DecodeEnum(Box::new(Expr::from_stmt_by_ref(*base, convert)), ty)
+            }
             _ => todo!("stmt={:#?}", stmt),
         }
     }

@@ -39,7 +39,7 @@ impl<'a> Entry<'a> {
     pub fn to_value(&self) -> Value {
         match *self {
             Entry::Expr(Expr::Value(value)) | Entry::Value(value) => value.clone(),
-            _ => todo!(),
+            _ => todo!("entry={self:#?}"),
         }
     }
 }

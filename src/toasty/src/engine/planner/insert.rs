@@ -23,11 +23,11 @@ impl Planner<'_> {
         // scope, check constraints, ...)
         self.preprocess_insert_values(model, &mut stmt);
 
+        self.lower_stmt_insert(model, &mut stmt);
+
         // If the statement `Returning` is constant (i.e. does not depend on the
         // database evaluating the statement), then extract it here.
         let const_returning = self.constantize_insert_returning(model, &mut stmt);
-
-        self.lower_stmt_insert(model, &mut stmt);
 
         let mut output_var = None;
 
@@ -56,7 +56,7 @@ impl Planner<'_> {
                 let action = self.write_actions.len();
 
                 let mut plan = plan::Insert {
-                    input: vec![],
+                    input: None,
                     output: None,
                     stmt: stmt::Insert {
                         target: stmt.target.clone(),
@@ -294,32 +294,63 @@ impl Planner<'_> {
         stmt: &mut stmt::Insert,
     ) -> Option<(Vec<stmt::Value>, stmt::Type)> {
         let Some(stmt::Returning::Expr(returning)) = &stmt.returning else {
+            todo!("stmt={stmt:#?}");
             return None;
         };
 
         let stmt::ExprSet::Values(values) = &*stmt.source.body else {
+            todo!("stmt={stmt:#?}");
             return None;
         };
 
-        struct ConstReturning;
+        let stmt::InsertTarget::Table(insert_table) = &stmt.target else {
+            todo!("stmt={stmt:#?}");
+        };
 
-        impl eval::Convert for ConstReturning {
-            fn convert_expr_field(&mut self, field: stmt::ExprField) -> eval::Expr {
-                eval::Expr::arg_project(0, [field.field.index])
+        struct ConstReturning<'a> {
+            columns: &'a [ColumnId],
+        }
+
+        impl eval::Convert for ConstReturning<'_> {
+            fn convert_expr_column(&mut self, stmt: stmt::ExprColumn) -> eval::Expr {
+                let index = self
+                    .columns
+                    .iter()
+                    .position(|column| *column == stmt.column)
+                    .unwrap();
+
+                eval::Expr::arg_project(0, [index])
             }
         }
 
-        let ty = self.infer_expr_ty(returning);
+        println!("stmt={stmt:#?}");
+        let expr = eval::Expr::try_convert_from_stmt(
+            returning.clone(),
+            ConstReturning {
+                columns: &insert_table.columns,
+            },
+        )
+        .unwrap();
+
+        let ret = self.infer_expr_ty(returning);
+        let args = stmt::Type::Record(
+            insert_table
+                .columns
+                .iter()
+                .map(|column_id| self.schema.column(column_id).ty.clone())
+                .collect(),
+        );
         let returning = eval::Func {
-            args: vec![self.model_record_ty(model)],
-            ret: ty.clone(),
-            expr: eval::Expr::try_convert_from_stmt(returning.clone(), ConstReturning).unwrap(),
+            args: vec![args],
+            ret: ret.clone(),
+            expr,
         };
 
         let mut rows = vec![];
 
         // TODO: OPTIMIZE!
         for row in &values.rows {
+            println!("EVAL; expr={returning:#?}; args=[{row:#?}]");
             let evaled = returning.eval([row]).unwrap();
             rows.push(evaled);
         }
@@ -328,7 +359,7 @@ impl Planner<'_> {
         // We do not need to receive it from the database anymore.
         stmt.returning = None;
 
-        Some((rows, ty))
+        Some((rows, ret))
     }
 }
 

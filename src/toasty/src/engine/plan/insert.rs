@@ -3,7 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub(crate) struct Insert {
     /// Where to get the input from
-    pub input: Vec<Input>,
+    pub input: Option<Input>,
 
     /// If the output is needed, store it in this variable
     pub output: Option<InsertOutput>,

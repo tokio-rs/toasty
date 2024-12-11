@@ -70,32 +70,6 @@ impl Projection {
         self.steps.resolve_field(schema, expr_self)
     }
 
-    /*
-    pub fn resolve_value<'a>(&self, expr_self: &'a Value) -> &'a Value {
-        let mut ret = expr_self;
-
-        for step in self.as_slice() {
-            match ret {
-                Value::Record(record) => ret = &record[step.into_usize()],
-                Value::Enum(value_enum) => {
-                    assert_eq!(value_enum.variant, step.into_usize());
-
-                    ret = match &value_enum.fields[..] {
-                        [] => todo!("expr_self={:#?}; projection={:#?}", expr_self, self),
-                        [field] => field,
-                        [..] => todo!(
-                            "in theory the path should also reference a field... but it does not"
-                        ),
-                    };
-                }
-                _ => todo!("ret={:#?}", ret),
-            }
-        }
-
-        ret
-    }
-    */
-
     pub fn resolves_to(&self, field: impl Into<PathStep>) -> bool {
         let field = field.into();
         let [step] = &self[..] else { return false };

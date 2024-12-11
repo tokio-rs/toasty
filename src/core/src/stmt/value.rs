@@ -152,6 +152,20 @@ impl Value {
         }
     }
 
+    pub fn is_a(&self, ty: &Type) -> bool {
+        match (self, ty) {
+            (Value::Bool(_), Type::Bool) => true,
+            (Value::Bool(_), _) => false,
+            (Value::I64(_), Type::I64) => true,
+            (Value::I64(_), _) => false,
+            (Value::Id(value), Type::Id(ty)) => value.model_id() == *ty,
+            (Value::Id(_), _) => false,
+            (Value::String(_), Type::String) => true,
+            (Value::String(_), _) => false,
+            _ => todo!("value={self:#?}, ty={ty:#?}"),
+        }
+    }
+
     #[track_caller]
     pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
         let mut ret = Entry::Value(self);

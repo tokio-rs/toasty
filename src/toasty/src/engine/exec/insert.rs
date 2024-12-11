@@ -6,7 +6,7 @@ use crate::driver::operation;
 
 impl Exec<'_> {
     pub(super) async fn exec_insert(&mut self, action: &plan::Insert) -> Result<()> {
-        assert!(action.input.is_empty(), "todo");
+        assert!(action.input.is_none(), "todo");
 
         let mut stmt = action.stmt.clone();
 
@@ -37,7 +37,7 @@ impl Exec<'_> {
             println!("stmt={:#?}", stmt);
             for await value in rows {
                 let value = value?;
-                println!("{value:#?}");
+                println!("{value:#?}; project={project:#?}");
                 let record = project.eval(&[value])?;
                 yield record.into();
             }
