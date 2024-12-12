@@ -141,19 +141,19 @@ pub struct CreateTodo {
 }
 impl CreateTodo {
     pub fn id(mut self, id: impl Into<Id<Todo>>) -> Self {
-        self.stmt.set_value(0, id.into());
+        self.stmt.set(0, id.into());
         self
     }
     pub fn user_id(mut self, user_id: impl Into<Id<super::user::User>>) -> Self {
-        self.stmt.set_value(1, user_id.into());
+        self.stmt.set(1, user_id.into());
         self
     }
     pub fn user<'b>(mut self, user: impl IntoExpr<self::relation::User<'b>>) -> Self {
-        self.stmt.set_expr(2, user.into_expr());
+        self.stmt.set(2, user.into_expr());
         self
     }
     pub fn title(mut self, title: impl Into<String>) -> Self {
-        self.stmt.set_value(3, title.into());
+        self.stmt.set(3, title.into());
         self
     }
     pub async fn exec(self, db: &Db) -> Result<Todo> {
@@ -230,7 +230,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<Todo>>) -> &mut Self {
-        self.stmt.set_expr(0, id.into());
+        self.stmt.set(0, id.into());
         self
     }
     pub fn user_id(mut self, user_id: impl Into<Id<super::user::User>>) -> Self {
@@ -238,7 +238,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_user_id(&mut self, user_id: impl Into<Id<super::user::User>>) -> &mut Self {
-        self.stmt.set_expr(1, user_id.into());
+        self.stmt.set(1, user_id.into());
         self
     }
     pub fn user<'b>(mut self, user: impl IntoExpr<self::relation::User<'b>>) -> Self {
@@ -246,7 +246,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_user<'b>(&mut self, user: impl IntoExpr<self::relation::User<'b>>) -> &mut Self {
-        self.stmt.set_expr(2, user.into_expr());
+        self.stmt.set(2, user.into_expr());
         self
     }
     pub fn title(mut self, title: impl Into<String>) -> Self {
@@ -254,7 +254,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_title(&mut self, title: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(3, title.into());
+        self.stmt.set(3, title.into());
         self
     }
     pub async fn exec(self, db: &Db) -> Result<()> {

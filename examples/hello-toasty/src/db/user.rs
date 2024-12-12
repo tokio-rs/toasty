@@ -141,15 +141,15 @@ pub struct CreateUser {
 }
 impl CreateUser {
     pub fn id(mut self, id: impl Into<Id<User>>) -> Self {
-        self.stmt.set_value(0, id.into());
+        self.stmt.set(0, id.into());
         self
     }
     pub fn name(mut self, name: impl Into<String>) -> Self {
-        self.stmt.set_value(1, name.into());
+        self.stmt.set(1, name.into());
         self
     }
     pub fn email(mut self, email: impl Into<String>) -> Self {
-        self.stmt.set_value(2, email.into());
+        self.stmt.set(2, email.into());
         self
     }
     pub fn todo(mut self, todo: impl IntoExpr<super::todo::Todo>) -> Self {
@@ -157,7 +157,7 @@ impl CreateUser {
         self
     }
     pub fn moto(mut self, moto: impl Into<String>) -> Self {
-        self.stmt.set_value(4, moto.into());
+        self.stmt.set(4, moto.into());
         self
     }
     pub async fn exec(self, db: &Db) -> Result<User> {
@@ -243,7 +243,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<User>>) -> &mut Self {
-        self.stmt.set_expr(0, id.into());
+        self.stmt.set(0, id.into());
         self
     }
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -251,7 +251,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_name(&mut self, name: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(1, name.into());
+        self.stmt.set(1, name.into());
         self
     }
     pub fn email(mut self, email: impl Into<String>) -> Self {
@@ -259,7 +259,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_email(&mut self, email: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(2, email.into());
+        self.stmt.set(2, email.into());
         self
     }
     pub fn todo(mut self, todo: impl IntoExpr<super::todo::Todo>) -> Self {
@@ -275,7 +275,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_moto(&mut self, moto: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(4, moto.into());
+        self.stmt.set(4, moto.into());
         self
     }
     pub fn unset_moto(&mut self) -> &mut Self {

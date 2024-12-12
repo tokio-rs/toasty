@@ -133,15 +133,15 @@ pub struct CreateUser {
 }
 impl CreateUser {
     pub fn id(mut self, id: impl Into<Id<User>>) -> Self {
-        self.stmt.set_value(0, id.into());
+        self.stmt.set(0, id.into());
         self
     }
     pub fn name(mut self, name: impl Into<String>) -> Self {
-        self.stmt.set_value(1, name.into());
+        self.stmt.set(1, name.into());
         self
     }
     pub fn profile(mut self, profile: impl IntoExpr<super::profile::Profile>) -> Self {
-        self.stmt.set_expr(2, profile.into_expr());
+        self.stmt.set(2, profile.into_expr());
         self
     }
     pub async fn exec(self, db: &Db) -> Result<User> {
@@ -217,7 +217,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<User>>) -> &mut Self {
-        self.stmt.set_expr(0, id.into());
+        self.stmt.set(0, id.into());
         self
     }
     pub fn name(mut self, name: impl Into<String>) -> Self {
@@ -225,7 +225,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_name(&mut self, name: impl Into<String>) -> &mut Self {
-        self.stmt.set_expr(1, name.into());
+        self.stmt.set(1, name.into());
         self
     }
     pub fn profile(mut self, profile: impl IntoExpr<super::profile::Profile>) -> Self {
@@ -233,7 +233,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_profile(&mut self, profile: impl IntoExpr<super::profile::Profile>) -> &mut Self {
-        self.stmt.set_expr(2, profile.into_expr());
+        self.stmt.set(2, profile.into_expr());
         self
     }
     pub fn unset_profile(&mut self) -> &mut Self {

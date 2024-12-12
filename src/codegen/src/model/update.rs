@@ -206,7 +206,7 @@ impl<'a> Generator<'a> {
                         }
 
                         pub fn #set_ident(&mut self, #name: impl Into<#ty>) -> &mut Self {
-                            self.stmt.set_expr(#index, #name.into());
+                            self.stmt.set(#index, #name.into());
                             self
                         }
 
@@ -223,7 +223,7 @@ impl<'a> Generator<'a> {
                         }
 
                         pub fn #set_ident(&mut self, #name: impl IntoExpr<#target_struct_name>) -> &mut Self {
-                            self.stmt.set_expr(#index, #name.into_expr());
+                            self.stmt.set(#index, #name.into_expr());
                             self
                         }
 
@@ -257,7 +257,7 @@ impl<'a> Generator<'a> {
                         }
 
                         pub fn #set_ident<'b>(&mut self, #name: impl IntoExpr<#relation_struct_path<'b>>) -> &mut Self {
-                            self.stmt.set_expr(#index, #name.into_expr());
+                            self.stmt.set(#index, #name.into_expr());
                             self
                         }
 

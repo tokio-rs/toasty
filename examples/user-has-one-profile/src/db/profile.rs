@@ -138,15 +138,15 @@ pub struct CreateProfile {
 }
 impl CreateProfile {
     pub fn id(mut self, id: impl Into<Id<Profile>>) -> Self {
-        self.stmt.set_value(0, id.into());
+        self.stmt.set(0, id.into());
         self
     }
     pub fn user<'b>(mut self, user: impl IntoExpr<self::relation::User<'b>>) -> Self {
-        self.stmt.set_expr(1, user.into_expr());
+        self.stmt.set(1, user.into_expr());
         self
     }
     pub fn user_id(mut self, user_id: impl Into<Id<super::user::User>>) -> Self {
-        self.stmt.set_value(2, user_id.into());
+        self.stmt.set(2, user_id.into());
         self
     }
     pub async fn exec(self, db: &Db) -> Result<Profile> {
@@ -226,7 +226,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_id(&mut self, id: impl Into<Id<Profile>>) -> &mut Self {
-        self.stmt.set_expr(0, id.into());
+        self.stmt.set(0, id.into());
         self
     }
     pub fn user<'b>(mut self, user: impl IntoExpr<self::relation::User<'b>>) -> Self {
@@ -234,7 +234,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_user<'b>(&mut self, user: impl IntoExpr<self::relation::User<'b>>) -> &mut Self {
-        self.stmt.set_expr(1, user.into_expr());
+        self.stmt.set(1, user.into_expr());
         self
     }
     pub fn unset_user(&mut self) -> &mut Self {
@@ -246,7 +246,7 @@ impl UpdateQuery {
         self
     }
     pub fn set_user_id(&mut self, user_id: impl Into<Id<super::user::User>>) -> &mut Self {
-        self.stmt.set_expr(2, user_id.into());
+        self.stmt.set(2, user_id.into());
         self
     }
     pub fn unset_user_id(&mut self) -> &mut Self {

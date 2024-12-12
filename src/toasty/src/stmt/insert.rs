@@ -43,12 +43,7 @@ impl<M: Model> Insert<M> {
         self.untyped.target = stmt::InsertTarget::Scope(scope.into_select().untyped);
     }
 
-    /// Set a record value for the last record in the statement
-    pub fn set_value(&mut self, field: usize, value: impl Into<stmt::Value>) {
-        self.set_expr(field, stmt::Expr::Value(value.into()));
-    }
-
-    pub fn set_expr(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+    pub fn set(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
         *self.expr_mut(field) = expr.into();
     }
 
