@@ -88,10 +88,6 @@ impl From<Query> for Statement {
 }
 
 impl Node for Query {
-    fn map<V: Map>(&self, visit: &mut V) -> Self {
-        visit.map_stmt_query(self)
-    }
-
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_query(self);
     }

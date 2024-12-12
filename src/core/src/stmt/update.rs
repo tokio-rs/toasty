@@ -65,10 +65,6 @@ impl From<Update> for Statement {
 }
 
 impl Node for Update {
-    fn map<V: Map>(&self, visit: &mut V) -> Self {
-        visit.map_stmt_update(self)
-    }
-
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_update(self);
     }

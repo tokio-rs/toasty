@@ -230,10 +230,6 @@ impl Default for Expr {
 }
 
 impl Node for Expr {
-    fn map<V: Map>(&self, visit: &mut V) -> Self {
-        visit.map_expr(self)
-    }
-
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_expr(self);
     }

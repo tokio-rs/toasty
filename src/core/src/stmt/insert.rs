@@ -36,10 +36,6 @@ impl From<Insert> for Statement {
 }
 
 impl Node for Insert {
-    fn map<V: Map>(&self, visit: &mut V) -> Self {
-        visit.map_stmt_insert(self)
-    }
-
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_insert(self);
     }

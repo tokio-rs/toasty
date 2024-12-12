@@ -109,9 +109,6 @@ pub use insert_target::InsertTarget;
 mod link;
 pub use link::Link;
 
-pub mod map;
-pub use map::Map;
-
 mod node;
 pub use node::Node;
 
@@ -226,10 +223,6 @@ impl Statement {
 }
 
 impl Node for Statement {
-    fn map<V: Map>(&self, visit: &mut V) -> Self {
-        visit.map_stmt(self)
-    }
-
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt(self);
     }

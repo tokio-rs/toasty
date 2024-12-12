@@ -25,10 +25,6 @@ impl From<Delete> for Statement {
 }
 
 impl Node for Delete {
-    fn map<V: Map>(&self, visit: &mut V) -> Self {
-        visit.map_stmt_delete(self)
-    }
-
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_delete(self);
     }

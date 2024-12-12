@@ -52,10 +52,6 @@ impl Select {
 }
 
 impl Node for Select {
-    fn map<V: Map>(&self, visit: &mut V) -> Self {
-        visit.map_stmt_select(self)
-    }
-
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_select(self);
     }

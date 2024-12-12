@@ -168,10 +168,6 @@ where
 }
 
 impl Node for ExprRecord {
-    fn map<V: Map>(&self, visit: &mut V) -> Self {
-        visit.map_expr_record(self)
-    }
-
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_expr_record(self);
     }

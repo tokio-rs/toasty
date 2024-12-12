@@ -19,10 +19,6 @@ impl From<Unlink> for Statement {
 }
 
 impl Node for Unlink {
-    fn map<V: Map>(&self, visit: &mut V) -> Self {
-        visit.map_stmt_unlink(self)
-    }
-
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_unlink(self);
     }

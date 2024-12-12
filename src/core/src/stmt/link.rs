@@ -19,10 +19,6 @@ impl From<Link> for Statement {
 }
 
 impl Node for Link {
-    fn map<V: Map>(&self, visit: &mut V) -> Self {
-        visit.map_stmt_link(self)
-    }
-
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_link(self);
     }
