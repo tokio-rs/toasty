@@ -242,7 +242,7 @@ impl<'a> Generator<'a> {
                         }
 
                         pub fn #add_ident(&mut self, #singular: impl IntoExpr<#target_struct_name>) -> &mut Self {
-                            self.stmt.push_expr(#index, #singular.into_expr());
+                            self.stmt.insert(#index, #singular.into_expr());
                             self
                         }
                     }

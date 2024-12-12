@@ -153,7 +153,7 @@ impl CreateUser {
         self
     }
     pub fn todo(mut self, todo: impl IntoExpr<super::todo::Todo>) -> Self {
-        self.stmt.push_expr(3, todo.into_expr());
+        self.stmt.insert(3, todo.into_expr());
         self
     }
     pub fn moto(mut self, moto: impl Into<String>) -> Self {
@@ -267,7 +267,7 @@ impl UpdateQuery {
         self
     }
     pub fn add_todo(&mut self, todo: impl IntoExpr<super::todo::Todo>) -> &mut Self {
-        self.stmt.push_expr(3, todo.into_expr());
+        self.stmt.insert(3, todo.into_expr());
         self
     }
     pub fn moto(mut self, moto: impl Into<String>) -> Self {

@@ -197,8 +197,8 @@ impl Planner<'_> {
             stmt::Expr::Stmt(expr_stmt) => {
                 self.plan_mut_has_many_stmt(has_many, *expr_stmt.stmt, scope)
             }
-            stmt::Expr::Concat(expr_concat) => {
-                for expr in expr_concat {
+            stmt::Expr::List(expr_list) => {
+                for expr in expr_list {
                     self.plan_mut_has_many_expr(has_many, expr, scope);
                 }
             }

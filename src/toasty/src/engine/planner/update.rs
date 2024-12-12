@@ -29,13 +29,9 @@ impl Planner<'_> {
 
             self.plan_mut_relation_field(field, &mut stmt.assignments[i], &scope, false);
 
-            // TODO: this should be moved into the above method, but that method
-            // is not well suited right now because it doesn't take in the full
-            // statement.
-
             // Map the belongs_to statement to the foreign key fields
             if let FieldTy::BelongsTo(belongs_to) = &field.ty {
-                let stmt::Expr::Value(value) = stmt.assignments.take(i) else {
+                let stmt::Expr::Value(value) = stmt.assignments.take(i).expr else {
                     todo!()
                 };
 

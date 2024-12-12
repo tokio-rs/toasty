@@ -55,33 +55,41 @@ impl Assignments {
     }
 
     pub fn set(&mut self, key: impl Into<PathStep>, expr: impl Into<Expr>) {
-        // *self.slot(field.into().into_usize()) = expr.into();
-        todo!()
+        self.assignments.insert(
+            key.into().into_usize(),
+            Assignment {
+                op: AssignmentOp::Set,
+                expr: expr.into(),
+            },
+        );
     }
 
     pub fn unset(&mut self, key: impl Into<PathStep>) {
-        /*
-        let field = field.into();
-        self.fields.unset(field);
-
-        self.exprs[field.into_usize()] = None;
-        */
-        todo!()
+        self.assignments.swap_remove(&key.into().into_usize());
     }
 
-    pub fn push(&mut self, key: impl Into<PathStep>, expr: impl Into<Expr>) {
-        // self.slot(field.into().into_usize()).push(expr.into());
-        todo!()
+    /// Insert a value into a set. The expression should evaluate to a single
+    /// value that is inserted into the set.
+    pub fn insert(&mut self, key: impl Into<PathStep>, expr: impl Into<Expr>) {
+        use indexmap::map::Entry;
+
+        match self.assignments.entry(key.into().into_usize()) {
+            Entry::Occupied(entry) => {
+                todo!()
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(Assignment {
+                    op: AssignmentOp::Insert,
+                    expr: expr.into(),
+                });
+            }
+        }
     }
 
-    pub fn take(&mut self, key: impl Into<PathStep>) -> stmt::Expr {
-        /*
-        let field = field.into();
-        self.fields.unset(field);
-
-        self.exprs[field.into_usize()].take().unwrap()
-        */
-        todo!()
+    pub fn take(&mut self, key: impl Into<PathStep>) -> Assignment {
+        self.assignments
+            .swap_remove(&key.into().into_usize())
+            .unwrap()
     }
 
     pub fn keys(&self) -> impl Iterator<Item = usize> + '_ {
@@ -99,23 +107,6 @@ impl Assignments {
             .iter_mut()
             .map(|(index, assignment)| (*index, assignment))
     }
-
-    fn slot(&mut self, index: usize) -> &mut Expr {
-        /*
-        self.fields.insert(index);
-
-        if self.exprs.len() <= index {
-            self.exprs.resize(index + 1, None);
-        }
-
-        if self.exprs[index].is_none() {
-            self.exprs[index] = Some(Expr::default());
-        }
-
-        self.exprs[index].as_mut().unwrap()
-        */
-        todo!()
-    }
 }
 
 impl Default for Assignments {
@@ -131,13 +122,13 @@ impl<I: Into<PathStep>> ops::Index<I> for Assignments {
 
     fn index(&self, index: I) -> &Self::Output {
         let index = index.into().into_usize();
-        &self.assignments[index].expr
+        &self.assignments.get(&index).unwrap().expr
     }
 }
 
 impl<I: Into<PathStep>> ops::IndexMut<I> for Assignments {
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         let index = index.into().into_usize();
-        &mut self.assignments[index].expr
+        &mut self.assignments.get_mut(&index).unwrap().expr
     }
 }

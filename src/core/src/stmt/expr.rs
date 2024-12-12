@@ -189,25 +189,6 @@ impl Expr {
         ret
     }
 
-    /// Assume the expression evaluates to a set of records and extend the
-    /// evaluation to include the given expression.
-    ///
-    /// TODO: maybe split up the ops and instead have `expr.as_or_cast_to_concat().push()`
-    pub fn push(&mut self, expr: impl Into<Expr>) {
-        use std::mem;
-
-        match self {
-            Expr::Concat(exprs) => exprs.push(expr.into()),
-            Expr::Value(Value::Null) => {
-                *self = ExprConcat::new(vec![expr.into()]).into();
-            }
-            _ => {
-                let prev = mem::replace(self, Expr::Value(Value::Null));
-                *self = ExprConcat::new(vec![prev, expr.into()]).into();
-            }
-        }
-    }
-
     pub fn take(&mut self) -> Expr {
         std::mem::replace(self, Expr::Value(Value::Null))
     }

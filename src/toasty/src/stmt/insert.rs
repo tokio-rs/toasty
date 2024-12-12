@@ -53,8 +53,19 @@ impl<M: Model> Insert<M> {
     }
 
     /// Extend the expression for `field` with the given expression
-    pub fn push_expr(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
-        self.expr_mut(field).push(expr);
+    pub fn insert(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+        // self.expr_mut(field).push(expr);
+        let target = self.expr_mut(field);
+
+        match target {
+            stmt::Expr::Value(stmt::Value::Null) => {
+                *target = stmt::Expr::List(vec![expr.into()]);
+            }
+            stmt::Expr::List(items) => {
+                items.push(expr.into());
+            }
+            _ => todo!("existing={target:#?}; expr={:#?}", expr.into()),
+        }
     }
 
     pub(crate) fn merge(&mut self, stmt: Insert<M>) {
