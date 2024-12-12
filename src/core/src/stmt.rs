@@ -121,9 +121,6 @@ pub use op_set::SetOp;
 mod path;
 pub use path::Path;
 
-mod path_step;
-pub use path_step::PathStep;
-
 mod path_field_set;
 pub use path_field_set::PathFieldSet;
 

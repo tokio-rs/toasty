@@ -387,7 +387,7 @@ impl<'a> ModelLoweringBuilder<'a> {
                 };
 
                 for (i, field_id) in model.primary_key.fields.iter().enumerate() {
-                    if field_id.index == step.into_usize() {
+                    if field_id.index == *step {
                         let mut p = projection.clone();
                         p[0] = i.into();
 

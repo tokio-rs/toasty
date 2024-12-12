@@ -59,7 +59,7 @@ impl<'a> Generator<'a> {
                     let mut result = db.exec_one(stmt.into()).await?;
 
                     for (field, value) in result.into_sparse_record().into_iter() {
-                        match field.into_usize() {
+                        match field {
                             #( #reload )*
                             _ => todo!("handle unknown field id in reload after update"),
                         }

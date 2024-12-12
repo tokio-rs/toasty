@@ -159,11 +159,9 @@ impl Expr {
 
         for step in path.step_iter() {
             ret = match ret {
-                Entry::Expr(Expr::Record(expr)) => Entry::Expr(&expr[step.into_usize()]),
+                Entry::Expr(Expr::Record(expr)) => Entry::Expr(&expr[step]),
                 Entry::Value(Value::Record(record))
-                | Entry::Expr(Expr::Value(Value::Record(record))) => {
-                    Entry::Value(&record[step.into_usize()])
-                }
+                | Entry::Expr(Expr::Value(Value::Record(record))) => Entry::Value(&record[step]),
                 _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
             }
         }
@@ -177,10 +175,10 @@ impl Expr {
 
         for step in path.step_iter() {
             ret = match ret {
-                EntryMut::Expr(Expr::Record(expr)) => EntryMut::Expr(&mut expr[step.into_usize()]),
+                EntryMut::Expr(Expr::Record(expr)) => EntryMut::Expr(&mut expr[step]),
                 EntryMut::Value(Value::Record(record))
                 | EntryMut::Expr(Expr::Value(Value::Record(record))) => {
-                    EntryMut::Value(&mut record[step.into_usize()])
+                    EntryMut::Value(&mut record[step])
                 }
                 _ => todo!("ret={ret:#?}; step={step:#?}"),
             }

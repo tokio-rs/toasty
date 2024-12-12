@@ -225,7 +225,7 @@ impl UpdateUser<'_> {
         let mut stmt = self.query.stmt;
         let mut result = db.exec_one(stmt.into()).await?;
         for (field, value) in result.into_sparse_record().into_iter() {
-            match field.into_usize() {
+            match field {
                 0 => self.model.id = stmt::Id::from_untyped(value.to_id()?),
                 1 => self.model.name = value.to_string()?,
                 2 => self.model.email = value.to_string()?,

@@ -50,21 +50,6 @@ impl ExprRecord {
         ExprRecord { fields }
     }
 
-    // TODO: delete this
-    pub fn is_identity(&self) -> bool {
-        (0..self.fields.len()).all(|i| {
-            let Expr::Project(expr_project) = &self.fields[i] else {
-                return false;
-            };
-
-            let [step] = &expr_project.projection[..] else {
-                return false;
-            };
-
-            step.into_usize() == i
-        })
-    }
-
     pub fn push(&mut self, expr: Expr) {
         self.fields.push(expr)
     }
@@ -99,20 +84,6 @@ impl ops::Index<usize> for ExprRecord {
 impl ops::IndexMut<usize> for ExprRecord {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.fields[index]
-    }
-}
-
-impl ops::Index<PathStep> for ExprRecord {
-    type Output = Expr;
-
-    fn index(&self, index: PathStep) -> &Self::Output {
-        &self.fields[index.into_usize()]
-    }
-}
-
-impl ops::IndexMut<PathStep> for ExprRecord {
-    fn index_mut(&mut self, index: PathStep) -> &mut Self::Output {
-        &mut self.fields[index.into_usize()]
     }
 }
 

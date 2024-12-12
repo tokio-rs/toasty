@@ -1,16 +1,16 @@
 use super::*;
 
 pub trait EntryPath {
-    type Iter: Iterator<Item = PathStep>;
+    type Iter: Iterator<Item = usize>;
 
     fn step_iter(self) -> Self::Iter;
 }
 
 impl EntryPath for usize {
-    type Iter = std::option::IntoIter<PathStep>;
+    type Iter = std::option::IntoIter<usize>;
 
     fn step_iter(self) -> Self::Iter {
-        Some(PathStep::from_usize(self)).into_iter()
+        Some(self).into_iter()
     }
 }
 

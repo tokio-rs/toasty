@@ -23,9 +23,7 @@ impl Value {
     pub fn sparse_record(fields: PathFieldSet, record: ValueRecord) -> Value {
         let mut values = vec![];
 
-        for (i, value) in fields.iter().zip(record.fields.into_iter()) {
-            let index = i.into_usize();
-
+        for (index, value) in fields.iter().zip(record.fields.into_iter()) {
             assert!(index >= values.len());
 
             while index > values.len() {
@@ -57,7 +55,7 @@ impl Type {
 }
 
 impl SparseRecord {
-    pub fn into_iter(self) -> impl Iterator<Item = (PathStep, Value)> {
+    pub fn into_iter(self) -> impl Iterator<Item = (usize, Value)> {
         self.values
             .into_iter()
             .enumerate()

@@ -2,8 +2,8 @@ use crate::schema::Index;
 
 use super::*;
 
-use indexmap::IndexMap;
-use std::ops;
+use indexmap::{Equivalent, IndexMap};
+use std::{hash::Hash, ops};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Assignments {
@@ -45,18 +45,25 @@ impl Assignments {
         self.assignments.is_empty()
     }
 
-    pub fn contains(&self, key: impl Into<PathStep>) -> bool {
-        self.assignments.contains_key(&key.into().into_usize())
+    pub fn contains(&self, key: usize) -> bool {
+        self.assignments.contains_key(&key)
     }
 
-    pub fn get(&self, key: impl Into<PathStep>) -> Option<&Assignment> {
-        let index = key.into().into_usize();
-        self.assignments.get(&index)
+    pub fn get<Q>(&self, key: &Q) -> Option<&Assignment>
+    where
+        Q: ?Sized + Hash + Equivalent<usize>,
+    {
+        self.assignments.get(key)
     }
 
-    pub fn set(&mut self, key: impl Into<PathStep>, expr: impl Into<Expr>) {
+    pub fn set<Q>(&mut self, key: Q, expr: impl Into<Expr>)
+    where
+        Q: Into<Projection>,
+    {
+        let key = key.into();
+        let [key] = key.as_slice() else { todo!() };
         self.assignments.insert(
-            key.into().into_usize(),
+            *key,
             Assignment {
                 op: AssignmentOp::Set,
                 expr: expr.into(),
@@ -64,16 +71,16 @@ impl Assignments {
         );
     }
 
-    pub fn unset(&mut self, key: impl Into<PathStep>) {
-        self.assignments.swap_remove(&key.into().into_usize());
+    pub fn unset(&mut self, key: usize) {
+        self.assignments.swap_remove(&key);
     }
 
     /// Insert a value into a set. The expression should evaluate to a single
     /// value that is inserted into the set.
-    pub fn insert(&mut self, key: impl Into<PathStep>, expr: impl Into<Expr>) {
+    pub fn insert(&mut self, key: usize, expr: impl Into<Expr>) {
         use indexmap::map::Entry;
 
-        match self.assignments.entry(key.into().into_usize()) {
+        match self.assignments.entry(key) {
             Entry::Occupied(entry) => {
                 todo!()
             }
@@ -86,10 +93,8 @@ impl Assignments {
         }
     }
 
-    pub fn take(&mut self, key: impl Into<PathStep>) -> Assignment {
-        self.assignments
-            .swap_remove(&key.into().into_usize())
-            .unwrap()
+    pub fn take(&mut self, key: usize) -> Assignment {
+        self.assignments.swap_remove(&key).unwrap()
     }
 
     pub fn keys(&self) -> impl Iterator<Item = usize> + '_ {
@@ -117,18 +122,16 @@ impl Default for Assignments {
     }
 }
 
-impl<I: Into<PathStep>> ops::Index<I> for Assignments {
+impl ops::Index<usize> for Assignments {
     type Output = Expr;
 
-    fn index(&self, index: I) -> &Self::Output {
-        let index = index.into().into_usize();
+    fn index(&self, index: usize) -> &Self::Output {
         &self.assignments.get(&index).unwrap().expr
     }
 }
 
-impl<I: Into<PathStep>> ops::IndexMut<I> for Assignments {
-    fn index_mut(&mut self, index: I) -> &mut Self::Output {
-        let index = index.into().into_usize();
+impl ops::IndexMut<usize> for Assignments {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.assignments.get_mut(&index).unwrap().expr
     }
 }

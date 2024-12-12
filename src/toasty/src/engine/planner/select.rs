@@ -184,10 +184,12 @@ impl Planner<'_> {
         // TODO: move this into verifier
         assert_eq!(base, path.root);
 
-        let [step] = &path[..] else { todo!() };
+        let [step] = &path.projection[..] else {
+            todo!()
+        };
 
         let model = self.model(base);
-        let field = &model.fields[step.into_usize()];
+        let field = &model.fields[*step];
 
         match &field.ty {
             FieldTy::HasMany(rel) => {

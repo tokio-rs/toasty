@@ -70,7 +70,7 @@ impl<'a, I: Input> Input for TypedInput<'a, I> {
 
             for step in projection {
                 ty = match ty {
-                    stmt::Type::Record(tys) => &tys[step.into_usize()],
+                    stmt::Type::Record(tys) => &tys[step],
                     _ => todo!("ty={ty:#?}"),
                 };
             }

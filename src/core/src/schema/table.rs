@@ -51,7 +51,7 @@ impl Table {
         };
         assert!(rest.is_empty());
 
-        &self.columns[first.into_usize()]
+        &self.columns[*first]
     }
 
     pub(crate) fn from_ast(ctx: &mut schema::Context, ast: &ast::Table) -> crate::Result<Table> {

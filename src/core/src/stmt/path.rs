@@ -15,7 +15,7 @@ pub struct Path {
 }
 
 impl Path {
-    pub fn field(root: impl Into<ModelId>, field: PathStep) -> Path {
+    pub fn field(root: impl Into<ModelId>, field: usize) -> Path {
         Path {
             root: root.into(),
             projection: Projection::single(field),
@@ -34,7 +34,7 @@ impl Path {
     }
 
     pub fn chain(&mut self, other: &Path) {
-        for field in &other[..] {
+        for field in &other.projection[..] {
             self.projection.push(*field);
         }
     }
@@ -46,7 +46,7 @@ impl Path {
 
         let mut ret = stmt::Expr::field(FieldId {
             model: self.root,
-            index: field.into_usize(),
+            index: *field,
         });
 
         if !project.is_empty() {
@@ -54,13 +54,5 @@ impl Path {
         }
 
         ret
-    }
-}
-
-impl ops::Deref for Path {
-    type Target = [PathStep];
-
-    fn deref(&self) -> &Self::Target {
-        self.projection.deref()
     }
 }

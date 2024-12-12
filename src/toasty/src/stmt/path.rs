@@ -100,11 +100,13 @@ impl<T: ?Sized> Path<T> {
         // TODO: can this be moved to a separate verification step somewhere?
         debug_assert_eq!(M::ID, self.untyped.root);
 
-        let [index] = &self.untyped[..] else { todo!() };
+        let [index] = &self.untyped.projection[..] else {
+            todo!()
+        };
 
         FieldId {
             model: self.untyped.root,
-            index: index.into_usize(),
+            index: *index,
         }
     }
 }
