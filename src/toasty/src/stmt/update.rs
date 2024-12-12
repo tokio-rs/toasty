@@ -55,10 +55,6 @@ impl<M: Model> Update<M> {
             _ => todo!("selection={select:#?}"),
         }
     }
-
-    pub fn fields(&self) -> &stmt::PathFieldSet {
-        &self.untyped.assignments.fields
-    }
 }
 
 impl<M> Clone for Update<M> {

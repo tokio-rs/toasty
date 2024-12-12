@@ -205,8 +205,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
             if returning.is_changed() {
                 let mut fields = vec![];
 
-                for i in i.assignments.fields.iter() {
-                    let i = i.into_usize();
+                for i in i.assignments.keys() {
                     let field = &self.model.fields[i];
 
                     assert!(field.ty.is_primitive(), "field={field:#?}");
@@ -219,7 +218,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
 
                 *returning = stmt::Returning::Expr(stmt::Expr::cast(
                     stmt::ExprRecord::from_vec(fields),
-                    stmt::Type::SparseRecord(i.assignments.fields.clone()),
+                    stmt::Type::SparseRecord(i.assignments.keys().collect()),
                 ));
             }
         }

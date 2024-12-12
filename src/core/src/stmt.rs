@@ -1,5 +1,5 @@
 mod assignments;
-pub use assignments::Assignments;
+pub use assignments::{Assignment, AssignmentOp, Assignments};
 
 mod delete;
 pub use delete::Delete;

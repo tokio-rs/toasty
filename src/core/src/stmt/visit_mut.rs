@@ -7,6 +7,10 @@ pub trait VisitMut: Sized {
         i.visit_mut(self);
     }
 
+    fn visit_assignment_mut(&mut self, i: &mut Assignment) {
+        visit_assignment_mut(self, i);
+    }
+
     fn visit_assignments_mut(&mut self, i: &mut Assignments) {
         visit_assignments_mut(self, i);
     }
@@ -246,14 +250,19 @@ impl<V: VisitMut> VisitMut for &mut V {
     }
 }
 
+pub fn visit_assignment_mut<V>(v: &mut V, node: &mut Assignment)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
+}
+
 pub fn visit_assignments_mut<V>(v: &mut V, node: &mut Assignments)
 where
     V: VisitMut + ?Sized,
 {
-    for expr in &mut node.exprs {
-        if let Some(expr) = expr {
-            v.visit_expr_mut(expr);
-        }
+    for (_, assignment) in node.iter_mut() {
+        v.visit_assignment_mut(assignment);
     }
 }
 

@@ -225,11 +225,11 @@ impl<'a, T: Params> Formatter<'a, T> {
 
         write!(self.dst, "UPDATE \"{}\" SET", table.name)?;
 
-        for (index, expr) in update.assignments.iter() {
+        for (index, assignment) in update.assignments.iter() {
             let column = &table.columns[index];
             write!(self.dst, " \"{}\" = ", column.name)?;
 
-            self.expr(expr)?;
+            self.expr(&assignment.expr)?;
         }
 
         assert!(

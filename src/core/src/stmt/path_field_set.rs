@@ -46,3 +46,15 @@ impl PathFieldSet {
         self.container.len()
     }
 }
+
+impl FromIterator<usize> for PathFieldSet {
+    fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
+        let mut ret = PathFieldSet::new();
+
+        for key in iter {
+            ret.insert(key);
+        }
+
+        ret
+    }
+}

@@ -1,78 +1,107 @@
+use crate::schema::Index;
+
 use super::*;
 
+use indexmap::IndexMap;
 use std::ops;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Assignments {
-    pub fields: PathFieldSet,
+    /// Map from UpdateTarget field the assignment for that field. The
+    /// UpdateTarget field may be an application-level model field or a lowered
+    /// table column.
+    assignments: IndexMap<usize, Assignment>,
+}
 
-    pub exprs: Vec<Option<Expr>>,
+#[derive(Debug, Clone, PartialEq)]
+pub struct Assignment {
+    /// Assignment operation
+    pub op: AssignmentOp,
+
+    /// Expression use for assignment
+    pub expr: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AssignmentOp {
+    /// Set a field, replacing the current value.
+    Set,
+
+    /// Insert one or more values into a set
+    Insert,
+
+    /// Remove one or more values from a set.
+    Remove,
 }
 
 impl Assignments {
     pub fn with_capacity(capacity: usize) -> Assignments {
         Assignments {
-            fields: PathFieldSet::new(),
-            exprs: Vec::with_capacity(capacity),
+            assignments: IndexMap::with_capacity(capacity),
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.fields.is_empty()
+        self.assignments.is_empty()
     }
 
-    pub fn contains(&self, field: impl Into<PathStep>) -> bool {
-        self.fields.contains(field)
+    pub fn contains(&self, key: impl Into<PathStep>) -> bool {
+        self.assignments.contains_key(&key.into().into_usize())
     }
 
-    pub fn get(&self, field: impl Into<PathStep>) -> Option<&Expr> {
-        let index = field.into().into_usize();
-
-        if index >= self.exprs.len() {
-            None
-        } else {
-            self.exprs[index].as_ref()
-        }
+    pub fn get(&self, key: impl Into<PathStep>) -> Option<&Assignment> {
+        let index = key.into().into_usize();
+        self.assignments.get(&index)
     }
 
-    pub fn set(&mut self, field: impl Into<PathStep>, expr: impl Into<Expr>) {
-        *self.slot(field.into().into_usize()) = expr.into();
+    pub fn set(&mut self, key: impl Into<PathStep>, expr: impl Into<Expr>) {
+        // *self.slot(field.into().into_usize()) = expr.into();
+        todo!()
     }
 
-    pub fn unset(&mut self, field: impl Into<PathStep>) {
+    pub fn unset(&mut self, key: impl Into<PathStep>) {
+        /*
         let field = field.into();
         self.fields.unset(field);
 
         self.exprs[field.into_usize()] = None;
+        */
+        todo!()
     }
 
-    pub fn push(&mut self, field: impl Into<PathStep>, expr: impl Into<Expr>) {
-        self.slot(field.into().into_usize()).push(expr.into());
+    pub fn push(&mut self, key: impl Into<PathStep>, expr: impl Into<Expr>) {
+        // self.slot(field.into().into_usize()).push(expr.into());
+        todo!()
     }
 
-    pub fn take(&mut self, field: impl Into<PathStep>) -> stmt::Expr {
+    pub fn take(&mut self, key: impl Into<PathStep>) -> stmt::Expr {
+        /*
         let field = field.into();
         self.fields.unset(field);
 
         self.exprs[field.into_usize()].take().unwrap()
+        */
+        todo!()
     }
 
-    // TODO: probably should create an `assignment::Entry` type
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (usize, &'a Expr)> + '_ {
-        self.fields.iter().map(|path_step| {
-            let index = path_step.into_usize();
-            (index, self.exprs[index].as_ref().unwrap())
-        })
+    pub fn keys(&self) -> impl Iterator<Item = usize> + '_ {
+        self.assignments.keys().map(|k| *k)
     }
 
-    pub fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = (usize, &'a mut Expr)> + '_ {
-        self.exprs
+    pub fn iter(&self) -> impl Iterator<Item = (usize, &Assignment)> + '_ {
+        self.assignments
+            .iter()
+            .map(|(index, assignment)| (*index, assignment))
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (usize, &mut Assignment)> + '_ {
+        self.assignments
             .iter_mut()
-            .enumerate()
-            .filter_map(|(i, entry)| entry.as_mut().map(|e| (i, e)))
+            .map(|(index, assignment)| (*index, assignment))
     }
 
     fn slot(&mut self, index: usize) -> &mut Expr {
+        /*
         self.fields.insert(index);
 
         if self.exprs.len() <= index {
@@ -84,14 +113,15 @@ impl Assignments {
         }
 
         self.exprs[index].as_mut().unwrap()
+        */
+        todo!()
     }
 }
 
 impl Default for Assignments {
     fn default() -> Self {
         Assignments {
-            fields: PathFieldSet::new(),
-            exprs: vec![],
+            assignments: IndexMap::new(),
         }
     }
 }
@@ -101,27 +131,13 @@ impl<I: Into<PathStep>> ops::Index<I> for Assignments {
 
     fn index(&self, index: I) -> &Self::Output {
         let index = index.into().into_usize();
-        self.exprs[index].as_ref().unwrap()
+        &self.assignments[index].expr
     }
 }
 
 impl<I: Into<PathStep>> ops::IndexMut<I> for Assignments {
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         let index = index.into().into_usize();
-        self.exprs[index].as_mut().unwrap()
-    }
-}
-
-impl fmt::Debug for Assignments {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut fmt = f.debug_struct("Assignments");
-
-        for (i, expr) in self.exprs.iter().enumerate() {
-            if let Some(expr) = expr {
-                fmt.field(&format!("{i}"), expr);
-            }
-        }
-
-        fmt.finish()
+        &mut self.assignments[index].expr
     }
 }
