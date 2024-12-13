@@ -17,7 +17,7 @@ impl Profile {
         CreateMany::default()
     }
     pub fn filter(expr: stmt::Expr<bool>) -> Query {
-        Query::from_stmt(stmt::Select::from_expr(expr))
+        Query::from_stmt(stmt::Select::filter(expr))
     }
     pub fn update(&mut self) -> UpdateProfile<'_> {
         let query = UpdateQuery::from(self.into_select());
@@ -383,7 +383,7 @@ pub mod queries {
     impl super::Profile {
         pub fn find_by_id(id: impl stmt::IntoExpr<Id<Profile>>) -> FindById {
             FindById {
-                query: Query::from_stmt(stmt::Select::from_expr(Profile::ID.eq(id))),
+                query: Query::from_stmt(stmt::Select::filter(Profile::ID.eq(id))),
             }
         }
     }
@@ -470,7 +470,7 @@ pub mod queries {
     impl stmt::IntoSelect for FindManyById {
         type Model = super::Profile;
         fn into_select(self) -> stmt::Select<Self::Model> {
-            stmt::Select::from_expr(stmt::in_set(Profile::ID, self.items))
+            stmt::Select::filter(stmt::in_set(Profile::ID, self.items))
         }
     }
     impl super::Profile {
@@ -478,7 +478,7 @@ pub mod queries {
             user_id: impl stmt::IntoExpr<Id<super::super::user::User>>,
         ) -> FindByUserId {
             FindByUserId {
-                query: Query::from_stmt(stmt::Select::from_expr(Profile::USER_ID.eq(user_id))),
+                query: Query::from_stmt(stmt::Select::filter(Profile::USER_ID.eq(user_id))),
             }
         }
     }
@@ -565,7 +565,7 @@ pub mod queries {
     impl stmt::IntoSelect for FindManyByUserId {
         type Model = super::Profile;
         fn into_select(self) -> stmt::Select<Self::Model> {
-            stmt::Select::from_expr(stmt::in_set(Profile::USER_ID, self.items))
+            stmt::Select::filter(stmt::in_set(Profile::USER_ID, self.items))
         }
     }
 }

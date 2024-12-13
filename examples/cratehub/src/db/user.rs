@@ -19,7 +19,7 @@ impl User {
         CreateMany::default()
     }
     pub fn filter(expr: stmt::Expr<bool>) -> Query {
-        Query::from_stmt(stmt::Select::from_expr(expr))
+        Query::from_stmt(stmt::Select::filter(expr))
     }
     pub fn update(&mut self) -> UpdateUser<'_> {
         let query = UpdateQuery::from(self.into_select());
@@ -382,7 +382,7 @@ pub mod relation {
                 id: impl stmt::IntoExpr<Id<super::super::super::package::Package>>,
             ) -> FindByUserAndId {
                 FindByUserAndId {
-                    stmt: stmt::Select::from_expr(
+                    stmt: stmt::Select::filter(
                         super::super::super::package::Package::USER
                             .in_query(self.scope)
                             .and(super::super::super::package::Package::ID.eq(id)),
@@ -413,7 +413,7 @@ pub mod relation {
                 id: impl stmt::IntoExpr<Id<super::super::super::package::Package>>,
             ) -> FindByUserAndId {
                 FindByUserAndId {
-                    stmt: stmt::Select::from_expr(
+                    stmt: stmt::Select::filter(
                         super::super::super::package::Package::USER
                             .in_query(self.scope)
                             .and(super::super::super::package::Package::ID.eq(id)),
@@ -476,7 +476,7 @@ pub mod queries {
     impl super::User {
         pub fn find_by_id(id: impl stmt::IntoExpr<Id<User>>) -> FindById {
             FindById {
-                query: Query::from_stmt(stmt::Select::from_expr(User::ID.eq(id))),
+                query: Query::from_stmt(stmt::Select::filter(User::ID.eq(id))),
             }
         }
     }
@@ -566,13 +566,13 @@ pub mod queries {
     impl stmt::IntoSelect for FindManyById {
         type Model = super::User;
         fn into_select(self) -> stmt::Select<Self::Model> {
-            stmt::Select::from_expr(stmt::in_set(User::ID, self.items))
+            stmt::Select::filter(stmt::in_set(User::ID, self.items))
         }
     }
     impl super::User {
         pub fn find_by_email(email: impl stmt::IntoExpr<String>) -> FindByEmail {
             FindByEmail {
-                query: Query::from_stmt(stmt::Select::from_expr(User::EMAIL.eq(email))),
+                query: Query::from_stmt(stmt::Select::filter(User::EMAIL.eq(email))),
             }
         }
     }
@@ -662,7 +662,7 @@ pub mod queries {
     impl stmt::IntoSelect for FindManyByEmail {
         type Model = super::User;
         fn into_select(self) -> stmt::Select<Self::Model> {
-            stmt::Select::from_expr(stmt::in_set(User::EMAIL, self.items))
+            stmt::Select::filter(stmt::in_set(User::EMAIL, self.items))
         }
     }
 }

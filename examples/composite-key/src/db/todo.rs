@@ -21,7 +21,7 @@ impl Todo {
         CreateMany::default()
     }
     pub fn filter(expr: stmt::Expr<bool>) -> Query {
-        Query::from_stmt(stmt::Select::from_expr(expr))
+        Query::from_stmt(stmt::Select::filter(expr))
     }
     pub fn update(&mut self) -> UpdateTodo<'_> {
         let query = UpdateQuery::from(self.into_select());
@@ -406,7 +406,7 @@ pub mod queries {
             user_id: impl stmt::IntoExpr<Id<super::super::user::User>>,
         ) -> FindByUserId {
             FindByUserId {
-                query: Query::from_stmt(stmt::Select::from_expr(Todo::USER_ID.eq(user_id))),
+                query: Query::from_stmt(stmt::Select::filter(Todo::USER_ID.eq(user_id))),
             }
         }
     }
@@ -457,7 +457,7 @@ pub mod queries {
             id: impl stmt::IntoExpr<Id<Todo>>,
         ) -> FindByUserIdAndId {
             FindByUserIdAndId {
-                query: Query::from_stmt(stmt::Select::from_expr(
+                query: Query::from_stmt(stmt::Select::filter(
                     Todo::USER_ID.eq(user_id).and(Todo::ID.eq(id)),
                 )),
             }
@@ -551,7 +551,7 @@ pub mod queries {
     impl stmt::IntoSelect for FindManyByUserIdAndId {
         type Model = super::Todo;
         fn into_select(self) -> stmt::Select<Self::Model> {
-            stmt::Select::from_expr(stmt::in_set((Todo::USER_ID, Todo::ID), self.items))
+            stmt::Select::filter(stmt::in_set((Todo::USER_ID, Todo::ID), self.items))
         }
     }
 }

@@ -41,7 +41,7 @@ impl<'a> Generator<'a> {
             // TODO: should this borrow more?
             pub fn #query_method_name(self, #query_method_args) ->  #query_struct_name {
                 #query_struct_name {
-                    stmt: stmt::Select::from_expr(#body)
+                    stmt: stmt::Select::filter(#body)
                 }
             }
         }
@@ -108,7 +108,7 @@ impl<'a> Generator<'a> {
                 // TODO: should this borrow more?
                 pub fn #query_method_name(#query_method_args) ->  #query_struct_name {
                     #query_struct_name {
-                        query: Query::from_stmt(stmt::Select::from_expr(#query))
+                        query: Query::from_stmt(stmt::Select::filter(#query))
                     }
                 }
             }
@@ -255,7 +255,7 @@ impl<'a> Generator<'a> {
                 type Model = super::#model_struct_name;
 
                 fn into_select(self) -> stmt::Select<Self::Model> {
-                    stmt::Select::from_expr(#query)
+                    stmt::Select::filter(#query)
                 }
             }
         }

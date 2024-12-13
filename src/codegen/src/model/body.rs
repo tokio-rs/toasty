@@ -52,7 +52,7 @@ impl<'a> Generator<'a> {
                 }
 
                 pub fn filter(expr: stmt::Expr<bool>) -> Query {
-                    Query::from_stmt(stmt::Select::from_expr(expr))
+                    Query::from_stmt(stmt::Select::filter(expr))
                 }
 
                 #update_method_def

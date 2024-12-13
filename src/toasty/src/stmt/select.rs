@@ -25,7 +25,7 @@ impl<M: Model> Select<M> {
         }
     }
 
-    pub fn from_expr(expr: Expr<bool>) -> Select<M> {
+    pub fn filter(expr: Expr<bool>) -> Select<M> {
         Select::from_untyped(stmt::Query::filter(M::ID, expr.untyped))
     }
 
