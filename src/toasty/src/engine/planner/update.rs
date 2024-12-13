@@ -27,7 +27,17 @@ impl Planner<'_> {
                 continue;
             }
 
-            self.plan_mut_relation_field(field, &mut stmt.assignments[i], &scope, false);
+            let Some(assignment) = stmt.assignments.get_mut(&i) else {
+                continue;
+            };
+
+            match assignment.op {
+                stmt::AssignmentOp::Set => assert!(!field.ty.is_has_many(), "TODO"),
+                stmt::AssignmentOp::Insert => assert!(field.ty.is_has_many(), "TODO"),
+                _ => todo!(),
+            }
+
+            self.plan_mut_relation_field(field, &mut assignment.expr, &scope, false);
 
             // Map the belongs_to statement to the foreign key fields
             if let FieldTy::BelongsTo(belongs_to) = &field.ty {

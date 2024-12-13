@@ -22,7 +22,7 @@ pub struct Assignment {
     pub expr: Expr,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum AssignmentOp {
     /// Set a field, replacing the current value.
     Set,
@@ -54,6 +54,13 @@ impl Assignments {
         Q: ?Sized + Hash + Equivalent<usize>,
     {
         self.assignments.get(key)
+    }
+
+    pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut Assignment>
+    where
+        Q: ?Sized + Hash + Equivalent<usize>,
+    {
+        self.assignments.get_mut(key)
     }
 
     pub fn set<Q>(&mut self, key: Q, expr: impl Into<Expr>)
@@ -123,15 +130,21 @@ impl Default for Assignments {
 }
 
 impl ops::Index<usize> for Assignments {
-    type Output = Expr;
+    type Output = Assignment;
 
     fn index(&self, index: usize) -> &Self::Output {
-        &self.assignments.get(&index).unwrap().expr
+        self.assignments.get(&index).unwrap()
     }
 }
 
 impl ops::IndexMut<usize> for Assignments {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.assignments.get_mut(&index).unwrap().expr
+        self.assignments.get_mut(&index).unwrap()
+    }
+}
+
+impl AssignmentOp {
+    pub fn is_set(self) -> bool {
+        matches!(self, AssignmentOp::Set)
     }
 }

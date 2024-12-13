@@ -420,6 +420,8 @@ impl Input for &mut stmt::Expr {
 
 impl Input for &stmt::Assignments {
     fn resolve_field(&mut self, expr_field: &stmt::ExprField) -> stmt::Expr {
-        self[expr_field.field.index].clone()
+        let assignment = &self[expr_field.field.index];
+        assert!(assignment.op.is_set());
+        assignment.expr.clone()
     }
 }
