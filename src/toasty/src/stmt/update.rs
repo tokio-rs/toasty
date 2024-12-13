@@ -9,10 +9,7 @@ pub struct Update<M> {
 }
 
 impl<M: Model> Update<M> {
-    pub fn new<S>(selection: S) -> Update<M>
-    where
-        S: IntoSelect<Model = M>,
-    {
+    pub fn new(selection: Select<M>) -> Update<M> {
         let mut stmt = Update::default();
         stmt.set_selection(selection);
         stmt
@@ -33,11 +30,8 @@ impl<M: Model> Update<M> {
         self.untyped.assignments.insert(field, expr);
     }
 
-    pub fn set_selection<S>(&mut self, selection: S)
-    where
-        S: IntoSelect<Model = M>,
-    {
-        let select = selection.into_select().untyped;
+    pub fn set_selection(&mut self, selection: Select<M>) {
+        let select = selection.untyped;
 
         match *select.body {
             stmt::ExprSet::Select(select) => {

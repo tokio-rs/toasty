@@ -291,7 +291,7 @@ impl UpdateQuery {
 impl From<Query> for UpdateQuery {
     fn from(value: Query) -> UpdateQuery {
         UpdateQuery {
-            stmt: stmt::Update::new(value),
+            stmt: stmt::Update::new(value.stmt),
         }
     }
 }
@@ -396,7 +396,7 @@ pub mod relation {
                 self,
                 todos: impl IntoSelect<Model = super::super::super::todo::Todo>,
             ) -> Add {
-                let mut stmt = stmt::Update::new(self.scope);
+                let mut stmt = stmt::Update::new(self.scope.into_select());
                 todo!()
             }
             #[doc = r" Remove items from the association"]
