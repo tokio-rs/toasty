@@ -48,11 +48,8 @@ impl Db {
         }
     }
 
-    pub async fn delete<Q>(&self, query: Q) -> Result<()>
-    where
-        Q: stmt::IntoSelect,
-    {
-        self.exec(query.into_select().delete()).await?;
+    pub async fn delete<M: Model>(&self, query: stmt::Select<M>) -> Result<()> {
+        self.exec(query.delete()).await?;
         Ok(())
     }
 
