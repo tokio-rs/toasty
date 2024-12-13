@@ -55,12 +55,6 @@ impl stmt::IntoSelect for &mut Package {
         (&*self).into_select()
     }
 }
-impl stmt::AsSelect for Package {
-    type Model = Package;
-    fn as_select(&self) -> stmt::Select<Self::Model> {
-        Package::find_by_user_id_and_id(&self.user_id, &self.id).into_select()
-    }
-}
 impl stmt::IntoSelect for Package {
     type Model = Package;
     fn into_select(self) -> stmt::Select<Self::Model> {

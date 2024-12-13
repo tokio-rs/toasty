@@ -55,12 +55,6 @@ impl stmt::IntoSelect for &mut Todo {
         (&*self).into_select()
     }
 }
-impl stmt::AsSelect for Todo {
-    type Model = Todo;
-    fn as_select(&self) -> stmt::Select<Self::Model> {
-        Todo::find_by_id(&self.id).into_select()
-    }
-}
 impl stmt::IntoSelect for Todo {
     type Model = Todo;
     fn into_select(self) -> stmt::Select<Self::Model> {

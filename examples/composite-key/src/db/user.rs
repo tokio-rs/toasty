@@ -55,12 +55,6 @@ impl stmt::IntoSelect for &mut User {
         (&*self).into_select()
     }
 }
-impl stmt::AsSelect for User {
-    type Model = User;
-    fn as_select(&self) -> stmt::Select<Self::Model> {
-        User::find_by_id(&self.id).into_select()
-    }
-}
 impl stmt::IntoSelect for User {
     type Model = User;
     fn into_select(self) -> stmt::Select<Self::Model> {

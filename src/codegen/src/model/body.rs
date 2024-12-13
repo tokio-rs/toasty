@@ -91,14 +91,6 @@ impl<'a> Generator<'a> {
                 }
             }
 
-            impl stmt::AsSelect for #struct_name {
-                type Model = #struct_name;
-
-                fn as_select(&self) -> stmt::Select<Self::Model> {
-                    #into_select_impl_ref
-                }
-            }
-
             impl stmt::IntoSelect for #struct_name {
                 type Model = #struct_name;
 

@@ -38,7 +38,7 @@ pub mod codegen_support {
         batch::CreateMany,
         cursor::{Cursor, FromCursor},
         relation::{BelongsTo, HasMany},
-        stmt::{self, AsSelect, Id, IntoExpr, IntoInsert, IntoSelect, Path},
+        stmt::{self, Id, IntoExpr, IntoInsert, IntoSelect, Path},
         Db, Error, Model, Result, Statement,
     };
     pub use toasty_core::{
