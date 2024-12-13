@@ -330,7 +330,7 @@ pub mod relation {
         }
         #[derive(Debug)]
         pub struct Add {
-            stmt: stmt::Link<super::User>,
+            stmt: stmt::Update<super::User>,
         }
         impl super::User {
             pub fn todos(&self) -> Todos<'_> {
@@ -371,9 +371,8 @@ pub mod relation {
                 self,
                 todos: impl IntoSelect<Model = super::super::super::todo::Todo>,
             ) -> Add {
-                Add {
-                    stmt: stmt::Link::new(self.scope, super::User::TODOS, todos),
-                }
+                let mut stmt = stmt::Update::new(self.scope);
+                todo!()
             }
             #[doc = r" Remove items from the association"]
             pub fn remove(

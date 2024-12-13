@@ -29,6 +29,7 @@ impl<'a> Generator<'a> {
 
     fn gen_has_many_struct(&self, rel: &HasMany, field: FieldId) -> TokenStream {
         let field_name = self.field_name(field);
+        let field_index = util::int(field.index);
         let field_const_name = self.field_const_name(field);
         let pair_field_const_name = self.field_const_name(rel.pair);
         let model_struct_name = self.self_struct_name();
@@ -70,7 +71,7 @@ impl<'a> Generator<'a> {
 
                 #[derive(Debug)]
                 pub struct Add {
-                    stmt: stmt::Link<super::#model_struct_name>,
+                    stmt: stmt::Update<super::#model_struct_name>,
                 }
 
                 impl super::#model_struct_name {
@@ -119,12 +120,12 @@ impl<'a> Generator<'a> {
 
                     /// Add an item to the association
                     pub fn add(self, #field_name: impl IntoSelect<Model = #target_struct_name>) -> Add {
-                        Add {
-                            stmt: stmt::Link::new(self.scope,
-                                super::#model_struct_name::#field_const_name,
-                                #field_name,
-                            ),
-                        }
+                        let mut stmt = stmt::Update::new(self.scope);
+                        /*
+                        stmt.set(#field_index, #field_name);
+                        Add { stmt }
+                        */
+                        todo!()
                     }
 
                     /// Remove items from the association

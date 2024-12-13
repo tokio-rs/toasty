@@ -23,9 +23,6 @@ pub use into_select::IntoSelect;
 mod key;
 pub use key::Key;
 
-mod link;
-pub use link::Link;
-
 mod path;
 pub use path::Path;
 

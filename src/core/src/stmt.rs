@@ -106,9 +106,6 @@ pub use insert_table::InsertTable;
 mod insert_target;
 pub use insert_target::InsertTarget;
 
-mod link;
-pub use link::Link;
-
 mod node;
 pub use node::Node;
 
@@ -194,9 +191,6 @@ pub enum Statement {
     /// Delete one or more existing records
     Delete(Delete),
 
-    /// Link one or more associations
-    Link(Link),
-
     /// Create one or more instances of a model
     Insert(Insert),
 
@@ -233,7 +227,6 @@ impl fmt::Debug for Statement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Statement::Delete(v) => v.fmt(f),
-            Statement::Link(v) => v.fmt(f),
             Statement::Insert(v) => v.fmt(f),
             Statement::Query(v) => v.fmt(f),
             Statement::Unlink(v) => v.fmt(f),

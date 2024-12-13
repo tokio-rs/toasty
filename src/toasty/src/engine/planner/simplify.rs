@@ -54,10 +54,6 @@ impl Planner<'_> {
         Simplify::new(self.schema).visit_stmt_delete_mut(stmt);
     }
 
-    pub(crate) fn simplify_stmt_link(&self, stmt: &mut stmt::Link) {
-        Simplify::new(self.schema).visit_stmt_link_mut(stmt);
-    }
-
     pub(crate) fn simplify_stmt_insert(&self, stmt: &mut stmt::Insert) {
         Simplify::new(self.schema).visit_stmt_insert_mut(stmt);
     }
@@ -134,11 +130,6 @@ impl<'a> VisitMut for Simplify<'_> {
         );
         stmt::visit_mut::visit_stmt_delete_mut(self, stmt);
         self.target = target;
-    }
-
-    fn visit_stmt_link_mut(&mut self, stmt: &mut stmt::Link) {
-        assert!(self.target.is_const());
-        stmt::visit_mut::visit_stmt_link_mut(self, stmt);
     }
 
     fn visit_stmt_insert_mut(&mut self, stmt: &mut stmt::Insert) {

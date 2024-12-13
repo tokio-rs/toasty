@@ -127,10 +127,6 @@ pub trait Visit: Sized {
         visit_stmt_delete(self, i);
     }
 
-    fn visit_stmt_link(&mut self, i: &Link) {
-        visit_stmt_link(self, i);
-    }
-
     fn visit_stmt_insert(&mut self, i: &Insert) {
         visit_stmt_insert(self, i);
     }
@@ -495,7 +491,6 @@ where
 {
     match node {
         Statement::Delete(stmt) => v.visit_stmt_delete(stmt),
-        Statement::Link(stmt) => v.visit_stmt_link(stmt),
         Statement::Insert(stmt) => v.visit_stmt_insert(stmt),
         Statement::Query(stmt) => v.visit_stmt_query(stmt),
         Statement::Unlink(stmt) => v.visit_stmt_unlink(stmt),
@@ -513,14 +508,6 @@ where
     if let Some(returning) = &node.returning {
         v.visit_returning(returning);
     }
-}
-
-pub fn visit_stmt_link<V>(v: &mut V, node: &Link)
-where
-    V: Visit + ?Sized,
-{
-    v.visit_stmt_query(&node.source);
-    v.visit_stmt_query(&node.target);
 }
 
 pub fn visit_stmt_insert<V>(v: &mut V, node: &Insert)

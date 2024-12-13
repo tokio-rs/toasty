@@ -3,7 +3,6 @@ mod index;
 mod input;
 mod insert;
 mod key;
-mod link;
 mod lower;
 mod output;
 mod relation;
@@ -96,7 +95,6 @@ impl<'a> Planner<'a> {
     fn plan_stmt(&mut self, stmt: stmt::Statement) {
         match stmt {
             stmt::Statement::Delete(stmt) => self.plan_delete(stmt),
-            stmt::Statement::Link(stmt) => self.plan_link(stmt),
             stmt::Statement::Insert(stmt) => {
                 // TODO: this isn't always true. The assert is there to help
                 // debug old code.
