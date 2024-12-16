@@ -51,6 +51,15 @@ impl IntoExpr<String> for String {
     }
 }
 
+impl<T, U, const N: usize> IntoExpr<[T]> for &[U; N]
+where
+    for<'a> &'a U: IntoExpr<T>,
+{
+    fn into_expr(self) -> Expr<[T]> {
+        Expr::list(self)
+    }
+}
+
 impl<T1, T2> IntoExpr<(T1,)> for (T2,)
 where
     T2: IntoExpr<T1>,

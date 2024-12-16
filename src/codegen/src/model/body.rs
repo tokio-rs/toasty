@@ -99,6 +99,12 @@ impl<'a> Generator<'a> {
                 }
             }
 
+            impl stmt::IntoExpr<#struct_name> for #struct_name {
+                fn into_expr(self) -> stmt::Expr<#struct_name> {
+                    todo!()
+                }
+            }
+
             impl stmt::IntoExpr<#struct_name> for &#struct_name {
                 fn into_expr(self) -> stmt::Expr<#struct_name> {
                     #struct_into_expr.into()
@@ -107,7 +113,7 @@ impl<'a> Generator<'a> {
 
             impl stmt::IntoExpr<[#struct_name]> for &#struct_name {
                 fn into_expr(self) -> stmt::Expr<[#struct_name]> {
-                    #struct_into_expr.into()
+                    stmt::Expr::list([self])
                 }
             }
 

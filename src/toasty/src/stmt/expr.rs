@@ -35,6 +35,17 @@ impl<T: ?Sized> Expr<T> {
     }
 }
 
+impl<T> Expr<[T]> {
+    pub fn list<I>(items: impl IntoIterator<Item = I>) -> Expr<[T]>
+    where
+        I: IntoExpr<T>,
+    {
+        Expr::from_untyped(stmt::Expr::list(
+            items.into_iter().map(|item| item.into_expr().untyped),
+        ))
+    }
+}
+
 impl Expr<bool> {
     pub fn and(self, rhs: impl IntoExpr<bool>) -> Expr<bool> {
         Expr::from_untyped(stmt::Expr::and(self.untyped, rhs.into_expr().untyped))

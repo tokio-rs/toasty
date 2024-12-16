@@ -61,6 +61,11 @@ impl stmt::IntoSelect for Package {
         Package::find_by_user_id_and_id(self.user_id, self.id).into_select()
     }
 }
+impl stmt::IntoExpr<Package> for Package {
+    fn into_expr(self) -> stmt::Expr<Package> {
+        todo!()
+    }
+}
 impl stmt::IntoExpr<Package> for &Package {
     fn into_expr(self) -> stmt::Expr<Package> {
         stmt::Key::from_expr((&self.user_id, &self.id)).into()
@@ -68,7 +73,7 @@ impl stmt::IntoExpr<Package> for &Package {
 }
 impl stmt::IntoExpr<[Package]> for &Package {
     fn into_expr(self) -> stmt::Expr<[Package]> {
-        stmt::Key::from_expr((&self.user_id, &self.id)).into()
+        stmt::Expr::list([self])
     }
 }
 #[derive(Debug)]

@@ -56,6 +56,11 @@ impl stmt::IntoSelect for User {
         User::find_by_id(self.id).into_select()
     }
 }
+impl stmt::IntoExpr<User> for User {
+    fn into_expr(self) -> stmt::Expr<User> {
+        todo!()
+    }
+}
 impl stmt::IntoExpr<User> for &User {
     fn into_expr(self) -> stmt::Expr<User> {
         stmt::Key::from_expr(&self.id).into()
@@ -63,7 +68,7 @@ impl stmt::IntoExpr<User> for &User {
 }
 impl stmt::IntoExpr<[User]> for &User {
     fn into_expr(self) -> stmt::Expr<[User]> {
-        stmt::Key::from_expr(&self.id).into()
+        stmt::Expr::list([self])
     }
 }
 #[derive(Debug)]

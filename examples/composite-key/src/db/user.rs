@@ -61,6 +61,11 @@ impl stmt::IntoSelect for User {
         User::find_by_id(self.id).into_select()
     }
 }
+impl stmt::IntoExpr<User> for User {
+    fn into_expr(self) -> stmt::Expr<User> {
+        todo!()
+    }
+}
 impl stmt::IntoExpr<User> for &User {
     fn into_expr(self) -> stmt::Expr<User> {
         stmt::Key::from_expr(&self.id).into()
@@ -68,7 +73,7 @@ impl stmt::IntoExpr<User> for &User {
 }
 impl stmt::IntoExpr<[User]> for &User {
     fn into_expr(self) -> stmt::Expr<[User]> {
-        stmt::Key::from_expr(&self.id).into()
+        stmt::Expr::list([self])
     }
 }
 #[derive(Debug)]
@@ -361,12 +366,10 @@ pub mod relation {
                 super::super::super::todo::Query::from_stmt(query.and(filter))
             }
             #[doc = r" Add an item to the association"]
-            pub fn add(
-                self,
-                todos: impl IntoSelect<Model = super::super::super::todo::Todo>,
-            ) -> Add {
-                let mut stmt = stmt::Update::new(self.scope.into_select());
-                todo!()
+            pub fn add(self, todos: impl IntoExpr<[super::super::super::todo::Todo]>) -> Add {
+                let mut stmt = stmt::Update::new(stmt::Select::from_expr(self.scope.into_expr()));
+                stmt.set(3, todos.into_expr());
+                Add { stmt }
             }
             #[doc = r" Remove items from the association"]
             pub fn remove(
