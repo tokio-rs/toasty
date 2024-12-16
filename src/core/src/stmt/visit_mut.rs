@@ -79,11 +79,15 @@ pub trait VisitMut: Sized {
         visit_expr_map_mut(self, i);
     }
 
+    fn visit_expr_model_mut(&mut self, i: &mut ExprModel) {
+        visit_expr_model_mut(self, i);
+    }
+
     fn visit_expr_or_mut(&mut self, i: &mut ExprOr) {
         visit_expr_or_mut(self, i);
     }
 
-    fn visit_expr_list_mut(&mut self, i: &mut Vec<Expr>) {
+    fn visit_expr_list_mut(&mut self, i: &mut ExprList) {
         visit_expr_list_mut(self, i);
     }
 
@@ -280,6 +284,7 @@ where
         Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),
         Expr::Key(expr) => v.visit_expr_key_mut(expr),
         Expr::Map(expr) => v.visit_expr_map_mut(expr),
+        Expr::Model(expr) => v.visit_expr_model_mut(expr),
         Expr::Or(expr) => v.visit_expr_or_mut(expr),
         Expr::Pattern(expr) => v.visit_expr_pattern_mut(expr),
         Expr::Project(expr) => v.visit_expr_project_mut(expr),
@@ -410,6 +415,12 @@ where
     v.visit_expr_mut(&mut *node.map);
 }
 
+pub fn visit_expr_model_mut<V>(v: &mut V, node: &mut ExprModel)
+where
+    V: VisitMut + ?Sized,
+{
+}
+
 pub fn visit_expr_or_mut<V>(v: &mut V, node: &mut ExprOr)
 where
     V: VisitMut + ?Sized,
@@ -419,11 +430,11 @@ where
     }
 }
 
-pub fn visit_expr_list_mut<V>(v: &mut V, node: &mut Vec<Expr>)
+pub fn visit_expr_list_mut<V>(v: &mut V, node: &mut ExprList)
 where
     V: VisitMut + ?Sized,
 {
-    for e in node {
+    for e in &mut node.items {
         v.visit_expr_mut(e);
     }
 }

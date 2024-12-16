@@ -12,9 +12,10 @@ impl Expr {
 }
 
 impl ExprList {
-    pub(crate) fn from_stmt(stmt: Vec<stmt::Expr>, convert: &mut impl Convert) -> ExprList {
+    pub(crate) fn from_stmt(stmt: stmt::ExprList, convert: &mut impl Convert) -> ExprList {
         ExprList {
             items: stmt
+                .items
                 .into_iter()
                 .map(|expr| Expr::from_stmt_by_ref(expr, convert))
                 .collect(),

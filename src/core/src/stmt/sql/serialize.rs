@@ -302,7 +302,7 @@ impl<'a, T: Params> Formatter<'a, T> {
     fn expr_as_list(&mut self, expr: &Expr) -> fmt::Result {
         match expr {
             Expr::Record(expr) => self.expr_list(expr),
-            Expr::List(expr) => self.expr_list(expr),
+            Expr::List(expr) => self.expr_list(&expr.items),
             Expr::Value(Value::Record(expr)) => self.value_list(expr),
             Expr::Value(Value::List(expr)) => self.value_list(expr),
             _ => self.expr(expr),

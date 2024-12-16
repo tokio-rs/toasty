@@ -18,6 +18,12 @@ impl Query {
         }
     }
 
+    pub fn values(values: impl Into<Values>) -> Query {
+        Query {
+            body: Box::new(ExprSet::Values(values.into())),
+        }
+    }
+
     pub fn update(self, schema: &Schema) -> Update {
         let ExprSet::Select(select) = *self.body else {
             todo!("stmt={self:#?}");

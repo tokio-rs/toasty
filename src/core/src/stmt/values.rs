@@ -40,3 +40,9 @@ impl From<Values> for Query {
         }
     }
 }
+
+impl From<Expr> for Values {
+    fn from(value: Expr) -> Self {
+        Values { rows: vec![value] }
+    }
+}

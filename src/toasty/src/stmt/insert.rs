@@ -54,10 +54,10 @@ impl<M: Model> Insert<M> {
 
         match target {
             stmt::Expr::Value(stmt::Value::Null) => {
-                *target = stmt::Expr::List(vec![expr.into()]);
+                *target = stmt::Expr::list_from_vec(vec![expr.into()]);
             }
-            stmt::Expr::List(items) => {
-                items.push(expr.into());
+            stmt::Expr::List(expr_list) => {
+                expr_list.items.push(expr.into());
             }
             _ => todo!("existing={target:#?}; expr={:#?}", expr.into()),
         }

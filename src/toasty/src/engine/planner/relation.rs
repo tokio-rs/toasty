@@ -198,7 +198,7 @@ impl Planner<'_> {
                 self.plan_mut_has_many_stmt(has_many, *expr_stmt.stmt, scope)
             }
             stmt::Expr::List(expr_list) => {
-                for expr in expr_list {
+                for expr in expr_list.items {
                     self.plan_mut_has_many_expr(has_many, expr, scope);
                 }
             }

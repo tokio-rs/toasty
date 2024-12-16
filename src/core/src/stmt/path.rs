@@ -15,6 +15,13 @@ pub struct Path {
 }
 
 impl Path {
+    pub fn model(root: impl Into<ModelId>) -> Path {
+        Path {
+            root: root.into(),
+            projection: Projection::identity(),
+        }
+    }
+
     pub fn field(root: impl Into<ModelId>, field: usize) -> Path {
         Path {
             root: root.into(),

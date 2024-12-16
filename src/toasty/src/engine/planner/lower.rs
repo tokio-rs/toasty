@@ -339,7 +339,7 @@ impl<'a> LowerStatement<'a> {
 
                 match list {
                     stmt::Expr::List(expr_list) => {
-                        for expr in expr_list {
+                        for expr in &mut expr_list.items {
                             self.uncast_id(expr);
                         }
                     }
@@ -354,7 +354,7 @@ impl<'a> LowerStatement<'a> {
                     assert!(lhs.is_column());
                 }
 
-                for item in list {
+                for item in &mut list.items {
                     assert!(item.is_value());
                 }
 

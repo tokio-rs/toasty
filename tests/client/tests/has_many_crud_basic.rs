@@ -805,6 +805,8 @@ async fn update_user_with_null_todo_is_err(s: impl Setup) {
         }"
     );
 
+    use toasty::stmt::{self, IntoExpr};
+
     let db = s.setup(db::load_schema()).await;
 
     // Create a user with a todo
@@ -820,7 +822,8 @@ async fn update_user_with_null_todo_is_err(s: impl Setup) {
     let todo = todos.into_iter().next().unwrap();
 
     // Updating the todo w/ null is an error. Thus requires a bit of a hack to make work
-    let mut stmt = toasty::stmt::Update::new(&todo);
+    let mut stmt: stmt::Update<db::Todo> =
+        stmt::Update::new(stmt::Select::from_expr((&todo).into_expr()));
     stmt.set(2, toasty_core::stmt::Value::Null);
     let _ = db.exec(stmt.into()).await.unwrap();
 

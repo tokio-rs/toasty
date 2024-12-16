@@ -25,6 +25,17 @@ impl<M: Model> Select<M> {
         }
     }
 
+    /// Convert a model expression to a query
+    pub fn from_expr(expr: Expr<M>) -> Select<M> {
+        match expr.untyped {
+            stmt::Expr::Stmt(expr) => match *expr.stmt {
+                stmt::Statement::Query(stmt) => Select::from_untyped(stmt),
+                stmt => todo!("stmt={stmt:#?}"),
+            },
+            expr => Select::from_untyped(stmt::Query::values(expr)),
+        }
+    }
+
     pub fn filter(expr: Expr<bool>) -> Select<M> {
         Select::from_untyped(stmt::Query::filter(M::ID, expr.untyped))
     }

@@ -37,6 +37,10 @@ impl ExprSet {
         }
     }
 
+    pub fn is_select(&self) -> bool {
+        matches!(self, ExprSet::Select(_))
+    }
+
     #[track_caller]
     pub fn as_values_mut(&mut self) -> &mut Values {
         match self {

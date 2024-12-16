@@ -435,6 +435,7 @@ impl<'a> Generator<'a> {
             }
             stmt::Expr::List(exprs) => {
                 let exprs = exprs
+                    .items
                     .iter()
                     .map(|expr| self.gen_expr_from_stmt(mid, args, expr, depth));
                 quote!(vec![ #( #exprs ),* ])

@@ -31,17 +31,21 @@ impl<M: Model> Update<M> {
     }
 
     pub fn set_selection(&mut self, selection: Select<M>) {
-        let select = selection.untyped;
+        let query = selection.untyped;
 
-        match *select.body {
+        match *query.body {
             stmt::ExprSet::Select(select) => {
-                assert_eq!(
+                debug_assert_eq!(
                     select.source.as_model_id(),
                     self.untyped.target.as_model_id()
                 );
+
                 self.untyped.filter = Some(select.filter);
             }
-            _ => todo!("selection={select:#?}"),
+            stmt::ExprSet::Values(values) => {
+                self.untyped.filter = Some(stmt::Expr::in_list(M::ID, values.rows))
+            }
+            body => todo!("selection={body:#?}"),
         }
     }
 }
