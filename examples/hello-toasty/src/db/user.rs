@@ -393,7 +393,7 @@ pub mod relation {
             #[doc = r" Add an item to the association"]
             pub fn add(self, todos: impl IntoExpr<[super::super::super::todo::Todo]>) -> Add {
                 let mut stmt = stmt::Update::new(stmt::Select::from_expr(self.scope.into_expr()));
-                stmt.set(3, todos.into_expr());
+                stmt.insert(3, todos.into_expr());
                 Add { stmt }
             }
             #[doc = r" Remove items from the association"]

@@ -43,10 +43,15 @@ impl<M: Model> Update<M> {
                 self.untyped.filter = Some(select.filter);
             }
             stmt::ExprSet::Values(values) => {
-                self.untyped.filter = Some(stmt::Expr::in_list(M::ID, values.rows))
+                self.untyped.filter = Some(stmt::Expr::in_list(stmt::Expr::key(M::ID), values.rows))
             }
             body => todo!("selection={body:#?}"),
         }
+    }
+
+    /// Don't return anything
+    pub fn set_returning_none(&mut self) {
+        self.untyped.returning = None;
     }
 }
 

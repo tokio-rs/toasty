@@ -71,10 +71,6 @@ pub trait Visit: Sized {
         visit_expr_key(self, i);
     }
 
-    fn visit_expr_model(&mut self, i: &ExprModel) {
-        visit_expr_model(self, i);
-    }
-
     fn visit_expr_or(&mut self, i: &ExprOr) {
         visit_expr_or(self, i);
     }
@@ -274,7 +270,6 @@ where
         Expr::InList(expr) => v.visit_expr_in_list(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
         Expr::Key(expr) => v.visit_expr_key(expr),
-        Expr::Model(expr) => v.visit_expr_model(expr),
         Expr::Or(expr) => v.visit_expr_or(expr),
         Expr::Pattern(expr) => v.visit_expr_pattern(expr),
         Expr::Project(expr) => v.visit_expr_project(expr),
@@ -385,12 +380,6 @@ where
 }
 
 pub fn visit_expr_key<V>(v: &mut V, node: &ExprKey)
-where
-    V: Visit + ?Sized,
-{
-}
-
-pub fn visit_expr_model<V>(v: &mut V, node: &ExprModel)
 where
     V: Visit + ?Sized,
 {

@@ -70,9 +70,6 @@ pub use expr_list::ExprList;
 mod expr_map;
 pub use expr_map::ExprMap;
 
-mod expr_model;
-pub use expr_model::ExprModel;
-
 mod expr_or;
 pub use expr_or::ExprOr;
 

@@ -121,7 +121,8 @@ impl<'a> Generator<'a> {
                     /// Add an item to the association
                     pub fn add(self, #field_name: impl IntoExpr<[#target_struct_name]>) -> Add {
                         let mut stmt = stmt::Update::new(stmt::Select::from_expr(self.scope.into_expr()));
-                        stmt.set(#field_index, #field_name.into_expr());
+                        stmt.set_returning_none();
+                        stmt.insert(#field_index, #field_name.into_expr());
                         Add { stmt }
                     }
 

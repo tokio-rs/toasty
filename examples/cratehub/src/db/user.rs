@@ -371,7 +371,7 @@ pub mod relation {
                 packages: impl IntoExpr<[super::super::super::package::Package]>,
             ) -> Add {
                 let mut stmt = stmt::Update::new(stmt::Select::from_expr(self.scope.into_expr()));
-                stmt.set(3, packages.into_expr());
+                stmt.insert(3, packages.into_expr());
                 Add { stmt }
             }
             #[doc = r" Remove items from the association"]

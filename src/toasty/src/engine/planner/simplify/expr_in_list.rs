@@ -4,6 +4,44 @@ use stmt::{Expr, Value};
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_in_list(&self, expr: &mut stmt::ExprInList) -> Option<Expr> {
+        self.rewrite_expr_in_list_when_model(expr);
+
+        /// Rewrite single-item lists into equalities
+        self.rewrite_expr_in_list_with_single_item(expr)
+    }
+
+    fn rewrite_expr_in_list_when_model(&self, expr: &mut stmt::ExprInList) {
+        match &mut *expr.expr {
+            stmt::Expr::Key(expr_key) => {
+                let model = self.schema.model(expr_key.model);
+
+                let [pk_field_id] = &model.primary_key.fields[..] else {
+                    todo!()
+                };
+                let pk = self.schema.field(*pk_field_id);
+
+                // Check RHS format
+                match &mut *expr.list {
+                    stmt::Expr::List(expr_list) => {
+                        for expr in &mut expr_list.items {
+                            match expr {
+                                stmt::Expr::Value(value) => {
+                                    assert!(value.is_a(&pk.ty.expect_primitive().ty));
+                                }
+                                _ => todo!("{expr:#?}"),
+                            }
+                        }
+                    }
+                    _ => todo!("expr={expr:#?}"),
+                }
+
+                *expr.expr = stmt::Expr::field(pk);
+            }
+            _ => {}
+        }
+    }
+
+    fn rewrite_expr_in_list_with_single_item(&self, expr: &mut stmt::ExprInList) -> Option<Expr> {
         let rhs = match &mut *expr.list {
             Expr::Value(value) => {
                 let values = match value {
@@ -17,13 +55,14 @@ impl Simplify<'_> {
 
                 Expr::Value(values[0].clone())
             }
-            Expr::Record(expr_record) => {
-                if expr_record.len() != 1 {
+            Expr::List(expr_list) => {
+                if expr_list.items.len() != 1 {
                     return None;
                 }
 
-                expr_record[0].take()
+                expr_list.items[0].take()
             }
+            Expr::Record(_) => todo!("should not happen"),
             _ => return None,
         };
 

@@ -48,9 +48,6 @@ pub enum Expr {
     /// Apply an expression to each item in a list
     Map(ExprMap),
 
-    /// Reference a model instance by identity.
-    Model(ExprModel),
-
     /// OR a set of binary expressi5nos
     Or(ExprOr),
 
@@ -285,7 +282,6 @@ impl fmt::Debug for Expr {
             Expr::IsNull(e) => e.fmt(f),
             Expr::Key(e) => e.fmt(f),
             Expr::Map(e) => e.fmt(f),
-            Expr::Model(e) => e.fmt(f),
             Expr::Or(e) => e.fmt(f),
             Expr::Pattern(e) => e.fmt(f),
             Expr::Project(e) => e.fmt(f),
