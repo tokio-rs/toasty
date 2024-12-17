@@ -227,7 +227,12 @@ impl Planner<'_> {
                 assert!(!self.insertions.contains_key(&has_many.target));
 
                 let scope = self.inserted_query_stmt(model, expr);
-                self.plan_mut_has_many_expr(has_many, expr.entry_mut(i).take(), &scope);
+                self.plan_mut_has_many_expr(
+                    has_many,
+                    stmt::AssignmentOp::Insert,
+                    expr.entry_mut(i).take(),
+                    &scope,
+                );
             } else if let Some(has_one) = field.ty.as_has_one() {
                 // For now, we need to keep this separate
                 assert!(!self.insertions.contains_key(&has_one.target));

@@ -6,6 +6,7 @@ impl Planner<'_> {
     pub(super) fn plan_mut_relation_field(
         &mut self,
         field: &Field,
+        op: stmt::AssignmentOp,
         expr: &mut stmt::Expr,
         selection: &stmt::Query,
         is_insert: bool,
@@ -22,7 +23,7 @@ impl Planner<'_> {
                 assert_ne!(self.relations.last(), Some(&has_many.pair));
 
                 self.relation_step(field, |planner| {
-                    planner.plan_mut_has_many_expr(has_many, mem::take(expr), selection);
+                    planner.plan_mut_has_many_expr(has_many, op, mem::take(expr), selection);
                 });
             }
             FieldTy::BelongsTo(_) => {
@@ -85,7 +86,7 @@ impl Planner<'_> {
                     );
 
                     if field.nullable {
-                        let mut stmt = scope.update(planner.schema);
+                        let mut stmt = scope.update();
                         stmt.assignments.set(field.id, stmt::Value::Null);
                         planner.plan_update(stmt);
                     } else {
@@ -190,20 +191,22 @@ impl Planner<'_> {
     pub(super) fn plan_mut_has_many_expr(
         &mut self,
         has_many: &HasMany,
+        op: stmt::AssignmentOp,
         expr: stmt::Expr,
         scope: &stmt::Query,
     ) {
         match expr {
             stmt::Expr::Stmt(expr_stmt) => {
+                assert!(!op.is_remove());
                 self.plan_mut_has_many_stmt(has_many, *expr_stmt.stmt, scope)
             }
             stmt::Expr::List(expr_list) => {
                 for expr in expr_list.items {
-                    self.plan_mut_has_many_expr(has_many, expr, scope);
+                    self.plan_mut_has_many_expr(has_many, op, expr, scope);
                 }
             }
             stmt::Expr::Value(value) => {
-                self.plan_mut_has_many_value(has_many, value, scope);
+                self.plan_mut_has_many_value(has_many, op, value, scope);
             }
             _ => todo!("expr={:#?}", expr),
         }
@@ -224,18 +227,48 @@ impl Planner<'_> {
     fn plan_mut_has_many_value(
         &mut self,
         has_many: &HasMany,
+        op: stmt::AssignmentOp,
         value: stmt::Value,
         scope: &stmt::Query,
     ) {
-        let mut stmt = stmt::Query::filter(
+        if op.is_remove() {
+            self.plan_mut_has_many_value_remove(has_many, value, scope);
+        } else {
+            let mut stmt = stmt::Query::filter(
+                has_many.target,
+                stmt::Expr::eq(stmt::Expr::key(has_many.target), value),
+            )
+            .update();
+
+            stmt.assignments
+                .set(has_many.pair, stmt::ExprStmt::new(scope.clone()));
+            self.plan_update(stmt);
+        }
+    }
+
+    fn plan_mut_has_many_value_remove(
+        &mut self,
+        has_many: &HasMany,
+        value: stmt::Value,
+        scope: &stmt::Query,
+    ) {
+        let pair = self.schema.field(has_many.pair);
+
+        let selection = stmt::Query::filter(
             has_many.target,
             stmt::Expr::eq(stmt::Expr::key(has_many.target), value),
-        )
-        .update(self.schema);
+        );
 
-        stmt.assignments
-            .set(has_many.pair, stmt::ExprStmt::new(scope.clone()));
-        self.plan_update(stmt);
+        if pair.nullable {
+            let mut stmt = selection.update();
+
+            // This protects against races.
+            stmt.condition = Some(stmt::Expr::in_subquery(has_many.pair, scope.clone()));
+            stmt.assignments.set(has_many.pair, stmt::Value::Null);
+            self.plan_update(stmt);
+        } else {
+            self.plan_delete(selection.delete());
+        }
     }
 
     pub(super) fn plan_mut_has_one_expr(
@@ -283,7 +316,7 @@ impl Planner<'_> {
 
         if self.schema.field(has_one.pair).nullable {
             // TODO: unify w/ has_many ops?
-            let mut stmt = pair_scope.update(self.schema);
+            let mut stmt = pair_scope.update();
             stmt.assignments.set(has_one.pair, stmt::Value::Null);
             self.plan_update(stmt);
         } else {
@@ -308,7 +341,7 @@ impl Planner<'_> {
             has_one.target,
             stmt::Expr::eq(stmt::Expr::key(has_one.target), value),
         )
-        .update(self.schema);
+        .update();
 
         stmt.assignments
             .set(has_one.pair, stmt::ExprStmt::new(scope.clone()));

@@ -24,15 +24,14 @@ impl Query {
         }
     }
 
-    pub fn update(self, schema: &Schema) -> Update {
+    pub fn update(self) -> Update {
         let ExprSet::Select(select) = *self.body else {
             todo!("stmt={self:#?}");
         };
-        let width = schema.model(select.source.as_model_id()).fields.len();
 
         stmt::Update {
             target: UpdateTarget::Model(select.source.as_model_id()),
-            assignments: stmt::Assignments::with_capacity(width),
+            assignments: stmt::Assignments::default(),
             filter: Some(select.filter),
             condition: None,
             returning: None,

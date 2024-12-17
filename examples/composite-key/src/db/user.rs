@@ -325,7 +325,7 @@ pub mod relation {
         }
         #[derive(Debug)]
         pub struct Remove {
-            stmt: stmt::Unlink<super::User>,
+            stmt: stmt::Update<super::User>,
         }
         #[derive(Debug)]
         pub struct Add {
@@ -368,17 +368,16 @@ pub mod relation {
             #[doc = r" Add an item to the association"]
             pub fn add(self, todos: impl IntoExpr<[super::super::super::todo::Todo]>) -> Add {
                 let mut stmt = stmt::Update::new(stmt::Select::from_expr(self.scope.into_expr()));
+                stmt.set_returning_none();
                 stmt.insert(3, todos.into_expr());
                 Add { stmt }
             }
             #[doc = r" Remove items from the association"]
-            pub fn remove(
-                self,
-                todos: impl IntoSelect<Model = super::super::super::todo::Todo>,
-            ) -> Remove {
-                Remove {
-                    stmt: stmt::Unlink::new(self.scope, super::User::TODOS, todos),
-                }
+            pub fn remove(self, todos: impl IntoExpr<[super::super::super::todo::Todo]>) -> Remove {
+                let mut stmt = stmt::Update::new(stmt::Select::from_expr(self.scope.into_expr()));
+                stmt.set_returning_none();
+                stmt.remove(3, todos.into_expr());
+                Remove { stmt }
             }
             pub fn find_by_id(
                 self,

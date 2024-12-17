@@ -30,6 +30,10 @@ impl<M: Model> Update<M> {
         self.untyped.assignments.insert(field, expr);
     }
 
+    pub fn remove(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+        self.untyped.assignments.remove(field, expr);
+    }
+
     pub fn set_selection(&mut self, selection: Select<M>) {
         let query = selection.untyped;
 

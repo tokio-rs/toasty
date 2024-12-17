@@ -155,9 +155,6 @@ pub use ty::Type;
 mod ty_enum;
 pub use ty_enum::{EnumVariant, TypeEnum};
 
-mod unlink;
-pub use unlink::Unlink;
-
 mod update;
 pub use update::{Update, UpdateTarget};
 
@@ -200,9 +197,6 @@ pub enum Statement {
     /// Query the database
     Query(Query),
 
-    /// Unlink one or more associations
-    Unlink(Unlink),
-
     /// Update one or more existing records
     Update(Update),
 }
@@ -232,7 +226,6 @@ impl fmt::Debug for Statement {
             Statement::Delete(v) => v.fmt(f),
             Statement::Insert(v) => v.fmt(f),
             Statement::Query(v) => v.fmt(f),
-            Statement::Unlink(v) => v.fmt(f),
             Statement::Update(v) => v.fmt(f),
         }
     }

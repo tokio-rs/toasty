@@ -10,7 +10,6 @@ mod select;
 mod simplify;
 mod subquery;
 mod ty;
-mod unlink;
 mod update;
 mod verify;
 
@@ -108,7 +107,6 @@ impl<'a> Planner<'a> {
                 let output = self.plan_select(stmt);
                 self.returning = Some(output);
             }
-            stmt::Statement::Unlink(stmt) => self.plan_unlink(stmt),
             stmt::Statement::Update(stmt) => {
                 if let Some(output) = self.plan_update(stmt) {
                     self.returning = Some(output);

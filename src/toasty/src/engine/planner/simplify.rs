@@ -12,9 +12,6 @@ mod expr_in_list;
 mod expr_is_null;
 mod expr_record;
 
-// mod expr;
-// use expr::SimplifyExpr;
-
 mod value;
 
 // Simplifications
@@ -60,10 +57,6 @@ impl Planner<'_> {
 
     pub(crate) fn simplify_stmt_query(&self, stmt: &mut stmt::Query) {
         Simplify::new(self.schema).visit_stmt_query_mut(stmt);
-    }
-
-    pub(crate) fn simplify_stmt_unlink(&self, stmt: &mut stmt::Unlink) {
-        Simplify::new(self.schema).visit_stmt_unlink_mut(stmt);
     }
 
     pub(crate) fn simplify_stmt_update(&self, stmt: &mut stmt::Update) {
@@ -148,11 +141,6 @@ impl<'a> VisitMut for Simplify<'_> {
         );
         stmt::visit_mut::visit_stmt_select_mut(self, stmt);
         self.target = target;
-    }
-
-    fn visit_stmt_unlink_mut(&mut self, stmt: &mut stmt::Unlink) {
-        assert!(self.target.is_const());
-        stmt::visit_mut::visit_stmt_unlink_mut(self, stmt);
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {

@@ -26,7 +26,7 @@ impl Planner<'_> {
                 );
 
                 if pair.nullable {
-                    let mut update = query.update(self.schema);
+                    let mut update = query.update();
                     update.assignments.set(pair.id, stmt::Value::Null);
 
                     self.plan_update(update);

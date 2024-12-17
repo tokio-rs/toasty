@@ -31,9 +31,6 @@ pub use select::Select;
 mod to_statement;
 pub use to_statement::ToStatement;
 
-mod unlink;
-pub use unlink::Unlink;
-
 mod update;
 pub use update::Update;
 
@@ -56,32 +53,6 @@ impl<M: Model> Statement<M> {
             untyped: query.into_select().untyped.into(),
             _p: PhantomData,
         }
-    }
-
-    pub fn update<Q>(
-        expr: stmt::ExprRecord,
-        fields: stmt::PathFieldSet,
-        selection: Q,
-    ) -> Statement<M>
-    where
-        Q: IntoSelect<Model = M>,
-    {
-        /*
-        let untyped = stmt::Update {
-            fields,
-            selection: selection.into_select().untyped,
-            expr,
-            condition: None,
-            returning: true,
-        }
-        .into();
-
-        Statement {
-            untyped,
-            _p: PhantomData,
-        }
-        */
-        todo!()
     }
 }
 

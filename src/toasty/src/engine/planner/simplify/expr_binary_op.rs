@@ -60,6 +60,7 @@ impl Simplify<'_> {
 
                             *other = match other.take() {
                                 stmt::Expr::Record(_) => todo!(),
+                                stmt::Expr::Stmt(stmt) => todo!("stmt={stmt:#?}"),
                                 other => other,
                             };
 

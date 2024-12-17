@@ -100,6 +100,22 @@ impl Assignments {
         }
     }
 
+    pub fn remove(&mut self, key: usize, expr: impl Into<Expr>) {
+        use indexmap::map::Entry;
+
+        match self.assignments.entry(key) {
+            Entry::Occupied(entry) => {
+                todo!()
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(Assignment {
+                    op: AssignmentOp::Remove,
+                    expr: expr.into(),
+                });
+            }
+        }
+    }
+
     pub fn take(&mut self, key: usize) -> Assignment {
         self.assignments.swap_remove(&key).unwrap()
     }
@@ -146,5 +162,9 @@ impl ops::IndexMut<usize> for Assignments {
 impl AssignmentOp {
     pub fn is_set(self) -> bool {
         matches!(self, AssignmentOp::Set)
+    }
+
+    pub fn is_remove(self) -> bool {
+        matches!(self, AssignmentOp::Remove)
     }
 }

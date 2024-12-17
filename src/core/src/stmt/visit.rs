@@ -139,10 +139,6 @@ pub trait Visit: Sized {
         visit_stmt_select(self, i);
     }
 
-    fn visit_stmt_unlink(&mut self, i: &Unlink) {
-        visit_stmt_unlink(self, i);
-    }
-
     fn visit_stmt_update(&mut self, i: &Update) {
         visit_stmt_update(self, i);
     }
@@ -493,7 +489,6 @@ where
         Statement::Delete(stmt) => v.visit_stmt_delete(stmt),
         Statement::Insert(stmt) => v.visit_stmt_insert(stmt),
         Statement::Query(stmt) => v.visit_stmt_query(stmt),
-        Statement::Unlink(stmt) => v.visit_stmt_unlink(stmt),
         Statement::Update(stmt) => v.visit_stmt_update(stmt),
     }
 }
@@ -538,14 +533,6 @@ where
     v.visit_source(&node.source);
     v.visit_expr(&node.filter);
     v.visit_returning(&node.returning);
-}
-
-pub fn visit_stmt_unlink<V>(v: &mut V, node: &Unlink)
-where
-    V: Visit + ?Sized,
-{
-    v.visit_stmt_query(&node.source);
-    v.visit_stmt_query(&node.target);
 }
 
 pub fn visit_stmt_update<V>(v: &mut V, node: &Update)

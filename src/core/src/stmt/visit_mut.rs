@@ -155,10 +155,6 @@ pub trait VisitMut: Sized {
         visit_stmt_delete_mut(self, i);
     }
 
-    fn visit_stmt_unlink_mut(&mut self, i: &mut Unlink) {
-        visit_stmt_unlink_mut(self, i);
-    }
-
     fn visit_update_target_mut(&mut self, i: &mut UpdateTarget) {
         visit_update_target_mut(self, i);
     }
@@ -528,7 +524,6 @@ where
         Statement::Delete(stmt) => v.visit_stmt_delete_mut(stmt),
         Statement::Insert(stmt) => v.visit_stmt_insert_mut(stmt),
         Statement::Query(stmt) => v.visit_stmt_query_mut(stmt),
-        Statement::Unlink(_) => todo!(),
         Statement::Update(stmt) => v.visit_stmt_update_mut(stmt),
     }
 }
@@ -591,14 +586,6 @@ where
     if let Some(returning) = &mut node.returning {
         v.visit_returning_mut(returning);
     }
-}
-
-pub fn visit_stmt_unlink_mut<V>(v: &mut V, node: &mut Unlink)
-where
-    V: VisitMut + ?Sized,
-{
-    v.visit_stmt_query_mut(&mut node.source);
-    v.visit_stmt_query_mut(&mut node.target);
 }
 
 pub fn visit_update_target_mut<V>(v: &mut V, node: &mut UpdateTarget)

@@ -9,7 +9,9 @@ impl Planner<'_> {
     // If the update statement requested the result to be returned, then this
     // method returns the var in which it will be stored.
     pub(super) fn plan_update(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
+        println!("update={stmt:#?}");
         self.simplify_stmt_update(&mut stmt);
+        println!("simplified={stmt:#?}");
 
         let model = self.model(stmt.target.as_model_id());
 
@@ -34,10 +36,10 @@ impl Planner<'_> {
             match assignment.op {
                 stmt::AssignmentOp::Set => assert!(!field.ty.is_has_many(), "TODO"),
                 stmt::AssignmentOp::Insert => assert!(field.ty.is_has_many(), "TODO"),
-                _ => todo!(),
+                stmt::AssignmentOp::Remove => assert!(field.ty.is_has_many(), "TODO"),
             }
 
-            self.plan_mut_relation_field(field, &mut assignment.expr, &scope, false);
+            self.plan_mut_relation_field(field, assignment.op, &mut assignment.expr, &scope, false);
 
             // Map the belongs_to statement to the foreign key fields
             if let FieldTy::BelongsTo(belongs_to) = &field.ty {

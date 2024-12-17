@@ -66,7 +66,7 @@ impl<'a> Generator<'a> {
 
                 #[derive(Debug)]
                 pub struct Remove {
-                    stmt: stmt::Unlink<super::#model_struct_name>,
+                    stmt: stmt::Update<super::#model_struct_name>,
                 }
 
                 #[derive(Debug)]
@@ -127,14 +127,11 @@ impl<'a> Generator<'a> {
                     }
 
                     /// Remove items from the association
-                    pub fn remove(self, #field_name: impl IntoSelect<Model = #target_struct_name>) -> Remove {
-                        Remove {
-                            stmt: stmt::Unlink::new(
-                                self.scope,
-                                super::#model_struct_name::#field_const_name,
-                                #field_name,
-                            ),
-                        }
+                    pub fn remove(self, #field_name: impl IntoExpr<[#target_struct_name]>) -> Remove {
+                        let mut stmt = stmt::Update::new(stmt::Select::from_expr(self.scope.into_expr()));
+                        stmt.set_returning_none();
+                        stmt.remove(#field_index, #field_name.into_expr());
+                        Remove { stmt }
                     }
 
                     #scoped_query_method_defs
