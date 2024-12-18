@@ -2,36 +2,30 @@ use super::*;
 
 impl Exec<'_> {
     pub(super) async fn exec_delete_by_key(&mut self, action: &plan::DeleteByKey) -> Result<()> {
-        /*
-        let keys = self
-            .collect_keys_from_input(&action.keys, &action.input)
-            .await?;
+        let args = if let Some(input) = &action.input {
+            vec![self.collect_input(input).await?]
+        } else {
+            vec![]
+        };
+
+        let keys = match action.keys.eval(&args[..])? {
+            stmt::Value::List(keys) => keys,
+            res => todo!("res={res:#?}"),
+        };
 
         if keys.is_empty() {
             return Ok(());
         } else {
             let op = operation::DeleteByKey {
                 table: action.table,
-                // TODO: don't eval unecessarily
                 keys,
                 filter: action.filter.clone(),
             };
 
-            /*
-            // TODO: do something with the result
-            let _ = self
-                .db
-                .driver
-                .exec(&self.db.schema, op.into())
-                .await?
-                .collect()
-                .await?;
-            */
-            todo!()
+            let res = self.db.driver.exec(&self.db.schema, op.into()).await?;
+            assert!(res.rows.is_count(), "TODO");
         }
 
         Ok(())
-        */
-        todo!()
     }
 }

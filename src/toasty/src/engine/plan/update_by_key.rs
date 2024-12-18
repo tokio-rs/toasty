@@ -13,7 +13,7 @@ pub(crate) struct UpdateByKey {
     pub table: TableId,
 
     /// Which key(s) to update
-    pub key: eval::Func,
+    pub keys: eval::Func,
 
     /// Assignments
     pub assignments: stmt::Assignments,

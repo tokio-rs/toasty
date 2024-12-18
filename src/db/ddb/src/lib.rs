@@ -96,8 +96,8 @@ impl DynamoDB {
             GetByKey(op) => self.exec_get_by_key(schema, op).await,
             /*
             QueryPk(op) => self.exec_query_pk(schema, op).await,
-            DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
             */
+            DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
             UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
             /*
             FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,

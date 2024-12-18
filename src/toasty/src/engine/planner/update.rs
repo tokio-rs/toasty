@@ -144,7 +144,7 @@ impl Planner<'_> {
                 input: None,
                 output,
                 table: model.lowering.table,
-                key,
+                keys: key,
                 assignments: stmt.assignments,
                 filter: index_plan.result_filter,
                 condition: stmt.condition,

@@ -5,7 +5,7 @@ impl DynamoDB {
         &self,
         schema: &schema::Schema,
         op: operation::DeleteByKey,
-    ) -> Result<stmt::ValueStream> {
+    ) -> Result<Response> {
         use aws_sdk_dynamodb::operation::delete_item::DeleteItemError;
 
         let table = schema.table(op.table);
@@ -52,7 +52,7 @@ impl DynamoDB {
 
                 if let Err(SdkError::ServiceError(e)) = res {
                     if let DeleteItemError::ConditionalCheckFailedException(_) = e.err() {
-                        return Ok(stmt::ValueStream::new());
+                        return Ok(Response::from_count(0));
                     }
 
                     return Err(SdkError::ServiceError(e).into());
@@ -60,7 +60,7 @@ impl DynamoDB {
 
                 assert!(res.is_ok());
 
-                return Ok(stmt::ValueStream::new());
+                return Ok(Response::from_count(1));
             } else {
                 let mut transact_items = vec![];
 
@@ -104,7 +104,7 @@ impl DynamoDB {
                     todo!("err={:#?}", e);
                 }
 
-                return Ok(stmt::ValueStream::new());
+                return Ok(Response::from_count(op.keys.len()));
             }
         }
 
@@ -138,7 +138,7 @@ impl DynamoDB {
             .await?;
 
         let Some(curr_unique_values) = res.item else {
-            return Ok(stmt::ValueStream::new());
+            return Ok(Response::from_count(0));
         };
 
         // Now we must both delete from the main table **and** the unique index
@@ -192,6 +192,6 @@ impl DynamoDB {
             .send()
             .await?;
 
-        Ok(stmt::ValueStream::new())
+        Ok(Response::from_count(1))
     }
 }
