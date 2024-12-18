@@ -6,19 +6,10 @@ pub(crate) struct QuerySql {
     pub input: Option<Input>,
 
     /// How to handle output
-    pub output: Option<QuerySqlOutput>,
+    pub output: Option<Output>,
 
     /// The query to execute. This may require input to generate the query.
     pub stmt: stmt::Statement,
-}
-
-#[derive(Debug)]
-pub(crate) struct QuerySqlOutput {
-    /// Variable to store the output in
-    pub var: plan::VarId,
-
-    /// How to project the output returned by the driver
-    pub project: eval::Func,
 }
 
 impl From<QuerySql> for Action {

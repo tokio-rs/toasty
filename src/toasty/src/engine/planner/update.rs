@@ -94,7 +94,7 @@ impl Planner<'_> {
 
         let output = self
             .partition_maybe_returning(&mut stmt.returning)
-            .map(|mut project| plan::QuerySqlOutput {
+            .map(|mut project| plan::Output {
                 var: self
                     .var_table
                     .register_var(stmt::Type::list(project.ret.clone())),

@@ -5,7 +5,7 @@ use crate::schema::*;
 #[derive(Debug)]
 pub(crate) struct GetByKey {
     /// Where to get arguments for this action.
-    pub input: Vec<Input>,
+    pub input: Option<Input>,
 
     /// Where to store the result
     pub output: VarId,
@@ -17,14 +17,14 @@ pub(crate) struct GetByKey {
     pub columns: Vec<ColumnId>,
 
     /// Keys to get
-    pub keys: eval::Expr,
+    pub keys: eval::Func,
 
     /// How to project the columns after receiving them from the database.
-    pub project: eval::Expr,
+    pub project: eval::Func,
 
     /// Additional filtering done on the result before returning it to the
     /// caller.
-    pub post_filter: Option<eval::Expr>,
+    pub post_filter: Option<eval::Func>,
 }
 
 impl From<GetByKey> for Action {

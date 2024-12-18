@@ -22,7 +22,7 @@ impl Planner<'_> {
     pub(super) fn plan_simplified_select(
         &mut self,
         cx: &Context,
-        stmt: stmt::Query,
+        mut stmt: stmt::Query,
     ) -> plan::VarId {
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
@@ -45,6 +45,8 @@ impl Planner<'_> {
             _ => todo!(),
         };
 
+        self.lower_stmt_query(model, &mut stmt);
+
         let ret = if self.capability.is_sql() {
             self.plan_select_sql(cx, model, stmt)
         } else {
@@ -64,8 +66,6 @@ impl Planner<'_> {
         model: &Model,
         mut stmt: stmt::Query,
     ) -> plan::VarId {
-        self.lower_stmt_query(model, &mut stmt);
-
         let input = if cx.input.is_empty() {
             None
         } else {
@@ -83,7 +83,7 @@ impl Planner<'_> {
 
         self.push_action(plan::QuerySql {
             input,
-            output: Some(plan::QuerySqlOutput {
+            output: Some(plan::Output {
                 var: output,
                 project,
             }),
@@ -93,32 +93,44 @@ impl Planner<'_> {
         output
     }
 
-    fn plan_select_kv(&mut self, cx: &Context, model: &Model, stmt: stmt::Query) -> plan::VarId {
+    fn plan_select_kv(
+        &mut self,
+        cx: &Context,
+        model: &Model,
+        mut stmt: stmt::Query,
+    ) -> plan::VarId {
         let table = self.schema.table(model.lowering.table);
-        /*
 
-        // TODO: don't clone
-        let filter = stmt.filter.clone();
+        let input = if cx.input.is_empty() {
+            None
+        } else {
+            self.partition_query_input(&mut stmt, &cx.input)
+        };
 
-        let mut index_plan = self.plan_index_path2(model, &filter);
+        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
+        let output = self
+            .var_table
+            .register_var(stmt::Type::list(project.ret.clone()));
+
+        let mut index_plan = match &*stmt.body {
+            stmt::ExprSet::Select(query) => self.plan_index_path2(table, &query.filter),
+            _ => todo!("stmt={stmt:#?}"),
+        };
 
         let mut index_filter = index_plan.index_filter;
-        let index = self.schema.index(index_plan.index.lowering.index);
-        self.lower_index_filter(table, model, index_plan.index, &mut index_filter);
 
-        if let Some(result_filter) = &mut index_plan.result_filter {
-            self.lower_expr2(model, result_filter);
-        }
+        todo!("index_filter={index_filter:#?}");
 
+        /*
         if index_plan.index.primary_key {
             // Is the index filter a set of keys
-            if let Some(keys) = self.try_build_key_filter(index, &index_filter) {
+            if let Some(keys) = self.try_build_key_filter(&index_plan.index, &index_filter) {
                 assert!(index_plan.post_filter.is_none());
 
-                let output = self.var_table.register_var();
+                let output = self.var_table.register_var(todo!("type"));
 
                 self.push_action(plan::GetByKey {
-                    input: cx.input.clone(),
+                    input,
                     output,
                     table: table.id,
                     columns: model.lowering.columns.clone(),
@@ -129,7 +141,6 @@ impl Planner<'_> {
 
                 output
             } else {
-                assert!(stmt.returning.is_star());
                 assert!(cx.input.is_empty());
 
                 let output = self.var_table.register_var();
@@ -177,7 +188,6 @@ impl Planner<'_> {
             get_by_key_out
         }
         */
-        todo!()
     }
 
     fn plan_select_include(&mut self, base: ModelId, path: &stmt::Path, input: plan::VarId) {
@@ -227,12 +237,6 @@ impl Planner<'_> {
 
                 let cx = Context {
                     input: vec![plan::InputSource::Ref(input)],
-                    /*
-                    input: vec![plan::Input::project_var_ref(
-                        input,
-                        eval::Expr::project(eval::Expr::arg(0), fk_field.source),
-                    )],
-                    */
                 };
 
                 let filter = stmt::Expr::in_list(

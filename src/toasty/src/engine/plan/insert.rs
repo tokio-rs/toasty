@@ -6,19 +6,10 @@ pub(crate) struct Insert {
     pub input: Option<Input>,
 
     /// If the output is needed, store it in this variable
-    pub output: Option<InsertOutput>,
+    pub output: Option<Output>,
 
     /// The insert statement
     pub stmt: stmt::Insert,
-}
-
-#[derive(Debug)]
-pub(crate) struct InsertOutput {
-    /// Where to store the output
-    pub var: VarId,
-
-    /// How to project it before storing
-    pub project: eval::Func,
 }
 
 impl From<Insert> for Action {

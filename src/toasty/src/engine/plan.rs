@@ -20,7 +20,10 @@ mod input;
 pub(crate) use input::{Input, InputSource};
 
 mod insert;
-pub(crate) use insert::{Insert, InsertOutput};
+pub(crate) use insert::Insert;
+
+mod output;
+pub(crate) use output::Output;
 
 mod pipeline;
 pub(crate) use pipeline::Pipeline;
@@ -29,7 +32,7 @@ mod query_pk;
 pub(crate) use query_pk::QueryPk;
 
 mod query_sql;
-pub(crate) use query_sql::{QuerySql, QuerySqlOutput};
+pub(crate) use query_sql::QuerySql;
 
 mod set_var;
 pub(crate) use set_var::{SetVar, VarId};
