@@ -147,7 +147,6 @@ impl Expr {
                 let base = e.base.ty(args);
                 e.map.ty(&[base])
             }
-            Expr::Project(e) => todo!("{self:#?}"),
             Expr::Record(e) => {
                 stmt::Type::Record(e.fields.iter().map(|field| field.ty(args)).collect())
             }

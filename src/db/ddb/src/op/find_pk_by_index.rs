@@ -5,7 +5,7 @@ impl DynamoDB {
         &self,
         schema: &schema::Schema,
         op: operation::FindPkByIndex,
-    ) -> Result<stmt::ValueStream> {
+    ) -> Result<Response> {
         let table = schema.table(op.table);
         let index = schema.index(op.index);
 
@@ -35,11 +35,11 @@ impl DynamoDB {
 
         let schema = schema.clone();
 
-        Ok(stmt::ValueStream::from_iter(
+        Ok(Response::from_value_stream(stmt::ValueStream::from_iter(
             res.items.into_iter().flatten().map(move |item| {
                 let table = schema.table(op.table);
                 item_to_record(&item, table.primary_key_columns())
             }),
-        ))
+        )))
     }
 }

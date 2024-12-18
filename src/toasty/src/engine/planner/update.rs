@@ -9,9 +9,7 @@ impl Planner<'_> {
     // If the update statement requested the result to be returned, then this
     // method returns the var in which it will be stored.
     pub(super) fn plan_update(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
-        println!("update={stmt:#?}");
         self.simplify_stmt_update(&mut stmt);
-        println!("simplified={stmt:#?}");
 
         let model = self.model(stmt.target.as_model_id());
 

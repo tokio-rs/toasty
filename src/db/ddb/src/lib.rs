@@ -99,9 +99,7 @@ impl DynamoDB {
             */
             DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
             UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
-            /*
             FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
-            */
             QuerySql(op) => match op.stmt {
                 stmt::Statement::Insert(op) => self.exec_insert(schema, op).await,
                 _ => todo!("op={:#?}", op),
@@ -280,32 +278,30 @@ fn ddb_expression<'a>(
     primary: bool,
     expr: &stmt::Expr,
 ) -> String {
-    /*
     match expr {
-        sql::Expr::BinaryOp(expr_binary_op) => {
+        stmt::Expr::BinaryOp(expr_binary_op) => {
             let lhs = ddb_expression(schema, attrs, primary, &expr_binary_op.lhs);
             let rhs = ddb_expression(schema, attrs, primary, &expr_binary_op.rhs);
 
             match expr_binary_op.op {
-                sql::BinaryOp::Eq => format!("{lhs} = {rhs}"),
-                sql::BinaryOp::Ne if primary => {
+                stmt::BinaryOp::Eq => format!("{lhs} = {rhs}"),
+                stmt::BinaryOp::Ne if primary => {
                     todo!("!= conditions on primary key not supported")
                 }
-                sql::BinaryOp::Ne => format!("{lhs} <> {rhs}"),
-                sql::BinaryOp::Gt => format!("{lhs} > {rhs}"),
-                sql::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
-                sql::BinaryOp::Lt => format!("{lhs} < {rhs}"),
-                sql::BinaryOp::Le => format!("{lhs} <= {rhs}"),
-                // stmt::BinaryOp::IsA => format!("begins_with({lhs}, {rhs})"),
+                stmt::BinaryOp::Ne => format!("{lhs} <> {rhs}"),
+                stmt::BinaryOp::Gt => format!("{lhs} > {rhs}"),
+                stmt::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
+                stmt::BinaryOp::Lt => format!("{lhs} < {rhs}"),
+                stmt::BinaryOp::Le => format!("{lhs} <= {rhs}"),
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
-        sql::Expr::Column(column_id) => {
-            let column = schema.column(column_id);
+        stmt::Expr::Column(expr_column) => {
+            let column = schema.column(expr_column.column);
             attrs.column(column).to_string()
         }
-        sql::Expr::Value(val) => attrs.value(val),
-        sql::Expr::And(expr_and) => {
+        stmt::Expr::Value(val) => attrs.value(val),
+        stmt::Expr::And(expr_and) => {
             let operands = expr_and
                 .operands
                 .iter()
@@ -313,22 +309,13 @@ fn ddb_expression<'a>(
                 .collect::<Vec<_>>();
             operands.join(" AND ")
         }
-        sql::Expr::BeginsWith(begins_with) => {
+        stmt::Expr::Pattern(stmt::ExprPattern::BeginsWith(begins_with)) => {
             let expr = ddb_expression(schema, attrs, primary, &begins_with.expr);
             let substr = ddb_expression(schema, attrs, primary, &begins_with.pattern);
             format!("begins_with({expr}, {substr})")
         }
-        /*
-        stmt::Expr::Type(expr_ty) => {
-            let variant = expr_ty.variant.unwrap();
-            let value = format!("{}#", variant);
-            attrs.value(&value.into())
-        }
-        */
         _ => todo!("FILTER = {:#?}", expr),
     }
-    */
-    todo!()
 }
 
 #[derive(Default)]

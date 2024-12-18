@@ -5,10 +5,10 @@ use crate::{driver::*, schema::*};
 #[derive(Debug)]
 pub(crate) struct FindPkByIndex {
     /// How to access input from the variable table.
-    pub input: Vec<Input>,
+    pub input: Option<Input>,
 
     /// Where to store the output
-    pub output: VarId,
+    pub output: Output,
 
     /// Table to query
     pub table: TableId,
@@ -18,17 +18,6 @@ pub(crate) struct FindPkByIndex {
 
     /// Filter to apply to index
     pub filter: stmt::Expr,
-}
-
-impl FindPkByIndex {
-    pub(crate) fn apply(&self) -> Result<operation::FindPkByIndex> {
-        Ok(operation::FindPkByIndex {
-            table: self.table,
-            index: self.index,
-            // TODO: don't apply if not needed
-            filter: self.filter.clone(),
-        })
-    }
 }
 
 impl From<FindPkByIndex> for Action {

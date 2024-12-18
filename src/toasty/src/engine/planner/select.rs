@@ -117,15 +117,16 @@ impl Planner<'_> {
             _ => todo!("stmt={stmt:#?}"),
         };
 
-        let mut index_filter = index_plan.index_filter;
+        let post_filter = index_plan
+            .result_filter
+            .map(|expr| eval::Func::new(project.args.clone(), eval::Expr::from_stmt(expr)));
 
         if index_plan.index.primary_key {
             // Is the index filter a set of keys
-            if let Some(keys) = self.try_build_key_filter(index_plan.index, &index_filter) {
+            if let Some(keys) =
+                self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
+            {
                 assert!(index_plan.post_filter.is_none());
-                let post_filter = index_plan
-                    .result_filter
-                    .map(|expr| eval::Func::new(project.args.clone(), eval::Expr::from_stmt(expr)));
 
                 self.push_action(plan::GetByKey {
                     input,
@@ -163,35 +164,57 @@ impl Planner<'_> {
                 todo!()
             }
         } else {
-            /*
             assert!(index_plan.post_filter.is_none());
 
-            let filter = sql::Expr::from_stmt(self.schema, table.id, index_filter);
+            let key_ty = index_plan.index.key_ty(self.schema);
+            let pk_by_index_out = self
+                .var_table
+                .register_var(stmt::Type::list(key_ty.clone()));
 
-            let pk_by_index_out = self.var_table.register_var();
+            // In this case, we have to flatten the returned record into a single value
+            let project_key = if index_plan.index.columns.len() == 1 {
+                let arg_ty = stmt::Type::Record(vec![self
+                    .schema
+                    .column(index_plan.index.columns[0].column)
+                    .ty
+                    .clone()]);
+
+                eval::Func {
+                    args: vec![arg_ty],
+                    ret: key_ty.clone(),
+                    expr: eval::Expr::project(eval::Expr::arg(0), [0]),
+                }
+            } else {
+                eval::Func::identity(key_ty.clone())
+            };
+
             self.push_action(plan::FindPkByIndex {
-                input: cx.input.clone(),
-                output: pk_by_index_out,
+                input,
+                output: plan::Output {
+                    var: pk_by_index_out,
+                    project: project_key,
+                },
                 table: table.id,
-                index: index_plan.index.lowering.index,
-                filter,
+                index: index_plan.index.id,
+                filter: index_plan.index_filter,
             });
-
-            let get_by_key_out = self.var_table.register_var();
 
             self.push_action(plan::GetByKey {
-                input: vec![plan::Input::from_var(pk_by_index_out)],
-                output: get_by_key_out,
+                input: Some(plan::Input::from_var(
+                    pk_by_index_out,
+                    stmt::Type::list(key_ty.clone()),
+                )),
+                output: plan::Output {
+                    var: output,
+                    project,
+                },
                 table: table.id,
-                keys: eval::Expr::project([0]),
+                keys: eval::Func::identity(stmt::Type::list(key_ty)),
                 columns: model.lowering.columns.clone(),
-                project,
-                post_filter: index_plan.result_filter.map(eval::Expr::from_stmt),
+                post_filter,
             });
 
-            get_by_key_out
-            */
-            todo!()
+            output
         }
     }
 
