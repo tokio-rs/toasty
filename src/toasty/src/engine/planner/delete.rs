@@ -36,6 +36,8 @@ impl Planner<'_> {
             }
         }
 
+        self.lower_stmt_delete(model, &mut stmt);
+
         if self.capability.is_sql() {
             self.plan_delete_sql(model, stmt);
         } else {
@@ -45,8 +47,6 @@ impl Planner<'_> {
     }
 
     fn plan_delete_sql(&mut self, model: &Model, mut stmt: stmt::Delete) {
-        self.lower_stmt_delete(model, &mut stmt);
-
         self.push_action(plan::QuerySql {
             output: None,
             input: None,
@@ -55,39 +55,30 @@ impl Planner<'_> {
     }
 
     fn plan_delete_kv(&mut self, model: &Model, mut stmt: stmt::Delete) {
-        /*
         let table = self.schema.table(model.lowering.table);
 
-        let filter = &mut stmt.filter;
-        let input = self.extract_input(filter, &[], true);
-
         // Figure out which index to use for the query
-        let index_plan = self.plan_index_path2(model, filter);
-        let mut index_filter = index_plan.index_filter;
-        let index = self.schema.index(index_plan.index.lowering.index);
-        self.lower_index_filter(table, model, index_plan.index, &mut index_filter);
+        let index_plan = self.plan_index_path2(table, &stmt.filter);
 
         if index_plan.index.primary_key {
-            if let Some(keys) = self.try_build_key_filter(index, &index_filter) {
-                let filter = index_plan.result_filter.map(|mut expr| {
-                    self.lower_expr2(model, &mut expr);
-                    expr
-                });
-
+            if let Some(keys) =
+                self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
+            {
                 self.push_write_action(plan::DeleteByKey {
-                    input,
+                    input: None,
                     table: model.lowering.table,
                     keys,
-                    filter,
+                    filter: index_plan.result_filter,
                 });
             } else {
                 todo!(
                     "subqueries={:#?}; index_plan.filter={:#?}",
                     self.subqueries,
-                    index_filter
+                    index_plan.index_filter,
                 );
             };
         } else {
+            /*
             assert!(index_plan.post_filter.is_none());
 
             let pk_by_index_out = self.var_table.register_var();
@@ -111,8 +102,8 @@ impl Planner<'_> {
                     expr
                 }),
             });
+            */
+            todo!()
         }
-        */
-        todo!()
     }
 }

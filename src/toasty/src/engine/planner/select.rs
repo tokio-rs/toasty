@@ -121,7 +121,7 @@ impl Planner<'_> {
 
         if index_plan.index.primary_key {
             // Is the index filter a set of keys
-            if let Some(keys) = self.try_build_key_filter(&index_plan.index, &index_filter) {
+            if let Some(keys) = self.try_build_key_filter(index_plan.index, &index_filter) {
                 assert!(index_plan.post_filter.is_none());
                 let post_filter = index_plan
                     .result_filter

@@ -5,13 +5,13 @@ use crate::schema::*;
 #[derive(Debug)]
 pub(crate) struct DeleteByKey {
     /// How to access input from the variable table.
-    pub input: Vec<Input>,
+    pub input: Option<Input>,
 
     /// Which model to get
     pub table: TableId,
 
     /// Which keys to delete
-    pub keys: eval::Expr,
+    pub keys: eval::Func,
 
     /// Only delete keys that match the filter
     pub filter: Option<stmt::Expr>,
