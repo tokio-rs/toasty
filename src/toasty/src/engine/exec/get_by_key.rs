@@ -39,7 +39,7 @@ impl Exec<'_> {
                 for await value in rows {
                     let value = value?;
                     let value = output.project.eval(&[value])?;
-                    yield value.into();
+                    yield value;
                 }
             })
         };

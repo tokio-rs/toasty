@@ -124,6 +124,10 @@ impl Assignments {
         self.assignments.keys().map(|k| *k)
     }
 
+    pub fn exprs(&self) -> impl Iterator<Item = &Expr> + '_ {
+        self.assignments.values().map(|assignment| &assignment.expr)
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (usize, &Assignment)> + '_ {
         self.assignments
             .iter()
@@ -134,6 +138,12 @@ impl Assignments {
         self.assignments
             .iter_mut()
             .map(|(index, assignment)| (*index, assignment))
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = (usize, Assignment)> {
+        self.assignments
+            .into_iter()
+            .map(|(index, assignment)| (index, assignment))
     }
 }
 

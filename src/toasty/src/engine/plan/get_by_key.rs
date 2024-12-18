@@ -13,11 +13,11 @@ pub(crate) struct GetByKey {
     /// Table to query
     pub table: TableId,
 
-    /// Columns to get
-    pub columns: Vec<ColumnId>,
-
     /// Keys to get
     pub keys: eval::Func,
+
+    /// Columns to get
+    pub columns: Vec<ColumnId>,
 
     /// Additional filtering done on the result before returning it to the
     /// caller.
