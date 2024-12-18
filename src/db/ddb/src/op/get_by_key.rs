@@ -5,8 +5,7 @@ impl DynamoDB {
         &self,
         schema: &schema::Schema,
         op: operation::GetByKey,
-    ) -> Result<stmt::ValueStream> {
-        /*
+    ) -> Result<Response> {
         let table = schema.table(op.table);
 
         if op.keys.len() == 1 {
@@ -20,23 +19,12 @@ impl DynamoDB {
                 .await?;
 
             if let Some(item) = res.item() {
-                if let Some(filter) = op.post_filter {
-                    // TODO: improve filtering logic
-                    let row = item_to_record(item, table.columns.iter())?;
-                    if filter.eval_bool(&row)? {
-                        let row = stmt::Record::from_vec(
-                            op.select.iter().map(|id| row[id.index].clone()).collect(),
-                        );
-                        Ok(stmt::ValueStream::from_value(row))
-                    } else {
-                        Ok(stmt::ValueStream::new())
-                    }
-                } else {
-                    let row = item_to_record(item, op.select.iter().map(|id| schema.column(id)))?;
-                    Ok(stmt::ValueStream::from_value(row))
-                }
+                let row = item_to_record(item, op.select.iter().map(|id| schema.column(id)))?;
+                Ok(Response::from_value_stream(stmt::ValueStream::from_value(
+                    row,
+                )))
             } else {
-                Ok(stmt::ValueStream::new())
+                Ok(Response::empty_value_stream())
             }
         } else {
             if op.keys.len() > 100 {
@@ -67,16 +55,16 @@ impl DynamoDB {
                 .await?;
 
             let Some(mut responses) = res.responses else {
-                return Ok(stmt::ValueStream::new());
+                return Ok(Response::empty_value_stream());
             };
             let Some(items) = responses.remove(&self.table_name(table)) else {
-                return Ok(stmt::ValueStream::new());
+                return Ok(Response::empty_value_stream());
             };
 
             let schema = schema.clone();
 
-            Ok(stmt::ValueStream::from_iter(items.into_iter().filter_map(
-                move |item| {
+            Ok(Response::from_value_stream(stmt::ValueStream::from_iter(
+                items.into_iter().filter_map(move |item| {
                     let row = match item_to_record(
                         &item,
                         op.select.iter().map(|column_id| schema.column(column_id)),
@@ -85,19 +73,9 @@ impl DynamoDB {
                         Err(e) => return Some(Err(e)),
                     };
 
-                    if let Some(filter) = &op.post_filter {
-                        match filter.eval_bool(&row) {
-                            Ok(true) => {}
-                            Ok(false) => return None,
-                            Err(e) => return Some(Err(e)),
-                        }
-                    }
-
                     Some(Ok(row))
-                },
+                }),
             )))
         }
-        */
-        todo!()
     }
 }

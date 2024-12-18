@@ -13,9 +13,26 @@ impl Planner<'_> {
         index: &Index,
         expr: &stmt::Expr,
     ) -> Option<eval::Func> {
-        TryConvert { index }
-            .try_convert(expr)
-            .map(|expr| eval::Func::new(vec![], expr))
+        TryConvert { index }.try_convert(expr).map(|expr| {
+            let expr = match expr {
+                expr @ eval::Expr::Value(stmt::Value::List(_)) => expr,
+                eval::Expr::Value(value) => eval::Expr::Value(stmt::Value::List(vec![value])),
+                expr => todo!("expr={expr:#?}"),
+            };
+
+            let key_ty = match &index.columns[..] {
+                [column] => self.schema.column(column).ty.clone(),
+                columns => {
+                    todo!("columns={columns:#?}");
+                }
+            };
+
+            eval::Func {
+                args: vec![],
+                ret: stmt::Type::list(key_ty),
+                expr,
+            }
+        })
     }
 }
 

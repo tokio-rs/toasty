@@ -15,10 +15,6 @@ pub struct GetByKey {
 
     /// Which keys to fetch
     pub keys: Vec<stmt::Value>,
-
-    /// How to filter the result before returning it to the caller.
-    /// TODO: this needs to be moved to the engine
-    pub post_filter: Option<eval::Expr>,
 }
 
 impl From<GetByKey> for Operation {

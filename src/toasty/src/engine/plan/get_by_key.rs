@@ -8,7 +8,7 @@ pub(crate) struct GetByKey {
     pub input: Option<Input>,
 
     /// Where to store the result
-    pub output: VarId,
+    pub output: Output,
 
     /// Table to query
     pub table: TableId,
@@ -18,9 +18,6 @@ pub(crate) struct GetByKey {
 
     /// Keys to get
     pub keys: eval::Func,
-
-    /// How to project the columns after receiving them from the database.
-    pub project: eval::Func,
 
     /// Additional filtering done on the result before returning it to the
     /// caller.

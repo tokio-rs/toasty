@@ -26,6 +26,12 @@ impl Response {
             rows: Rows::Values(values),
         }
     }
+
+    pub fn empty_value_stream() -> Response {
+        Response {
+            rows: Rows::Values(ValueStream::new()),
+        }
+    }
 }
 
 impl Rows {

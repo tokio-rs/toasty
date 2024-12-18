@@ -119,28 +119,29 @@ impl Planner<'_> {
 
         let mut index_filter = index_plan.index_filter;
 
-        todo!("index_filter={index_filter:#?}");
-
-        /*
         if index_plan.index.primary_key {
             // Is the index filter a set of keys
             if let Some(keys) = self.try_build_key_filter(&index_plan.index, &index_filter) {
                 assert!(index_plan.post_filter.is_none());
-
-                let output = self.var_table.register_var(todo!("type"));
+                let post_filter = index_plan
+                    .result_filter
+                    .map(|expr| eval::Func::new(project.args.clone(), eval::Expr::from_stmt(expr)));
 
                 self.push_action(plan::GetByKey {
                     input,
-                    output,
+                    output: plan::Output {
+                        var: output,
+                        project,
+                    },
                     table: table.id,
                     columns: model.lowering.columns.clone(),
                     keys,
-                    project,
-                    post_filter: index_plan.result_filter.map(eval::Expr::from_stmt),
+                    post_filter,
                 });
 
                 output
             } else {
+                /*
                 assert!(cx.input.is_empty());
 
                 let output = self.var_table.register_var();
@@ -158,8 +159,11 @@ impl Planner<'_> {
                 });
 
                 output
+                */
+                todo!()
             }
         } else {
+            /*
             assert!(index_plan.post_filter.is_none());
 
             let filter = sql::Expr::from_stmt(self.schema, table.id, index_filter);
@@ -186,8 +190,9 @@ impl Planner<'_> {
             });
 
             get_by_key_out
+            */
+            todo!()
         }
-        */
     }
 
     fn plan_select_include(&mut self, base: ModelId, path: &stmt::Path, input: plan::VarId) {

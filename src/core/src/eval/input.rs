@@ -29,3 +29,9 @@ impl<const N: usize> Input for &[stmt::Value; N] {
         self[expr_arg.position].entry(projection).to_value()
     }
 }
+
+impl Input for &[stmt::Value] {
+    fn resolve_arg(&mut self, expr_arg: &ExprArg, projection: &Projection) -> Value {
+        self[expr_arg.position].entry(projection).to_value()
+    }
+}
