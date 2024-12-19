@@ -377,7 +377,7 @@ impl<'a> LowerStatement<'a> {
 
     fn uncast_expr_id(&self, expr: &mut stmt::Expr) {
         match expr {
-            stmt::Expr::Value(value) if value.is_id() => {
+            stmt::Expr::Value(value) => {
                 self.uncast_value_id(value);
             }
             stmt::Expr::Cast(expr_cast) if expr_cast.ty.is_id() => {
@@ -388,15 +388,28 @@ impl<'a> LowerStatement<'a> {
                 let base = expr.take();
                 *expr = stmt::Expr::cast(base, stmt::Type::String);
             }
+            stmt::Expr::List(expr_list) => {
+                for expr in &mut expr_list.items {
+                    self.uncast_expr_id(expr);
+                }
+            }
             _ => todo!("{expr:#?}"),
         }
     }
 
     fn uncast_value_id(&self, value: &mut stmt::Value) {
-        assert!(value.is_id());
-
-        let uncast = value.take().into_id().into_primitive();
-        *value = uncast;
+        match value {
+            stmt::Value::Id(_) => {
+                let uncast = value.take().into_id().into_primitive();
+                *value = uncast;
+            }
+            stmt::Value::List(items) => {
+                for item in items {
+                    self.uncast_value_id(item);
+                }
+            }
+            _ => todo!("{value:#?}"),
+        }
     }
 }
 
