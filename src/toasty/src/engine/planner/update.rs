@@ -116,7 +116,7 @@ impl Planner<'_> {
         // Figure out which index to use for the query
         // let input = self.extract_input(&mut filter, &[], true);
 
-        let index_plan =
+        let mut index_plan =
             self.plan_index_path2(table, stmt.filter.as_ref().expect("no filter specified"));
 
         assert!(!stmt.assignments.is_empty());
@@ -150,55 +150,26 @@ impl Planner<'_> {
 
             output_var
         } else {
-            todo!("stmt={stmt:#?}");
-            /*
             debug_assert!(index_plan.post_filter.is_none());
-
-            // Find existing associations so we can delete them
-            // TODO: leverage select path
-            // TODO: this should be atomic
-            let pk_by_index_out = self.var_table.register_var();
-
-            self.push_action(plan::FindPkByIndex {
-                input,
-                output: pk_by_index_out,
-                table: table.id,
-                index: index_plan.index.lowering.index,
-                filter: sql::Expr::from_stmt(self.schema, table.id, index_filter),
-            });
-
-            let output = if stmt.returning {
-                Some(self.var_table.register_var())
-            } else {
-                None
-            };
-
-            debug_assert!(!columns.is_empty());
+            debug_assert!(!stmt.assignments.is_empty());
             assert!(stmt.condition.is_none());
 
-            let assignments = columns
-                .into_iter()
-                .zip(projected.into_iter())
-                .map(|(column, stmt)| sql::Assignment {
-                    target: column,
-                    value: sql::Expr::from_stmt(self.schema, table.id, stmt),
-                })
-                .collect();
+            // Find existing associations so we can delete them
+            // TODO: this should be atomic
+            let update_by_key_input = self.plan_find_pk_by_index(&mut index_plan, None);
+            let keys = eval::Func::identity(update_by_key_input.project.ret.clone());
 
             self.push_write_action(plan::UpdateByKey {
-                input: Some(pk_by_index_out),
+                input: Some(update_by_key_input),
                 output,
                 table: model.lowering.table,
-                key: eval::Expr::identity(),
-                assignments,
-                filter: index_plan
-                    .result_filter
-                    .map(|stmt| sql::Expr::from_stmt(self.schema, table.id, stmt)),
+                keys,
+                assignments: stmt.assignments,
+                filter: index_plan.result_filter,
                 condition: None,
             });
 
-            output
-            */
+            output_var
         }
     }
 
