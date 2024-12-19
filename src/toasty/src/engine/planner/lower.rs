@@ -54,21 +54,26 @@ impl Planner<'_> {
 }
 
 fn is_eq_constrained(expr: &stmt::Expr, column: &Column) -> bool {
+    use stmt::Expr::*;
+
     match expr {
-        stmt::Expr::And(expr) => expr.iter().any(|expr| is_eq_constrained(expr, column)),
-        stmt::Expr::Or(expr) => expr.iter().all(|expr| is_eq_constrained(expr, column)),
-        stmt::Expr::BinaryOp(expr) => {
+        And(expr) => expr.iter().any(|expr| is_eq_constrained(expr, column)),
+        Or(expr) => expr.iter().all(|expr| is_eq_constrained(expr, column)),
+        BinaryOp(expr) => {
             if !expr.op.is_eq() {
                 return false;
             }
 
             match (&*expr.lhs, &*expr.rhs) {
-                (stmt::Expr::Column(lhs), stmt::Expr::Value(_)) if lhs.column == column.id => true,
-                (stmt::Expr::Value(_), stmt::Expr::Column(rhs)) if rhs.column == column.id => true,
+                (Column(lhs), _) => lhs.column == column.id,
+                (_, Column(rhs)) => rhs.column == column.id,
                 _ => false,
             }
         }
-        stmt::Expr::InList(expr) => todo!(),
+        InList(expr) => match &*expr.expr {
+            Column(lhs) => lhs.column == column.id,
+            _ => todo!("expr={:#?}", expr),
+        },
         _ => todo!("expr={:#?}", expr),
     }
 }
