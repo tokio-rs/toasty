@@ -99,7 +99,6 @@ impl Planner<'_> {
         model: &Model,
         mut stmt: stmt::Query,
     ) -> plan::VarId {
-        println!("stmt={stmt:#?}");
         let table = self.schema.table(model.lowering.table);
 
         let mut index_plan = match &*stmt.body {

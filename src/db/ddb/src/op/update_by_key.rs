@@ -120,7 +120,11 @@ impl DynamoDB {
                                     return Ok(stmt::ValueStream::new());
                                 }
                                 */
-                                return Ok(Response::empty_value_stream());
+                                return if op.returning {
+                                    Ok(Response::empty_value_stream())
+                                } else {
+                                    Ok(Response::from_count(0))
+                                };
                             }
 
                             // At this point, there should be a condition
@@ -378,7 +382,7 @@ impl DynamoDB {
             let values = stmt::ValueStream::from_value(stmt::Value::record_from_vec(ret));
             Response::from_value_stream(values)
         } else {
-            Response::empty_value_stream()
+            Response::from_count(ret.len())
         })
     }
 }

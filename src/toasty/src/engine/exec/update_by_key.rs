@@ -35,7 +35,7 @@ impl Exec<'_> {
             match res.rows {
                 Rows::Values(rows) => {
                     let Some(output) = &action.output else {
-                        todo!()
+                        todo!("action={action:#?}");
                     };
 
                     let res = if output.project.is_identity() {
