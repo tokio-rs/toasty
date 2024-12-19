@@ -24,7 +24,6 @@ impl Planner<'_> {
         cx: &Context,
         mut stmt: stmt::Query,
     ) -> plan::VarId {
-        println!("stmt={stmt:#?}");
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.model(source_model.model);
@@ -169,7 +168,7 @@ impl Planner<'_> {
         };
 
         // TODO: clean all of this up!
-        let result_post_filter = if keys.is_some() {
+        let result_post_filter = if !index_plan.index.primary_key || keys.is_some() {
             index_plan.result_filter.clone().map(|expr| {
                 struct Columns<'a>(&'a mut Vec<stmt::Expr>);
 

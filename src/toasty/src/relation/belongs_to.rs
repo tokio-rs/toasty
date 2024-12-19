@@ -35,7 +35,10 @@ impl<T: fmt::Debug> fmt::Debug for BelongsTo<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.value.as_ref() {
             Some(t) => t.fmt(fmt),
-            None => Ok(()),
+            None => {
+                write!(fmt, "<not loaded>")?;
+                Ok(())
+            }
         }
     }
 }

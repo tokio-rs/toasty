@@ -1,6 +1,7 @@
 use tests_client::*;
 
 use std::collections::HashMap;
+use toasty::stmt::Id;
 
 async fn crud_user_todos_categories(s: impl Setup) {
     schema!(
@@ -154,38 +155,48 @@ async fn crud_user_todos_categories(s: impl Setup) {
         .await
         .unwrap();
 
-    let lists = [
+    fn check_todo_list(expect: &HashMap<Id<db::Todo>, db::Todo>, list: Vec<db::Todo>) {
+        assert_eq!(3, list.len(), "list={list:#?}");
+
+        let actual: HashMap<_, _> = list
+            .into_iter()
+            .map(|todo| (todo.id.clone(), todo))
+            .collect();
+
+        assert_eq!(3, actual.len(), "actual={actual:#?}");
+
+        for (id, actual) in actual {
+            assert_eq!(expect[&id].title, actual.title);
+        }
+    }
+
+    check_todo_list(
+        &expect,
         category
             .todos()
             .query(db::Todo::USER.eq(&user))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
+    );
+
+    check_todo_list(
+        &expect,
         user.todos()
             .query(db::Todo::CATEGORY.eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
+    );
+
+    check_todo_list(
+        &expect,
         db::Todo::find_by_user_id(&user.id)
             .filter(db::Todo::CATEGORY.eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
-    ];
-
-    for list in lists {
-        assert_eq!(3, list.len());
-
-        let actual: HashMap<_, _> = list
-            .into_iter()
-            .map(|todo| (todo.id.clone(), todo))
-            .collect();
-        assert_eq!(3, actual.len());
-
-        for (id, actual) in actual {
-            assert_eq!(expect[&id].title, actual.title);
-        }
-    }
+    );
 }
 
 tests!(crud_user_todos_categories,);
