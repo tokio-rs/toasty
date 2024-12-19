@@ -184,14 +184,37 @@ impl Expr {
         std::mem::replace(self, Expr::Value(Value::Null))
     }
 
+    pub fn substitute(&mut self, mut input: impl substitute::Input) {
+        self.substitute_ref(&mut input);
+    }
+
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        visit_mut::for_each_expr_mut(self, move |expr| match expr {
-            Expr::Arg(expr_arg) => {
-                *expr = input.resolve_arg(expr_arg);
+        struct Substitute<'a, I>(&'a mut I);
+
+        impl<'a, I> VisitMut for Substitute<'a, I>
+        where
+            I: substitute::Input,
+        {
+            fn visit_expr_mut(&mut self, expr: &mut Expr) {
+                match expr {
+                    Expr::Map(expr_map) => {
+                        // Only recurse into the base expression as arguments
+                        // reference the base.
+                        self.visit_expr_mut(&mut expr_map.base);
+                    }
+                    _ => {
+                        visit_mut::visit_expr_mut(self, expr);
+                    }
+                }
+
+                // Substitute after recurring.
+                if let Expr::Arg(expr_arg) = expr {
+                    *expr = self.0.resolve_arg(expr_arg);
+                }
             }
-            Expr::Map(_) => todo!(),
-            _ => {}
-        });
+        }
+
+        Substitute(input).visit_expr_mut(self);
     }
 }
 

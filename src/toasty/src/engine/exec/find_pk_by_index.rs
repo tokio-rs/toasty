@@ -7,11 +7,15 @@ impl Exec<'_> {
         &mut self,
         action: &plan::FindPkByIndex,
     ) -> Result<()> {
-        let filter = if let Some(input) = &action.input {
-            todo!("action={action:#?}");
-        } else {
-            action.filter.clone()
-        };
+        let mut filter = action.filter.clone();
+
+        if let Some(input) = &action.input {
+            let input = self.collect_input(input).await?;
+
+            filter.substitute(&[input]);
+
+            todo!("we need to simplify here... {:#?}", filter);
+        }
 
         let res = self
             .db
