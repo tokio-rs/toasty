@@ -117,16 +117,16 @@ impl Planner<'_> {
             _ => todo!("stmt={stmt:#?}"),
         };
 
-        let post_filter = index_plan
-            .result_filter
-            .map(|expr| eval::Func::new(project.args.clone(), eval::Expr::from_stmt(expr)));
-
         if index_plan.index.primary_key {
             // Is the index filter a set of keys
             if let Some(keys) =
                 self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
             {
                 assert!(index_plan.post_filter.is_none());
+
+                let post_filter = index_plan
+                    .result_filter
+                    .map(|expr| eval::Func::new(project.args.clone(), eval::Expr::from_stmt(expr)));
 
                 self.push_action(plan::GetByKey {
                     input,
@@ -142,26 +142,25 @@ impl Planner<'_> {
 
                 output
             } else {
-                /*
                 assert!(cx.input.is_empty());
 
-                let output = self.var_table.register_var();
+                let post_filter = index_plan
+                    .post_filter
+                    .map(|expr| eval::Func::new(project.args.clone(), eval::Expr::from_stmt(expr)));
 
                 self.push_action(plan::QueryPk {
-                    output,
+                    output: plan::Output {
+                        var: output,
+                        project,
+                    },
                     table: table.id,
                     columns: model.lowering.columns.clone(),
-                    pk_filter: sql::Expr::from_stmt(self.schema, table.id, index_filter),
-                    project,
-                    filter: index_plan
-                        .result_filter
-                        .map(|stmt| sql::Expr::from_stmt(self.schema, table.id, stmt)),
-                    post_filter: index_plan.post_filter.map(eval::Expr::from_stmt),
+                    pk_filter: index_plan.index_filter,
+                    filter: index_plan.result_filter,
+                    post_filter,
                 });
 
                 output
-                */
-                todo!()
             }
         } else {
             assert!(index_plan.post_filter.is_none());
@@ -198,6 +197,10 @@ impl Planner<'_> {
                 index: index_plan.index.id,
                 filter: index_plan.index_filter,
             });
+
+            let post_filter = index_plan
+                .result_filter
+                .map(|expr| eval::Func::new(project.args.clone(), eval::Expr::from_stmt(expr)));
 
             self.push_action(plan::GetByKey {
                 input: Some(plan::Input::from_var(

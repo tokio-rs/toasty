@@ -34,6 +34,7 @@ impl Exec<'_> {
 
             // TODO: don't clone
             let output = action.output.clone();
+            assert!(action.post_filter.is_none());
 
             ValueStream::from_stream(async_stream::try_stream! {
                 for await value in rows {

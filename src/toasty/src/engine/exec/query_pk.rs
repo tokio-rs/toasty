@@ -1,35 +1,47 @@
 use super::*;
 
+use crate::driver::Rows;
+
 impl Exec<'_> {
     pub(super) async fn exec_query_pk(&mut self, action: &plan::QueryPk) -> Result<()> {
         let op = action.apply()?;
-        let res = self.db.driver.exec(&self.db.schema, op.into()).await?;
+        let res = self
+            .db
+            .driver
+            .exec(
+                &self.db.schema,
+                operation::QueryPk {
+                    table: action.table,
+                    select: action.columns.clone(),
+                    pk_filter: action.pk_filter.clone(),
+                    filter: action.filter.clone(),
+                }
+                .into(),
+            )
+            .await?;
+
+        let rows = match res.rows {
+            Rows::Values(rows) => rows,
+            _ => todo!("res={res:#?}"),
+        };
 
         // TODO: don't clone
-        let project = action.project.clone();
+        let project = action.output.project.clone();
         let post_filter = action.post_filter.clone();
 
-        /*
-        let res = ValueStream::from_stream(async_stream::try_stream! {
-            for await value in res {
-                let value = value?;
-                let record = project.eval(&value)?;
+        self.vars.store(
+            action.output.var,
+            ValueStream::from_stream(async_stream::try_stream! {
+                for await value in rows {
+                    let value = value?;
+                    let value = project.eval(&[value])?;
 
-                if let Some(post_filter) = &post_filter {
-                    // TODO: not quite right...
-                    let r = record.expect_record();
-                    if post_filter.eval_bool(r)? {
-                        yield record.into();
-                    }
-                } else {
-                    yield record.into();
+                    assert!(post_filter.is_none(), "TODO");
+
+                    yield value;
                 }
-            }
-        });
-        */
-        todo!();
-
-        self.vars.store(action.output, res.rows.into_values());
+            }),
+        );
 
         Ok(())
     }

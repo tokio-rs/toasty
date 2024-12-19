@@ -53,6 +53,10 @@ impl Value {
         ValueRecord::from_vec(fields).into()
     }
 
+    pub fn list_from_vec(items: Vec<Value>) -> Value {
+        Value::List(items)
+    }
+
     /// Create a `ValueCow` representing the given boolean value
     pub const fn from_bool(src: bool) -> Value {
         Value::Bool(src)

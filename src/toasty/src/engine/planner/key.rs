@@ -13,6 +13,8 @@ impl Planner<'_> {
         index: &Index,
         expr: &stmt::Expr,
     ) -> Option<eval::Func> {
+        println!("try_build_key_filter; index={index:#?}; expr={expr:#?}");
+
         TryConvert { index }.try_convert(expr).map(|expr| {
             let expr = match expr {
                 expr @ eval::Expr::Value(stmt::Value::List(_)) => expr,
@@ -136,15 +138,13 @@ impl<'a> TryConvert<'a> {
     }
 
     fn expr_arg_to_project(&self, expr: &stmt::Expr) -> eval::Expr {
-        match expr {
-            stmt::Expr::Value(value) => eval::Expr::Value(value.clone()),
-            _ => todo!("expr={:#?}", expr),
-        }
+        assert!(expr.is_value());
+        eval::Expr::from_stmt(expr.clone())
     }
 
     fn is_key_projection(&self, expr: &stmt::Expr) -> bool {
         match expr {
-            stmt::Expr::Project(_) if self.index.columns.len() == 1 => true,
+            stmt::Expr::Column(expr_column) if self.index.columns.len() == 1 => true,
             stmt::Expr::Record(expr_record) if self.index.columns.len() == expr_record.len() => {
                 true
             }

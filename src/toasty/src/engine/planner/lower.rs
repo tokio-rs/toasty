@@ -311,8 +311,8 @@ impl<'a> LowerStatement<'a> {
                 ))
             }
             (stmt::Expr::Cast(expr_cast), other) if expr_cast.ty.is_id() => {
-                self.uncast_id(lhs);
-                self.uncast_id(other);
+                self.uncast_expr_id(lhs);
+                self.uncast_expr_id(other);
                 None
             }
             (stmt::Expr::Cast(_), stmt::Expr::Cast(_)) => todo!(),
@@ -335,12 +335,17 @@ impl<'a> LowerStatement<'a> {
                 None
             }
             (stmt::Expr::Cast(expr_cast), list) if expr_cast.ty.is_id() => {
-                self.uncast_id(expr);
+                self.uncast_expr_id(expr);
 
                 match list {
                     stmt::Expr::List(expr_list) => {
                         for expr in &mut expr_list.items {
-                            self.uncast_id(expr);
+                            self.uncast_expr_id(expr);
+                        }
+                    }
+                    stmt::Expr::Value(stmt::Value::List(items)) => {
+                        for item in items {
+                            self.uncast_value_id(item);
                         }
                     }
                     _ => todo!("list={list:#?}"),
@@ -370,11 +375,10 @@ impl<'a> LowerStatement<'a> {
         *expr = lowered.into();
     }
 
-    fn uncast_id(&self, expr: &mut stmt::Expr) {
+    fn uncast_expr_id(&self, expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::Value(value) if value.is_id() => {
-                let value = expr.take().into_value().into_id().into_primitive();
-                *expr = value.into();
+                self.uncast_value_id(value);
             }
             stmt::Expr::Cast(expr_cast) if expr_cast.ty.is_id() => {
                 *expr = expr_cast.expr.take();
@@ -386,6 +390,13 @@ impl<'a> LowerStatement<'a> {
             }
             _ => todo!("{expr:#?}"),
         }
+    }
+
+    fn uncast_value_id(&self, value: &mut stmt::Value) {
+        assert!(value.is_id());
+
+        let uncast = value.take().into_id().into_primitive();
+        *value = uncast;
     }
 }
 

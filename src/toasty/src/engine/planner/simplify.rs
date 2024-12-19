@@ -10,6 +10,7 @@ mod expr_cast;
 mod expr_concat_str;
 mod expr_in_list;
 mod expr_is_null;
+mod expr_list;
 mod expr_record;
 
 mod value;
@@ -82,6 +83,7 @@ impl<'a> VisitMut for Simplify<'_> {
             Expr::InSubquery(expr_in_subquery) => {
                 self.lift_in_subquery(&expr_in_subquery.expr, &expr_in_subquery.query)
             }
+            Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
             _ => None,

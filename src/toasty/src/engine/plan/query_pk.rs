@@ -4,7 +4,7 @@ use crate::{driver::*, schema::*};
 #[derive(Debug)]
 pub(crate) struct QueryPk {
     /// Where to store the result
-    pub output: plan::VarId,
+    pub output: Output,
 
     /// Table to query
     pub table: TableId,
@@ -15,14 +15,11 @@ pub(crate) struct QueryPk {
     /// How to filter the index.
     pub pk_filter: stmt::Expr,
 
-    /// How to project the result returned by the driver
-    pub project: eval::Expr,
-
     /// Filter to pass to the database
     pub filter: Option<stmt::Expr>,
 
     /// Filter to apply in-memory
-    pub post_filter: Option<eval::Expr>,
+    pub post_filter: Option<eval::Func>,
 }
 
 impl QueryPk {
