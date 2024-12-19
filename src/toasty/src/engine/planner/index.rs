@@ -185,6 +185,20 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
         use stmt::Expr::*;
 
         match expr {
+            Pattern(stmt::ExprPattern::BeginsWith(e)) => {
+                debug_assert!(e.pattern.is_value(), "TODO");
+
+                // Equivalent to a binary op with a `<=` operator.
+                match &*e.expr {
+                    Column(expr_column) => {
+                        let m =
+                            self.match_expr_binary_op_column(expr_column, expr, stmt::BinaryOp::Le);
+                        assert!(m, "TODO; expr={:#?}", expr);
+                        m
+                    }
+                    _ => todo!("expr={:#?}", expr),
+                }
+            }
             BinaryOp(e) => match (&*e.lhs, &*e.rhs) {
                 (Column(lhs), Value(..)) => self.match_expr_binary_op_column(lhs, expr, e.op),
                 (Value(..), Column(rhs)) => {
@@ -367,6 +381,17 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
         use stmt::Expr::*;
 
         match expr {
+            Pattern(stmt::ExprPattern::BeginsWith(_)) => {
+                if self
+                    .columns
+                    .iter()
+                    .any(|f| f.exprs.contains_key(&ByAddress(expr)))
+                {
+                    (expr.clone(), true.into())
+                } else {
+                    (true.into(), expr.clone())
+                }
+            }
             BinaryOp(binary_op) => {
                 if self
                     .columns
@@ -378,7 +403,8 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                         return (true.into(), true.into());
                     }
 
-                    // Normalize the expression to include the path on the LHS
+                    // Normalize the expression to include the column on the LHS
+                    // TODO: is this needed?
                     let expr = match (&*binary_op.lhs, &*binary_op.rhs) {
                         (Column(_), Value(_)) => expr.clone(),
                         (Value(value), Column(path)) => {
@@ -438,7 +464,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                 let result_filter = match result_filter_operands.len() {
                     0 => true.into(),
                     1 => result_filter_operands.into_iter().next().unwrap(),
-                    _ => stmt::ExprOr {
+                    _ => stmt::ExprAnd {
                         operands: result_filter_operands,
                     }
                     .into(),

@@ -51,24 +51,24 @@ impl Planner<'_> {
         LowerStatement::from_model(self.schema, model).visit_stmt_update_mut(stmt);
         self.simplify_stmt_update(stmt);
     }
-
-    // TODO: get rid of this
-    pub(crate) fn lower_stmt_filter(&self, model: &Model, filter: &mut stmt::Expr) {
-        let mut lower = LowerStatement::from_model(self.schema, model);
-        lower.visit_expr_mut(filter);
-        lower.apply_lowering_filter_constraint(filter);
-        simplify::simplify_expr(self.schema, model, filter);
-    }
 }
 
-fn is_constrained(expr: &stmt::Expr, column: &Column) -> bool {
+fn is_eq_constrained(expr: &stmt::Expr, column: &Column) -> bool {
     match expr {
-        stmt::Expr::And(expr) => expr.iter().any(|expr| is_constrained(expr, column)),
-        stmt::Expr::Or(expr) => expr.iter().all(|expr| is_constrained(expr, column)),
-        stmt::Expr::BinaryOp(expr) => is_constrained(&*expr.lhs, column),
-        stmt::Expr::Project(expr) => expr.projection.resolves_to(column.id),
-        stmt::Expr::Record(lhs) => lhs.fields.iter().any(|expr| is_constrained(expr, column)),
-        stmt::Expr::InList(expr) => is_constrained(&*expr.expr, column),
+        stmt::Expr::And(expr) => expr.iter().any(|expr| is_eq_constrained(expr, column)),
+        stmt::Expr::Or(expr) => expr.iter().all(|expr| is_eq_constrained(expr, column)),
+        stmt::Expr::BinaryOp(expr) => {
+            if !expr.op.is_eq() {
+                return false;
+            }
+
+            match (&*expr.lhs, &*expr.rhs) {
+                (stmt::Expr::Column(lhs), stmt::Expr::Value(_)) if lhs.column == column.id => true,
+                (stmt::Expr::Value(_), stmt::Expr::Column(rhs)) if rhs.column == column.id => true,
+                _ => false,
+            }
+        }
+        stmt::Expr::InList(expr) => todo!(),
         _ => todo!("expr={:#?}", expr),
     }
 }
@@ -240,17 +240,18 @@ impl<'a> LowerStatement<'a> {
     fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Expr) {
         use std::mem;
 
-        let mut expr = mem::take(filter);
+        // TODO: we really shouldn't have to simplify here, but until
+        // simplification includes overlapping predicate pruning, we have to do
+        // this here.
+        simplify::simplify_expr(self.schema, simplify::ExprTarget::Const, filter);
 
-        // Include any column constraints that are constant as part of the
-        // lowering.
-        let mut operands = match expr {
-            stmt::Expr::And(expr_and) => expr_and.operands,
-            expr => vec![expr],
-        };
+        let mut operands = vec![];
 
         for column in self.table.primary_key_columns() {
-            // TODO: don't hard code
+            if is_eq_constrained(filter, column) {
+                continue;
+            }
+
             let pattern = match &self.model.lowering.model_to_table[column.id.index] {
                 stmt::Expr::ConcatStr(expr) => {
                     // hax
@@ -272,11 +273,19 @@ impl<'a> LowerStatement<'a> {
             operands.push(stmt::Expr::begins_with(stmt::Expr::column(column), pattern));
         }
 
-        *filter = if operands.len() == 1 {
-            operands.into_iter().next().unwrap()
-        } else {
-            stmt::ExprAnd { operands: operands }.into()
-        };
+        if operands.is_empty() {
+            return;
+        }
+
+        match filter {
+            stmt::Expr::And(expr_and) => {
+                expr_and.operands.extend(operands);
+            }
+            expr => {
+                operands.push(expr.take());
+                *expr = stmt::ExprAnd { operands }.into();
+            }
+        }
     }
 
     fn lower_expr_binary_op(

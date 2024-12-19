@@ -78,12 +78,30 @@ impl<'a> LowerModels<'a> {
                 index: i,
             };
 
+            let mut scope = None;
+
+            for model in &*models {
+                let pk_index = &model.indices[0];
+                assert!(pk_index.primary_key);
+
+                let Some(pk_field) = pk_index.fields.get(i) else {
+                    continue;
+                };
+
+                match scope {
+                    None => scope = Some(pk_field.scope),
+                    Some(scope) => {
+                        assert_eq!(scope, pk_field.scope);
+                    }
+                }
+            }
+
             self.table.primary_key.columns.push(column_id);
             self.table.indices[0].columns.push(IndexColumn {
                 column: column_id,
                 // TODO: we don't actually know what the columns will be yet...
                 op: IndexOp::Eq,
-                scope: IndexScope::Partition,
+                scope: scope.unwrap(),
             });
         }
     }
