@@ -77,7 +77,6 @@ impl Planner<'_> {
         }
 
         self.lower_stmt_update(model, &mut stmt);
-        self.constantize_update_returning(&mut stmt);
 
         if self.capability.is_sql() {
             self.plan_update_sql(stmt)
@@ -171,26 +170,5 @@ impl Planner<'_> {
 
             output_var
         }
-    }
-
-    fn constantize_update_returning(&self, stmt: &mut stmt::Update) {
-        // TODO: probably not worth doing because we have to issue the update
-        // statement regardless
-        /*
-        if let Some(stmt::Returning::Expr(returning)) = &mut stmt.returning {
-            stmt::visit_mut::for_each_expr_mut(returning, |expr| {
-                let stmt::Expr::Column(expr_column) = expr else {
-                    return;
-                };
-                let Some(stmt::Expr::Value(assignment)) =
-                    stmt.assignments.get(expr_column.column.index)
-                else {
-                    return;
-                };
-
-                *expr = assignment.clone().into();
-            });
-        }
-        */
     }
 }

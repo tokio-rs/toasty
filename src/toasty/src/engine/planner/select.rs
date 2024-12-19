@@ -24,6 +24,7 @@ impl Planner<'_> {
         cx: &Context,
         mut stmt: stmt::Query,
     ) -> plan::VarId {
+        println!("stmt={stmt:#?}");
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.model(source_model.model);
@@ -112,28 +113,76 @@ impl Planner<'_> {
             None
         };
 
-        // TODO: clean all of this up!
-        let result_post_filter = if keys.is_some() {
+        let input = if cx.input.is_empty() {
+            None
+        } else {
+            self.partition_query_input(&mut stmt, &cx.input)
+        };
+
+        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
+        let output = self
+            .var_table
+            .register_var(stmt::Type::list(project.ret.clone()));
+
+        if keys.is_some() {
             // Because we are querying by key, the result filter must be
             // applied in-memory. TODO: some DBs might support filtering in
             // the DB.
+            if let Some(filter) = &index_plan.result_filter {
+                let returning = stmt
+                    .body
+                    .as_select_mut()
+                    .returning
+                    .as_expr_mut()
+                    .as_record_mut();
+
+                stmt::visit::for_each_expr(filter, |filter_expr| {
+                    if let stmt::Expr::Column(filter_expr) = filter_expr {
+                        let contains = returning.fields.iter().any(|e| match e {
+                            stmt::Expr::Column(e) => e.column == filter_expr.column,
+                            _ => false,
+                        });
+
+                        if !contains {
+                            todo!("returning types won't like up with projection");
+                            /*
+                            returning
+                                .fields
+                                .push(stmt::Expr::column(filter_expr.column));
+                            */
+                        }
+                    }
+                });
+            }
+        }
+
+        let columns = match &stmt.body.as_select().returning {
+            stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => expr_record
+                .fields
+                .iter()
+                .map(|expr| match expr {
+                    stmt::Expr::Column(expr) => expr.column,
+                    _ => todo!("stmt={stmt:#?}"),
+                })
+                .collect(),
+            _ => todo!("stmt={stmt:#?}"),
+        };
+
+        // TODO: clean all of this up!
+        let result_post_filter = if keys.is_some() {
             index_plan.result_filter.clone().map(|expr| {
                 struct Columns<'a>(&'a mut Vec<stmt::Expr>);
 
                 impl eval::Convert for Columns<'_> {
                     fn convert_expr_column(&mut self, stmt: stmt::ExprColumn) -> eval::Expr {
-                        let index = self.0.iter().position(|expr| match expr {
-                            stmt::Expr::Column(expr) => expr.column == stmt.column,
-                            _ => false,
-                        });
-
-                        let index = if let Some(index) = index {
-                            index
-                        } else {
-                            let index = self.0.len();
-                            self.0.push(stmt::Expr::column(stmt.column));
-                            index
-                        };
+                        let index = self
+                            .0
+                            .iter()
+                            .position(|expr| match expr {
+                                stmt::Expr::Column(expr) => expr.column == stmt.column,
+                                _ => false,
+                            })
+                            .unwrap();
 
                         eval::Expr::project(eval::Expr::arg(0), [index])
                     }
@@ -153,29 +202,6 @@ impl Planner<'_> {
             })
         } else {
             None
-        };
-
-        let input = if cx.input.is_empty() {
-            None
-        } else {
-            self.partition_query_input(&mut stmt, &cx.input)
-        };
-
-        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
-        let output = self
-            .var_table
-            .register_var(stmt::Type::list(project.ret.clone()));
-
-        let mut columns = match &stmt.body.as_select().returning {
-            stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => expr_record
-                .fields
-                .iter()
-                .map(|expr| match expr {
-                    stmt::Expr::Column(expr) => expr.column,
-                    _ => todo!("stmt={stmt:#?}"),
-                })
-                .collect(),
-            _ => todo!("stmt={stmt:#?}"),
         };
 
         if index_plan.index.primary_key {

@@ -72,7 +72,7 @@ impl Planner<'_> {
                 });
             } else {
                 todo!(
-                    "subqueries={:#?}; index_plan.filter={:#?}",
+                    "subqueries={:#?}; index_plan.filter={:#?}; stmt={stmt:#?}",
                     self.subqueries,
                     index_plan.index_filter,
                 );

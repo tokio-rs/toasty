@@ -17,15 +17,11 @@ impl Planner<'_> {
             let expr = match expr {
                 expr @ eval::Expr::Value(stmt::Value::List(_)) => expr,
                 eval::Expr::Value(value) => eval::Expr::Value(stmt::Value::List(vec![value])),
+                expr @ eval::Expr::Record(_) => eval::Expr::list_from_vec(vec![expr]),
                 expr => todo!("expr={expr:#?}"),
             };
 
-            let key_ty = match &index.columns[..] {
-                [column] => self.schema.column(column).ty.clone(),
-                columns => {
-                    todo!("columns={columns:#?}");
-                }
-            };
+            let key_ty = self.index_key_ty(index);
 
             eval::Func {
                 args: vec![],
@@ -47,18 +43,18 @@ impl<'a> TryConvert<'a> {
                     if self.index.columns.len() > 1 {
                         None
                     } else {
-                        Some(self.expr_arg_to_project(&e.rhs))
+                        Some(self.key_expr_to_eval(&e.rhs))
                     }
                 } else {
                     todo!("expr = {:#?}", expr);
                 }
             }
             InList(e) => {
-                if !self.is_key_projection(&*e.expr) {
+                if !self.is_key_expr(&*e.expr) {
                     return None;
                 }
 
-                Some(self.expr_arg_to_project(&e.list))
+                Some(self.key_expr_to_eval(&e.list))
             }
             And(e) => {
                 assert!(
@@ -84,8 +80,8 @@ impl<'a> TryConvert<'a> {
                         return None;
                     };
 
-                    // The LHS of the operand is a projection referencing an index field
-                    let Project(p) = &*binary_op.lhs else {
+                    // The LHS of the operand is a column referencing an index field
+                    let Column(expr_column) = &*binary_op.lhs else {
                         return None;
                     };
 
@@ -95,14 +91,14 @@ impl<'a> TryConvert<'a> {
                         .columns
                         .iter()
                         .enumerate()
-                        .find(|(_, c)| p.projection.resolves_to(c.column))
+                        .find(|(_, c)| expr_column.column == c.column)
                     else {
                         return None;
                     };
 
                     assert!(fields[index].is_null());
 
-                    fields[index] = self.expr_arg_to_project(&binary_op.rhs);
+                    fields[index] = self.key_expr_to_eval(&binary_op.rhs);
                 }
 
                 if fields.iter().any(|field| field.is_null()) {
@@ -135,12 +131,12 @@ impl<'a> TryConvert<'a> {
         }
     }
 
-    fn expr_arg_to_project(&self, expr: &stmt::Expr) -> eval::Expr {
+    fn key_expr_to_eval(&self, expr: &stmt::Expr) -> eval::Expr {
         assert!(expr.is_value());
         eval::Expr::from_stmt(expr.clone())
     }
 
-    fn is_key_projection(&self, expr: &stmt::Expr) -> bool {
+    fn is_key_expr(&self, expr: &stmt::Expr) -> bool {
         match expr {
             stmt::Expr::Column(expr_column) if self.index.columns.len() == 1 => true,
             stmt::Expr::Record(expr_record) if self.index.columns.len() == expr_record.len() => {

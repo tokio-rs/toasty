@@ -44,14 +44,16 @@ impl Exec<'_> {
                         true
                     };
 
-                    let value = if output.project.is_identity() {
-                        let [value] = args else { todo!() };
-                        value
-                    } else {
-                        output.project.eval(&args)?
-                    };
+                    if select {
+                        let value = if output.project.is_identity() {
+                            let [value] = args else { todo!() };
+                            value
+                        } else {
+                            output.project.eval(&args)?
+                        };
 
-                    yield value;
+                        yield value;
+                    }
                 }
             })
         };
