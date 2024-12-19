@@ -32,6 +32,11 @@ impl Simplify<'_> {
                             }
                         }
                     }
+                    stmt::Expr::Value(stmt::Value::List(values)) => {
+                        for value in values {
+                            assert!(value.is_a(&pk.ty.expect_primitive().ty));
+                        }
+                    }
                     _ => todo!("expr={expr:#?}"),
                 }
 
