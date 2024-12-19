@@ -113,6 +113,7 @@ impl Planner<'_> {
             None
         };
 
+        // TODO: clean all of this up!
         let result_post_filter = if keys.is_some() {
             // Because we are querying by key, the result filter must be
             // applied in-memory. TODO: some DBs might support filtering in
@@ -223,53 +224,21 @@ impl Planner<'_> {
         } else {
             assert!(index_plan.post_filter.is_none());
 
-            let key_ty = index_plan.index.key_ty(self.schema);
-            let pk_by_index_out = self
-                .var_table
-                .register_var(stmt::Type::list(key_ty.clone()));
-
-            // In this case, we have to flatten the returned record into a single value
-            let project_key = if index_plan.index.columns.len() == 1 {
-                let arg_ty = stmt::Type::Record(vec![self
-                    .schema
-                    .column(index_plan.index.columns[0].column)
-                    .ty
-                    .clone()]);
-
-                eval::Func {
-                    args: vec![arg_ty],
-                    ret: key_ty.clone(),
-                    expr: eval::Expr::project(eval::Expr::arg(0), [0]),
-                }
-            } else {
-                eval::Func::identity(key_ty.clone())
-            };
-
-            self.push_action(plan::FindPkByIndex {
-                input,
-                output: plan::Output {
-                    var: pk_by_index_out,
-                    project: project_key,
-                },
-                table: table.id,
-                index: index_plan.index.id,
-                filter: index_plan.index_filter,
-            });
+            let get_by_key_input = self.plan_find_pk_by_index(&mut index_plan, input);
 
             let post_filter =
                 result_post_filter.map(|expr| eval::Func::new(project.args.clone(), expr));
 
+            let keys = eval::Func::identity(get_by_key_input.project.ret.clone());
+
             self.push_action(plan::GetByKey {
-                input: Some(plan::Input::from_var(
-                    pk_by_index_out,
-                    stmt::Type::list(key_ty.clone()),
-                )),
+                input: Some(get_by_key_input),
                 output: plan::Output {
                     var: output,
                     project,
                 },
                 table: table.id,
-                keys: eval::Func::identity(stmt::Type::list(key_ty)),
+                keys,
                 columns: model.lowering.columns.clone(),
                 post_filter,
             });

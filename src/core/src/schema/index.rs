@@ -56,15 +56,6 @@ pub enum IndexScope {
     Local,
 }
 
-impl Index {
-    pub fn key_ty(&self, schema: &Schema) -> stmt::Type {
-        match &self.columns[..] {
-            [id] => schema.column(id).ty.clone(),
-            ids => stmt::Type::Record(ids.iter().map(|id| schema.column(id).ty.clone()).collect()),
-        }
-    }
-}
-
 impl IndexColumn {
     pub fn table_column<'a>(&self, schema: &'a Schema) -> &'a Column {
         schema.column(self.column)

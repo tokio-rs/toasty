@@ -58,7 +58,7 @@ impl Planner<'_> {
         let table = self.schema.table(model.lowering.table);
 
         // Figure out which index to use for the query
-        let index_plan = self.plan_index_path2(table, &stmt.filter);
+        let mut index_plan = self.plan_index_path2(table, &stmt.filter);
 
         if index_plan.index.primary_key {
             if let Some(keys) =
@@ -78,32 +78,20 @@ impl Planner<'_> {
                 );
             };
         } else {
-            /*
             assert!(index_plan.post_filter.is_none());
 
-            let pk_by_index_out = self.var_table.register_var();
-            self.push_action(plan::FindPkByIndex {
-                input,
-                output: pk_by_index_out,
-                table: table.id,
-                index: index_plan.index.lowering.index,
-                filter: index_filter,
-            });
+            let delete_by_key_input = self.plan_find_pk_by_index(&mut index_plan, None);
+            let keys = eval::Func::identity(delete_by_key_input.project.ret.clone());
 
             // TODO: include a deletion condition that ensures the index fields
             // match the query (i.e. the record is still included by the index
             // above and not concurrently updated since the index was query).
             self.push_write_action(plan::DeleteByKey {
-                input: vec![plan::Input::from_var(pk_by_index_out)],
+                input: Some(delete_by_key_input),
                 table: table.id,
-                keys: eval::Expr::project(eval::Expr::arg(0), [0]),
-                filter: index_plan.result_filter.map(|mut expr| {
-                    self.lower_expr2(model, &mut expr);
-                    expr
-                }),
+                keys,
+                filter: index_plan.result_filter,
             });
-            */
-            todo!()
         }
     }
 }
