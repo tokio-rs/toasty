@@ -99,7 +99,61 @@ impl Planner<'_> {
         model: &Model,
         mut stmt: stmt::Query,
     ) -> plan::VarId {
+        println!("stmt={stmt:#?}");
         let table = self.schema.table(model.lowering.table);
+
+        let mut index_plan = match &*stmt.body {
+            stmt::ExprSet::Select(query) => self.plan_index_path2(table, &query.filter),
+            _ => todo!("stmt={stmt:#?}"),
+        };
+
+        let keys = if index_plan.index.primary_key {
+            self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
+        } else {
+            None
+        };
+
+        let result_post_filter = if keys.is_some() {
+            // Because we are querying by key, the result filter must be
+            // applied in-memory. TODO: some DBs might support filtering in
+            // the DB.
+            index_plan.result_filter.clone().map(|expr| {
+                struct Columns<'a>(&'a mut Vec<stmt::Expr>);
+
+                impl eval::Convert for Columns<'_> {
+                    fn convert_expr_column(&mut self, stmt: stmt::ExprColumn) -> eval::Expr {
+                        let index = self.0.iter().position(|expr| match expr {
+                            stmt::Expr::Column(expr) => expr.column == stmt.column,
+                            _ => false,
+                        });
+
+                        let index = if let Some(index) = index {
+                            index
+                        } else {
+                            let index = self.0.len();
+                            self.0.push(stmt::Expr::column(stmt.column));
+                            index
+                        };
+
+                        eval::Expr::project(eval::Expr::arg(0), [index])
+                    }
+                }
+
+                let convert = Columns(
+                    &mut stmt
+                        .body
+                        .as_select_mut()
+                        .returning
+                        .as_expr_mut()
+                        .as_record_mut()
+                        .fields,
+                );
+
+                eval::Expr::try_convert_from_stmt(expr, convert).unwrap()
+            })
+        } else {
+            None
+        };
 
         let input = if cx.input.is_empty() {
             None
@@ -112,21 +166,25 @@ impl Planner<'_> {
             .var_table
             .register_var(stmt::Type::list(project.ret.clone()));
 
-        let mut index_plan = match &*stmt.body {
-            stmt::ExprSet::Select(query) => self.plan_index_path2(table, &query.filter),
+        let mut columns = match &stmt.body.as_select().returning {
+            stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => expr_record
+                .fields
+                .iter()
+                .map(|expr| match expr {
+                    stmt::Expr::Column(expr) => expr.column,
+                    _ => todo!("stmt={stmt:#?}"),
+                })
+                .collect(),
             _ => todo!("stmt={stmt:#?}"),
         };
 
         if index_plan.index.primary_key {
             // Is the index filter a set of keys
-            if let Some(keys) =
-                self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
-            {
+            if let Some(keys) = keys {
                 assert!(index_plan.post_filter.is_none());
 
-                let post_filter = index_plan
-                    .result_filter
-                    .map(|expr| eval::Func::new(project.args.clone(), eval::Expr::from_stmt(expr)));
+                let result_filter =
+                    result_post_filter.map(|expr| eval::Func::new(project.args.clone(), expr));
 
                 self.push_action(plan::GetByKey {
                     input,
@@ -135,9 +193,9 @@ impl Planner<'_> {
                         project,
                     },
                     table: table.id,
-                    columns: model.lowering.columns.clone(),
+                    columns,
                     keys,
-                    post_filter,
+                    post_filter: result_filter,
                 });
 
                 output
@@ -198,9 +256,8 @@ impl Planner<'_> {
                 filter: index_plan.index_filter,
             });
 
-            let post_filter = index_plan
-                .result_filter
-                .map(|expr| eval::Func::new(project.args.clone(), eval::Expr::from_stmt(expr)));
+            let post_filter =
+                result_post_filter.map(|expr| eval::Func::new(project.args.clone(), expr));
 
             self.push_action(plan::GetByKey {
                 input: Some(plan::Input::from_var(

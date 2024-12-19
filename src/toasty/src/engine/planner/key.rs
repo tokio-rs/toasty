@@ -13,8 +13,6 @@ impl Planner<'_> {
         index: &Index,
         expr: &stmt::Expr,
     ) -> Option<eval::Func> {
-        println!("try_build_key_filter; index={index:#?}; expr={expr:#?}");
-
         TryConvert { index }.try_convert(expr).map(|expr| {
             let expr = match expr {
                 expr @ eval::Expr::Value(stmt::Value::List(_)) => expr,
