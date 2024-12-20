@@ -57,6 +57,10 @@ impl Value {
         Value::List(items)
     }
 
+    pub fn is_list(&self) -> bool {
+        matches!(self, Value::List(_))
+    }
+
     /// Create a `ValueCow` representing the given boolean value
     pub const fn from_bool(src: bool) -> Value {
         Value::Bool(src)

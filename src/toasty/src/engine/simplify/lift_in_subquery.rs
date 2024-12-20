@@ -1,5 +1,7 @@
 use super::*;
 
+use stmt::Visit;
+
 struct LiftBelongsTo<'a> {
     belongs_to: &'a BelongsTo,
     // TODO: switch to bit field set
@@ -131,7 +133,7 @@ impl<'a> Simplify<'a> {
     }
 }
 
-impl stmt::Visit for LiftBelongsTo<'_> {
+impl Visit for LiftBelongsTo<'_> {
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         match (&*i.lhs, &*i.rhs) {
             (stmt::Expr::Field(expr_field), other) | (other, stmt::Expr::Field(expr_field)) => {

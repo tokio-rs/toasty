@@ -11,6 +11,7 @@ mod expr_concat_str;
 mod expr_in_list;
 mod expr_is_null;
 mod expr_list;
+mod expr_map;
 mod expr_record;
 
 mod value;
@@ -20,12 +21,15 @@ mod value;
 mod lift_in_subquery;
 mod rewrite_root_path_expr;
 
-use super::*;
+use toasty_core::{
+    schema::*,
+    stmt::{self, VisitMut},
+};
 
 use std::mem;
 use stmt::Expr;
 
-struct Simplify<'a> {
+pub(crate) struct Simplify<'a> {
     /// Schema the statement is referencing
     schema: &'a Schema,
 
@@ -47,24 +51,6 @@ pub(crate) fn simplify_expr<'a>(
     .visit_expr_mut(expr);
 }
 
-impl Planner<'_> {
-    pub(crate) fn simplify_stmt_delete(&self, stmt: &mut stmt::Delete) {
-        Simplify::new(self.schema).visit_stmt_delete_mut(stmt);
-    }
-
-    pub(crate) fn simplify_stmt_insert(&self, stmt: &mut stmt::Insert) {
-        Simplify::new(self.schema).visit_stmt_insert_mut(stmt);
-    }
-
-    pub(crate) fn simplify_stmt_query(&self, stmt: &mut stmt::Query) {
-        Simplify::new(self.schema).visit_stmt_query_mut(stmt);
-    }
-
-    pub(crate) fn simplify_stmt_update(&self, stmt: &mut stmt::Update) {
-        Simplify::new(self.schema).visit_stmt_update_mut(stmt);
-    }
-}
-
 impl<'a> VisitMut for Simplify<'_> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         // First, simplify the expression.
@@ -84,6 +70,7 @@ impl<'a> VisitMut for Simplify<'_> {
                 self.lift_in_subquery(&expr_in_subquery.expr, &expr_in_subquery.query)
             }
             Expr::List(expr) => self.simplify_expr_list(expr),
+            Expr::Map(expr) => self.simplify_expr_map(expr),
             Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
             _ => None,
@@ -189,7 +176,7 @@ impl<'a> VisitMut for Simplify<'_> {
 }
 
 impl<'a> Simplify<'a> {
-    fn new(schema: &'a Schema) -> Simplify<'a> {
+    pub(crate) fn new(schema: &'a Schema) -> Simplify<'a> {
         Simplify {
             schema,
             target: ExprTarget::Const,

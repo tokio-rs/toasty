@@ -9,7 +9,6 @@ mod lower;
 mod output;
 mod relation;
 mod select;
-mod simplify;
 mod subquery;
 mod ty;
 mod update;
@@ -20,7 +19,11 @@ use var::VarTable;
 
 use crate::{
     driver::capability::{self, Capability},
-    engine::{plan, Plan},
+    engine::{
+        plan,
+        simplify::{self, Simplify},
+        Plan,
+    },
 };
 use toasty_core::{
     eval,
@@ -182,5 +185,22 @@ impl<'a> Planner<'a> {
 
     fn model(&self, id: impl Into<ModelId>) -> &'a Model {
         self.schema.model(id)
+    }
+
+    // TODO: Move this?
+    pub(crate) fn simplify_stmt_delete(&self, stmt: &mut stmt::Delete) {
+        Simplify::new(self.schema).visit_stmt_delete_mut(stmt);
+    }
+
+    pub(crate) fn simplify_stmt_insert(&self, stmt: &mut stmt::Insert) {
+        Simplify::new(self.schema).visit_stmt_insert_mut(stmt);
+    }
+
+    pub(crate) fn simplify_stmt_query(&self, stmt: &mut stmt::Query) {
+        Simplify::new(self.schema).visit_stmt_query_mut(stmt);
+    }
+
+    pub(crate) fn simplify_stmt_update(&self, stmt: &mut stmt::Update) {
+        Simplify::new(self.schema).visit_stmt_update_mut(stmt);
     }
 }

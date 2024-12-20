@@ -87,8 +87,6 @@ impl Planner<'_> {
     }
 
     fn plan_update_sql(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
-        let model = self.model(stmt.target.as_model_id());
-
         let output = self
             .partition_maybe_returning(&mut stmt.returning)
             .map(|mut project| plan::Output {

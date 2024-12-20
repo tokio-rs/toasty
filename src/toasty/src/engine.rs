@@ -1,10 +1,11 @@
+// mod eval;
 mod exec;
 
 mod plan;
 use plan::{Action, Plan};
 
 mod planner;
-
+mod simplify;
 mod verify;
 
 use crate::{Db, Result};

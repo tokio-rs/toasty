@@ -253,10 +253,6 @@ impl<'a> LowerStatement<'a> {
         let mut operands = vec![];
 
         for column in self.table.primary_key_columns() {
-            if is_eq_constrained(filter, column) {
-                continue;
-            }
-
             let pattern = match &self.model.lowering.model_to_table[column.id.index] {
                 stmt::Expr::ConcatStr(expr) => {
                     // hax
@@ -272,6 +268,10 @@ impl<'a> LowerStatement<'a> {
                 stmt::Expr::Value(value) => todo!(),
                 _ => continue,
             };
+
+            if is_eq_constrained(filter, column) {
+                continue;
+            }
 
             assert_eq!(self.model.lowering.columns[column.id.index], column.id);
 
@@ -375,6 +375,14 @@ impl<'a> LowerStatement<'a> {
 
                 for item in &mut list.items {
                     assert!(item.is_value());
+                }
+
+                None
+            }
+            (stmt::Expr::Record(lhs), stmt::Expr::Value(stmt::Value::List(_))) => {
+                // TODO: implement for real
+                for lhs in lhs {
+                    assert!(lhs.is_column());
                 }
 
                 None

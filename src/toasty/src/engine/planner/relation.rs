@@ -205,6 +205,11 @@ impl Planner<'_> {
                     self.plan_mut_has_many_expr(has_many, op, expr, scope);
                 }
             }
+            stmt::Expr::Value(stmt::Value::List(value_list)) => {
+                for value in value_list {
+                    self.plan_mut_has_many_value(has_many, op, value, scope);
+                }
+            }
             stmt::Expr::Value(value) => {
                 self.plan_mut_has_many_value(has_many, op, value, scope);
             }
@@ -231,6 +236,8 @@ impl Planner<'_> {
         value: stmt::Value,
         scope: &stmt::Query,
     ) {
+        assert!(!value.is_list());
+
         if op.is_remove() {
             self.plan_mut_has_many_value_remove(has_many, value, scope);
         } else {

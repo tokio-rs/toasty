@@ -37,6 +37,7 @@ impl Update {
 }
 
 impl UpdateTarget {
+    #[track_caller]
     pub fn as_model_id(&self) -> ModelId {
         match self {
             UpdateTarget::Model(model_id) => *model_id,
@@ -50,6 +51,7 @@ impl UpdateTarget {
         })
     }
 
+    #[track_caller]
     pub fn as_table(&self) -> &TableWithJoins {
         match self {
             UpdateTarget::Table(table) => table,
