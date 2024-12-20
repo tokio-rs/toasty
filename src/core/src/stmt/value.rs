@@ -189,6 +189,7 @@ impl Value {
                 }
             }
             (Value::Record(_), _) => false,
+            (Value::SparseRecord(value), Type::SparseRecord(fields)) => value.fields == *fields,
             (Value::String(_), Type::String) => true,
             (Value::String(_), _) => false,
             _ => todo!("value={self:#?}, ty={ty:#?}"),
