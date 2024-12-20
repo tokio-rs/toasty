@@ -10,6 +10,7 @@ impl Exec<'_> {
             vec![]
         };
 
+        println!("eval_keys; fn={:#?}; args={:#?}", action.keys, args);
         let keys = match action.keys.eval(&args[..])? {
             stmt::Value::List(keys) => keys,
             res => todo!("res={res:#?}"),

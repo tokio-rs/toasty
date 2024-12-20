@@ -17,6 +17,13 @@ impl Expr {
         }
         .into()
     }
+
+    pub fn as_map(&self) -> &ExprMap {
+        match self {
+            Expr::Map(expr) => expr,
+            _ => todo!(),
+        }
+    }
 }
 
 impl From<ExprMap> for Expr {

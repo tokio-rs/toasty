@@ -101,6 +101,13 @@ impl Planner<'_> {
     ) -> plan::VarId {
         let table = self.schema.table(model.lowering.table);
 
+        // Extract parts of the query that must be executed in-memory.
+        let input = if cx.input.is_empty() {
+            None
+        } else {
+            self.partition_query_input(&mut stmt, &cx.input)
+        };
+
         let mut index_plan = match &*stmt.body {
             stmt::ExprSet::Select(query) => self.plan_index_path2(table, &query.filter),
             _ => todo!("stmt={stmt:#?}"),
@@ -110,12 +117,6 @@ impl Planner<'_> {
             self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
         } else {
             None
-        };
-
-        let input = if cx.input.is_empty() {
-            None
-        } else {
-            self.partition_query_input(&mut stmt, &cx.input)
         };
 
         let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);

@@ -222,6 +222,13 @@ impl Value {
             Value::Null => Type::Null,
             Value::Record(v) => Type::Record(v.fields.iter().map(Value::ty).collect()),
             Value::String(_) => Type::String,
+            Value::List(ref items) => {
+                if items.is_empty() {
+                    Type::List(Box::new(Type::Null))
+                } else {
+                    Type::List(Box::new(items[0].ty()))
+                }
+            }
             _ => todo!("value={self:#?}"),
         }
     }

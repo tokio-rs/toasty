@@ -2,7 +2,13 @@ use super::*;
 
 /// Try to convert an index filter expression to a key expression
 struct TryConvert<'a> {
+    planner: &'a Planner<'a>,
+
+    /// Index being keyed on
     index: &'a Index,
+
+    /// Eval function arguments
+    args: Vec<stmt::Type>,
 }
 
 impl Planner<'_> {
@@ -13,18 +19,25 @@ impl Planner<'_> {
         index: &Index,
         expr: &stmt::Expr,
     ) -> Option<eval::Func> {
-        TryConvert { index }.try_convert(expr).map(|expr| {
+        let mut conv = TryConvert {
+            planner: self,
+            index,
+            args: vec![],
+        };
+
+        conv.try_convert(expr).map(|expr| {
             let expr = match expr {
                 expr @ eval::Expr::Value(stmt::Value::List(_)) => expr,
                 eval::Expr::Value(value) => eval::Expr::Value(stmt::Value::List(vec![value])),
                 expr @ eval::Expr::Record(_) => eval::Expr::list_from_vec(vec![expr]),
+                expr @ eval::Expr::Arg(_) => expr,
                 expr => todo!("expr={expr:#?}"),
             };
 
             let key_ty = self.index_key_ty(index);
 
             eval::Func {
-                args: vec![],
+                args: conv.args,
                 ret: stmt::Type::list(key_ty),
                 expr,
             }
@@ -33,7 +46,7 @@ impl Planner<'_> {
 }
 
 impl<'a> TryConvert<'a> {
-    fn try_convert(&self, expr: &stmt::Expr) -> Option<eval::Expr> {
+    fn try_convert(&mut self, expr: &stmt::Expr) -> Option<eval::Expr> {
         use stmt::Expr::*;
 
         match expr {
@@ -50,11 +63,11 @@ impl<'a> TryConvert<'a> {
                 }
             }
             InList(e) => {
-                if !self.is_key_expr(&*e.expr) {
+                if !self.is_key_reference(&*e.expr) {
                     return None;
                 }
 
-                Some(self.key_expr_to_eval(&e.list))
+                Some(self.key_list_expr_to_eval(&e.list))
             }
             And(e) => {
                 assert!(
@@ -132,11 +145,22 @@ impl<'a> TryConvert<'a> {
     }
 
     fn key_expr_to_eval(&self, expr: &stmt::Expr) -> eval::Expr {
-        assert!(expr.is_value());
+        assert!(expr.is_value(), "expr={:#?}", expr);
         eval::Expr::from_stmt(expr.clone())
     }
 
-    fn is_key_expr(&self, expr: &stmt::Expr) -> bool {
+    fn key_list_expr_to_eval(&mut self, expr: &stmt::Expr) -> eval::Expr {
+        match expr {
+            stmt::Expr::Arg(_) => {
+                self.args
+                    .push(stmt::Type::list(self.planner.index_key_ty(self.index)));
+                eval::Expr::from_stmt(expr.clone())
+            }
+            _ => todo!("expr={:#?}", expr),
+        }
+    }
+
+    fn is_key_reference(&self, expr: &stmt::Expr) -> bool {
         match expr {
             stmt::Expr::Column(expr_column) if self.index.columns.len() == 1 => true,
             stmt::Expr::Record(expr_record) if self.index.columns.len() == expr_record.len() => {

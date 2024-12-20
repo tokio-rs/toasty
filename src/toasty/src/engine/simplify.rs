@@ -70,7 +70,7 @@ impl<'a> VisitMut for Simplify<'_> {
                 self.lift_in_subquery(&expr_in_subquery.expr, &expr_in_subquery.query)
             }
             Expr::List(expr) => self.simplify_expr_list(expr),
-            Expr::Map(expr) => self.simplify_expr_map(expr),
+            Expr::Map(_) => self.simplify_expr_map(i),
             Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
             _ => None,
