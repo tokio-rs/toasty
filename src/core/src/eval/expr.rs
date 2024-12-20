@@ -49,6 +49,12 @@ impl Expr {
             stmt::Expr::DecodeEnum(base, ty, variant) => {
                 Expr::DecodeEnum(Box::new(Expr::from_stmt_by_ref(*base, convert)), ty)
             }
+            stmt::Expr::IsNull(expr) => ExprBinaryOp {
+                lhs: Box::new(Expr::from_stmt_by_ref(*expr.expr, convert)),
+                rhs: Box::new(Expr::Value(Value::Null)),
+                op: BinaryOp::Eq,
+            }
+            .into(),
             _ => todo!("stmt={:#?}", stmt),
         }
     }

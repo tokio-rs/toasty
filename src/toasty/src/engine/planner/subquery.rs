@@ -5,8 +5,8 @@ impl Planner<'_> {
     ///
     /// At this point, the expression should have been simplified to the point
     /// that subqueries are actually required to be executed separately.
-    pub(super) fn plan_subqueries<T: stmt::Node>(&mut self, stmt: &T) {
-        stmt::visit::for_each_expr(stmt, |expr| {
+    pub(super) fn plan_subqueries<T: stmt::Node>(&mut self, stmt: &mut T) {
+        stmt::visit_mut::for_each_expr_mut(stmt, |expr| {
             if let stmt::Expr::InSubquery(expr) = expr {
                 // The subquery has already been simplified
                 // TODO: don't clone

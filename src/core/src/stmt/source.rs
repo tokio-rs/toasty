@@ -23,6 +23,7 @@ impl Source {
         matches!(self, Source::Model(_))
     }
 
+    #[track_caller]
     pub fn as_model(&self) -> &SourceModel {
         match self {
             Source::Model(source) => source,

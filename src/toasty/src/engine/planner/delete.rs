@@ -36,12 +36,16 @@ impl Planner<'_> {
             }
         }
 
+        if !self.capability.is_sql() {
+            // Subqueries are planned before lowering
+            self.plan_subqueries(&mut stmt);
+        }
+
         self.lower_stmt_delete(model, &mut stmt);
 
         if self.capability.is_sql() {
             self.plan_delete_sql(model, stmt);
         } else {
-            self.plan_subqueries(&mut stmt);
             self.plan_delete_kv(model, stmt);
         }
     }

@@ -210,6 +210,12 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                 _ => todo!("expr={:#?}", expr),
             },
             InList(e) => self.match_expr_in_list(&*e.expr, expr),
+            IsNull(e) => match &*e.expr {
+                Column(expr_column) => {
+                    self.match_expr_binary_op_column(expr_column, expr, stmt::BinaryOp::Eq)
+                }
+                _ => todo!("expr={:#?}", expr),
+            },
             And(and_exprs) => {
                 let matched = self.match_all_restrictions(and_exprs);
 
@@ -381,7 +387,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
         use stmt::Expr::*;
 
         match expr {
-            Pattern(stmt::ExprPattern::BeginsWith(_)) => {
+            Pattern(stmt::ExprPattern::BeginsWith(_)) | InList(_) | IsNull(_) => {
                 if self
                     .columns
                     .iter()
@@ -422,17 +428,6 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                     };
 
                     (expr, true.into())
-                } else {
-                    (true.into(), expr.clone())
-                }
-            }
-            InList(_) => {
-                if self
-                    .columns
-                    .iter()
-                    .any(|f| f.exprs.contains_key(&ByAddress(expr)))
-                {
-                    (expr.clone(), true.into())
                 } else {
                     (true.into(), expr.clone())
                 }
