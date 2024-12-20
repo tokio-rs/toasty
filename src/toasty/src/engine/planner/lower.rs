@@ -362,7 +362,14 @@ impl<'a> LowerStatement<'a> {
                             self.uncast_value_id(item);
                         }
                     }
-                    _ => todo!("list={list:#?}"),
+                    stmt::Expr::Arg(_) => {
+                        let arg = list.take();
+
+                        // TODO: don't always cast to a string...
+                        let cast = stmt::Expr::cast(stmt::Expr::arg(0), stmt::Type::String);
+                        *list = stmt::Expr::map(arg, cast);
+                    }
+                    _ => todo!("expr={expr:#?}; list={list:#?}"),
                 }
 
                 None

@@ -70,11 +70,29 @@ impl Partitioner<'_> {
 }
 
 impl Planner<'_> {
-    pub(crate) fn partition_query_input(
+    pub(crate) fn partition_stmt_delete_input(
+        &mut self,
+        stmt: &mut stmt::Delete,
+        sources: &[plan::InputSource],
+    ) -> Option<plan::Input> {
+        let mut partitioner = Partitioner {
+            planner: &*self,
+            sources,
+            input: None,
+        };
+
+        let partition = partitioner.partition_expr(&mut stmt.filter);
+        assert!(partition.is_stmt());
+
+        partitioner.input
+    }
+
+    pub(crate) fn partition_stmt_query_input(
         &mut self,
         stmt: &mut stmt::Query,
         sources: &[plan::InputSource],
     ) -> Option<plan::Input> {
+        assert!(sources.len() <= 1, "sources={sources:#?}");
         let mut partitioner = Partitioner {
             planner: &*self,
             sources,

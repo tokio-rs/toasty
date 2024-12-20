@@ -36,13 +36,6 @@ impl Planner<'_> {
             }
         }
 
-        if !self.capability.is_sql() {
-            // Subqueries are planned before lowering
-            self.plan_subqueries(&mut stmt);
-        }
-
-        self.lower_stmt_delete(model, &mut stmt);
-
         if self.capability.is_sql() {
             self.plan_delete_sql(model, stmt);
         } else {
@@ -51,6 +44,8 @@ impl Planner<'_> {
     }
 
     fn plan_delete_sql(&mut self, model: &Model, mut stmt: stmt::Delete) {
+        self.lower_stmt_delete(model, &mut stmt);
+
         self.push_action(plan::QuerySql {
             output: None,
             input: None,
@@ -61,6 +56,17 @@ impl Planner<'_> {
     fn plan_delete_kv(&mut self, model: &Model, mut stmt: stmt::Delete) {
         let table = self.schema.table(model.lowering.table);
 
+        // Subqueries are planned before lowering
+        let input_sources = self.plan_subqueries(&mut stmt);
+
+        self.lower_stmt_delete(model, &mut stmt);
+
+        let input = if input_sources.is_empty() {
+            None
+        } else {
+            self.partition_stmt_delete_input(&mut stmt, &input_sources)
+        };
+
         // Figure out which index to use for the query
         let mut index_plan = self.plan_index_path2(table, &stmt.filter);
 
@@ -69,22 +75,21 @@ impl Planner<'_> {
                 self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
             {
                 self.push_write_action(plan::DeleteByKey {
-                    input: None,
+                    input,
                     table: model.lowering.table,
                     keys,
                     filter: index_plan.result_filter,
                 });
             } else {
                 todo!(
-                    "subqueries={:#?}; index_plan.filter={:#?}; stmt={stmt:#?}",
-                    self.subqueries,
+                    "index_plan.filter={:#?}; stmt={stmt:#?}",
                     index_plan.index_filter,
                 );
             };
         } else {
             assert!(index_plan.post_filter.is_none());
 
-            let delete_by_key_input = self.plan_find_pk_by_index(&mut index_plan, None);
+            let delete_by_key_input = self.plan_find_pk_by_index(&mut index_plan, input);
             let keys = eval::Func::identity(delete_by_key_input.project.ret.clone());
 
             // TODO: include a deletion condition that ensures the index fields

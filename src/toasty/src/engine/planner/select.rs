@@ -69,7 +69,7 @@ impl Planner<'_> {
         let input = if cx.input.is_empty() {
             None
         } else {
-            self.partition_query_input(&mut stmt, &cx.input)
+            self.partition_stmt_query_input(&mut stmt, &cx.input)
         };
 
         let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
@@ -105,7 +105,7 @@ impl Planner<'_> {
         let input = if cx.input.is_empty() {
             None
         } else {
-            self.partition_query_input(&mut stmt, &cx.input)
+            self.partition_stmt_query_input(&mut stmt, &cx.input)
         };
 
         let mut index_plan = match &*stmt.body {

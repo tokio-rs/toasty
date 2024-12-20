@@ -52,7 +52,11 @@ impl Expr {
             stmt::Expr::IsNull(expr) => ExprBinaryOp {
                 lhs: Box::new(Expr::from_stmt_by_ref(*expr.expr, convert)),
                 rhs: Box::new(Expr::Value(Value::Null)),
-                op: BinaryOp::Eq,
+                op: if expr.negate {
+                    BinaryOp::Ne
+                } else {
+                    BinaryOp::Eq
+                },
             }
             .into(),
             _ => todo!("stmt={:#?}", stmt),
@@ -151,7 +155,7 @@ impl Expr {
             Expr::List(_) => todo!("{self:#?}"),
             Expr::Map(e) => {
                 let base = e.base.ty(args);
-                e.map.ty(&[base])
+                stmt::Type::list(e.map.ty(&[base]))
             }
             Expr::Record(e) => {
                 stmt::Type::Record(e.fields.iter().map(|field| field.ty(args)).collect())

@@ -43,7 +43,12 @@ impl Func {
             tys: &self.args,
         };
 
-        self.expr.eval_ref(&mut input)
+        let ret = self.expr.eval_ref(&mut input)?;
+
+        assert!(!ret.is_null());
+        assert!(ret.is_a(&self.ret), "ret={ret:#?}; ty={:#?}", self.ret);
+
+        Ok(ret)
     }
 
     /// Special case of `eval` where the expression is a constant

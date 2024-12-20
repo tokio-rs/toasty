@@ -59,12 +59,6 @@ struct Planner<'a> {
     /// Tracks additional needed state to handle insertions.
     insertions: HashMap<ModelId, Insertion>,
 
-    /// Each subquery is planned individually and the output variable is tracked
-    /// here.
-    ///
-    /// TODO: make key a new-type?
-    subqueries: HashMap<usize, plan::VarId>,
-
     /// Planning a query can require walking relations to maintain data
     /// consistency. This field tracks the current relation edge being traversed
     /// so the planner doesn't walk it backwards.
@@ -86,7 +80,6 @@ pub(crate) fn apply(capability: &Capability, schema: &Schema, stmt: stmt::Statem
         write_actions: vec![],
         returning: None,
         insertions: HashMap::new(),
-        subqueries: HashMap::new(),
         relations: Vec::new(),
     };
 

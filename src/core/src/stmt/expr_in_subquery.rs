@@ -14,6 +14,10 @@ impl Expr {
         }
         .into()
     }
+
+    pub fn is_in_subquery(&self) -> bool {
+        matches!(self, Expr::InSubquery(_))
+    }
 }
 
 impl From<ExprInSubquery> for Expr {
