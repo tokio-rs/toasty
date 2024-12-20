@@ -156,6 +156,7 @@ impl<'a> TryConvert<'a> {
                     .push(stmt::Type::list(self.planner.index_key_ty(self.index)));
                 eval::Expr::from_stmt(expr.clone())
             }
+            stmt::Expr::Value(_) => eval::Expr::from_stmt(expr.clone()),
             _ => todo!("expr={:#?}", expr),
         }
     }

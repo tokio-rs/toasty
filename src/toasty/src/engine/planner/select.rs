@@ -228,9 +228,39 @@ impl Planner<'_> {
             } else {
                 assert!(cx.input.is_empty());
 
-                let post_filter = index_plan
-                    .post_filter
-                    .map(|expr| eval::Func::new(project.args.clone(), eval::Expr::from_stmt(expr)));
+                let post_filter = index_plan.post_filter.map(|expr| {
+                    struct Columns<'a>(&'a mut Vec<stmt::Expr>);
+
+                    impl eval::Convert for Columns<'_> {
+                        fn convert_expr_column(&mut self, stmt: stmt::ExprColumn) -> eval::Expr {
+                            let index = self
+                                .0
+                                .iter()
+                                .position(|expr| match expr {
+                                    stmt::Expr::Column(expr) => expr.column == stmt.column,
+                                    _ => false,
+                                })
+                                .unwrap();
+
+                            eval::Expr::project(eval::Expr::arg(0), [index])
+                        }
+                    }
+
+                    let convert = Columns(
+                        &mut stmt
+                            .body
+                            .as_select_mut()
+                            .returning
+                            .as_expr_mut()
+                            .as_record_mut()
+                            .fields,
+                    );
+
+                    eval::Func::new(
+                        project.args.clone(),
+                        eval::Expr::try_convert_from_stmt(expr, convert).unwrap(),
+                    )
+                });
 
                 self.push_action(plan::QueryPk {
                     output: plan::Output {
@@ -238,7 +268,7 @@ impl Planner<'_> {
                         project,
                     },
                     table: table.id,
-                    columns: model.lowering.columns.clone(),
+                    columns,
                     pk_filter: index_plan.index_filter,
                     filter: index_plan.result_filter,
                     post_filter,

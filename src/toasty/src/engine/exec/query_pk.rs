@@ -33,12 +33,24 @@ impl Exec<'_> {
             action.output.var,
             ValueStream::from_stream(async_stream::try_stream! {
                 for await value in rows {
-                    let value = value?;
-                    let value = project.eval(&[value])?;
+                    let args = [value?];
 
-                    assert!(post_filter.is_none(), "TODO");
+                    let select = if let Some(filter) = &post_filter {
+                        filter.eval_bool(&args)?
+                    } else {
+                        true
+                    };
 
-                    yield value;
+                    if select {
+                        let value = if project.is_identity() {
+                            let [value] = args else { todo!() };
+                            value
+                        } else {
+                            project.eval(&args)?
+                        };
+
+                        yield value;
+                    }
                 }
             }),
         );
