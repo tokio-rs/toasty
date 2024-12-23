@@ -19,28 +19,12 @@ impl Exec<'_> {
             )
             .await?;
 
-        let output = match &action.output {
-            Some(output) => output,
-            None => {
-                assert!(action.stmt.returning.is_none());
-                return Ok(());
-            }
+        let Some(output) = &action.output else {
+            assert!(action.stmt.returning.is_none());
+            return Ok(());
         };
 
-        let rows = res.rows.into_values();
-
-        // TODO: don't clone
-        let project = output.project.clone();
-        let stmt = action.stmt.clone();
-
-        let res = ValueStream::from_stream(async_stream::try_stream! {
-            for await value in rows {
-                let value = value?;
-                let record = project.eval(&[value])?;
-                yield record.into();
-            }
-        });
-
+        let res = self.project_and_filter_output(res.rows.into_values(), &output.project, None);
         self.vars.store(output.var, res);
 
         Ok(())

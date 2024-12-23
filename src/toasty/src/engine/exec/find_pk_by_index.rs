@@ -36,22 +36,8 @@ impl Exec<'_> {
             Rows::Count(_) => todo!(),
         };
 
-        if action.output.project.is_identity() {
-            self.vars.store(action.output.var, rows);
-        } else {
-            let project = action.output.project.clone();
-
-            self.vars.store(
-                action.output.var,
-                ValueStream::from_stream(async_stream::try_stream! {
-                    for await value in rows {
-                        let value = value?;
-                        let value = project.eval(&[value])?;
-                        yield value;
-                    }
-                }),
-            );
-        }
+        let res = self.project_and_filter_output(rows, &action.output.project, None);
+        self.vars.store(action.output.var, res);
 
         Ok(())
     }

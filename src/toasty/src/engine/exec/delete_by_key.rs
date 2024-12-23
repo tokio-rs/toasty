@@ -2,16 +2,9 @@ use super::*;
 
 impl Exec<'_> {
     pub(super) async fn exec_delete_by_key(&mut self, action: &plan::DeleteByKey) -> Result<()> {
-        let args = if let Some(input) = &action.input {
-            vec![self.collect_input(input).await?]
-        } else {
-            vec![]
-        };
-
-        let keys = match action.keys.eval(&args[..])? {
-            stmt::Value::List(keys) => keys,
-            res => todo!("res={res:#?}"),
-        };
+        let keys = self
+            .eval_keys_maybe_using_input(&action.keys, &action.input)
+            .await?;
 
         if keys.is_empty() {
             return Ok(());

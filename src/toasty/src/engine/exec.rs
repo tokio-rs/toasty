@@ -4,6 +4,7 @@ mod delete_by_key;
 mod find_pk_by_index;
 mod get_by_key;
 mod insert;
+mod kv;
 mod query_pk;
 mod query_sql;
 mod update_by_key;
