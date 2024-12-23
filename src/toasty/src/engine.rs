@@ -1,4 +1,5 @@
 mod eval2;
+use eval2 as eval;
 mod exec;
 
 mod plan;
@@ -6,12 +7,12 @@ use plan::{Action, Plan};
 
 mod planner;
 mod simplify;
+mod ty;
 mod verify;
 
 use crate::{Db, Result};
 
 use toasty_core::{
-    eval,
     stmt::{self, Statement, ValueStream},
     Schema,
 };

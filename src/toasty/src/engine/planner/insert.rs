@@ -316,26 +316,17 @@ impl Planner<'_> {
         }
 
         impl eval::Convert for ConstReturning<'_> {
-            fn convert_expr_column(&mut self, stmt: stmt::ExprColumn) -> eval::Expr {
+            fn convert_expr_column(&mut self, stmt: &stmt::ExprColumn) -> Option<stmt::Expr> {
                 let index = self
                     .columns
                     .iter()
                     .position(|column| *column == stmt.column)
                     .unwrap();
 
-                eval::Expr::arg_project(0, [index])
+                Some(stmt::Expr::arg_project(0, [index]))
             }
         }
 
-        let expr = eval::Expr::try_convert_from_stmt(
-            returning.clone(),
-            ConstReturning {
-                columns: &insert_table.columns,
-            },
-        )
-        .unwrap();
-
-        let ret = self.infer_expr_ty(returning);
         let args = stmt::Type::Record(
             insert_table
                 .columns
@@ -343,17 +334,21 @@ impl Planner<'_> {
                 .map(|column_id| self.schema.column(column_id).ty.clone())
                 .collect(),
         );
-        let returning = eval::Func {
-            args: vec![args],
-            ret: ret.clone(),
-            expr,
-        };
+
+        let expr = eval::Func::try_convert_from_stmt(
+            returning.clone(),
+            vec![args],
+            ConstReturning {
+                columns: &insert_table.columns,
+            },
+        )
+        .unwrap();
 
         let mut rows = vec![];
 
         // TODO: OPTIMIZE!
         for row in &values.rows {
-            let evaled = returning.eval([row]).unwrap();
+            let evaled = expr.eval([row]).unwrap();
             rows.push(evaled);
         }
 
@@ -361,7 +356,7 @@ impl Planner<'_> {
         // We do not need to receive it from the database anymore.
         stmt.returning = None;
 
-        Some((rows, stmt::Type::list(ret)))
+        Some((rows, stmt::Type::list(expr.ret)))
     }
 }
 

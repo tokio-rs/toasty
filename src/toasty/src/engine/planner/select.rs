@@ -174,7 +174,10 @@ impl Planner<'_> {
                 struct Columns<'a>(&'a mut Vec<stmt::Expr>);
 
                 impl eval::Convert for Columns<'_> {
-                    fn convert_expr_column(&mut self, stmt: stmt::ExprColumn) -> eval::Expr {
+                    fn convert_expr_column(
+                        &mut self,
+                        stmt: &stmt::ExprColumn,
+                    ) -> Option<stmt::Expr> {
                         let index = self
                             .0
                             .iter()
@@ -184,7 +187,7 @@ impl Planner<'_> {
                             })
                             .unwrap();
 
-                        eval::Expr::project(eval::Expr::arg(0), [index])
+                        Some(stmt::Expr::project(stmt::Expr::arg(0), [index]))
                     }
                 }
 
@@ -198,7 +201,7 @@ impl Planner<'_> {
                         .fields,
                 );
 
-                eval::Expr::try_convert_from_stmt(expr, convert).unwrap()
+                eval::Func::try_convert_from_stmt(expr, project.args.clone(), convert).unwrap()
             })
         } else {
             None
@@ -209,9 +212,6 @@ impl Planner<'_> {
             if let Some(keys) = keys {
                 assert!(index_plan.post_filter.is_none());
 
-                let result_filter =
-                    result_post_filter.map(|expr| eval::Func::new(project.args.clone(), expr));
-
                 self.push_action(plan::GetByKey {
                     input,
                     output: plan::Output {
@@ -221,7 +221,7 @@ impl Planner<'_> {
                     table: table.id,
                     columns,
                     keys,
-                    post_filter: result_filter,
+                    post_filter: result_post_filter,
                 });
 
                 output
@@ -232,7 +232,10 @@ impl Planner<'_> {
                     struct Columns<'a>(&'a mut Vec<stmt::Expr>);
 
                     impl eval::Convert for Columns<'_> {
-                        fn convert_expr_column(&mut self, stmt: stmt::ExprColumn) -> eval::Expr {
+                        fn convert_expr_column(
+                            &mut self,
+                            stmt: &stmt::ExprColumn,
+                        ) -> Option<stmt::Expr> {
                             let index = self
                                 .0
                                 .iter()
@@ -242,7 +245,7 @@ impl Planner<'_> {
                                 })
                                 .unwrap();
 
-                            eval::Expr::project(eval::Expr::arg(0), [index])
+                            Some(stmt::Expr::project(stmt::Expr::arg(0), [index]))
                         }
                     }
 
@@ -256,10 +259,7 @@ impl Planner<'_> {
                             .fields,
                     );
 
-                    eval::Func::new(
-                        project.args.clone(),
-                        eval::Expr::try_convert_from_stmt(expr, convert).unwrap(),
-                    )
+                    eval::Func::try_convert_from_stmt(expr, project.args.clone(), convert).unwrap()
                 });
 
                 self.push_action(plan::QueryPk {
@@ -280,10 +280,6 @@ impl Planner<'_> {
             assert!(index_plan.post_filter.is_none());
 
             let get_by_key_input = self.plan_find_pk_by_index(&mut index_plan, input);
-
-            let post_filter =
-                result_post_filter.map(|expr| eval::Func::new(project.args.clone(), expr));
-
             let keys = eval::Func::identity(get_by_key_input.project.ret.clone());
 
             self.push_action(plan::GetByKey {
@@ -295,7 +291,7 @@ impl Planner<'_> {
                 table: table.id,
                 keys,
                 columns: model.lowering.columns.clone(),
-                post_filter,
+                post_filter: result_post_filter,
             });
 
             output

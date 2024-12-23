@@ -27,26 +27,22 @@ impl Planner<'_> {
 
         conv.try_convert(expr).map(|expr| {
             let expr = match expr {
-                expr @ eval::Expr::Value(stmt::Value::List(_)) => expr,
-                eval::Expr::Value(value) => eval::Expr::Value(stmt::Value::List(vec![value])),
-                expr @ eval::Expr::Record(_) => eval::Expr::list_from_vec(vec![expr]),
-                expr @ eval::Expr::Arg(_) => expr,
+                expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
+                stmt::Expr::Value(value) => stmt::Expr::Value(stmt::Value::List(vec![value])),
+                expr @ stmt::Expr::Record(_) => stmt::Expr::list_from_vec(vec![expr]),
+                expr @ stmt::Expr::Arg(_) => expr,
                 expr => todo!("expr={expr:#?}"),
             };
 
             let key_ty = self.index_key_ty(index);
 
-            eval::Func {
-                args: conv.args,
-                ret: stmt::Type::list(key_ty),
-                expr,
-            }
+            eval::Func::from_stmt_unchecked(expr, conv.args, stmt::Type::list(key_ty))
         })
     }
 }
 
 impl<'a> TryConvert<'a> {
-    fn try_convert(&mut self, expr: &stmt::Expr) -> Option<eval::Expr> {
+    fn try_convert(&mut self, expr: &stmt::Expr) -> Option<stmt::Expr> {
         use stmt::Expr::*;
 
         match expr {
@@ -80,7 +76,7 @@ impl<'a> TryConvert<'a> {
                 }
 
                 // Composite key. Try assigning the AND operands to key fields
-                let mut fields = vec![eval::Expr::null(); e.operands.len()];
+                let mut fields = vec![stmt::Expr::null(); e.operands.len()];
 
                 for operand in &e.operands {
                     // If the AND operand is not a binary op, then not a key expression
@@ -109,17 +105,17 @@ impl<'a> TryConvert<'a> {
                         return None;
                     };
 
-                    assert!(fields[index].is_null());
+                    assert!(fields[index].is_value_null());
 
                     fields[index] = self.key_expr_to_eval(&binary_op.rhs);
                 }
 
-                if fields.iter().any(|field| field.is_null()) {
+                if fields.iter().any(|field| field.is_value_null()) {
                     // Not all fields were matched
                     return None;
                 }
 
-                Some(eval::Expr::record_from_vec(fields))
+                Some(stmt::Expr::record_from_vec(fields))
             }
             Or(e) => {
                 let mut entries = vec![];
@@ -130,12 +126,12 @@ impl<'a> TryConvert<'a> {
                     };
 
                     match key {
-                        eval::Expr::Value(_) | eval::Expr::Record(_) => entries.push(key),
+                        stmt::Expr::Value(_) | stmt::Expr::Record(_) => entries.push(key),
                         _ => todo!("key={:#?}", key),
                     }
                 }
 
-                Some(eval::Expr::list_from_vec(entries))
+                Some(stmt::Expr::list_from_vec(entries))
             }
             InSubquery(_) => {
                 todo!("expr = {:#?}", expr);
@@ -144,19 +140,19 @@ impl<'a> TryConvert<'a> {
         }
     }
 
-    fn key_expr_to_eval(&self, expr: &stmt::Expr) -> eval::Expr {
+    fn key_expr_to_eval(&self, expr: &stmt::Expr) -> stmt::Expr {
         assert!(expr.is_value(), "expr={:#?}", expr);
-        eval::Expr::from_stmt(expr.clone())
+        expr.clone()
     }
 
-    fn key_list_expr_to_eval(&mut self, expr: &stmt::Expr) -> eval::Expr {
+    fn key_list_expr_to_eval(&mut self, expr: &stmt::Expr) -> stmt::Expr {
         match expr {
             stmt::Expr::Arg(_) => {
                 self.args
                     .push(stmt::Type::list(self.planner.index_key_ty(self.index)));
-                eval::Expr::from_stmt(expr.clone())
+                expr.clone()
             }
-            stmt::Expr::Value(_) => eval::Expr::from_stmt(expr.clone()),
+            stmt::Expr::Value(_) => expr.clone(),
             _ => todo!("expr={:#?}", expr),
         }
     }

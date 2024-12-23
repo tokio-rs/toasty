@@ -12,7 +12,7 @@ enum Partition {
     Stmt,
     Eval {
         source: plan::InputSource,
-        project: eval::Expr,
+        project: stmt::Expr,
     },
 }
 
@@ -27,7 +27,7 @@ impl Partitioner<'_> {
         match expr {
             stmt::Expr::Arg(expr) => Partition::Eval {
                 source: self.sources[expr.position].clone(),
-                project: eval::Expr::arg(0),
+                project: stmt::Expr::arg(0),
             },
             stmt::Expr::Column(_) => Partition::Stmt,
             stmt::Expr::InList(expr) => {
@@ -41,7 +41,7 @@ impl Partitioner<'_> {
 
                     self.input = Some(plan::Input {
                         source,
-                        project: eval::Func::new(vec![ty], project),
+                        project: eval::Func::from_stmt(project, vec![ty]),
                     });
                     *expr.list = stmt::Expr::arg(0);
                 }
@@ -61,7 +61,7 @@ impl Partitioner<'_> {
                 // map, assuming that this is the top-level projection.
                 Partition::Eval {
                     source,
-                    project: eval::Expr::map(project, eval::Expr::from_stmt(expr.map.take())),
+                    project: stmt::Expr::map(project, expr.map.take()),
                 }
             }
             _ => todo!("{expr:#?}"),

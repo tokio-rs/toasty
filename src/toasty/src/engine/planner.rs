@@ -20,13 +20,12 @@ use var::VarTable;
 use crate::{
     driver::capability::{self, Capability},
     engine::{
-        plan,
+        eval, plan,
         simplify::{self, Simplify},
         Plan,
     },
 };
 use toasty_core::{
-    eval,
     schema::*,
     stmt::{self, Visit, VisitMut},
 };

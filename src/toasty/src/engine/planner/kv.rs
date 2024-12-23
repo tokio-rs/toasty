@@ -21,11 +21,11 @@ impl Planner<'_> {
                 .ty
                 .clone()]);
 
-            eval::Func {
-                args: vec![arg_ty],
-                ret: key_ty.clone(),
-                expr: eval::Expr::project(eval::Expr::arg(0), [0]),
-            }
+            eval::Func::from_stmt_unchecked(
+                stmt::Expr::arg_project(0, [0]),
+                vec![arg_ty],
+                key_ty.clone(),
+            )
         } else {
             eval::Func::identity(key_ty.clone())
         };
