@@ -96,7 +96,6 @@ impl Driver for Sqlite {
                     .as_ref()
                     .map(|returning| returning.as_expr().as_record().len())
             }
-            _ => todo!(),
         };
 
         if width.is_none() {
@@ -136,7 +135,7 @@ impl Driver for Sqlite {
         }
 
         // Some special handling
-        if let stmt::Statement::Update(update) = sql {
+        if sql.is_update() {
             if pre_condition {
                 if ret.is_empty() {
                     // Just assume the precondition failed here... we will
@@ -233,7 +232,6 @@ fn value_from_param<'a>(value: &'a stmt::Value) -> rusqlite::types::ToSqlOutput<
 
 fn load(row: &rusqlite::Row, index: usize) -> stmt::Value {
     use rusqlite::types::Value as SqlValue;
-    use std::borrow::Cow;
 
     let value: Option<SqlValue> = row.get(index).unwrap();
 
@@ -244,66 +242,4 @@ fn load(row: &rusqlite::Row, index: usize) -> stmt::Value {
         None => stmt::Value::Null,
         _ => todo!("value={value:#?}"),
     }
-
-    /*
-    match ty {
-        stmt::Type::Id(mid) => {
-            let s: Option<String> = row.get(index).unwrap();
-            match s {
-                Some(s) => stmt::Id::from_string(*mid, s).into(),
-                None => stmt::Value::Null,
-            }
-        }
-        stmt::Type::String => {
-            let s: Option<String> = row.get(index).unwrap();
-            match s {
-                Some(s) => stmt::Value::String(Cow::Owned(s)),
-                None => stmt::Value::Null,
-            }
-        }
-        stmt::Type::I64 => {
-            let s: Option<i64> = row.get(index).unwrap();
-            match s {
-                Some(s) => stmt::Value::I64(s),
-                None => stmt::Value::Null,
-            }
-        }
-        stmt::Type::Enum(..) => {
-            let s: Option<String> = row.get(index).unwrap();
-
-            match s {
-                Some(s) => {
-                    let (variant, rest) = s.split_once("#").unwrap();
-                    let variant: usize = variant.parse().unwrap();
-                    let v: V = serde_json::from_str(rest).unwrap();
-                    let value = match v {
-                        V::Bool(v) => stmt::Value::Bool(v),
-                        V::Null => stmt::Value::Null,
-                        V::String(v) => stmt::Value::String(v.into()),
-                        V::Id(model, v) => {
-                            stmt::Value::Id(stmt::Id::from_string(schema::ModelId(model), v))
-                        }
-                        V::I64(v) => stmt::Value::I64(v),
-                    };
-
-                    if value.is_null() {
-                        stmt::ValueEnum {
-                            variant,
-                            fields: stmt::Record::from_vec(vec![]),
-                        }
-                        .into()
-                    } else {
-                        stmt::ValueEnum {
-                            variant,
-                            fields: stmt::Record::from_vec(vec![value]),
-                        }
-                        .into()
-                    }
-                }
-                None => stmt::Value::Null,
-            }
-        }
-        ty => todo!("column.ty = {:#?}", ty),
-    }
-    */
 }

@@ -18,6 +18,12 @@ pub struct Update {
     pub returning: Option<Returning>,
 }
 
+impl Statement {
+    pub fn is_update(&self) -> bool {
+        matches!(self, Statement::Update(_))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum UpdateTarget {
     /// Update a model

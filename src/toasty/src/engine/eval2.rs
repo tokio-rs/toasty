@@ -150,7 +150,7 @@ fn eval(expr: &stmt::Expr, input: &mut impl Input) -> Result<stmt::Value> {
             };
 
             for item in items.iter_mut() {
-                let mut i = item.take();
+                let i = item.take();
                 *item = eval(&*expr_map.map, &mut &[i])?;
             }
 

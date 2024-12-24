@@ -1,5 +1,4 @@
 use super::*;
-use toasty_core::schema::FieldId;
 
 use std::{fmt, marker::PhantomData};
 
