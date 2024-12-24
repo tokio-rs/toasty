@@ -7,14 +7,28 @@ impl Exec<'_> {
         &mut self,
         action: &plan::ExecStatement,
     ) -> Result<()> {
-        let mut sql = action.stmt.clone();
+        self.exec_statement(
+            action.stmt.clone(),
+            action.input.as_ref(),
+            action.output.as_ref(),
+        )
+        .await
+    }
 
-        if let Some(input) = &action.input {
+    pub(super) async fn exec_statement(
+        &mut self,
+        stmt: stmt::Statement,
+        input: Option<&plan::Input>,
+        output: Option<&plan::Output>,
+    ) -> Result<()> {
+        let mut stmt = stmt.clone();
+
+        if let Some(input) = input {
             let input = self.collect_input(input).await?;
-            sql.substitute(&[input]);
+            stmt.substitute(&[input]);
         }
 
-        let expect_rows = match &sql {
+        let expect_rows = match &stmt {
             stmt::Statement::Delete(stmt) => stmt.returning.is_some(),
             stmt::Statement::Insert(stmt) => stmt.returning.is_some(),
             stmt::Statement::Query(_) => true,
@@ -25,10 +39,10 @@ impl Exec<'_> {
         let res = self
             .db
             .driver
-            .exec(&self.db.schema, operation::QuerySql { stmt: sql }.into())
+            .exec(&self.db.schema, operation::QuerySql { stmt }.into())
             .await?;
 
-        let Some(out) = &action.output else {
+        let Some(out) = output else {
             assert!(res.rows.is_count());
             return Ok(());
         };
@@ -38,7 +52,7 @@ impl Exec<'_> {
 
         let res = match res.rows {
             Rows::Count(count) => {
-                assert!(!expect_rows, "action={action:?}");
+                assert!(!expect_rows);
                 ValueStream::from_stream(async_stream::try_stream! {
                     for _ in 0..count {
                         let row = project.eval_const();
@@ -47,7 +61,7 @@ impl Exec<'_> {
                 })
             }
             Rows::Values(rows) => {
-                assert!(expect_rows, "action={action:?}");
+                assert!(expect_rows);
                 ValueStream::from_stream(async_stream::try_stream! {
                     for await value in rows {
                         let value = value?;
