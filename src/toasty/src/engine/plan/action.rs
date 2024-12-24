@@ -9,6 +9,9 @@ pub(crate) enum Action {
 
     DeleteByKey(DeleteByKey),
 
+    /// Execute a statement
+    ExecStatement(ExecStatement),
+
     FindPkByIndex(FindPkByIndex),
 
     /// Execute `Operation::GetByKey` using key input
@@ -23,9 +26,6 @@ pub(crate) enum Action {
 
     /// Set a variable to a const
     SetVar(SetVar),
-
-    /// Issue a SQL query
-    Statement(Statement),
 }
 
 impl fmt::Debug for Action {
@@ -34,13 +34,13 @@ impl fmt::Debug for Action {
             Action::Associate(a) => a.fmt(f),
             Action::BatchWrite(a) => a.fmt(f),
             Action::DeleteByKey(a) => a.fmt(f),
+            Action::ExecStatement(a) => a.fmt(f),
             Action::FindPkByIndex(a) => a.fmt(f),
             Action::GetByKey(a) => a.fmt(f),
             Action::Insert(a) => a.fmt(f),
             Action::QueryPk(a) => a.fmt(f),
             Action::UpdateByKey(a) => a.fmt(f),
             Action::SetVar(a) => a.fmt(f),
-            Action::Statement(a) => a.fmt(f),
         }
     }
 }

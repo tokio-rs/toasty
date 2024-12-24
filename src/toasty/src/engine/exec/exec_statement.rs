@@ -3,7 +3,10 @@ use super::*;
 use crate::driver::Rows;
 
 impl Exec<'_> {
-    pub(super) async fn exec_query_sql(&mut self, action: &plan::Statement) -> Result<()> {
+    pub(super) async fn action_exec_statement(
+        &mut self,
+        action: &plan::ExecStatement,
+    ) -> Result<()> {
         let mut sql = action.stmt.clone();
 
         if let Some(input) = &action.input {

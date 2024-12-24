@@ -2,7 +2,7 @@ use super::*;
 use toasty_core::schema::FieldTy;
 
 impl Exec<'_> {
-    pub(super) async fn exec_associate(&mut self, action: &plan::Associate) -> Result<()> {
+    pub(super) async fn action_associate(&mut self, action: &plan::Associate) -> Result<()> {
         let mut source = self.vars.load(action.source).collect().await?;
         let target = self.vars.load(action.target).collect().await?;
 

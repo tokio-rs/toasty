@@ -3,7 +3,7 @@ use super::*;
 use crate::driver::Rows;
 
 impl Exec<'_> {
-    pub(super) async fn exec_update_by_key(&mut self, action: &plan::UpdateByKey) -> Result<()> {
+    pub(super) async fn action_update_by_key(&mut self, action: &plan::UpdateByKey) -> Result<()> {
         let args = if let Some(input) = &action.input {
             vec![self.collect_input(input).await?]
         } else {

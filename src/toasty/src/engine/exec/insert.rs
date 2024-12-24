@@ -6,7 +6,7 @@ use crate::driver::{operation, Rows};
 
 impl Exec<'_> {
     // TODO: unify w/ exec_query_sql
-    pub(super) async fn exec_insert(&mut self, action: &plan::Insert) -> Result<()> {
+    pub(super) async fn action_insert(&mut self, action: &plan::Insert) -> Result<()> {
         let mut sql = stmt::Statement::Insert(action.stmt.clone());
 
         if let Some(input) = &action.input {

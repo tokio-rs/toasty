@@ -1,7 +1,7 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct Statement {
+pub(crate) struct ExecStatement {
     /// Where to get arguments for this action.
     pub input: Option<Input>,
 
@@ -12,8 +12,8 @@ pub(crate) struct Statement {
     pub stmt: stmt::Statement,
 }
 
-impl From<Statement> for Action {
-    fn from(value: Statement) -> Self {
-        Action::Statement(value)
+impl From<ExecStatement> for Action {
+    fn from(value: ExecStatement) -> Self {
+        Action::ExecStatement(value)
     }
 }

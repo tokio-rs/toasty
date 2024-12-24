@@ -3,7 +3,7 @@ use super::*;
 use crate::driver::Rows;
 
 impl Exec<'_> {
-    pub(super) async fn exec_get_by_key(&mut self, action: &plan::GetByKey) -> Result<()> {
+    pub(super) async fn action_get_by_key(&mut self, action: &plan::GetByKey) -> Result<()> {
         let keys = self
             .eval_keys_maybe_using_input(&action.keys, &action.input)
             .await?;

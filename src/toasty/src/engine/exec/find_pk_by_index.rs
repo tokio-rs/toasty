@@ -3,7 +3,7 @@ use super::*;
 use crate::driver::Rows;
 
 impl Exec<'_> {
-    pub(super) async fn exec_find_pk_by_index(
+    pub(super) async fn action_find_pk_by_index(
         &mut self,
         action: &plan::FindPkByIndex,
     ) -> Result<()> {

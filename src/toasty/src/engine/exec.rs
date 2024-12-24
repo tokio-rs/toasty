@@ -1,12 +1,12 @@
 mod associate;
 mod batch_write;
 mod delete_by_key;
+mod exec_statement;
 mod find_pk_by_index;
 mod get_by_key;
 mod insert;
 mod kv;
 mod query_pk;
-mod query_sql;
 mod update_by_key;
 
 mod var_store;
@@ -44,15 +44,15 @@ impl Exec<'_> {
 
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {
-            Action::Associate(action) => self.exec_associate(action).await,
-            Action::BatchWrite(action) => self.exec_batch_write(action).await,
-            Action::DeleteByKey(action) => self.exec_delete_by_key(action).await,
-            Action::FindPkByIndex(action) => self.exec_find_pk_by_index(action).await,
-            Action::GetByKey(action) => self.exec_get_by_key(action).await,
-            Action::Insert(action) => self.exec_insert(action).await,
-            Action::QueryPk(action) => self.exec_query_pk(action).await,
-            Action::Statement(action) => self.exec_query_sql(action).await,
-            Action::UpdateByKey(action) => self.exec_update_by_key(action).await,
+            Action::Associate(action) => self.action_associate(action).await,
+            Action::BatchWrite(action) => self.action_batch_write(action).await,
+            Action::DeleteByKey(action) => self.action_delete_by_key(action).await,
+            Action::ExecStatement(action) => self.action_exec_statement(action).await,
+            Action::FindPkByIndex(action) => self.action_find_pk_by_index(action).await,
+            Action::GetByKey(action) => self.action_get_by_key(action).await,
+            Action::Insert(action) => self.action_insert(action).await,
+            Action::QueryPk(action) => self.action_query_pk(action).await,
+            Action::UpdateByKey(action) => self.action_update_by_key(action).await,
             Action::SetVar(action) => {
                 self.vars
                     .store(action.var, ValueStream::from_vec(action.value.clone()));

@@ -1,7 +1,7 @@
 use super::*;
 
 impl Exec<'_> {
-    pub(super) async fn exec_delete_by_key(&mut self, action: &plan::DeleteByKey) -> Result<()> {
+    pub(super) async fn action_delete_by_key(&mut self, action: &plan::DeleteByKey) -> Result<()> {
         let keys = self
             .eval_keys_maybe_using_input(&action.keys, &action.input)
             .await?;

@@ -8,11 +8,11 @@ impl Planner<'_> {
             Associate(action) => self.verify_associate(action),
             BatchWrite(action) => self.verify_batch_write(action),
             DeleteByKey(action) => self.verify_delete_by_key(action),
+            ExecStatement(action) => self.verify_exec_statement(action),
             FindPkByIndex(action) => self.verify_find_pk_by_index(action),
             GetByKey(action) => self.verify_get_by_key(action),
             Insert(action) => self.verify_insert(action),
             QueryPk(action) => self.verify_query_pk(action),
-            Statement(action) => self.verify_statement(action),
             UpdateByKey(action) => self.verify_update_by_key(action),
             SetVar(action) => self.verify_set_var(action),
         }
@@ -46,7 +46,7 @@ impl Planner<'_> {
 
     fn verify_query_pk(&self, _action: &plan::QueryPk) {}
 
-    fn verify_statement(&self, _action: &plan::Statement) {}
+    fn verify_exec_statement(&self, _action: &plan::ExecStatement) {}
 
     fn verify_update_by_key(&self, _action: &plan::UpdateByKey) {}
 
