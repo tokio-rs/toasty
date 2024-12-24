@@ -1,5 +1,4 @@
-mod eval2;
-use eval2 as eval;
+mod eval;
 mod exec;
 
 mod plan;

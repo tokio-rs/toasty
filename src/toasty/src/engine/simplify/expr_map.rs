@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::engine::eval2::Func;
+use crate::engine::eval::Func;
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_map(&self, expr: &mut stmt::Expr) -> Option<Expr> {
