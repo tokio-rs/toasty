@@ -26,13 +26,6 @@ impl Input {
             project: eval::Func::identity(ty),
         }
     }
-
-    pub(crate) fn project_var_ref(var: VarId, project: eval::Func) -> Input {
-        Input {
-            source: InputSource::Ref(var),
-            project,
-        }
-    }
 }
 
 impl From<&InputSource> for VarId {

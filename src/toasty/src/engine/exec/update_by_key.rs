@@ -41,7 +41,7 @@ impl Exec<'_> {
                     let res = self.project_and_filter_output(rows, &output.project, None);
                     self.vars.store(output.var, res);
                 }
-                Rows::Count(count) => {
+                Rows::Count(_) => {
                     debug_assert!(action.output.is_none());
                 }
             }

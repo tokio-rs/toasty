@@ -1,5 +1,5 @@
 use super::*;
-use crate::{driver::*, schema::*};
+use crate::schema::*;
 
 /// Schema: `self` references [index-fields, input-fields] flattened
 #[derive(Debug)]

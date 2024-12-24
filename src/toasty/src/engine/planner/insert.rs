@@ -1,5 +1,3 @@
-use stmt::ValueStream;
-
 use super::*;
 
 use std::collections::hash_map::Entry;
@@ -91,9 +89,7 @@ impl Planner<'_> {
             .as_values_mut()
             .rows;
 
-        for mut row in rows {
-            dst.push(row);
-        }
+        dst.extend(rows);
 
         if let Some((values, ty)) = const_returning {
             assert!(output_var.is_none());
@@ -139,8 +135,6 @@ impl Planner<'_> {
         // Next, we have to find all belongs-to fields and normalize them to FK
         // values
         for field in &model.fields {
-            let index = field.id.index;
-
             if let FieldTy::BelongsTo(rel) = &field.ty {
                 let [fk_field] = &rel.foreign_key.fields[..] else {
                     todo!()
@@ -152,14 +146,8 @@ impl Planner<'_> {
                     continue;
                 }
 
-                // Values should be remapped...
-                match &rel.foreign_key.fields[..] {
-                    [fk_field] => {
-                        let e = field_expr.take();
-                        expr.entry_mut(fk_field.source.index).insert(e);
-                    }
-                    _ => todo!(),
-                }
+                let e = field_expr.take();
+                expr.entry_mut(fk_field.source.index).insert(e);
             }
         }
 

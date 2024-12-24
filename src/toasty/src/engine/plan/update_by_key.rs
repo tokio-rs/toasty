@@ -1,5 +1,5 @@
 use super::*;
-use crate::{driver::*, schema::*};
+use crate::schema::*;
 
 #[derive(Debug, Clone)]
 pub(crate) struct UpdateByKey {

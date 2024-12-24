@@ -27,7 +27,7 @@ use crate::{
 };
 use toasty_core::{
     schema::*,
-    stmt::{self, Visit, VisitMut},
+    stmt::{self, VisitMut},
 };
 
 use std::collections::HashMap;

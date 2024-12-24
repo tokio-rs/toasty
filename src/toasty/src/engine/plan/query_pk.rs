@@ -1,5 +1,5 @@
 use super::*;
-use crate::{driver::*, schema::*};
+use crate::schema::*;
 
 #[derive(Debug)]
 pub(crate) struct QueryPk {
@@ -20,17 +20,6 @@ pub(crate) struct QueryPk {
 
     /// Filter to apply in-memory
     pub post_filter: Option<eval::Func>,
-}
-
-impl QueryPk {
-    pub(crate) fn apply(&self) -> Result<operation::QueryPk> {
-        Ok(operation::QueryPk {
-            table: self.table,
-            select: self.columns.clone(),
-            pk_filter: self.pk_filter.clone(),
-            filter: self.filter.clone(),
-        })
-    }
 }
 
 impl From<QueryPk> for Action {

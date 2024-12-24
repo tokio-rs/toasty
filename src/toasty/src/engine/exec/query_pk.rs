@@ -4,7 +4,6 @@ use crate::driver::Rows;
 
 impl Exec<'_> {
     pub(super) async fn action_query_pk(&mut self, action: &plan::QueryPk) -> Result<()> {
-        let op = action.apply()?;
         let res = self
             .db
             .driver
