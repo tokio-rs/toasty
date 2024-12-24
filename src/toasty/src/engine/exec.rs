@@ -51,7 +51,7 @@ impl Exec<'_> {
             Action::GetByKey(action) => self.exec_get_by_key(action).await,
             Action::Insert(action) => self.exec_insert(action).await,
             Action::QueryPk(action) => self.exec_query_pk(action).await,
-            Action::QuerySql(action) => self.exec_query_sql(action).await,
+            Action::Statement(action) => self.exec_query_sql(action).await,
             Action::UpdateByKey(action) => self.exec_update_by_key(action).await,
             Action::SetVar(action) => {
                 self.vars

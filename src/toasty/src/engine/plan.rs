@@ -31,8 +31,8 @@ pub(crate) use pipeline::Pipeline;
 mod query_pk;
 pub(crate) use query_pk::QueryPk;
 
-mod query_sql;
-pub(crate) use query_sql::QuerySql;
+mod statement;
+pub(crate) use statement::Statement;
 
 mod set_var;
 pub(crate) use set_var::{SetVar, VarId};

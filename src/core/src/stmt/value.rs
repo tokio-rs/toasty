@@ -3,8 +3,6 @@ use sparse_record::SparseRecord;
 use super::*;
 use crate::Result;
 
-use std::borrow::Cow;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     /// Boolean value

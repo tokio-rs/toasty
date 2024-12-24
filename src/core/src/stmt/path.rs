@@ -1,7 +1,5 @@
 use super::*;
 
-use std::{fmt, ops};
-
 /// Describes a traversal through fields.
 ///
 /// The root is not specified as part of the struct.

@@ -16,14 +16,9 @@ impl Values {
     }
 
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        /*
         for row in &mut self.rows {
-            for item in row {
-                item.substitute_ref(input);
-            }
+            row.substitute_ref(input);
         }
-        */
-        todo!()
     }
 }
 

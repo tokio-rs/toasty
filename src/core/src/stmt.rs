@@ -140,7 +140,7 @@ mod source;
 pub use source::{Source, SourceModel};
 
 mod sparse_record;
-use sparse_record::SparseRecord;
+pub use sparse_record::SparseRecord;
 
 pub mod sql;
 

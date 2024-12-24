@@ -30,7 +30,6 @@ impl<'a> Generator<'a> {
     fn gen_has_many_struct(&self, rel: &HasMany, field: FieldId) -> TokenStream {
         let field_name = self.field_name(field);
         let field_index = util::int(field.index);
-        let field_const_name = self.field_const_name(field);
         let pair_field_const_name = self.field_const_name(rel.pair);
         let model_struct_name = self.self_struct_name();
         let relation_struct_name = self.relation_struct_name(field);

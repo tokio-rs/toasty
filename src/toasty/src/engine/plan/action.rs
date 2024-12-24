@@ -25,7 +25,7 @@ pub(crate) enum Action {
     SetVar(SetVar),
 
     /// Issue a SQL query
-    QuerySql(QuerySql),
+    Statement(Statement),
 }
 
 impl fmt::Debug for Action {
@@ -38,9 +38,9 @@ impl fmt::Debug for Action {
             Action::GetByKey(a) => a.fmt(f),
             Action::Insert(a) => a.fmt(f),
             Action::QueryPk(a) => a.fmt(f),
-            Action::QuerySql(a) => a.fmt(f),
             Action::UpdateByKey(a) => a.fmt(f),
             Action::SetVar(a) => a.fmt(f),
+            Action::Statement(a) => a.fmt(f),
         }
     }
 }

@@ -428,10 +428,8 @@ impl<'a> ModelLoweringBuilder<'a> {
         model.lowering.model_to_table = stmt::ExprRecord::from_vec(self.model_to_table);
         model.lowering.table_to_model = stmt::ExprRecord::from_vec(self.table_to_model);
         model.lowering.model_pk_to_table = if self.model_pk_to_table.len() == 1 {
-            let mut expr = self.model_pk_to_table.into_iter().next().unwrap();
-
+            let expr = self.model_pk_to_table.into_iter().next().unwrap();
             debug_assert!(expr.is_field() || expr.is_cast(), "expr={:#?}", expr);
-
             expr
         } else {
             stmt::ExprRecord::from_vec(self.model_pk_to_table).into()

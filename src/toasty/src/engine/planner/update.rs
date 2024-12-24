@@ -102,7 +102,7 @@ impl Planner<'_> {
 
         let output_var = output.as_ref().map(|o| o.var);
 
-        self.push_action(plan::QuerySql {
+        self.push_action(plan::Statement {
             output,
             input: None,
             stmt: stmt.into(),

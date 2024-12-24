@@ -1,7 +1,5 @@
 use super::*;
 
-use std::ops;
-
 #[derive(Clone, PartialEq)]
 pub enum Expr {
     /// AND a set of binary expressions

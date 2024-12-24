@@ -12,7 +12,7 @@ impl Planner<'_> {
             GetByKey(action) => self.verify_get_by_key(action),
             Insert(action) => self.verify_insert(action),
             QueryPk(action) => self.verify_query_pk(action),
-            QuerySql(action) => self.verify_query_sql(action),
+            Statement(action) => self.verify_statement(action),
             UpdateByKey(action) => self.verify_update_by_key(action),
             SetVar(action) => self.verify_set_var(action),
         }
@@ -46,7 +46,7 @@ impl Planner<'_> {
 
     fn verify_query_pk(&self, _action: &plan::QueryPk) {}
 
-    fn verify_query_sql(&self, _action: &plan::QuerySql) {}
+    fn verify_statement(&self, _action: &plan::Statement) {}
 
     fn verify_update_by_key(&self, _action: &plan::UpdateByKey) {}
 

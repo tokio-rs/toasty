@@ -1,5 +1,3 @@
-use crate::schema::Index;
-
 use super::*;
 
 use indexmap::{Equivalent, IndexMap};
@@ -88,7 +86,7 @@ impl Assignments {
         use indexmap::map::Entry;
 
         match self.assignments.entry(key) {
-            Entry::Occupied(entry) => {
+            Entry::Occupied(_) => {
                 todo!()
             }
             Entry::Vacant(entry) => {
@@ -104,7 +102,7 @@ impl Assignments {
         use indexmap::map::Entry;
 
         match self.assignments.entry(key) {
-            Entry::Occupied(entry) => {
+            Entry::Occupied(_) => {
                 todo!()
             }
             Entry::Vacant(entry) => {

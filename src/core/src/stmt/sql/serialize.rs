@@ -65,15 +65,10 @@ impl<'a> Serializer<'a> {
 impl<'a, T: Params> Formatter<'a, T> {
     fn statement(&mut self, statement: &DataStatement) -> fmt::Result {
         match statement {
-            /*
-            Statement::CreateIndex(stmt) => self.create_index(stmt)?,
-            Statement::CreateTable(stmt) => self.create_table(stmt)?,
-            */
             DataStatement::Delete(stmt) => self.delete(stmt)?,
             DataStatement::Insert(stmt) => self.insert(stmt)?,
             DataStatement::Query(stmt) => self.query(stmt)?,
             DataStatement::Update(stmt) => self.update(stmt)?,
-            _ => todo!("stmt = {statement:#?}"),
         }
 
         write!(self.dst, ";")?;
@@ -89,7 +84,6 @@ impl<'a, T: Params> Formatter<'a, T> {
             Statement::Insert(stmt) => self.insert(stmt)?,
             Statement::Query(stmt) => self.query(stmt)?,
             Statement::Update(stmt) => self.update(stmt)?,
-            _ => todo!("stmt = {statement:#?}"),
         }
 
         write!(self.dst, ";")?;

@@ -6,6 +6,8 @@ impl DynamoDB {
         schema: &schema::Schema,
         insert: stmt::Insert,
     ) -> Result<Response> {
+        assert!(insert.returning.is_none());
+
         let insert_table = insert.target.as_table();
         let table = &schema.table(insert_table.table);
 
@@ -30,12 +32,10 @@ impl DynamoDB {
 
         // Create the item map
         let mut insert_items = vec![];
-        let mut ret = vec![];
 
         let source = insert.source.body.into_values();
 
         for row in source.rows {
-            let mut values = vec![];
             let mut items = HashMap::new();
 
             for (i, column_id) in insert_table.columns.iter().enumerate() {
@@ -47,9 +47,10 @@ impl DynamoDB {
                     items.insert(column.name.clone(), ddb_val(value));
                 }
             }
-            ret.push(stmt::ValueRecord::from_vec(values).into());
             insert_items.push(items);
         }
+
+        let count = insert_items.len();
 
         match &unique_indices[..] {
             [] => {
@@ -159,8 +160,6 @@ impl DynamoDB {
             _ => todo!(),
         }
 
-        Ok(Response::from_value_stream(stmt::ValueStream::from_vec(
-            ret,
-        )))
+        Ok(Response::from_count(count))
     }
 }

@@ -81,7 +81,7 @@ impl Planner<'_> {
             assert!(input.project.args[0].is_list(), "{input:#?}");
         }
 
-        self.push_action(plan::QuerySql {
+        self.push_action(plan::Statement {
             input,
             output: Some(plan::Output {
                 var: output,

@@ -1,7 +1,7 @@
 use super::*;
 
 #[derive(Debug)]
-pub(crate) struct QuerySql {
+pub(crate) struct Statement {
     /// Where to get arguments for this action.
     pub input: Option<Input>,
 
@@ -12,8 +12,8 @@ pub(crate) struct QuerySql {
     pub stmt: stmt::Statement,
 }
 
-impl From<QuerySql> for Action {
-    fn from(value: QuerySql) -> Self {
-        Action::QuerySql(value)
+impl From<Statement> for Action {
+    fn from(value: Statement) -> Self {
+        Action::Statement(value)
     }
 }

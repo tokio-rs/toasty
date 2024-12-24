@@ -375,7 +375,6 @@ impl<'a> Generator<'a> {
         filter: &stmt::Expr,
         depth: usize,
     ) -> TokenStream {
-        let model = self.schema.model(mid);
         let struct_name = self.model_struct_path(mid, depth);
 
         match filter {
@@ -385,38 +384,6 @@ impl<'a> Generator<'a> {
                 let base = quote!(#struct_name);
                 let field = self.field_const_name(expr_field.field);
                 quote!( #base :: #field )
-            }
-            stmt::Expr::Project(expr_project) => {
-                /*
-                let steps = expr_project.projection.as_slice();
-                let mut current_model = model;
-                let mut base = quote!(#struct_name);
-
-                for i in 0..steps.len() {
-                    let field = &current_model.fields[steps[i].into_usize()];
-                    let field_id = field.id;
-                    let field_const_name = self.field_const_name(field_id);
-                    base = quote!( #base :: #field_const_name );
-
-                    match &field.ty {
-                        FieldTy::BelongsTo(rel) => {
-                            current_model = self.schema.model(rel.target);
-                        }
-                        FieldTy::HasMany(rel) => {
-                            current_model = self.schema.model(rel.target);
-                        }
-                        FieldTy::HasOne(rel) => {
-                            current_model = self.schema.model(rel.target);
-                        }
-                        FieldTy::Primitive(_) => {
-                            assert_eq!(i + 1, steps.len());
-                        }
-                    }
-                }
-
-                base
-                */
-                todo!()
             }
             stmt::Expr::Arg(arg) => {
                 let arg = &args[arg.position];

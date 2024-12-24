@@ -172,10 +172,6 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub(crate) fn model_field_count(&self) -> TokenStream {
-        util::int(self.model.fields.len())
-    }
-
     pub(crate) fn relation_struct_name(&self, field: impl Into<FieldId>) -> &syn::Ident {
         let field = field.into();
         &self.names.relations[&field].struct_name

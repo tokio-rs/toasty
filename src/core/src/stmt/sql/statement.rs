@@ -25,7 +25,6 @@ impl From<DataStatement> for Statement {
             DataStatement::Insert(stmt) => Statement::Insert(stmt),
             DataStatement::Query(stmt) => Statement::Query(stmt),
             DataStatement::Update(stmt) => Statement::Update(stmt),
-            _ => todo!("stmt={value:#?}"),
         }
     }
 }

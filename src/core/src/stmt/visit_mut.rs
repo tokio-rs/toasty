@@ -291,7 +291,6 @@ where
             }
         }
         Expr::DecodeEnum(base, ..) => v.visit_expr_mut(base),
-        _ => todo!("{node:#?}"),
     }
 }
 
