@@ -35,7 +35,6 @@ impl Exec<'_> {
             stmt::Statement::Update(stmt) => stmt.returning.is_some(),
         };
 
-        println!("expect_rows={expect_rows:#?}");
         let res = self
             .db
             .driver
