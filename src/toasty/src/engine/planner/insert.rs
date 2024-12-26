@@ -25,7 +25,7 @@ impl Planner<'_> {
 
         // If the statement `Returning` is constant (i.e. does not depend on the
         // database evaluating the statement), then extract it here.
-        let const_returning = self.constantize_insert_returning(model, &mut stmt);
+        let const_returning = self.constantize_insert_returning(&mut stmt);
 
         let mut output_var = None;
 
@@ -283,7 +283,6 @@ impl Planner<'_> {
     // TODO: unify with update?
     fn constantize_insert_returning(
         &self,
-        model: &Model,
         stmt: &mut stmt::Insert,
     ) -> Option<(Vec<stmt::Value>, stmt::Type)> {
         let Some(stmt::Returning::Expr(returning)) = &stmt.returning else {
@@ -292,7 +291,6 @@ impl Planner<'_> {
 
         let stmt::ExprSet::Values(values) = &*stmt.source.body else {
             todo!("stmt={stmt:#?}");
-            return None;
         };
 
         let stmt::InsertTarget::Table(insert_table) = &stmt.target else {

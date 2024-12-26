@@ -1,7 +1,3 @@
-use std::ops::Sub;
-
-use stmt::substitute;
-
 use super::*;
 
 struct LowerStatement<'a> {
@@ -82,7 +78,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
 
-        for (index, update_expr) in i.iter() {
+        for index in i.keys() {
             let field = &self.model.fields[index];
 
             if field.primary_key {
@@ -155,7 +151,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
         self.visit_expr_mut(&mut i.expr);
     }
 
-    fn visit_expr_stmt_mut(&mut self, i: &mut stmt::ExprStmt) {}
+    fn visit_expr_stmt_mut(&mut self, _i: &mut stmt::ExprStmt) {}
 
     fn visit_insert_target_mut(&mut self, i: &mut stmt::InsertTarget) {
         *i = stmt::InsertTable {
@@ -243,8 +239,6 @@ impl<'a> VisitMut for LowerStatement<'a> {
 
 impl<'a> LowerStatement<'a> {
     fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Expr) {
-        use std::mem;
-
         // TODO: we really shouldn't have to simplify here, but until
         // simplification includes overlapping predicate pruning, we have to do
         // this here.
@@ -265,7 +259,7 @@ impl<'a> LowerStatement<'a> {
 
                     format!("{}{}", a, b)
                 }
-                stmt::Expr::Value(value) => todo!(),
+                stmt::Expr::Value(_) => todo!(),
                 _ => continue,
             };
 
@@ -457,10 +451,10 @@ impl<I: Input> VisitMut for Substitute<I> {
         }
     }
 
-    fn visit_expr_in_subquery_mut(&mut self, i: &mut stmt::ExprInSubquery) {
+    fn visit_expr_in_subquery_mut(&mut self, _i: &mut stmt::ExprInSubquery) {
         todo!()
     }
-    fn visit_expr_stmt_mut(&mut self, i: &mut stmt::ExprStmt) {
+    fn visit_expr_stmt_mut(&mut self, _i: &mut stmt::ExprStmt) {
         todo!()
     }
 }

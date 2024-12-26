@@ -6,7 +6,7 @@ impl Simplify<'_> {
     pub(super) fn simplify_expr_in_list(&self, expr: &mut stmt::ExprInList) -> Option<Expr> {
         self.rewrite_expr_in_list_when_model(expr);
 
-        /// Rewrite single-item lists into equalities
+        // Rewrite single-item lists into equalities
         self.rewrite_expr_in_list_with_single_item(expr)
     }
 

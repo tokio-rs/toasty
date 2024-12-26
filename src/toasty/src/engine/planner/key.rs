@@ -159,7 +159,7 @@ impl<'a> TryConvert<'a> {
 
     fn is_key_reference(&self, expr: &stmt::Expr) -> bool {
         match expr {
-            stmt::Expr::Column(expr_column) if self.index.columns.len() == 1 => true,
+            stmt::Expr::Column(_) if self.index.columns.len() == 1 => true,
             stmt::Expr::Record(expr_record) if self.index.columns.len() == expr_record.len() => {
                 true
             }

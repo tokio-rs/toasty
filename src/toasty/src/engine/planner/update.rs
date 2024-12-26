@@ -93,7 +93,7 @@ impl Planner<'_> {
     fn plan_update_sql(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
         let output = self
             .partition_maybe_returning(&mut stmt.returning)
-            .map(|mut project| plan::Output {
+            .map(|project| plan::Output {
                 var: self
                     .var_table
                     .register_var(stmt::Type::list(project.ret.clone())),
@@ -124,7 +124,7 @@ impl Planner<'_> {
 
         let output = self
             .partition_maybe_returning(&mut stmt.returning)
-            .map(|mut project| plan::Output {
+            .map(|project| plan::Output {
                 var: self
                     .var_table
                     .register_var(stmt::Type::list(project.ret.clone())),

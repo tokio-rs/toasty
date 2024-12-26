@@ -147,8 +147,8 @@ impl<'a> VisitMut for Simplify<'_> {
         let width = match &self.target {
             ExprTarget::Const => todo!(),
             ExprTarget::Model(model) => model.fields.len(),
-            ExprTarget::Table(table) => todo!(),
-            ExprTarget::TableWithColumns(_, columns) => columns.len(),
+            ExprTarget::Table => todo!(),
+            ExprTarget::TableWithColumns(columns) => columns.len(),
         };
 
         for row in &mut values.rows {

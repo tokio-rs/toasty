@@ -22,8 +22,6 @@ impl Planner<'_> {
     /// Partition a returning statement between what can be handled by the
     /// target database and what Toasty handles in-memory.
     pub(crate) fn partition_returning(&self, stmt: &mut stmt::Returning) -> eval::Func {
-        use Partition::*;
-
         let ret = self.infer_expr_ty(stmt.as_expr(), &[]);
 
         match stmt {
@@ -152,7 +150,7 @@ impl Partitioner<'_> {
                 } else {
                     let mut fields = vec![];
 
-                    for (i, res) in field_partition_res.into_iter().enumerate() {
+                    for res in field_partition_res.into_iter() {
                         match res {
                             Stmt => {
                                 todo!()

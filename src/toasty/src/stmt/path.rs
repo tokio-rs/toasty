@@ -1,9 +1,5 @@
 use super::*;
 
-use toasty_core::schema::FieldId;
-
-use std::marker::PhantomData;
-
 pub struct Path<T: ?Sized> {
     untyped: stmt::Path,
     _p: PhantomData<T>,
@@ -95,29 +91,9 @@ impl<T: ?Sized> Path<T> {
             _p: PhantomData,
         }
     }
-
-    pub(crate) fn to_field_id<M: Model>(self) -> FieldId {
-        // TODO: can this be moved to a separate verification step somewhere?
-        debug_assert_eq!(M::ID, self.untyped.root);
-
-        let [index] = &self.untyped.projection[..] else {
-            todo!()
-        };
-
-        FieldId {
-            model: self.untyped.root,
-            index: *index,
-        }
-    }
 }
 
-impl<M> Path<M> {
-    /*
-    pub const fn root() -> Path<M> {
-        Path::new(stmt::Path::root())
-    }
-    */
-}
+impl<M> Path<M> {}
 
 impl<T> IntoExpr<T> for Path<T> {
     fn into_expr(self) -> Expr<T> {

@@ -12,10 +12,10 @@ pub(crate) enum ExprTarget<'a> {
     Model(&'a Model),
 
     /// The expression has already been lowered and is in context of a table
-    Table(&'a Table),
+    Table,
 
     /// A lowered insert specifies the columns to insert into
-    TableWithColumns(&'a Table, Vec<ColumnId>),
+    TableWithColumns(Vec<ColumnId>),
 }
 
 impl<'a> ExprTarget<'a> {
@@ -33,7 +33,6 @@ impl<'a> ExprTarget<'a> {
                 let table = schema.table(table_with_joins.table);
                 ExprTarget::from(table)
             }
-            _ => todo!("source={source:#?}"),
         }
     }
 
@@ -52,10 +51,8 @@ impl<'a> ExprTarget<'a> {
                 ExprTarget::from(model)
             }
             stmt::InsertTarget::Table(table_with_columns) => {
-                let table = schema.table(table_with_columns.table);
-                ExprTarget::TableWithColumns(table, table_with_columns.columns.clone())
+                ExprTarget::TableWithColumns(table_with_columns.columns.clone())
             }
-            _ => todo!(),
         }
     }
 
@@ -68,15 +65,8 @@ impl<'a> ExprTarget<'a> {
                 let model = schema.model(*model_id);
                 ExprTarget::from(model)
             }
-            stmt::UpdateTarget::Table(table_with_columns) => {
-                let table = schema.table(table_with_columns.table);
-                ExprTarget::Table(table)
-            }
+            stmt::UpdateTarget::Table(_) => ExprTarget::Table,
         }
-    }
-
-    pub(crate) fn is_const(&self) -> bool {
-        matches!(self, ExprTarget::Const)
     }
 
     pub(crate) fn is_model(&self) -> bool {
@@ -91,7 +81,7 @@ impl<'a> From<&'a Model> for ExprTarget<'a> {
 }
 
 impl<'a> From<&'a Table> for ExprTarget<'a> {
-    fn from(value: &'a Table) -> Self {
-        ExprTarget::Table(value)
+    fn from(_: &'a Table) -> Self {
+        ExprTarget::Table
     }
 }

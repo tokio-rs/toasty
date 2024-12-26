@@ -48,7 +48,7 @@ impl Planner<'_> {
         self.lower_stmt_query(model, &mut stmt);
 
         let ret = if self.capability.is_sql() {
-            self.plan_select_sql(cx, model, stmt)
+            self.plan_select_sql(cx, stmt)
         } else {
             self.plan_select_kv(cx, model, stmt)
         };
@@ -60,12 +60,7 @@ impl Planner<'_> {
         ret
     }
 
-    fn plan_select_sql(
-        &mut self,
-        cx: &Context,
-        model: &Model,
-        mut stmt: stmt::Query,
-    ) -> plan::VarId {
+    fn plan_select_sql(&mut self, cx: &Context, mut stmt: stmt::Query) -> plan::VarId {
         let input = if cx.input.is_empty() {
             None
         } else {

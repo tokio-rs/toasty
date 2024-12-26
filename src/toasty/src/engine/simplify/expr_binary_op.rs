@@ -21,7 +21,7 @@ impl Simplify<'_> {
                 self.uncast_value_id(val);
                 None
             }
-            (stmt::Expr::Key(expr_key), other) | (other, stmt::Expr::Key(expr_key)) => {
+            (stmt::Expr::Key(_), other) | (other, stmt::Expr::Key(_)) => {
                 assert!(op.is_eq());
                 assert!(self.target.is_model());
 
@@ -73,25 +73,13 @@ impl Simplify<'_> {
             _ => {
                 // For now, just make sure there are no relations in the expression
                 stmt::visit::for_each_expr(lhs, |expr| {
-                    if let stmt::Expr::Project(expr_project) = expr {
-                        /*
-                        let field = expr_project
-                            .projection
-                            .resolve_field(self.schema, self.model);
-                        assert!(field.ty.is_primitive());
-                        */
+                    if let stmt::Expr::Project(_) = expr {
                         todo!()
                     }
                 });
 
                 stmt::visit::for_each_expr(rhs, |expr| {
-                    if let stmt::Expr::Project(expr_project) = expr {
-                        /*
-                        let field = expr_project
-                            .projection
-                            .resolve_field(self.schema, self.model);
-                        assert!(field.ty.is_primitive());
-                        */
+                    if let stmt::Expr::Project(_) = expr {
                         todo!()
                     }
                 });

@@ -18,7 +18,7 @@ impl<'a> Simplify<'a> {
     ) -> Option<stmt::Expr> {
         // The expression is a path expression referencing a relation.
         let field = match expr {
-            stmt::Expr::Project(expr_project) => {
+            stmt::Expr::Project(_) => {
                 todo!()
             }
             stmt::Expr::Field(expr) => self.schema.field(expr.field),
