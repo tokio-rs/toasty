@@ -1,10 +1,11 @@
 use super::*;
 
-impl<'stmt> Exec<'_, 'stmt> {
-    pub(super) async fn exec_get_by_key(&mut self, action: &plan::GetByKey<'stmt>) -> Result<()> {
-        // Compute the keys to get
+use crate::driver::Rows;
+
+impl Exec<'_> {
+    pub(super) async fn action_get_by_key(&mut self, action: &plan::GetByKey) -> Result<()> {
         let keys = self
-            .collect_keys_from_input(&action.keys, &action.input)
+            .eval_keys_maybe_using_input(&action.keys, &action.input)
             .await?;
 
         let res = if keys.is_empty() {
@@ -14,24 +15,22 @@ impl<'stmt> Exec<'_, 'stmt> {
                 table: action.table,
                 select: action.columns.clone(),
                 keys,
-                post_filter: action.post_filter.clone(),
             };
 
             let res = self.db.driver.exec(&self.db.schema, op.into()).await?;
+            let rows = match res.rows {
+                Rows::Values(rows) => rows,
+                _ => todo!("res={res:#?}"),
+            };
 
-            // TODO: don't clone
-            let project = action.project.clone();
-
-            ValueStream::from_stream(async_stream::try_stream! {
-                for await value in res {
-                    let value = value?;
-                    let value = project.eval(&value)?;
-                    yield value.into();
-                }
-            })
+            self.project_and_filter_output(
+                rows,
+                &action.output.project,
+                action.post_filter.as_ref(),
+            )
         };
 
-        self.vars.store(action.output, res);
+        self.vars.store(action.output.var, res);
         Ok(())
     }
 }

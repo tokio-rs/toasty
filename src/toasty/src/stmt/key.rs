@@ -1,13 +1,13 @@
 use super::*;
 
-pub struct Key<'stmt, T: ?Sized> {
-    pub(crate) untyped: stmt::Value<'stmt>,
+pub struct Key<T: ?Sized> {
+    pub(crate) untyped: stmt::Value,
 
     pub(crate) _p: PhantomData<T>,
 }
 
-impl<'stmt, M: Model> Key<'stmt, M> {
-    pub fn from_expr(expr: impl IntoExpr<'stmt, M::Key>) -> Key<'stmt, M> {
+impl<M: Model> Key<M> {
+    pub fn from_expr(expr: impl IntoExpr<M::Key>) -> Key<M> {
         let expr = expr.into_expr();
 
         let untyped = match expr.untyped {
@@ -24,7 +24,7 @@ impl<'stmt, M: Model> Key<'stmt, M> {
                     }
                 }
 
-                stmt::Record::from_vec(f).into()
+                stmt::ValueRecord::from_vec(f).into()
             }
             _ => todo!(),
         };
@@ -36,8 +36,8 @@ impl<'stmt, M: Model> Key<'stmt, M> {
     }
 }
 
-impl<'stmt, M> From<Key<'stmt, M>> for Expr<'stmt, M> {
-    fn from(value: Key<'stmt, M>) -> Self {
+impl<M> From<Key<M>> for Expr<M> {
+    fn from(value: Key<M>) -> Self {
         Expr {
             untyped: value.untyped.into(),
             _p: PhantomData,
@@ -45,8 +45,8 @@ impl<'stmt, M> From<Key<'stmt, M>> for Expr<'stmt, M> {
     }
 }
 
-impl<'stmt, M> From<Key<'stmt, M>> for Expr<'stmt, [M]> {
-    fn from(value: Key<'stmt, M>) -> Self {
+impl<M> From<Key<M>> for Expr<[M]> {
+    fn from(value: Key<M>) -> Self {
         Expr {
             untyped: value.untyped.into(),
             _p: PhantomData,

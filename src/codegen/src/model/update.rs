@@ -25,43 +25,15 @@ impl<'a> Generator<'a> {
 
                     if let stmt::Type::Id(_) = primitive.ty {
                         if field.nullable {
-                            quote!(#i => self.model.#name = into_iter.next().unwrap().#conv()?.map(stmt::Id::from_untyped),)
+                            quote!(#i => self.model.#name = value.#conv()?.map(stmt::Id::from_untyped),)
                         } else {
-                            quote!(#i => self.model.#name = stmt::Id::from_untyped(into_iter.next().unwrap().#conv()?),)
+                            quote!(#i => self.model.#name = stmt::Id::from_untyped(value.#conv()?),)
                         }
                     } else {
-                        quote!(#i => self.model.#name = into_iter.next().unwrap().#conv()?,)
+                        quote!(#i => self.model.#name = value.#conv()?,)
                     }
                 }
-                FieldTy::BelongsTo(rel) => {
-                    match &rel.foreign_key.fields[..] {
-                        [fk_field] => {
-                            let source = self.schema.field(fk_field.source);
-                            let primitive = source.ty.expect_primitive();
-                            let name = self.field_name(fk_field.source);
-                            let conv = self.value_to_ty_fn(&primitive.ty, source.nullable);
-
-                            if let stmt::Type::Id(_) = primitive.ty {
-                                if field.nullable {
-                                    quote!(#i => self.model.#name = into_iter.next().unwrap().#conv()?.map(stmt::Id::from_untyped),)
-                                } else {
-                                    quote!(#i => self.model.#name = stmt::Id::from_untyped(into_iter.next().unwrap().#conv()?),)
-                                }
-                            } else {
-                                quote!(#i => self.model.#name = into_iter.next().unwrap().#conv()?,)
-                            }
-                        }
-                        _ => todo!(),
-                    }
-                }
-                FieldTy::HasMany(..) => {
-                    // TODO: something to do here?
-                    quote!(#i => {})
-                }
-                FieldTy::HasOne(..) => {
-                    // TODO: something to do here?
-                    quote!(#i => {})
-                }
+                _ => quote!(#i => todo!("should not be set; {} = {value:#?}", #i),)
             }
 
         });
@@ -71,34 +43,23 @@ impl<'a> Generator<'a> {
             #[derive(Debug)]
             pub struct #update_struct_name<'a> {
                 model: &'a mut #struct_name,
-                query: UpdateQuery<'a>,
+                query: UpdateQuery,
             }
 
             #[derive(Debug)]
-            pub struct UpdateQuery<'a> {
-                stmt: stmt::Update<'a, #struct_name>,
+            pub struct UpdateQuery {
+                stmt: stmt::Update<#struct_name>,
             }
 
-            impl<'a> #update_struct_name<'a> {
+            impl #update_struct_name<'_> {
                 #update_methods
 
                 pub async fn exec(self, db: &Db) -> Result<()> {
-                    let fields;
-                    let mut into_iter;
+                    let mut stmt = self.query.stmt;
+                    let mut result = db.exec_one(stmt.into()).await?;
 
-                    {
-                        let mut stmt = self.query.stmt;
-                        fields = stmt.fields().clone();
-
-                        stmt.set_selection(&*self.model);
-
-                        let mut records = db.exec::<#struct_name>(stmt.into()).await?;
-                        // TODO: try to avoid the vec clone from turning a record static
-                        into_iter = records.next().await.unwrap()?.into_record().into_owned().into_iter();
-                    }
-
-                    for field in fields.iter() {
-                        match field.into_usize() {
+                    for (field, value) in result.into_sparse_record().into_iter() {
+                        match field {
                             #( #reload )*
                             _ => todo!("handle unknown field id in reload after update"),
                         }
@@ -108,7 +69,7 @@ impl<'a> Generator<'a> {
                 }
             }
 
-            impl<'a> UpdateQuery<'a> {
+            impl UpdateQuery {
                 #update_query_methods
 
                 pub async fn exec(self, db: &Db) -> Result<()> {
@@ -118,14 +79,14 @@ impl<'a> Generator<'a> {
                 }
             }
 
-            impl<'a> From<Query<'a>> for UpdateQuery<'a> {
-                fn from(value: Query<'a>) -> UpdateQuery<'a> {
-                    UpdateQuery { stmt: stmt::Update::new(value) }
+            impl From<Query> for UpdateQuery {
+                fn from(value: Query) -> UpdateQuery {
+                    UpdateQuery { stmt: stmt::Update::new(value.stmt) }
                 }
             }
 
-            impl<'a> From<stmt::Select<'a, #struct_name>> for UpdateQuery<'a> {
-                fn from(src: stmt::Select<'a, #struct_name>) -> UpdateQuery<'a> {
+            impl From<stmt::Select<#struct_name>> for UpdateQuery {
+                fn from(src: stmt::Select<#struct_name>) -> UpdateQuery {
                     UpdateQuery { stmt: stmt::Update::new(src) }
                 }
             }
@@ -136,12 +97,11 @@ impl<'a> Generator<'a> {
         let update_struct_name = self.self_update_struct_name();
 
         quote! {
-            pub fn update<'a>(&'a mut self) -> #update_struct_name<'a> {
+            pub fn update(&mut self) -> #update_struct_name<'_> {
+                let query = UpdateQuery::from(self.into_select());
                 #update_struct_name {
                     model: self,
-                    query: UpdateQuery {
-                        stmt: stmt::Update::default(),
-                    },
+                    query,
                 }
             }
         }
@@ -181,7 +141,7 @@ impl<'a> Generator<'a> {
                     let target_struct_name = self.model_struct_path(rel.target, 0);
 
                     quote! {
-                        pub fn #name(mut self, #name: impl IntoExpr<'a, #target_struct_name>) -> Self {
+                        pub fn #name(mut self, #name: impl IntoExpr<#target_struct_name>) -> Self {
                             self.query.#set_ident(#name);
                             self
                         }
@@ -195,7 +155,7 @@ impl<'a> Generator<'a> {
                     let add_ident = ident!("add_{}", singular);
 
                     quote! {
-                        pub fn #singular(mut self, #singular: impl IntoExpr<'a, #target_struct_name>) -> Self {
+                        pub fn #singular(mut self, #singular: impl IntoExpr<#target_struct_name>) -> Self {
                             self.query.#add_ident(#singular);
                             self
                         }
@@ -205,7 +165,7 @@ impl<'a> Generator<'a> {
                     let relation_struct_path = self.field_ty(field, 0);
 
                     quote! {
-                        pub fn #name<'b>(mut self, #name: impl IntoExpr<'a, #relation_struct_path<'b>>) -> Self {
+                        pub fn #name<'b>(mut self, #name: impl IntoExpr<#relation_struct_path<'b>>) -> Self {
                             self.query.#set_ident(#name);
                             self
                         }
@@ -246,7 +206,7 @@ impl<'a> Generator<'a> {
                         }
 
                         pub fn #set_ident(&mut self, #name: impl Into<#ty>) -> &mut Self {
-                            self.stmt.set_expr(#index, #name.into());
+                            self.stmt.set(#index, #name.into());
                             self
                         }
 
@@ -257,13 +217,13 @@ impl<'a> Generator<'a> {
                     let target_struct_name = self.model_struct_path(rel.target, 0);
 
                     quote! {
-                        pub fn #name(mut self, #name: impl IntoExpr<'a, #target_struct_name>) -> Self {
+                        pub fn #name(mut self, #name: impl IntoExpr<#target_struct_name>) -> Self {
                             self.#set_ident(#name);
                             self
                         }
 
-                        pub fn #set_ident(&mut self, #name: impl IntoExpr<'a, #target_struct_name>) -> &mut Self {
-                            self.stmt.set_expr(#index, #name.into_expr());
+                        pub fn #set_ident(&mut self, #name: impl IntoExpr<#target_struct_name>) -> &mut Self {
+                            self.stmt.set(#index, #name.into_expr());
                             self
                         }
 
@@ -276,13 +236,13 @@ impl<'a> Generator<'a> {
                     let add_ident = ident!("add_{}", singular);
 
                     quote! {
-                        pub fn #singular(mut self, #singular: impl IntoExpr<'a, #target_struct_name>) -> Self {
+                        pub fn #singular(mut self, #singular: impl IntoExpr<#target_struct_name>) -> Self {
                             self.#add_ident(#singular);
                             self
                         }
 
-                        pub fn #add_ident(&mut self, #singular: impl IntoExpr<'a, #target_struct_name>) -> &mut Self {
-                            self.stmt.push_expr(#index, #singular.into_expr());
+                        pub fn #add_ident(&mut self, #singular: impl IntoExpr<#target_struct_name>) -> &mut Self {
+                            self.stmt.insert(#index, #singular.into_expr());
                             self
                         }
                     }
@@ -291,13 +251,13 @@ impl<'a> Generator<'a> {
                     let relation_struct_path = self.field_ty(field, 0);
 
                     quote! {
-                        pub fn #name<'b>(mut self, #name: impl IntoExpr<'a, #relation_struct_path<'b>>) -> Self {
+                        pub fn #name<'b>(mut self, #name: impl IntoExpr<#relation_struct_path<'b>>) -> Self {
                             self.#set_ident(#name);
                             self
                         }
 
-                        pub fn #set_ident<'b>(&mut self, #name: impl IntoExpr<'a, #relation_struct_path<'b>>) -> &mut Self {
-                            self.stmt.set_expr(#index, #name.into_expr());
+                        pub fn #set_ident<'b>(&mut self, #name: impl IntoExpr<#relation_struct_path<'b>>) -> &mut Self {
+                            self.stmt.set(#index, #name.into_expr());
                             self
                         }
 

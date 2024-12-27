@@ -17,6 +17,19 @@ enum Repr {
     String(String),
 }
 
+impl Value {
+    pub const fn is_id(&self) -> bool {
+        matches!(self, Value::Id(_))
+    }
+
+    pub fn into_id(self) -> Id {
+        match self {
+            Value::Id(id) => id,
+            _ => todo!(),
+        }
+    }
+}
+
 impl Id {
     pub fn from_int(model: ModelId, id: u64) -> Id {
         Id {
@@ -53,35 +66,49 @@ impl Id {
         }
     }
 
-    pub fn to_primitive(&self) -> stmt::Value<'_> {
+    pub fn to_primitive(&self) -> stmt::Value {
         match &self.repr {
+            Repr::Int(_) => todo!(),
+            Repr::String(id) => id.clone().into(),
+        }
+    }
+
+    pub fn into_primitive(self) -> stmt::Value {
+        match self.repr {
             Repr::Int(_) => todo!(),
             Repr::String(id) => id.into(),
         }
     }
+
+    pub fn cast(self, ty: &Type) -> Result<Value> {
+        match (self.repr, ty) {
+            (Repr::String(id), Type::String) => Ok(id.into()),
+            (repr, _) => todo!("id={repr:#?}; ty={ty:#?}"),
+        }
+    }
 }
 
-impl<'stmt> From<Id> for Expr<'stmt> {
+impl From<Id> for Expr {
     fn from(value: Id) -> Self {
         Expr::Value(value.into())
     }
 }
 
-impl<'stmt> From<&'stmt Id> for Expr<'stmt> {
-    fn from(value: &'stmt Id) -> Expr<'stmt> {
+impl From<&Id> for Expr {
+    fn from(value: &Id) -> Expr {
         Expr::Value(value.into())
     }
 }
 
-impl<'a> From<&'a Id> for stmt::Value<'a> {
-    fn from(src: &'a Id) -> stmt::Value<'a> {
+impl From<&Id> for stmt::Value {
+    fn from(src: &Id) -> stmt::Value {
         // TODO: probably can avoid cloning if needed
         stmt::Value::Id(src.to_owned())
     }
 }
 
-impl<'a> From<Id> for stmt::Value<'a> {
-    fn from(src: Id) -> stmt::Value<'a> {
+impl From<Id> for stmt::Value {
+    fn from(src: Id) -> stmt::Value {
         stmt::Value::Id(src)
     }
 }

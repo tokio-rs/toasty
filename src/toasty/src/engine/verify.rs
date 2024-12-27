@@ -5,31 +5,29 @@ use toasty_core::{
 
 use super::*;
 
-struct Verify<'stmt> {
-    schema: &'stmt Schema,
+struct Verify<'a> {
+    schema: &'a Schema,
 }
 
-struct VerifyExpr<'stmt> {
-    schema: &'stmt Schema,
+struct VerifyExpr<'a> {
+    schema: &'a Schema,
     model: ModelId,
 }
 
-pub(crate) fn apply<'stmt>(schema: &'stmt Schema, stmt: &Statement<'stmt>) {
+pub(crate) fn apply(schema: &Schema, stmt: &Statement) {
     Verify { schema }.visit(stmt);
 }
 
-impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
-    fn visit_stmt_insert(&mut self, i: &stmt::Insert<'stmt>) {
-        self.visit_stmt_query(&i.scope);
-
+impl stmt::Visit for Verify<'_> {
+    fn visit_stmt_delete(&mut self, i: &stmt::Delete) {
         VerifyExpr {
             schema: self.schema,
-            model: i.scope.body.as_select().source.as_model_id(),
+            model: i.from.as_model_id(),
         }
-        .visit(&i.values);
+        .verify_filter(&i.filter);
     }
 
-    fn visit_stmt_select(&mut self, i: &stmt::Select<'stmt>) {
+    fn visit_stmt_select(&mut self, i: &stmt::Select) {
         VerifyExpr {
             schema: self.schema,
             model: i.source.as_model_id(),
@@ -37,42 +35,26 @@ impl<'stmt> stmt::Visit<'stmt> for Verify<'stmt> {
         .verify_filter(&i.filter);
     }
 
-    fn visit_stmt_update(&mut self, i: &stmt::Update<'stmt>) {
-        self.visit_stmt_query(&i.selection);
-
+    fn visit_stmt_update(&mut self, i: &stmt::Update) {
         // Is not an empty update
-        assert!(!i.fields.is_empty(), "stmt = {i:#?}");
+        assert!(!i.assignments.is_empty(), "stmt = {i:#?}");
 
-        // TODO: VERIFY THIS
+        let mut verify_expr = VerifyExpr {
+            schema: self.schema,
+            model: i.target.as_model_id(),
+        };
 
-        // let model = self.schema.model(stmt.selection.source);
-
-        // TODO: verify this better
-        // self.verify_model_expr_record(model, &*stmt.values);
-
-        /*
-
-        // Verify the update expression matches the type of the field being
-        // updated.
-        for (field_path, expr) in stmt.fields.iter().zip(stmt.values.iter()) {
-            let field = &model.fields[field_path.as_index()];
-            assert!(expr.ty().casts_to(&field.expr_ty()));
-        }
-        */
-    }
-
-    fn visit_expr(&mut self, _i: &stmt::Expr<'stmt>) {
-        panic!("should not reach this point")
+        verify_expr.visit_stmt_update(i);
     }
 }
 
-impl<'stmt> VerifyExpr<'stmt> {
-    fn verify_filter(&mut self, expr: &stmt::Expr<'stmt>) {
+impl VerifyExpr<'_> {
+    fn verify_filter(&mut self, expr: &stmt::Expr) {
         self.assert_bool_expr(expr);
         self.visit(expr);
     }
 
-    fn assert_bool_expr(&self, expr: &stmt::Expr<'stmt>) {
+    fn assert_bool_expr(&self, expr: &stmt::Expr) {
         use stmt::Expr::*;
 
         match expr {
@@ -87,8 +69,8 @@ impl<'stmt> VerifyExpr<'stmt> {
     }
 }
 
-impl<'stmt> stmt::Visit<'stmt> for VerifyExpr<'stmt> {
-    fn visit_expr_and(&mut self, i: &stmt::ExprAnd<'stmt>) {
+impl stmt::Visit for VerifyExpr<'_> {
+    fn visit_expr_and(&mut self, i: &stmt::ExprAnd) {
         stmt::visit::visit_expr_and(self, i);
 
         for expr in &i.operands {
@@ -96,7 +78,7 @@ impl<'stmt> stmt::Visit<'stmt> for VerifyExpr<'stmt> {
         }
     }
 
-    fn visit_expr_or(&mut self, i: &stmt::ExprOr<'stmt>) {
+    fn visit_expr_or(&mut self, i: &stmt::ExprOr) {
         stmt::visit::visit_expr_or(self, i);
 
         for expr in &i.operands {
@@ -109,7 +91,7 @@ impl<'stmt> stmt::Visit<'stmt> for VerifyExpr<'stmt> {
         let _ = i.resolve_field(self.schema, self.schema.model(self.model));
     }
 
-    fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp<'stmt>) {
+    fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         stmt::visit::visit_expr_binary_op(self, i);
 
         /*
@@ -130,7 +112,7 @@ impl<'stmt> stmt::Visit<'stmt> for VerifyExpr<'stmt> {
         */
     }
 
-    fn visit_expr_in_subquery(&mut self, i: &stmt::ExprInSubquery<'stmt>) {
+    fn visit_expr_in_subquery(&mut self, i: &stmt::ExprInSubquery) {
         // stmt::visit::visit_expr_in_subquery(self, i);
 
         // Visit **only** the subquery expression

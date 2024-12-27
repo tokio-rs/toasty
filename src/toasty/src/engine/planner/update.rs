@@ -5,284 +5,172 @@ use super::*;
 // * Queries might mix `insert`, `update`, and `delete`
 // * Since Update may insert, it could trigger the full insertion planning path.
 
-impl<'stmt> Planner<'_, 'stmt> {
+impl Planner<'_> {
     // If the update statement requested the result to be returned, then this
     // method returns the var in which it will be stored.
-    pub(super) fn plan_update(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
+    pub(super) fn plan_update(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
         self.simplify_stmt_update(&mut stmt);
 
-        let model = self.model(stmt.selection.body.as_select().source.as_model_id());
+        let model = self.model(stmt.target.as_model_id());
 
         // Make sure the update statement isn't empty
-        assert!(!stmt.fields.is_empty(), "update must update some columns");
+        assert!(
+            !stmt.assignments.is_empty(),
+            "update must update some columns"
+        );
+
+        let scope = stmt.selection();
 
         // Handle any relation updates
         for (i, field) in model.fields.iter().enumerate() {
-            if !stmt.fields.contains(i) {
+            if !stmt.assignments.contains(i) {
                 continue;
             }
 
-            self.plan_mut_relation_field(field, &mut stmt.expr[i], &stmt.selection, false);
+            let Some(assignment) = stmt.assignments.get_mut(&i) else {
+                continue;
+            };
 
-            // TODO: this should be moved into the above method, but that method
-            // is not well suited right now because it doesn't take in the full
-            // statement.
+            match assignment.op {
+                stmt::AssignmentOp::Set => assert!(!field.ty.is_has_many(), "TODO"),
+                stmt::AssignmentOp::Insert => assert!(field.ty.is_has_many(), "TODO"),
+                stmt::AssignmentOp::Remove => assert!(field.ty.is_has_many(), "TODO"),
+            }
+
+            self.plan_mut_relation_field(field, assignment.op, &mut assignment.expr, &scope, false);
 
             // Map the belongs_to statement to the foreign key fields
             if let FieldTy::BelongsTo(belongs_to) = &field.ty {
-                stmt.fields.unset(i);
-
-                let stmt::Expr::Value(value) = stmt.expr[i].take() else {
+                let stmt::Expr::Value(value) = stmt.assignments.take(i).expr else {
                     todo!()
                 };
 
                 match value {
                     stmt::Value::Null => {
                         for fk_field in &belongs_to.foreign_key.fields {
-                            stmt.fields.insert(fk_field.source);
-                            stmt.expr[fk_field.source.index] = stmt::Expr::null();
+                            stmt.assignments.set(fk_field.source, stmt::Expr::null());
                         }
                     }
                     value => {
                         let [fk_field] = &belongs_to.foreign_key.fields[..] else {
                             todo!("composite keys")
                         };
-                        stmt.fields.insert(fk_field.source);
-                        stmt.expr[fk_field.source.index] = value.into();
+
+                        stmt.assignments.set(fk_field.source, value);
                     }
                 }
             } else if field.is_relation() {
-                stmt.fields.unset(i);
+                stmt.assignments.unset(i);
             }
         }
 
-        self.plan_subqueries(&mut stmt);
+        if stmt.assignments.is_empty() {
+            if stmt.returning.is_none() {
+                return None;
+            }
+
+            let value = stmt::Value::empty_sparse_record();
+            return Some(self.set_var(
+                vec![value],
+                stmt::Type::list(stmt::Type::empty_sparse_record()),
+            ));
+        }
+
+        if !self.capability.is_sql() {
+            // Subqueries are planned before lowering
+            self.plan_subqueries(&mut stmt);
+        }
+
+        self.lower_stmt_update(model, &mut stmt);
 
         if self.capability.is_sql() {
             self.plan_update_sql(stmt)
         } else {
-            self.plan_update_kv(stmt)
+            self.plan_update_kv(model, stmt)
         }
     }
 
-    fn plan_update_sql(&mut self, stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
-        let model = self.model(stmt.selection.body.as_select().source.as_model_id());
-
-        if stmt.fields.is_empty() {
-            if !stmt.returning {
-                return None;
-            }
-
-            // This probably isn't exactly correct because we need to return the
-            // right number of rows matching the selection.
-            let record = stmt::Record::from_vec(vec![stmt::Value::Null; model.fields.len()]);
-            return Some(self.set_var(vec![record.into()]));
-        }
-
-        let sql = self.lower_update_expr(model, &stmt).into();
-
-        let output = if stmt.returning {
-            // TODO: this correct?
-            let mut ty = vec![];
-
-            for updated_field in stmt.fields.iter() {
-                let field = &model.fields[updated_field.into_usize()];
-
-                ty.push(field.ty.expect_primitive().ty.clone());
-            }
-
-            Some(plan::QuerySqlOutput {
-                var: self.var_table.register_var(),
-                ty: stmt::Type::Record(ty),
-                project: eval::Expr::identity(),
-            })
-        } else {
-            None
-        };
+    fn plan_update_sql(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
+        let output = self
+            .partition_maybe_returning(&mut stmt.returning)
+            .map(|project| plan::Output {
+                var: self
+                    .var_table
+                    .register_var(stmt::Type::list(project.ret.clone())),
+                project,
+            });
 
         let output_var = output.as_ref().map(|o| o.var);
 
-        self.push_action(plan::QuerySql {
+        self.push_action(plan::ExecStatement {
             output,
-            input: vec![],
-            sql,
+            input: None,
+            stmt: stmt.into(),
         });
 
         output_var
     }
 
-    fn plan_update_kv(&mut self, mut stmt: stmt::Update<'stmt>) -> Option<plan::VarId> {
-        let model = self.model(stmt.selection.body.as_select().source.as_model_id());
+    fn plan_update_kv(&mut self, model: &Model, mut stmt: stmt::Update) -> Option<plan::VarId> {
         let table = self.schema.table(model.lowering.table);
 
         // Figure out which index to use for the query
-        let mut filter = stmt.selection.body.as_select().filter.clone();
-        let input = self.extract_input(&mut filter, &[], true);
+        // let input = self.extract_input(&mut filter, &[], true);
 
-        let mut index_plan = self.plan_index_path2(model, &filter);
+        let mut index_plan =
+            self.plan_index_path2(table, stmt.filter.as_ref().expect("no filter specified"));
 
-        let mut index_filter = index_plan.index_filter;
-        let index = self.schema.index(index_plan.index.lowering.index);
-        self.lower_index_filter(table, model, index_plan.index, &mut index_filter);
+        assert!(!stmt.assignments.is_empty());
 
-        /*
-         *
-         * ===== Lowering -- TODO: move to lower.rs =====
-         *
-         */
+        let output = self
+            .partition_maybe_returning(&mut stmt.returning)
+            .map(|project| plan::Output {
+                var: self
+                    .var_table
+                    .register_var(stmt::Type::list(project.ret.clone())),
+                project,
+            });
 
-        if let Some(result_filter) = &mut index_plan.result_filter {
-            self.lower_expr2(model, result_filter);
-        }
-
-        let mut columns = vec![];
-        let mut projected = vec![];
-
-        // First, lower each update expression
-        for expr in &mut stmt.expr {
-            self.lower_expr2(model, expr);
-        }
-
-        // TODO: move this to lower?
-        for updated_field in stmt.fields.iter() {
-            let field = &model.fields[updated_field.into_usize()];
-
-            if field.primary_key {
-                todo!("updating PK not supported yet");
-            }
-
-            match &field.ty {
-                FieldTy::Primitive(primitive) => {
-                    let mut lowered = model.lowering.model_to_table[primitive.lowering].clone();
-                    lowered.substitute(&stmt.expr);
-
-                    columns.push(primitive.column);
-                    projected.push(lowered);
-                }
-                _ => {
-                    todo!("field = {:#?}; stmt={:#?}", field, stmt);
-                }
-            }
-        }
-
-        /*
-         *
-         * ===== /Lowering =====
-         *
-         */
-
-        // Nothing to update
-        if columns.is_empty() {
-            if stmt.returning {
-                let var = self.var_table.register_var();
-
-                self.push_action(plan::SetVar {
-                    var,
-                    value: vec![stmt::Record::default().into()],
-                });
-
-                return Some(var);
-            } else {
-                return None;
-            }
-        }
+        let output_var = output.as_ref().map(|o| o.var);
 
         if index_plan.index.primary_key {
-            let Some(key) = self.try_build_key_filter(index, &index_filter) else {
-                todo!("index_filter={:#?}", index_filter);
+            let Some(key) = self.try_build_key_filter(&index_plan.index, &index_plan.index_filter)
+            else {
+                todo!("index_filter={:#?}", index_plan.index_filter);
             };
-
-            debug_assert!(!columns.is_empty());
-            debug_assert_eq!(
-                projected.len(),
-                columns.len(),
-                "projected={projected:?}; columns={columns:?}"
-            );
-
-            let output = if stmt.returning {
-                Some(self.var_table.register_var())
-            } else {
-                None
-            };
-
-            let condition = stmt.condition.map(|mut stmt| {
-                self.lower_expr2(model, &mut stmt);
-                sql::Expr::from_stmt(self.schema, table.id, stmt)
-            });
-
-            let filter = index_plan.result_filter.clone().map(|stmt| {
-                // Was lowered above...
-                // self.lower_expr2(model, &mut stmt);
-                sql::Expr::from_stmt(self.schema, table.id, stmt)
-            });
-
-            let assignments = columns
-                .into_iter()
-                .zip(projected.into_iter())
-                .map(|(column, value)| sql::Assignment {
-                    target: column,
-                    value: sql::Expr::from_stmt(self.schema, table.id, value),
-                })
-                .collect();
 
             self.push_write_action(plan::UpdateByKey {
                 input: None,
                 output,
                 table: model.lowering.table,
-                key,
-                assignments,
-                filter,
-                condition,
+                keys: key,
+                assignments: stmt.assignments,
+                filter: index_plan.result_filter,
+                condition: stmt.condition,
             });
 
-            output
+            output_var
         } else {
             debug_assert!(index_plan.post_filter.is_none());
-
-            // Find existing associations so we can delete them
-            // TODO: leverage select path
-            // TODO: this should be atomic
-            let pk_by_index_out = self.var_table.register_var();
-
-            self.push_action(plan::FindPkByIndex {
-                input,
-                output: pk_by_index_out,
-                table: table.id,
-                index: index_plan.index.lowering.index,
-                filter: sql::Expr::from_stmt(self.schema, table.id, index_filter),
-            });
-
-            let output = if stmt.returning {
-                Some(self.var_table.register_var())
-            } else {
-                None
-            };
-
-            debug_assert!(!columns.is_empty());
+            debug_assert!(!stmt.assignments.is_empty());
             assert!(stmt.condition.is_none());
 
-            let assignments = columns
-                .into_iter()
-                .zip(projected.into_iter())
-                .map(|(column, stmt)| sql::Assignment {
-                    target: column,
-                    value: sql::Expr::from_stmt(self.schema, table.id, stmt),
-                })
-                .collect();
+            // Find existing associations so we can delete them
+            // TODO: this should be atomic
+            let update_by_key_input = self.plan_find_pk_by_index(&mut index_plan, None);
+            let keys = eval::Func::identity(update_by_key_input.project.ret.clone());
 
             self.push_write_action(plan::UpdateByKey {
-                input: Some(pk_by_index_out),
+                input: Some(update_by_key_input),
                 output,
                 table: model.lowering.table,
-                key: eval::Expr::identity(),
-                assignments,
-                filter: index_plan
-                    .result_filter
-                    .map(|stmt| sql::Expr::from_stmt(self.schema, table.id, stmt)),
+                keys,
+                assignments: stmt.assignments,
+                filter: index_plan.result_filter,
                 condition: None,
             });
 
-            output
+            output_var
         }
     }
 }

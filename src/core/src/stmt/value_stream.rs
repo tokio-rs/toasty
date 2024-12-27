@@ -2,83 +2,77 @@ use super::*;
 
 use std::{
     collections::VecDeque,
-    fmt,
-    marker::PhantomData,
-    mem,
+    fmt, mem,
     pin::Pin,
     task::{Context, Poll},
 };
 use tokio_stream::{Stream, StreamExt};
 
-pub struct ValueStream<'stmt> {
-    buffer: Buffer<'stmt>,
-    stream: Option<DynStream<'stmt>>,
+pub struct ValueStream {
+    buffer: Buffer,
+    stream: Option<DynStream>,
 }
 
 #[derive(Debug)]
-struct Iter<'stmt, I> {
+struct Iter<I> {
     iter: I,
-    _m: PhantomData<&'stmt ()>,
 }
 
 #[derive(Clone)]
-enum Buffer<'stmt> {
+enum Buffer {
     Empty,
-    One(Value<'stmt>),
-    Many(VecDeque<Value<'stmt>>),
+    One(Value),
+    Many(VecDeque<Value>),
 }
 
-type DynStream<'stmt> = Pin<Box<dyn Stream<Item = crate::Result<Value<'stmt>>> + Send + 'stmt>>;
+type DynStream = Pin<Box<dyn Stream<Item = crate::Result<Value>> + Send + 'static>>;
 
-impl<'stmt> ValueStream<'stmt> {
-    pub fn new() -> ValueStream<'stmt> {
+impl ValueStream {
+    pub fn new() -> ValueStream {
         ValueStream {
             buffer: Buffer::Empty,
             stream: None,
         }
     }
 
-    pub fn from_value(value: impl Into<Value<'stmt>>) -> ValueStream<'stmt> {
+    pub fn from_value(value: impl Into<Value>) -> ValueStream {
         ValueStream {
             buffer: Buffer::One(value.into()),
             stream: None,
         }
     }
 
-    pub fn from_stream<T: Stream<Item = crate::Result<Value<'stmt>>> + Send + 'stmt>(
+    pub fn from_stream<T: Stream<Item = crate::Result<Value>> + Send + 'static>(
         stream: T,
-    ) -> ValueStream<'stmt> {
+    ) -> ValueStream {
         ValueStream {
             buffer: Buffer::Empty,
             stream: Some(Box::pin(stream)),
         }
     }
 
-    pub fn from_vec(records: Vec<Value<'stmt>>) -> ValueStream<'stmt> {
+    pub fn from_vec(records: Vec<Value>) -> ValueStream {
         ValueStream {
             buffer: Buffer::Many(records.into()),
             stream: None,
         }
     }
 
-    pub fn from_iter<T, I>(iter: I) -> ValueStream<'stmt>
+    pub fn from_iter<T, I>(iter: I) -> ValueStream
     where
-        T: Into<Value<'stmt>>,
-        I: Iterator<Item = crate::Result<T>> + Send + 'stmt,
+        T: Into<Value>,
+        I: Iterator<Item = crate::Result<T>> + Send + 'static,
     {
-        ValueStream::from_stream(Iter {
-            iter,
-            _m: PhantomData,
-        })
+        ValueStream::from_stream(Iter { iter })
     }
 
     /// Returns the next record in the stream
-    pub async fn next(&mut self) -> Option<crate::Result<Value<'stmt>>> {
+    pub async fn next(&mut self) -> Option<crate::Result<Value>> {
         StreamExt::next(self).await
     }
 
     /// Peek at the next record in the stream
-    pub async fn peek(&mut self) -> Option<crate::Result<&Value<'stmt>>> {
+    pub async fn peek(&mut self) -> Option<crate::Result<&Value>> {
         if self.buffer.is_empty() {
             match self.next().await {
                 Some(Ok(value)) => self.buffer.push(value),
@@ -106,7 +100,7 @@ impl<'stmt> ValueStream<'stmt> {
         ret
     }
 
-    pub async fn collect(mut self) -> crate::Result<Vec<Value<'stmt>>> {
+    pub async fn collect(mut self) -> crate::Result<Vec<Value>> {
         let mut ret = Vec::with_capacity(self.min_len());
 
         while let Some(res) = self.next().await {
@@ -116,22 +110,7 @@ impl<'stmt> ValueStream<'stmt> {
         Ok(ret)
     }
 
-    pub async fn collect_records(mut self) -> crate::Result<Vec<Record<'stmt>>> {
-        let mut ret = Vec::with_capacity(self.min_len());
-
-        while let Some(res) = self.next().await {
-            let value = res?;
-
-            ret.push(match value {
-                Value::Record(record) => record.into_owned(),
-                value => Record::from_vec(vec![value]),
-            });
-        }
-
-        Ok(ret)
-    }
-
-    pub async fn dup(&mut self) -> crate::Result<ValueStream<'stmt>> {
+    pub async fn dup(&mut self) -> crate::Result<ValueStream> {
         self.buffer().await?;
 
         Ok(ValueStream {
@@ -151,22 +130,20 @@ impl<'stmt> ValueStream<'stmt> {
         Ok(())
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Value<'stmt>> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Value> {
         assert!(self.stream.is_none());
 
         // TODO: don't box
         match &mut self.buffer {
             Buffer::Empty => Box::new(None.into_iter()),
             Buffer::One(v) => Box::new(Some(v).into_iter()),
-            Buffer::Many(v) => {
-                Box::new(v.iter_mut()) as Box<dyn Iterator<Item = &mut Value<'stmt>>>
-            }
+            Buffer::Many(v) => Box::new(v.iter_mut()) as Box<dyn Iterator<Item = &mut Value>>,
         }
     }
 }
 
-impl<'stmt> Stream for ValueStream<'stmt> {
-    type Item = crate::Result<Value<'stmt>>;
+impl Stream for ValueStream {
+    type Item = crate::Result<Value>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Some(next) = self.buffer.next() {
@@ -196,8 +173,8 @@ impl<'stmt> Stream for ValueStream<'stmt> {
     }
 }
 
-impl<'stmt> From<Value<'stmt>> for ValueStream<'stmt> {
-    fn from(src: Value<'stmt>) -> ValueStream<'stmt> {
+impl From<Value> for ValueStream {
+    fn from(src: Value) -> ValueStream {
         ValueStream {
             buffer: Buffer::One(src),
             stream: None,
@@ -205,20 +182,20 @@ impl<'stmt> From<Value<'stmt>> for ValueStream<'stmt> {
     }
 }
 
-impl<'stmt> From<Vec<Value<'stmt>>> for ValueStream<'stmt> {
-    fn from(value: Vec<Value<'stmt>>) -> Self {
+impl From<Vec<Value>> for ValueStream {
+    fn from(value: Vec<Value>) -> Self {
         ValueStream::from_vec(value)
     }
 }
 
-impl<'stmt, I> Unpin for Iter<'stmt, I> {}
+impl<I> Unpin for Iter<I> {}
 
-impl<'stmt, T, I> Stream for Iter<'stmt, I>
+impl<T, I> Stream for Iter<I>
 where
     I: Iterator<Item = crate::Result<T>>,
-    T: Into<Value<'stmt>>,
+    T: Into<Value>,
 {
-    type Item = crate::Result<Value<'stmt>>;
+    type Item = crate::Result<Value>;
 
     fn poll_next(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         Poll::Ready(self.iter.next().map(|res| res.map(|item| item.into())))
@@ -229,13 +206,13 @@ where
     }
 }
 
-impl<'stmt> fmt::Debug for ValueStream<'stmt> {
+impl fmt::Debug for ValueStream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RecordStream").finish()
     }
 }
 
-impl<'stmt> Buffer<'stmt> {
+impl Buffer {
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -248,7 +225,7 @@ impl<'stmt> Buffer<'stmt> {
         }
     }
 
-    fn first(&self) -> Option<&Value<'stmt>> {
+    fn first(&self) -> Option<&Value> {
         match self {
             Buffer::Empty => None,
             Buffer::One(value) => Some(value),
@@ -256,7 +233,7 @@ impl<'stmt> Buffer<'stmt> {
         }
     }
 
-    fn next(&mut self) -> Option<Value<'stmt>> {
+    fn next(&mut self) -> Option<Value> {
         match self {
             Buffer::Empty => None,
             Buffer::One(_) => {
@@ -269,7 +246,7 @@ impl<'stmt> Buffer<'stmt> {
         }
     }
 
-    fn push(&mut self, value: Value<'stmt>) {
+    fn push(&mut self, value: Value) {
         match self {
             Buffer::Empty => {
                 *self = Buffer::One(value);
@@ -293,7 +270,7 @@ impl<'stmt> Buffer<'stmt> {
     }
 }
 
-impl<'stmt> Default for Buffer<'stmt> {
+impl Default for Buffer {
     fn default() -> Self {
         Buffer::Empty
     }

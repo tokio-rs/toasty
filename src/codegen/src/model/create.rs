@@ -8,40 +8,40 @@ impl<'a> Generator<'a> {
 
         quote! {
             #[derive(Debug)]
-            pub struct #create_struct_name<'a> {
-                pub(super) stmt: stmt::Insert<'a, #struct_name>,
+            pub struct #create_struct_name {
+                pub(super) stmt: stmt::Insert<#struct_name>,
             }
 
-            impl<'a> #create_struct_name<'a> {
+            impl #create_struct_name {
                 #create_methods
 
-                pub async fn exec(self, db: &'a Db) -> Result<#struct_name> {
-                    db.exec_insert_one::<#struct_name>(self.stmt).await
+                pub async fn exec(self, db: &Db) -> Result<#struct_name> {
+                    db.exec_insert_one(self.stmt).await
                 }
             }
 
-            impl<'a> IntoInsert<'a> for #create_struct_name<'a> {
+            impl IntoInsert for #create_struct_name {
                 type Model = #struct_name;
 
-                fn into_insert(self) -> stmt::Insert<'a, #struct_name> {
+                fn into_insert(self) -> stmt::Insert<#struct_name> {
                     self.stmt
                 }
             }
 
-            impl<'a> IntoExpr<'a, #struct_name> for #create_struct_name<'a> {
-                fn into_expr(self) -> stmt::Expr<'a, #struct_name> {
+            impl IntoExpr<#struct_name> for #create_struct_name {
+                fn into_expr(self) -> stmt::Expr<#struct_name> {
                     self.stmt.into()
                 }
             }
 
-            impl<'a> IntoExpr<'a, [#struct_name]> for #create_struct_name<'a> {
-                fn into_expr(self) -> stmt::Expr<'a, [#struct_name]> {
+            impl IntoExpr<[#struct_name]> for #create_struct_name {
+                fn into_expr(self) -> stmt::Expr<[#struct_name]> {
                     self.stmt.into_list_expr()
                 }
             }
 
-            impl<'a> Default for #create_struct_name<'a> {
-                fn default() -> #create_struct_name<'a> {
+            impl Default for #create_struct_name {
+                fn default() -> #create_struct_name {
                     #create_struct_name {
                         stmt: stmt::Insert::blank(),
                     }
@@ -76,8 +76,8 @@ impl<'a> Generator<'a> {
                     let target_struct_name = self.model_struct_path(rel.target, 0);
 
                     quote! {
-                        pub fn #singular(mut self, #singular: impl IntoExpr<'a, #target_struct_name>) -> Self {
-                            self.stmt.push_expr(#index, #singular.into_expr());
+                        pub fn #singular(mut self, #singular: impl IntoExpr<#target_struct_name>) -> Self {
+                            self.stmt.insert(#index, #singular.into_expr());
                             self
                         }
                     }
@@ -86,8 +86,8 @@ impl<'a> Generator<'a> {
                     let target_struct_name = self.model_struct_path(rel.target, 0);
 
                     quote! {
-                        pub fn #name(mut self, #name: impl IntoExpr<'a, #target_struct_name>) -> Self {
-                            self.stmt.set_expr(#index, #name.into_expr());
+                        pub fn #name(mut self, #name: impl IntoExpr<#target_struct_name>) -> Self {
+                            self.stmt.set(#index, #name.into_expr());
                             self
                         }
                     }
@@ -96,8 +96,8 @@ impl<'a> Generator<'a> {
                     let relation_struct_path = self.field_ty(field, 0);
 
                     quote! {
-                        pub fn #name<'b>(mut self, #name: impl IntoExpr<'a, #relation_struct_path<'b>>) -> Self {
-                            self.stmt.set_expr(#index, #name.into_expr());
+                        pub fn #name<'b>(mut self, #name: impl IntoExpr<#relation_struct_path<'b>>) -> Self {
+                            self.stmt.set(#index, #name.into_expr());
                             self
                         }
                     }
@@ -108,7 +108,7 @@ impl<'a> Generator<'a> {
 
                     quote! {
                         pub fn #name(mut self, #name: #ty) -> Self {
-                            self.stmt.set_value(#index, #name.into());
+                            self.stmt.set(#index, #name.into());
                             self
                         }
                     }

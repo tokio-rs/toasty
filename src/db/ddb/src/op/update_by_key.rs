@@ -1,11 +1,11 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_update_by_key<'a>(
+    pub(crate) async fn exec_update_by_key(
         &self,
         schema: &schema::Schema,
-        op: operation::UpdateByKey<'a>,
-    ) -> Result<stmt::ValueStream<'a>> {
+        op: operation::UpdateByKey,
+    ) -> Result<Response> {
         let table = schema.table(op.table);
 
         let mut expr_attrs = ExprAttrs::default();
@@ -17,9 +17,7 @@ impl DynamoDB {
                 if !index.primary_key && index.unique {
                     index.columns.iter().any(|index_column| {
                         let column = index_column.table_column(schema);
-                        op.assignments
-                            .iter()
-                            .any(|assignment| assignment.target == column.id)
+                        op.assignments.keys().any(|index| index == column.id.index)
                     })
                 } else {
                     false
@@ -42,17 +40,15 @@ impl DynamoDB {
         let mut update_expression_remove = String::new();
         let mut ret = vec![];
 
-        for assignment in &op.assignments {
-            let value = match &assignment.value {
-                sql::Expr::Value(value) => value,
-                _ => todo!("assignment = {:#?}", assignment),
+        for (index, assignment) in op.assignments.iter() {
+            let value = match &assignment.expr {
+                stmt::Expr::Value(value) => value,
+                _ => todo!("op = {:#?}", op),
             };
 
             ret.push(value.clone());
 
-            let column = expr_attrs
-                .column(schema.column(assignment.target))
-                .to_string();
+            let column = expr_attrs.column(&table.columns[index]).to_string();
 
             if value.is_null() {
                 if !update_expression_remove.is_empty() {
@@ -124,7 +120,11 @@ impl DynamoDB {
                                     return Ok(stmt::ValueStream::new());
                                 }
                                 */
-                                return Ok(stmt::ValueStream::new());
+                                return if op.returning {
+                                    Ok(Response::empty_value_stream())
+                                } else {
+                                    Ok(Response::from_count(0))
+                                };
                             }
 
                             // At this point, there should be a condition
@@ -221,10 +221,12 @@ impl DynamoDB {
                 for index_column in &index.columns {
                     let column = index_column.table_column(schema);
 
-                    for assignment in &op.assignments {
-                        if column.id == assignment.target {
+                    for (index, assignment) in op.assignments.iter() {
+                        if column.id.index == index {
                             if let Some(prev) = curr_unique_values.remove(&column.name) {
-                                let value = assignment.value.as_value();
+                                let stmt::Expr::Value(value) = &assignment.expr else {
+                                    todo!()
+                                };
 
                                 // TODO: this probably could be made cheaper if needed
                                 if ddb_to_val(&column.ty, &prev) != *value {
@@ -306,13 +308,15 @@ impl DynamoDB {
 
                         for index_column in &index.columns {
                             let column = index_column.table_column(schema);
-                            let assignment = op
+                            let (_, assignment) = op
                                 .assignments
                                 .iter()
-                                .find(|assignment| *column_id == assignment.target)
+                                .find(|(index, _)| column_id.index == *index)
                                 .unwrap();
 
-                            let value = assignment.value.as_value();
+                            let stmt::Expr::Value(value) = &assignment.expr else {
+                                todo!()
+                            };
 
                             if !value.is_null() {
                                 index_insert_items.insert(column.name.clone(), ddb_val(value));
@@ -375,9 +379,10 @@ impl DynamoDB {
 
         // If we get here, then returning should be false
         Ok(if op.returning {
-            stmt::ValueStream::from_value(stmt::Record::from_vec(ret))
+            let values = stmt::ValueStream::from_value(stmt::Value::record_from_vec(ret));
+            Response::from_value_stream(values)
         } else {
-            stmt::ValueStream::new()
+            Response::from_count(ret.len())
         })
     }
 }

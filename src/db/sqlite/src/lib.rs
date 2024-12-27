@@ -1,6 +1,6 @@
 use toasty_core::{
-    driver::{operation::Operation, Capability, Driver},
-    schema, sql, stmt, Schema,
+    driver::{operation::Operation, Capability, Driver, Response},
+    schema, stmt, Schema,
 };
 
 use anyhow::Result;
@@ -40,46 +40,70 @@ impl Driver for Sqlite {
         Ok(())
     }
 
-    async fn exec<'stmt>(
-        &self,
-        schema: &Schema,
-        op: Operation<'stmt>,
-    ) -> Result<stmt::ValueStream<'stmt>> {
+    async fn exec(&self, schema: &Schema, op: Operation) -> Result<Response> {
         use Operation::*;
 
         let connection = self.connection.lock().unwrap();
 
-        let sql;
-        let ty;
-
-        match &op {
-            QuerySql(op) => {
-                sql = &op.stmt;
-                ty = op.ty.as_ref();
-            }
-            Insert(op) => {
-                sql = op;
-                ty = None;
-            }
+        let mut sql = match op {
+            QuerySql(op) => op.stmt,
+            Insert(op) => op,
             _ => todo!(),
-        }
+        };
+
+        // SQL doesn't handle pre-condition. This should be moved into toasty's planner.
+        let pre_condition = match &mut sql {
+            stmt::Statement::Update(update) => {
+                if let Some(condition) = update.condition.take() {
+                    update.filter = Some(match update.filter.take() {
+                        Some(filter) => stmt::Expr::and(filter, condition),
+                        None => condition,
+                    });
+
+                    assert!(update.returning.is_none());
+
+                    update.returning = Some(stmt::Returning::Expr(stmt::Expr::record([true])));
+
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
 
         let mut params = vec![];
-        let sql_str = sql.to_sql_string(schema, &mut params);
+        let sql_str = stmt::sql::Serializer::new(schema).serialize_stmt(&sql, &mut params);
 
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
-        if ty.is_none() {
-            let exec = !matches!(sql, sql::Statement::Update(u) if u.pre_condition.is_some());
-
-            if exec {
-                stmt.execute(rusqlite::params_from_iter(
-                    params.iter().map(value_from_param),
-                ))
-                .unwrap();
-
-                return Ok(stmt::ValueStream::new());
+        let width = match &sql {
+            stmt::Statement::Query(stmt) => match &*stmt.body {
+                stmt::ExprSet::Select(stmt) => Some(stmt.returning.as_expr().as_record().len()),
+                _ => todo!(),
+            },
+            stmt::Statement::Insert(stmt) => stmt
+                .returning
+                .as_ref()
+                .map(|returning| returning.as_expr().as_record().len()),
+            stmt::Statement::Delete(stmt) => stmt
+                .returning
+                .as_ref()
+                .map(|returning| returning.as_expr().as_record().len()),
+            stmt::Statement::Update(stmt) => {
+                assert!(stmt.condition.is_none(), "stmt={stmt:#?}");
+                stmt.returning
+                    .as_ref()
+                    .map(|returning| returning.as_expr().as_record().len())
             }
+        };
+
+        if width.is_none() {
+            let count = stmt.execute(rusqlite::params_from_iter(
+                params.iter().map(value_from_param),
+            ))?;
+
+            return Ok(Response::from_count(count));
         }
 
         let mut rows = stmt
@@ -88,29 +112,20 @@ impl Driver for Sqlite {
             ))
             .unwrap();
 
-        let ty = match ty {
-            Some(ty) => ty,
-            None => &stmt::Type::Bool,
-        };
-
         let mut ret = vec![];
 
         loop {
             match rows.next() {
                 Ok(Some(row)) => {
-                    if let stmt::Type::Record(tys) = ty {
-                        let mut items = vec![];
+                    let mut items = vec![];
 
-                        for (index, ty) in tys.iter().enumerate() {
-                            items.push(load(row, index, ty));
-                        }
+                    let width = width.unwrap();
 
-                        ret.push(stmt::Record::from_vec(items).into());
-                    } else if let stmt::Type::Bool = ty {
-                        ret.push(stmt::Record::from_vec(vec![]).into());
-                    } else {
-                        todo!()
+                    for index in 0..width {
+                        items.push(load(row, index));
                     }
+
+                    ret.push(stmt::ValueRecord::from_vec(items).into());
                 }
                 Ok(None) => break,
                 Err(err) => {
@@ -120,17 +135,21 @@ impl Driver for Sqlite {
         }
 
         // Some special handling
-        if let sql::Statement::Update(update) = sql {
-            if update.pre_condition.is_some() && ret.is_empty() {
-                // Just assume the precondition failed here... we will
-                // need to make this transactional later.
-                anyhow::bail!("pre condition failed");
-            } else if update.returning.is_none() {
-                return Ok(stmt::ValueStream::new());
+        if sql.is_update() {
+            if pre_condition {
+                if ret.is_empty() {
+                    // Just assume the precondition failed here... we will
+                    // need to make this transactional later.
+                    anyhow::bail!("pre condition failed");
+                } else {
+                    return Ok(Response::from_count(ret.len()));
+                }
             }
         }
 
-        Ok(stmt::ValueStream::from_vec(ret))
+        Ok(Response::from_value_stream(stmt::ValueStream::from_vec(
+            ret,
+        )))
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
@@ -147,7 +166,7 @@ impl Sqlite {
         let connection = self.connection.lock().unwrap();
 
         let mut params = vec![];
-        let stmt = sql::Statement::create_table(table).to_sql_string(schema, &mut params);
+        let stmt = stmt::sql::Statement::create_table(table).serialize(schema, &mut params);
         assert!(params.is_empty());
 
         connection.execute(&stmt, [])?;
@@ -159,7 +178,7 @@ impl Sqlite {
                 continue;
             }
 
-            let stmt = sql::Statement::create_index(index).to_sql_string(schema, &mut params);
+            let stmt = stmt::sql::Statement::create_index(index).serialize(schema, &mut params);
             assert!(params.is_empty());
 
             connection.execute(&stmt, [])?;
@@ -177,11 +196,13 @@ enum V {
     Id(usize, String),
 }
 
-fn value_from_param<'a>(value: &'a stmt::Value<'a>) -> rusqlite::types::ToSqlOutput<'a> {
+fn value_from_param<'a>(value: &'a stmt::Value) -> rusqlite::types::ToSqlOutput<'a> {
     use rusqlite::types::{ToSqlOutput, Value, ValueRef};
     use stmt::Value::*;
 
     match value {
+        Bool(true) => ToSqlOutput::Owned(Value::Integer(1)),
+        Bool(false) => ToSqlOutput::Owned(Value::Integer(0)),
         Id(v) => ToSqlOutput::Owned(v.to_string().into()),
         I64(v) => ToSqlOutput::Owned(Value::Integer(*v)),
         String(v) => ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes())),
@@ -209,66 +230,16 @@ fn value_from_param<'a>(value: &'a stmt::Value<'a>) -> rusqlite::types::ToSqlOut
     }
 }
 
-fn load<'stmt>(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt::Value<'stmt> {
-    use std::borrow::Cow;
+fn load(row: &rusqlite::Row, index: usize) -> stmt::Value {
+    use rusqlite::types::Value as SqlValue;
 
-    match ty {
-        stmt::Type::Id(mid) => {
-            let s: Option<String> = row.get(index).unwrap();
-            match s {
-                Some(s) => stmt::Id::from_string(*mid, s).into(),
-                None => stmt::Value::Null,
-            }
-        }
-        stmt::Type::String => {
-            let s: Option<String> = row.get(index).unwrap();
-            match s {
-                Some(s) => stmt::Value::String(Cow::Owned(s)),
-                None => stmt::Value::Null,
-            }
-        }
-        stmt::Type::I64 => {
-            let s: Option<i64> = row.get(index).unwrap();
-            match s {
-                Some(s) => stmt::Value::I64(s),
-                None => stmt::Value::Null,
-            }
-        }
-        stmt::Type::Enum(..) => {
-            let s: Option<String> = row.get(index).unwrap();
+    let value: Option<SqlValue> = row.get(index).unwrap();
 
-            match s {
-                Some(s) => {
-                    let (variant, rest) = s.split_once("#").unwrap();
-                    let variant: usize = variant.parse().unwrap();
-                    let v: V = serde_json::from_str(rest).unwrap();
-                    let value = match v {
-                        V::Bool(v) => stmt::Value::Bool(v),
-                        V::Null => stmt::Value::Null,
-                        V::String(v) => stmt::Value::String(v.into()),
-                        V::Id(model, v) => {
-                            stmt::Value::Id(stmt::Id::from_string(schema::ModelId(model), v))
-                        }
-                        V::I64(v) => stmt::Value::I64(v),
-                    };
-
-                    if value.is_null() {
-                        stmt::ValueEnum {
-                            variant,
-                            fields: stmt::Record::from_vec(vec![]),
-                        }
-                        .into()
-                    } else {
-                        stmt::ValueEnum {
-                            variant,
-                            fields: stmt::Record::from_vec(vec![value]),
-                        }
-                        .into()
-                    }
-                }
-                None => stmt::Value::Null,
-            }
-        }
-        ty => todo!("column.ty = {:#?}", ty),
+    match value {
+        Some(SqlValue::Null) => stmt::Value::Null,
+        Some(SqlValue::Integer(value)) => stmt::Value::I64(value),
+        Some(SqlValue::Text(value)) => stmt::Value::String(value.into()),
+        None => stmt::Value::Null,
+        _ => todo!("value={value:#?}"),
     }
 }

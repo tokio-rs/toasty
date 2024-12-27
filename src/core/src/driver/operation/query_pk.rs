@@ -1,12 +1,9 @@
 use super::*;
 
-use crate::{
-    schema::{ColumnId, TableId},
-    sql,
-};
+use crate::schema::{ColumnId, TableId};
 
 #[derive(Debug)]
-pub struct QueryPk<'stmt> {
+pub struct QueryPk {
     /// Table to query
     pub table: TableId,
 
@@ -14,15 +11,15 @@ pub struct QueryPk<'stmt> {
     pub select: Vec<ColumnId>,
 
     /// How to filter the index.
-    pub pk_filter: sql::Expr<'stmt>,
+    pub pk_filter: stmt::Expr,
 
     /// Additional filtering done on the result before returning it to the
     /// caller.
-    pub filter: Option<sql::Expr<'stmt>>,
+    pub filter: Option<stmt::Expr>,
 }
 
-impl<'stmt> From<QueryPk<'stmt>> for Operation<'stmt> {
-    fn from(value: QueryPk<'stmt>) -> Self {
+impl From<QueryPk> for Operation {
+    fn from(value: QueryPk) -> Self {
         Operation::QueryPk(value)
     }
 }

@@ -2,44 +2,33 @@ use super::*;
 
 use std::{fmt, marker::PhantomData};
 
-pub struct Insert<'a, M: ?Sized> {
-    pub(crate) untyped: stmt::Insert<'a>,
+pub struct Insert<M: ?Sized> {
+    pub(crate) untyped: stmt::Insert,
     _p: PhantomData<M>,
 }
 
-impl<'a, M: Model> Insert<'a, M> {
-    pub fn new<S>(scope: S, records: Vec<stmt::Expr<'a>>) -> Insert<'a, M>
-    where
-        S: IntoSelect<'a, Model = M>,
-    {
-        Insert {
-            untyped: stmt::Insert {
-                scope: scope.into_select().untyped,
-                values: stmt::ExprRecord::from_vec(records).into(),
-                returning: Some(stmt::Returning::Star),
-            },
-            _p: PhantomData,
-        }
-    }
-
+impl<M: Model> Insert<M> {
     /// Create an insertion statement that inserts an empty record (all fields are null).
     ///
     /// This insertion statement is not guaranteed to be valid.
-    pub fn blank() -> Insert<'a, M> {
+    ///
+    /// TODO: rename `new`?
+    pub fn blank() -> Insert<M> {
         Insert {
             untyped: stmt::Insert {
-                scope: stmt::Query::filter(M::ID, true),
-                values: stmt::ExprRecord::from_vec(vec![stmt::Expr::record(
-                    std::iter::repeat(stmt::Expr::null()).take(M::FIELD_COUNT),
-                )])
-                .into(),
+                target: stmt::InsertTarget::Model(M::ID),
+                source: stmt::Query {
+                    body: Box::new(stmt::ExprSet::Values(stmt::Values::new(vec![
+                        stmt::ExprRecord::from_vec(vec![]).into(),
+                    ]))),
+                },
                 returning: Some(stmt::Returning::Star),
             },
             _p: PhantomData,
         }
     }
 
-    pub const fn from_untyped(untyped: stmt::Insert<'a>) -> Insert<'a, M> {
+    pub const fn from_untyped(untyped: stmt::Insert) -> Insert<M> {
         Insert {
             untyped,
             _p: PhantomData,
@@ -49,43 +38,57 @@ impl<'a, M: Model> Insert<'a, M> {
     /// Set the scope of the insert.
     pub fn set_scope<S>(&mut self, scope: S)
     where
-        S: IntoSelect<'a, Model = M>,
+        S: IntoSelect<Model = M>,
     {
-        self.untyped.scope = scope.into_select().untyped;
+        self.untyped.target = stmt::InsertTarget::Scope(scope.into_select().untyped);
     }
 
-    /// Set a record value for the last record in the statement
-    pub fn set_value(&mut self, field: usize, value: impl Into<stmt::Value<'a>>) {
-        self.current_mut()[field] = stmt::Expr::Value(value.into());
-    }
-
-    pub fn set_expr(&mut self, field: usize, expr: impl Into<stmt::Expr<'a>>) {
-        self.current_mut()[field] = expr.into();
+    pub fn set(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+        *self.expr_mut(field) = expr.into();
     }
 
     /// Extend the expression for `field` with the given expression
-    pub fn push_expr(&mut self, field: usize, expr: impl Into<stmt::Expr<'a>>) {
-        self.current_mut()[field].push(expr);
+    pub fn insert(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+        // self.expr_mut(field).push(expr);
+        let target = self.expr_mut(field);
+
+        match target {
+            stmt::Expr::Value(stmt::Value::Null) => {
+                *target = stmt::Expr::list_from_vec(vec![expr.into()]);
+            }
+            stmt::Expr::List(expr_list) => {
+                expr_list.items.push(expr.into());
+            }
+            _ => todo!("existing={target:#?}; expr={:#?}", expr.into()),
+        }
     }
 
-    pub(crate) fn merge(&mut self, stmt: Insert<'a, M>) {
+    pub(crate) fn merge(&mut self, stmt: Insert<M>) {
         self.untyped.merge(stmt.untyped);
     }
 
-    /// Returns the current record being updated
-    fn current_mut(&mut self) -> &mut stmt::ExprRecord<'a> {
-        let stmt::Expr::Record(expr_record) = &mut self.untyped.values else {
-            todo!()
-        };
-        expr_record.last_mut().unwrap().as_record_mut()
+    fn expr_mut(&mut self, field: usize) -> &mut stmt::Expr {
+        let row = self.current_mut();
+
+        while row.fields.len() <= field {
+            row.fields.push(stmt::Expr::default());
+        }
+
+        &mut row[field]
     }
 
-    pub fn into_list_expr(self) -> Expr<'a, [M]> {
+    /// Returns the current record being updated
+    fn current_mut(&mut self) -> &mut stmt::ExprRecord {
+        let values = self.untyped.source.body.as_values_mut();
+        values.rows.last_mut().unwrap().as_record_mut()
+    }
+
+    pub fn into_list_expr(self) -> Expr<[M]> {
         Expr::from_untyped(stmt::Expr::Stmt(self.untyped.into()))
     }
 }
 
-impl<M> Clone for Insert<'_, M> {
+impl<M> Clone for Insert<M> {
     fn clone(&self) -> Self {
         Insert {
             untyped: self.untyped.clone(),
@@ -94,19 +97,19 @@ impl<M> Clone for Insert<'_, M> {
     }
 }
 
-impl<'a, M> From<Insert<'a, M>> for stmt::Expr<'a> {
-    fn from(value: Insert<'a, M>) -> Self {
+impl<M> From<Insert<M>> for stmt::Expr {
+    fn from(value: Insert<M>) -> Self {
         stmt::ExprStmt::new(value.untyped).into()
     }
 }
 
-impl<'a, M> From<Insert<'a, [M]>> for stmt::Expr<'a> {
-    fn from(value: Insert<'a, [M]>) -> Self {
+impl<M> From<Insert<[M]>> for stmt::Expr {
+    fn from(value: Insert<[M]>) -> Self {
         stmt::ExprStmt::new(value.untyped).into()
     }
 }
 
-impl<'a, M> fmt::Debug for Insert<'a, M> {
+impl<M> fmt::Debug for Insert<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.untyped.fmt(f)
     }

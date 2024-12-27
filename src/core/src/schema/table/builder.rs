@@ -25,9 +25,9 @@ struct LowerModels<'a> {
 struct ModelLoweringBuilder<'a> {
     table: &'a mut Table,
     lowering_columns: Vec<ColumnId>,
-    model_to_table: Vec<stmt::Expr<'static>>,
-    model_pk_to_table: Vec<stmt::Expr<'static>>,
-    table_to_model: Vec<stmt::Expr<'static>>,
+    model_to_table: Vec<stmt::Expr>,
+    model_pk_to_table: Vec<stmt::Expr>,
+    table_to_model: Vec<stmt::Expr>,
 }
 
 impl<'a> LowerModels<'a> {
@@ -55,6 +55,13 @@ impl<'a> LowerModels<'a> {
             self.lower_model_fields(model);
         }
 
+        // Hax
+        for column in &mut self.table.columns {
+            if let stmt::Type::Enum(_) = column.ty {
+                column.ty = stmt::Type::String;
+            }
+        }
+
         self.update_index_names();
     }
 
@@ -71,12 +78,30 @@ impl<'a> LowerModels<'a> {
                 index: i,
             };
 
+            let mut scope = None;
+
+            for model in &*models {
+                let pk_index = &model.indices[0];
+                assert!(pk_index.primary_key);
+
+                let Some(pk_field) = pk_index.fields.get(i) else {
+                    continue;
+                };
+
+                match scope {
+                    None => scope = Some(pk_field.scope),
+                    Some(scope) => {
+                        assert_eq!(scope, pk_field.scope);
+                    }
+                }
+            }
+
             self.table.primary_key.columns.push(column_id);
             self.table.indices[0].columns.push(IndexColumn {
                 column: column_id,
                 // TODO: we don't actually know what the columns will be yet...
                 op: IndexOp::Eq,
-                scope: IndexScope::Partition,
+                scope: scope.unwrap(),
             });
         }
     }
@@ -172,7 +197,7 @@ impl<'a> LowerModels<'a> {
                 // TODO: null probably isn't the right type... maybe `ty` should
                 // be Option<Type> if we don't know what it is yet.
                 let ty = match ty {
-                    Some(ty) => ty,
+                    Some(ty) => stmt_ty_to_table(ty),
                     None => {
                         let mut ty_enum = stmt::TypeEnum::default();
                         ty_enum.insert_variant();
@@ -298,7 +323,7 @@ impl<'a> LowerModels<'a> {
                 index: self.table.columns.len(),
             },
             name,
-            ty: primitive.ty.clone(),
+            ty: stmt_ty_to_table(primitive.ty.clone()),
             nullable,
             primary_key: false,
         };
@@ -330,13 +355,9 @@ impl<'a> ModelLoweringBuilder<'a> {
                     .unwrap();
 
                 self.lowering_columns.push(*pk);
-                self.model_to_table.push(
-                    stmt::ExprEnum {
-                        variant: variant.discriminant,
-                        fields: stmt::ExprRecord::from_vec(vec![]),
-                    }
-                    .into(),
-                );
+                // TODO: this should not be hard coded
+                self.model_to_table
+                    .push(format!("{}#", variant.discriminant).into());
             }
         }
 
@@ -384,7 +405,7 @@ impl<'a> ModelLoweringBuilder<'a> {
                 };
 
                 for (i, field_id) in model.primary_key.fields.iter().enumerate() {
-                    if field_id.index == step.into_usize() {
+                    if field_id.index == *step {
                         let mut p = projection.clone();
                         p[0] = i.into();
 
@@ -407,10 +428,8 @@ impl<'a> ModelLoweringBuilder<'a> {
         model.lowering.model_to_table = stmt::ExprRecord::from_vec(self.model_to_table);
         model.lowering.table_to_model = stmt::ExprRecord::from_vec(self.table_to_model);
         model.lowering.model_pk_to_table = if self.model_pk_to_table.len() == 1 {
-            let mut expr = self.model_pk_to_table.into_iter().next().unwrap();
-
-            // Lower the projection to trim off the front
-            expr.project_self(1);
+            let expr = self.model_pk_to_table.into_iter().next().unwrap();
+            debug_assert!(expr.is_field() || expr.is_cast(), "expr={:#?}", expr);
             expr
         } else {
             stmt::ExprRecord::from_vec(self.model_pk_to_table).into()
@@ -429,11 +448,7 @@ impl<'a> ModelLoweringBuilder<'a> {
         }
     }
 
-    fn map_primitive(
-        &mut self,
-        expr: impl Into<stmt::Expr<'static>>,
-        primitive: &mut FieldPrimitive,
-    ) {
+    fn map_primitive(&mut self, expr: impl Into<stmt::Expr>, primitive: &mut FieldPrimitive) {
         let lowering = self.encode_column(primitive.column, &primitive.ty, expr);
         primitive.lowering = self.model_to_table.len();
 
@@ -445,69 +460,71 @@ impl<'a> ModelLoweringBuilder<'a> {
         &self,
         column_id: ColumnId,
         ty: &stmt::Type,
-        expr: impl Into<stmt::Expr<'static>>,
-    ) -> stmt::Expr<'static> {
+        expr: impl Into<stmt::Expr>,
+    ) -> stmt::Expr {
         let expr = expr.into();
         let column = self.table.column(column_id);
 
         assert_ne!(stmt::Type::Null, *ty);
 
-        if column.ty == *ty {
-            expr
-        } else {
-            match &column.ty {
-                stmt::Type::Enum(ty_enum) => {
-                    let variant = ty_enum
-                        .variants
-                        .iter()
-                        .find(|variant| match &variant.fields[..] {
-                            [field_ty] if field_ty == ty => true,
-                            _ => false,
-                        })
-                        .unwrap();
+        match &column.ty {
+            column_ty if column_ty == ty => expr,
+            stmt::Type::Enum(ty_enum) => {
+                let variant = ty_enum
+                    .variants
+                    .iter()
+                    .find(|variant| match &variant.fields[..] {
+                        [field_ty] if field_ty == ty => true,
+                        _ => false,
+                    })
+                    .unwrap();
 
-                    stmt::ExprEnum {
-                        variant: variant.discriminant,
-                        fields: stmt::ExprRecord::from_vec(vec![expr.into()]),
-                    }
-                    .into()
-                }
-                // Not reachable
-                _ => todo!(),
+                stmt::Expr::concat_str((
+                    variant.discriminant.to_string(),
+                    "#",
+                    stmt::Expr::cast(expr, stmt::Type::String),
+                ))
             }
+            stmt::Type::String if ty.is_id() => stmt::Expr::cast(expr, &column.ty),
+            _ => todo!("column={column:#?}"),
         }
     }
 
-    fn map_table_column_to_model(&mut self, primitive: &FieldPrimitive) -> stmt::Expr<'static> {
+    fn map_table_column_to_model(&mut self, primitive: &FieldPrimitive) -> stmt::Expr {
         let column_id = primitive.column;
         let column = self.table.column(column_id);
 
-        // Find the index in the lowering's column list
-        let i = self
-            .lowering_columns
-            .iter()
-            .position(|c| *c == column_id)
-            .unwrap();
+        match &column.ty {
+            c_ty if *c_ty == primitive.ty => stmt::Expr::column(column),
+            stmt::Type::Enum(ty_enum) => {
+                let variant = ty_enum
+                    .variants
+                    .iter()
+                    .find(|variant| match &variant.fields[..] {
+                        [field_ty] => *field_ty == primitive.ty,
+                        _ => false,
+                    })
+                    .unwrap();
 
-        if column.ty == primitive.ty {
-            stmt::Expr::project([i])
-        } else {
-            // Project the enum to the model
-            let ty_enum = match &column.ty {
-                stmt::Type::Enum(ty_enum) => ty_enum,
-                _ => todo!(),
-            };
-
-            let variant = ty_enum
-                .variants
-                .iter()
-                .find(|variant| match &variant.fields[..] {
-                    [field_ty] => *field_ty == primitive.ty,
-                    _ => false,
-                })
-                .unwrap();
-
-            stmt::Expr::project([i, variant.discriminant])
+                stmt::Expr::DecodeEnum(
+                    Box::new(stmt::Expr::column(column)),
+                    primitive.ty.clone(),
+                    variant.discriminant,
+                )
+            }
+            stmt::Type::String if primitive.ty.is_id() => {
+                stmt::Expr::cast(stmt::Expr::column(column), &primitive.ty)
+            }
+            _ => todo!("column={column:#?}; primitive={primitive:#?}"),
         }
+    }
+}
+
+fn stmt_ty_to_table(ty: stmt::Type) -> stmt::Type {
+    match ty {
+        stmt::Type::I64 => stmt::Type::I64,
+        stmt::Type::String => stmt::Type::String,
+        stmt::Type::Id(_) => stmt::Type::String,
+        _ => todo!("{ty:#?}"),
     }
 }

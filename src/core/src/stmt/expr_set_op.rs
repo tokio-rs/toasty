@@ -1,17 +1,17 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprSetOp<'stmt> {
+pub struct ExprSetOp {
     pub op: SetOp,
-    pub operands: Vec<ExprSet<'stmt>>,
+    pub operands: Vec<ExprSet>,
 }
 
-impl<'stmt> ExprSetOp<'stmt> {
+impl ExprSetOp {
     pub fn is_union(&self) -> bool {
         matches!(self.op, SetOp::Union)
     }
 
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input<'stmt>) {
+    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
         for operand in &mut self.operands {
             operand.substitute_ref(input);
         }

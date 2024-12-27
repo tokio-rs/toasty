@@ -1,11 +1,11 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_query_pk<'stmt>(
+    pub(crate) async fn exec_query_pk(
         &self,
         schema: &schema::Schema,
-        op: operation::QueryPk<'stmt>,
-    ) -> Result<stmt::ValueStream<'stmt>> {
+        op: operation::QueryPk,
+    ) -> Result<Response> {
         let table = schema.table(op.table);
 
         let mut expr_attrs = ExprAttrs::default();
@@ -30,13 +30,13 @@ impl DynamoDB {
 
         let schema = schema.clone();
 
-        Ok(stmt::ValueStream::from_iter(
+        Ok(Response::from_value_stream(stmt::ValueStream::from_iter(
             res.items.into_iter().flatten().map(move |item| {
                 item_to_record(
                     &item,
                     op.select.iter().map(|column_id| schema.column(column_id)),
                 )
             }),
-        ))
+        )))
     }
 }

@@ -1,170 +1,87 @@
 use super::*;
 
-use std::ops;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Expr<'stmt> {
+#[derive(Clone, PartialEq)]
+pub enum Expr {
     /// AND a set of binary expressions
-    And(ExprAnd<'stmt>),
+    And(ExprAnd),
 
     /// An argument when the expression is a function body
     Arg(ExprArg),
 
     /// Binary expression
-    BinaryOp(ExprBinaryOp<'stmt>),
+    BinaryOp(ExprBinaryOp),
+
+    /// Cast an expression to a different type
+    Cast(ExprCast),
+
+    /// References a column from a table in the statement
+    Column(ExprColumn),
 
     /// Concat multiple expressions together
-    Concat(ExprConcat<'stmt>),
+    /// TODO: name this something different?
+    Concat(ExprConcat),
+
+    /// Concat strings
+    ConcatStr(ExprConcatStr),
 
     /// Return an enum value
-    Enum(ExprEnum<'stmt>),
+    Enum(ExprEnum),
+
+    /// References a field in the statement
+    Field(ExprField),
 
     /// In list
-    InList(ExprInList<'stmt>),
+    InList(ExprInList),
 
     /// The expression is contained by the given subquery
-    InSubquery(ExprInSubquery<'stmt>),
+    InSubquery(ExprInSubquery),
+
+    /// Whether an expression is (or is not) null. This is different from a
+    /// binary expression because of how databases treat null comparisons.
+    IsNull(ExprIsNull),
+
+    /// References a model's primary key
+    Key(ExprKey),
+
+    /// Apply an expression to each item in a list
+    Map(ExprMap),
 
     /// OR a set of binary expressi5nos
-    Or(ExprOr<'stmt>),
+    Or(ExprOr),
 
     /// Checks if an expression matches a pattern.
-    Pattern(ExprPattern<'stmt>),
+    Pattern(ExprPattern),
 
     /// Project an expression
-    Project(ExprProject<'stmt>),
+    Project(ExprProject),
 
     /// Evaluates to a tuple value
-    Record(ExprRecord<'stmt>),
+    Record(ExprRecord),
 
     /// A list of expressions of the same type
-    List(Vec<Expr<'stmt>>),
+    List(ExprList),
 
     /// Evaluate a sub-statement
-    Stmt(ExprStmt<'stmt>),
+    Stmt(ExprStmt),
 
     /// A type reference. This is used by the "is a" expression
     Type(ExprTy),
 
     /// Evaluates to a constant value reference
-    Value(Value<'stmt>),
+    Value(Value),
+
+    // TODO: get rid of this?
+    DecodeEnum(Box<Expr>, Type, usize),
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn and(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
-        let mut lhs = lhs.into();
-        let rhs = rhs.into();
-
-        match (&mut lhs, rhs) {
-            (Expr::And(lhs_and), Expr::And(rhs_and)) => {
-                lhs_and.operands.extend(rhs_and.operands);
-                lhs
-            }
-            (Expr::And(lhs_and), rhs) => {
-                lhs_and.operands.push(rhs);
-                lhs
-            }
-            (_, Expr::And(mut rhs_and)) => {
-                rhs_and.operands.push(lhs);
-                rhs_and.into()
-            }
-            (_, rhs) => ExprAnd::new(vec![lhs, rhs]).into(),
-        }
-    }
-
-    pub fn or(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
-        let mut lhs = lhs.into();
-        let rhs = rhs.into();
-
-        match (&mut lhs, rhs) {
-            (Expr::Or(lhs_or), Expr::Or(rhs_or)) => {
-                lhs_or.operands.extend(rhs_or.operands);
-                lhs
-            }
-            (Expr::Or(lhs_or), rhs) => {
-                lhs_or.operands.push(rhs);
-                lhs
-            }
-            (_, Expr::Or(mut lhs_or)) => {
-                lhs_or.operands.push(lhs);
-                lhs_or.into()
-            }
-            (_, rhs) => ExprOr::new(vec![lhs, rhs]).into(),
-        }
-    }
-
-    /// Returns the identity expression.
-    ///
-    /// TODO: delete?
-    pub const fn identity() -> Expr<'stmt> {
-        Expr::Project(ExprProject {
-            base: ProjectBase::ExprSelf,
-            projection: Projection::identity(),
-        })
-    }
-
-    pub const fn is_identity(&self) -> bool {
-        match self {
-            Expr::Project(expr_project) => expr_project.is_identity(),
-            _ => false,
-        }
-    }
-
-    pub fn null() -> Expr<'stmt> {
+impl Expr {
+    pub fn null() -> Expr {
         Expr::Value(Value::Null)
     }
 
     /// Is a value that evaluates to null
-    pub fn is_null(&self) -> bool {
+    pub fn is_value_null(&self) -> bool {
         matches!(self, Expr::Value(Value::Null))
-    }
-
-    pub fn in_subquery(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Query<'stmt>>) -> Expr<'stmt> {
-        ExprInSubquery {
-            expr: Box::new(lhs.into()),
-            query: Box::new(rhs.into()),
-        }
-        .into()
-    }
-
-    pub fn list<T>(items: impl IntoIterator<Item = T>) -> Expr<'stmt>
-    where
-        T: Into<Expr<'stmt>>,
-    {
-        Expr::List(items.into_iter().map(Into::into).collect())
-    }
-
-    pub fn self_expr() -> Expr<'stmt> {
-        ExprProject {
-            base: ProjectBase::ExprSelf,
-            projection: Projection::identity(),
-        }
-        .into()
-    }
-
-    pub fn record<T>(items: impl IntoIterator<Item = T>) -> Expr<'stmt>
-    where
-        T: Into<Expr<'stmt>>,
-    {
-        Expr::Record(ExprRecord::from_iter(items.into_iter()))
-    }
-
-    pub fn is_record(&self) -> bool {
-        matches!(self, Expr::Record(_))
-    }
-
-    pub fn as_record(&self) -> &ExprRecord<'stmt> {
-        match self {
-            Expr::Record(expr_record) => expr_record,
-            _ => panic!(),
-        }
-    }
-
-    pub fn as_record_mut(&mut self) -> &mut ExprRecord<'stmt> {
-        match self {
-            Expr::Record(expr_record) => expr_record,
-            _ => panic!(),
-        }
     }
 
     /// Returns true if the expression is the `true` boolean expression
@@ -190,128 +107,33 @@ impl<'stmt> Expr<'stmt> {
         matches!(self, Expr::Arg(_))
     }
 
-    pub fn into_value(self) -> Value<'stmt> {
+    pub fn into_value(self) -> Value {
         match self {
             Expr::Value(value) => value,
             _ => todo!(),
         }
     }
 
-    pub fn into_stmt(self) -> ExprStmt<'stmt> {
+    pub fn into_stmt(self) -> ExprStmt {
         match self {
             Expr::Stmt(stmt) => stmt,
             _ => todo!(),
         }
     }
 
-    pub fn simplify(&mut self) {
-        visit_mut::for_each_expr_mut(self, move |expr| {
-            let maybe_expr = match expr {
-                // Simplification step. If the original expression is an "in
-                // list" op, but the right-hand side is a record with a single
-                // entry, then simplify the expression to an equality.
-                Expr::InList(e) => e.simplify(),
-                Expr::Record(expr_record) => expr_record.simplify(),
-                _ => None,
-            };
-
-            if let Some(simplified) = maybe_expr {
-                *expr = simplified;
-            }
-        });
-    }
-
-    pub fn substitute(&mut self, mut input: impl substitute::Input<'stmt>) {
-        self.substitute_ref(&mut input);
-    }
-
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input<'stmt>) {
-        visit_mut::for_each_expr_mut(self, move |expr| match expr {
-            Expr::Arg(expr_arg) => {
-                *expr = input.resolve_arg(expr_arg);
-            }
-            Expr::Project(expr_project) => match &expr_project.base {
-                ProjectBase::ExprSelf => {
-                    *expr = input.resolve_self_projection(&expr_project.projection);
-                }
-                _ => {}
-            },
-            _ => {}
-        });
-
-        self.simplify();
-    }
-
-    /// Special case of `eval` where the expression is a constant
-    ///
-    /// # Panics
-    ///
-    /// `eval_const` panics if the expression is not constant
-    pub(crate) fn eval_const(&self) -> Value<'stmt> {
-        self.eval_ref(&mut eval::const_input()).unwrap()
-    }
-
-    pub(crate) fn eval_bool_ref(&self, input: &mut impl eval::Input<'stmt>) -> Result<bool> {
-        match self.eval_ref(input)? {
-            Value::Bool(ret) => Ok(ret),
-            _ => todo!(),
-        }
-    }
-
-    pub(crate) fn eval_ref(&self, input: &mut impl eval::Input<'stmt>) -> Result<Value<'stmt>> {
+    /// Returns `true` if the expression is a constant expression.
+    pub fn is_const(&self) -> bool {
         match self {
-            Expr::And(expr_and) => {
-                debug_assert!(!expr_and.operands.is_empty());
-
-                for operand in &expr_and.operands {
-                    if !operand.eval_bool_ref(input)? {
-                        return Ok(false.into());
-                    }
-                }
-
-                Ok(true.into())
-            }
-            Expr::Arg(expr_arg) => Ok(input.resolve_arg(expr_arg)),
-            Expr::Value(value) => Ok(value.clone()),
-            Expr::BinaryOp(expr_binary_op) => {
-                let lhs = expr_binary_op.lhs.eval_ref(input)?;
-                let rhs = expr_binary_op.rhs.eval_ref(input)?;
-
-                match expr_binary_op.op {
-                    BinaryOp::Eq => Ok((lhs == rhs).into()),
-                    BinaryOp::Ne => Ok((lhs != rhs).into()),
-                    _ => todo!("{:#?}", self),
-                }
-            }
-            Expr::Enum(expr_enum) => Ok(ValueEnum {
-                variant: expr_enum.variant,
-                fields: expr_enum.fields.eval_ref(input)?,
-            }
-            .into()),
-            Expr::Project(expr_project) => match expr_project.base {
-                ProjectBase::ExprSelf => {
-                    Ok(input.resolve_self_projection(&expr_project.projection))
-                }
-                _ => todo!(),
-            },
-            Expr::Record(expr_record) => Ok(expr_record.eval_ref(input)?.into()),
-            Expr::List(exprs) => {
-                let mut applied = vec![];
-
-                for expr in exprs {
-                    applied.push(expr.eval_ref(input)?);
-                }
-
-                Ok(Value::List(applied))
-            }
-            _ => todo!("{:#?}", self),
+            Expr::Value(_) => true,
+            Expr::Record(expr_record) => expr_record.iter().all(|expr| expr.is_const()),
+            _ => false,
         }
     }
 
-    pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Expr<'stmt> {
+    pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Expr {
         struct MapProjections<T>(T);
 
-        impl<'stmt, T: FnMut(&Projection) -> Projection> VisitMut<'stmt> for MapProjections<T> {
+        impl<T: FnMut(&Projection) -> Projection> VisitMut for MapProjections<T> {
             fn visit_projection_mut(&mut self, i: &mut Projection) {
                 *i = self.0(i);
             }
@@ -322,169 +144,179 @@ impl<'stmt> Expr<'stmt> {
         mapped
     }
 
-    /// Assume the expression evaluates to a set of records and extend the
-    /// evaluation to include the given expression.
-    ///
-    /// TODO: maybe split up the ops and instead have `expr.as_or_cast_to_concat().push()`
-    pub fn push(&mut self, expr: impl Into<Expr<'stmt>>) {
-        use std::mem;
+    #[track_caller]
+    pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
+        let mut ret = Entry::Expr(self);
 
-        match self {
-            Expr::Concat(exprs) => exprs.push(expr.into()),
-            Expr::Value(Value::Null) => {
-                *self = ExprConcat::new(vec![expr.into()]).into();
-            }
-            _ => {
-                let prev = mem::replace(self, Expr::Value(Value::Null));
-                *self = ExprConcat::new(vec![prev, expr.into()]).into();
+        for step in path.step_iter() {
+            ret = match ret {
+                Entry::Expr(Expr::Record(expr)) => Entry::Expr(&expr[step]),
+                Entry::Value(Value::Record(record))
+                | Entry::Expr(Expr::Value(Value::Record(record))) => Entry::Value(&record[step]),
+                _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
             }
         }
+
+        ret
     }
 
-    pub fn take(&mut self) -> Expr<'stmt> {
+    #[track_caller]
+    pub fn entry_mut(&mut self, path: impl EntryPath) -> EntryMut<'_> {
+        let mut ret = EntryMut::Expr(self);
+
+        for step in path.step_iter() {
+            ret = match ret {
+                EntryMut::Expr(Expr::Record(expr)) => EntryMut::Expr(&mut expr[step]),
+                EntryMut::Value(Value::Record(record))
+                | EntryMut::Expr(Expr::Value(Value::Record(record))) => {
+                    EntryMut::Value(&mut record[step])
+                }
+                _ => todo!("ret={ret:#?}; step={step:#?}"),
+            }
+        }
+
+        ret
+    }
+
+    pub fn take(&mut self) -> Expr {
         std::mem::replace(self, Expr::Value(Value::Null))
     }
 
-    /// Updates the expression to assume a projected `expr_self`
-    ///
-    /// TODO: rename this... not a good name
-    pub fn project_self(&mut self, steps: usize) {
-        visit_mut::for_each_expr_mut(self, |expr| {
-            match expr {
-                Expr::Project(expr_project) => {
-                    assert!(expr_project.base.is_expr_self());
+    pub fn substitute(&mut self, mut input: impl substitute::Input) {
+        self.substitute_ref(&mut input);
+    }
 
-                    // Trim the start of the projection
-                    expr_project.projection = Projection::from(&expr_project.projection[steps..]);
+    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
+        struct Substitute<'a, I>(&'a mut I);
+
+        impl<'a, I> VisitMut for Substitute<'a, I>
+        where
+            I: substitute::Input,
+        {
+            fn visit_expr_mut(&mut self, expr: &mut Expr) {
+                match expr {
+                    Expr::Map(expr_map) => {
+                        // Only recurse into the base expression as arguments
+                        // reference the base.
+                        self.visit_expr_mut(&mut expr_map.base);
+                    }
+                    _ => {
+                        visit_mut::visit_expr_mut(self, expr);
+                    }
                 }
-                _ => {}
+
+                // Substitute after recurring.
+                if let Expr::Arg(expr_arg) = expr {
+                    *expr = self.0.resolve_arg(expr_arg);
+                }
             }
-        });
+        }
+
+        Substitute(input).visit_expr_mut(self);
     }
 }
 
-impl<'stmt> Default for Expr<'stmt> {
+impl Default for Expr {
     fn default() -> Self {
         Expr::Value(Value::default())
     }
 }
 
-impl<'stmt> ops::Index<usize> for Expr<'stmt> {
-    type Output = Expr<'stmt>;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        match self {
-            Expr::Record(expr_record) => expr_record.index(index),
-            _ => todo!(),
-        }
-    }
-}
-
-impl<'stmt> ops::IndexMut<usize> for Expr<'stmt> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match self {
-            Expr::Record(expr_record) => expr_record.index_mut(index),
-            _ => todo!("trying to index {:#?}", self),
-        }
-    }
-}
-
-impl<'stmt> ops::Index<PathStep> for Expr<'stmt> {
-    type Output = Expr<'stmt>;
-
-    fn index(&self, index: PathStep) -> &Self::Output {
-        self.index(index.into_usize())
-    }
-}
-
-impl<'stmt> ops::IndexMut<PathStep> for Expr<'stmt> {
-    fn index_mut(&mut self, index: PathStep) -> &mut Self::Output {
-        self.index_mut(index.into_usize())
-    }
-}
-
-impl<'stmt> Node<'stmt> for Expr<'stmt> {
-    fn map<V: Map<'stmt>>(&self, visit: &mut V) -> Self {
-        visit.map_expr(self)
-    }
-
-    fn visit<V: Visit<'stmt>>(&self, mut visit: V) {
+impl Node for Expr {
+    fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_expr(self);
     }
 
-    fn visit_mut<V: VisitMut<'stmt>>(&mut self, mut visit: V) {
+    fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
         visit.visit_expr_mut(self);
     }
 }
 
 // === Conversions ===
 
-impl<'stmt> From<bool> for Expr<'stmt> {
-    fn from(value: bool) -> Expr<'stmt> {
+impl From<bool> for Expr {
+    fn from(value: bool) -> Expr {
         Expr::Value(Value::from(value))
     }
 }
 
-impl<'stmt> From<ColumnId> for Expr<'stmt> {
-    fn from(value: ColumnId) -> Self {
-        ExprProject::from(value).into()
-    }
-}
-
-impl<'stmt> From<ExprRecord<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprRecord<'stmt>) -> Expr<'stmt> {
-        Expr::Record(value)
-    }
-}
-
-impl<'stmt> From<&Field> for Expr<'stmt> {
-    fn from(value: &Field) -> Self {
-        ExprProject::from(value).into()
-    }
-}
-
-impl<'stmt> From<FieldId> for Expr<'stmt> {
-    fn from(value: FieldId) -> Self {
-        ExprProject::from(value).into()
-    }
-}
-
-impl<'stmt> From<i64> for Expr<'stmt> {
+impl From<i64> for Expr {
     fn from(value: i64) -> Self {
         Expr::Value(value.into())
     }
 }
 
-impl<'stmt> From<&i64> for Expr<'stmt> {
+impl From<&i64> for Expr {
     fn from(value: &i64) -> Self {
         Expr::Value(value.into())
     }
 }
 
-impl<'stmt> From<String> for Expr<'stmt> {
+impl From<String> for Expr {
     fn from(value: String) -> Self {
         Expr::Value(value.into())
     }
 }
 
-impl<'stmt> From<&'stmt String> for Expr<'stmt> {
-    fn from(value: &'stmt String) -> Self {
+impl From<&String> for Expr {
+    fn from(value: &String) -> Self {
         Expr::Value(value.into())
     }
 }
 
-impl<'stmt> From<Value<'stmt>> for Expr<'stmt> {
-    fn from(value: Value<'stmt>) -> Expr<'stmt> {
+impl From<&str> for Expr {
+    fn from(value: &str) -> Self {
+        Expr::Value(value.into())
+    }
+}
+
+impl From<Value> for Expr {
+    fn from(value: Value) -> Expr {
         Expr::Value(value)
     }
 }
 
-impl<'stmt, E1, E2> From<(E1, E2)> for Expr<'stmt>
+impl<E1, E2> From<(E1, E2)> for Expr
 where
-    E1: Into<Expr<'stmt>>,
-    E2: Into<Expr<'stmt>>,
+    E1: Into<Expr>,
+    E2: Into<Expr>,
 {
-    fn from(value: (E1, E2)) -> Expr<'stmt> {
+    fn from(value: (E1, E2)) -> Expr {
         Expr::Record(value.into())
+    }
+}
+
+impl fmt::Debug for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Expr::And(e) => e.fmt(f),
+            Expr::Arg(e) => e.fmt(f),
+            Expr::BinaryOp(e) => e.fmt(f),
+            Expr::Cast(e) => e.fmt(f),
+            Expr::Column(e) => e.fmt(f),
+            Expr::Concat(e) => e.fmt(f),
+            Expr::ConcatStr(e) => e.fmt(f),
+            Expr::Enum(e) => e.fmt(f),
+            Expr::Field(e) => e.fmt(f),
+            Expr::InList(e) => e.fmt(f),
+            Expr::InSubquery(e) => e.fmt(f),
+            Expr::IsNull(e) => e.fmt(f),
+            Expr::Key(e) => e.fmt(f),
+            Expr::Map(e) => e.fmt(f),
+            Expr::Or(e) => e.fmt(f),
+            Expr::Pattern(e) => e.fmt(f),
+            Expr::Project(e) => e.fmt(f),
+            Expr::Record(e) => e.fmt(f),
+            Expr::List(e) => e.fmt(f),
+            Expr::Stmt(e) => e.fmt(f),
+            Expr::Type(e) => e.fmt(f),
+            Expr::Value(e) => e.fmt(f),
+            Expr::DecodeEnum(expr, ty, variant) => f
+                .debug_tuple("DecodeEnum")
+                .field(expr)
+                .field(ty)
+                .field(variant)
+                .finish(),
+        }
     }
 }

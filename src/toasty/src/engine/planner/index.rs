@@ -11,14 +11,14 @@ use std::collections::hash_map;
 
  */
 
-impl<'stmt> Planner<'_, 'stmt> {
-    pub(crate) fn plan_index_path2<'a>(
+impl<'a> Planner<'a> {
+    pub(crate) fn plan_index_path2(
         &mut self,
-        model: &'a Model,
-        filter: &'a stmt::Expr<'stmt>,
-    ) -> IndexPlan<'a, 'stmt> {
+        table: &'a Table,
+        filter: &stmt::Expr,
+    ) -> IndexPlan<'a> {
         let mut index_planner = IndexPlanner {
-            model,
+            table,
             filter,
             index_matches: vec![],
             index_paths: vec![],
@@ -60,25 +60,25 @@ impl<'stmt> Planner<'_, 'stmt> {
 }
 
 #[derive(Debug)]
-pub(crate) struct IndexPlan<'a, 'stmt> {
+pub(crate) struct IndexPlan<'a> {
     /// The index to use to execute the query
-    pub(crate) index: &'a ModelIndex,
+    pub(crate) index: &'a Index,
 
     /// Filter to apply to the index
-    pub(crate) index_filter: stmt::Expr<'stmt>,
+    pub(crate) index_filter: stmt::Expr,
 
     /// How to filter results after applying the index filter
-    pub(crate) result_filter: Option<stmt::Expr<'stmt>>,
+    pub(crate) result_filter: Option<stmt::Expr>,
 
     /// True if we have to apply the result filter our self
-    pub(crate) post_filter: Option<stmt::Expr<'stmt>>,
+    pub(crate) post_filter: Option<stmt::Expr>,
 }
 
 struct IndexPlanner<'a, 'stmt> {
-    model: &'a Model,
+    table: &'a Table,
 
     /// Query filter
-    filter: &'a stmt::Expr<'stmt>,
+    filter: &'stmt stmt::Expr,
 
     /// Matches clauses in the filter with available indices
     index_matches: Vec<IndexMatch<'a, 'stmt>>,
@@ -90,15 +90,15 @@ struct IndexPlanner<'a, 'stmt> {
 #[derive(Debug)]
 struct IndexMatch<'a, 'stmt> {
     /// The index in question
-    index: &'a ModelIndex,
+    index: &'a Index,
 
-    /// Restriction matches for each field
-    fields: Vec<IndexFieldMatch<'a, 'stmt>>,
+    /// Restriction matches for each column
+    columns: Vec<IndexColumnMatch<'stmt>>,
 }
 
 #[derive(Debug)]
-struct IndexFieldMatch<'a, 'stmt> {
-    exprs: HashMap<ByAddress<&'a stmt::Expr<'stmt>>, ExprMatch>,
+struct IndexColumnMatch<'stmt> {
+    exprs: HashMap<ByAddress<&'stmt stmt::Expr>, ExprMatch>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -112,16 +112,16 @@ struct IndexPath {
     cost: usize,
 }
 
-type ExprPair<'stmt> = (stmt::Expr<'stmt>, stmt::Expr<'stmt>);
+type ExprPair = (stmt::Expr, stmt::Expr);
 
 struct PartitionCtx<'a> {
     capability: &'a capability::KeyValue,
     apply_result_filter_on_results: bool,
 }
 
-impl<'a, 'stmt> IndexPlanner<'a, 'stmt> {
+impl IndexPlanner<'_, '_> {
     fn plan_index_path(&mut self) -> IndexPath {
-        // A preprocessing step that matches filter clauses to various index fields.
+        // A preprocessing step that matches filter clauses to various index columns.
         self.build_index_matches();
 
         // Populate index_paths with possible ways to execute the query.
@@ -139,13 +139,13 @@ impl<'a, 'stmt> IndexPlanner<'a, 'stmt> {
     }
 
     fn build_index_matches(&mut self) {
-        for index in &self.model.indices {
+        for index in &self.table.indices {
             let mut index_match = IndexMatch {
                 index,
-                fields: index
-                    .fields
+                columns: index
+                    .columns
                     .iter()
-                    .map(|_| IndexFieldMatch {
+                    .map(|_| IndexColumnMatch {
                         exprs: HashMap::new(),
                     })
                     .collect(),
@@ -155,9 +155,9 @@ impl<'a, 'stmt> IndexPlanner<'a, 'stmt> {
                 continue;
             }
 
-            // Check if the *first* index field matched any sub expression. If
+            // Check if the *first* index column matched any sub expression. If
             // not, the index is not useful to us.
-            if index_match.fields[0].exprs.is_empty() {
+            if index_match.columns[0].exprs.is_empty() {
                 continue;
             }
 
@@ -180,33 +180,53 @@ impl<'a, 'stmt> IndexPlanner<'a, 'stmt> {
     }
 }
 
-impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
-    fn match_restriction(&mut self, expr: &'a stmt::Expr<'stmt>) -> bool {
+impl<'stmt> IndexMatch<'_, 'stmt> {
+    fn match_restriction(&mut self, expr: &'stmt stmt::Expr) -> bool {
         use stmt::Expr::*;
 
         match expr {
+            Pattern(stmt::ExprPattern::BeginsWith(e)) => {
+                debug_assert!(e.pattern.is_value(), "TODO");
+
+                // Equivalent to a binary op with a `<=` operator.
+                match &*e.expr {
+                    Column(expr_column) => {
+                        let m =
+                            self.match_expr_binary_op_column(expr_column, expr, stmt::BinaryOp::Le);
+                        assert!(m, "TODO; expr={:#?}", expr);
+                        m
+                    }
+                    _ => todo!("expr={:#?}", expr),
+                }
+            }
             BinaryOp(e) => match (&*e.lhs, &*e.rhs) {
-                (Project(lhs), Value(..)) => self.match_expr_binary_op_project(lhs, expr, e.op),
-                (Value(..), Project(rhs)) => {
+                (Column(lhs), Value(..)) => self.match_expr_binary_op_column(lhs, expr, e.op),
+                (Value(..), Column(rhs)) => {
                     let mut op = e.op;
                     op.reverse();
 
-                    self.match_expr_binary_op_project(rhs, expr, op)
+                    self.match_expr_binary_op_column(rhs, expr, op)
                 }
                 _ => todo!("expr={:#?}", expr),
             },
             InList(e) => self.match_expr_in_list(&*e.expr, expr),
+            IsNull(e) => match &*e.expr {
+                Column(expr_column) => {
+                    self.match_expr_binary_op_column(expr_column, expr, stmt::BinaryOp::Eq)
+                }
+                _ => todo!("expr={:#?}", expr),
+            },
             And(and_exprs) => {
                 let matched = self.match_all_restrictions(and_exprs);
 
                 if matched {
-                    // Union all matched fields for each operand
-                    for field in &mut self.fields {
+                    // Union all matched columns for each operand
+                    for column in &mut self.columns {
                         for and_expr in and_exprs {
                             if let Some(operand_match) =
-                                field.exprs.get(&ByAddress(and_expr)).copied()
+                                column.exprs.get(&ByAddress(and_expr)).copied()
                             {
-                                match field.exprs.entry(ByAddress(expr)) {
+                                match column.exprs.entry(ByAddress(expr)) {
                                     hash_map::Entry::Vacant(e) => {
                                         e.insert(ExprMatch {
                                             eq: operand_match.eq,
@@ -233,25 +253,25 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
                 let mut matched_operand = false;
 
                 // For OR expressions, we need to ensure that the index match is
-                // balanced for each field. To do this, if operand matched, then
-                // we do a deeper search to see if any index field matched with
+                // balanced for each column. To do this, if operand matched, then
+                // we do a deeper search to see if any index column matched with
                 // *all* or branches.
                 if matched_any_expr {
-                    'fields: for field in &mut self.fields {
+                    'columns: for column in &mut self.columns {
                         let mut eq = true;
 
                         for or_expr in or_exprs {
-                            if let Some(operand_match) = field.exprs.get(&ByAddress(or_expr)) {
+                            if let Some(operand_match) = column.exprs.get(&ByAddress(or_expr)) {
                                 eq &= operand_match.eq;
                             } else {
-                                continue 'fields;
+                                continue 'columns;
                             }
                         }
 
                         // At this point, we verified *each* operand matched a
-                        // field, so we can consider the entire expression as
-                        // having matched that field.
-                        field.exprs.insert(ByAddress(expr), ExprMatch { eq });
+                        // column, so we can consider the entire expression as
+                        // having matched that column.
+                        column.exprs.insert(ByAddress(expr), ExprMatch { eq });
                         matched_operand = true;
                     }
                 }
@@ -263,8 +283,8 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
     }
 
     /// Returns true if **any** expression in the provided list match with
-    /// **any** index field.
-    fn match_all_restrictions(&mut self, exprs: &'a [stmt::Expr<'stmt>]) -> bool {
+    /// **any** index column.
+    fn match_all_restrictions(&mut self, exprs: &'stmt [stmt::Expr]) -> bool {
         let mut matched = false;
 
         for expr in exprs {
@@ -274,31 +294,27 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
         matched
     }
 
-    fn match_expr_in_list(
-        &mut self,
-        lhs: &'a stmt::Expr<'stmt>,
-        expr: &'a stmt::Expr<'stmt>,
-    ) -> bool {
+    fn match_expr_in_list(&mut self, lhs: &'stmt stmt::Expr, expr: &'stmt stmt::Expr) -> bool {
         match lhs {
-            stmt::Expr::Project(path) => {
-                self.match_expr_binary_op_project(path, expr, stmt::BinaryOp::Eq)
+            stmt::Expr::Column(expr_column) => {
+                self.match_expr_binary_op_column(expr_column, expr, stmt::BinaryOp::Eq)
             }
             stmt::Expr::Record(expr_record) => {
                 let mut matched = false;
 
                 for sub_expr in expr_record {
-                    let stmt::Expr::Project(path) = sub_expr else {
+                    let stmt::Expr::Column(expr_column) = sub_expr else {
                         todo!()
                     };
                     matched |=
-                        self.match_expr_binary_op_project(path, sub_expr, stmt::BinaryOp::Eq);
+                        self.match_expr_binary_op_column(expr_column, sub_expr, stmt::BinaryOp::Eq);
                 }
 
                 if matched {
-                    for field in &mut self.fields {
+                    for column in &mut self.columns {
                         for sub_expr in expr_record {
-                            if field.exprs.contains_key(&ByAddress(sub_expr)) {
-                                field.exprs.insert(ByAddress(expr), ExprMatch { eq: true });
+                            if column.exprs.contains_key(&ByAddress(sub_expr)) {
+                                column.exprs.insert(ByAddress(expr), ExprMatch { eq: true });
 
                                 break;
                             }
@@ -312,27 +328,27 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
         }
     }
 
-    fn match_expr_binary_op_project(
+    fn match_expr_binary_op_column(
         &mut self,
-        project: &stmt::ExprProject,
-        expr: &'a stmt::Expr<'stmt>,
+        expr_column: &stmt::ExprColumn,
+        expr: &'stmt stmt::Expr,
         op: stmt::BinaryOp,
     ) -> bool {
         let mut matched = false;
 
-        for (i, index_field) in self.index.fields.iter().enumerate() {
-            // Check that the path matches an index field
-            if !project.projection.resolves_to(index_field.field) {
+        for (i, index_column) in self.index.columns.iter().enumerate() {
+            // Check that the path matches an index column
+            if expr_column.column != index_column.column {
                 continue;
             }
 
-            // If the index field is scoped as a partition key, then only
+            // If the index column is scoped as a partition key, then only
             // equality predicates are supported.
-            if index_field.scope.is_partition() && !op.is_eq() {
+            if index_column.scope.is_partition() && !op.is_eq() {
                 continue;
             }
 
-            self.fields[i]
+            self.columns[i]
                 .exprs
                 .insert(ByAddress(expr), ExprMatch { eq: op.is_eq() });
 
@@ -343,13 +359,13 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
     }
 
     /// Copute the cost of using this index match to execute the query.
-    fn compute_cost(&self, filter: &stmt::Expr<'stmt>) -> usize {
+    fn compute_cost(&self, filter: &stmt::Expr) -> usize {
         // TODO: factor in post query in-memory filtering.
         if self.index.unique {
             let mut cost = 0;
 
-            for field in &self.fields {
-                let Some(expr_match) = field.exprs.get(&ByAddress(filter)) else {
+            for column in &self.columns {
+                let Some(expr_match) = column.exprs.get(&ByAddress(filter)) else {
                     break;
                 };
 
@@ -367,17 +383,24 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
         }
     }
 
-    fn partition_filter(
-        &self,
-        ctx: &mut PartitionCtx<'_>,
-        expr: &stmt::Expr<'stmt>,
-    ) -> ExprPair<'stmt> {
+    fn partition_filter(&self, ctx: &mut PartitionCtx<'_>, expr: &stmt::Expr) -> ExprPair {
         use stmt::Expr::*;
 
         match expr {
+            Pattern(stmt::ExprPattern::BeginsWith(_)) | InList(_) | IsNull(_) => {
+                if self
+                    .columns
+                    .iter()
+                    .any(|f| f.exprs.contains_key(&ByAddress(expr)))
+                {
+                    (expr.clone(), true.into())
+                } else {
+                    (true.into(), expr.clone())
+                }
+            }
             BinaryOp(binary_op) => {
                 if self
-                    .fields
+                    .columns
                     .iter()
                     .any(|f| f.exprs.contains_key(&ByAddress(expr)))
                 {
@@ -386,10 +409,11 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
                         return (true.into(), true.into());
                     }
 
-                    // Normalize the expression to include the path on the LHS
+                    // Normalize the expression to include the column on the LHS
+                    // TODO: is this needed?
                     let expr = match (&*binary_op.lhs, &*binary_op.rhs) {
-                        (Project(_), Value(_)) => expr.clone(),
-                        (Value(value), Project(path)) => {
+                        (Column(_), Value(_)) => expr.clone(),
+                        (Value(value), Column(path)) => {
                             let mut op = binary_op.op;
                             op.reverse();
 
@@ -400,21 +424,10 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
                             }
                             .into()
                         }
-                        _ => todo!(),
+                        _ => todo!("binary_op={binary_op:#?}"),
                     };
 
                     (expr, true.into())
-                } else {
-                    (true.into(), expr.clone())
-                }
-            }
-            InList(_) => {
-                if self
-                    .fields
-                    .iter()
-                    .any(|f| f.exprs.contains_key(&ByAddress(expr)))
-                {
-                    (expr.clone(), true.into())
                 } else {
                     (true.into(), expr.clone())
                 }
@@ -446,7 +459,7 @@ impl<'a, 'stmt> IndexMatch<'a, 'stmt> {
                 let result_filter = match result_filter_operands.len() {
                     0 => true.into(),
                     1 => result_filter_operands.into_iter().next().unwrap(),
-                    _ => stmt::ExprOr {
+                    _ => stmt::ExprAnd {
                         operands: result_filter_operands,
                     }
                     .into(),

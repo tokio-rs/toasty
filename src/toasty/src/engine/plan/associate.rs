@@ -14,7 +14,7 @@ pub(crate) struct Associate {
     pub(crate) field: FieldId,
 }
 
-impl<'stmt> From<Associate> for Action<'stmt> {
+impl From<Associate> for Action {
     fn from(value: Associate) -> Self {
         Action::Associate(value)
     }

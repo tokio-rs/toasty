@@ -3,195 +3,152 @@ use super::*;
 use std::{fmt, ops};
 
 #[derive(Clone, Default, PartialEq)]
-pub struct ExprRecord<'stmt> {
-    pub fields: Vec<Expr<'stmt>>,
+pub struct ExprRecord {
+    pub fields: Vec<Expr>,
 }
 
-impl<'stmt> ExprRecord<'stmt> {
-    pub fn from_iter<T>(iter: impl Iterator<Item = T>) -> ExprRecord<'stmt>
+impl Expr {
+    pub fn record<T>(items: impl IntoIterator<Item = T>) -> Expr
     where
-        T: Into<Expr<'stmt>>,
+        T: Into<Expr>,
+    {
+        Expr::Record(ExprRecord::from_iter(items.into_iter()))
+    }
+
+    pub fn record_from_vec(fields: Vec<Expr>) -> Expr {
+        Expr::Record(ExprRecord::from_vec(fields))
+    }
+
+    pub fn is_record(&self) -> bool {
+        matches!(self, Expr::Record(_))
+    }
+
+    pub fn as_record(&self) -> &ExprRecord {
+        match self {
+            Expr::Record(expr_record) => expr_record,
+            _ => panic!(),
+        }
+    }
+
+    pub fn as_record_mut(&mut self) -> &mut ExprRecord {
+        match self {
+            Expr::Record(expr_record) => expr_record,
+            _ => panic!(),
+        }
+    }
+}
+
+impl ExprRecord {
+    pub fn from_iter<T>(iter: impl Iterator<Item = T>) -> ExprRecord
+    where
+        T: Into<Expr>,
     {
         ExprRecord::from_vec(iter.map(Into::into).collect())
     }
 
-    pub fn from_vec(fields: Vec<Expr<'stmt>>) -> ExprRecord<'stmt> {
+    pub fn from_vec(fields: Vec<Expr>) -> ExprRecord {
         ExprRecord { fields }
     }
 
-    // TODO: delete this
-    pub fn is_identity(&self) -> bool {
-        (0..self.fields.len()).all(|i| {
-            let Expr::Project(expr_project) = &self.fields[i] else {
-                return false;
-            };
-
-            let [step] = &expr_project.projection[..] else {
-                return false;
-            };
-
-            step.into_usize() == i
-        })
-    }
-
-    pub(crate) fn eval_ref(
-        &self,
-        input: &mut impl eval::Input<'stmt>,
-    ) -> crate::Result<Record<'stmt>> {
-        let mut applied = vec![];
-
-        for expr in &self.fields {
-            applied.push(expr.eval_ref(input)?);
-        }
-
-        Ok(Record::from_vec(applied))
-    }
-
-    pub fn push(&mut self, expr: Expr<'stmt>) {
+    pub fn push(&mut self, expr: Expr) {
         self.fields.push(expr)
     }
 
-    /// Special case of `eval` where the expression is a constant
-    ///
-    /// # Panics
-    ///
-    /// `eval_const` panics if the expression is not constant
-    pub fn eval_const(&self) -> Record<'stmt> {
-        self.eval_ref(&mut eval::const_input()).unwrap()
-    }
-
-    pub(crate) fn simplify(&mut self) -> Option<Expr<'stmt>> {
-        let mut all_values = true;
-
-        for expr in &mut self.fields {
-            expr.simplify();
-
-            all_values &= expr.is_value();
-        }
-
-        if all_values {
-            let mut values = vec![];
-
-            for expr in self.fields.drain(..) {
-                let Expr::Value(value) = expr else { panic!() };
-                values.push(value);
-            }
-
-            Some(Expr::Value(Value::Record(Record::from_vec(values).into())))
-        } else {
-            None
-        }
+    pub fn resize(&mut self, new_len: usize, value: impl Into<stmt::Expr>) {
+        self.fields.resize(new_len, value.into());
     }
 }
 
-impl<'stmt> ops::Deref for ExprRecord<'stmt> {
-    type Target = [Expr<'stmt>];
+impl ops::Deref for ExprRecord {
+    type Target = [Expr];
 
     fn deref(&self) -> &Self::Target {
         &self.fields[..]
     }
 }
 
-impl<'stmt> ops::DerefMut for ExprRecord<'stmt> {
+impl ops::DerefMut for ExprRecord {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.fields[..]
     }
 }
 
-impl<'stmt> ops::Index<usize> for ExprRecord<'stmt> {
-    type Output = Expr<'stmt>;
+impl ops::Index<usize> for ExprRecord {
+    type Output = Expr;
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.fields[index]
     }
 }
 
-impl<'stmt> ops::IndexMut<usize> for ExprRecord<'stmt> {
+impl ops::IndexMut<usize> for ExprRecord {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.fields[index]
     }
 }
 
-impl<'stmt> ops::Index<PathStep> for ExprRecord<'stmt> {
-    type Output = Expr<'stmt>;
-
-    fn index(&self, index: PathStep) -> &Self::Output {
-        &self.fields[index.into_usize()]
-    }
-}
-
-impl<'stmt> ops::IndexMut<PathStep> for ExprRecord<'stmt> {
-    fn index_mut(&mut self, index: PathStep) -> &mut Self::Output {
-        &mut self.fields[index.into_usize()]
-    }
-}
-
-impl<'stmt> IntoIterator for ExprRecord<'stmt> {
-    type Item = Expr<'stmt>;
-    type IntoIter = std::vec::IntoIter<Expr<'stmt>>;
+impl IntoIterator for ExprRecord {
+    type Item = Expr;
+    type IntoIter = std::vec::IntoIter<Expr>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.fields.into_iter()
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a ExprRecord<'stmt> {
-    type Item = &'a Expr<'stmt>;
-    type IntoIter = std::slice::Iter<'a, Expr<'stmt>>;
+impl<'a> IntoIterator for &'a ExprRecord {
+    type Item = &'a Expr;
+    type IntoIter = std::slice::Iter<'a, Expr>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.fields.iter()
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a mut ExprRecord<'stmt> {
-    type Item = &'a mut Expr<'stmt>;
-    type IntoIter = std::slice::IterMut<'a, Expr<'stmt>>;
+impl<'a> IntoIterator for &'a mut ExprRecord {
+    type Item = &'a mut Expr;
+    type IntoIter = std::slice::IterMut<'a, Expr>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.fields.iter_mut()
     }
 }
 
-impl<'stmt> AsRef<[Expr<'stmt>]> for ExprRecord<'stmt> {
-    fn as_ref(&self) -> &[Expr<'stmt>] {
+impl AsRef<[Expr]> for ExprRecord {
+    fn as_ref(&self) -> &[Expr] {
         self.fields.as_ref()
     }
 }
 
-impl<'stmt> From<Record<'stmt>> for ExprRecord<'stmt> {
-    fn from(src: Record<'stmt>) -> ExprRecord<'stmt> {
-        ExprRecord::from_vec(src.into_iter().map(Into::into).collect())
+impl From<ExprRecord> for Expr {
+    fn from(value: ExprRecord) -> Expr {
+        Expr::Record(value)
     }
 }
 
-impl<'stmt, E1, E2> From<(E1, E2)> for ExprRecord<'stmt>
+impl<E1, E2> From<(E1, E2)> for ExprRecord
 where
-    E1: Into<Expr<'stmt>>,
-    E2: Into<Expr<'stmt>>,
+    E1: Into<Expr>,
+    E2: Into<Expr>,
 {
-    fn from(src: (E1, E2)) -> ExprRecord<'stmt> {
+    fn from(src: (E1, E2)) -> ExprRecord {
         ExprRecord {
             fields: vec![src.0.into(), src.1.into()],
         }
     }
 }
 
-impl<'stmt> Node<'stmt> for ExprRecord<'stmt> {
-    fn map<V: Map<'stmt>>(&self, visit: &mut V) -> Self {
-        visit.map_expr_record(self)
-    }
-
-    fn visit<V: Visit<'stmt>>(&self, mut visit: V) {
+impl Node for ExprRecord {
+    fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_expr_record(self);
     }
 
-    fn visit_mut<V: VisitMut<'stmt>>(&mut self, mut visit: V) {
+    fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
         visit.visit_expr_record_mut(self);
     }
 }
 
-impl<'stmt> fmt::Debug for ExprRecord<'stmt> {
+impl fmt::Debug for ExprRecord {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.fields.as_slice().fmt(f)
     }

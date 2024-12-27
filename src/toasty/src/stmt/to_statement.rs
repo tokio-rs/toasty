@@ -1,7 +1,7 @@
 use super::*;
 
-pub trait ToStatement<'a> {
+pub trait ToStatement {
     type Model;
 
-    fn to_statement(self) -> Statement<'a, Self::Model>;
+    fn to_statement(self) -> Statement<Self::Model>;
 }

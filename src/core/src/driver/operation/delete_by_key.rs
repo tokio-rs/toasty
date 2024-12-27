@@ -2,19 +2,19 @@ use super::*;
 use crate::{schema::TableId, stmt};
 
 #[derive(Debug)]
-pub struct DeleteByKey<'stmt> {
+pub struct DeleteByKey {
     /// Which table to delete from
     pub table: TableId,
 
     /// Which keys to delete
-    pub keys: Vec<stmt::Value<'stmt>>,
+    pub keys: Vec<stmt::Value>,
 
     /// Only delete keys that match the filter
-    pub filter: Option<sql::Expr<'stmt>>,
+    pub filter: Option<stmt::Expr>,
 }
 
-impl<'stmt> From<DeleteByKey<'stmt>> for Operation<'stmt> {
-    fn from(value: DeleteByKey<'stmt>) -> Operation<'stmt> {
+impl From<DeleteByKey> for Operation {
+    fn from(value: DeleteByKey) -> Operation {
         Operation::DeleteByKey(value)
     }
 }

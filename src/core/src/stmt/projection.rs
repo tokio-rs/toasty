@@ -9,17 +9,17 @@ pub struct Projection {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Steps {
-    /// References `self`
+    /// References the projection base
     Identity,
 
     /// One field step
-    Single([PathStep; 1]),
+    Single([usize; 1]),
 
     /// Multi field steps
-    Multi(Vec<PathStep>),
+    Multi(Vec<usize>),
 }
 
-pub struct Iter<'a>(std::slice::Iter<'a, PathStep>);
+pub struct Iter<'a>(std::slice::Iter<'a, usize>);
 
 impl Projection {
     pub const fn identity() -> Projection {
@@ -28,31 +28,29 @@ impl Projection {
         }
     }
 
-    /// The path references the root (i.e. `self`)
+    /// The path references the root (i.e. the projection base)
     pub const fn is_identity(&self) -> bool {
         matches!(self.steps, Steps::Identity)
     }
 
-    pub fn single(step: impl Into<PathStep>) -> Projection {
+    pub fn single(step: usize) -> Projection {
         Projection {
-            steps: Steps::Single([step.into()]),
+            steps: Steps::Single([step]),
         }
     }
 
     /// Mostly here for `const`
     pub const fn from_index(index: usize) -> Projection {
         Projection {
-            steps: Steps::Single([PathStep::from_usize(index)]),
+            steps: Steps::Single([index]),
         }
     }
 
-    pub fn as_slice(&self) -> &[PathStep] {
+    pub fn as_slice(&self) -> &[usize] {
         self.steps.as_slice()
     }
 
-    pub fn push(&mut self, step: impl Into<PathStep>) {
-        let step = step.into();
-
+    pub fn push(&mut self, step: usize) {
         match &mut self.steps {
             Steps::Identity => {
                 self.steps = Steps::Single([step]);
@@ -70,44 +68,14 @@ impl Projection {
         self.steps.resolve_field(schema, expr_self)
     }
 
-    // TODO: unify with above
-    pub fn resolve_value<'a, 'stmt>(&self, expr_self: &'a [Value<'stmt>]) -> &'a Value<'stmt> {
-        let [first, rest @ ..] = self.as_slice() else {
-            todo!()
-        };
-
-        let mut ret = &expr_self[first.into_usize()];
-
-        for step in rest {
-            match ret {
-                Value::Record(record) => ret = &record[step.into_usize()],
-                Value::Enum(value_enum) => {
-                    assert_eq!(value_enum.variant, step.into_usize());
-
-                    ret = match &value_enum.fields[..] {
-                        [] => todo!("expr_self={:#?}; projection={:#?}", expr_self, self),
-                        [field] => field,
-                        [..] => todo!(
-                            "in theory the path should also reference a field... but it does not"
-                        ),
-                    };
-                }
-                _ => todo!("ret={:#?}", ret),
-            }
-        }
-
-        ret
-    }
-
-    pub fn resolves_to(&self, field: impl Into<PathStep>) -> bool {
-        let field = field.into();
-        let [step] = &self[..] else { return false };
-        *step == field
+    pub fn resolves_to(&self, other: impl Into<Projection>) -> bool {
+        let other = other.into();
+        *self == other
     }
 }
 
 impl ops::Deref for Projection {
-    type Target = [PathStep];
+    type Target = [usize];
 
     fn deref(&self) -> &Self::Target {
         self.steps.as_slice()
@@ -125,7 +93,7 @@ impl ops::DerefMut for Projection {
 }
 
 impl<'a> IntoIterator for &'a Projection {
-    type Item = PathStep;
+    type Item = usize;
     type IntoIter = Iter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -135,23 +103,43 @@ impl<'a> IntoIterator for &'a Projection {
 
 impl From<&Field> for Projection {
     fn from(value: &Field) -> Self {
+        Projection::single(value.id.index)
+    }
+}
+
+impl From<FieldId> for Projection {
+    fn from(value: FieldId) -> Self {
+        Projection::single(value.index)
+    }
+}
+
+impl From<ColumnId> for Projection {
+    fn from(value: ColumnId) -> Self {
+        Projection::single(value.index)
+    }
+}
+
+impl From<usize> for Projection {
+    fn from(value: usize) -> Self {
         Projection::single(value)
     }
 }
 
-impl<T, I> From<T> for Projection
-where
-    T: IntoIterator<Item = I>,
-    I: Into<PathStep>,
-{
-    fn from(value: T) -> Projection {
-        let mut projection = Projection::identity();
-
-        for step in value {
-            projection.push(step);
+impl From<&[usize]> for Projection {
+    fn from(value: &[usize]) -> Self {
+        match value {
+            [] => Projection::identity(),
+            [value] => Projection::single(*value),
+            value => Projection {
+                steps: Steps::Multi(value.into()),
+            },
         }
+    }
+}
 
-        projection
+impl<const N: usize> From<[usize; N]> for Projection {
+    fn from(value: [usize; N]) -> Self {
+        Projection::from(&value[..])
     }
 }
 
@@ -163,7 +151,7 @@ impl fmt::Debug for Projection {
             f.field(&"identity");
         } else {
             for field in &self[..] {
-                f.field(&field.into_usize());
+                f.field(&field);
             }
         }
 
@@ -172,7 +160,7 @@ impl fmt::Debug for Projection {
 }
 
 impl Steps {
-    fn as_slice(&self) -> &[PathStep] {
+    fn as_slice(&self) -> &[usize] {
         match self {
             Steps::Identity => &[],
             Steps::Single(step) => &step[..],
@@ -186,7 +174,7 @@ impl Steps {
         let [first, rest @ ..] = self.as_slice() else {
             panic!("need at most one path step")
         };
-        let mut projected = &expr_self.fields[first.into_usize()];
+        let mut projected = &expr_self.fields[*first];
 
         for step in rest {
             let target = match &projected.ty {
@@ -196,7 +184,7 @@ impl Steps {
                 HasOne(_) => todo!(),
             };
 
-            projected = &target.fields[step.into_usize()];
+            projected = &target.fields[*step];
         }
 
         projected
@@ -204,9 +192,9 @@ impl Steps {
 }
 
 impl<'a> Iterator for Iter<'a> {
-    type Item = PathStep;
+    type Item = usize;
 
-    fn next(&mut self) -> Option<PathStep> {
+    fn next(&mut self) -> Option<usize> {
         self.0.next().copied()
     }
 }

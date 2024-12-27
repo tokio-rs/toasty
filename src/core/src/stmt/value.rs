@@ -1,15 +1,15 @@
+use sparse_record::SparseRecord;
+
 use super::*;
 use crate::Result;
 
-use std::borrow::Cow;
-
 #[derive(Debug, Clone, PartialEq)]
-pub enum Value<'stmt> {
+pub enum Value {
     /// Boolean value
     Bool(bool),
 
     /// Value of an enumerated type
-    Enum(ValueEnum<'stmt>),
+    Enum(ValueEnum),
 
     /// Signed 64-bit integer
     I64(i64),
@@ -17,22 +17,25 @@ pub enum Value<'stmt> {
     /// A unique model identifier
     Id(Id),
 
+    /// A typed record
+    SparseRecord(SparseRecord),
+
     /// Null value
     Null,
 
     /// Record value, either borrowed or owned
-    Record(RecordCow<'stmt>),
+    Record(ValueRecord),
 
     /// A list of values of the same type
-    List(Vec<Value<'stmt>>),
+    List(Vec<Value>),
 
     /// String value, either borrowed or owned
-    String(Cow<'stmt, str>),
+    String(String),
 }
 
-impl<'stmt> Value<'stmt> {
+impl Value {
     /// Returns a `ValueCow` representing null
-    pub const fn null() -> Value<'stmt> {
+    pub const fn null() -> Value {
         Value::Null
     }
 
@@ -44,38 +47,21 @@ impl<'stmt> Value<'stmt> {
         matches!(self, Value::Record(_))
     }
 
-    /// The value's type. `None` if the value is null
-    pub fn ty(&self) -> Type {
-        match self {
-            Value::Bool(_) => Type::Bool,
-            Value::Enum { .. } => todo!("can't generate the type from here"),
-            Value::I64(_) => Type::I64,
-            Value::Id(id) => Type::Id(id.model_id()),
-            Value::Null => Type::Null,
-            Value::Record(_) => todo!(),
-            Value::String(_) => Type::String,
-            Value::List(_) => todo!(),
-        }
+    pub fn record_from_vec(fields: Vec<Value>) -> Value {
+        ValueRecord::from_vec(fields).into()
+    }
+
+    pub fn list_from_vec(items: Vec<Value>) -> Value {
+        Value::List(items)
+    }
+
+    pub fn is_list(&self) -> bool {
+        matches!(self, Value::List(_))
     }
 
     /// Create a `ValueCow` representing the given boolean value
-    pub const fn from_bool(src: bool) -> Value<'stmt> {
+    pub const fn from_bool(src: bool) -> Value {
         Value::Bool(src)
-    }
-
-    pub fn into_owned(self) -> Value<'static> {
-        match self {
-            Value::Bool(value) => Value::Bool(value),
-            Value::Enum(value) => Value::Enum(value.into_owned()),
-            Value::I64(value) => Value::I64(value),
-            Value::Id(value) => Value::Id(value),
-            Value::Null => Value::Null,
-            Value::Record(value) => Value::Record(value.into_static()),
-            Value::String(value) => Value::String(Cow::Owned(value.into_owned())),
-            Value::List(values) => {
-                Value::List(values.into_iter().map(|v| v.into_owned()).collect())
-            }
-        }
     }
 
     // TODO: switch these to `Option`
@@ -103,15 +89,15 @@ impl<'stmt> Value<'stmt> {
 
     pub fn to_string(self) -> Result<String> {
         match self {
-            Self::String(v) => Ok(v.into_owned()),
-            _ => anyhow::bail!("cannot convert value to String"),
+            Self::String(v) => Ok(v),
+            _ => anyhow::bail!("cannot convert value to String {self:#?}"),
         }
     }
 
     pub fn to_option_string(self) -> Result<Option<String>> {
         match self {
             Self::Null => Ok(None),
-            Self::String(v) => Ok(Some(v.into_owned())),
+            Self::String(v) => Ok(Some(v)),
             _ => anyhow::bail!("cannot convert value to String"),
         }
     }
@@ -123,7 +109,7 @@ impl<'stmt> Value<'stmt> {
         }
     }
 
-    pub fn to_record(self) -> Result<RecordCow<'stmt>> {
+    pub fn to_record(self) -> Result<ValueRecord> {
         match self {
             Self::Record(record) => Ok(record),
             _ => anyhow::bail!("canot convert value to record"),
@@ -144,83 +130,159 @@ impl<'stmt> Value<'stmt> {
         }
     }
 
-    pub fn as_record(&self) -> Option<&Record<'_>> {
+    pub fn as_record(&self) -> Option<&ValueRecord> {
         match self {
-            Self::Record(record_cow) => Some(&**record_cow),
+            Self::Record(record) => Some(record),
             _ => None,
         }
     }
 
-    pub fn expect_record(&self) -> &Record<'stmt> {
+    pub fn expect_record(&self) -> &ValueRecord {
         match self {
-            Value::Record(record) => &**record,
+            Value::Record(record) => record,
+            _ => panic!("{self:#?}"),
+        }
+    }
+
+    pub fn expect_record_mut(&mut self) -> &mut ValueRecord {
+        match self {
+            Value::Record(record) => record,
             _ => panic!(),
         }
     }
 
-    pub fn expect_record_mut(&mut self) -> &mut Record<'stmt> {
+    pub fn into_record(self) -> ValueRecord {
         match self {
-            Value::Record(record) => &mut **record,
+            Value::Record(record) => record,
             _ => panic!(),
         }
     }
 
-    pub fn into_record(self) -> Record<'stmt> {
-        match self {
-            Value::Record(record) => record.into_owned(),
-            _ => panic!(),
+    pub fn is_a(&self, ty: &Type) -> bool {
+        match (self, ty) {
+            (Value::Null, _) => true,
+            (Value::Bool(_), Type::Bool) => true,
+            (Value::Bool(_), _) => false,
+            (Value::I64(_), Type::I64) => true,
+            (Value::I64(_), _) => false,
+            (Value::Id(value), Type::Id(ty)) => value.model_id() == *ty,
+            (Value::Id(_), _) => false,
+            (Value::List(value), Type::List(ty)) => {
+                if value.is_empty() {
+                    true
+                } else {
+                    value[0].is_a(ty)
+                }
+            }
+            (Value::List(_), _) => false,
+            (Value::Record(value), Type::Record(fields)) => {
+                if value.len() == fields.len() {
+                    value
+                        .fields
+                        .iter()
+                        .zip(fields.iter())
+                        .all(|(value, ty)| value.is_a(ty))
+                } else {
+                    false
+                }
+            }
+            (Value::Record(_), _) => false,
+            (Value::SparseRecord(value), Type::SparseRecord(fields)) => value.fields == *fields,
+            (Value::String(_), Type::String) => true,
+            (Value::String(_), _) => false,
+            _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
     }
 
-    pub fn take(&mut self) -> Value<'stmt> {
+    #[track_caller]
+    pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
+        let mut ret = Entry::Value(self);
+
+        for step in path.step_iter() {
+            ret = match ret {
+                Entry::Value(Value::Record(record)) => Entry::Value(&record[step]),
+                _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
+            }
+        }
+
+        ret
+    }
+
+    pub fn take(&mut self) -> Value {
         std::mem::take(self)
+    }
+
+    pub fn ty(&self) -> Type {
+        match self {
+            Value::Bool(_) => Type::Bool,
+            Value::I64(_) => Type::I64,
+            Value::Id(v) => Type::Id(v.model_id()),
+            Value::SparseRecord(v) => Type::SparseRecord(v.fields.clone()),
+            Value::Null => Type::Null,
+            Value::Record(v) => Type::Record(v.fields.iter().map(Value::ty).collect()),
+            Value::String(_) => Type::String,
+            Value::List(ref items) => {
+                if items.is_empty() {
+                    Type::List(Box::new(Type::Null))
+                } else {
+                    Type::List(Box::new(items[0].ty()))
+                }
+            }
+            _ => todo!("value={self:#?}"),
+        }
     }
 }
 
-impl<'stmt> Default for Value<'stmt> {
-    fn default() -> Value<'stmt> {
+impl Default for Value {
+    fn default() -> Value {
         Value::Null
     }
 }
 
-impl<'stmt> From<bool> for Value<'stmt> {
-    fn from(src: bool) -> Value<'stmt> {
+impl AsRef<Value> for Value {
+    fn as_ref(&self) -> &Value {
+        self
+    }
+}
+
+impl From<bool> for Value {
+    fn from(src: bool) -> Value {
         Value::Bool(src)
     }
 }
 
-impl<'stmt> From<String> for Value<'stmt> {
-    fn from(src: String) -> Value<'stmt> {
-        Value::String(Cow::Owned(src))
+impl From<String> for Value {
+    fn from(src: String) -> Value {
+        Value::String(src)
     }
 }
 
-impl<'stmt> From<&'stmt String> for Value<'stmt> {
-    fn from(src: &'stmt String) -> Value<'stmt> {
-        Value::String(Cow::Borrowed(src))
+impl From<&String> for Value {
+    fn from(src: &String) -> Value {
+        Value::String(src.clone())
     }
 }
 
-impl<'stmt> From<&'stmt str> for Value<'stmt> {
-    fn from(src: &'stmt str) -> Value<'stmt> {
-        Value::String(Cow::Borrowed(src))
+impl From<&str> for Value {
+    fn from(src: &str) -> Value {
+        Value::String(src.to_string())
     }
 }
 
-impl<'stmt> From<i64> for Value<'stmt> {
+impl From<i64> for Value {
     fn from(value: i64) -> Self {
         Value::I64(value)
     }
 }
 
-impl<'stmt> From<&i64> for Value<'stmt> {
+impl From<&i64> for Value {
     fn from(value: &i64) -> Self {
         Value::I64(*value)
     }
 }
 
-impl<'stmt> From<Record<'stmt>> for Value<'stmt> {
-    fn from(value: Record<'stmt>) -> Self {
-        Value::Record(RecordCow::Owned(value))
+impl From<ValueRecord> for Value {
+    fn from(value: ValueRecord) -> Self {
+        Value::Record(value)
     }
 }

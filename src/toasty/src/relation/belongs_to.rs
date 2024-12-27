@@ -9,11 +9,11 @@ pub struct BelongsTo<T> {
 }
 
 impl<T: Model> BelongsTo<T> {
-    pub fn load(input: Value<'_>) -> crate::Result<BelongsTo<T>> {
+    pub fn load(input: Value) -> crate::Result<BelongsTo<T>> {
         Ok(match input {
             Value::Null => BelongsTo::default(),
             Value::Record(record) => BelongsTo {
-                value: Some(T::load(record.into_owned())?),
+                value: Some(T::load(record)?),
             },
             _ => todo!(),
         })
@@ -35,7 +35,10 @@ impl<T: fmt::Debug> fmt::Debug for BelongsTo<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.value.as_ref() {
             Some(t) => t.fmt(fmt),
-            None => Ok(()),
+            None => {
+                write!(fmt, "<not loaded>")?;
+                Ok(())
+            }
         }
     }
 }

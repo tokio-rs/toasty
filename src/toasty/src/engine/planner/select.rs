@@ -1,108 +1,88 @@
 use super::*;
 
 #[derive(Debug, Default)]
-pub(super) struct Context<'stmt> {
+pub(super) struct Context {
     /// If the statement references any arguments (`stmt::ExprArg`), this
     /// informs the planner how to access those arguments.
-    input: Vec<plan::Input<'stmt>>,
+    input: Vec<plan::InputSource>,
 }
 
-impl<'stmt> Planner<'_, 'stmt> {
+impl Planner<'_> {
     /// Plan a select statement, returning the variable ID where the output will
     /// be stored.
-    pub(super) fn plan_select(&mut self, stmt: stmt::Query<'stmt>) -> plan::VarId {
+    pub(super) fn plan_select(&mut self, stmt: stmt::Query) -> plan::VarId {
         self.plan_select2(&Context::default(), stmt)
     }
 
-    fn plan_select2(&mut self, cx: &Context<'stmt>, mut stmt: stmt::Query<'stmt>) -> plan::VarId {
+    fn plan_select2(&mut self, cx: &Context, mut stmt: stmt::Query) -> plan::VarId {
         self.simplify_stmt_query(&mut stmt);
-        self.plan_simplified_select(cx, &stmt)
+        self.plan_simplified_select(cx, stmt)
     }
 
     pub(super) fn plan_simplified_select(
         &mut self,
-        cx: &Context<'stmt>,
-        stmt: &stmt::Query<'stmt>,
+        cx: &Context,
+        mut stmt: stmt::Query,
     ) -> plan::VarId {
-        let stmt = stmt.body.as_select();
-
-        let source_model = stmt.source.as_model();
+        // TODO: don't clone?
+        let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.model(source_model.model);
 
-        // TODO: inefficient projection. The full table is selected, but not
-        // always used in the projection.
-        let project;
+        let source_model = match &*stmt.body {
+            stmt::ExprSet::Select(select) => {
+                match &select.source {
+                    stmt::Source::Model(source_model) => {
+                        if !source_model.include.is_empty() {
+                            // For now, the full model must be selected
+                            assert!(matches!(select.returning, stmt::Returning::Star));
+                        }
 
-        match &stmt.returning {
-            stmt::Returning::Star => {
-                project = eval::Expr::from_stmt(model.lowering.table_to_model.clone().into());
+                        source_model.clone()
+                    }
+                    _ => todo!(),
+                }
             }
-            stmt::Returning::Expr(returning) => {
-                let mut stmt = returning.clone();
-                stmt.substitute(&model.lowering.table_to_model);
-                project = eval::Expr::from_stmt(stmt)
-            }
-        }
-
-        let ret = if self.capability.is_sql() {
-            self.plan_select_sql(cx, project, stmt)
-        } else {
-            self.plan_select_kv(cx, project, stmt)
+            _ => todo!(),
         };
 
-        if !source_model.include.is_empty() {
-            // For now, the full model must be selected
-            assert!(stmt.returning.is_star());
-        }
+        self.lower_stmt_query(model, &mut stmt);
+
+        let ret = if self.capability.is_sql() {
+            self.plan_select_sql(cx, stmt)
+        } else {
+            self.plan_select_kv(cx, model, stmt)
+        };
 
         for include in &source_model.include {
-            self.plan_select_include(stmt.source.as_model_id(), include, ret);
+            self.plan_select_include(source_model.model, include, ret);
         }
 
         ret
     }
 
-    fn plan_select_sql(
-        &mut self,
-        cx: &Context<'stmt>,
-        project: eval::Expr<'stmt>,
-        stmt: &stmt::Select<'stmt>,
-    ) -> plan::VarId {
-        let model = self.schema.model(stmt.source.as_model_id());
-        let table = self.schema.table(model.lowering.table);
+    fn plan_select_sql(&mut self, cx: &Context, mut stmt: stmt::Query) -> plan::VarId {
+        let input = if cx.input.is_empty() {
+            None
+        } else {
+            self.partition_stmt_query_input(&mut stmt, &cx.input)
+        };
 
-        // TODO: don't clone?
-        let mut filter = stmt.filter.clone();
+        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
+        let output = self
+            .var_table
+            .register_var(stmt::Type::list(project.ret.clone()));
 
-        self.lower_select(table, model, &mut filter);
-
-        let mut sql_project = vec![];
-        let mut sql_ty = vec![];
-
-        for column_id in &model.lowering.columns {
-            let column = table.column(column_id);
-
-            sql_project.push(stmt::Expr::project(*column_id));
-            sql_ty.push(column.ty.clone());
+        if let Some(input) = &input {
+            assert!(input.project.args[0].is_list(), "{input:#?}");
         }
 
-        let sql = sql::Statement::query(
-            self.schema,
-            table.id,
-            stmt::Expr::record(sql_project),
-            filter,
-        );
-
-        let output = self.var_table.register_var();
-
-        self.push_action(plan::QuerySql {
-            input: cx.input.clone(),
-            output: Some(plan::QuerySqlOutput {
+        self.push_action(plan::ExecStatement {
+            input,
+            output: Some(plan::Output {
                 var: output,
-                ty: stmt::Type::Record(sql_ty),
                 project,
             }),
-            sql,
+            stmt: stmt.into(),
         });
 
         output
@@ -110,60 +90,183 @@ impl<'stmt> Planner<'_, 'stmt> {
 
     fn plan_select_kv(
         &mut self,
-        cx: &Context<'stmt>,
-        project: eval::Expr<'stmt>,
-        stmt: &stmt::Select<'stmt>,
+        cx: &Context,
+        model: &Model,
+        mut stmt: stmt::Query,
     ) -> plan::VarId {
-        let model = self.schema.model(stmt.source.as_model_id());
         let table = self.schema.table(model.lowering.table);
 
-        // TODO: don't clone
-        let filter = stmt.filter.clone();
+        // Extract parts of the query that must be executed in-memory.
+        let input = if cx.input.is_empty() {
+            None
+        } else {
+            self.partition_stmt_query_input(&mut stmt, &cx.input)
+        };
 
-        let mut index_plan = self.plan_index_path2(model, &filter);
+        let mut index_plan = match &*stmt.body {
+            stmt::ExprSet::Select(query) => self.plan_index_path2(table, &query.filter),
+            _ => todo!("stmt={stmt:#?}"),
+        };
 
-        let mut index_filter = index_plan.index_filter;
-        let index = self.schema.index(index_plan.index.lowering.index);
-        self.lower_index_filter(table, model, index_plan.index, &mut index_filter);
+        let keys = if index_plan.index.primary_key {
+            self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
+        } else {
+            None
+        };
 
-        if let Some(result_filter) = &mut index_plan.result_filter {
-            self.lower_expr2(model, result_filter);
+        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
+        let output = self
+            .var_table
+            .register_var(stmt::Type::list(project.ret.clone()));
+
+        if keys.is_some() {
+            // Because we are querying by key, the result filter must be
+            // applied in-memory. TODO: some DBs might support filtering in
+            // the DB.
+            if let Some(filter) = &index_plan.result_filter {
+                let returning = stmt
+                    .body
+                    .as_select_mut()
+                    .returning
+                    .as_expr_mut()
+                    .as_record_mut();
+
+                stmt::visit::for_each_expr(filter, |filter_expr| {
+                    if let stmt::Expr::Column(filter_expr) = filter_expr {
+                        let contains = returning.fields.iter().any(|e| match e {
+                            stmt::Expr::Column(e) => e.column == filter_expr.column,
+                            _ => false,
+                        });
+
+                        if !contains {
+                            todo!("returning types won't like up with projection");
+                            /*
+                            returning
+                                .fields
+                                .push(stmt::Expr::column(filter_expr.column));
+                            */
+                        }
+                    }
+                });
+            }
         }
+
+        let columns = match &stmt.body.as_select().returning {
+            stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => expr_record
+                .fields
+                .iter()
+                .map(|expr| match expr {
+                    stmt::Expr::Column(expr) => expr.column,
+                    _ => todo!("stmt={stmt:#?}"),
+                })
+                .collect(),
+            _ => todo!("stmt={stmt:#?}"),
+        };
+
+        // TODO: clean all of this up!
+        let result_post_filter = if !index_plan.index.primary_key || keys.is_some() {
+            index_plan.result_filter.clone().map(|expr| {
+                struct Columns<'a>(&'a mut Vec<stmt::Expr>);
+
+                impl eval::Convert for Columns<'_> {
+                    fn convert_expr_column(
+                        &mut self,
+                        stmt: &stmt::ExprColumn,
+                    ) -> Option<stmt::Expr> {
+                        let index = self
+                            .0
+                            .iter()
+                            .position(|expr| match expr {
+                                stmt::Expr::Column(expr) => expr.column == stmt.column,
+                                _ => false,
+                            })
+                            .unwrap();
+
+                        Some(stmt::Expr::project(stmt::Expr::arg(0), [index]))
+                    }
+                }
+
+                let convert = Columns(
+                    &mut stmt
+                        .body
+                        .as_select_mut()
+                        .returning
+                        .as_expr_mut()
+                        .as_record_mut()
+                        .fields,
+                );
+
+                eval::Func::try_convert_from_stmt(expr, project.args.clone(), convert).unwrap()
+            })
+        } else {
+            None
+        };
 
         if index_plan.index.primary_key {
             // Is the index filter a set of keys
-            if let Some(keys) = self.try_build_key_filter(index, &index_filter) {
+            if let Some(keys) = keys {
                 assert!(index_plan.post_filter.is_none());
 
-                let output = self.var_table.register_var();
-
                 self.push_action(plan::GetByKey {
-                    input: cx.input.clone(),
-                    output,
+                    input,
+                    output: plan::Output {
+                        var: output,
+                        project,
+                    },
                     table: table.id,
-                    columns: model.lowering.columns.clone(),
+                    columns,
                     keys,
-                    project,
-                    post_filter: index_plan.result_filter.map(eval::Expr::from_stmt),
+                    post_filter: result_post_filter,
                 });
 
                 output
             } else {
-                assert!(stmt.returning.is_star());
                 assert!(cx.input.is_empty());
 
-                let output = self.var_table.register_var();
+                let post_filter = index_plan.post_filter.map(|expr| {
+                    struct Columns<'a>(&'a mut Vec<stmt::Expr>);
+
+                    impl eval::Convert for Columns<'_> {
+                        fn convert_expr_column(
+                            &mut self,
+                            stmt: &stmt::ExprColumn,
+                        ) -> Option<stmt::Expr> {
+                            let index = self
+                                .0
+                                .iter()
+                                .position(|expr| match expr {
+                                    stmt::Expr::Column(expr) => expr.column == stmt.column,
+                                    _ => false,
+                                })
+                                .unwrap();
+
+                            Some(stmt::Expr::project(stmt::Expr::arg(0), [index]))
+                        }
+                    }
+
+                    let convert = Columns(
+                        &mut stmt
+                            .body
+                            .as_select_mut()
+                            .returning
+                            .as_expr_mut()
+                            .as_record_mut()
+                            .fields,
+                    );
+
+                    eval::Func::try_convert_from_stmt(expr, project.args.clone(), convert).unwrap()
+                });
 
                 self.push_action(plan::QueryPk {
-                    output,
+                    output: plan::Output {
+                        var: output,
+                        project,
+                    },
                     table: table.id,
-                    columns: model.lowering.columns.clone(),
-                    pk_filter: sql::Expr::from_stmt(self.schema, table.id, index_filter),
-                    project,
-                    filter: index_plan
-                        .result_filter
-                        .map(|stmt| sql::Expr::from_stmt(self.schema, table.id, stmt)),
-                    post_filter: index_plan.post_filter.map(eval::Expr::from_stmt),
+                    columns,
+                    pk_filter: index_plan.index_filter,
+                    filter: index_plan.result_filter,
+                    post_filter,
                 });
 
                 output
@@ -171,30 +274,22 @@ impl<'stmt> Planner<'_, 'stmt> {
         } else {
             assert!(index_plan.post_filter.is_none());
 
-            let filter = sql::Expr::from_stmt(self.schema, table.id, index_filter);
-
-            let pk_by_index_out = self.var_table.register_var();
-            self.push_action(plan::FindPkByIndex {
-                input: cx.input.clone(),
-                output: pk_by_index_out,
-                table: table.id,
-                index: index_plan.index.lowering.index,
-                filter,
-            });
-
-            let get_by_key_out = self.var_table.register_var();
+            let get_by_key_input = self.plan_find_pk_by_index(&mut index_plan, input);
+            let keys = eval::Func::identity(get_by_key_input.project.ret.clone());
 
             self.push_action(plan::GetByKey {
-                input: vec![plan::Input::from_var(pk_by_index_out)],
-                output: get_by_key_out,
+                input: Some(get_by_key_input),
+                output: plan::Output {
+                    var: output,
+                    project,
+                },
                 table: table.id,
-                keys: eval::Expr::project([0]),
+                keys,
                 columns: model.lowering.columns.clone(),
-                project,
-                post_filter: index_plan.result_filter.map(eval::Expr::from_stmt),
+                post_filter: result_post_filter,
             });
 
-            get_by_key_out
+            output
         }
     }
 
@@ -202,10 +297,12 @@ impl<'stmt> Planner<'_, 'stmt> {
         // TODO: move this into verifier
         assert_eq!(base, path.root);
 
-        let [step] = &path[..] else { todo!() };
+        let [step] = &path.projection[..] else {
+            todo!()
+        };
 
         let model = self.model(base);
-        let field = &model.fields[step.into_usize()];
+        let field = &model.fields[*step];
 
         match &field.ty {
             FieldTy::HasMany(rel) => {
@@ -216,16 +313,17 @@ impl<'stmt> Planner<'_, 'stmt> {
                 };
 
                 let cx = Context {
-                    input: vec![plan::Input::project_var_ref(
-                        input,
-                        eval::Expr::map(
-                            eval::Expr::project([0]),
-                            eval::Expr::project(fk_field.target),
-                        ),
-                    )],
+                    input: vec![plan::InputSource::Ref(input)],
                 };
 
-                let filter = stmt::Expr::in_list(fk_field.source, stmt::Expr::arg(0));
+                let filter = stmt::Expr::in_list(
+                    fk_field.source,
+                    stmt::Expr::map(
+                        stmt::Expr::arg(0),
+                        stmt::Expr::project(stmt::Expr::arg(0), fk_field.target),
+                    ),
+                );
+
                 let out = self.plan_select2(&cx, stmt::Query::filter(rel.target, filter));
 
                 // Associate target records with the source
@@ -241,16 +339,16 @@ impl<'stmt> Planner<'_, 'stmt> {
                 };
 
                 let cx = Context {
-                    input: vec![plan::Input::project_var_ref(
-                        input,
-                        eval::Expr::map(
-                            eval::Expr::project([0]),
-                            eval::Expr::project(fk_field.source),
-                        ),
-                    )],
+                    input: vec![plan::InputSource::Ref(input)],
                 };
 
-                let filter = stmt::Expr::in_list(fk_field.target, stmt::Expr::arg(0));
+                let filter = stmt::Expr::in_list(
+                    fk_field.target,
+                    stmt::Expr::map(
+                        stmt::Expr::arg(0),
+                        stmt::Expr::project(stmt::Expr::arg(0), fk_field.source),
+                    ),
+                );
                 let out = self.plan_select2(&cx, stmt::Query::filter(rel.target, filter));
 
                 // Associate target records with the source

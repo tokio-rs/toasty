@@ -1,21 +1,22 @@
+mod eval;
 mod exec;
 
 mod plan;
 use plan::{Action, Plan};
 
 mod planner;
-
+mod simplify;
+mod ty;
 mod verify;
 
 use crate::{Db, Result};
 
 use toasty_core::{
-    eval, sql,
     stmt::{self, Statement, ValueStream},
     Schema,
 };
 
-pub(crate) async fn exec<'stmt>(db: &Db, stmt: Statement<'stmt>) -> Result<ValueStream<'stmt>> {
+pub(crate) async fn exec(db: &Db, stmt: Statement) -> Result<ValueStream> {
     if cfg!(debug_assertions) {
         verify::apply(&db.schema, &stmt);
     }

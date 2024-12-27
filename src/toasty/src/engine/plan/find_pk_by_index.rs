@@ -1,14 +1,14 @@
 use super::*;
-use crate::{driver::*, schema::*};
+use crate::schema::*;
 
 /// Schema: `self` references [index-fields, input-fields] flattened
 #[derive(Debug)]
-pub(crate) struct FindPkByIndex<'stmt> {
+pub(crate) struct FindPkByIndex {
     /// How to access input from the variable table.
-    pub input: Vec<Input<'stmt>>,
+    pub input: Option<Input>,
 
     /// Where to store the output
-    pub output: VarId,
+    pub output: Output,
 
     /// Table to query
     pub table: TableId,
@@ -17,22 +17,11 @@ pub(crate) struct FindPkByIndex<'stmt> {
     pub index: IndexId,
 
     /// Filter to apply to index
-    pub filter: sql::Expr<'stmt>,
+    pub filter: stmt::Expr,
 }
 
-impl<'stmt> FindPkByIndex<'stmt> {
-    pub(crate) fn apply(&self) -> Result<operation::FindPkByIndex<'stmt>> {
-        Ok(operation::FindPkByIndex {
-            table: self.table,
-            index: self.index,
-            // TODO: don't apply if not needed
-            filter: self.filter.clone(),
-        })
-    }
-}
-
-impl<'stmt> From<FindPkByIndex<'stmt>> for Action<'stmt> {
-    fn from(src: FindPkByIndex<'stmt>) -> Action<'stmt> {
+impl From<FindPkByIndex> for Action {
+    fn from(src: FindPkByIndex) -> Action {
         Action::FindPkByIndex(src)
     }
 }

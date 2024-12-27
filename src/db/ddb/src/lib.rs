@@ -4,10 +4,10 @@ use toasty_core::{
     driver::{
         capability,
         operation::{self, Operation},
-        Capability, Driver,
+        Capability, Driver, Response,
     },
     schema::{self, Column, ColumnId},
-    sql, stmt, Schema,
+    stmt, Schema,
 };
 
 use anyhow::Result;
@@ -72,11 +72,7 @@ impl Driver for DynamoDB {
         Ok(())
     }
 
-    async fn exec<'stmt>(
-        &self,
-        schema: &Schema,
-        op: Operation<'stmt>,
-    ) -> Result<stmt::ValueStream<'stmt>> {
+    async fn exec(&self, schema: &Schema, op: Operation) -> Result<Response> {
         self.exec2(schema, op).await
     }
 
@@ -90,24 +86,20 @@ impl Driver for DynamoDB {
 }
 
 impl DynamoDB {
-    async fn exec2<'stmt>(
-        &self,
-        schema: &Schema,
-        op: Operation<'stmt>,
-    ) -> Result<stmt::ValueStream<'stmt>> {
+    async fn exec2(&self, schema: &Schema, op: Operation) -> Result<Response> {
         use Operation::*;
 
         match op {
-            Insert(op) => self.exec_insert(schema, op.into_insert()).await,
             GetByKey(op) => self.exec_get_by_key(schema, op).await,
             QueryPk(op) => self.exec_query_pk(schema, op).await,
             DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
             UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
             FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
             QuerySql(op) => match op.stmt {
-                sql::Statement::Insert(op) => self.exec_insert(schema, op).await,
+                stmt::Statement::Insert(op) => self.exec_insert(schema, op).await,
                 _ => todo!("op={:#?}", op),
             },
+            _ => todo!("op={op:#?}"),
         }
     }
 
@@ -141,7 +133,7 @@ fn ddb_ty(ty: &stmt::Type) -> ScalarAttributeType {
     }
 }
 
-fn ddb_key(table: &schema::Table, key: &stmt::Value<'_>) -> HashMap<String, AttributeValue> {
+fn ddb_key(table: &schema::Table, key: &stmt::Value) -> HashMap<String, AttributeValue> {
     let mut ret = HashMap::new();
 
     for (index, column) in table.primary_key_columns().enumerate() {
@@ -165,7 +157,7 @@ enum V {
     Id(usize, String),
 }
 
-fn ddb_val(val: &stmt::Value<'_>) -> AttributeValue {
+fn ddb_val(val: &stmt::Value) -> AttributeValue {
     match val {
         stmt::Value::Bool(val) => AttributeValue::Bool(*val),
         stmt::Value::String(val) => AttributeValue::S(val.to_string()),
@@ -190,13 +182,13 @@ fn ddb_val(val: &stmt::Value<'_>) -> AttributeValue {
     }
 }
 
-fn ddb_to_val<'a>(ty: &stmt::Type, val: &'a AttributeValue) -> stmt::Value<'a> {
+fn ddb_to_val<'stmt>(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
     use stmt::Type;
     use AttributeValue::*;
 
     match (ty, val) {
         (Type::Bool, Bool(val)) => stmt::Value::from(*val),
-        (Type::String, S(val)) => stmt::Value::from(val),
+        (Type::String, S(val)) => stmt::Value::from(val.clone()),
         (Type::I64, N(val)) => stmt::Value::from(val.parse::<i64>().unwrap()),
         (Type::Id(model), S(val)) => stmt::Value::from(stmt::Id::from_string(*model, val.clone())),
         (Type::Enum(..), S(val)) => {
@@ -216,13 +208,13 @@ fn ddb_to_val<'a>(ty: &stmt::Type, val: &'a AttributeValue) -> stmt::Value<'a> {
             if value.is_null() {
                 stmt::ValueEnum {
                     variant,
-                    fields: stmt::Record::from_vec(vec![]),
+                    fields: stmt::ValueRecord::from_vec(vec![]),
                 }
                 .into()
             } else {
                 stmt::ValueEnum {
                     variant,
-                    fields: stmt::Record::from_vec(vec![value]),
+                    fields: stmt::ValueRecord::from_vec(vec![value]),
                 }
                 .into()
             }
@@ -261,12 +253,12 @@ fn ddb_key_schema(
 fn item_to_record<'a, 'stmt>(
     item: &HashMap<String, AttributeValue>,
     columns: impl Iterator<Item = &'a schema::Column>,
-) -> Result<stmt::Record<'stmt>> {
-    Ok(stmt::Record::from_vec(
+) -> Result<stmt::ValueRecord> {
+    Ok(stmt::ValueRecord::from_vec(
         columns
             .map(|column| {
                 if let Some(value) = item.get(&column.name) {
-                    ddb_to_val(&column.ty, value).into_owned()
+                    ddb_to_val(&column.ty, value)
                 } else {
                     stmt::Value::Null
                 }
@@ -279,33 +271,32 @@ fn ddb_expression<'a>(
     schema: &'a Schema,
     attrs: &mut ExprAttrs,
     primary: bool,
-    expr: &sql::Expr<'_>,
+    expr: &stmt::Expr,
 ) -> String {
     match expr {
-        sql::Expr::BinaryOp(expr_binary_op) => {
+        stmt::Expr::BinaryOp(expr_binary_op) => {
             let lhs = ddb_expression(schema, attrs, primary, &expr_binary_op.lhs);
             let rhs = ddb_expression(schema, attrs, primary, &expr_binary_op.rhs);
 
             match expr_binary_op.op {
-                sql::BinaryOp::Eq => format!("{lhs} = {rhs}"),
-                sql::BinaryOp::Ne if primary => {
+                stmt::BinaryOp::Eq => format!("{lhs} = {rhs}"),
+                stmt::BinaryOp::Ne if primary => {
                     todo!("!= conditions on primary key not supported")
                 }
-                sql::BinaryOp::Ne => format!("{lhs} <> {rhs}"),
-                sql::BinaryOp::Gt => format!("{lhs} > {rhs}"),
-                sql::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
-                sql::BinaryOp::Lt => format!("{lhs} < {rhs}"),
-                sql::BinaryOp::Le => format!("{lhs} <= {rhs}"),
-                // stmt::BinaryOp::IsA => format!("begins_with({lhs}, {rhs})"),
+                stmt::BinaryOp::Ne => format!("{lhs} <> {rhs}"),
+                stmt::BinaryOp::Gt => format!("{lhs} > {rhs}"),
+                stmt::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
+                stmt::BinaryOp::Lt => format!("{lhs} < {rhs}"),
+                stmt::BinaryOp::Le => format!("{lhs} <= {rhs}"),
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
-        sql::Expr::Column(column_id) => {
-            let column = schema.column(column_id);
+        stmt::Expr::Column(expr_column) => {
+            let column = schema.column(expr_column.column);
             attrs.column(column).to_string()
         }
-        sql::Expr::Value(val) => attrs.value(val),
-        sql::Expr::And(expr_and) => {
+        stmt::Expr::Value(val) => attrs.value(val),
+        stmt::Expr::And(expr_and) => {
             let operands = expr_and
                 .operands
                 .iter()
@@ -313,18 +304,11 @@ fn ddb_expression<'a>(
                 .collect::<Vec<_>>();
             operands.join(" AND ")
         }
-        sql::Expr::BeginsWith(begins_with) => {
+        stmt::Expr::Pattern(stmt::ExprPattern::BeginsWith(begins_with)) => {
             let expr = ddb_expression(schema, attrs, primary, &begins_with.expr);
             let substr = ddb_expression(schema, attrs, primary, &begins_with.pattern);
             format!("begins_with({expr}, {substr})")
         }
-        /*
-        stmt::Expr::Type(expr_ty) => {
-            let variant = expr_ty.variant.unwrap();
-            let value = format!("{}#", variant);
-            attrs.value(&value.into())
-        }
-        */
         _ => todo!("FILTER = {:#?}", expr),
     }
 }
@@ -350,7 +334,7 @@ impl ExprAttrs {
         }
     }
 
-    fn value(&mut self, val: &stmt::Value<'_>) -> String {
+    fn value(&mut self, val: &stmt::Value) -> String {
         self.ddb_value(ddb_val(val))
     }
 

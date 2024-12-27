@@ -3,44 +3,64 @@ use super::*;
 use std::ops;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprAnd<'stmt> {
-    pub operands: Vec<Expr<'stmt>>,
+pub struct ExprAnd {
+    pub operands: Vec<Expr>,
 }
 
-impl<'stmt> ExprAnd<'stmt> {
-    pub fn new(operands: Vec<Expr<'stmt>>) -> ExprAnd<'stmt> {
-        ExprAnd { operands }
+impl Expr {
+    pub fn and(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
+        let mut lhs = lhs.into();
+        let rhs = rhs.into();
+
+        match (&mut lhs, rhs) {
+            (Expr::And(lhs_and), Expr::And(rhs_and)) => {
+                lhs_and.operands.extend(rhs_and.operands);
+                lhs
+            }
+            (Expr::And(lhs_and), rhs) => {
+                lhs_and.operands.push(rhs);
+                lhs
+            }
+            (_, Expr::And(mut rhs_and)) => {
+                rhs_and.operands.push(lhs);
+                rhs_and.into()
+            }
+            (_, rhs) => ExprAnd {
+                operands: vec![lhs, rhs],
+            }
+            .into(),
+        }
     }
 }
 
-impl<'stmt> ops::Deref for ExprAnd<'stmt> {
-    type Target = [Expr<'stmt>];
+impl ops::Deref for ExprAnd {
+    type Target = [Expr];
 
     fn deref(&self) -> &Self::Target {
         self.operands.deref()
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a ExprAnd<'stmt> {
-    type IntoIter = std::slice::Iter<'a, Expr<'stmt>>;
-    type Item = &'a Expr<'stmt>;
+impl<'a> IntoIterator for &'a ExprAnd {
+    type IntoIter = std::slice::Iter<'a, Expr>;
+    type Item = &'a Expr;
 
     fn into_iter(self) -> Self::IntoIter {
         self.operands.iter()
     }
 }
 
-impl<'a, 'stmt> IntoIterator for &'a mut ExprAnd<'stmt> {
-    type IntoIter = std::slice::IterMut<'a, Expr<'stmt>>;
-    type Item = &'a mut Expr<'stmt>;
+impl<'a> IntoIterator for &'a mut ExprAnd {
+    type IntoIter = std::slice::IterMut<'a, Expr>;
+    type Item = &'a mut Expr;
 
     fn into_iter(self) -> Self::IntoIter {
         self.operands.iter_mut()
     }
 }
 
-impl<'stmt> From<ExprAnd<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprAnd<'stmt>) -> Self {
+impl From<ExprAnd> for Expr {
+    fn from(value: ExprAnd) -> Self {
         Expr::And(value)
     }
 }

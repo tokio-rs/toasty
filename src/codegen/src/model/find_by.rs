@@ -39,9 +39,9 @@ impl<'a> Generator<'a> {
 
         quote! {
             // TODO: should this borrow more?
-            pub fn #query_method_name(self, #query_method_args) ->  #query_struct_name<'a> {
+            pub fn #query_method_name(self, #query_method_args) ->  #query_struct_name {
                 #query_struct_name {
-                    stmt: stmt::Select::from_expr(#body)
+                    stmt: stmt::Select::filter(#body)
                 }
             }
         }
@@ -95,7 +95,7 @@ impl<'a> Generator<'a> {
                     let relation_query_struct_path = self.relation_query_struct_path(field, 0);
 
                     Some(quote! {
-                        pub fn #name(mut self) -> #relation_query_struct_path<'a> {
+                        pub fn #name(mut self) -> #relation_query_struct_path {
                             #relation_query_struct_path::with_scope(self)
                         }
                     })
@@ -106,19 +106,19 @@ impl<'a> Generator<'a> {
         quote! {
             impl super::#model_struct_name {
                 // TODO: should this borrow more?
-                pub fn #query_method_name<'a>(#query_method_args) ->  #query_struct_name<'a> {
+                pub fn #query_method_name(#query_method_args) ->  #query_struct_name {
                     #query_struct_name {
-                        query: Query::from_stmt(stmt::Select::from_expr(#query))
+                        query: Query::from_stmt(stmt::Select::filter(#query))
                     }
                 }
             }
 
-            pub struct #query_struct_name<'a> {
-                query: Query<'a>,
+            pub struct #query_struct_name {
+                query: Query,
             }
 
-            impl<'a> #query_struct_name<'a> {
-                pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, super::#model_struct_name>> {
+            impl #query_struct_name {
+                pub async fn all(self, db: &Db) -> Result<Cursor<super::#model_struct_name>> {
                     self.query.all(db).await
                 }
 
@@ -130,7 +130,7 @@ impl<'a> Generator<'a> {
                     self.query.get(db).await
                 }
 
-                pub fn update(self) -> super::UpdateQuery<'a> {
+                pub fn update(self) -> super::UpdateQuery {
                     super::UpdateQuery::from(self.query)
                 }
 
@@ -138,18 +138,18 @@ impl<'a> Generator<'a> {
                     self.query.delete(db).await
                 }
 
-                pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> #query_struct_name<'a> {
+                pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> #query_struct_name {
                     let path = path.into();
                     self.query.stmt.include(path);
                     self
                 }
 
-                pub fn filter(self, filter: stmt::Expr<'a, bool>) -> Query<'a> {
+                pub fn filter(self, filter: stmt::Expr<bool>) -> Query {
                     let stmt = self.into_select();
                     Query::from_stmt(stmt.and(filter))
                 }
 
-                pub async fn collect<A>(self, db: &'a Db) -> Result<A>
+                pub async fn collect<A>(self, db: &Db) -> Result<A>
                 where
                     A: FromCursor<super::#model_struct_name>
                 {
@@ -159,10 +159,10 @@ impl<'a> Generator<'a> {
                 #( #relation_methods )*
             }
 
-            impl<'a> stmt::IntoSelect<'a> for #query_struct_name<'a> {
+            impl stmt::IntoSelect for #query_struct_name {
                 type Model = super::#model_struct_name;
 
-                fn into_select(self) -> stmt::Select<'a, Self::Model> {
+                fn into_select(self) -> stmt::Select<Self::Model> {
                     self.query.into_select()
                 }
             }
@@ -201,22 +201,22 @@ impl<'a> Generator<'a> {
         quote! {
             impl super::#model_struct_name {
                 // TODO: should this borrow more?
-                pub fn #query_method_name<'a>() ->  #query_struct_name<'a> {
+                pub fn #query_method_name() ->  #query_struct_name {
                     #query_struct_name { items: vec![] }
                 }
             }
 
-            pub struct #query_struct_name<'a> {
-                items: Vec<stmt::Expr<'a, #item_ty>>,
+            pub struct #query_struct_name {
+                items: Vec<stmt::Expr<#item_ty>>,
             }
 
-            impl<'a> #query_struct_name<'a> {
+            impl #query_struct_name {
                 pub fn item(mut self, #query_method_args ) -> Self {
                     self.items.push( #query_push_item );
                     self
                 }
 
-                pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, super::#model_struct_name>> {
+                pub async fn all(self, db: &Db) -> Result<Cursor<super::#model_struct_name>> {
                     db.all(self.into_select()).await
                 }
 
@@ -228,7 +228,7 @@ impl<'a> Generator<'a> {
                     db.get(self.into_select()).await
                 }
 
-                pub fn update(self) -> super::UpdateQuery<'a> {
+                pub fn update(self) -> super::UpdateQuery {
                     super::UpdateQuery::from(self.into_select())
                 }
 
@@ -236,12 +236,12 @@ impl<'a> Generator<'a> {
                     db.delete(self.into_select()).await
                 }
 
-                pub fn filter(self, filter: stmt::Expr<'a, bool>) -> Query<'a> {
+                pub fn filter(self, filter: stmt::Expr<bool>) -> Query {
                     let stmt = self.into_select();
                     Query::from_stmt(stmt.and(filter))
                 }
 
-                pub async fn collect<A>(self, db: &'a Db) -> Result<A>
+                pub async fn collect<A>(self, db: &Db) -> Result<A>
                 where
                     A: FromCursor<super::#model_struct_name>
                 {
@@ -251,11 +251,11 @@ impl<'a> Generator<'a> {
                 // #( #relation_methods )*
             }
 
-            impl<'a> stmt::IntoSelect<'a> for #query_struct_name<'a> {
+            impl stmt::IntoSelect for #query_struct_name {
                 type Model = super::#model_struct_name;
 
-                fn into_select(self) -> stmt::Select<'a, Self::Model> {
-                    stmt::Select::from_expr(#query)
+                fn into_select(self) -> stmt::Select<Self::Model> {
+                    stmt::Select::filter(#query)
                 }
             }
         }
@@ -275,7 +275,7 @@ impl<'a> Generator<'a> {
                     let target_struct_name = self.model_struct_path(*model_id, depth);
 
                     quote!(
-                        #name: impl stmt::IntoExpr<'a, #target_struct_name>
+                        #name: impl stmt::IntoExpr<#target_struct_name>
                     )
                 }
                 stmt::Type::ForeignKey(field_id) => {
@@ -283,14 +283,14 @@ impl<'a> Generator<'a> {
                     let relation_struct_name = self.relation_struct_name(field_id);
 
                     quote!(
-                        #name: impl stmt::IntoExpr<'a, super::relation::#field_name::#relation_struct_name>
+                        #name: impl stmt::IntoExpr<super::relation::#field_name::#relation_struct_name>
                     )
                 }
                 ty => {
                     let ty = self.ty(ty, depth);
 
                     quote! {
-                        #name: impl stmt::IntoExpr<'a, #ty>
+                        #name: impl stmt::IntoExpr<#ty>
                     }
                 }
             }
@@ -331,12 +331,12 @@ impl<'a> Generator<'a> {
         let query_struct_name = self.query_struct_name(query.id);
 
         quote! {
-            pub struct #query_struct_name<'a> {
-                stmt: stmt::Select<'a, #model_struct_name>,
+            pub struct #query_struct_name {
+                stmt: stmt::Select<#model_struct_name>,
             }
 
-            impl<'a> #query_struct_name<'a> {
-                pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, #model_struct_name>> {
+            impl #query_struct_name {
+                pub async fn all(self, db: &Db) -> Result<Cursor<#model_struct_name>> {
                     db.all(self.stmt).await
                 }
 
@@ -348,7 +348,7 @@ impl<'a> Generator<'a> {
                     db.get(self.stmt).await
                 }
 
-                pub fn update(self) -> #path UpdateQuery<'a> {
+                pub fn update(self) -> #path UpdateQuery {
                     #path UpdateQuery::from(self.stmt)
                 }
 
@@ -358,10 +358,10 @@ impl<'a> Generator<'a> {
                 }
             }
 
-            impl<'a> stmt::IntoSelect<'a> for #query_struct_name<'a> {
+            impl stmt::IntoSelect for #query_struct_name {
                 type Model = #model_struct_name;
 
-                fn into_select(self) -> stmt::Select<'a, Self::Model> {
+                fn into_select(self) -> stmt::Select<Self::Model> {
                     self.stmt
                 }
             }
@@ -372,43 +372,18 @@ impl<'a> Generator<'a> {
         &self,
         mid: ModelId,
         args: &[TokenStream],
-        filter: &stmt::Expr<'static>,
+        filter: &stmt::Expr,
         depth: usize,
     ) -> TokenStream {
-        let model = self.schema.model(mid);
         let struct_name = self.model_struct_path(mid, depth);
 
         match filter {
             stmt::Expr::And(exprs) => self.gen_expr_chain(mid, args, exprs, quote!(and), depth),
             stmt::Expr::Or(exprs) => self.gen_expr_chain(mid, args, exprs, quote!(or), depth),
-            stmt::Expr::Project(expr_project) => {
-                let steps = expr_project.projection.as_slice();
-                let mut current_model = model;
-                let mut base = quote!(#struct_name);
-
-                for i in 0..steps.len() {
-                    let field = &current_model.fields[steps[i].into_usize()];
-                    let field_id = field.id;
-                    let field_const_name = self.field_const_name(field_id);
-                    base = quote!( #base :: #field_const_name );
-
-                    match &field.ty {
-                        FieldTy::BelongsTo(rel) => {
-                            current_model = self.schema.model(rel.target);
-                        }
-                        FieldTy::HasMany(rel) => {
-                            current_model = self.schema.model(rel.target);
-                        }
-                        FieldTy::HasOne(rel) => {
-                            current_model = self.schema.model(rel.target);
-                        }
-                        FieldTy::Primitive(_) => {
-                            assert_eq!(i + 1, steps.len());
-                        }
-                    }
-                }
-
-                base
+            stmt::Expr::Field(expr_field) => {
+                let base = quote!(#struct_name);
+                let field = self.field_const_name(expr_field.field);
+                quote!( #base :: #field )
             }
             stmt::Expr::Arg(arg) => {
                 let arg = &args[arg.position];
@@ -427,6 +402,7 @@ impl<'a> Generator<'a> {
             }
             stmt::Expr::List(exprs) => {
                 let exprs = exprs
+                    .items
                     .iter()
                     .map(|expr| self.gen_expr_from_stmt(mid, args, expr, depth));
                 quote!(vec![ #( #exprs ),* ])
@@ -461,13 +437,7 @@ impl<'a> Generator<'a> {
 
                 quote!(#lhs . in_query ( #subquery ))
             }
-            stmt::Expr::Pattern(_)
-            | stmt::Expr::Concat(_)
-            | stmt::Expr::Stmt(_)
-            | stmt::Expr::Type(_)
-            | stmt::Expr::Enum(_) => {
-                todo!()
-            }
+            expr => todo!("expr={expr:#?}"),
         }
     }
 
@@ -475,7 +445,7 @@ impl<'a> Generator<'a> {
         &self,
         model_id: ModelId,
         args: &[TokenStream],
-        exprs: &[stmt::Expr<'static>],
+        exprs: &[stmt::Expr],
         f: TokenStream,
         depth: usize,
     ) -> TokenStream {

@@ -1,8 +1,8 @@
 use super::*;
 use toasty_core::schema::FieldTy;
 
-impl<'stmt> Exec<'_, 'stmt> {
-    pub(super) async fn exec_associate(&mut self, action: &plan::Associate) -> Result<()> {
+impl Exec<'_> {
+    pub(super) async fn action_associate(&mut self, action: &plan::Associate) -> Result<()> {
         let mut source = self.vars.load(action.source).collect().await?;
         let target = self.vars.load(action.target).collect().await?;
 
@@ -46,7 +46,8 @@ impl<'stmt> Exec<'_, 'stmt> {
                         }
                     }
 
-                    source_item[action.field.index] = stmt::Record::from_vec(associated).into();
+                    source_item[action.field.index] =
+                        stmt::ValueRecord::from_vec(associated).into();
                 }
             }
             _ => todo!(),

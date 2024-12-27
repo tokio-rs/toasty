@@ -1,9 +1,9 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExprPattern<'stmt> {
+pub enum ExprPattern {
     /// Tests if a string expression starts with a particular substring.
-    BeginsWith(ExprBeginsWith<'stmt>),
+    BeginsWith(ExprBeginsWith),
 
-    Like(ExprLike<'stmt>),
+    Like(ExprLike),
 }

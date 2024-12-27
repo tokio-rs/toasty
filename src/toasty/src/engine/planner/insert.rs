@@ -3,205 +3,167 @@ use super::*;
 use std::collections::hash_map::Entry;
 
 /// Process the scope component of an insert statement.
-struct ApplyInsertScope<'a, 'stmt> {
-    expr: &'a mut stmt::Expr<'stmt>,
+struct ApplyInsertScope<'a> {
+    expr: &'a mut stmt::Expr,
 }
 
-impl<'stmt> Planner<'_, 'stmt> {
-    pub(super) fn plan_insert(&mut self, mut stmt: stmt::Insert<'stmt>) -> Option<plan::VarId> {
+impl Planner<'_> {
+    pub(super) fn plan_insert(&mut self, mut stmt: stmt::Insert) -> Option<plan::VarId> {
         self.simplify_stmt_insert(&mut stmt);
 
-        let model = self.model(stmt.scope.body.as_select().source.as_model_id());
+        let model = self.model(stmt.target.as_model());
 
-        if let stmt::Expr::Record(record) = &stmt.values {
-            assert!(!record.is_empty());
+        if let stmt::ExprSet::Values(values) = &*stmt.source.body {
+            assert!(!values.is_empty(), "stmt={stmt:#?}");
         }
 
-        let filter = &stmt.scope.body.as_select().filter;
+        // Do initial pre-processing of insertion values (apply defaults, apply
+        // scope, check constraints, ...)
+        self.preprocess_insert_values(model, &mut stmt);
+
+        self.lower_stmt_insert(model, &mut stmt);
+
+        // If the statement `Returning` is constant (i.e. does not depend on the
+        // database evaluating the statement), then extract it here.
+        let const_returning = self.constantize_insert_returning(&mut stmt);
+
+        let mut output_var = None;
+
+        // First, lower the returning part of the statement and get any
+        // necessary in-memory projection.
+        let project = stmt
+            .returning
+            .as_mut()
+            .map(|returning| self.partition_returning(returning));
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
-                // Lol, clean this up
-                if let Some(returning) = &stmt.returning {
-                    let stmt::Returning::Expr(expr) = returning else {
-                        todo!("handle other returning")
-                    };
-
-                    match &model.primary_key.fields[..] {
-                        [pk_field] => {
-                            let stmt::Expr::Project(expr_project) = expr else {
-                                todo!()
-                            };
-                            let [step] = expr_project.projection.as_slice() else {
-                                todo!()
-                            };
-                            assert_eq!(step.into_usize(), pk_field.index);
-                        }
-                        _ => todo!(),
-                    }
-                }
-
+                // TODO
+                assert!(!matches!(stmt.returning, Some(stmt::Returning::Expr(_))));
+                assert_eq!(
+                    self.write_actions[e.get().action]
+                        .as_insert()
+                        .stmt
+                        .returning,
+                    stmt.returning
+                );
                 e.get().action
             }
             Entry::Vacant(e) => {
+                // TODO: don't always return values if none are needed.
                 let action = self.write_actions.len();
-                let mut returning = vec![];
 
-                e.insert(Insertion { action });
+                let mut plan = plan::Insert {
+                    input: None,
+                    output: None,
+                    stmt: stmt::Insert {
+                        target: stmt.target.clone(),
+                        source: stmt::Values::default().into(),
+                        returning: stmt.returning.take(),
+                    },
+                };
 
-                for column in &model.lowering.columns {
-                    returning.push(sql::Expr::column(column));
+                if let Some(project) = project {
+                    let var = self.var_table.register_var(project.ret.clone());
+                    plan.output = Some(plan::Output { var, project });
+                    output_var = Some(var);
                 }
 
-                self.push_write_action(plan::Insert {
-                    input: vec![],
-                    output: None,
-                    stmt: sql::Insert {
-                        table: model.lowering.table,
-                        columns: model.lowering.columns.clone(),
-                        source: Box::new(sql::Query::values(sql::Values::default())),
-                        returning: Some(returning),
-                    },
-                });
+                e.insert(Insertion { action });
+                self.push_write_action(plan);
 
                 action
             }
         };
 
-        // This entire thing is bogus
-        let mut returning_pk = if let Some(stmt::Returning::Expr(e)) = &stmt.returning {
-            match e {
-                stmt::Expr::Project(expr_project) => {
-                    let [step] = &expr_project.projection[..] else {
-                        todo!()
-                    };
-                    let [pk] = &model.primary_key.fields[..] else {
-                        todo!()
-                    };
-
-                    if step.into_usize() == pk.index {
-                        Some(vec![])
-                    } else {
-                        todo!()
-                    }
-                }
-                _ => todo!(),
-            }
-        } else {
-            None
-        };
-
-        let records = match stmt.values {
-            stmt::Expr::Record(records) => records,
+        let rows = match *stmt.source.body {
+            stmt::ExprSet::Values(values) => values.rows,
             _ => todo!("stmt={:#?}", stmt),
         };
 
-        for mut entry in records {
-            if !filter.is_true() {
-                self.apply_insert_scope(&mut entry, filter);
-            }
+        let dst = &mut self.write_actions[action]
+            .as_insert_mut()
+            .stmt
+            .source
+            .body
+            .as_values_mut()
+            .rows;
 
-            self.plan_insert_record(model, entry, action, returning_pk.as_mut());
+        dst.extend(rows);
+
+        if let Some((values, ty)) = const_returning {
+            assert!(output_var.is_none());
+
+            output_var = Some(self.set_var(values, ty));
         }
-
-        let output_var;
-        let output_plan;
-
-        match &stmt.returning {
-            Some(stmt::Returning::Star) => {
-                let project = eval::Expr::from_stmt(model.lowering.table_to_model.clone().into());
-
-                // TODO: cache this
-                let ty = stmt::Type::Record(
-                    model
-                        .lowering
-                        .columns
-                        .iter()
-                        .map(|column_id| self.schema.column(column_id).ty.clone())
-                        .collect(),
-                );
-
-                let var = self.var_table.register_var();
-                output_plan = Some(plan::InsertOutput { var, project, ty });
-                output_var = Some(var);
-            }
-            Some(stmt::Returning::Expr(_)) => {
-                // TODO: this isn't actually correct
-                output_var = Some(self.set_var(returning_pk.unwrap()));
-                output_plan = None;
-            }
-            None => {
-                output_var = None;
-                output_plan = None;
-            }
-        };
-
-        let action = self.insertions[&model.id].action;
-        self.write_actions[action].as_insert_mut().output = output_plan;
 
         output_var
     }
 
-    fn plan_insert_record(
-        &mut self,
-        model: &Model,
-        mut expr: stmt::Expr<'stmt>,
-        action: usize,
-        returning_pk: Option<&mut Vec<stmt::Value<'stmt>>>,
-    ) {
-        self.apply_insertion_defaults(model, &mut expr);
-        self.plan_insert_relation_stmts(model, &mut expr);
-        self.verify_non_nullable_fields_have_values(model, &mut expr);
-        self.apply_fk_association(model, &expr, returning_pk);
+    fn preprocess_insert_values(&mut self, model: &Model, stmt: &mut stmt::Insert) {
+        let stmt::ExprSet::Values(values) = &mut *stmt.source.body else {
+            todo!()
+        };
 
-        let lowered = self.lower_insert_expr(model, expr);
+        let scope_expr = match &stmt.target {
+            stmt::InsertTarget::Scope(query) => Some(&query.body.as_select().filter),
+            _ => None,
+        };
 
-        self.write_actions[action]
-            .as_insert_mut()
-            .stmt
-            .source
-            .as_values_mut()
-            .rows
-            .push(lowered);
+        for row in &mut values.rows {
+            if let Some(scope_expr) = scope_expr {
+                self.apply_insert_scope(row, scope_expr);
+            }
+
+            self.apply_insertion_defaults(model, row);
+            self.plan_insert_relation_stmts(model, row);
+            self.verify_non_nullable_fields_have_values(model, row);
+        }
     }
 
     // Checks all fields of a record and handles nulls
-    fn apply_insertion_defaults(&mut self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
+    fn apply_insertion_defaults(&mut self, model: &Model, expr: &mut stmt::Expr) {
         // TODO: make this smarter.. a lot smarter
 
-        // First, we have to find all belongs-to fields and normalize them to FK values
+        // First, we pad the record to account for all fields
+        if let stmt::Expr::Record(expr_record) = expr {
+            // TODO: get rid of this
+            assert_eq!(expr_record.len(), model.fields.len());
+            // expr_record.resize(model.fields.len(), stmt::Value::Null);
+        }
+
+        // Next, we have to find all belongs-to fields and normalize them to FK
+        // values
         for field in &model.fields {
             if let FieldTy::BelongsTo(rel) = &field.ty {
-                let field_expr = expr.resolve_mut(field.id);
+                let [fk_field] = &rel.foreign_key.fields[..] else {
+                    todo!()
+                };
 
-                if !field_expr.is_value() || field_expr.is_null() {
+                let mut field_expr = expr.entry_mut(field.id.index);
+
+                if !field_expr.is_value() || field_expr.is_value_null() {
                     continue;
                 }
 
-                // Values should be remapped...
-                match &rel.foreign_key.fields[..] {
-                    [fk_field] => {
-                        let e = field_expr.take();
-                        expr[fk_field.source.index] = e;
-                    }
-                    _ => todo!(),
-                }
+                let e = field_expr.take();
+                expr.entry_mut(fk_field.source.index).insert(e);
             }
         }
 
         // We have to handle auto fields first because they are often the
         // identifier which may be referenced to handle associations.
         for field in &model.fields {
-            let field_expr = expr.resolve_mut(field.id);
+            let mut field_expr = expr.entry_mut(field.id.index);
 
-            if field_expr.is_null() {
+            if field_expr.is_value_null() {
                 // If the field is defined to be auto-populated, then populate
                 // it here.
                 if let Some(auto) = &field.auto {
                     match auto {
                         Auto::Id => {
                             let id = uuid::Uuid::new_v4().to_string();
-                            *field_expr = stmt::Id::from_string(model.id, id).into();
+                            field_expr.insert(stmt::Id::from_string(model.id, id).into());
                         }
                     }
                 }
@@ -209,19 +171,15 @@ impl<'stmt> Planner<'_, 'stmt> {
         }
     }
 
-    fn verify_non_nullable_fields_have_values(
-        &mut self,
-        model: &Model,
-        expr: &mut stmt::Expr<'stmt>,
-    ) {
+    fn verify_non_nullable_fields_have_values(&mut self, model: &Model, expr: &mut stmt::Expr) {
         for field in &model.fields {
             if field.nullable {
                 continue;
             }
 
-            let field_expr = expr.resolve_mut(field.id);
+            let field_expr = expr.entry(field.id.index);
 
-            if field_expr.is_null() {
+            if field_expr.is_value_null() {
                 // Relations are handled differently
                 if !field.ty.is_relation() {
                     panic!(
@@ -236,9 +194,9 @@ impl<'stmt> Planner<'_, 'stmt> {
         }
     }
 
-    fn plan_insert_relation_stmts(&mut self, model: &Model, expr: &mut stmt::Expr<'stmt>) {
+    fn plan_insert_relation_stmts(&mut self, model: &Model, expr: &mut stmt::Expr) {
         for (i, field) in model.fields.iter().enumerate() {
-            if expr[i].is_null() {
+            if expr.entry(i).is_value_null() {
                 if !field.nullable && field.ty.is_has_one() {
                     panic!(
                         "Insert missing non-nullable field; model={}; field={}; ty={:#?}; expr={:#?}",
@@ -257,27 +215,37 @@ impl<'stmt> Planner<'_, 'stmt> {
                 assert!(!self.insertions.contains_key(&has_many.target));
 
                 let scope = self.inserted_query_stmt(model, expr);
-                self.plan_mut_has_many_expr(has_many, expr[i].take(), &scope);
+                self.plan_mut_has_many_expr(
+                    has_many,
+                    stmt::AssignmentOp::Insert,
+                    expr.entry_mut(i).take(),
+                    &scope,
+                );
             } else if let Some(has_one) = field.ty.as_has_one() {
                 // For now, we need to keep this separate
                 assert!(!self.insertions.contains_key(&has_one.target));
 
                 let scope = self.inserted_query_stmt(model, expr);
-                self.plan_mut_has_one_expr(has_one, expr[i].take(), &scope, true);
+                self.plan_mut_has_one_expr(has_one, expr.entry_mut(i).take(), &scope, true);
             } else if let Some(belongs_to) = field.ty.as_belongs_to() {
-                if expr[i].is_stmt() {
-                    let expr_stmt = expr[i].take().into_stmt();
+                let mut entry = expr.entry_mut(i);
+
+                if entry.is_statement() {
+                    let expr_stmt = entry.take().into_stmt();
                     let scope = self.inserted_query_stmt(model, expr);
+                    let mut entry = expr.entry_mut(i);
+
+                    debug_assert!(entry.is_expr(), "entry={entry:#?}");
 
                     self.plan_mut_belongs_to_stmt(
                         field,
                         *expr_stmt.stmt,
-                        &mut expr[i],
+                        entry.as_expr_mut(),
                         &scope,
                         true,
                     );
 
-                    match expr[i].take() {
+                    match entry.take() {
                         stmt::Expr::Value(value) => match value {
                             stmt::Value::Null => {}
                             stmt::Value::Record(_) => todo!("composite key"),
@@ -285,7 +253,7 @@ impl<'stmt> Planner<'_, 'stmt> {
                                 let [fk_field] = &belongs_to.foreign_key.fields[..] else {
                                     todo!()
                                 };
-                                expr[fk_field.source.index] = value.into();
+                                expr.entry_mut(fk_field.source.index).insert(value.into());
                             }
                         },
                         e => todo!("expr={:#?}", e),
@@ -295,49 +263,95 @@ impl<'stmt> Planner<'_, 'stmt> {
         }
     }
 
-    fn apply_fk_association(
-        &self,
-        model: &Model,
-        expr: &stmt::Expr<'stmt>,
-        returning_pk: Option<&mut Vec<stmt::Value<'stmt>>>,
-    ) {
-        if let Some(keys) = returning_pk {
-            let mut pk = model.primary_key_fields();
-
-            if pk.len() == 1 {
-                let i = pk.next().unwrap().id.index;
-                // TODO: clean this up
-                keys.push(eval::Expr::from_stmt(expr[i].clone()).eval_const());
-            } else {
-                todo!("TODO: batch insert relations with composite PK");
-            }
-        }
-    }
-
     /// Returns a select statement that will select the newly inserted record
-    fn inserted_query_stmt(&self, model: &Model, expr: &stmt::Expr<'stmt>) -> stmt::Query<'stmt> {
+    fn inserted_query_stmt(&self, model: &Model, expr: &stmt::Expr) -> stmt::Query {
         // The owner's primary key
         let mut args = vec![];
 
         for pk_field in model.primary_key_fields() {
-            let expr = eval::Expr::from_stmt(expr[pk_field.id.index].clone());
-            args.push(expr.eval_const());
+            // let expr = eval::Expr::from(expr.entry(pk_field.id.index).to_value());
+            args.push(expr.entry(pk_field.id.index).to_value());
         }
 
-        model.find_by_id(self.schema, stmt::substitute::args(&args[..]))
+        model.find_by_id(self.schema, &args)
     }
 
-    fn apply_insert_scope(&mut self, expr: &mut stmt::Expr<'stmt>, scope: &stmt::Expr<'stmt>) {
+    fn apply_insert_scope(&mut self, expr: &mut stmt::Expr, scope: &stmt::Expr) {
         ApplyInsertScope { expr }.apply(scope);
+    }
+
+    // TODO: unify with update?
+    fn constantize_insert_returning(
+        &self,
+        stmt: &mut stmt::Insert,
+    ) -> Option<(Vec<stmt::Value>, stmt::Type)> {
+        let Some(stmt::Returning::Expr(returning)) = &stmt.returning else {
+            return None;
+        };
+
+        let stmt::ExprSet::Values(values) = &*stmt.source.body else {
+            todo!("stmt={stmt:#?}");
+        };
+
+        let stmt::InsertTarget::Table(insert_table) = &stmt.target else {
+            todo!("stmt={stmt:#?}");
+        };
+
+        struct ConstReturning<'a> {
+            columns: &'a [ColumnId],
+        }
+
+        impl eval::Convert for ConstReturning<'_> {
+            fn convert_expr_column(&mut self, stmt: &stmt::ExprColumn) -> Option<stmt::Expr> {
+                let index = self
+                    .columns
+                    .iter()
+                    .position(|column| *column == stmt.column)
+                    .unwrap();
+
+                Some(stmt::Expr::arg_project(0, [index]))
+            }
+        }
+
+        let args = stmt::Type::Record(
+            insert_table
+                .columns
+                .iter()
+                .map(|column_id| self.schema.column(column_id).ty.clone())
+                .collect(),
+        );
+
+        let expr = eval::Func::try_convert_from_stmt(
+            returning.clone(),
+            vec![args],
+            ConstReturning {
+                columns: &insert_table.columns,
+            },
+        )
+        .unwrap();
+
+        let mut rows = vec![];
+
+        // TODO: OPTIMIZE!
+        for row in &values.rows {
+            let evaled = expr.eval([row]).unwrap();
+            rows.push(evaled);
+        }
+
+        // The returning portion of the statement has been extracted as a const.
+        // We do not need to receive it from the database anymore.
+        stmt.returning = None;
+
+        Some((rows, stmt::Type::list(expr.ret)))
     }
 }
 
-impl<'a, 'stmt> ApplyInsertScope<'a, 'stmt> {
-    fn apply(&mut self, expr: &stmt::Expr<'stmt>) {
+impl ApplyInsertScope<'_> {
+    fn apply(&mut self, expr: &stmt::Expr) {
         self.apply_expr(expr, true);
     }
 
-    fn apply_expr(&mut self, stmt: &stmt::Expr<'stmt>, set: bool) {
+    fn apply_expr(&mut self, stmt: &stmt::Expr, set: bool) {
         match stmt {
             stmt::Expr::And(exprs) => {
                 for expr in exprs {
@@ -345,11 +359,11 @@ impl<'a, 'stmt> ApplyInsertScope<'a, 'stmt> {
                 }
             }
             stmt::Expr::BinaryOp(e) if e.op.is_eq() => match (&*e.lhs, &*e.rhs) {
-                (stmt::Expr::Project(lhs), stmt::Expr::Value(rhs)) => {
-                    self.apply_eq_const(&lhs.projection, rhs, set);
+                (stmt::Expr::Field(lhs), stmt::Expr::Value(rhs)) => {
+                    self.apply_eq_const(lhs.field, rhs, set);
                 }
-                (stmt::Expr::Value(lhs), stmt::Expr::Project(rhs)) => {
-                    self.apply_eq_const(&rhs.projection, lhs, set);
+                (stmt::Expr::Value(lhs), stmt::Expr::Field(rhs)) => {
+                    self.apply_eq_const(rhs.field, lhs, set);
                 }
                 _ => todo!(),
             },
@@ -359,22 +373,17 @@ impl<'a, 'stmt> ApplyInsertScope<'a, 'stmt> {
         }
     }
 
-    fn apply_eq_const(
-        &mut self,
-        projection: &stmt::Projection,
-        val: &stmt::Value<'stmt>,
-        set: bool,
-    ) {
-        let existing = self.expr.resolve_mut(projection);
+    fn apply_eq_const(&mut self, field: FieldId, val: &stmt::Value, set: bool) {
+        let mut existing = self.expr.entry_mut(field.index);
 
-        if !existing.is_null() {
-            if let stmt::Expr::Value(existing) = existing {
+        if !existing.is_value_null() {
+            if let stmt::EntryMut::Value(existing) = existing {
                 assert_eq!(existing, val);
             } else {
                 todo!()
             }
         } else if set {
-            *existing = val.clone().into();
+            existing.insert(val.clone().into());
         } else {
             todo!()
         }

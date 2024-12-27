@@ -2,43 +2,68 @@ use super::*;
 
 /// Try to convert an index filter expression to a key expression
 struct TryConvert<'a> {
+    planner: &'a Planner<'a>,
+
+    /// Index being keyed on
     index: &'a Index,
+
+    /// Eval function arguments
+    args: Vec<stmt::Type>,
 }
 
-impl<'stmt> Planner<'_, 'stmt> {
+impl Planner<'_> {
     /// If the expression is shaped like a key expression, then convert it to
     /// one.
     pub(crate) fn try_build_key_filter(
         &self,
         index: &Index,
-        expr: &stmt::Expr<'stmt>,
-    ) -> Option<eval::Expr<'stmt>> {
-        TryConvert { index }.try_convert(expr)
+        expr: &stmt::Expr,
+    ) -> Option<eval::Func> {
+        let mut conv = TryConvert {
+            planner: self,
+            index,
+            args: vec![],
+        };
+
+        conv.try_convert(expr).map(|expr| {
+            let expr = match expr {
+                expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
+                stmt::Expr::Value(value) => stmt::Expr::Value(stmt::Value::List(vec![value])),
+                expr @ stmt::Expr::Record(_) => stmt::Expr::list_from_vec(vec![expr]),
+                expr @ stmt::Expr::Arg(_) => expr,
+                expr => todo!("expr={expr:#?}"),
+            };
+
+            let key_ty = self.index_key_ty(index);
+
+            eval::Func::from_stmt_unchecked(expr, conv.args, stmt::Type::list(key_ty))
+        })
     }
 }
 
 impl<'a> TryConvert<'a> {
-    fn try_convert<'stmt>(&self, expr: &stmt::Expr<'stmt>) -> Option<eval::Expr<'stmt>> {
+    fn try_convert(&mut self, expr: &stmt::Expr) -> Option<stmt::Expr> {
         use stmt::Expr::*;
 
         match expr {
+            Arg(_) => todo!("{expr:#?}"),
             BinaryOp(e) => {
                 if e.op.is_eq() {
                     if self.index.columns.len() > 1 {
                         None
                     } else {
-                        Some(self.expr_arg_to_project(&e.rhs))
+                        Some(self.key_expr_to_eval(&e.rhs))
                     }
                 } else {
                     todo!("expr = {:#?}", expr);
                 }
             }
             InList(e) => {
-                if !self.is_key_projection(&*e.expr) {
+                if !self.is_key_reference(&*e.expr) {
                     return None;
                 }
 
-                Some(self.expr_arg_to_project(&e.list))
+                Some(self.key_list_expr_to_eval(&e.list))
             }
             And(e) => {
                 assert!(
@@ -51,7 +76,7 @@ impl<'a> TryConvert<'a> {
                 }
 
                 // Composite key. Try assigning the AND operands to key fields
-                let mut fields = vec![eval::Expr::null(); e.operands.len()];
+                let mut fields = vec![stmt::Expr::null(); e.operands.len()];
 
                 for operand in &e.operands {
                     // If the AND operand is not a binary op, then not a key expression
@@ -64,8 +89,8 @@ impl<'a> TryConvert<'a> {
                         return None;
                     };
 
-                    // The LHS of the operand is a projection referencing an index field
-                    let Project(p) = &*binary_op.lhs else {
+                    // The LHS of the operand is a column referencing an index field
+                    let Column(expr_column) = &*binary_op.lhs else {
                         return None;
                     };
 
@@ -75,22 +100,22 @@ impl<'a> TryConvert<'a> {
                         .columns
                         .iter()
                         .enumerate()
-                        .find(|(_, c)| p.projection.resolves_to(c.column))
+                        .find(|(_, c)| expr_column.column == c.column)
                     else {
                         return None;
                     };
 
-                    assert!(fields[index].is_null());
+                    assert!(fields[index].is_value_null());
 
-                    fields[index] = self.expr_arg_to_project(&binary_op.rhs);
+                    fields[index] = self.key_expr_to_eval(&binary_op.rhs);
                 }
 
-                if fields.iter().any(|field| field.is_null()) {
+                if fields.iter().any(|field| field.is_value_null()) {
                     // Not all fields were matched
                     return None;
                 }
 
-                Some(eval::Expr::record_from_vec(fields))
+                Some(stmt::Expr::record_from_vec(fields))
             }
             Or(e) => {
                 let mut entries = vec![];
@@ -101,12 +126,12 @@ impl<'a> TryConvert<'a> {
                     };
 
                     match key {
-                        eval::Expr::Value(_) | eval::Expr::Record(_) => entries.push(key),
+                        stmt::Expr::Value(_) | stmt::Expr::Record(_) => entries.push(key),
                         _ => todo!("key={:#?}", key),
                     }
                 }
 
-                Some(eval::Expr::list_from_vec(entries))
+                Some(stmt::Expr::list_from_vec(entries))
             }
             InSubquery(_) => {
                 todo!("expr = {:#?}", expr);
@@ -115,29 +140,26 @@ impl<'a> TryConvert<'a> {
         }
     }
 
-    fn expr_arg_to_project<'stmt>(&self, expr: &stmt::Expr<'stmt>) -> eval::Expr<'stmt> {
+    fn key_expr_to_eval(&self, expr: &stmt::Expr) -> stmt::Expr {
+        assert!(expr.is_value(), "expr={:#?}", expr);
+        expr.clone()
+    }
+
+    fn key_list_expr_to_eval(&mut self, expr: &stmt::Expr) -> stmt::Expr {
         match expr {
-            stmt::Expr::Arg(arg) => eval::Expr::project([arg.position]),
-            // TODO: ok for now I guess, but enum should be gone before this point.
-            stmt::Expr::Enum(expr_enum) => {
-                let fields = eval::Expr::from_stmt(expr_enum.fields.clone().into());
-                let stmt::Value::Record(fields) = fields.eval_const() else {
-                    todo!()
-                };
-                eval::Expr::Value(stmt::Value::Enum(stmt::ValueEnum {
-                    variant: expr_enum.variant,
-                    fields: fields.into_owned(),
-                }))
+            stmt::Expr::Arg(_) => {
+                self.args
+                    .push(stmt::Type::list(self.planner.index_key_ty(self.index)));
+                expr.clone()
             }
-            stmt::Expr::List(_) => eval::Expr::from_stmt(expr.clone()),
-            stmt::Expr::Value(value) => eval::Expr::Value(value.clone()),
+            stmt::Expr::Value(_) => expr.clone(),
             _ => todo!("expr={:#?}", expr),
         }
     }
 
-    fn is_key_projection(&self, expr: &stmt::Expr<'_>) -> bool {
+    fn is_key_reference(&self, expr: &stmt::Expr) -> bool {
         match expr {
-            stmt::Expr::Project(_) if self.index.columns.len() == 1 => true,
+            stmt::Expr::Column(_) if self.index.columns.len() == 1 => true,
             stmt::Expr::Record(expr_record) if self.index.columns.len() == expr_record.len() => {
                 true
             }

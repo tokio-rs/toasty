@@ -1,32 +1,36 @@
 use super::*;
 
-impl<'stmt> Exec<'_, 'stmt> {
-    pub(super) async fn exec_query_pk(&mut self, action: &plan::QueryPk<'stmt>) -> Result<()> {
-        let op = action.apply()?;
-        let res = self.db.driver.exec(&self.db.schema, op.into()).await?;
+use crate::driver::Rows;
 
-        // TODO: don't clone
-        let project = action.project.clone();
-        let post_filter = action.post_filter.clone();
-
-        let res = ValueStream::from_stream(async_stream::try_stream! {
-            for await value in res {
-                let value = value?;
-                let record = project.eval(&value)?;
-
-                if let Some(post_filter) = &post_filter {
-                    // TODO: not quite right...
-                    let r = record.expect_record();
-                    if post_filter.eval_bool(r)? {
-                        yield record.into();
-                    }
-                } else {
-                    yield record.into();
+impl Exec<'_> {
+    pub(super) async fn action_query_pk(&mut self, action: &plan::QueryPk) -> Result<()> {
+        let res = self
+            .db
+            .driver
+            .exec(
+                &self.db.schema,
+                operation::QueryPk {
+                    table: action.table,
+                    select: action.columns.clone(),
+                    pk_filter: action.pk_filter.clone(),
+                    filter: action.filter.clone(),
                 }
-            }
-        });
+                .into(),
+            )
+            .await?;
 
-        self.vars.store(action.output, res);
+        let rows = match res.rows {
+            Rows::Values(rows) => rows,
+            _ => todo!("res={res:#?}"),
+        };
+
+        let res = self.project_and_filter_output(
+            rows,
+            &action.output.project,
+            action.post_filter.as_ref(),
+        );
+
+        self.vars.store(action.output.var, res);
 
         Ok(())
     }

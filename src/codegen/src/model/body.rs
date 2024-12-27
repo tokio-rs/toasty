@@ -4,7 +4,6 @@ impl<'a> Generator<'a> {
     pub(super) fn gen_body(&mut self) -> TokenStream {
         // Build field-level codegen state
         let model_id = util::int(self.model.id.0);
-        let field_count = self.model_field_count();
 
         let container_import = self.container_import();
 
@@ -44,16 +43,16 @@ impl<'a> Generator<'a> {
             impl #struct_name {
                 #field_consts
 
-                pub fn create<'a>() -> #create_struct_name<'a> {
+                pub fn create() -> #create_struct_name {
                     #create_struct_name::default()
                 }
 
-                pub fn create_many<'a>() -> CreateMany<'a, #struct_name> {
+                pub fn create_many() -> CreateMany<#struct_name> {
                     CreateMany::default()
                 }
 
-                pub fn filter<'a>(expr: stmt::Expr<'a, bool>) -> Query<'a> {
-                    Query::from_stmt(stmt::Select::from_expr(expr))
+                pub fn filter(expr: stmt::Expr<bool>) -> Query {
+                    Query::from_stmt(stmt::Select::filter(expr))
                 }
 
                 #update_method_def
@@ -67,49 +66,54 @@ impl<'a> Generator<'a> {
 
             impl Model for #struct_name {
                 const ID: ModelId = ModelId(#model_id);
-                const FIELD_COUNT: usize = #field_count;
                 type Key = #key_ty;
 
-                fn load(mut record: Record<'_>) -> Result<Self, Error> {
+                fn load(mut record: ValueRecord) -> Result<Self, Error> {
                     Ok(#struct_name {
                         #struct_load_fields
                     })
                 }
             }
 
-            impl<'a> stmt::IntoSelect<'a> for &'a #struct_name {
+            impl stmt::IntoSelect for &#struct_name {
                 type Model = #struct_name;
 
-                fn into_select(self) -> stmt::Select<'a, Self::Model> {
+                fn into_select(self) -> stmt::Select<Self::Model> {
                     #into_select_impl_ref
                 }
             }
 
-            impl stmt::AsSelect for #struct_name {
+            impl stmt::IntoSelect for &mut #struct_name {
                 type Model = #struct_name;
 
-                fn as_select(&self) -> stmt::Select<'_, Self::Model> {
-                    #into_select_impl_ref
+                fn into_select(self) -> stmt::Select<Self::Model> {
+                    (&*self).into_select()
                 }
             }
 
-            impl stmt::IntoSelect<'static> for #struct_name {
+            impl stmt::IntoSelect for #struct_name {
                 type Model = #struct_name;
 
-                fn into_select(self) -> stmt::Select<'static, Self::Model> {
+                fn into_select(self) -> stmt::Select<Self::Model> {
                     #into_select_impl_value
                 }
             }
 
-            impl<'a> stmt::IntoExpr<'a, #struct_name> for &'a #struct_name {
-                fn into_expr(self) -> stmt::Expr<'a, #struct_name> {
+            impl stmt::IntoExpr<#struct_name> for #struct_name {
+                fn into_expr(self) -> stmt::Expr<#struct_name> {
+                    todo!()
+                }
+            }
+
+            impl stmt::IntoExpr<#struct_name> for &#struct_name {
+                fn into_expr(self) -> stmt::Expr<#struct_name> {
                     #struct_into_expr.into()
                 }
             }
 
-            impl<'a> stmt::IntoExpr<'a, [#struct_name]> for &'a #struct_name {
-                fn into_expr(self) -> stmt::Expr<'a, [#struct_name]> {
-                    #struct_into_expr.into()
+            impl stmt::IntoExpr<[#struct_name]> for &#struct_name {
+                fn into_expr(self) -> stmt::Expr<[#struct_name]> {
+                    stmt::Expr::list([self])
                 }
             }
 

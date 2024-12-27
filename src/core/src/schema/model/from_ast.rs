@@ -17,7 +17,7 @@ impl Model {
                 lowering: Lowering {
                     table: table::TableId::placeholder(),
                     columns: vec![],
-                    model_pk_to_table: stmt::Expr::identity(),
+                    model_pk_to_table: stmt::Expr::default(),
                     table_to_model: stmt::ExprRecord::default(),
                     model_to_table: stmt::ExprRecord::default(),
                 },

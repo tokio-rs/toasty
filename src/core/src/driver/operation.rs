@@ -19,25 +19,25 @@ pub use update_by_key::UpdateByKey;
 use super::*;
 
 #[derive(Debug)]
-pub enum Operation<'stmt> {
-    /// Create a new record. This will always be a `sql::Insert`
-    Insert(sql::Statement<'stmt>),
+pub enum Operation {
+    /// Create a new record. This will always be a lowered `stmt::Insert`
+    Insert(stmt::Statement),
 
     /// Delete records identified by the given keys.
-    DeleteByKey(DeleteByKey<'stmt>),
+    DeleteByKey(DeleteByKey),
 
     /// Find by index
-    FindPkByIndex(FindPkByIndex<'stmt>),
+    FindPkByIndex(FindPkByIndex),
 
     /// Get one or more records by the primary key
-    GetByKey(GetByKey<'stmt>),
+    GetByKey(GetByKey),
 
     /// Query the table, filtering by the primary key
-    QueryPk(QueryPk<'stmt>),
+    QueryPk(QueryPk),
 
     /// Execute a SQL query
-    QuerySql(QuerySql<'stmt>),
+    QuerySql(QuerySql),
 
     /// Update a record by the primary key
-    UpdateByKey(UpdateByKey<'stmt>),
+    UpdateByKey(UpdateByKey),
 }

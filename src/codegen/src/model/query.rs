@@ -7,16 +7,16 @@ impl<'a> Generator<'a> {
 
         quote! {
             #[derive(Debug)]
-            pub struct Query<'a> {
-                stmt: stmt::Select<'a, #struct_name>,
+            pub struct Query {
+                stmt: stmt::Select<#struct_name>,
             }
 
-            impl<'a> Query<'a> {
-                pub const fn from_stmt(stmt: stmt::Select<'a, #struct_name>) -> Query<'a> {
+            impl Query {
+                pub const fn from_stmt(stmt: stmt::Select<#struct_name>) -> Query {
                     Query { stmt }
                 }
 
-                pub async fn all(self, db: &'a Db) -> Result<Cursor<'a, #struct_name>> {
+                pub async fn all(self, db: &Db) -> Result<Cursor<#struct_name>> {
                     db.all(self.stmt).await
                 }
 
@@ -28,7 +28,7 @@ impl<'a> Generator<'a> {
                     db.get(self.stmt).await
                 }
 
-                pub fn update(self) -> UpdateQuery<'a> {
+                pub fn update(self) -> UpdateQuery {
                     UpdateQuery::from(self)
                 }
 
@@ -37,14 +37,14 @@ impl<'a> Generator<'a> {
                     Ok(())
                 }
 
-                pub async fn collect<A>(self, db: &'a Db) -> Result<A>
+                pub async fn collect<A>(self, db: &Db) -> Result<A>
                 where
                     A: FromCursor<#struct_name>
                 {
                     self.all(db).await?.collect().await
                 }
 
-                pub fn filter(self, expr: stmt::Expr<'a, bool>) -> Query<'a> {
+                pub fn filter(self, expr: stmt::Expr<bool>) -> Query {
                     Query {
                         stmt: self.stmt.and(expr),
                     }
@@ -53,24 +53,24 @@ impl<'a> Generator<'a> {
                 #relation_methods
             }
 
-            impl<'a> stmt::IntoSelect<'a> for Query<'a> {
+            impl stmt::IntoSelect for Query {
                 type Model = #struct_name;
 
-                fn into_select(self) -> stmt::Select<'a, #struct_name> {
+                fn into_select(self) -> stmt::Select<#struct_name> {
                     self.stmt
                 }
             }
 
-            impl<'a> stmt::IntoSelect<'a> for &Query<'a> {
+            impl stmt::IntoSelect for &Query {
                 type Model = #struct_name;
 
-                fn into_select(self) -> stmt::Select<'a, #struct_name> {
+                fn into_select(self) -> stmt::Select<#struct_name> {
                     self.stmt.clone()
                 }
             }
 
-            impl Default for Query<'static> {
-                fn default() -> Query<'static> {
+            impl Default for Query {
+                fn default() -> Query {
                     Query { stmt: stmt::Select::all() }
                 }
             }
@@ -97,7 +97,7 @@ impl<'a> Generator<'a> {
         let module_name = self.module_name(target, 0);
 
         quote! {
-            pub fn #name(mut self) -> #module_name::Query<'a> {
+            pub fn #name(mut self) -> #module_name::Query {
                 todo!()
             }
         }

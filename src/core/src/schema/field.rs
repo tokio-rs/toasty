@@ -1,6 +1,5 @@
 mod primitive;
 pub use primitive::FieldPrimitive;
-use stmt::PathStep;
 
 use super::*;
 
@@ -255,15 +254,6 @@ impl FieldId {
     }
 }
 
-impl IntoIterator for FieldId {
-    type IntoIter = std::option::IntoIter<PathStep>;
-    type Item = PathStep;
-
-    fn into_iter(self) -> Self::IntoIter {
-        Some(self.into()).into_iter()
-    }
-}
-
 impl Into<FieldId> for &FieldId {
     fn into(self) -> FieldId {
         *self
@@ -273,6 +263,12 @@ impl Into<FieldId> for &FieldId {
 impl Into<FieldId> for &Field {
     fn into(self) -> FieldId {
         self.id
+    }
+}
+
+impl Into<usize> for FieldId {
+    fn into(self) -> usize {
+        self.index
     }
 }
 

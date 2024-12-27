@@ -1,11 +1,9 @@
 use super::*;
 
-use std::{fmt, ops};
-
 /// Describes a traversal through fields.
 ///
 /// The root is not specified as part of the struct.
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Path {
     /// Model the path originates from
     pub root: ModelId,
@@ -15,7 +13,14 @@ pub struct Path {
 }
 
 impl Path {
-    pub fn field(root: impl Into<ModelId>, field: PathStep) -> Path {
+    pub fn model(root: impl Into<ModelId>) -> Path {
+        Path {
+            root: root.into(),
+            projection: Projection::identity(),
+        }
+    }
+
+    pub fn field(root: impl Into<ModelId>, field: usize) -> Path {
         Path {
             root: root.into(),
             projection: Projection::single(field),
@@ -34,32 +39,25 @@ impl Path {
     }
 
     pub fn chain(&mut self, other: &Path) {
-        for field in &other[..] {
+        for field in &other.projection[..] {
             self.projection.push(*field);
         }
     }
 
-    pub fn into_self_project_expr<'stmt>(self) -> Expr<'stmt> {
-        ExprProject {
-            base: ProjectBase::ExprSelf,
-            projection: self.projection,
+    pub fn into_stmt(self) -> Expr {
+        let [field, project @ ..] = self.projection.as_slice() else {
+            todo!("path={self:#?}")
+        };
+
+        let mut ret = stmt::Expr::field(FieldId {
+            model: self.root,
+            index: *field,
+        });
+
+        if !project.is_empty() {
+            ret = stmt::Expr::project(ret, project);
         }
-        .into()
-    }
-}
 
-impl ops::Deref for Path {
-    type Target = [PathStep];
-
-    fn deref(&self) -> &Self::Target {
-        self.projection.deref()
-    }
-}
-
-impl fmt::Debug for Path {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut f = f.debug_tuple("Path");
-
-        f.finish()
+        ret
     }
 }

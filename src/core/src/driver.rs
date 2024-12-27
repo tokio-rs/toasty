@@ -1,10 +1,13 @@
 pub mod capability;
 pub use capability::Capability;
 
+mod response;
+pub use response::{Response, Rows};
+
 pub mod operation;
 pub use operation::Operation;
 
-use crate::{async_trait, eval, sql, stmt::ValueStream, Schema};
+use crate::{async_trait, stmt, Schema};
 
 use std::fmt::Debug;
 
@@ -17,11 +20,7 @@ pub trait Driver: Debug + Send + Sync + 'static {
     async fn register_schema(&mut self, schema: &Schema) -> crate::Result<()>;
 
     /// Execute a database operation
-    async fn exec<'stmt>(
-        &self,
-        schema: &Schema,
-        plan: Operation<'stmt>,
-    ) -> crate::Result<ValueStream<'stmt>>;
+    async fn exec(&self, schema: &Schema, plan: Operation) -> crate::Result<Response>;
 
     /// TODO: this will probably go away
     async fn reset_db(&self, _schema: &Schema) -> crate::Result<()> {

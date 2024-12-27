@@ -24,7 +24,7 @@ pub struct Query {
     pub ret: ModelId,
 
     /// Implementation
-    pub stmt: stmt::Query<'static>,
+    pub stmt: stmt::Query,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -79,10 +79,10 @@ enum FindByArgType {
 }
 
 impl Query {
-    pub fn apply<'stmt>(&self, input: impl stmt::substitute::Input<'stmt>) -> stmt::Query<'stmt> {
-        let mut stmt: stmt::Query<'stmt> = self.stmt.clone();
+    pub fn apply(&self, mut input: impl stmt::substitute::Input) -> stmt::Query {
+        let mut stmt: stmt::Query = self.stmt.clone();
 
-        stmt.substitute(input);
+        stmt.substitute_ref(&mut input);
         stmt
     }
 
@@ -216,13 +216,6 @@ impl<'a> FindByBuilder<'a> {
                         FieldTy::BelongsTo(_) => stmt::Type::ForeignKey(field.id),
                         _ => todo!("field={:#?}", field),
                     },
-                    /*
-                    ty: match &field.ty {
-                        FieldTy::Primitive(primitive) => primitive.ty.clone(),
-                        FieldTy::BelongsTo(rel) => rel.expr_ty.clone(),
-                        _ => todo!("field={:#?}", field),
-                    },
-                    */
                 });
             }
         }
@@ -230,12 +223,11 @@ impl<'a> FindByBuilder<'a> {
         args
     }
 
-    fn query_body(&self) -> stmt::Query<'static> {
+    fn query_body(&self) -> stmt::Query {
         let mut exprs = vec![];
 
         for find_by_arg in &self.args {
             let field = self.model.field(find_by_arg.field_id);
-            // let lhs = stmt::Path::from(field.id);
 
             match find_by_arg.ty {
                 FindByArgType::Expr => {
@@ -259,13 +251,13 @@ impl<'a> FindByBuilder<'a> {
         let filter = if exprs.len() == 1 {
             exprs.pop().unwrap()
         } else {
-            stmt::ExprAnd::new(exprs).into()
+            stmt::ExprAnd { operands: exprs }.into()
         };
 
         stmt::Query::filter(self.model.id, filter)
     }
 
-    fn many_query_body(&self) -> stmt::Query<'static> {
+    fn many_query_body(&self) -> stmt::Query {
         let mut exprs = vec![];
         let mut tys = vec![];
 
@@ -274,7 +266,7 @@ impl<'a> FindByBuilder<'a> {
 
             match find_by_arg.ty {
                 FindByArgType::Expr => {
-                    exprs.push(stmt::Expr::project(field));
+                    exprs.push(stmt::Expr::field(field));
                     tys.push(field.expr_ty().clone());
                 }
                 FindByArgType::ForeignKey => {
@@ -283,7 +275,7 @@ impl<'a> FindByBuilder<'a> {
                     match &rel.foreign_key.fields[..] {
                         [] => panic!("foreign keys cannot be empty"),
                         [fk_field] => {
-                            exprs.push(stmt::Expr::project([field.id, fk_field.target]));
+                            exprs.push(stmt::Expr::project(field, fk_field.target));
                             tys.push(
                                 self.model
                                     .field(fk_field.source)

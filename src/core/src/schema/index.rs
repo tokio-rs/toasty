@@ -44,7 +44,7 @@ pub struct IndexColumn {
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum IndexOp {
     Eq,
-    Sort(sql::Direction),
+    Sort(stmt::Direction),
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -55,8 +55,6 @@ pub enum IndexScope {
     /// The index column is scoped to a physical node.
     Local,
 }
-
-impl Index {}
 
 impl IndexColumn {
     pub fn table_column<'a>(&self, schema: &'a Schema) -> &'a Column {

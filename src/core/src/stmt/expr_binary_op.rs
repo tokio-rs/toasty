@@ -1,14 +1,14 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprBinaryOp<'stmt> {
-    pub lhs: Box<Expr<'stmt>>,
+pub struct ExprBinaryOp {
+    pub lhs: Box<Expr>,
     pub op: BinaryOp,
-    pub rhs: Box<Expr<'stmt>>,
+    pub rhs: Box<Expr>,
 }
 
-impl<'stmt> Expr<'stmt> {
-    pub fn eq(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+impl Expr {
+    pub fn eq(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
         ExprBinaryOp {
             op: BinaryOp::Eq,
             lhs: Box::new(lhs.into()),
@@ -28,7 +28,7 @@ impl<'stmt> Expr<'stmt> {
         )
     }
 
-    pub fn ge(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+    pub fn ge(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
         ExprBinaryOp {
             op: BinaryOp::Ge,
             lhs: Box::new(lhs.into()),
@@ -37,7 +37,7 @@ impl<'stmt> Expr<'stmt> {
         .into()
     }
 
-    pub fn gt(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+    pub fn gt(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
         ExprBinaryOp {
             op: BinaryOp::Gt,
             lhs: Box::new(lhs.into()),
@@ -46,7 +46,7 @@ impl<'stmt> Expr<'stmt> {
         .into()
     }
 
-    pub fn le(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+    pub fn le(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
         ExprBinaryOp {
             op: BinaryOp::Le,
             lhs: Box::new(lhs.into()),
@@ -55,7 +55,7 @@ impl<'stmt> Expr<'stmt> {
         .into()
     }
 
-    pub fn lt(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+    pub fn lt(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
         ExprBinaryOp {
             op: BinaryOp::Lt,
             lhs: Box::new(lhs.into()),
@@ -64,7 +64,7 @@ impl<'stmt> Expr<'stmt> {
         .into()
     }
 
-    pub fn ne(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+    pub fn ne(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
         ExprBinaryOp {
             op: BinaryOp::Ne,
             lhs: Box::new(lhs.into()),
@@ -73,7 +73,7 @@ impl<'stmt> Expr<'stmt> {
         .into()
     }
 
-    pub fn is_a(lhs: impl Into<Expr<'stmt>>, rhs: impl Into<Expr<'stmt>>) -> Expr<'stmt> {
+    pub fn is_a(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
         ExprBinaryOp {
             op: BinaryOp::IsA,
             lhs: Box::new(lhs.into()),
@@ -83,8 +83,8 @@ impl<'stmt> Expr<'stmt> {
     }
 }
 
-impl<'stmt> From<ExprBinaryOp<'stmt>> for Expr<'stmt> {
-    fn from(value: ExprBinaryOp<'stmt>) -> Self {
+impl From<ExprBinaryOp> for Expr {
+    fn from(value: ExprBinaryOp) -> Self {
         Expr::BinaryOp(value)
     }
 }

@@ -1,37 +1,44 @@
 use super::*;
 
-impl<'stmt> Exec<'_, 'stmt> {
-    pub(super) async fn exec_find_pk_by_index(
+use crate::driver::Rows;
+
+impl Exec<'_> {
+    pub(super) async fn action_find_pk_by_index(
         &mut self,
-        action: &plan::FindPkByIndex<'stmt>,
+        action: &plan::FindPkByIndex,
     ) -> Result<()> {
-        let op = if !action.input.is_empty() {
-            // TODO: this isn't actually right, but I'm temporarily hacking my
-            // way through a bigger refactor. Hopefully nobody sees this
-            // comment! J/K I'm sure this won't get fixed before I open up the
-            // repo.
-            assert_eq!(action.input.len(), 1);
+        let mut filter = action.filter.clone();
 
-            // Collect input
-            let input = self.collect_input(&action.input[0]).await?;
+        if let Some(input) = &action.input {
+            let input = self.collect_input(input).await?;
 
-            let mut args = [Some(sql::Expr::from(stmt::Value::List(input)))];
+            filter.substitute(&[input]);
 
-            let mut filter = action.filter.clone();
-            filter.substitute(&mut args[..]);
+            simplify::simplify_expr(&self.db.schema, simplify::ExprTarget::Const, &mut filter);
+        }
 
-            operation::FindPkByIndex {
-                table: action.table,
-                index: action.index,
-                filter,
-            }
-        } else {
-            action.apply()?
+        let res = self
+            .db
+            .driver
+            .exec(
+                &self.db.schema,
+                operation::FindPkByIndex {
+                    table: action.table,
+                    index: action.index,
+                    filter,
+                }
+                .into(),
+            )
+            .await?;
+
+        let rows = match res.rows {
+            Rows::Values(values) => values,
+            Rows::Count(_) => todo!(),
         };
 
-        let res = self.db.driver.exec(&self.db.schema, op.into()).await?;
+        let res = self.project_and_filter_output(rows, &action.output.project, None);
+        self.vars.store(action.output.var, res);
 
-        self.vars.store(action.output, res);
         Ok(())
     }
 }
