@@ -6,27 +6,27 @@ use std_util::prelude::*;
 async fn crud_user_todos(s: impl Setup) {
     schema!(
         "
-        table user_and_todos {
-            model User {
-                #[key]
-                #[auto]
-                id: Id,
+        #[table(user_and_todos)]
+        model User {
+            #[key]
+            #[auto]
+            id: Id,
 
-                todos: [Todo],
-            }
+            todos: [Todo],
+        }
 
-            #[key(partition = user_id, local = id)]
-            model Todo {
-                user_id: Id<User>,
+        #[table(user_and_todos)]
+        #[key(partition = user_id, local = id)]
+        model Todo {
+            user_id: Id<User>,
 
-                #[relation(key = user_id, references = id)]
-                user: User,
+            #[relation(key = user_id, references = id)]
+            user: User,
 
-                #[auto]
-                id: Id,
+            #[auto]
+            id: Id,
 
-                title: String,
-            }
+            title: String,
         }"
     );
 
@@ -306,25 +306,25 @@ async fn has_many_when_fk_and_pk_are_composite(_s: impl Setup) {}
 async fn require_index_to_find_todos_by_user(_s: impl Setup) {
     toasty_core::schema::from_str(
         "
-        table user_and_todos {
-            model User {
-                #[key]
-                #[auto]
-                id: Id,
+        #[table(user_and_todos)]
+        model User {
+            #[key]
+            #[auto]
+            id: Id,
 
-                todos: [Todo],
-            }
+            todos: [Todo],
+        }
 
-            model Todo {
-                #[key]
-                user: User,
+        #[table(user_and_todos)]
+        model Todo {
+            #[key]
+            user: User,
 
-                #[key]
-                #[auto]
-                id: Id,
+            #[key]
+            #[auto]
+            id: Id,
 
-                title: String,
-            }
+            title: String,
         }",
     )
     .unwrap();

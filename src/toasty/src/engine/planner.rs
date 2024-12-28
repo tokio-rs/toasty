@@ -56,12 +56,12 @@ struct Planner<'a> {
     returning: Option<plan::VarId>,
 
     /// Tracks additional needed state to handle insertions.
-    insertions: HashMap<ModelId, Insertion>,
+    insertions: HashMap<app::ModelId, Insertion>,
 
     /// Planning a query can require walking relations to maintain data
     /// consistency. This field tracks the current relation edge being traversed
     /// so the planner doesn't walk it backwards.
-    relations: Vec<FieldId>,
+    relations: Vec<app::FieldId>,
 }
 
 #[derive(Debug)]
@@ -175,7 +175,7 @@ impl<'a> Planner<'a> {
         action.value
     }
 
-    fn model(&self, id: impl Into<ModelId>) -> &'a Model {
+    fn model(&self, id: impl Into<app::ModelId>) -> &'a app::Model {
         self.schema.model(id)
     }
 

@@ -78,6 +78,8 @@ impl<'a> Generator<'a> {
     }
 
     fn gen_relation_methods(&self) -> TokenStream {
+        use app::FieldTy;
+
         self.model
             .fields
             .iter()
@@ -92,7 +94,7 @@ impl<'a> Generator<'a> {
             .collect()
     }
 
-    fn gen_belongs_to_method(&self, field: FieldId, target: ModelId) -> TokenStream {
+    fn gen_belongs_to_method(&self, field: app::FieldId, target: app::ModelId) -> TokenStream {
         let name = self.field_name(field);
         let module_name = self.module_name(target, 0);
 

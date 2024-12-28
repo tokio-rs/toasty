@@ -1,4 +1,5 @@
 use super::*;
+use app::Model;
 
 impl<'db> Simplify<'db> {
     /// Rewrites expressions where one half is a path referencing `self`. In

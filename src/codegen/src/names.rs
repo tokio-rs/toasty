@@ -1,6 +1,7 @@
 use crate::util;
 
 use super::*;
+use app::FieldTy;
 
 use std::collections::HashMap;
 
@@ -9,15 +10,15 @@ pub(crate) struct Names {
 
     pub container_alias_name: Option<syn::Ident>,
 
-    pub models: HashMap<ModelId, ModelNames>,
+    pub models: HashMap<app::ModelId, ModelNames>,
 
-    pub fields: HashMap<FieldId, FieldNames>,
+    pub fields: HashMap<app::FieldId, FieldNames>,
 
     /// Structs generated for each relation
-    pub relations: HashMap<FieldId, RelationNames>,
+    pub relations: HashMap<app::FieldId, RelationNames>,
 
     /// Queries generated for an index
-    pub queries: HashMap<QueryId, QueryNames>,
+    pub queries: HashMap<app::QueryId, QueryNames>,
 }
 
 pub(crate) struct ModelNames {
@@ -68,11 +69,11 @@ impl Names {
         let mut relations = HashMap::new();
         let mut queries = HashMap::new();
 
-        for query in schema.queries() {
+        for query in &schema.queries {
             queries.insert(query.id, QueryNames::from_query(query));
         }
 
-        for model in schema.models() {
+        for model in &schema.models {
             // Generate model names
             let names = ModelNames::from_model(model);
             models.insert(model.id, names);
@@ -133,7 +134,7 @@ impl Names {
 }
 
 impl ModelNames {
-    fn from_model(model: &Model) -> ModelNames {
+    fn from_model(model: &app::Model) -> ModelNames {
         let module_name = util::ident(&model.name.snake_case());
         let struct_name = util::ident(&model.name.upper_camel_case());
         let create_name = util::ident(&format!("Create{}", model.name.upper_camel_case()));
@@ -149,7 +150,7 @@ impl ModelNames {
 }
 
 impl QueryNames {
-    fn from_query(query: &Query) -> QueryNames {
+    fn from_query(query: &app::Query) -> QueryNames {
         QueryNames {
             method_name: util::ident(&query.name),
             struct_name: util::ident(&util::type_name(&query.name)),

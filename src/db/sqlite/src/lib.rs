@@ -5,7 +5,10 @@ use toasty_core::{
 
 use anyhow::Result;
 use rusqlite::Connection;
-use std::{path::Path, sync::Mutex};
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Debug)]
 pub struct Sqlite {
@@ -40,7 +43,7 @@ impl Driver for Sqlite {
         Ok(())
     }
 
-    async fn exec(&self, schema: &Schema, op: Operation) -> Result<Response> {
+    async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         use Operation::*;
 
         let connection = self.connection.lock().unwrap();
@@ -153,7 +156,7 @@ impl Driver for Sqlite {
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
-        for table in schema.tables() {
+        for table in &schema.tables {
             self.create_table(schema, table)?;
         }
 

@@ -3,6 +3,7 @@ use crate::ast;
 #[derive(Debug)]
 pub(super) enum Model {
     Key(Key),
+    Table(Table),
 }
 
 #[derive(Debug)]
@@ -25,6 +26,11 @@ pub(crate) struct Relation {
     pub(crate) references: Vec<ast::Ident>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct Table {
+    pub(crate) name: String,
+}
+
 #[derive(Debug)]
 pub(super) struct Key {
     // Names of fields that make up the partition key
@@ -38,6 +44,7 @@ impl Model {
     pub(super) fn from_ast(ast: &ast::Attribute) -> Model {
         match ast.meta.ident().as_str() {
             "key" => Model::Key(Model::key_from_ast(&ast.meta)),
+            "table" => Model::Table(Model::table_from_ast(&ast.meta)),
             _ => todo!("attribute = {:#?}", ast),
         }
     }
@@ -64,6 +71,18 @@ impl Model {
         }
 
         Key { partition, local }
+    }
+
+    fn table_from_ast(meta: &ast::Meta) -> Table {
+        let items = &meta.as_list().items;
+        assert_eq!(1, items.len());
+
+        let name = match &items[0] {
+            ast::Meta::Ident(ident) => ident.to_string(),
+            _ => todo!("items={items:#?}"),
+        };
+
+        Table { name }
     }
 }
 

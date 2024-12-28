@@ -6,7 +6,7 @@ use toasty_core::{
         operation::{self, Operation},
         Capability, Driver, Response,
     },
-    schema::{self, Column, ColumnId},
+    schema::{self, app, Column, ColumnId},
     stmt, Schema,
 };
 
@@ -14,7 +14,7 @@ use anyhow::Result;
 use aws_sdk_dynamodb::{
     error::SdkError, operation::update_item::UpdateItemError, types::*, Client,
 };
-use std::{collections::HashMap, fmt::Write};
+use std::{collections::HashMap, fmt::Write, sync::Arc};
 
 #[derive(Debug)]
 pub struct DynamoDB {
@@ -72,12 +72,12 @@ impl Driver for DynamoDB {
         Ok(())
     }
 
-    async fn exec(&self, schema: &Schema, op: Operation) -> Result<Response> {
+    async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         self.exec2(schema, op).await
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
-        for table in schema.tables() {
+        for table in &schema.tables {
             self.create_table(schema, table, true).await?;
         }
 
@@ -86,7 +86,7 @@ impl Driver for DynamoDB {
 }
 
 impl DynamoDB {
-    async fn exec2(&self, schema: &Schema, op: Operation) -> Result<Response> {
+    async fn exec2(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         use Operation::*;
 
         match op {
@@ -199,9 +199,7 @@ fn ddb_to_val<'stmt>(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
                 V::Bool(v) => stmt::Value::Bool(v),
                 V::Null => stmt::Value::Null,
                 V::String(v) => stmt::Value::String(v.into()),
-                V::Id(model, v) => {
-                    stmt::Value::Id(stmt::Id::from_string(schema::ModelId(model), v))
-                }
+                V::Id(model, v) => stmt::Value::Id(stmt::Id::from_string(app::ModelId(model), v)),
                 V::I64(v) => stmt::Value::I64(v),
             };
 

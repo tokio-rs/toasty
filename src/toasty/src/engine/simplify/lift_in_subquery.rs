@@ -1,4 +1,5 @@
 use super::*;
+use app::{BelongsTo, FieldId, FieldTy, HasOne};
 
 use stmt::Visit;
 

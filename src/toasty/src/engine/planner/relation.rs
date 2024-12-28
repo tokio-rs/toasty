@@ -1,11 +1,12 @@
 use super::*;
+use app::{Field, FieldId, FieldTy, HasMany, HasOne};
 
 use std::mem;
 
 impl Planner<'_> {
     pub(super) fn plan_mut_relation_field(
         &mut self,
-        field: &Field,
+        field: &app::Field,
         op: stmt::AssignmentOp,
         expr: &mut stmt::Expr,
         selection: &stmt::Query,

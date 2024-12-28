@@ -16,7 +16,7 @@ use std::rc::Rc;
 
 pub(crate) fn generate<'a>(
     schema: &'a Schema,
-    model: &'a Model,
+    model: &'a app::Model,
     names: Rc<Names>,
     in_macro: bool,
 ) -> ModelOutput<'a> {
@@ -35,7 +35,7 @@ pub(crate) struct Generator<'a> {
     pub schema: &'a Schema,
 
     /// Model being generated
-    pub model: &'a Model,
+    pub model: &'a app::Model,
 
     /// Stores various names
     pub names: Rc<Names>,
@@ -48,7 +48,7 @@ impl<'a> Generator<'a> {
     /// Create a new `GenModel` for the provided model
     pub(crate) fn new(
         schema: &'a Schema,
-        model: &'a Model,
+        model: &'a app::Model,
         names: Rc<Names>,
         in_macro: bool,
     ) -> Generator<'a> {
@@ -60,7 +60,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub(crate) fn module_path(&self, mid: ModelId, depth: usize) -> TokenStream {
+    pub(crate) fn module_path(&self, mid: app::ModelId, depth: usize) -> TokenStream {
         if mid == self.model.id {
             quote!()
         } else {
@@ -89,7 +89,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub(crate) fn module_name(&self, id: ModelId, depth: usize) -> TokenStream {
+    pub(crate) fn module_name(&self, id: app::ModelId, depth: usize) -> TokenStream {
         let name = &self.names.models[&id].module_name;
 
         if id == self.model.id {
@@ -104,23 +104,23 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub(crate) fn field_name(&self, field: impl Into<FieldId>) -> &syn::Ident {
+    pub(crate) fn field_name(&self, field: impl Into<app::FieldId>) -> &syn::Ident {
         let field = field.into();
         &self.names.fields[&field].field_name
     }
 
-    pub(crate) fn field_const_name(&self, field: impl Into<FieldId>) -> &syn::Ident {
+    pub(crate) fn field_const_name(&self, field: impl Into<app::FieldId>) -> &syn::Ident {
         let field = field.into();
         &self.names.fields[&field].const_name
     }
 
-    pub(crate) fn singular_name(&self, field: impl Into<FieldId>) -> &syn::Ident {
+    pub(crate) fn singular_name(&self, field: impl Into<app::FieldId>) -> &syn::Ident {
         let field = field.into();
         self.names.relations[&field].singular_name.as_ref().unwrap()
     }
 
-    pub(crate) fn field_ty(&self, field: &Field, depth: usize) -> TokenStream {
-        use FieldTy::*;
+    pub(crate) fn field_ty(&self, field: &app::Field, depth: usize) -> TokenStream {
+        use app::FieldTy::*;
 
         match &field.ty {
             Primitive(field_ty) => self.ty(&field_ty.ty, depth),
@@ -135,11 +135,11 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub(crate) fn query(&self, id: impl Into<QueryId>) -> &Query {
+    pub(crate) fn query(&self, id: impl Into<app::QueryId>) -> &app::Query {
         self.schema.query(id.into())
     }
 
-    pub(crate) fn pk_query(&self) -> &Query {
+    pub(crate) fn pk_query(&self) -> &app::Query {
         self.schema.query(self.model.primary_key.query)
     }
 
@@ -160,7 +160,11 @@ impl<'a> Generator<'a> {
         self.model_struct_path(self.model.id, 1)
     }
 
-    pub(crate) fn model_struct_path(&self, id: impl Into<ModelId>, depth: usize) -> TokenStream {
+    pub(crate) fn model_struct_path(
+        &self,
+        id: impl Into<app::ModelId>,
+        depth: usize,
+    ) -> TokenStream {
         let id = id.into();
         let name = &self.names.models[&id].struct_name;
 
@@ -172,14 +176,14 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub(crate) fn relation_struct_name(&self, field: impl Into<FieldId>) -> &syn::Ident {
+    pub(crate) fn relation_struct_name(&self, field: impl Into<app::FieldId>) -> &syn::Ident {
         let field = field.into();
         &self.names.relations[&field].struct_name
     }
 
     pub(crate) fn relation_query_struct_path(
         &self,
-        field: impl Into<FieldId>,
+        field: impl Into<app::FieldId>,
         depth: usize,
     ) -> TokenStream {
         let field = field.into();
@@ -188,23 +192,23 @@ impl<'a> Generator<'a> {
         quote!(#target_mod_name::relation::#field_name::Query)
     }
 
-    pub(crate) fn model_pk_query_method_name(&self, id: ModelId) -> &syn::Ident {
+    pub(crate) fn model_pk_query_method_name(&self, id: app::ModelId) -> &syn::Ident {
         let query = self.schema.model(id).primary_key.query;
         self.query_method_name(query)
     }
 
-    pub(crate) fn query_method_name(&self, query: QueryId) -> &syn::Ident {
+    pub(crate) fn query_method_name(&self, query: app::QueryId) -> &syn::Ident {
         &self.names.queries[&query].method_name
     }
 
-    pub(crate) fn scoped_query_method_name(&self, query: QueryId) -> &syn::Ident {
+    pub(crate) fn scoped_query_method_name(&self, query: app::QueryId) -> &syn::Ident {
         self.names.queries[&query]
             .scoped_method_name
             .as_ref()
             .unwrap()
     }
 
-    pub(crate) fn query_struct_name(&self, query: QueryId) -> &syn::Ident {
+    pub(crate) fn query_struct_name(&self, query: app::QueryId) -> &syn::Ident {
         &self.names.queries[&query].struct_name
     }
 

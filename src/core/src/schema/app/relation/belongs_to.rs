@@ -32,11 +32,11 @@ pub struct ForeignKeyField {
 }
 
 impl BelongsTo {
-    pub fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
+    pub fn target<'a>(&self, schema: &'a crate::Schema) -> &'a Model {
         schema.model(self.target)
     }
 
-    pub fn pair<'a>(&self, schema: &'a Schema) -> &'a HasMany {
+    pub fn pair<'a>(&self, schema: &'a crate::Schema) -> &'a HasMany {
         schema.field(self.pair).ty.expect_has_many()
     }
 }
@@ -58,11 +58,11 @@ impl ForeignKey {
 }
 
 impl ForeignKeyField {
-    pub fn source<'a>(&self, schema: &'a Schema) -> &'a Field {
+    pub fn source<'a>(&self, schema: &'a crate::Schema) -> &'a Field {
         schema.field(self.source)
     }
 
-    pub fn target<'a>(&self, schema: &'a Schema) -> &'a Field {
+    pub fn target<'a>(&self, schema: &'a crate::Schema) -> &'a Field {
         schema.field(self.target)
     }
 }

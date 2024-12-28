@@ -1,5 +1,5 @@
 use crate::Error;
-use toasty_core::{schema::ModelId, stmt};
+use toasty_core::{schema::app::ModelId, stmt};
 
 pub trait Model: Sized {
     /// Unique identifier for this model within the schema.

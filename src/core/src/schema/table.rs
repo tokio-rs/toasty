@@ -54,13 +54,7 @@ impl Table {
         &self.columns[*first]
     }
 
-    pub(crate) fn from_ast(ctx: &mut schema::Context, ast: &ast::Table) -> crate::Result<Table> {
-        let name = ast.ident.to_string();
-        let id = ctx.register_table(&name);
-        Ok(Table::new(id, name))
-    }
-
-    fn new(id: TableId, name: String) -> Table {
+    pub(crate) fn new(id: TableId, name: String) -> Table {
         Table {
             id,
             name,

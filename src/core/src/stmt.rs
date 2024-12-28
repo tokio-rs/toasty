@@ -180,7 +180,10 @@ pub mod visit;
 pub use visit::Visit;
 
 use crate::{
-    schema::{Column, ColumnId, Field, FieldId, Model, ModelId, Schema, TableId},
+    schema::{
+        app::{Field, FieldId, Model, ModelId},
+        Column, ColumnId, Schema, TableId,
+    },
     stmt, Error, Result,
 };
 

@@ -162,6 +162,8 @@ impl<'a> Generator<'a> {
 
     /// Each model field has an associated struct field
     fn gen_struct_fields(&self) -> TokenStream {
+        use app::FieldTy;
+
         self.model
             .fields
             .iter()
@@ -198,6 +200,8 @@ impl<'a> Generator<'a> {
     }
 
     fn gen_struct_load_fields(&self) -> TokenStream {
+        use app::FieldTy;
+
         self.model
             .fields
             .iter()
@@ -227,6 +231,8 @@ impl<'a> Generator<'a> {
     }
 
     fn gen_struct_into_expr(&self) -> TokenStream {
+        use app::FieldTy;
+
         let mut pk_exprs = vec![];
 
         for field in self.model.primary_key_fields() {

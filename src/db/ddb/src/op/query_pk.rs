@@ -3,7 +3,7 @@ use super::*;
 impl DynamoDB {
     pub(crate) async fn exec_query_pk(
         &self,
-        schema: &schema::Schema,
+        schema: &Arc<schema::Schema>,
         op: operation::QueryPk,
     ) -> Result<Response> {
         let table = schema.table(op.table);

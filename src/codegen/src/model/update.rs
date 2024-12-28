@@ -1,11 +1,13 @@
 use super::*;
 
+use app::FieldTy;
+
 impl<'a> Generator<'a> {
     pub(super) fn self_update_struct_name(&self) -> &syn::Ident {
         self.update_struct_name_for(self.model.id)
     }
 
-    pub(super) fn update_struct_name_for(&self, id: ModelId) -> &syn::Ident {
+    pub(super) fn update_struct_name_for(&self, id: app::ModelId) -> &syn::Ident {
         &self.names.models[&id].update_name
     }
 

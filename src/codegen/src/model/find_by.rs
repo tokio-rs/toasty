@@ -10,7 +10,7 @@ impl<'a> Generator<'a> {
             .collect()
     }
 
-    pub(crate) fn gen_scoped_find_by_method(&self, scoped: &ScopedQuery) -> TokenStream {
+    pub(crate) fn gen_scoped_find_by_method(&self, scoped: &app::ScopedQuery) -> TokenStream {
         let query_method_name = self.scoped_query_method_name(scoped.id);
         let query_struct_name = self.query_struct_name(scoped.id);
 
@@ -50,14 +50,14 @@ impl<'a> Generator<'a> {
     // TODO: split this up and unify with other fns
     pub(crate) fn gen_scoped_find_by_struct(
         &self,
-        scoped: &ScopedQuery,
+        scoped: &app::ScopedQuery,
         depth: usize,
     ) -> TokenStream {
         let query = self.query(scoped.id);
         self.gen_find_by_struct(query, depth)
     }
 
-    fn find_by_query(&self, query: &Query) -> TokenStream {
+    fn find_by_query(&self, query: &app::Query) -> TokenStream {
         if !query.many {
             self.find_basic_by_query(query)
         } else {
@@ -65,7 +65,9 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn find_basic_by_query(&self, query: &Query) -> TokenStream {
+    fn find_basic_by_query(&self, query: &app::Query) -> TokenStream {
+        use app::FieldTy;
+
         let query_method_name = self.query_method_name(query.id);
         let model_struct_name = self.self_struct_name();
         let query_struct_name = self.query_struct_name(query.id);
@@ -169,7 +171,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn find_many_by_query(&self, query: &Query) -> TokenStream {
+    fn find_many_by_query(&self, query: &app::Query) -> TokenStream {
         let query_method_name = self.query_method_name(query.id);
         let model_struct_name = self.self_struct_name();
         let query_struct_name = self.query_struct_name(query.id);
@@ -263,7 +265,7 @@ impl<'a> Generator<'a> {
 
     fn gen_method_args(
         &self,
-        args: &[Arg],
+        args: &[app::Arg],
         arg_idents: &[TokenStream],
         depth: usize,
     ) -> TokenStream {
@@ -299,7 +301,7 @@ impl<'a> Generator<'a> {
         quote!( #( #args ),* )
     }
 
-    fn gen_item_arg_tys(&self, args: &[Arg]) -> TokenStream {
+    fn gen_item_arg_tys(&self, args: &[app::Arg]) -> TokenStream {
         let mut tys = args.iter().map(move |arg| match &arg.ty {
             stmt::Type::Model(model) => {
                 let target_struct_name = self.model_struct_path(*model, 1);
@@ -325,7 +327,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn gen_find_by_struct(&self, query: &Query, depth: usize) -> TokenStream {
+    fn gen_find_by_struct(&self, query: &app::Query, depth: usize) -> TokenStream {
         let path = self.module_path(query.ret, depth);
         let model_struct_name = self.model_struct_path(query.ret, depth);
         let query_struct_name = self.query_struct_name(query.id);
@@ -370,7 +372,7 @@ impl<'a> Generator<'a> {
 
     fn gen_expr_from_stmt(
         &self,
-        mid: ModelId,
+        mid: app::ModelId,
         args: &[TokenStream],
         filter: &stmt::Expr,
         depth: usize,
@@ -443,7 +445,7 @@ impl<'a> Generator<'a> {
 
     fn gen_expr_chain(
         &self,
-        model_id: ModelId,
+        model_id: app::ModelId,
         args: &[TokenStream],
         exprs: &[stmt::Expr],
         f: TokenStream,

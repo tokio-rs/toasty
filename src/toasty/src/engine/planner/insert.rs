@@ -100,7 +100,7 @@ impl Planner<'_> {
         output_var
     }
 
-    fn preprocess_insert_values(&mut self, model: &Model, stmt: &mut stmt::Insert) {
+    fn preprocess_insert_values(&mut self, model: &app::Model, stmt: &mut stmt::Insert) {
         let stmt::ExprSet::Values(values) = &mut *stmt.source.body else {
             todo!()
         };
@@ -122,7 +122,7 @@ impl Planner<'_> {
     }
 
     // Checks all fields of a record and handles nulls
-    fn apply_insertion_defaults(&mut self, model: &Model, expr: &mut stmt::Expr) {
+    fn apply_insertion_defaults(&mut self, model: &app::Model, expr: &mut stmt::Expr) {
         // TODO: make this smarter.. a lot smarter
 
         // First, we pad the record to account for all fields
@@ -135,7 +135,7 @@ impl Planner<'_> {
         // Next, we have to find all belongs-to fields and normalize them to FK
         // values
         for field in &model.fields {
-            if let FieldTy::BelongsTo(rel) = &field.ty {
+            if let app::FieldTy::BelongsTo(rel) = &field.ty {
                 let [fk_field] = &rel.foreign_key.fields[..] else {
                     todo!()
                 };
@@ -161,7 +161,7 @@ impl Planner<'_> {
                 // it here.
                 if let Some(auto) = &field.auto {
                     match auto {
-                        Auto::Id => {
+                        app::Auto::Id => {
                             let id = uuid::Uuid::new_v4().to_string();
                             field_expr.insert(stmt::Id::from_string(model.id, id).into());
                         }
@@ -171,7 +171,11 @@ impl Planner<'_> {
         }
     }
 
-    fn verify_non_nullable_fields_have_values(&mut self, model: &Model, expr: &mut stmt::Expr) {
+    fn verify_non_nullable_fields_have_values(
+        &mut self,
+        model: &app::Model,
+        expr: &mut stmt::Expr,
+    ) {
         for field in &model.fields {
             if field.nullable {
                 continue;
@@ -194,7 +198,7 @@ impl Planner<'_> {
         }
     }
 
-    fn plan_insert_relation_stmts(&mut self, model: &Model, expr: &mut stmt::Expr) {
+    fn plan_insert_relation_stmts(&mut self, model: &app::Model, expr: &mut stmt::Expr) {
         for (i, field) in model.fields.iter().enumerate() {
             if expr.entry(i).is_value_null() {
                 if !field.nullable && field.ty.is_has_one() {
@@ -264,7 +268,7 @@ impl Planner<'_> {
     }
 
     /// Returns a select statement that will select the newly inserted record
-    fn inserted_query_stmt(&self, model: &Model, expr: &stmt::Expr) -> stmt::Query {
+    fn inserted_query_stmt(&self, model: &app::Model, expr: &stmt::Expr) -> stmt::Query {
         // The owner's primary key
         let mut args = vec![];
 
@@ -373,7 +377,7 @@ impl ApplyInsertScope<'_> {
         }
     }
 
-    fn apply_eq_const(&mut self, field: FieldId, val: &stmt::Value, set: bool) {
+    fn apply_eq_const(&mut self, field: app::FieldId, val: &stmt::Value, set: bool) {
         let mut existing = self.expr.entry_mut(field.index);
 
         if !existing.is_value_null() {

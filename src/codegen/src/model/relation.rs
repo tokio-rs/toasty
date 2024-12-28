@@ -1,5 +1,7 @@
 use super::*;
 
+use app::FieldTy;
+
 impl<'a> Generator<'a> {
     pub(super) fn gen_relation_structs(&self) -> TokenStream {
         self.model
@@ -27,7 +29,7 @@ impl<'a> Generator<'a> {
             .collect()
     }
 
-    fn gen_has_many_struct(&self, rel: &HasMany, field: FieldId) -> TokenStream {
+    fn gen_has_many_struct(&self, rel: &app::HasMany, field: app::FieldId) -> TokenStream {
         let field_name = self.field_name(field);
         let field_index = util::int(field.index);
         let pair_field_const_name = self.field_const_name(rel.pair);
@@ -181,7 +183,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn gen_relation_field(&self, field: &Field, target: ModelId) -> TokenStream {
+    fn gen_relation_field(&self, field: &app::Field, target: app::ModelId) -> TokenStream {
         let field_name = self.field_name(field.id);
         let relation_struct_name = self.relation_struct_name(field);
         let target_struct_name = self.model_struct_path(target, 1);
@@ -252,7 +254,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn gen_has_one_struct(&self, rel: &HasOne, field: &Field) -> TokenStream {
+    fn gen_has_one_struct(&self, rel: &app::HasOne, field: &app::Field) -> TokenStream {
         let field_name = self.field_name(field);
         let pair_field_const_name = self.field_const_name(rel.pair);
         let model_struct_name = self.self_struct_name();
@@ -335,7 +337,11 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub(crate) fn gen_belongs_to_struct(&self, rel: &BelongsTo, field: &Field) -> TokenStream {
+    pub(crate) fn gen_belongs_to_struct(
+        &self,
+        rel: &app::BelongsTo,
+        field: &app::Field,
+    ) -> TokenStream {
         let field_name = self.field_name(field.id);
         let model_struct_name = self.self_struct_name();
         let relation_struct_name = self.relation_struct_name(field.id);

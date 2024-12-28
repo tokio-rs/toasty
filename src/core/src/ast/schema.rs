@@ -8,7 +8,6 @@ pub(crate) struct Schema {
 #[derive(Debug)]
 pub(crate) enum SchemaItem {
     Model(Model),
-    Table(Table),
 }
 
 impl Parse for Schema {
@@ -29,8 +28,6 @@ impl Parse for SchemaItem {
                 model.attrs = attrs;
 
                 return Ok(SchemaItem::Model(model));
-            } else if p.is_next::<keyword::Table>() {
-                return p.parse().map(SchemaItem::Table);
             } else if p.is_next::<Pound>() {
                 attrs.push(p.parse::<Attribute>()?);
             } else {
@@ -47,7 +44,6 @@ impl Schema {
             .flat_map(|item| -> Box<dyn Iterator<Item = &Model>> {
                 match item {
                     SchemaItem::Model(model) => Box::new(Some(model).into_iter()),
-                    SchemaItem::Table(table) => Box::new(table.models.iter()),
                 }
             })
     }

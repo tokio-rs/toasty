@@ -1,4 +1,5 @@
-pub(crate) mod attr;
+pub(super) mod attr;
+
 mod from_ast;
 
 mod index;
@@ -33,6 +34,9 @@ pub struct Model {
     pub queries: Vec<QueryId>,
 
     pub indices: Vec<ModelIndex>,
+
+    /// If the schema specifies a table to map the model to, this is set.
+    pub table_name: Option<String>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
@@ -62,27 +66,13 @@ impl Model {
         self.fields.iter_mut().find(|field| field.name == name)
     }
 
-    pub fn find_by_id(&self, schema: &Schema, input: impl stmt::substitute::Input) -> stmt::Query {
+    pub fn find_by_id(
+        &self,
+        schema: &crate::Schema,
+        input: impl stmt::substitute::Input,
+    ) -> stmt::Query {
         schema.query(self.primary_key.query).apply(input)
     }
-
-    /*
-    pub fn update_stmt(&self, selection: stmt::Query) -> stmt::Update {
-        assert_eq!(selection.source(), self.id);
-
-        let expr = stmt::ExprRecord::from_iter(
-            std::iter::repeat(stmt::Expr::null()).take(self.fields.len()),
-        );
-
-        stmt::Update {
-            selection,
-            fields: stmt::PathFieldSet::default(),
-            expr,
-            condition: None,
-            returning: false,
-        }
-    }
-    */
 
     /// Iterate over the fields used for the model's primary key.
     /// TODO: extract type?
