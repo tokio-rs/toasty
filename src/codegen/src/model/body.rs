@@ -177,8 +177,14 @@ impl<'a> Generator<'a> {
                 FieldTy::BelongsTo(rel) => {
                     let name = self.field_name(field);
                     let ty = self.model_struct_path(rel.target, 0);
-                    quote! {
-                        #name: BelongsTo<#ty>,
+                    if self.model.id == rel.target {
+                        quote! {
+                            #name: Box<BelongsTo<#ty>>,
+                        }
+                    } else {
+                        quote! {
+                            #name: BelongsTo<#ty>,
+                        }
                     }
                 }
                 FieldTy::Primitive(..) => {
@@ -210,8 +216,12 @@ impl<'a> Generator<'a> {
                         quote!(#name: HasMany::load(record[#index].take())?,)
                     }
                     FieldTy::HasOne(_) => quote!(),
-                    FieldTy::BelongsTo(_) => {
-                        quote!(#name: BelongsTo::load(record[#index].take())?,)
+                    FieldTy::BelongsTo(rel) => {
+                        if self.model.id == rel.target {
+                            quote!(#name: Box::new(BelongsTo::load(record[#index].take())?),)
+                        } else {
+                            quote!(#name: BelongsTo::load(record[#index].take())?,)
+                        }
                     }
                     FieldTy::Primitive(primitive) => {
                         let load = self.primitive_from_value(

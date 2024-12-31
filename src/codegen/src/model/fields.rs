@@ -54,13 +54,24 @@ impl<'a> Generator<'a> {
                         }
                     }
                     HasMany(_) | HasOne(_) | BelongsTo(_) => {
-                        let module_name = self.module_name(field.id.model, depth);
-                        let relation_struct_name = self.relation_struct_name(field);
+                        if model.id == field.id.model {
+                            let relation_struct_name = self.relation_struct_name(field);
+    
+                            quote! {
+                                pub fn #name(mut self) -> #relation_struct_name {
+                                    let path = self.path.chain(#struct_path::#const_name);
+                                    #relation_struct_name::from_path(path)
+                                }
+                            }
+                        } else {
+                            let module_name = self.module_name(field.id.model, depth);
+                            let relation_struct_name = self.relation_struct_name(field);
 
-                        quote! {
-                            pub fn #name(mut self) -> #module_name::fields::#relation_struct_name {
-                                let path = self.path.chain(#struct_path::#const_name);
-                                #module_name::fields::#relation_struct_name::from_path(path)
+                            quote! {
+                                pub fn #name(mut self) -> #module_name::fields::#relation_struct_name {
+                                    let path = self.path.chain(#struct_path::#const_name);
+                                    #module_name::fields::#relation_struct_name::from_path(path)
+                                }
                             }
                         }
                     }

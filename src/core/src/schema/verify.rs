@@ -45,7 +45,9 @@ impl Verify<'_> {
 
                 if let Some(belongs_to) = field.ty.as_belongs_to() {
                     assert_ne!(belongs_to.target, ModelId::placeholder());
-                    assert_ne!(belongs_to.pair, FieldId::placeholder());
+                    if model.id != belongs_to.target {
+                        assert_ne!(belongs_to.pair, FieldId::placeholder());
+                    }
                     assert_ne!(
                         belongs_to.expr_ty,
                         stmt::Type::Model(ModelId::placeholder())

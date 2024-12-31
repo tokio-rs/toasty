@@ -1,0 +1,11 @@
+model Person {
+    #[key]
+    #[auto]
+    id: Id,
+
+    name: String,
+
+    parent_id: Option<Id<Person>>,
+    #[relation(key = parent_id, references = id)]
+    parent: Option<Person>,
+}
