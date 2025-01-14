@@ -56,7 +56,7 @@ pub(crate) struct FindByBuilder<'a> {
 
     /// Query arguments. The first is the field being queried. The `bool` is
     /// whether or not to take the argument as a model reference or as foreign
-    /// key components.
+    /// key components.f
     ///
     /// This is exposed so the caller can check if there already is a generated
     /// query for the arg combo.
@@ -107,6 +107,7 @@ impl<'a> FindByBuilder<'a> {
         let field_id = field.into();
 
         let is_belongs_to = self.model.field(field_id).ty.is_belongs_to();
+        assert!(!is_belongs_to);
 
         self.args.push(FindByArg {
             field_id,

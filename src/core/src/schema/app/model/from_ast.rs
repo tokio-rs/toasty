@@ -1,21 +1,21 @@
 use super::*;
 
 struct Builder<'a> {
-    ctx: &'a mut schema::Context,
+    cx: &'a mut Context,
     model: Model,
 }
 
 impl Model {
-    pub(crate) fn from_ast(ctx: &mut schema::Context, node: &ast::Model) -> crate::Result<Model> {
-        let id = ctx.resolve_model(&ast::Path::new(&node.ident));
+    pub(crate) fn from_ast(cx: &mut Context, node: &ast::Model) -> crate::Result<Model> {
+        let id = cx.resolve_model(&ast::Path::new(&node.ident));
 
         Ok(Builder {
-            ctx,
+            cx,
             model: Model {
                 id,
                 name: Name::new(&node.ident.to_string()),
                 lowering: Lowering {
-                    table: table::TableId::placeholder(),
+                    table: TableId::placeholder(),
                     columns: vec![],
                     model_pk_to_table: stmt::Expr::default(),
                     table_to_model: stmt::ExprRecord::default(),
@@ -44,6 +44,7 @@ impl Model {
                         index: IndexId::placeholder(),
                     },
                 }],
+                table_name: None,
             },
         }
         .from_ast(node))
@@ -80,7 +81,7 @@ impl<'a> Builder<'a> {
                 ast::Type::Array(path) => {
                     match &*path.ty {
                         ast::Type::Path(path) => {
-                            let target = self.ctx.resolve_ty(&path.path, self.model.id);
+                            let target = self.cx.resolve_ty(&path.path, self.model.id);
 
                             if let stmt::Type::Model(target) = target {
                                 let singularize = std_util::str::singularize(&name);
@@ -156,7 +157,7 @@ impl<'a> Builder<'a> {
 
                 if let attr::Field::Relation(attr) = attr {
                     // Store the relation for later
-                    self.ctx.store_relation_attr(field.id, attr.clone());
+                    self.cx.store_relation_attr(field.id, attr.clone());
                 }
             }
         }
@@ -196,6 +197,10 @@ impl<'a> Builder<'a> {
                         });
                     }
                 }
+                attr::Model::Table(attr) => {
+                    assert!(self.model.table_name.is_none());
+                    self.model.table_name = Some(attr.name);
+                }
             }
         }
 
@@ -217,7 +222,7 @@ impl<'a> Builder<'a> {
         path: &ast::TypePath,
         relation: Option<&attr::Relation>,
     ) {
-        let ty = self.ctx.resolve_ty(&path.path, self.model.id);
+        let ty = self.cx.resolve_ty(&path.path, self.model.id);
 
         if let stmt::Type::Model(target) = ty {
             let ty = if let Some(relation) = relation {

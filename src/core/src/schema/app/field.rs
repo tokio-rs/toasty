@@ -46,7 +46,7 @@ impl Field {
     }
 
     /// Returns a fully qualified name for the field.
-    pub fn full_name(&self, schema: &Schema) -> String {
+    pub fn full_name(&self, schema: &crate::Schema) -> String {
         let model = schema.model(self.id.model);
         format!("{}::{}", model.name.upper_camel_case(), self.name)
     }
@@ -61,7 +61,7 @@ impl Field {
     }
 
     /// If the field is a relation, return the target of the relation.
-    pub fn relation_target<'a>(&self, schema: &'a Schema) -> Option<&'a Model> {
+    pub fn relation_target<'a>(&self, schema: &'a crate::Schema) -> Option<&'a Model> {
         self.relation_target_id().map(|id| schema.model(id))
     }
 

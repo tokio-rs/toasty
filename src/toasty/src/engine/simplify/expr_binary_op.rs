@@ -1,4 +1,5 @@
 use super::*;
+use app::FieldTy;
 
 use stmt::Expr;
 

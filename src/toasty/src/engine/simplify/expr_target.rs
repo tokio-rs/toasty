@@ -1,4 +1,5 @@
 use super::*;
+use app::Model;
 
 /// The "root" an expression is targetting. This can be a model, table, ...
 #[derive(Debug, Clone)]

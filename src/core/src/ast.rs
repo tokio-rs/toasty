@@ -37,9 +37,6 @@ pub(crate) use punctuated::Punctuated;
 mod schema;
 pub(crate) use schema::{Schema, SchemaItem};
 
-mod table;
-pub(crate) use table::Table;
-
 mod token;
 pub(crate) use token::Token;
 

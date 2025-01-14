@@ -10,7 +10,7 @@ pub struct Db {
     pub(crate) driver: Arc<dyn Driver>,
 
     /// Schema being managed by this DB instance.
-    pub(crate) schema: Schema,
+    pub(crate) schema: Arc<Schema>,
 }
 
 impl Db {
@@ -19,7 +19,7 @@ impl Db {
 
         Db {
             driver: Arc::new(driver),
-            schema: schema,
+            schema: Arc::new(schema),
         }
     }
 

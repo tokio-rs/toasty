@@ -1,4 +1,4 @@
-use toasty_core::schema::Model;
+use toasty_core::schema::app::Model;
 
 use proc_macro2::TokenStream;
 

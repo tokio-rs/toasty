@@ -2,7 +2,7 @@ use super::*;
 
 impl<'a> Generator<'a> {
     pub(super) fn gen_model_field_consts(&self) -> TokenStream {
-        use FieldTy::*;
+        use app::FieldTy::*;
 
         self.model
             .fields
@@ -32,8 +32,8 @@ impl<'a> Generator<'a> {
             .collect()
     }
 
-    pub(super) fn gen_path_methods(&self, model: &'a Model, depth: usize) -> TokenStream {
-        use FieldTy::*;
+    pub(super) fn gen_path_methods(&self, model: &'a app::Model, depth: usize) -> TokenStream {
+        use app::FieldTy::*;
 
         model
             .fields

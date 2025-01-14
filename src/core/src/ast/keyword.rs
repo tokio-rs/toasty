@@ -35,7 +35,6 @@ macro_rules! define_keyword {
 
 define_keyword! {
     "model" => Model;
-    "table" => Table;
 
     // The Option keyword for `Option<_>` types
     "Option" => Opt;

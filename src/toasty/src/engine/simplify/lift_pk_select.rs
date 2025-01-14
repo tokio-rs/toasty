@@ -1,4 +1,5 @@
 use super::*;
+use app::FieldId;
 
 use toasty_core::schema::*;
 

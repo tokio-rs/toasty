@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::schema::ColumnId;
+
 #[derive(Debug, PartialEq)]
 pub struct FieldPrimitive {
     /// Which table column the field is mapped to

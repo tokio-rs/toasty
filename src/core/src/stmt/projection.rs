@@ -169,7 +169,7 @@ impl Steps {
     }
 
     fn resolve_field<'a>(&self, schema: &'a Schema, expr_self: &'a Model) -> &'a Field {
-        use crate::schema::FieldTy::*;
+        use crate::schema::app::FieldTy::*;
 
         let [first, rest @ ..] = self.as_slice() else {
             panic!("need at most one path step")

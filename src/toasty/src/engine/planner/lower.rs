@@ -4,7 +4,7 @@ struct LowerStatement<'a> {
     schema: &'a Schema,
 
     /// The model in which the statement is contextualized.
-    model: &'a Model,
+    model: &'a app::Model,
 
     /// The associated table for the model.
     table: &'a Table,
@@ -18,7 +18,7 @@ trait Input {
 }
 
 impl<'a> LowerStatement<'a> {
-    fn from_model(schema: &'a Schema, model: &'a Model) -> LowerStatement<'a> {
+    fn from_model(schema: &'a Schema, model: &'a app::Model) -> LowerStatement<'a> {
         LowerStatement {
             schema,
             model,
@@ -28,22 +28,22 @@ impl<'a> LowerStatement<'a> {
 }
 
 impl Planner<'_> {
-    pub(crate) fn lower_stmt_delete(&self, model: &Model, stmt: &mut stmt::Delete) {
+    pub(crate) fn lower_stmt_delete(&self, model: &app::Model, stmt: &mut stmt::Delete) {
         LowerStatement::from_model(self.schema, model).visit_stmt_delete_mut(stmt);
         self.simplify_stmt_delete(stmt);
     }
 
-    pub(crate) fn lower_stmt_query(&self, model: &Model, stmt: &mut stmt::Query) {
+    pub(crate) fn lower_stmt_query(&self, model: &app::Model, stmt: &mut stmt::Query) {
         LowerStatement::from_model(self.schema, model).visit_stmt_query_mut(stmt);
         self.simplify_stmt_query(stmt);
     }
 
-    pub(crate) fn lower_stmt_insert(&self, model: &Model, stmt: &mut stmt::Insert) {
+    pub(crate) fn lower_stmt_insert(&self, model: &app::Model, stmt: &mut stmt::Insert) {
         LowerStatement::from_model(self.schema, model).visit_stmt_insert_mut(stmt);
         self.simplify_stmt_insert(stmt);
     }
 
-    pub(crate) fn lower_stmt_update(&self, model: &Model, stmt: &mut stmt::Update) {
+    pub(crate) fn lower_stmt_update(&self, model: &app::Model, stmt: &mut stmt::Update) {
         LowerStatement::from_model(self.schema, model).visit_stmt_update_mut(stmt);
         self.simplify_stmt_update(stmt);
     }
@@ -86,7 +86,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
             }
 
             match &field.ty {
-                FieldTy::Primitive(primitive) => {
+                app::FieldTy::Primitive(primitive) => {
                     let mut lowered =
                         self.model.lowering.model_to_table[primitive.lowering].clone();
                     Substitute(&*i).visit_expr_mut(&mut lowered);
@@ -211,7 +211,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
 
                     assert!(field.ty.is_primitive(), "field={field:#?}");
 
-                    fields.push(stmt::Expr::field(FieldId {
+                    fields.push(stmt::Expr::field(app::FieldId {
                         model: self.model.id,
                         index: i,
                     }));

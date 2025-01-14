@@ -1,4 +1,5 @@
 use super::*;
+use app::{FieldTy, Model};
 
 // Strategy:
 // * Create a batch of queries to operate atomically.

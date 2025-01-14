@@ -54,7 +54,7 @@ impl<'a> Generator<'a> {
         self.create_struct_path(self.model.id, 0)
     }
 
-    pub(super) fn create_struct_path(&self, id: ModelId, depth: usize) -> TokenStream {
+    pub(super) fn create_struct_path(&self, id: app::ModelId, depth: usize) -> TokenStream {
         let name = &self.names.models[&id].create_name;
 
         if id == self.model.id {
@@ -66,6 +66,8 @@ impl<'a> Generator<'a> {
     }
 
     fn gen_create_methods(&self) -> TokenStream {
+        use app::FieldTy;
+
         self.model.fields.iter().map(move |field| {
             let name = self.field_name(field.id);
             let index = util::int(field.id.index);

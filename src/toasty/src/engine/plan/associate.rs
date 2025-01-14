@@ -1,6 +1,6 @@
 use super::*;
 
-use toasty_core::schema::FieldId;
+use toasty_core::schema::app::FieldId;
 
 #[derive(Debug)]
 pub(crate) struct Associate {

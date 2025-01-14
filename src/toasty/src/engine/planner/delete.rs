@@ -43,7 +43,7 @@ impl Planner<'_> {
         }
     }
 
-    fn plan_delete_sql(&mut self, model: &Model, mut stmt: stmt::Delete) {
+    fn plan_delete_sql(&mut self, model: &app::Model, mut stmt: stmt::Delete) {
         self.lower_stmt_delete(model, &mut stmt);
 
         self.push_action(plan::ExecStatement {
@@ -53,7 +53,7 @@ impl Planner<'_> {
         });
     }
 
-    fn plan_delete_kv(&mut self, model: &Model, mut stmt: stmt::Delete) {
+    fn plan_delete_kv(&mut self, model: &app::Model, mut stmt: stmt::Delete) {
         let table = self.schema.table(model.lowering.table);
 
         // Subqueries are planned before lowering

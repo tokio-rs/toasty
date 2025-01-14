@@ -1,5 +1,5 @@
 use toasty_core::{
-    schema::ModelId,
+    schema::app::ModelId,
     stmt::{self, Visit},
 };
 

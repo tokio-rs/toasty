@@ -4,6 +4,8 @@ impl Verify<'_> {
     // Iterate each model and make sure there is an index path that enables
     // querying
     pub(super) fn verify_relations_are_indexed(&self, field: &Field) {
+        use app::FieldTy;
+
         match &field.ty {
             FieldTy::BelongsTo(rel) => self.verify_belongs_to_is_indexed(rel),
             FieldTy::HasMany(rel) => self.verify_has_many_relation_is_indexed(rel),
@@ -12,15 +14,15 @@ impl Verify<'_> {
         }
     }
 
-    fn verify_belongs_to_is_indexed(&self, _: &BelongsTo) {
+    fn verify_belongs_to_is_indexed(&self, _: &app::BelongsTo) {
         // TODO: Is there any necessary verification here?
     }
 
-    fn verify_has_many_relation_is_indexed(&self, rel: &HasMany) {
+    fn verify_has_many_relation_is_indexed(&self, rel: &app::HasMany) {
         self.verify_has_relation_is_indexed(rel.target(self.schema), rel.pair);
     }
 
-    fn verify_has_one_relation_is_indexed(&self, rel: &HasOne) {
+    fn verify_has_one_relation_is_indexed(&self, rel: &app::HasOne) {
         self.verify_has_relation_is_indexed(rel.target(self.schema), rel.pair);
     }
 

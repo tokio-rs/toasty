@@ -43,7 +43,7 @@ pub mod codegen_support {
     };
     pub use toasty_core::{
         driver,
-        schema::{self, ModelId},
+        schema::{self, app::ModelId},
         stmt::{Value, ValueRecord, ValueStream},
     };
 }

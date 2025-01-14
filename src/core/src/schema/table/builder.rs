@@ -1,5 +1,7 @@
 use super::*;
 
+use app::{FieldPrimitive, FieldTy};
+
 use std::iter::repeat;
 
 impl Table {
