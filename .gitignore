@@ -1,3 +1,4 @@
 .cargo
 /target
 /Cargo.lock
+/toasty.db3
