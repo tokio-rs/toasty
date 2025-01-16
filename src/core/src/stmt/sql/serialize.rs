@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::schema::db;
+
 use crate::stmt::Statement as DataStatement;
 
 use std::fmt::{self, Write};
@@ -10,7 +12,7 @@ pub trait Params {
 
 /// Serialize a statement to a SQL string
 pub struct Serializer<'a> {
-    schema: &'a Schema,
+    schema: &'a db::Schema,
 }
 
 struct Formatter<'a, T> {
@@ -18,7 +20,7 @@ struct Formatter<'a, T> {
     dst: &'a mut String,
 
     /// The schema that the query references
-    schema: &'a Schema,
+    schema: &'a db::Schema,
 
     /// Query paramaters (referenced by placeholders) are stored here.
     params: &'a mut T,
@@ -31,7 +33,7 @@ impl Params for Vec<stmt::Value> {
 }
 
 impl<'a> Serializer<'a> {
-    pub fn new(schema: &'a Schema) -> Serializer<'a> {
+    pub fn new(schema: &'a db::Schema) -> Serializer<'a> {
         Serializer { schema }
     }
 

@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::schema::Table;
+use crate::schema::db::Table;
 
 #[derive(Debug, Clone)]
 pub struct CreateTable {

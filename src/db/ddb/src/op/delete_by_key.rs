@@ -3,7 +3,7 @@ use super::*;
 impl DynamoDB {
     pub(crate) async fn exec_delete_by_key(
         &self,
-        schema: &schema::Schema,
+        schema: &Schema,
         op: operation::DeleteByKey,
     ) -> Result<Response> {
         use aws_sdk_dynamodb::operation::delete_item::DeleteItemError;

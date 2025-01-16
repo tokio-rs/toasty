@@ -1,5 +1,6 @@
 use super::*;
-use crate::schema::*;
+
+use crate::schema::db::TableId;
 
 #[derive(Debug, Clone)]
 pub(crate) struct UpdateByKey {

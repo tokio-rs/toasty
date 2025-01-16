@@ -17,6 +17,7 @@ impl Planner<'_> {
         let project_key = if index_plan.index.columns.len() == 1 {
             let arg_ty = stmt::Type::Record(vec![self
                 .schema
+                .db
                 .column(index_plan.index.columns[0].column)
                 .ty
                 .clone()]);

@@ -1,14 +1,14 @@
 use super::*;
 
+use db::{Index, Table};
+
 use by_address::ByAddress;
 use std::collections::hash_map;
 
 /*
-
 1) Match all restrictions with related indices.
 2) Compute top-level index paths
 3) If no index path matches full restriction, and there are ORs, try multiple paths.
-
  */
 
 impl<'a> Planner<'a> {

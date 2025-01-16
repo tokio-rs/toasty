@@ -1,5 +1,7 @@
 use super::*;
 
+use db::Index;
+
 /// Try to convert an index filter expression to a key expression
 struct TryConvert<'a> {
     planner: &'a Planner<'a>,

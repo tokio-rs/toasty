@@ -3,7 +3,7 @@ use super::*;
 impl DynamoDB {
     pub(crate) async fn exec_get_by_key<'stmt>(
         &self,
-        schema: &Arc<schema::Schema>,
+        schema: &Arc<Schema>,
         op: operation::GetByKey,
     ) -> Result<Response> {
         let table = schema.table(op.table);

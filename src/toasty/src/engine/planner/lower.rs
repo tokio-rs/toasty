@@ -1,5 +1,7 @@
 use super::*;
 
+use db::{Column, Table};
+
 struct LowerStatement<'a> {
     schema: &'a Schema,
 
@@ -22,7 +24,7 @@ impl<'a> LowerStatement<'a> {
         LowerStatement {
             schema,
             model,
-            table: schema.table(model.lowering.table),
+            table: schema.db.table(model.lowering.table),
         }
     }
 }

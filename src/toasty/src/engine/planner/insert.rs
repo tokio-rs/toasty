@@ -1,5 +1,7 @@
 use super::*;
 
+use db::ColumnId;
+
 use std::collections::hash_map::Entry;
 
 /// Process the scope component of an insert statement.
@@ -321,7 +323,7 @@ impl Planner<'_> {
             insert_table
                 .columns
                 .iter()
-                .map(|column_id| self.schema.column(column_id).ty.clone())
+                .map(|column_id| self.schema.db.column(column_id).ty.clone())
                 .collect(),
         );
 

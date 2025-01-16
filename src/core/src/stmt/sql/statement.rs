@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::schema::db::Schema;
 use crate::stmt::Statement as DataStatement;
 
 #[derive(Debug, Clone)]

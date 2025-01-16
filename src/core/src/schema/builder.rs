@@ -1,4 +1,5 @@
 use super::*;
+
 /// Used to resolve types during parsing
 #[derive(Default)]
 pub(crate) struct Builder {
@@ -8,7 +9,7 @@ pub(crate) struct Builder {
 
 impl Builder {
     pub(crate) fn from_ast(mut self, ast: &ast::Schema) -> crate::Result<Schema> {
-        let mut ctx = schema::Context::new();
+        let mut ctx = db::Context::new();
 
         let mut app_schema = app::Schema::from_ast(ast)?;
 
@@ -64,9 +65,10 @@ impl Builder {
         }
 
         let schema = Schema {
-            models: app_schema.models,
-            tables: self.tables,
-            queries: app_schema.queries,
+            app: app_schema,
+            db: Arc::new(db::Schema {
+                tables: self.tables,
+            }),
         };
 
         // Verify the schema structure

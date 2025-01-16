@@ -113,7 +113,7 @@ impl Planner<'_> {
     }
 
     fn plan_update_kv(&mut self, model: &Model, mut stmt: stmt::Update) -> Option<plan::VarId> {
-        let table = self.schema.table(model.lowering.table);
+        let table = self.schema.db.table(model.lowering.table);
 
         // Figure out which index to use for the query
         // let input = self.extract_input(&mut filter, &[], true);

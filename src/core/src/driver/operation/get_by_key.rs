@@ -1,7 +1,7 @@
 use super::*;
 
 use crate::{
-    schema::{ColumnId, TableId},
+    schema::db::{ColumnId, TableId},
     stmt,
 };
 

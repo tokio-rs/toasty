@@ -1,5 +1,6 @@
 use super::*;
-use crate::schema::*;
+
+use crate::schema::db::{IndexId, TableId};
 
 /// Schema: `self` references [index-fields, input-fields] flattened
 #[derive(Debug)]

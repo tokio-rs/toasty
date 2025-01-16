@@ -1,5 +1,6 @@
 use super::*;
-use crate::schema::*;
+
+use crate::schema::db::{ColumnId, TableId};
 
 /// Get a model by key
 #[derive(Debug)]

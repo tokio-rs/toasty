@@ -21,7 +21,7 @@ impl Exec<'_> {
             .db
             .driver
             .exec(
-                &self.db.schema,
+                &self.db.schema.db,
                 operation::FindPkByIndex {
                     table: action.table,
                     index: action.index,

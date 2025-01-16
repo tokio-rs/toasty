@@ -3,7 +3,7 @@ use super::*;
 impl DynamoDB {
     pub(crate) async fn exec_insert(
         &self,
-        schema: &schema::Schema,
+        schema: &Schema,
         insert: stmt::Insert,
     ) -> Result<Response> {
         assert!(insert.returning.is_none());

@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::schema::{self, Index, TableId};
+use crate::schema::db::{Index, IndexOp, TableId};
 
 #[derive(Debug, Clone)]
 pub struct CreateIndex {
@@ -28,8 +28,8 @@ impl Statement {
                 .map(|index_column| ExprOrderBy {
                     expr: Expr::column(index_column.column),
                     order: match index_column.op {
-                        schema::IndexOp::Eq => None,
-                        schema::IndexOp::Sort(direction) => Some(direction),
+                        IndexOp::Eq => None,
+                        IndexOp::Sort(direction) => Some(direction),
                     },
                 })
                 .collect(),

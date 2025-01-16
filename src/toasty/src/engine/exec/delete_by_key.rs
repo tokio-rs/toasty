@@ -15,7 +15,7 @@ impl Exec<'_> {
                 filter: action.filter.clone(),
             };
 
-            let res = self.db.driver.exec(&self.db.schema, op.into()).await?;
+            let res = self.db.driver.exec(&self.db.schema.db, op.into()).await?;
             assert!(res.rows.is_count(), "TODO");
         }
 

@@ -54,7 +54,7 @@ impl Planner<'_> {
     }
 
     fn plan_delete_kv(&mut self, model: &app::Model, mut stmt: stmt::Delete) {
-        let table = self.schema.table(model.lowering.table);
+        let table = self.schema.db.table(model.lowering.table);
 
         // Subqueries are planned before lowering
         let input_sources = self.plan_subqueries(&mut stmt);

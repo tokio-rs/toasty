@@ -15,7 +15,7 @@ pub struct Db {
 
 impl Db {
     pub async fn new(schema: Schema, mut driver: impl Driver) -> Db {
-        driver.register_schema(&schema).await.unwrap();
+        driver.register_schema(&schema.db).await.unwrap();
 
         Db {
             driver: Arc::new(driver),
@@ -93,6 +93,6 @@ impl Db {
 
     /// TODO: remove
     pub async fn reset_db(&self) -> Result<()> {
-        self.driver.reset_db(&self.schema).await
+        self.driver.reset_db(&self.schema.db).await
     }
 }

@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::{schema::TableId, stmt};
+use crate::{schema::db::TableId, stmt};
 
 #[derive(Debug)]
 pub struct UpdateByKey {

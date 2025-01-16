@@ -1,6 +1,7 @@
 use toasty_core::{
     driver::{operation::Operation, Capability, Driver, Response},
-    schema, stmt, Schema,
+    schema::db::{Schema, Table},
+    stmt,
 };
 
 use anyhow::Result;
@@ -165,7 +166,7 @@ impl Driver for Sqlite {
 }
 
 impl Sqlite {
-    fn create_table(&self, schema: &Schema, table: &schema::Table) -> Result<()> {
+    fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
         let connection = self.connection.lock().unwrap();
 
         let mut params = vec![];

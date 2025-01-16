@@ -4,7 +4,7 @@ impl DynamoDB {
     pub(crate) async fn create_table(
         &self,
         schema: &Schema,
-        table: &schema::Table,
+        table: &Table,
         reset: bool,
     ) -> Result<()> {
         if reset {

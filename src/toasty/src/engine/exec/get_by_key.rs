@@ -17,7 +17,7 @@ impl Exec<'_> {
                 keys,
             };
 
-            let res = self.db.driver.exec(&self.db.schema, op.into()).await?;
+            let res = self.db.driver.exec(&self.db.schema.db, op.into()).await?;
             let rows = match res.rows {
                 Rows::Values(rows) => rows,
                 _ => todo!("res={res:#?}"),

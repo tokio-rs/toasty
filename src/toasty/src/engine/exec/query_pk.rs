@@ -8,7 +8,7 @@ impl Exec<'_> {
             .db
             .driver
             .exec(
-                &self.db.schema,
+                &self.db.schema.db,
                 operation::QueryPk {
                     table: action.table,
                     select: action.columns.clone(),

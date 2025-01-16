@@ -1,5 +1,5 @@
 use crate::{
-    schema::{ColumnId, IndexId, TableId},
+    schema::db::{ColumnId, IndexId, TableId},
     stmt,
 };
 
