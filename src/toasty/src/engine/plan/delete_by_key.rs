@@ -1,5 +1,6 @@
 use super::*;
-use crate::schema::*;
+
+use crate::schema::db::TableId;
 
 /// Input is the key to delete
 #[derive(Debug)]

@@ -1,6 +1,6 @@
 use super::*;
 
-use app::{FieldPrimitive, FieldTy};
+use crate::schema::app::{FieldPrimitive, FieldTy, Model};
 
 use std::iter::repeat;
 

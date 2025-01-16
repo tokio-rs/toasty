@@ -182,7 +182,8 @@ pub use visit::Visit;
 use crate::{
     schema::{
         app::{Field, FieldId, Model, ModelId},
-        Column, ColumnId, Schema, TableId,
+        db::{Column, ColumnId, TableId},
+        Schema,
     },
     stmt, Error, Result,
 };

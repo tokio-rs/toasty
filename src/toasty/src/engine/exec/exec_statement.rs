@@ -38,7 +38,7 @@ impl Exec<'_> {
         let res = self
             .db
             .driver
-            .exec(&self.db.schema, operation::QuerySql { stmt }.into())
+            .exec(&self.db.schema.db, operation::QuerySql { stmt }.into())
             .await?;
 
         let Some(out) = output else {

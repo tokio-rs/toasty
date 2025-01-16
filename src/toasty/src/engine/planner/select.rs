@@ -95,7 +95,7 @@ impl Planner<'_> {
         model: &Model,
         mut stmt: stmt::Query,
     ) -> plan::VarId {
-        let table = self.schema.table(model.lowering.table);
+        let table = self.schema.db.table(model.lowering.table);
 
         // Extract parts of the query that must be executed in-memory.
         let input = if cx.input.is_empty() {

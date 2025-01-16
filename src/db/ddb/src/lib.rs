@@ -6,8 +6,11 @@ use toasty_core::{
         operation::{self, Operation},
         Capability, Driver, Response,
     },
-    schema::{self, app, Column, ColumnId},
-    stmt, Schema,
+    schema::{
+        app,
+        db::{Column, ColumnId, Index, Schema, Table},
+    },
+    stmt,
 };
 
 use anyhow::Result;
@@ -103,7 +106,7 @@ impl DynamoDB {
         }
     }
 
-    fn table_name(&self, table: &schema::Table) -> String {
+    fn table_name(&self, table: &Table) -> String {
         if let Some(prefix) = &self.table_prefix {
             format!("{}{}", prefix, table.name)
         } else {
@@ -111,7 +114,7 @@ impl DynamoDB {
         }
     }
 
-    fn index_table_name(&self, index: &schema::Index) -> String {
+    fn index_table_name(&self, index: &Index) -> String {
         if let Some(prefix) = &self.table_prefix {
             format!("{}{}", prefix, index.name)
         } else {
@@ -133,7 +136,7 @@ fn ddb_ty(ty: &stmt::Type) -> ScalarAttributeType {
     }
 }
 
-fn ddb_key(table: &schema::Table, key: &stmt::Value) -> HashMap<String, AttributeValue> {
+fn ddb_key(table: &Table, key: &stmt::Value) -> HashMap<String, AttributeValue> {
     let mut ret = HashMap::new();
 
     for (index, column) in table.primary_key_columns().enumerate() {
@@ -221,10 +224,7 @@ fn ddb_to_val<'stmt>(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
     }
 }
 
-fn ddb_key_schema(
-    partition: &schema::Column,
-    range: Option<&schema::Column>,
-) -> Vec<KeySchemaElement> {
+fn ddb_key_schema(partition: &Column, range: Option<&Column>) -> Vec<KeySchemaElement> {
     let mut ks = vec![];
 
     ks.push(
@@ -250,7 +250,7 @@ fn ddb_key_schema(
 
 fn item_to_record<'a, 'stmt>(
     item: &HashMap<String, AttributeValue>,
-    columns: impl Iterator<Item = &'a schema::Column>,
+    columns: impl Iterator<Item = &'a Column>,
 ) -> Result<stmt::ValueRecord> {
     Ok(stmt::ValueRecord::from_vec(
         columns

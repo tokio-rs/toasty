@@ -5,6 +5,8 @@ pub use pk::TablePrimaryKey;
 
 use super::*;
 
+use crate::schema::{Model, Name};
+
 use std::fmt;
 
 /// A database table
@@ -80,7 +82,7 @@ impl Table {
         }
     }
 
-    pub(crate) fn from_model(ctx: &mut schema::Context, model: &mut Model) -> crate::Result<Table> {
+    pub(crate) fn from_model(ctx: &mut Context, model: &mut Model) -> crate::Result<Table> {
         let name = name_from_model(&model.name);
         let id = ctx.register_table(&name);
 

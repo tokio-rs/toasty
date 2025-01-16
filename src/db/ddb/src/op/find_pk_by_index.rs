@@ -3,7 +3,7 @@ use super::*;
 impl DynamoDB {
     pub(crate) async fn exec_find_pk_by_index(
         &self,
-        schema: &Arc<schema::Schema>,
+        schema: &Arc<Schema>,
         op: operation::FindPkByIndex,
     ) -> Result<Response> {
         let table = schema.table(op.table);

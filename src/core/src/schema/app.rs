@@ -27,7 +27,10 @@ pub use schema::Schema;
 mod scope;
 pub use scope::ScopedQuery;
 
-use super::{IndexOp, IndexScope, Lowering, Name};
+use super::{
+    db::{IndexOp, IndexScope},
+    Lowering, Name,
+};
 use crate::{ast, stmt};
 
 // TODO: remove

@@ -69,11 +69,11 @@ impl Names {
         let mut relations = HashMap::new();
         let mut queries = HashMap::new();
 
-        for query in &schema.queries {
+        for query in &schema.app.queries {
             queries.insert(query.id, QueryNames::from_query(query));
         }
 
-        for model in &schema.models {
+        for model in &schema.app.models {
             // Generate model names
             let names = ModelNames::from_model(model);
             models.insert(model.id, names);

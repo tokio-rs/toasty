@@ -1,5 +1,7 @@
 use super::*;
+
 use app::Model;
+use db::{ColumnId, Table};
 
 /// The "root" an expression is targetting. This can be a model, table, ...
 #[derive(Debug, Clone)]
@@ -31,7 +33,7 @@ impl<'a> ExprTarget<'a> {
                     todo!("source={source:#?}")
                 };
 
-                let table = schema.table(table_with_joins.table);
+                let table = schema.db.table(table_with_joins.table);
                 ExprTarget::from(table)
             }
         }

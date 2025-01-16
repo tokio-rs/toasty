@@ -3,31 +3,27 @@ pub mod app;
 mod builder;
 pub(crate) use builder::Builder;
 
-mod column;
-pub use column::{Column, ColumnId};
-
-mod context;
-pub(crate) use context::Context;
-
-mod index;
-pub use index::{Index, IndexColumn, IndexId, IndexOp, IndexScope};
+pub mod db;
 
 mod name;
 pub use name::Name;
 
-mod table;
-pub use table::{Table, TableId, TablePrimaryKey};
-
 mod verify;
 
 use crate::*;
+
 use app::{Field, FieldId, Model, ModelId, Query, QueryId};
+use db::{ColumnId, IndexId, Table, TableId};
+
+use std::sync::Arc;
 
 #[derive(Debug, Default)]
 pub struct Schema {
-    pub models: Vec<Model>,
-    pub tables: Vec<Table>,
-    pub queries: Vec<Query>,
+    /// Application-level schema
+    pub app: app::Schema,
+
+    /// Database-level schema
+    pub db: Arc<db::Schema>,
 }
 
 pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Schema> {
@@ -53,11 +49,7 @@ pub fn from_str(source: &str) -> Result<Schema> {
 impl Schema {
     /// Get a model by ID
     pub fn model(&self, id: impl Into<ModelId>) -> &Model {
-        self.models.get(id.into().0).expect("invalid model ID")
-    }
-
-    pub fn table(&self, id: impl Into<TableId>) -> &Table {
-        self.tables.get(id.into().0).expect("invalid table ID")
+        self.app.models.get(id.into().0).expect("invalid model ID")
     }
 
     /// Get a field by ID
@@ -68,24 +60,9 @@ impl Schema {
             .expect("invalid field ID")
     }
 
-    pub fn column(&self, id: impl Into<ColumnId>) -> &Column {
-        let id = id.into();
-        self.table(id.table)
-            .columns
-            .get(id.index)
-            .expect("invalid column ID")
-    }
-
-    pub fn index(&self, id: IndexId) -> &Index {
-        self.table(id.table)
-            .indices
-            .get(id.index)
-            .expect("invalid index ID")
-    }
-
     pub fn query(&self, id: impl Into<QueryId>) -> &Query {
         let id = id.into();
-        &self.queries[id.0]
+        &self.app.queries[id.0]
     }
 
     pub(crate) fn from_ast(ast: &ast::Schema) -> Result<Schema> {
