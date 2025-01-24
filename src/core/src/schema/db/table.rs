@@ -1,11 +1,7 @@
-mod builder;
-
 mod pk;
 pub use pk::TablePrimaryKey;
 
 use super::*;
-
-use crate::schema::{Model, Name};
 
 use std::fmt;
 
@@ -81,20 +77,6 @@ impl Table {
             }],
         }
     }
-
-    pub(crate) fn from_model(ctx: &mut Context, model: &mut Model) -> crate::Result<Table> {
-        let name = name_from_model(&model.name);
-        let id = ctx.register_table(&name);
-
-        // Update the model to point to this table
-        model.lowering.table = id;
-
-        let mut table = Table::new(id, name);
-
-        table.lower_models(&mut [model]);
-
-        Ok(table)
-    }
 }
 
 impl TableId {
@@ -107,8 +89,4 @@ impl fmt::Debug for TableId {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(fmt, "TableId({})", self.0)
     }
-}
-
-fn name_from_model(model_name: &Name) -> String {
-    std_util::str::pluralize(&model_name.snake_case())
 }

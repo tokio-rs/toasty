@@ -113,7 +113,7 @@ impl Planner<'_> {
     }
 
     fn plan_update_kv(&mut self, model: &Model, mut stmt: stmt::Update) -> Option<plan::VarId> {
-        let table = self.schema.db.table(model.lowering.table);
+        let table = self.schema.table_for(model);
 
         // Figure out which index to use for the query
         // let input = self.extract_input(&mut filter, &[], true);
@@ -143,7 +143,7 @@ impl Planner<'_> {
             self.push_write_action(plan::UpdateByKey {
                 input: None,
                 output,
-                table: model.lowering.table,
+                table: table.id,
                 keys: key,
                 assignments: stmt.assignments,
                 filter: index_plan.result_filter,
@@ -164,7 +164,7 @@ impl Planner<'_> {
             self.push_write_action(plan::UpdateByKey {
                 input: Some(update_by_key_input),
                 output,
-                table: model.lowering.table,
+                table: table.id,
                 keys,
                 assignments: stmt.assignments,
                 filter: index_plan.result_filter,

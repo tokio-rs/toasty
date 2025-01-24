@@ -20,9 +20,6 @@ pub struct Model {
     /// Name of the model
     pub name: Name,
 
-    /// Describes how to lower the model to a table
-    pub lowering: Lowering,
-
     /// Fields contained by the model
     pub fields: Vec<Field>,
 
@@ -83,21 +80,11 @@ impl Model {
             .map(|pk_field| &self.fields[pk_field.index])
     }
 
-    pub fn primary_key_primitives<'a>(&'a self) -> impl Iterator<Item = &'a FieldPrimitive> + 'a {
+    pub(crate) fn primary_key_primitives<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = &'a FieldPrimitive> + 'a {
         self.primary_key_fields()
             .map(|field| field.ty.expect_primitive())
-    }
-
-    pub(crate) fn primary_key_primitives_mut<'a>(
-        &'a mut self,
-    ) -> impl Iterator<Item = &'a mut FieldPrimitive> + 'a {
-        // Some stupidly annoying code to avoid unsafe...
-        let mut fields = self.fields.iter_mut().map(Some).collect::<Vec<_>>();
-        self.primary_key
-            .fields
-            .iter()
-            .map(move |pk_field| fields[pk_field.index].take().unwrap())
-            .map(|field| field.ty.expect_primitive_mut())
     }
 }
 

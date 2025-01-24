@@ -9,9 +9,6 @@ pub use driver::Driver;
 #[macro_use]
 mod error;
 
-mod lowering;
-pub use lowering::{IndexLowering, Lowering};
-
 pub mod schema;
 pub use schema::Schema;
 

@@ -29,9 +29,6 @@ pub use scope::ScopedQuery;
 
 use super::{
     db::{IndexOp, IndexScope},
-    Lowering, Name,
+    Name,
 };
 use crate::{ast, stmt};
-
-// TODO: remove
-use crate::schema::{lowering::IndexLowering, ColumnId, IndexId, TableId};
