@@ -36,7 +36,6 @@ impl Verify<'_> {
     fn verify_ids_populated(&self) -> bool {
         for model in &self.schema.app.models {
             assert_ne!(model.id, ModelId::placeholder());
-            assert_ne!(model.lowering.table, TableId::placeholder());
 
             for field in &model.fields {
                 if let Some(has_many) = field.ty.as_has_many() {
@@ -50,11 +49,6 @@ impl Verify<'_> {
                         belongs_to.expr_ty,
                         stmt::Type::Model(ModelId::placeholder())
                     );
-                }
-
-                if let app::FieldTy::Primitive(primitive) = &field.ty {
-                    assert_ne!(primitive.column, ColumnId::placeholder());
-                    assert_ne!(primitive.lowering, usize::MAX);
                 }
             }
         }

@@ -10,6 +10,9 @@ struct LowerStatement<'a> {
 
     /// The associated table for the model.
     table: &'a Table,
+
+    /// How to map expressions between the model and table
+    mapping: &'a mapping::Model,
 }
 
 /// Substitute fields for columns
@@ -24,7 +27,8 @@ impl<'a> LowerStatement<'a> {
         LowerStatement {
             schema,
             model,
-            table: schema.db.table(model.lowering.table),
+            table: schema.table_for(model),
+            mapping: schema.mapping_for(model),
         }
     }
 }
@@ -88,11 +92,14 @@ impl<'a> VisitMut for LowerStatement<'a> {
             }
 
             match &field.ty {
-                app::FieldTy::Primitive(primitive) => {
-                    let mut lowered =
-                        self.model.lowering.model_to_table[primitive.lowering].clone();
+                app::FieldTy::Primitive(_) => {
+                    let Some(field_mapping) = &self.mapping.fields[index] else {
+                        todo!()
+                    };
+
+                    let mut lowered = self.mapping.model_to_table[field_mapping.lowering].clone();
                     Substitute(&*i).visit_expr_mut(&mut lowered);
-                    assignments.set(primitive.column, lowered);
+                    assignments.set(field_mapping.column, lowered);
                 }
                 _ => {
                     todo!("field = {:#?};", field);
@@ -115,7 +122,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
                 self.lower_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
             stmt::Expr::Field(expr) => {
-                *i = self.model.lowering.table_to_model[expr.field.index].clone();
+                *i = self.mapping.table_to_model[expr.field.index].clone();
 
                 self.visit_expr_mut(i);
                 return;
@@ -157,15 +164,15 @@ impl<'a> VisitMut for LowerStatement<'a> {
 
     fn visit_insert_target_mut(&mut self, i: &mut stmt::InsertTarget) {
         *i = stmt::InsertTable {
-            table: self.model.lowering.table,
-            columns: self.model.lowering.columns.clone(),
+            table: self.mapping.table,
+            columns: self.mapping.columns.clone(),
         }
         .into();
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
         if let stmt::Returning::Star = *i {
-            *i = stmt::Returning::Expr(self.model.lowering.table_to_model.clone().into());
+            *i = stmt::Returning::Expr(self.mapping.table_to_model.clone().into());
         }
 
         stmt::visit_mut::visit_returning_mut(self, i);
@@ -249,7 +256,7 @@ impl<'a> LowerStatement<'a> {
         let mut operands = vec![];
 
         for column in self.table.primary_key_columns() {
-            let pattern = match &self.model.lowering.model_to_table[column.id.index] {
+            let pattern = match &self.mapping.model_to_table[column.id.index] {
                 stmt::Expr::ConcatStr(expr) => {
                     // hax
                     let stmt::Expr::Value(stmt::Value::String(a)) = &expr.exprs[0] else {
@@ -269,7 +276,7 @@ impl<'a> LowerStatement<'a> {
                 continue;
             }
 
-            assert_eq!(self.model.lowering.columns[column.id.index], column.id);
+            assert_eq!(self.mapping.columns[column.id.index], column.id);
 
             operands.push(stmt::Expr::begins_with(stmt::Expr::column(column), pattern));
         }
@@ -395,7 +402,7 @@ impl<'a> LowerStatement<'a> {
     }
 
     fn lower_insert_values(&self, expr: &mut stmt::Expr) {
-        let mut lowered = self.model.lowering.model_to_table.clone();
+        let mut lowered = self.mapping.model_to_table.clone();
         Substitute(&mut *expr).visit_expr_record_mut(&mut lowered);
         *expr = lowered.into();
     }

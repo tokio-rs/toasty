@@ -13,8 +13,6 @@ pub struct ModelIndex {
 
     /// When true, the index is the primary key
     pub primary_key: bool,
-
-    pub lowering: IndexLowering,
 }
 
 #[derive(Debug, PartialEq)]

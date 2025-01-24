@@ -5,6 +5,9 @@ pub(crate) use builder::Builder;
 
 pub mod db;
 
+pub mod mapping;
+use mapping::Mapping;
+
 mod name;
 pub use name::Name;
 
@@ -17,13 +20,16 @@ use db::{ColumnId, IndexId, Table, TableId};
 
 use std::sync::Arc;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Schema {
     /// Application-level schema
     pub app: app::Schema,
 
     /// Database-level schema
     pub db: Arc<db::Schema>,
+
+    /// Maps the app-level schema to the db-level schema
+    pub mapping: Mapping,
 }
 
 pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Schema> {
@@ -60,12 +66,24 @@ impl Schema {
             .expect("invalid field ID")
     }
 
+    pub fn mapping_for(&self, id: impl Into<ModelId>) -> &mapping::Model {
+        self.mapping.model(id)
+    }
+
     pub fn query(&self, id: impl Into<QueryId>) -> &Query {
         let id = id.into();
         &self.app.queries[id.0]
     }
 
+    pub fn table_for(&self, id: impl Into<ModelId>) -> &Table {
+        self.db.table(self.table_id_for(id))
+    }
+
+    pub fn table_id_for(&self, id: impl Into<ModelId>) -> TableId {
+        self.mapping.model(id).table
+    }
+
     pub(crate) fn from_ast(ast: &ast::Schema) -> Result<Schema> {
-        schema::Builder::default().from_ast(ast)
+        schema::Builder::from_ast(ast)
     }
 }

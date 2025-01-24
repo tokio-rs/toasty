@@ -14,13 +14,6 @@ impl Model {
             model: Model {
                 id,
                 name: Name::new(&node.ident.to_string()),
-                lowering: Lowering {
-                    table: TableId::placeholder(),
-                    columns: vec![],
-                    model_pk_to_table: stmt::Expr::default(),
-                    table_to_model: stmt::ExprRecord::default(),
-                    model_to_table: stmt::ExprRecord::default(),
-                },
                 fields: vec![],
                 primary_key: PrimaryKey {
                     fields: vec![],
@@ -40,9 +33,6 @@ impl Model {
                     fields: vec![],
                     unique: true,
                     primary_key: true,
-                    lowering: IndexLowering {
-                        index: IndexId::placeholder(),
-                    },
                 }],
                 table_name: None,
             },
@@ -133,9 +123,6 @@ impl<'a> Builder<'a> {
                         }],
                         unique: attr.is_unique(),
                         primary_key: false,
-                        lowering: IndexLowering {
-                            index: IndexId::placeholder(),
-                        },
                     });
                 }
 
@@ -260,11 +247,7 @@ impl<'a> Builder<'a> {
             self.model.fields.push(Field {
                 id,
                 name: name.clone(),
-                ty: FieldTy::Primitive(FieldPrimitive {
-                    column: ColumnId::placeholder(),
-                    lowering: usize::MAX,
-                    ty,
-                }),
+                ty: FieldTy::Primitive(FieldPrimitive { ty }),
                 primary_key: false,
                 nullable,
                 auto: None,
