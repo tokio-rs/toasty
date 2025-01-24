@@ -1,7 +1,7 @@
 use super::*;
 
 #[derive(Debug, PartialEq)]
-pub struct TablePrimaryKey {
+pub struct PrimaryKey {
     /// Fields composing the primary key
     pub columns: Vec<ColumnId>,
 

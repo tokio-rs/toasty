@@ -1,6 +1,3 @@
-mod pk;
-pub use pk::TablePrimaryKey;
-
 use super::*;
 
 use std::fmt;
@@ -17,7 +14,7 @@ pub struct Table {
     /// The table's columns
     pub columns: Vec<Column>,
 
-    pub primary_key: TablePrimaryKey,
+    pub primary_key: PrimaryKey,
 
     pub indices: Vec<Index>,
 }
@@ -57,7 +54,7 @@ impl Table {
             id,
             name,
             columns: vec![],
-            primary_key: TablePrimaryKey {
+            primary_key: PrimaryKey {
                 columns: vec![],
                 index: IndexId {
                     table: id,
