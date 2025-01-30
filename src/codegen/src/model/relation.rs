@@ -38,6 +38,11 @@ impl<'a> Generator<'a> {
         let target_mod_name = self.module_name(rel.target, 2);
         let target_struct_name = self.model_struct_path(rel.target, 2);
         let target_create_struct_path = self.create_struct_path(rel.target, 2);
+        let prefix = if rel.target == self.model.id {
+            quote!(super::)
+        } else {
+            quote!(#target_mod_name::)
+        };
 
         let scoped_query_method_defs = rel
             .queries
@@ -114,9 +119,9 @@ impl<'a> Generator<'a> {
                     pub fn query(
                         self,
                         filter: stmt::Expr<bool>
-                    ) -> #target_mod_name::Query {
+                    ) -> #prefix Query {
                         let query = self.into_select();
-                        #target_mod_name::Query::from_stmt(query.and(filter))
+                        #prefix Query::from_stmt(query.and(filter))
                     }
 
                     /// Add an item to the association

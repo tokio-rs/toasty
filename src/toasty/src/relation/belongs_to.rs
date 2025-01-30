@@ -5,7 +5,7 @@ use toasty_core::stmt::Value;
 use std::fmt;
 
 pub struct BelongsTo<T> {
-    value: Option<T>,
+    value: Option<Box<T>>,
 }
 
 impl<T: Model> BelongsTo<T> {
@@ -13,7 +13,7 @@ impl<T: Model> BelongsTo<T> {
         Ok(match input {
             Value::Null => BelongsTo::default(),
             Value::Record(record) => BelongsTo {
-                value: Some(T::load(record)?),
+                value: Some(Box::new(T::load(record)?)),
             },
             _ => todo!(),
         })
