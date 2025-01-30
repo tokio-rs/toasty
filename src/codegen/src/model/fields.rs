@@ -54,13 +54,28 @@ impl<'a> Generator<'a> {
                         }
                     }
                     HasMany(_) | HasOne(_) | BelongsTo(_) => {
+                        let target = match &field.ty {
+                            HasMany(rel) => rel.target,
+                            HasOne(rel) => rel.target,
+                            BelongsTo(rel) => rel.target,
+                            _ => todo!(),
+                        };
+
                         let module_name = self.module_name(field.id.model, depth);
                         let relation_struct_name = self.relation_struct_name(field);
 
+                        // If this is a self-referencial relation, we don't need
+                        // to prefix types with the module name.
+                        let prefix = if model.id == target {
+                            quote!()
+                        } else {
+                            quote!(#module_name::fields::)
+                        };
+
                         quote! {
-                            pub fn #name(mut self) -> #module_name::fields::#relation_struct_name {
+                            pub fn #name(mut self) -> #prefix #relation_struct_name {
                                 let path = self.path.chain(#struct_path::#const_name);
-                                #module_name::fields::#relation_struct_name::from_path(path)
+                                #prefix #relation_struct_name::from_path(path)
                             }
                         }
                     }

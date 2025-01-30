@@ -19,6 +19,8 @@ members = [
     "examples/hello-toasty",
     "examples/cratehub",
     "examples/user-has-one-profile",
+    # Delete
+    "examples/scratch",
 
     # Tests
     "tests/client",
