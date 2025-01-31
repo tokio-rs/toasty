@@ -110,7 +110,7 @@ impl Field {
     pub fn pair(&self) -> Option<FieldId> {
         match &self.ty {
             FieldTy::Primitive(_) => None,
-            FieldTy::BelongsTo(belongs_to) => Some(belongs_to.pair),
+            FieldTy::BelongsTo(belongs_to) => belongs_to.pair,
             FieldTy::HasMany(has_many) => Some(has_many.pair),
             FieldTy::HasOne(has_one) => Some(has_one.pair),
         }

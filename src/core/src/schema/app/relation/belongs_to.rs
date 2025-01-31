@@ -10,7 +10,7 @@ pub struct BelongsTo {
     pub expr_ty: stmt::Type,
 
     /// The `HasMany` or `HasOne` association that pairs with this
-    pub pair: FieldId,
+    pub pair: Option<FieldId>,
 
     /// The foreign key is a set of primitive fields that match the target's
     /// primary key.
@@ -34,10 +34,6 @@ pub struct ForeignKeyField {
 impl BelongsTo {
     pub fn target<'a>(&self, schema: &'a crate::Schema) -> &'a Model {
         schema.model(self.target)
-    }
-
-    pub fn pair<'a>(&self, schema: &'a crate::Schema) -> &'a HasMany {
-        schema.field(self.pair).ty.expect_has_many()
     }
 }
 

@@ -70,11 +70,17 @@ impl Planner<'_> {
         } else {
             self.relation_step(field, |planner| {
                 let belongs_to = field.ty.expect_belongs_to();
-                let pair = planner.schema.field(belongs_to.pair);
+
+                // If the BelongsTo field is the pair of a HasOne, then any
+                // previous assignment to the pair needs to be cleared out.
+                let nullify = belongs_to
+                    .pair
+                    .map(|pair| planner.schema.field(pair).ty.is_has_one())
+                    .unwrap_or(false);
 
                 // If the pair is *not* has_many, then any previous assignment
                 // to the pair needs to be cleared out.
-                if !pair.ty.is_has_many() {
+                if nullify {
                     planner.plan_mut_belongs_to_nullify(field, scope);
 
                     let [fk_field] = &belongs_to.foreign_key.fields[..] else {
@@ -169,21 +175,24 @@ impl Planner<'_> {
     fn plan_mut_belongs_to_nullify(&mut self, field: &Field, scope: &stmt::Query) {
         self.relation_step(field, |planner| {
             let belongs_to = field.ty.expect_belongs_to();
-            let pair = planner.schema.field(belongs_to.pair);
 
-            if !pair.ty.is_has_many() && !pair.nullable {
-                let mut scope = scope.clone();
+            if let Some(pair) = belongs_to.pair.map(|pair| planner.schema.field(pair)) {
+                if pair.ty.is_has_one() && !pair.nullable {
+                    let mut scope = scope.clone();
 
-                // If the belongs_to is nullable, then we want to only update
-                // instances that have a belongs_to that is not null.
-                if field.nullable {
-                    let filter = &mut scope.body.as_select_mut().filter;
-                    *filter =
-                        stmt::Expr::and(filter.take(), stmt::Expr::ne(field, stmt::Value::Null));
+                    // If the belongs_to is nullable, then we want to only update
+                    // instances that have a belongs_to that is not null.
+                    if field.nullable {
+                        let filter = &mut scope.body.as_select_mut().filter;
+                        *filter = stmt::Expr::and(
+                            filter.take(),
+                            stmt::Expr::ne(field, stmt::Value::Null),
+                        );
+                    }
+
+                    let delete = planner.relation_pair_scope(pair.id, scope).delete();
+                    planner.plan_delete(delete);
                 }
-
-                let delete = planner.relation_pair_scope(belongs_to.pair, scope).delete();
-                planner.plan_delete(delete);
             }
         });
     }

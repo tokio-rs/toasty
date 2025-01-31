@@ -125,19 +125,22 @@ impl Builder {
                         for target_index in 0..self.models[belongs_to.target.0].fields.len() {
                             pair = match &self.models[belongs_to.target.0].fields[target_index].ty {
                                 FieldTy::HasMany(has_many) if has_many.pair == field_id => {
+                                    assert!(pair.is_none());
                                     Some(self.models[belongs_to.target.0].fields[target_index].id)
                                 }
                                 FieldTy::HasOne(has_one) if has_one.pair == field_id => {
+                                    assert!(pair.is_none());
                                     Some(self.models[belongs_to.target.0].fields[target_index].id)
                                 }
                                 _ => continue,
                             }
                         }
 
-                        match pair {
-                            Some(pair) => pair,
-                            None => continue,
+                        if pair.is_none() {
+                            continue;
                         }
+
+                        pair
                     }
                     _ => continue,
                 };
@@ -255,13 +258,6 @@ impl Builder {
                     builder.field(field);
                 }
 
-                /*
-                assert!(self
-                    .find_by_queries
-                    .insert(builder.args.clone(), query_id)
-                    .is_none());
-                */
-
                 let query = builder.build();
                 let scoped_query = ScopedQuery::new(&query);
 
@@ -306,45 +302,7 @@ impl Builder {
             return field_id;
         }
 
-        // Try to convert a HasOne. During the initial pass, if a relation is
-        // not obviously a BelongsTo, we start by assuming it is a HasOne. At
-        // this point, we might consider it a BelongsTo as it is paired with a
-        // HasMany.
-        //
-        // The key difference between a HasOne and a BelongsTo is BelongsTo
-        // holds the foreign key.
-
-        let target = &mut self.models[target.0];
-
-        let mut has_one: Vec<_> = target
-            .fields
-            .iter_mut()
-            .filter(|field| match &field.ty {
-                FieldTy::HasOne(rel) => rel.target == ModelId(src),
-                _ => false,
-            })
-            .collect();
-
-        match &mut has_one[..] {
-            [field] => {
-                let HasOne {
-                    target, expr_ty, ..
-                } = field.ty.expect_has_one();
-
-                // Convert the HasOne to a BelongsTo
-                field.ty = BelongsTo {
-                    target: *target,
-                    expr_ty: expr_ty.clone(),
-                    pair: FieldId::placeholder(),
-                    foreign_key: relation::ForeignKey::placeholder(),
-                }
-                .into();
-
-                field.id
-            }
-            [] => todo!(),
-            _ => todo!(),
-        }
+        todo!("missing relation attribute")
     }
 
     fn foreign_key_for(

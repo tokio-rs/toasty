@@ -219,7 +219,7 @@ impl<'a> Builder<'a> {
                 BelongsTo {
                     target,
                     expr_ty: stmt::Type::Model(target),
-                    pair: FieldId::placeholder(),
+                    pair: None,
                     // This will be populated at a later step.
                     foreign_key: relation::ForeignKey::placeholder(),
                 }
