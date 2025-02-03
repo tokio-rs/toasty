@@ -7,26 +7,25 @@ use toasty::Db;
 use toasty_sqlite::Sqlite;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> toasty::Result<()> {
     let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
-    let schema = toasty::schema::from_file(schema_file).unwrap();
+    let schema = toasty::schema::from_file(schema_file)?;
 
     println!("{schema:#?}");
 
     // Use the in-memory sqlite driver
     let driver = Sqlite::in_memory();
 
-    let db = Db::new(schema, driver).await;
+    let db = Db::new(schema, driver).await?;
     // For now, reset!s
-    db.reset_db().await.unwrap();
+    db.reset_db().await?;
 
     println!("==> let user = User::create()");
     let user = User::create()
         .name("John Doe")
         .email("john@example.com")
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     println!(" ~~~~~~~~~~~ CREATE TODOs ~~~~~~~~~~~~");
 
@@ -37,35 +36,24 @@ async fn main() {
             .title(*title)
             .order(i as i64)
             .exec(&db)
-            .await
-            .unwrap();
+            .await?;
 
         println!("CREATED = {todo:#?}");
     }
-
-    // let mut todos = user.todos().all(&db).await.unwrap();
-
-    // while let Some(todo) = todos.next().await {
-    //     let todo = todo.unwrap();
-    //     println!("TODO = {:#?}", todo);
-    // }
 
     // Query a user's todos
     println!("====================");
     println!("--- QUERY ---");
     println!("====================");
 
-    let mut todos = user
-        .todos()
-        .query(db::Todo::ORDER.eq(1))
-        .all(&db)
-        .await
-        .unwrap();
+    let mut todos = user.todos().query(db::Todo::ORDER.eq(1)).all(&db).await?;
 
     while let Some(todo) = todos.next().await {
-        let todo = todo.unwrap();
+        let todo = todo?;
         println!("TODO = {todo:#?}");
     }
 
     println!(">>> DONE <<<");
+
+    Ok(())
 }

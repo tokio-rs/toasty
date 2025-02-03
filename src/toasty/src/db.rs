@@ -1,6 +1,6 @@
 use crate::{driver::Driver, engine, stmt, Cursor, Model, Result, Statement};
 
-use toasty_core::{stmt::ValueStream, Schema};
+use toasty_core::{schema::app, stmt::ValueStream, Schema};
 
 use std::sync::Arc;
 
@@ -14,13 +14,15 @@ pub struct Db {
 }
 
 impl Db {
-    pub async fn new(schema: Schema, mut driver: impl Driver) -> Db {
+    pub async fn new(schema: app::Schema, mut driver: impl Driver) -> Result<Db> {
+        let schema = Schema::from_app(schema)?;
+
         driver.register_schema(&schema.db).await.unwrap();
 
-        Db {
+        Ok(Db {
             driver: Arc::new(driver),
             schema: Arc::new(schema),
-        }
+        })
     }
 
     /// Execute a query, returning all matching records

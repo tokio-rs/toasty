@@ -15,7 +15,7 @@ use quote::quote;
 use std::rc::Rc;
 
 pub(crate) fn generate<'a>(
-    schema: &'a Schema,
+    schema: &'a app::Schema,
     model: &'a app::Model,
     names: Rc<Names>,
     in_macro: bool,
@@ -32,7 +32,7 @@ pub(crate) fn generate<'a>(
 
 /// Generate the Rust Toasty client for the specified model.
 pub(crate) struct Generator<'a> {
-    pub schema: &'a Schema,
+    pub schema: &'a app::Schema,
 
     /// Model being generated
     pub model: &'a app::Model,
@@ -47,7 +47,7 @@ pub(crate) struct Generator<'a> {
 impl<'a> Generator<'a> {
     /// Create a new `GenModel` for the provided model
     pub(crate) fn new(
-        schema: &'a Schema,
+        schema: &'a app::Schema,
         model: &'a app::Model,
         names: Rc<Names>,
         in_macro: bool,

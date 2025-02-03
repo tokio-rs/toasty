@@ -279,7 +279,7 @@ impl Planner<'_> {
             args.push(expr.entry(pk_field.id.index).to_value());
         }
 
-        model.find_by_id(self.schema, &args)
+        model.find_by_id(&self.schema.app, &args)
     }
 
     fn apply_insert_scope(&mut self, expr: &mut stmt::Expr, scope: &stmt::Expr) {

@@ -21,11 +21,11 @@ pub struct HasMany {
 }
 
 impl HasMany {
-    pub fn target<'a>(&self, schema: &'a crate::Schema) -> &'a Model {
+    pub fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
         schema.model(self.target)
     }
 
-    pub fn pair<'a>(&self, schema: &'a crate::Schema) -> &'a BelongsTo {
+    pub fn pair<'a>(&self, schema: &'a Schema) -> &'a BelongsTo {
         schema.field(self.pair).ty.expect_belongs_to()
     }
 }

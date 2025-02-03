@@ -22,7 +22,7 @@ impl<'a> Simplify<'a> {
             stmt::Expr::Project(_) => {
                 todo!()
             }
-            stmt::Expr::Field(expr) => self.schema.field(expr.field),
+            stmt::Expr::Field(expr) => self.schema.app.field(expr.field),
             _ => {
                 return None;
             }
@@ -105,7 +105,7 @@ impl<'a> Simplify<'a> {
             return None;
         }
 
-        let pair = has_one.pair(self.schema);
+        let pair = has_one.pair(&self.schema.app);
 
         let expr = match &pair.foreign_key.fields[..] {
             [fk_field] => stmt::Expr::field(fk_field.target),

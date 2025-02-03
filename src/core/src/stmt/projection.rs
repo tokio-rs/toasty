@@ -1,4 +1,5 @@
 use super::*;
+use crate::schema::app;
 
 use std::{fmt, ops};
 
@@ -64,7 +65,7 @@ impl Projection {
         }
     }
 
-    pub fn resolve_field<'a>(&self, schema: &'a Schema, expr_self: &'a Model) -> &'a Field {
+    pub fn resolve_field<'a>(&self, schema: &'a app::Schema, expr_self: &'a Model) -> &'a Field {
         self.steps.resolve_field(schema, expr_self)
     }
 
@@ -168,7 +169,7 @@ impl Steps {
         }
     }
 
-    fn resolve_field<'a>(&self, schema: &'a Schema, expr_self: &'a Model) -> &'a Field {
+    fn resolve_field<'a>(&self, schema: &'a app::Schema, expr_self: &'a Model) -> &'a Field {
         use crate::schema::app::FieldTy::*;
 
         let [first, rest @ ..] = self.as_slice() else {

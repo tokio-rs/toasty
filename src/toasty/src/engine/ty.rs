@@ -14,7 +14,7 @@ impl Resolve for Schema {
     }
 
     fn resolve_field(&self, stmt: &stmt::ExprField) -> &stmt::Type {
-        self.field(stmt.field).expr_ty()
+        self.app.field(stmt.field).expr_ty()
     }
 }
 

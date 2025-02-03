@@ -88,28 +88,11 @@ impl stmt::Visit for VerifyExpr<'_> {
 
     fn visit_projection(&mut self, i: &stmt::Projection) {
         // The path should resolve. Verifying type is done at a higher level
-        let _ = i.resolve_field(self.schema, self.schema.model(self.model));
+        let _ = i.resolve_field(&self.schema.app, self.schema.app.model(self.model));
     }
 
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         stmt::visit::visit_expr_binary_op(self, i);
-
-        /*
-        if i.op.is_in_set() {
-            assert!(!matches!(&*i.rhs, stmt::Expr::Record(_)));
-        } else {
-            // TODO: Update this verification
-            /*
-            assert!(
-                lhs_ty.casts_to(&rhs_ty),
-                "lhs_ty={:#?}; rhs_ty={:#?}",
-                lhs_ty,
-                rhs_ty
-            );
-            assert!(lhs_ty.applies_binary_op(i.op));
-            */
-        }
-        */
     }
 
     fn visit_expr_in_subquery(&mut self, i: &stmt::ExprInSubquery) {
@@ -123,21 +106,5 @@ impl stmt::Visit for VerifyExpr<'_> {
             schema: self.schema,
         }
         .visit(&*i.query);
-
-        // TODO: update this verification
-        /*
-        // The subquery should be a list of the same type as expression
-        let expr_ty = self.ty(&i.expr);
-        // let subquery_ty = i.subquery.ty(self.schema);
-        let subquery_ty = todo!();
-
-        assert_eq!(
-            expr_ty,
-            match subquery_ty {
-                stmt::Type::List(item) => *item,
-                _ => todo!(),
-            }
-        );
-        */
     }
 }

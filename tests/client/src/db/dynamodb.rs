@@ -27,7 +27,7 @@ impl Setup for SetupDynamoDb {
         let client = Client::new(&sdk_config.load().await);
 
         let driver = toasty_dynamodb::DynamoDB::new(client, Some(prefix));
-        let db = toasty::Db::new(schema, driver).await;
+        let db = toasty::Db::new(schema, driver).await.unwrap();
         db.reset_db().await.unwrap();
         db
     }

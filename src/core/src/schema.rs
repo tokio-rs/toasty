@@ -1,7 +1,6 @@
 pub mod app;
 
 mod builder;
-pub(crate) use builder::Builder;
 
 pub mod db;
 
@@ -15,7 +14,7 @@ mod verify;
 
 use crate::*;
 
-use app::{Field, FieldId, Model, ModelId, Query, QueryId};
+use app::{Field, FieldId, Model, ModelId};
 use db::{ColumnId, IndexId, Table, TableId};
 
 use std::sync::Arc;
@@ -32,7 +31,7 @@ pub struct Schema {
     pub mapping: Mapping,
 }
 
-pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Schema> {
+pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<app::Schema> {
     use anyhow::Context;
     use std::{fs, str};
 
@@ -46,33 +45,15 @@ pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Schema> {
     from_str(contents)
 }
 
-pub fn from_str(source: &str) -> Result<Schema> {
+pub fn from_str(source: &str) -> Result<app::Schema> {
     let schema = crate::ast::from_str(source)?;
-    let schema = Schema::from_ast(&schema)?;
+    let schema = app::Schema::from_ast(&schema)?;
     Ok(schema)
 }
 
 impl Schema {
-    /// Get a model by ID
-    pub fn model(&self, id: impl Into<ModelId>) -> &Model {
-        self.app.models.get(id.into().0).expect("invalid model ID")
-    }
-
-    /// Get a field by ID
-    pub fn field(&self, id: FieldId) -> &Field {
-        self.model(id.model)
-            .fields
-            .get(id.index)
-            .expect("invalid field ID")
-    }
-
     pub fn mapping_for(&self, id: impl Into<ModelId>) -> &mapping::Model {
         self.mapping.model(id)
-    }
-
-    pub fn query(&self, id: impl Into<QueryId>) -> &Query {
-        let id = id.into();
-        &self.app.queries[id.0]
     }
 
     pub fn table_for(&self, id: impl Into<ModelId>) -> &Table {
@@ -81,9 +62,5 @@ impl Schema {
 
     pub fn table_id_for(&self, id: impl Into<ModelId>) -> TableId {
         self.mapping.model(id).table
-    }
-
-    pub(crate) fn from_ast(ast: &ast::Schema) -> Result<Schema> {
-        schema::Builder::from_ast(ast)
     }
 }

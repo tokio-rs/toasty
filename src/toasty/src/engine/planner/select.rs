@@ -27,7 +27,7 @@ impl Planner<'_> {
     ) -> plan::VarId {
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
-        let model = self.schema.model(source_model.model);
+        let model = self.schema.app.model(source_model.model);
 
         let source_model = match &*stmt.body {
             stmt::ExprSet::Select(select) => {
@@ -307,7 +307,7 @@ impl Planner<'_> {
 
         match &field.ty {
             FieldTy::HasMany(rel) => {
-                let pair = rel.pair(self.schema);
+                let pair = rel.pair(&self.schema.app);
 
                 let [fk_field] = &pair.foreign_key.fields[..] else {
                     todo!("composite key")

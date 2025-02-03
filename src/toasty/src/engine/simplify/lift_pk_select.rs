@@ -13,7 +13,7 @@ pub(crate) fn lift_key_select(
         return None;
     };
 
-    let model = schema.model(select.source.as_model_id());
+    let model = schema.app.model(select.source.as_model_id());
 
     match &select.filter {
         stmt::Expr::BinaryOp(expr_binary_op) => {
@@ -25,7 +25,7 @@ pub(crate) fn lift_key_select(
                 return None;
             };
 
-            let lhs_field = schema.field(expr_binary_op.lhs.as_field().field);
+            let lhs_field = schema.app.field(expr_binary_op.lhs.as_field().field);
 
             if *key_field == lhs_field.id {
                 if let stmt::Expr::Value(value) = &*expr_binary_op.rhs {

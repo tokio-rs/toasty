@@ -55,7 +55,7 @@ pub fn schema(input: TokenStream) -> TokenStream {
         pub mod db {
             #( #mods )*
 
-            pub fn load_schema() -> toasty::schema::Schema {
+            pub fn load_schema() -> toasty::schema::app::Schema {
                 toasty::schema::from_str(#schema_src).unwrap()
             }
         }

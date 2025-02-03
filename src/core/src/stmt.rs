@@ -183,7 +183,6 @@ use crate::{
     schema::{
         app::{Field, FieldId, Model, ModelId},
         db::{Column, ColumnId, TableId},
-        Schema,
     },
     stmt, Error, Result,
 };
