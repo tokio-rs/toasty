@@ -6,7 +6,7 @@ impl Exec<'_> {
         let mut source = self.vars.load(action.source).collect().await?;
         let target = self.vars.load(action.target).collect().await?;
 
-        match &self.db.schema.field(action.field).ty {
+        match &self.db.schema.app.field(action.field).ty {
             FieldTy::BelongsTo(rel) => {
                 for source_item in &mut source {
                     let source_item = source_item.expect_record_mut();
@@ -27,7 +27,7 @@ impl Exec<'_> {
                 }
             }
             FieldTy::HasMany(rel) => {
-                let pair = rel.pair(&self.db.schema);
+                let pair = rel.pair(&self.db.schema.app);
 
                 for source_item in &mut source {
                     let source_item = source_item.expect_record_mut();

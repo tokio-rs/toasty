@@ -63,17 +63,17 @@ pub(crate) struct QueryNames {
 }
 
 impl Names {
-    pub(crate) fn from_schema(schema: &Schema) -> Names {
+    pub(crate) fn from_schema(schema: &app::Schema) -> Names {
         let mut models = HashMap::new();
         let mut fields = HashMap::new();
         let mut relations = HashMap::new();
         let mut queries = HashMap::new();
 
-        for query in &schema.app.queries {
+        for query in &schema.queries {
             queries.insert(query.id, QueryNames::from_query(query));
         }
 
-        for model in &schema.app.models {
+        for model in &schema.models {
             // Generate model names
             let names = ModelNames::from_model(model);
             models.insert(model.id, names);

@@ -46,7 +46,7 @@ impl Field {
     }
 
     /// Returns a fully qualified name for the field.
-    pub fn full_name(&self, schema: &crate::Schema) -> String {
+    pub fn full_name(&self, schema: &Schema) -> String {
         let model = schema.model(self.id.model);
         format!("{}::{}", model.name.upper_camel_case(), self.name)
     }
@@ -61,41 +61,9 @@ impl Field {
     }
 
     /// If the field is a relation, return the target of the relation.
-    pub fn relation_target<'a>(&self, schema: &'a crate::Schema) -> Option<&'a Model> {
+    pub fn relation_target<'a>(&self, schema: &'a Schema) -> Option<&'a Model> {
         self.relation_target_id().map(|id| schema.model(id))
     }
-
-    /*
-    pub fn primitives(&self) -> Box<dyn Iterator<Item = &FieldPrimitive> + '_> {
-        match &self.ty {
-            FieldTy::Primitive(primitive) => Box::new(Some(primitive).into_iter()),
-            FieldTy::BelongsTo(belongs_to) => Box::new(
-                belongs_to
-                    .foreign_key
-                    .fields
-                    .iter()
-                    .map(|fk_field| &fk_field.primitive),
-            ),
-            FieldTy::HasMany(_) | FieldTy::HasOne(_) => Box::new(None.into_iter()),
-        }
-    }
-    */
-
-    /*
-    pub(crate) fn primitives_mut(&mut self) -> Box<dyn Iterator<Item = &mut FieldPrimitive> + '_> {
-        match &mut self.ty {
-            FieldTy::Primitive(primitive) => Box::new(Some(primitive).into_iter()),
-            FieldTy::BelongsTo(belongs_to) => Box::new(
-                belongs_to
-                    .foreign_key
-                    .fields
-                    .iter_mut()
-                    .map(|fk_field| &mut fk_field.primitive),
-            ),
-            FieldTy::HasMany(_) | FieldTy::HasOne(_) => Box::new(None.into_iter()),
-        }
-    }
-    */
 
     /// The type the field **evaluates** too. This is the "expression type".
     pub fn expr_ty(&self) -> &stmt::Type {

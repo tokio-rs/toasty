@@ -19,15 +19,15 @@ impl Verify<'_> {
     }
 
     fn verify_has_many_relation_is_indexed(&self, rel: &app::HasMany) {
-        self.verify_has_relation_is_indexed(rel.target(self.schema), rel.pair);
+        self.verify_has_relation_is_indexed(rel.target(&self.schema.app), rel.pair);
     }
 
     fn verify_has_one_relation_is_indexed(&self, rel: &app::HasOne) {
-        self.verify_has_relation_is_indexed(rel.target(self.schema), rel.pair);
+        self.verify_has_relation_is_indexed(rel.target(&self.schema.app), rel.pair);
     }
 
     fn verify_has_relation_is_indexed(&self, target: &Model, pair: FieldId) {
-        let belongs_to = self.schema.field(pair).ty.expect_belongs_to();
+        let belongs_to = self.schema.app.field(pair).ty.expect_belongs_to();
 
         // Find an index that starts with the relations pair field and either
         // has no more fields or the next field is of local scope. This ensures

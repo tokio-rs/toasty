@@ -13,12 +13,12 @@ impl Simplify<'_> {
     fn rewrite_expr_in_list_when_model(&self, expr: &mut stmt::ExprInList) {
         match &mut *expr.expr {
             stmt::Expr::Key(expr_key) => {
-                let model = self.schema.model(expr_key.model);
+                let model = self.schema.app.model(expr_key.model);
 
                 let [pk_field_id] = &model.primary_key.fields[..] else {
                     todo!()
                 };
-                let pk = self.schema.field(*pk_field_id);
+                let pk = self.schema.app.field(*pk_field_id);
 
                 // Check RHS format
                 match &mut *expr.list {

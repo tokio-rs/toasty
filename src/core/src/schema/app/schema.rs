@@ -20,6 +20,24 @@ impl Schema {
         let builder = Builder::default();
         builder.from_ast(ast)
     }
+
+    /// Get a field by ID
+    pub fn field(&self, id: FieldId) -> &Field {
+        self.model(id.model)
+            .fields
+            .get(id.index)
+            .expect("invalid field ID")
+    }
+
+    /// Get a model by ID
+    pub fn model(&self, id: impl Into<ModelId>) -> &Model {
+        self.models.get(id.into().0).expect("invalid model ID")
+    }
+
+    pub fn query(&self, id: impl Into<QueryId>) -> &Query {
+        let id = id.into();
+        &self.queries[id.0]
+    }
 }
 
 impl Builder {

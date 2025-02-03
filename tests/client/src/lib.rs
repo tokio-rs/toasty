@@ -3,7 +3,7 @@ mod macros;
 
 pub mod db;
 
-use toasty::{schema::Schema, Db};
+use toasty::{schema::app::Schema, Db};
 use toasty_core::driver::Capability;
 
 pub use std_util::*;

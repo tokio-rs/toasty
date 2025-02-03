@@ -34,7 +34,7 @@ impl Simplify<'_> {
                 Some(self.rewrite_root_path_expr(model, other.take()))
             }
             (stmt::Expr::Field(expr_field), other) | (other, stmt::Expr::Field(expr_field)) => {
-                let field = self.schema.field(expr_field.field);
+                let field = self.schema.app.field(expr_field.field);
 
                 match &field.ty {
                     FieldTy::Primitive(_) => None,

@@ -17,7 +17,7 @@ impl Planner<'_> {
                     self.relations.pop();
                 }
             } else if let Some(rel) = field.ty.as_has_many() {
-                let pair = self.schema.field(rel.pair);
+                let pair = self.schema.app.field(rel.pair);
 
                 // TODO: can this be unified with update?
                 let query = stmt::Query::filter(

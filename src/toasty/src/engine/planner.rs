@@ -176,7 +176,7 @@ impl<'a> Planner<'a> {
     }
 
     fn model(&self, id: impl Into<app::ModelId>) -> &'a app::Model {
-        self.schema.model(id)
+        self.schema.app.model(id)
     }
 
     // TODO: Move this?

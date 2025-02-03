@@ -5,7 +5,7 @@ use super::*;
 use std::collections::HashMap;
 
 /// Used to resolve types during parsing
-pub(crate) struct Builder {
+struct Builder {
     /// Maps table names to identifiers. The identifiers are reserved before the
     /// table objects are actually created.
     table_lookup: HashMap<String, TableId>,
@@ -18,9 +18,8 @@ pub(crate) struct Builder {
     pub(crate) mapping: Mapping,
 }
 
-impl Builder {
-    pub(crate) fn from_ast(ast: &ast::Schema) -> crate::Result<Schema> {
-        let app = app::Schema::from_ast(ast)?;
+impl Schema {
+    pub fn from_app(app: app::Schema) -> Result<Schema> {
         let mut builder = Builder {
             table_lookup: HashMap::new(),
 

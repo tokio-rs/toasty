@@ -131,6 +131,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
             stmt::Expr::InSubquery(expr) => {
                 let sub_model = self
                     .schema
+                    .app
                     .model(expr.query.body.as_select().source.as_model_id());
 
                 LowerStatement::from_model(&self.schema, sub_model)
