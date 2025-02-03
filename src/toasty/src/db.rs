@@ -15,7 +15,7 @@ pub struct Db {
 
 impl Db {
     pub async fn new(schema: app::Schema, mut driver: impl Driver) -> Result<Db> {
-        let schema = Schema::from_app(schema)?;
+        let schema = Schema::from_app(schema, driver.capability())?;
 
         driver.register_schema(&schema.db).await.unwrap();
 

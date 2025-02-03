@@ -19,7 +19,7 @@ struct Builder {
 }
 
 impl Schema {
-    pub fn from_app(app: app::Schema) -> Result<Schema> {
+    pub fn from_app(app: app::Schema, db: &driver::Capability) -> Result<Schema> {
         let mut builder = Builder {
             table_lookup: HashMap::new(),
 
@@ -64,7 +64,7 @@ impl Schema {
             });
         }
 
-        builder.build_tables_from_models(&app);
+        builder.build_tables_from_models(&app, db);
 
         let schema = Schema {
             app,
