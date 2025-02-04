@@ -1,6 +1,9 @@
 use super::*;
 
 struct BuildTableFromModels<'a> {
+    /// Database-specific capabilities
+    _db: &'a driver::Capability,
+
     /// The table being built from the set of models
     table: &'a mut Table,
 
@@ -31,7 +34,7 @@ impl Builder {
         id
     }
 
-    pub(super) fn build_tables_from_models(&mut self, app: &app::Schema) {
+    pub(super) fn build_tables_from_models(&mut self, app: &app::Schema, db: &driver::Capability) {
         for table in &mut self.tables {
             let models = app
                 .models
@@ -40,6 +43,7 @@ impl Builder {
                 .collect::<Vec<_>>();
 
             BuildTableFromModels {
+                _db: db,
                 table,
                 mapping: &mut self.mapping,
                 prefix_table_names: models.len() > 1,
