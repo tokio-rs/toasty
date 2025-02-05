@@ -12,6 +12,7 @@ impl<'a> Generator<'a> {
                 pub(super) stmt: stmt::Insert<#struct_name>,
             }
 
+            /*
             impl #create_struct_name {
                 #create_methods
 
@@ -39,6 +40,7 @@ impl<'a> Generator<'a> {
                     self.stmt.into_list_expr()
                 }
             }
+            */
 
             impl Default for #create_struct_name {
                 fn default() -> #create_struct_name {

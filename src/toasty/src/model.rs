@@ -13,3 +13,7 @@ pub trait Model: Sized {
     /// Load an instance of the model, populating fields using the given row.
     fn load(row: stmt::ValueRecord) -> Result<Self, Error>;
 }
+
+pub trait Relation<'a> {
+    type Field;
+}

@@ -53,6 +53,7 @@ impl<'a> Generator<'a> {
                 stmt: stmt::Update<#struct_name>,
             }
 
+            /*
             impl #update_struct_name<'_> {
                 #update_methods
 
@@ -92,6 +93,7 @@ impl<'a> Generator<'a> {
                     UpdateQuery { stmt: stmt::Update::new(src) }
                 }
             }
+            */
         }
     }
 

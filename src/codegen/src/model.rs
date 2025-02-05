@@ -1,8 +1,8 @@
 mod body;
 mod create;
 mod fields;
-mod find_by;
-mod query;
+// mod find_by;
+// mod query;
 mod relation;
 mod update;
 
@@ -15,25 +15,22 @@ use quote::quote;
 use std::rc::Rc;
 
 pub(crate) fn generate<'a>(
-    schema: &'a app::Schema,
     model: &'a app::Model,
     names: Rc<Names>,
     in_macro: bool,
 ) -> ModelOutput<'a> {
-    let mut gen = Generator::new(schema, model, names, in_macro);
+    let mut gen = Generator::new(model, names, in_macro);
     let module_name = gen.names.models[&model.id].module_name.clone();
 
     ModelOutput {
         model,
         module_name,
-        body: gen.gen_body(),
+        body: gen.gen_model_body(),
     }
 }
 
 /// Generate the Rust Toasty client for the specified model.
 pub(crate) struct Generator<'a> {
-    pub schema: &'a app::Schema,
-
     /// Model being generated
     pub model: &'a app::Model,
 
@@ -47,13 +44,11 @@ pub(crate) struct Generator<'a> {
 impl<'a> Generator<'a> {
     /// Create a new `GenModel` for the provided model
     pub(crate) fn new(
-        schema: &'a app::Schema,
         model: &'a app::Model,
         names: Rc<Names>,
         in_macro: bool,
     ) -> Generator<'a> {
         Generator {
-            schema,
             model,
             names,
             in_macro,
@@ -136,11 +131,13 @@ impl<'a> Generator<'a> {
     }
 
     pub(crate) fn query(&self, id: impl Into<app::QueryId>) -> &app::Query {
-        self.schema.query(id.into())
+        // self.schema.query(id.into())
+        todo!()
     }
 
     pub(crate) fn pk_query(&self) -> &app::Query {
-        self.schema.query(self.model.primary_key.query)
+        // self.schema.query(self.model.primary_key.query)
+        todo!()
     }
 
     pub(crate) fn ty(&self, ty: &stmt::Type, depth: usize) -> TokenStream {
@@ -176,6 +173,21 @@ impl<'a> Generator<'a> {
         }
     }
 
+    pub(crate) fn target_struct_path(&self, field: impl Into<app::FieldId>, depth: usize) -> TokenStream {
+        let field = field.into();
+
+        assert!(field.model == self.model.id);
+
+        let target = match &self.model.fields[field.index].ty {
+            app::FieldTy::HasOne(rel) => rel.target,
+            app::FieldTy::HasMany(rel) => rel.target,
+            app::FieldTy::BelongsTo(rel) => rel.target,
+            app::FieldTy::Primitive(_) => unreachable!(),
+        };
+
+        self.model_struct_path(target, depth)
+    }
+
     pub(crate) fn relation_struct_name(&self, field: impl Into<app::FieldId>) -> &syn::Ident {
         let field = field.into();
         &self.names.relations[&field].struct_name
@@ -193,8 +205,11 @@ impl<'a> Generator<'a> {
     }
 
     pub(crate) fn model_pk_query_method_name(&self, id: app::ModelId) -> &syn::Ident {
+        /*
         let query = self.schema.model(id).primary_key.query;
         self.query_method_name(query)
+        */
+        todo!()
     }
 
     pub(crate) fn query_method_name(&self, query: app::QueryId) -> &syn::Ident {

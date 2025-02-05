@@ -1,7 +1,7 @@
 use super::*;
 
 impl<'a> Generator<'a> {
-    pub(super) fn gen_body(&mut self) -> TokenStream {
+    pub(super) fn gen_model_body(&mut self) -> TokenStream {
         // Build field-level codegen state
         let model_id = util::int(self.model.id.0);
 
@@ -19,6 +19,7 @@ impl<'a> Generator<'a> {
         let update_method_def = self.gen_model_update_method_def();
 
         let field_consts = self.gen_model_field_consts();
+        /*
         let query_struct = self.gen_query_struct();
 
         let relation_query_structs = self.gen_relation_structs();
@@ -29,6 +30,9 @@ impl<'a> Generator<'a> {
 
         let into_select_impl_ref = self.gen_into_select_impl(true);
         let into_select_impl_value = self.gen_into_select_impl(false);
+        */
+
+        let relations_mod = self.gen_relations_module();
 
         quote! {
             #container_import
@@ -51,6 +55,7 @@ impl<'a> Generator<'a> {
                     CreateMany::default()
                 }
 
+                /*
                 pub fn filter(expr: stmt::Expr<bool>) -> Query {
                     Query::from_stmt(stmt::Select::filter(expr))
                 }
@@ -62,6 +67,7 @@ impl<'a> Generator<'a> {
                     db.exec(stmt).await?;
                     Ok(())
                 }
+                */
             }
 
             impl Model for #struct_name {
@@ -75,6 +81,11 @@ impl<'a> Generator<'a> {
                 }
             }
 
+            impl<'a> Relation<'a> for #struct_name {
+                type Field = relations::Many<'a>;
+            }
+
+            /*
             impl stmt::IntoSelect for &#struct_name {
                 type Model = #struct_name;
 
@@ -118,11 +129,19 @@ impl<'a> Generator<'a> {
             }
 
             #query_struct
+            */
 
             #create_struct_def
 
             #update_struct_def
 
+            pub mod relations {
+                use super::*;
+
+                #relations_mod
+            }
+
+            /*
             pub mod fields {
                 use super::*;
 
@@ -141,6 +160,7 @@ impl<'a> Generator<'a> {
 
                 #query_structs
             }
+            */
         }
     }
 
@@ -230,6 +250,7 @@ impl<'a> Generator<'a> {
             .collect()
     }
 
+    /*
     fn gen_struct_into_expr(&self) -> TokenStream {
         use app::FieldTy;
 
@@ -285,4 +306,5 @@ impl<'a> Generator<'a> {
             #struct_name::#query_name(#( #args )*).into_select()
         }
     }
+    */
 }

@@ -21,7 +21,7 @@ pub fn generate<'a>(schema: &'a app::Schema, in_macro: bool) -> Output<'a> {
     let models = schema
         .models
         .iter()
-        .map(|model| model::generate(schema, model, names.clone(), in_macro))
+        .map(|model| model::generate(model, names.clone(), in_macro))
         .collect();
 
     Output { models }

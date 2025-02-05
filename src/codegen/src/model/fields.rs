@@ -18,13 +18,15 @@ impl<'a> Generator<'a> {
                             pub const #const_name: Path<#ty> = Path::from_field_index::<Self>(#field_offset);
                         }
                     }
-                    HasMany(..) | HasOne(..) | BelongsTo(..) => {
-                        let module_name = self.module_name(field.id.model, 0);
-                        let relation_struct_name = self.relation_struct_name(field);
+                    BelongsTo(_) => quote!(),
+                    HasMany(..) | HasOne(..) => {
+                        let target_struct_path = self.target_struct_path(field, 0);
 
                         quote! {
-                            pub const #const_name: #module_name::fields::#relation_struct_name =
-                                #module_name::fields::#relation_struct_name::from_path(Path::from_field_index::<Self>(#field_offset));
+                            pub const #const_name: <#target_struct_path as Relation<'static>>::Field =
+                                <#target_struct_path as Relation<'static>>::Field::from_user(
+                                    Path::from_field_index::<Self>(#field_offset)
+                                );
                         }
                     }
                 }
@@ -32,6 +34,7 @@ impl<'a> Generator<'a> {
             .collect()
     }
 
+    /*
     pub(super) fn gen_path_methods(&self, model: &'a app::Model, depth: usize) -> TokenStream {
         use app::FieldTy::*;
 
@@ -83,4 +86,5 @@ impl<'a> Generator<'a> {
             })
             .collect()
     }
+    */
 }

@@ -1,8 +1,54 @@
 use super::*;
 
-use app::FieldTy;
-
 impl<'a> Generator<'a> {
+
+    pub(super) fn gen_relations_module(&self) -> TokenStream {
+        if !self.relation_fields().any(|f| f.ty.is_belongs_to()) {
+            return quote! {
+                pub struct Many<'a> {
+                    _priv: &'a (),
+                }
+            };
+        }
+
+        let many_variants = self.relation_fields().map(|field| match &field.ty {
+            app::FieldTy::BelongsTo(_) => {
+                let name = self.relation_struct_name(field);
+                let strukt = self.target_struct_path(field, 1);
+                quote!(#name(&'a #strukt),)
+            }
+            _ => quote!(),
+        });
+
+        let many_from_fns = self.relation_fields().map(|field| match &field.ty {
+            app::FieldTy::BelongsTo(_) => {
+                let from_fn = util::ident(&format!("from_{}", self.field_name(field.id)));
+                let strukt = self.target_struct_path(field, 1);
+
+                quote! {
+                    pub const fn #from_fn(_: Path<#strukt>) -> Many<'a> {
+                        todo!()
+                    }
+                }
+            }
+            _ => quote!(),
+        });
+
+        quote! {
+            pub enum Many<'a> {
+                #(#many_variants)*
+            }
+
+            impl<'a> Many<'a> {
+                #(#many_from_fns)*
+            }
+        }
+    }
+    fn relation_fields(&self) -> impl Iterator<Item = &app::Field> {
+        self.model.fields.iter().filter(|field| field.ty.is_relation())
+    }
+
+    /*
     pub(super) fn gen_relation_structs(&self) -> TokenStream {
         self.model
             .fields
@@ -193,7 +239,7 @@ impl<'a> Generator<'a> {
         let relation_struct_name = self.relation_struct_name(field);
         let target_struct_name = self.model_struct_path(target, 1);
 
-        let path_methods = self.gen_path_methods(self.schema.model(target), 1);
+        let path_methods = self.gen_path_methods(todo!() /*self.schema.model(target)*/, 1);
 
         let target_ty = if field.ty.is_has_many() {
             quote!([#target_struct_name])
@@ -359,7 +405,8 @@ impl<'a> Generator<'a> {
         let find_by_pk = self.model_pk_query_method_name(rel.target);
 
         let find_by_pk_args = rel.foreign_key.fields.iter().map(|fk_field| {
-            let field = self.schema.field(fk_field.source);
+            assert_eq!(fk_field.source.model, self.model.id);
+            let field = self.model.field(fk_field.source);
             let name = self.field_name(fk_field.source);
 
             if field.nullable {
@@ -465,4 +512,5 @@ impl<'a> Generator<'a> {
             pub use #field_name::#relation_struct_name;
         }
     }
+    */
 }
