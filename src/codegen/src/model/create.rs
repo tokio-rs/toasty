@@ -12,7 +12,6 @@ impl<'a> Generator<'a> {
                 pub(super) stmt: stmt::Insert<#struct_name>,
             }
 
-            /*
             impl #create_struct_name {
                 #create_methods
 
@@ -21,6 +20,7 @@ impl<'a> Generator<'a> {
                 }
             }
 
+            /*
             impl IntoInsert for #create_struct_name {
                 type Model = #struct_name;
 
@@ -77,7 +77,7 @@ impl<'a> Generator<'a> {
             match &field.ty {
                 FieldTy::HasMany(rel) => {
                     let singular = self.singular_name(field);
-                    let target_struct_name = self.model_struct_path(rel.target, 0);
+                    let target_struct_name = self.model_struct_path(rel.target, 1);
 
                     quote! {
                         pub fn #singular(mut self, #singular: impl IntoExpr<#target_struct_name>) -> Self {
@@ -87,7 +87,7 @@ impl<'a> Generator<'a> {
                     }
                 }
                 FieldTy::HasOne(rel) => {
-                    let target_struct_name = self.model_struct_path(rel.target, 0);
+                    let target_struct_name = self.model_struct_path(rel.target, 1);
 
                     quote! {
                         pub fn #name(mut self, #name: impl IntoExpr<#target_struct_name>) -> Self {
@@ -96,18 +96,18 @@ impl<'a> Generator<'a> {
                         }
                     }
                 }
-                FieldTy::BelongsTo(_) => {
-                    let relation_struct_path = self.field_ty(field, 0);
+                FieldTy::BelongsTo(rel) => {
+                    let target_struct_name = self.model_struct_path(rel.target, 1);
 
                     quote! {
-                        pub fn #name<'b>(mut self, #name: impl IntoExpr<#relation_struct_path<'b>>) -> Self {
+                        pub fn #name(mut self, #name: impl IntoExpr<#target_struct_name>) -> Self {
                             self.stmt.set(#index, #name.into_expr());
                             self
                         }
                     }
                 }
                 FieldTy::Primitive(_) => {
-                    let ty = self.field_ty(field, 0);
+                    let ty = self.field_ty(field, 1);
                     let ty = quote!(impl Into<#ty>);
 
                     quote! {

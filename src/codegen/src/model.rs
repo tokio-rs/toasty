@@ -43,11 +43,7 @@ pub(crate) struct Generator<'a> {
 
 impl<'a> Generator<'a> {
     /// Create a new `GenModel` for the provided model
-    pub(crate) fn new(
-        model: &'a app::Model,
-        names: Rc<Names>,
-        in_macro: bool,
-    ) -> Generator<'a> {
+    pub(crate) fn new(model: &'a app::Model, names: Rc<Names>, in_macro: bool) -> Generator<'a> {
         Generator {
             model,
             names,
@@ -173,7 +169,11 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub(crate) fn target_struct_path(&self, field: impl Into<app::FieldId>, depth: usize) -> TokenStream {
+    pub(crate) fn target_struct_path(
+        &self,
+        field: impl Into<app::FieldId>,
+        depth: usize,
+    ) -> TokenStream {
         let field = field.into();
 
         assert!(field.model == self.model.id);

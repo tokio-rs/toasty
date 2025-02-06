@@ -32,7 +32,7 @@ impl<'a> Generator<'a> {
         let into_select_impl_value = self.gen_into_select_impl(false);
         */
 
-        let relations_mod = self.gen_relations_module();
+        let relations_mod = self.gen_relations_mod();
 
         quote! {
             #container_import
@@ -47,8 +47,8 @@ impl<'a> Generator<'a> {
             impl #struct_name {
                 #field_consts
 
-                pub fn create() -> #create_struct_name {
-                    #create_struct_name::default()
+                pub fn create() -> builders::#create_struct_name {
+                    builders::#create_struct_name::default()
                 }
 
                 pub fn create_many() -> CreateMany<#struct_name> {
@@ -82,7 +82,8 @@ impl<'a> Generator<'a> {
             }
 
             impl<'a> Relation<'a> for #struct_name {
-                type Field = relations::Many<'a>;
+                type ManyField = relations::Many<'a>;
+                type OneField = relations::One<'a>;
             }
 
             /*
@@ -131,9 +132,13 @@ impl<'a> Generator<'a> {
             #query_struct
             */
 
-            #create_struct_def
+            pub mod builders {
+                use super::*;
 
-            #update_struct_def
+                #create_struct_def
+
+                #update_struct_def
+            }
 
             pub mod relations {
                 use super::*;
