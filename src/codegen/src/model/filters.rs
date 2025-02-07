@@ -24,11 +24,19 @@ impl<'a> Generator<'a> {
     pub(super) fn gen_model_filter_methods(&self, depth: usize) -> TokenStream {
         self.filters
             .iter()
-            .map(|filter| self.gen_model_filter_method(filter, depth))
+            .map(|filter| {
+                let get = self.gen_model_get_method(filter, depth);
+                let filter = self.gen_model_filter_method(filter, depth);
+
+                quote!(
+                    #get
+                    #filter
+                )
+            })
             .collect()
     }
 
-    fn gen_model_filter_method(&self, filter: &Filter, depth: usize) -> TokenStream {
+    fn gen_model_get_method(&self, filter: &Filter, depth: usize) -> TokenStream {
         let struct_name = self.self_struct_name();
         let ident = self.get_method_ident(filter);
         let filter_ident = self.filter_method_ident(filter);
@@ -41,6 +49,19 @@ impl<'a> Generator<'a> {
                     .#filter_ident( #( #arg_idents ),* )
                     .get(db)
                     .await
+            }
+        }
+    }
+
+    fn gen_model_filter_method(&self, filter: &Filter, depth: usize) -> TokenStream {
+        let ident = self.filter_method_ident(filter);
+        let args = self.gen_filter_args(filter, depth);
+        let arg_idents = self.gen_filter_arg_idents(filter);
+
+        quote! {
+            pub fn #ident(#( #args ),* ) -> Query {
+                Query::default()
+                    .#ident( #( #arg_idents ),* )
             }
         }
     }
