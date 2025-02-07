@@ -50,6 +50,18 @@ impl Expr<bool> {
     pub fn and(self, rhs: impl IntoExpr<bool>) -> Expr<bool> {
         Expr::from_untyped(stmt::Expr::and(self.untyped, rhs.into_expr().untyped))
     }
+
+    pub fn and_all<E>(exprs: impl IntoIterator<Item = E>) -> Expr<bool>
+    where
+        E: IntoExpr<bool>,
+    {
+        exprs
+            .into_iter()
+            .map(|expr| expr.into_expr().untyped)
+            .reduce(|lhs, rhs| stmt::Expr::and(lhs, rhs))
+            .map(Expr::from_untyped)
+            .unwrap_or_else(|| Expr::from_untyped(true))
+    }
 }
 
 impl<T: ?Sized> From<Expr<T>> for stmt::Expr {

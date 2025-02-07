@@ -81,6 +81,7 @@ impl<'a> Generator<'a> {
                     Ok(())
                 }
             }
+            */
 
             impl From<Query> for UpdateQuery {
                 fn from(value: Query) -> UpdateQuery {
@@ -93,7 +94,6 @@ impl<'a> Generator<'a> {
                     UpdateQuery { stmt: stmt::Update::new(src) }
                 }
             }
-            */
         }
     }
 

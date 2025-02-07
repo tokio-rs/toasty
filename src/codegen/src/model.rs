@@ -1,10 +1,12 @@
 mod body;
 mod create;
 mod fields;
-// mod find_by;
-// mod query;
+mod filters;
+mod query;
 mod relation;
 mod update;
+
+use filters::Filter;
 
 use crate::*;
 
@@ -34,6 +36,9 @@ pub(crate) struct Generator<'a> {
     /// Model being generated
     pub model: &'a app::Model,
 
+    /// Model filters to generate methods for
+    pub filters: Vec<Filter>,
+
     /// Stores various names
     pub names: Rc<Names>,
 
@@ -44,8 +49,11 @@ pub(crate) struct Generator<'a> {
 impl<'a> Generator<'a> {
     /// Create a new `GenModel` for the provided model
     pub(crate) fn new(model: &'a app::Model, names: Rc<Names>, in_macro: bool) -> Generator<'a> {
+        let filters = Filter::build_model_filters(model);
+
         Generator {
             model,
+            filters,
             names,
             in_macro,
         }
@@ -110,8 +118,13 @@ impl<'a> Generator<'a> {
         self.names.relations[&field].singular_name.as_ref().unwrap()
     }
 
-    pub(crate) fn field_ty(&self, field: &app::Field, depth: usize) -> TokenStream {
+    pub(crate) fn field_ty(&self, field: impl Into<app::FieldId>, depth: usize) -> TokenStream {
         use app::FieldTy::*;
+
+        let field = field.into();
+        assert_eq!(field.model, self.model.id);
+
+        let field = &self.model.fields[field.index];
 
         match &field.ty {
             Primitive(field_ty) => self.ty(&field_ty.ty, depth),

@@ -19,9 +19,11 @@ impl<'a> Generator<'a> {
         let update_method_def = self.gen_model_update_method_def();
 
         let field_consts = self.gen_model_field_consts();
-        /*
-        let query_struct = self.gen_query_struct();
 
+        let query_struct = self.gen_query_struct();
+        let model_filters = self.gen_model_filter_methods(0);
+
+        /*
         let relation_query_structs = self.gen_relation_structs();
         let relation_fields = self.gen_relation_fields();
         let query_structs = self.gen_query_structs();
@@ -46,6 +48,8 @@ impl<'a> Generator<'a> {
 
             impl #struct_name {
                 #field_consts
+
+                #model_filters
 
                 pub fn create() -> builders::#create_struct_name {
                     builders::#create_struct_name::default()
@@ -128,9 +132,9 @@ impl<'a> Generator<'a> {
                     stmt::Expr::list([self])
                 }
             }
+            */
 
             #query_struct
-            */
 
             pub mod builders {
                 use super::*;

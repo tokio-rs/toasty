@@ -4,6 +4,7 @@ impl<'a> Generator<'a> {
     pub(crate) fn gen_query_struct(&self) -> TokenStream {
         let struct_name = self.self_struct_name();
         let relation_methods = self.gen_relation_methods();
+        let filter_methods = self.gen_query_filter_methods();
 
         quote! {
             #[derive(Debug)]
@@ -15,6 +16,8 @@ impl<'a> Generator<'a> {
                 pub const fn from_stmt(stmt: stmt::Select<#struct_name>) -> Query {
                     Query { stmt }
                 }
+
+                #filter_methods
 
                 pub async fn all(self, db: &Db) -> Result<Cursor<#struct_name>> {
                     db.all(self.stmt).await
@@ -28,8 +31,8 @@ impl<'a> Generator<'a> {
                     db.get(self.stmt).await
                 }
 
-                pub fn update(self) -> UpdateQuery {
-                    UpdateQuery::from(self)
+                pub fn update(self) -> builders::UpdateQuery {
+                    builders::UpdateQuery::from(self)
                 }
 
                 pub async fn delete(self, db: &Db) -> Result<()> {
