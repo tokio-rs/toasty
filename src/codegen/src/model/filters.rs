@@ -77,6 +77,26 @@ impl<'a> Generator<'a> {
         }
     }
 
+    pub(super) fn gen_model_into_select_body(&self, by_ref: bool) -> TokenStream {
+        let fields = self
+            .model
+            .primary_key_fields()
+            .map(|field| field.id)
+            .collect::<Vec<_>>();
+        let filter = Filter { fields };
+
+        let ident = self.filter_method_ident(&filter);
+        let arg_idents = self.gen_filter_arg_idents(&filter);
+
+        let amp = if by_ref { quote!(&) } else { quote!() };
+
+        quote! {
+            Query::default()
+                .#ident( #( #amp self.#arg_idents ),* )
+                .stmt
+        }
+    }
+
     fn get_method_ident(&self, filter: &Filter) -> syn::Ident {
         self.method_ident("get_by", filter)
     }

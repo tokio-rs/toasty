@@ -29,10 +29,10 @@ impl<'a> Generator<'a> {
         let query_structs = self.gen_query_structs();
 
         let struct_into_expr = self.gen_struct_into_expr();
-
-        let into_select_impl_ref = self.gen_into_select_impl(true);
-        let into_select_impl_value = self.gen_into_select_impl(false);
         */
+
+        let into_select_body_ref = self.gen_model_into_select_body(true);
+        let into_select_body_value = self.gen_model_into_select_body(false);
 
         let relations_mod = self.gen_relations_mod();
 
@@ -59,12 +59,12 @@ impl<'a> Generator<'a> {
                     CreateMany::default()
                 }
 
+                #update_method_def
+
                 /*
                 pub fn filter(expr: stmt::Expr<bool>) -> Query {
                     Query::from_stmt(stmt::Select::filter(expr))
                 }
-
-                #update_method_def
 
                 pub async fn delete(self, db: &Db) -> Result<()> {
                     let stmt = self.into_select().delete();
@@ -90,12 +90,11 @@ impl<'a> Generator<'a> {
                 type OneField = relations::One<'a>;
             }
 
-            /*
             impl stmt::IntoSelect for &#struct_name {
                 type Model = #struct_name;
 
                 fn into_select(self) -> stmt::Select<Self::Model> {
-                    #into_select_impl_ref
+                    #into_select_body_ref
                 }
             }
 
@@ -111,10 +110,11 @@ impl<'a> Generator<'a> {
                 type Model = #struct_name;
 
                 fn into_select(self) -> stmt::Select<Self::Model> {
-                    #into_select_impl_value
+                    #into_select_body_value
                 }
             }
 
+            /*
             impl stmt::IntoExpr<#struct_name> for #struct_name {
                 fn into_expr(self) -> stmt::Expr<#struct_name> {
                     todo!()
@@ -293,26 +293,6 @@ impl<'a> Generator<'a> {
 
         quote! {
             stmt::Key::from_expr(#pk_expr)
-        }
-    }
-
-    fn gen_into_select_impl(&self, is_ref: bool) -> TokenStream {
-        let struct_name = self.self_struct_name();
-        let query = self.pk_query();
-        let query_name = self.query_method_name(query.id);
-
-        let args = query.args.iter().map(|arg| {
-            let name = util::ident(&arg.name);
-
-            if is_ref {
-                quote!(&self.#name,)
-            } else {
-                quote!(self.#name,)
-            }
-        });
-
-        quote! {
-            #struct_name::#query_name(#( #args )*).into_select()
         }
     }
     */
