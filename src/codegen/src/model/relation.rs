@@ -1,82 +1,93 @@
 use super::*;
 
 impl<'a> Generator<'a> {
-    pub(super) fn gen_relations_mod(&self) -> TokenStream {
-        let mut field_many_variants: Vec<_> = self
-            .relation_fields()
+    pub(super) fn gen_model_relation_methods(&self) -> impl Iterator<Item = TokenStream> + '_ {
+        self.model
+            .fields
+            .iter()
             .filter_map(|field| match &field.ty {
-                app::FieldTy::BelongsTo(_) => {
-                    let name = self.relation_struct_name(field);
-                    let strukt = self.target_struct_path(field, 1);
-                    Some(quote!(#name(&'a #strukt),))
-                }
+                app::FieldTy::HasMany(_) => Some(self.gen_model_relation_has_many_method(field.id)),
                 _ => None,
             })
-            .collect();
+    }
+
+    fn gen_model_relation_has_many_method(&self, field: app::FieldId) -> TokenStream {
+        let name = self.field_name(field);
+
+        quote! {
+            pub fn #name(&self) -> <Self as Relation<'_>>::Many {
+                todo!()
+            }
+        }
+    }
+
+    pub(super) fn gen_relations_mod(&self) -> TokenStream {
+        let mut many_variants = vec![];
+        let mut field_many_variants = vec![];
+        let mut field_one_variants = vec![];
+        let mut many_from_fns = vec![];
+        let mut one_from_fns = vec![];
+
+        for field in self.relation_fields() {
+            let name = self.relation_struct_name(field);
+            let strukt = self.target_struct_path(field, 1);
+            let from_fn = util::ident(&format!("from_{}", self.field_name(field.id)));
+
+            match &field.ty {
+                app::FieldTy::HasMany(_) => {
+                    many_variants.push(quote!(#name(&'a #strukt),));
+                    field_many_variants.push(quote!(#name(&'a ()),));
+
+                    one_from_fns.push(quote! {
+                        pub const fn #from_fn(_: Path<#strukt>) -> () {
+                            todo!()
+                        }
+                    });
+                }
+                app::FieldTy::BelongsTo(_) => {
+                    field_one_variants.push(quote!(#name(&'a ()),));
+
+                    many_from_fns.push(quote! {
+                        pub const fn #from_fn(_: Path<#strukt>) -> ManyField<'a> {
+                            todo!()
+                        }
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        if many_variants.is_empty() {
+            many_variants.push(quote!(_Unused(&'a ()),))
+        }
 
         if field_many_variants.is_empty() {
             field_many_variants.push(quote!(_Unused(&'a ()),));
         }
 
-        let mut field_one_variants: Vec<_> = self
-            .relation_fields()
-            .filter_map(|field| match &field.ty {
-                app::FieldTy::HasMany(_) => {
-                    let name = self.relation_struct_name(field);
-                    let strukt = self.target_struct_path(field, 1);
-                    Some(quote!(#name(&'a #strukt),))
-                }
-                _ => None,
-            })
-            .collect();
-
         if field_one_variants.is_empty() {
             field_one_variants.push(quote!(_Unused(&'a ()),));
         }
 
-        let many_from_fns = self.relation_fields().map(|field| match &field.ty {
-            app::FieldTy::BelongsTo(_) => {
-                let from_fn = util::ident(&format!("from_{}", self.field_name(field.id)));
-                let strukt = self.target_struct_path(field, 1);
-
-                quote! {
-                    pub const fn #from_fn(_: Path<#strukt>) -> Many<'a> {
-                        todo!()
-                    }
-                }
-            }
-            _ => quote!(),
-        });
-
-        let one_from_fns = self.relation_fields().map(|field| match &field.ty {
-            app::FieldTy::HasMany(_) => {
-                let from_fn = util::ident(&format!("from_{}", self.field_name(field.id)));
-                let strukt = self.target_struct_path(field, 1);
-
-                quote! {
-                    pub fn #from_fn(self) -> #strukt {
-                        todo!()
-                    }
-                }
-            }
-            _ => quote!(),
-        });
-
         quote! {
             pub enum Many<'a> {
-                #(#field_many_variants)*
+                #( #many_variants )*
             }
 
-            impl<'a> Many<'a> {
-                #(#many_from_fns)*
+            pub enum ManyField<'a> {
+                #( #field_many_variants )*
             }
 
-            pub enum One<'a> {
-                #(#field_one_variants)*
+            impl<'a> ManyField<'a> {
+                #( #many_from_fns )*
             }
 
-            impl<'a> One<'a> {
-                #(#one_from_fns)*
+            pub enum OneField<'a> {
+                #( #field_one_variants )*
+            }
+
+            impl<'a> OneField<'a> {
+                #( #one_from_fns )*
             }
         }
     }

@@ -23,6 +23,8 @@ impl<'a> Generator<'a> {
         let query_struct = self.gen_query_struct();
         let model_filters = self.gen_model_filter_methods(0);
 
+        let relation_methods = self.gen_model_relation_methods();
+
         /*
         let relation_query_structs = self.gen_relation_structs();
         let relation_fields = self.gen_relation_fields();
@@ -48,6 +50,8 @@ impl<'a> Generator<'a> {
 
             impl #struct_name {
                 #field_consts
+
+                #( #relation_methods )*
 
                 #model_filters
 
@@ -86,8 +90,9 @@ impl<'a> Generator<'a> {
             }
 
             impl<'a> Relation<'a> for #struct_name {
-                type ManyField = relations::Many<'a>;
-                type OneField = relations::One<'a>;
+                type Many = relations::Many<'a>;
+                type ManyField = relations::ManyField<'a>;
+                type OneField = relations::OneField<'a>;
             }
 
             impl stmt::IntoSelect for &#struct_name {
