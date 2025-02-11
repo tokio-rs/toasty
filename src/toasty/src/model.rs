@@ -17,5 +17,6 @@ pub trait Model: Sized {
 pub trait Relation<'a> {
     type Many;
     type ManyField;
+    type One;
     type OneField;
 }

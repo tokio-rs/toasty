@@ -6,20 +6,43 @@ impl<'a> Generator<'a> {
             .fields
             .iter()
             .filter_map(|field| match &field.ty {
-                app::FieldTy::BelongsTo(_) => Some(self.gen_model_relation_belongs_to_method(field.id)),
+                app::FieldTy::BelongsTo(rel) => {
+                    Some(self.gen_model_relation_belongs_to_method(field.id, rel))
+                }
                 app::FieldTy::HasMany(_) => Some(self.gen_model_relation_has_many_method(field.id)),
                 _ => None,
             })
     }
 
-    fn gen_model_relation_belongs_to_method(&self, field: app::FieldId) -> TokenStream {
+    fn gen_model_relation_belongs_to_method(
+        &self,
+        field: app::FieldId,
+        rel: &app::BelongsTo,
+    ) -> TokenStream {
         let name = self.field_name(field);
         let strukt = self.target_struct_path(field, 0);
-        let from_fn = util::ident(&format!("from_{}", self.self_field_name()));
+
+        // For proc macros, this will be updated to use field attributes instead of looking at the schema types
+        let operands = rel.foreign_key.fields.iter().map(|fk_field| {
+            let target_field_const = self.field_const_name(fk_field.target);
+            let source_field_name = self.field_name(fk_field.source);
+
+            quote! {
+                #strukt::#target_field_const.eq(&self.#source_field_name)
+            }
+        });
+
+        let filter = if rel.foreign_key.fields.len() == 1 {
+            quote!( #( #operands )* )
+        } else {
+            quote!( stmt::Expr::and_all([ #(#operands),* ]) )
+        };
 
         quote! {
             pub fn #name(&self) -> <#strukt as Relation<'_>>::One {
-                <#strukt as Relation<'_>>::One::#from_fn(self)
+                <#strukt as Relation<'_>>::One::from_select(
+                    #strukt::filter(#filter).into_select()
+                )
             }
         }
     }
@@ -27,69 +50,32 @@ impl<'a> Generator<'a> {
     fn gen_model_relation_has_many_method(&self, field: app::FieldId) -> TokenStream {
         let name = self.field_name(field);
         let strukt = self.target_struct_path(field, 0);
-        let from_fn = util::ident(&format!("from_{}", self.self_field_name()));
+        let const_name = self.self_const_name();
 
         quote! {
             pub fn #name(&self) -> <#strukt as Relation<'_>>::Many {
-                <#strukt as Relation<'_>>::Many::#from_fn(self)
+                <#strukt as Relation<'_>>::Many::from_select(
+                    #strukt::filter(
+                        #strukt::#const_name.in_query(self)
+                    ).into_select()
+                )
             }
         }
     }
 
     pub(super) fn gen_relations_mod(&self) -> TokenStream {
-        let mut many_variants = vec![];
-        let mut many_from_fns = vec![];
-        let mut one_from_fns = vec![];
-        let mut many_into_select_branches = vec![];
-
-        for field in self.relation_fields() {
-            let name = self.relation_struct_name(field);
-            let strukt = self.self_struct_name();
-            let source_strukt = self.target_struct_path(field, 1);
-            let const_name = self.field_const_name(field.id);
-            let from_fn = util::ident(&format!("from_{}", self.field_name(field.id)));
-
-            match &field.ty {
-                app::FieldTy::HasMany(_) => {
-                    one_from_fns.push(quote! {
-                        /*
-                        pub const fn #from_fn(_: Path<#source_strukt>) -> () {
-                            todo!()
-                        }
-                        */
-                    });
-                }
-                app::FieldTy::BelongsTo(_) => {
-                    many_variants.push(quote!(#name(&'a #source_strukt),));
-
-                    many_from_fns.push(quote! {
-                        pub fn #from_fn(source: &'a #source_strukt) -> Many<'a> {
-                            Many::#name(source)
-                        }
-                    });
-
-                    many_into_select_branches.push(quote! {
-                        Many::#name(source) => #strukt::#const_name.in_query(source),
-                    });
-                }
-                _ => {}
-            }
-        }
-
-        if many_variants.is_empty() {
-            many_variants.push(quote!(_Unused(&'a ()),))
-        }
-
-        if many_into_select_branches.is_empty() {
-            many_into_select_branches.push(quote!(Many::_Unused(_) => todo!()));
-        }
-
         let strukt_name = self.self_struct_name();
         let create_struct_name = self.self_create_struct_name();
 
         quote! {
-            pub enum Many<'a> {
-                #( #many_variants )*
+            #[derive(Debug)]
+            pub struct Many {
+                scope: stmt::Select<#strukt_name>,
+            }
+
+            #[derive(Debug)]
+            pub struct One {
+                scope: stmt::Select<#strukt_name>,
             }
 
             pub struct ManyField {
@@ -100,36 +86,52 @@ impl<'a> Generator<'a> {
                 pub(super) path: Path<super::#strukt_name>,
             }
 
-            impl ManyField {
-                pub const fn from_path(path: Path<[super::#strukt_name]>) -> ManyField {
-                    ManyField { path }
+            impl Many {
+                pub fn from_select(stmt: stmt::Select<#strukt_name>) -> Many {
+                    Many { scope: stmt }
                 }
-            }
-
-            impl<'a> Many<'a> {
-                #( #many_from_fns )*
 
                 /// Iterate all entries in the relation
                 pub async fn all(self, db: &Db) -> Result<Cursor<#strukt_name>> {
-                    db.all(self.into_select()).await
+                    db.all(self.scope).await
                 }
 
                 pub fn create(self) -> builders::#create_struct_name {
                     let mut builder = builders::#create_struct_name::default();
-                    builder.stmt.set_scope(self);
+                    builder.stmt.set_scope(self.scope);
                     builder
                 }
             }
 
-            impl<'a> stmt::IntoSelect for Many<'a> {
+            impl stmt::IntoSelect for Many {
                 type Model = #strukt_name;
 
                 fn into_select(self) -> stmt::Select<Self::Model> {
-                    #strukt_name::filter(
-                        match self {
-                            #( #many_into_select_branches )*
-                        }
-                    ).into_select()
+                    self.scope
+                }
+            }
+
+            impl One {
+                pub fn from_select(stmt: stmt::Select<#strukt_name>) -> One {
+                    One { scope: stmt }
+                }
+
+                pub async fn get(self, db: &Db) -> Result<#strukt_name> {
+                    db.get(self.scope).await
+                }
+            }
+
+            impl stmt::IntoSelect for One {
+                type Model = #strukt_name;
+
+                fn into_select(self) -> stmt::Select<Self::Model> {
+                    self.scope
+                }
+            }
+
+            impl ManyField {
+                pub const fn from_path(path: Path<[super::#strukt_name]>) -> ManyField {
+                    ManyField { path }
                 }
             }
 

@@ -28,6 +28,9 @@ pub(crate) struct ModelNames {
     /// Primary model struct name
     pub struct_name: syn::Ident,
 
+    /// Constantized version of the struct name
+    pub const_name: syn::Ident,
+
     /// Create model instance builder
     pub create_name: syn::Ident,
 
@@ -137,12 +140,14 @@ impl ModelNames {
     fn from_model(model: &app::Model) -> ModelNames {
         let module_name = util::ident(&model.name.snake_case());
         let struct_name = util::ident(&model.name.upper_camel_case());
+        let const_name = util::ident(&model.name.upper_snake_case());
         let create_name = util::ident(&format!("Create{}", model.name.upper_camel_case()));
         let update_name = util::ident(&format!("Update{}", model.name.upper_camel_case()));
 
         ModelNames {
             module_name,
             struct_name,
+            const_name,
             create_name,
             update_name,
         }
