@@ -166,6 +166,11 @@ impl<'a> Generator<'a> {
         self.model_struct_path(self.model.id, 1)
     }
 
+    pub(crate) fn self_field_name(&self) -> TokenStream {
+        let name = &self.names.models[&self.model.id].module_name;
+        quote!(#name)
+    }
+
     pub(crate) fn model_struct_path(
         &self,
         id: impl Into<app::ModelId>,

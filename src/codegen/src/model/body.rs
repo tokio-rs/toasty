@@ -65,11 +65,11 @@ impl<'a> Generator<'a> {
 
                 #update_method_def
 
-                /*
                 pub fn filter(expr: stmt::Expr<bool>) -> Query {
                     Query::from_stmt(stmt::Select::filter(expr))
                 }
 
+                /*
                 pub async fn delete(self, db: &Db) -> Result<()> {
                     let stmt = self.into_select().delete();
                     db.exec(stmt).await?;
@@ -91,8 +91,8 @@ impl<'a> Generator<'a> {
 
             impl<'a> Relation<'a> for #struct_name {
                 type Many = relations::Many<'a>;
-                type ManyField = relations::ManyField<'a>;
-                type OneField = relations::OneField<'a>;
+                type ManyField = relations::ManyField;
+                type OneField = relations::OneField;
             }
 
             impl stmt::IntoSelect for &#struct_name {

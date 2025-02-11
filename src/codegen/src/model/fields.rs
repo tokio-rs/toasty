@@ -10,6 +10,7 @@ impl<'a> Generator<'a> {
             .map(move |field| {
                 let const_name = self.field_const_name(field);
                 let field_offset = util::int(field.id.index);
+
                 match &field.ty {
                     Primitive(primitive) => {
                         let ty = self.ty(&primitive.ty, 0);
@@ -18,14 +19,23 @@ impl<'a> Generator<'a> {
                             pub const #const_name: Path<#ty> = Path::from_field_index::<Self>(#field_offset);
                         }
                     }
-                    BelongsTo(_) => quote!(),
+                    BelongsTo(_) => {
+                        let target_struct_path = self.target_struct_path(field, 0);
+
+                        quote! {
+                            pub const #const_name: <#target_struct_path as Relation<'static>>::OneField =
+                                <#target_struct_path as Relation<'static>>::OneField::from_path(
+                                    Path::from_field_index::<#target_struct_path>(#field_offset)
+                                );
+                        }
+                    }
                     HasMany(..) | HasOne(..) => {
                         let target_struct_path = self.target_struct_path(field, 0);
 
                         quote! {
                             pub const #const_name: <#target_struct_path as Relation<'static>>::ManyField =
-                                <#target_struct_path as Relation<'static>>::ManyField::from_user(
-                                    Path::from_field_index::<Self>(#field_offset)
+                                <#target_struct_path as Relation<'static>>::ManyField::from_path(
+                                    Path::from_field_index::<#target_struct_path>(#field_offset)
                                 );
                         }
                     }

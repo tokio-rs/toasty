@@ -13,44 +13,50 @@ impl<'a> Generator<'a> {
 
     fn gen_model_relation_has_many_method(&self, field: app::FieldId) -> TokenStream {
         let name = self.field_name(field);
+        let strukt = self.target_struct_path(field, 0);
+        let from_fn = util::ident(&format!("from_{}", self.self_field_name()));
 
         quote! {
-            pub fn #name(&self) -> <Self as Relation<'_>>::Many {
-                todo!()
+            pub fn #name(&self) -> <#strukt as Relation<'_>>::Many {
+                <#strukt as Relation<'_>>::Many::#from_fn(self)
             }
         }
     }
 
     pub(super) fn gen_relations_mod(&self) -> TokenStream {
         let mut many_variants = vec![];
-        let mut field_many_variants = vec![];
-        let mut field_one_variants = vec![];
         let mut many_from_fns = vec![];
         let mut one_from_fns = vec![];
+        let mut many_into_select_branches = vec![];
 
         for field in self.relation_fields() {
             let name = self.relation_struct_name(field);
-            let strukt = self.target_struct_path(field, 1);
+            let strukt = self.self_struct_name();
+            let source_strukt = self.target_struct_path(field, 1);
+            let const_name = self.field_const_name(field.id);
             let from_fn = util::ident(&format!("from_{}", self.field_name(field.id)));
 
             match &field.ty {
                 app::FieldTy::HasMany(_) => {
-                    many_variants.push(quote!(#name(&'a #strukt),));
-                    field_many_variants.push(quote!(#name(&'a ()),));
-
                     one_from_fns.push(quote! {
-                        pub const fn #from_fn(_: Path<#strukt>) -> () {
+                        /*
+                        pub const fn #from_fn(_: Path<#source_strukt>) -> () {
                             todo!()
                         }
+                        */
                     });
                 }
                 app::FieldTy::BelongsTo(_) => {
-                    field_one_variants.push(quote!(#name(&'a ()),));
+                    many_variants.push(quote!(#name(&'a #source_strukt),));
 
                     many_from_fns.push(quote! {
-                        pub const fn #from_fn(_: Path<#strukt>) -> ManyField<'a> {
-                            todo!()
+                        pub fn #from_fn(source: &'a #source_strukt) -> Many<'a> {
+                            Many::#name(source)
                         }
+                    });
+
+                    many_into_select_branches.push(quote! {
+                        Many::#name(source) => #strukt::#const_name.in_query(source),
                     });
                 }
                 _ => {}
@@ -61,33 +67,65 @@ impl<'a> Generator<'a> {
             many_variants.push(quote!(_Unused(&'a ()),))
         }
 
-        if field_many_variants.is_empty() {
-            field_many_variants.push(quote!(_Unused(&'a ()),));
+        if many_into_select_branches.is_empty() {
+            many_into_select_branches.push(quote!(Many::_Unused(_) => todo!()));
         }
 
-        if field_one_variants.is_empty() {
-            field_one_variants.push(quote!(_Unused(&'a ()),));
-        }
+        let strukt_name = self.self_struct_name();
+        let create_struct_name = self.self_create_struct_name();
 
         quote! {
             pub enum Many<'a> {
                 #( #many_variants )*
             }
 
-            pub enum ManyField<'a> {
-                #( #field_many_variants )*
+            pub struct ManyField {
+                pub(super) path: Path<[super::#strukt_name]>,
             }
 
-            impl<'a> ManyField<'a> {
+            pub struct OneField {
+                pub(super) path: Path<super::#strukt_name>,
+            }
+
+            impl ManyField {
+                pub const fn from_path(path: Path<[super::#strukt_name]>) -> ManyField {
+                    ManyField { path }
+                }
+            }
+
+            impl<'a> Many<'a> {
                 #( #many_from_fns )*
+
+                pub fn create(self) -> builders::#create_struct_name {
+                    let mut builder = builders::#create_struct_name::default();
+                    builder.stmt.set_scope(self);
+                    builder
+                }
             }
 
-            pub enum OneField<'a> {
-                #( #field_one_variants )*
+            impl<'a> stmt::IntoSelect for Many<'a> {
+                type Model = #strukt_name;
+
+                fn into_select(self) -> stmt::Select<Self::Model> {
+                    #strukt_name::filter(
+                        match self {
+                            #( #many_into_select_branches )*
+                        }
+                    ).into_select()
+                }
             }
 
-            impl<'a> OneField<'a> {
-                #( #one_from_fns )*
+            impl OneField {
+                pub const fn from_path(path: Path<super::#strukt_name>) -> OneField {
+                    OneField { path }
+                }
+
+                pub fn in_query<Q>(self, rhs: Q) -> toasty::stmt::Expr<bool>
+                where
+                    Q: stmt::IntoSelect<Model = super::#strukt_name>,
+                {
+                    self.path.in_query(rhs)
+                }
             }
         }
     }
