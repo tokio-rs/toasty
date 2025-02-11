@@ -6,9 +6,22 @@ impl<'a> Generator<'a> {
             .fields
             .iter()
             .filter_map(|field| match &field.ty {
+                app::FieldTy::BelongsTo(_) => Some(self.gen_model_relation_belongs_to_method(field.id)),
                 app::FieldTy::HasMany(_) => Some(self.gen_model_relation_has_many_method(field.id)),
                 _ => None,
             })
+    }
+
+    fn gen_model_relation_belongs_to_method(&self, field: app::FieldId) -> TokenStream {
+        let name = self.field_name(field);
+        let strukt = self.target_struct_path(field, 0);
+        let from_fn = util::ident(&format!("from_{}", self.self_field_name()));
+
+        quote! {
+            pub fn #name(&self) -> <#strukt as Relation<'_>>::One {
+                <#strukt as Relation<'_>>::One::#from_fn(self)
+            }
+        }
     }
 
     fn gen_model_relation_has_many_method(&self, field: app::FieldId) -> TokenStream {
@@ -95,6 +108,11 @@ impl<'a> Generator<'a> {
 
             impl<'a> Many<'a> {
                 #( #many_from_fns )*
+
+                /// Iterate all entries in the relation
+                pub async fn all(self, db: &Db) -> Result<Cursor<#strukt_name>> {
+                    db.all(self.into_select()).await
+                }
 
                 pub fn create(self) -> builders::#create_struct_name {
                     let mut builder = builders::#create_struct_name::default();
