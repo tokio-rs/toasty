@@ -5,6 +5,7 @@ pub(crate) use expr_target::ExprTarget;
 pub(crate) mod flatten_bool_ops;
 pub(crate) mod lift_pk_select;
 
+mod expr_and;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_concat_str;
@@ -58,6 +59,7 @@ impl<'a> VisitMut for Simplify<'_> {
 
         // If an in-subquery expression, then try lifting it.
         let maybe_expr = match i {
+            Expr::And(expr_and) => self.simplify_expr_and(expr_and),
             Expr::BinaryOp(expr_binary_op) => self.simplify_expr_binary_op(
                 expr_binary_op.op,
                 &mut *expr_binary_op.lhs,

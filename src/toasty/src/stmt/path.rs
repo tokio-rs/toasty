@@ -1,5 +1,7 @@
 use super::*;
 
+use std::fmt;
+
 pub struct Path<T: ?Sized> {
     untyped: stmt::Path,
     _p: PhantomData<T>,
@@ -107,5 +109,11 @@ impl<T> IntoExpr<T> for Path<T> {
 impl<T: ?Sized> From<Path<T>> for stmt::Path {
     fn from(value: Path<T>) -> Self {
         value.untyped
+    }
+}
+
+impl<T: ?Sized> fmt::Debug for Path<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.untyped)
     }
 }
