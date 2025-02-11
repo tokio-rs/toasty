@@ -69,13 +69,11 @@ impl<'a> Generator<'a> {
                     Query::from_stmt(stmt::Select::filter(expr))
                 }
 
-                /*
                 pub async fn delete(self, db: &Db) -> Result<()> {
                     let stmt = self.into_select().delete();
                     db.exec(stmt).await?;
                     Ok(())
                 }
-                */
             }
 
             impl Model for #struct_name {
