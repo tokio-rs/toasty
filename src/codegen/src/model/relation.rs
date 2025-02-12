@@ -96,10 +96,36 @@ impl<'a> Generator<'a> {
                     db.all(self.scope).await
                 }
 
+                pub async fn collect<A>(self, db: &Db) -> Result<A>
+                where
+                    A: FromCursor<#strukt_name>
+                {
+                    self.all(db).await?.collect().await
+                }
+
                 pub fn create(self) -> builders::#create_struct_name {
                     let mut builder = builders::#create_struct_name::default();
                     builder.stmt.set_scope(self.scope);
                     builder
+                }
+
+                /*
+                    pub async fn exec(self, db: &Db) -> Result<()> {
+                        let mut cursor = db.exec(self.stmt.into()).await?;
+                        assert!(cursor.next().await.is_none());
+                        Ok(())
+                    }
+                */
+
+                /// Remove items from the association
+                pub async fn remove(self, db: &Db, item: impl IntoExpr<[#strukt_name]>) -> Result<()> {
+                    /*
+                    let mut stmt = stmt::Update::new(stmt::Select::from_expr(self.scope.into_expr()));
+                    stmt.set_returning_none();
+                    stmt.remove(#field_index, #field_name.into_expr());
+                    Remove { stmt }
+                    */
+                    todo!("scope={:#?}", self.scope);
                 }
             }
 
