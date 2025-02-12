@@ -20,7 +20,6 @@ impl<'a> Generator<'a> {
                 }
             }
 
-            /*
             impl IntoInsert for #create_struct_name {
                 type Model = #struct_name;
 
@@ -40,7 +39,6 @@ impl<'a> Generator<'a> {
                     self.stmt.into_list_expr()
                 }
             }
-            */
 
             impl Default for #create_struct_name {
                 fn default() -> #create_struct_name {
