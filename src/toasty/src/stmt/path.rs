@@ -15,6 +15,19 @@ impl<T: ?Sized> Path<T> {
         }
     }
 
+    pub const fn root() -> Path<T>
+    where
+        T: Model,
+    {
+        Path {
+            untyped: stmt::Path {
+                root: T::ID,
+                projection: stmt::Projection::identity(),
+            },
+            _p: PhantomData,
+        }
+    }
+
     pub const fn from_field_index<M: Model>(index: usize) -> Path<T> {
         Path {
             untyped: stmt::Path::from_index(M::ID, index),

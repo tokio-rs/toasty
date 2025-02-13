@@ -33,6 +33,8 @@ impl<'a> Generator<'a> {
         let struct_into_expr = self.gen_struct_into_expr();
         */
 
+        let into_expr_body_ref = self.gen_model_into_expr_body(true);
+        let into_expr_body_val = self.gen_model_into_expr_body(false);
         let into_select_body_ref = self.gen_model_into_select_body(true);
         let into_select_body_value = self.gen_model_into_select_body(false);
 
@@ -120,13 +122,13 @@ impl<'a> Generator<'a> {
 
             impl stmt::IntoExpr<#struct_name> for #struct_name {
                 fn into_expr(self) -> stmt::Expr<#struct_name> {
-                    todo!()
+                    #into_expr_body_val
                 }
             }
 
             impl stmt::IntoExpr<#struct_name> for &#struct_name {
                 fn into_expr(self) -> stmt::Expr<#struct_name> {
-                    todo!()
+                    #into_expr_body_ref
                 }
             }
 

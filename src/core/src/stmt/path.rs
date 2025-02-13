@@ -1,3 +1,5 @@
+use crate::schema::app;
+
 use super::*;
 
 /// Describes a traversal through fields.
@@ -38,6 +40,11 @@ impl Path {
         self.projection.len()
     }
 
+    pub fn resolve_field<'a>(&self, schema: &'a app::Schema) -> &'a Field {
+        let expr_self = schema.model(self.root);
+        self.projection.resolve_field(schema, expr_self)
+    }
+
     pub fn chain(&mut self, other: &Path) {
         for field in &other.projection[..] {
             self.projection.push(*field);
@@ -45,19 +52,20 @@ impl Path {
     }
 
     pub fn into_stmt(self) -> Expr {
-        let [field, project @ ..] = self.projection.as_slice() else {
-            todo!("path={self:#?}")
-        };
+        match self.projection.as_slice() {
+            [] => Expr::key(self.root),
+            [field, project @ ..] => {
+                let mut ret = Expr::field(FieldId {
+                    model: self.root,
+                    index: *field,
+                });
 
-        let mut ret = stmt::Expr::field(FieldId {
-            model: self.root,
-            index: *field,
-        });
+                if !project.is_empty() {
+                    ret = Expr::project(ret, project);
+                }
 
-        if !project.is_empty() {
-            ret = stmt::Expr::project(ret, project);
+                ret
+            }
         }
-
-        ret
     }
 }

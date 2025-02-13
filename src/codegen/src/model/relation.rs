@@ -121,14 +121,10 @@ impl<'a> Generator<'a> {
                 */
 
                 /// Remove items from the association
-                pub async fn remove(self, db: &Db, item: impl IntoExpr<[#strukt_name]>) -> Result<()> {
-                    /*
-                    let mut stmt = stmt::Update::new(stmt::Select::from_expr(self.scope.into_expr()));
-                    stmt.set_returning_none();
-                    stmt.remove(#field_index, #field_name.into_expr());
-                    Remove { stmt }
-                    */
-                    todo!("stmt={:#?}", self.stmt);
+                pub async fn remove(self, db: &Db, item: impl IntoExpr<#strukt_name>) -> Result<()> {
+                    let stmt = self.stmt.into_select().and(stmt::Path::<#strukt_name>::root().eq(item));
+                    db.exec(stmt.delete()).await?;
+                    Ok(())
                 }
             }
 

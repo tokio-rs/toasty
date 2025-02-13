@@ -266,7 +266,7 @@ pub fn visit_association_mut<V>(v: &mut V, node: &mut Association)
 where
     V: VisitMut + ?Sized,
 {
-    v.visit_stmt_select_mut(&mut node.source);
+    v.visit_stmt_query_mut(&mut node.source);
 }
 
 pub fn visit_expr_mut<V>(v: &mut V, node: &mut Expr)

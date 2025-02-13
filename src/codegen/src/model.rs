@@ -227,14 +227,6 @@ impl<'a> Generator<'a> {
         quote!(#target_mod_name::relation::#field_name::Query)
     }
 
-    pub(crate) fn model_pk_query_method_name(&self, id: app::ModelId) -> &syn::Ident {
-        /*
-        let query = self.schema.model(id).primary_key.query;
-        self.query_method_name(query)
-        */
-        todo!()
-    }
-
     pub(crate) fn query_method_name(&self, query: app::QueryId) -> &syn::Ident {
         &self.names.queries[&query].method_name
     }

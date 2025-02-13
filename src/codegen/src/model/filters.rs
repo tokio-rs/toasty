@@ -98,6 +98,32 @@ impl<'a> Generator<'a> {
         }
     }
 
+    pub(crate) fn gen_model_into_expr_body(&self, by_ref: bool) -> TokenStream {
+        let iter = self.model.primary_key_fields();
+
+        if iter.len() == 1 {
+            let expr = iter.map(|field| {
+                let name = self.field_name(field);
+
+                if by_ref {
+                    quote!((&self.#name).into_expr().cast())
+                } else {
+                    quote!(self.#name.into_expr().cast())
+                }
+            });
+
+            quote!( #( #expr )* )
+        } else {
+            let expr = iter.map(|field| {
+                let name = self.field_name(field);
+                let amp = if by_ref { "&" } else { "" };
+                quote!( #amp self.#name)
+            });
+
+            quote!( ( #( #expr ),* ).into_expr().cast() )
+        }
+    }
+
     pub(super) fn gen_model_into_select_body(&self, by_ref: bool) -> TokenStream {
         let fields = self
             .model

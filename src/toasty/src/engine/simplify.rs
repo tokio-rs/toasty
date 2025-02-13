@@ -5,6 +5,7 @@ pub(crate) use expr_target::ExprTarget;
 pub(crate) mod flatten_bool_ops;
 pub(crate) mod lift_pk_select;
 
+mod association;
 mod expr_and;
 mod expr_binary_op;
 mod expr_cast;
@@ -112,6 +113,7 @@ impl<'a> VisitMut for Simplify<'_> {
             &mut self.target,
             ExprTarget::from_source(self.schema, &stmt.from),
         );
+        self.simplify_via_association_for_delete(stmt);
         stmt::visit_mut::visit_stmt_delete_mut(self, stmt);
         self.target = target;
     }
@@ -121,16 +123,35 @@ impl<'a> VisitMut for Simplify<'_> {
             &mut self.target,
             ExprTarget::from_insert_target(self.schema, &stmt.target),
         );
+
+        self.simplify_via_association_for_insert(stmt);
+
         stmt::visit_mut::visit_stmt_insert_mut(self, stmt);
         self.target = target;
     }
 
+    fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
+        self.simplify_via_association_for_query(stmt);
+
+        stmt::visit_mut::visit_stmt_query_mut(self, stmt);
+    }
+
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
+        // Swap the current simplification target
         let target = mem::replace(
             &mut self.target,
             ExprTarget::from_source(self.schema, &stmt.source),
         );
+
+        if let stmt::Source::Model(model) = &mut stmt.source {
+            if let Some(via) = model.via.take() {
+                todo!("via={via:#?}");
+            }
+        }
+
         stmt::visit_mut::visit_stmt_select_mut(self, stmt);
+
+        // Replace the current simplification target
         self.target = target;
     }
 
