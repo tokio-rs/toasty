@@ -49,15 +49,18 @@ impl<'a> Generator<'a> {
 
     fn gen_model_relation_has_many_method(&self, field: app::FieldId) -> TokenStream {
         let name = self.field_name(field);
-        let strukt = self.target_struct_path(field, 0);
-        let const_name = self.self_const_name();
+        let target_struct = self.target_struct_path(field, 0);
+        let const_name = self.field_const_name(field);
 
         quote! {
-            pub fn #name(&self) -> <#strukt as Relation<'_>>::Many {
-                <#strukt as Relation<'_>>::Many::from_select(
+            pub fn #name(&self) -> <#target_struct as Relation<'_>>::Many {
+                <#target_struct as Relation<'_>>::Many::from_stmt(
+                    stmt::Association::new(self.into_select(), Self::#const_name.into())
+                    /*
                     #strukt::filter(
                         #strukt::#const_name.in_query(self)
                     ).into_select()
+                    */
                 )
             }
         }
@@ -70,7 +73,7 @@ impl<'a> Generator<'a> {
         quote! {
             #[derive(Debug)]
             pub struct Many {
-                scope: stmt::Select<#strukt_name>,
+                stmt: stmt::Association<[#strukt_name]>,
             }
 
             #[derive(Debug)]
@@ -87,13 +90,13 @@ impl<'a> Generator<'a> {
             }
 
             impl Many {
-                pub fn from_select(stmt: stmt::Select<#strukt_name>) -> Many {
-                    Many { scope: stmt }
+                pub fn from_stmt(stmt: stmt::Association<[#strukt_name]>) -> Many {
+                    Many { stmt }
                 }
 
                 /// Iterate all entries in the relation
                 pub async fn all(self, db: &Db) -> Result<Cursor<#strukt_name>> {
-                    db.all(self.scope).await
+                    db.all(self.stmt.into_select()).await
                 }
 
                 pub async fn collect<A>(self, db: &Db) -> Result<A>
@@ -105,7 +108,7 @@ impl<'a> Generator<'a> {
 
                 pub fn create(self) -> builders::#create_struct_name {
                     let mut builder = builders::#create_struct_name::default();
-                    builder.stmt.set_scope(self.scope);
+                    builder.stmt.set_scope(self.stmt.into_select());
                     builder
                 }
 
@@ -125,7 +128,7 @@ impl<'a> Generator<'a> {
                     stmt.remove(#field_index, #field_name.into_expr());
                     Remove { stmt }
                     */
-                    todo!("scope={:#?}", self.scope);
+                    todo!("stmt={:#?}", self.stmt);
                 }
             }
 
@@ -133,7 +136,7 @@ impl<'a> Generator<'a> {
                 type Model = #strukt_name;
 
                 fn into_select(self) -> stmt::Select<Self::Model> {
-                    self.scope
+                    self.stmt.into_select()
                 }
             }
 
@@ -161,6 +164,12 @@ impl<'a> Generator<'a> {
                 }
             }
 
+            impl Into<Path<[#strukt_name]>> for ManyField {
+                fn into(self) -> Path<[#strukt_name]> {
+                    self.path
+                }
+            }
+
             impl OneField {
                 pub const fn from_path(path: Path<super::#strukt_name>) -> OneField {
                     OneField { path }
@@ -174,12 +183,6 @@ impl<'a> Generator<'a> {
                 }
             }
         }
-    }
-    fn relation_fields(&self) -> impl Iterator<Item = &app::Field> {
-        self.model
-            .fields
-            .iter()
-            .filter(|field| field.ty.is_relation())
     }
 
     /*

@@ -3,7 +3,7 @@ use super::*;
 use std::fmt;
 
 pub struct Path<T: ?Sized> {
-    untyped: stmt::Path,
+    pub(super) untyped: stmt::Path,
     _p: PhantomData<T>,
 }
 

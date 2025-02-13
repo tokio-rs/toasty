@@ -182,14 +182,44 @@ impl<'a> Planner<'a> {
     // TODO: Move this?
     pub(crate) fn simplify_stmt_delete(&self, stmt: &mut stmt::Delete) {
         Simplify::new(self.schema).visit_stmt_delete_mut(stmt);
+
+        // Make sure `via` associations is simplified
+        debug_assert!(match &stmt.from {
+            stmt::Source::Model(source) => {
+                source.via.is_none()
+            }
+            stmt::Source::Table(_) => true,
+        })
     }
 
     pub(crate) fn simplify_stmt_insert(&self, stmt: &mut stmt::Insert) {
         Simplify::new(self.schema).visit_stmt_insert_mut(stmt);
+
+        // Make sure `via` associations is simplified
+        debug_assert!(match &stmt.target {
+            stmt::InsertTarget::Scope(query) => {
+                match &query.body.as_select().source {
+                    stmt::Source::Model(source) => source.via.is_none(),
+                    stmt::Source::Table(_) => true,
+                }
+            }
+            _ => true,
+        })
     }
 
     pub(crate) fn simplify_stmt_query(&self, stmt: &mut stmt::Query) {
         Simplify::new(self.schema).visit_stmt_query_mut(stmt);
+
+        // Make sure `via` associations is simplified
+        debug_assert!(match &*stmt.body {
+            stmt::ExprSet::Select(select) => {
+                match &select.source {
+                    stmt::Source::Model(source) => source.via.is_none(),
+                    stmt::Source::Table(_) => true,
+                }
+            }
+            _ => true,
+        })
     }
 
     pub(crate) fn simplify_stmt_update(&self, stmt: &mut stmt::Update) {

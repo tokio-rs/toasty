@@ -14,6 +14,9 @@ pub struct SourceModel {
     /// The source model
     pub model: ModelId,
 
+    /// Selecting via an association
+    pub via: Option<Association>,
+
     /// Associations to include
     pub include: Vec<Path>,
 }
@@ -63,6 +66,7 @@ impl From<ModelId> for Source {
     fn from(value: ModelId) -> Self {
         Source::Model(SourceModel {
             model: value,
+            via: None,
             include: vec![],
         })
     }

@@ -15,6 +15,10 @@ pub trait VisitMut: Sized {
         visit_assignments_mut(self, i);
     }
 
+    fn visit_association_mut(&mut self, i: &mut Association) {
+        visit_association_mut(self, i);
+    }
+
     fn visit_expr_mut(&mut self, i: &mut Expr) {
         visit_expr_mut(self, i);
     }
@@ -256,6 +260,13 @@ where
     for (_, assignment) in node.iter_mut() {
         v.visit_assignment_mut(assignment);
     }
+}
+
+pub fn visit_association_mut<V>(v: &mut V, node: &mut Association)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_stmt_select_mut(&mut node.source);
 }
 
 pub fn visit_expr_mut<V>(v: &mut V, node: &mut Expr)
