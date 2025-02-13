@@ -6,14 +6,8 @@ publish = false
 
 [features]
 default = ["sqlite"]
-sqlite = [
-    "dep:toasty-sqlite",
-]
-dynamodb = [
-    "dep:toasty-dynamodb",
-    "dep:aws-config",
-    "dep:aws-sdk-dynamodb",
-]
+sqlite = ["dep:toasty-sqlite"]
+dynamodb = ["dep:toasty-dynamodb", "dep:aws-config", "dep:aws-sdk-dynamodb"]
 
 [dependencies]
 async-trait = "0.1"
@@ -27,7 +21,9 @@ toasty-sqlite = { path = "../../src/db/sqlite", optional = true }
 # DyanmoDB driver
 toasty-dynamodb = { path = "../../src/db/ddb", optional = true }
 aws-config = { version = "1", optional = true }
-aws-sdk-dynamodb = { version = "1.3.0", features = ["test-util"], optional = true }
+aws-sdk-dynamodb = { version = "1.3.0", features = [
+    "test-util",
+], optional = true }
 
 # Utilities
 std-util = { path = "../../src/std-util" }
@@ -36,4 +32,4 @@ trybuild = { version = "1.0.89", features = ["diff"] }
 [dev-dependencies]
 
 # Tokio
-tokio = { version = "1.18", features = ["full"] }
+tokio.workspace = true
