@@ -1,9 +1,7 @@
 use super::*;
 
 impl Planner<'_> {
-    pub(super) fn plan_delete(&mut self, mut stmt: stmt::Delete) {
-        self.simplify_stmt_delete(&mut stmt);
-
+    pub(super) fn plan_stmt_delete(&mut self, mut stmt: stmt::Delete) {
         let model = self.model(stmt.from.as_model_id());
         let selection = stmt.selection();
 
@@ -29,9 +27,9 @@ impl Planner<'_> {
                     let mut update = query.update();
                     update.assignments.set(pair.id, stmt::Value::Null);
 
-                    self.plan_update(update);
+                    self.plan_stmt(&Context::default(), update.into());
                 } else {
-                    self.plan_delete(query.delete());
+                    self.plan_stmt(&Context::default(), query.delete().into());
                 }
             }
         }

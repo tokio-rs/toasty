@@ -95,7 +95,7 @@ impl Planner<'_> {
                     if field.nullable {
                         let mut stmt = scope.update();
                         stmt.assignments.set(field.id, stmt::Value::Null);
-                        planner.plan_update(stmt);
+                        planner.plan_stmt(&Context::default(), stmt.into());
                     } else {
                         todo!("delete any models with the association currently being set");
                     }
@@ -134,7 +134,7 @@ impl Planner<'_> {
                     }
                 });
 
-                let insertion_output = self.plan_insert(insert).unwrap();
+                let insertion_output = self.plan_stmt(&Context::default(), insert.into()).unwrap();
 
                 // An optimization that always holds for now. In the
                 // future, this will not be the case. The
@@ -191,7 +191,7 @@ impl Planner<'_> {
                     }
 
                     let delete = planner.relation_pair_scope(pair.id, scope).delete();
-                    planner.plan_delete(delete);
+                    planner.plan_stmt(&Context::default(), delete.into());
                 }
             }
         });
@@ -259,7 +259,7 @@ impl Planner<'_> {
 
             stmt.assignments
                 .set(has_many.pair, stmt::ExprStmt::new(scope.clone()));
-            self.plan_update(stmt);
+            self.plan_stmt(&Context::default(), stmt.into());
         }
     }
 
@@ -282,9 +282,9 @@ impl Planner<'_> {
             // This protects against races.
             stmt.condition = Some(stmt::Expr::in_subquery(has_many.pair, scope.clone()));
             stmt.assignments.set(has_many.pair, stmt::Value::Null);
-            self.plan_update(stmt);
+            self.plan_stmt(&Context::default(), stmt.into());
         } else {
-            self.plan_delete(selection.delete());
+            self.plan_stmt(&Context::default(), selection.delete().into());
         }
     }
 
@@ -335,9 +335,9 @@ impl Planner<'_> {
             // TODO: unify w/ has_many ops?
             let mut stmt = pair_scope.update();
             stmt.assignments.set(has_one.pair, stmt::Value::Null);
-            self.plan_update(stmt);
+            self.plan_stmt(&Context::default(), stmt.into());
         } else {
-            self.plan_delete(pair_scope.delete());
+            self.plan_stmt(&Context::default(), pair_scope.delete().into());
         }
     }
 
@@ -363,7 +363,7 @@ impl Planner<'_> {
         stmt.assignments
             .set(has_one.pair, stmt::ExprStmt::new(scope.clone()));
 
-        self.plan_update(stmt);
+        self.plan_stmt(&Context::default(), stmt.into());
     }
 
     fn plan_mut_has_many_insert(
@@ -381,7 +381,7 @@ impl Planner<'_> {
             .relation_pair_scope(has_many.pair, scope.clone())
             .into();
 
-        self.plan_insert(stmt);
+        self.plan_stmt(&Context::default(), stmt.into());
     }
 
     fn plan_mut_has_one_insert(
@@ -407,7 +407,7 @@ impl Planner<'_> {
                 .filter,
         );
 
-        self.plan_insert(stmt);
+        self.plan_stmt(&Context::default(), stmt.into());
     }
 
     /// Translate a source model scope to a target model scope for a has_one

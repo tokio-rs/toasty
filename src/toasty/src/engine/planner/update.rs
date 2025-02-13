@@ -9,9 +9,7 @@ use app::{FieldTy, Model};
 impl Planner<'_> {
     // If the update statement requested the result to be returned, then this
     // method returns the var in which it will be stored.
-    pub(super) fn plan_update(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
-        self.simplify_stmt_update(&mut stmt);
-
+    pub(super) fn plan_stmt_update(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
         let model = self.model(stmt.target.as_model_id());
 
         // Make sure the update statement isn't empty

@@ -64,6 +64,13 @@ struct Planner<'a> {
     relations: Vec<app::FieldId>,
 }
 
+#[derive(Debug, Default)]
+struct Context {
+    /// If the statement references any arguments (`stmt::ExprArg`), this
+    /// informs the planner how to access those arguments.
+    input: Vec<plan::InputSource>,
+}
+
 #[derive(Debug)]
 struct Insertion {
     /// Insert plan entry
@@ -82,33 +89,35 @@ pub(crate) fn apply(capability: &Capability, schema: &Schema, stmt: stmt::Statem
         relations: Vec::new(),
     };
 
-    planner.plan_stmt(stmt);
+    planner.plan_stmt_root(stmt);
     planner.build()
 }
 
 impl<'a> Planner<'a> {
     /// Entry point to plan the root statement.
-    fn plan_stmt(&mut self, stmt: stmt::Statement) {
-        match stmt {
-            stmt::Statement::Delete(stmt) => self.plan_delete(stmt),
-            stmt::Statement::Insert(stmt) => {
-                // TODO: this isn't always true. The assert is there to help
-                // debug old code.
-                assert_eq!(stmt.returning, Some(stmt::Returning::Star));
+    fn plan_stmt_root(&mut self, stmt: stmt::Statement) {
+        if let stmt::Statement::Insert(stmt) = &stmt {
+            // TODO: this isn't always true. The assert is there to help
+            // debug old code.
+            assert_eq!(stmt.returning, Some(stmt::Returning::Star));
+        }
 
-                let output_var = self.plan_insert(stmt);
-                assert!(output_var.is_some());
-                self.returning = output_var;
+        if let Some(output) = self.plan_stmt(&Context::default(), stmt) {
+            self.returning = Some(output);
+        }
+    }
+
+    fn plan_stmt(&mut self, cx: &Context, mut stmt: stmt::Statement) -> Option<plan::VarId> {
+        self.simplify_stmt(&mut stmt);
+
+        match stmt {
+            stmt::Statement::Delete(stmt) => {
+                self.plan_stmt_delete(stmt);
+                None
             }
-            stmt::Statement::Query(stmt) => {
-                let output = self.plan_select(stmt);
-                self.returning = Some(output);
-            }
-            stmt::Statement::Update(stmt) => {
-                if let Some(output) = self.plan_update(stmt) {
-                    self.returning = Some(output);
-                }
-            }
+            stmt::Statement::Insert(stmt) => self.plan_stmt_insert(stmt),
+            stmt::Statement::Query(stmt) => Some(self.plan_stmt_select(cx, stmt)),
+            stmt::Statement::Update(stmt) => self.plan_stmt_update(stmt),
         }
     }
 
@@ -179,50 +188,36 @@ impl<'a> Planner<'a> {
         self.schema.app.model(id)
     }
 
-    // TODO: Move this?
-    pub(crate) fn simplify_stmt_delete(&self, stmt: &mut stmt::Delete) {
-        Simplify::new(self.schema).visit_stmt_delete_mut(stmt);
+    fn simplify_stmt(&self, stmt: &mut stmt::Statement) {
+        simplify::simplify_stmt(self.schema, stmt);
 
         // Make sure `via` associations is simplified
-        debug_assert!(match &stmt.from {
-            stmt::Source::Model(source) => {
-                source.via.is_none()
-            }
-            stmt::Source::Table(_) => true,
-        })
-    }
-
-    pub(crate) fn simplify_stmt_insert(&self, stmt: &mut stmt::Insert) {
-        Simplify::new(self.schema).visit_stmt_insert_mut(stmt);
-
-        // Make sure `via` associations is simplified
-        debug_assert!(match &stmt.target {
-            stmt::InsertTarget::Scope(query) => {
-                match &query.body.as_select().source {
+        debug_assert!(match stmt {
+            stmt::Statement::Delete(stmt) => {
+                match &stmt.from {
                     stmt::Source::Model(source) => source.via.is_none(),
                     stmt::Source::Table(_) => true,
                 }
             }
-            _ => true,
-        })
-    }
-
-    pub(crate) fn simplify_stmt_query(&self, stmt: &mut stmt::Query) {
-        Simplify::new(self.schema).visit_stmt_query_mut(stmt);
-
-        // Make sure `via` associations is simplified
-        debug_assert!(match &*stmt.body {
-            stmt::ExprSet::Select(select) => {
-                match &select.source {
-                    stmt::Source::Model(source) => source.via.is_none(),
-                    stmt::Source::Table(_) => true,
+            stmt::Statement::Insert(stmt) => {
+                match &stmt.target {
+                    stmt::InsertTarget::Scope(query) => match &query.body.as_select().source {
+                        stmt::Source::Model(source) => source.via.is_none(),
+                        stmt::Source::Table(_) => true,
+                    },
+                    _ => true,
+                }
+            }
+            stmt::Statement::Query(stmt) => {
+                match &*stmt.body {
+                    stmt::ExprSet::Select(select) => match &select.source {
+                        stmt::Source::Model(source) => source.via.is_none(),
+                        stmt::Source::Table(_) => true,
+                    },
+                    _ => true,
                 }
             }
             _ => true,
-        })
-    }
-
-    pub(crate) fn simplify_stmt_update(&self, stmt: &mut stmt::Update) {
-        Simplify::new(self.schema).visit_stmt_update_mut(stmt);
+        });
     }
 }

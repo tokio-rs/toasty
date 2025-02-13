@@ -25,7 +25,7 @@ mod rewrite_root_path_expr;
 
 use toasty_core::{
     schema::*,
-    stmt::{self, VisitMut},
+    stmt::{self, Node, VisitMut},
 };
 
 use std::mem;
@@ -38,6 +38,10 @@ pub(crate) struct Simplify<'a> {
     /// The context in which expressions are evaluated. This is a model or
     /// table.
     target: ExprTarget<'a>,
+}
+
+pub(crate) fn simplify_stmt<T: Node>(schema: &Schema, stmt: &mut T) {
+    Simplify::new(schema).visit_mut(stmt);
 }
 
 // TODO: get rid of this

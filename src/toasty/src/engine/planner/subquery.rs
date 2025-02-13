@@ -24,7 +24,7 @@ impl Planner<'_> {
                 let arg = stmt::Expr::arg(sources.len());
                 *expr = stmt::Expr::in_list(base, arg);
 
-                let output = self.plan_simplified_select(&select::Context::default(), query);
+                let output = self.plan_stmt_select(&Context::default(), query);
                 sources.push(plan::InputSource::Value(output));
             }
         });

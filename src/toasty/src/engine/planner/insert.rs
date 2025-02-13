@@ -10,9 +10,7 @@ struct ApplyInsertScope<'a> {
 }
 
 impl Planner<'_> {
-    pub(super) fn plan_insert(&mut self, mut stmt: stmt::Insert) -> Option<plan::VarId> {
-        self.simplify_stmt_insert(&mut stmt);
-
+    pub(super) fn plan_stmt_insert(&mut self, mut stmt: stmt::Insert) -> Option<plan::VarId> {
         let model = self.model(stmt.target.as_model());
 
         if let stmt::ExprSet::Values(values) = &*stmt.source.body {
