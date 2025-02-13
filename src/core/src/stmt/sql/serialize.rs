@@ -4,7 +4,10 @@ use crate::schema::db;
 
 use crate::stmt::Statement as DataStatement;
 
-use std::fmt::{self, Write};
+use std::{
+    fmt::{self, Write},
+    ops::Deref,
+};
 
 pub trait Params {
     fn push(&mut self, param: &stmt::Value);
@@ -32,12 +35,67 @@ impl Params for Vec<stmt::Value> {
     }
 }
 
+/// A serialization result.
+pub struct SerializeResult(String);
+
+impl SerializeResult {
+    /// Creates a new serialization result.
+    pub fn new(value: impl Into<String>) -> SerializeResult {
+        Self(value.into())
+    }
+
+    /// Returns a reference to the inner string.
+    pub fn inner(&self) -> &str {
+        self.0.as_str()
+    }
+
+    /// Consumes `self` and returns the inner string.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    /// Converts all question mark args (i.e., `?`) to numbered args (e.g., `$1`).
+    pub fn into_numbered_args(self) -> Self {
+        let mut result = String::with_capacity(self.0.len());
+        let mut n = 1;
+
+        for c in self.0.chars() {
+            if c == '?' {
+                result.push_str(&format!("${n}"));
+                n += 1;
+            } else {
+                result.push(c);
+            }
+        }
+
+        Self(result)
+    }
+}
+
+impl Deref for SerializeResult {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AsRef<str> for SerializeResult {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
 impl<'a> Serializer<'a> {
     pub fn new(schema: &'a db::Schema) -> Serializer<'a> {
         Serializer { schema }
     }
 
-    pub fn serialize_stmt(&self, stmt: &DataStatement, params: &mut impl Params) -> String {
+    pub fn serialize_stmt(
+        &self,
+        stmt: &DataStatement,
+        params: &mut impl Params,
+    ) -> SerializeResult {
         let mut ret = String::new();
 
         let mut fmt = Formatter {
@@ -47,10 +105,14 @@ impl<'a> Serializer<'a> {
         };
 
         fmt.statement(stmt).unwrap();
-        ret
+        SerializeResult::new(ret)
     }
 
-    pub fn serialize_sql_stmt(&self, stmt: &Statement, params: &mut impl Params) -> String {
+    pub fn serialize_sql_stmt(
+        &self,
+        stmt: &Statement,
+        params: &mut impl Params,
+    ) -> SerializeResult {
         let mut ret = String::new();
 
         let mut fmt = Formatter {
@@ -60,7 +122,7 @@ impl<'a> Serializer<'a> {
         };
 
         fmt.sql_statement(stmt).unwrap();
-        ret
+        SerializeResult::new(ret)
     }
 }
 
@@ -82,6 +144,7 @@ impl<T: Params> Formatter<'_, T> {
         match statement {
             Statement::CreateIndex(stmt) => self.create_index(stmt)?,
             Statement::CreateTable(stmt) => self.create_table(stmt)?,
+            Statement::DropTable(stmt) => self.drop_table(stmt)?,
             Statement::Delete(stmt) => self.delete(stmt)?,
             Statement::Insert(stmt) => self.insert(stmt)?,
             Statement::Query(stmt) => self.query(stmt)?,
@@ -148,6 +211,13 @@ impl<T: Params> Formatter<'_, T> {
         self.expr(stmt.primary_key.as_deref().unwrap())?;
 
         write!(self.dst, ")")?;
+
+        Ok(())
+    }
+
+    fn drop_table(&mut self, stmt: &DropTable) -> fmt::Result {
+        write!(self.dst, "DROP TABLE ")?;
+        self.name(&stmt.name)?;
 
         Ok(())
     }
@@ -469,5 +539,19 @@ impl<T: Params> Formatter<'_, T> {
     fn ident_str(&mut self, ident: &str) -> fmt::Result {
         write!(self.dst, "\"{ident}\"")?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn to_numbered_args() {
+        let result = SerializeResult::new("INSERT INTO table (a, b, c) VALUES (?, ?, ?)");
+        assert_eq!(
+            result.into_numbered_args().inner(),
+            "INSERT INTO table (a, b, c) VALUES ($1, $2, $3)"
+        );
     }
 }

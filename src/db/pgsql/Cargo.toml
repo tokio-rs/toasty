@@ -1,0 +1,10 @@
+[package]
+name = "toasty-pgsql"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+postgres.workspace = true
+toasty-core = { workspace = true, features = ["postgres"] }
+tokio.workspace = true
+tokio-postgres.workspace = true
