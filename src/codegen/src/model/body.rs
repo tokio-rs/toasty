@@ -81,16 +81,19 @@ impl<'a> Generator<'a> {
             impl Model for #struct_name {
                 const ID: ModelId = ModelId(#model_id);
                 type Key = #key_ty;
-                type Many = relations::Many;
-                type ManyField = relations::ManyField;
-                type One = relations::One;
-                type OneField = relations::OneField;
 
                 fn load(mut record: ValueRecord) -> Result<Self, Error> {
                     Ok(#struct_name {
                         #struct_load_fields
                     })
                 }
+            }
+
+            impl Relation for #struct_name {
+                type Many = relations::Many;
+                type ManyField = relations::ManyField;
+                type One = relations::One;
+                type OneField = relations::OneField;
             }
 
             impl stmt::IntoSelect for &#struct_name {

@@ -11,11 +11,11 @@ impl User {
     pub const ID: Path<Id<User>> = Path::from_field_index::<Self>(0);
     pub const NAME: Path<String> = Path::from_field_index::<Self>(1);
     pub const EMAIL: Path<String> = Path::from_field_index::<Self>(2);
-    pub const TODOS: <super::todo::Todo as Model>::ManyField =
-        <super::todo::Todo as Model>::ManyField::from_path(Path::from_field_index::<Self>(3));
+    pub const TODOS: <super::todo::Todo as Relation>::ManyField =
+        <super::todo::Todo as Relation>::ManyField::from_path(Path::from_field_index::<Self>(3));
     pub const MOTO: Path<String> = Path::from_field_index::<Self>(4);
-    pub fn todos(&self) -> <super::todo::Todo as Model>::Many {
-        <super::todo::Todo as Model>::Many::from_stmt(stmt::Association::new(
+    pub fn todos(&self) -> <super::todo::Todo as Relation>::Many {
+        <super::todo::Todo as Relation>::Many::from_stmt(stmt::Association::many(
             self.into_select(),
             Self::TODOS.into(),
         ))
@@ -54,10 +54,6 @@ impl User {
 impl Model for User {
     const ID: ModelId = ModelId(0);
     type Key = Id<User>;
-    type Many = relations::Many;
-    type ManyField = relations::ManyField;
-    type One = relations::One;
-    type OneField = relations::OneField;
     fn load(mut record: ValueRecord) -> Result<Self, Error> {
         Ok(User {
             id: Id::from_untyped(record[0].take().to_id()?),
@@ -67,6 +63,12 @@ impl Model for User {
             moto: record[4].take().to_option_string()?,
         })
     }
+}
+impl Relation for User {
+    type Many = relations::Many;
+    type ManyField = relations::ManyField;
+    type One = relations::One;
+    type OneField = relations::OneField;
 }
 impl stmt::IntoSelect for &User {
     type Model = User;
@@ -345,7 +347,7 @@ pub mod relations {
     }
     #[derive(Debug)]
     pub struct One {
-        scope: stmt::Select<User>,
+        stmt: stmt::Select<User>,
     }
     pub struct ManyField {
         pub(super) path: Path<[super::User]>,
@@ -386,17 +388,17 @@ pub mod relations {
         }
     }
     impl One {
-        pub fn from_select(stmt: stmt::Select<User>) -> One {
-            One { scope: stmt }
+        pub fn from_stmt(stmt: stmt::Select<User>) -> One {
+            One { stmt }
         }
         pub async fn get(self, db: &Db) -> Result<User> {
-            db.get(self.scope).await
+            db.get(self.stmt.into_select()).await
         }
     }
     impl stmt::IntoSelect for One {
         type Model = User;
         fn into_select(self) -> stmt::Select<Self::Model> {
-            self.scope
+            self.stmt.into_select()
         }
     }
     impl ManyField {
@@ -418,6 +420,11 @@ pub mod relations {
             Q: stmt::IntoSelect<Model = super::User>,
         {
             self.path.in_query(rhs)
+        }
+    }
+    impl Into<Path<User>> for OneField {
+        fn into(self) -> Path<User> {
+            self.path
         }
     }
 }

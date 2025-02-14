@@ -41,9 +41,26 @@ impl Simplify<'_> {
         let field = association.path.resolve_field(&self.schema.app);
 
         match &field.ty {
+            app::FieldTy::BelongsTo(rel) => {
+                self.rewrite_association_belongs_to_as_filter(rel, association)
+            }
             app::FieldTy::HasMany(rel) => stmt::Expr::in_subquery(rel.pair, *association.source),
             _ => todo!("field={field:#?}"),
         }
+    }
+
+    fn rewrite_association_belongs_to_as_filter(
+        &mut self,
+        rel: &app::BelongsTo,
+        mut association: stmt::Association,
+    ) -> stmt::Expr {
+        /*
+        let operands = rel.foreign_key.fields.iter().map(|fk_field| {
+            stmt::Expr::eq(todo!())
+        });
+        */
+
+        todo!("rel={rel:#?}, association={association:#?}");
     }
 
     fn rewrite_delete_association_as_update(

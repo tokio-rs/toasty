@@ -10,15 +10,6 @@ pub trait Model: Sized {
     /// Model key type
     type Key;
 
-    /// HasMany relation type
-    type Many;
-
-    type ManyField;
-
-    type One;
-
-    type OneField;
-
     /// Load an instance of the model, populating fields using the given row.
     fn load(row: stmt::ValueRecord) -> Result<Self, Error>;
 }

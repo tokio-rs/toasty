@@ -7,7 +7,7 @@ impl<'a> Generator<'a> {
             .iter()
             .filter_map(|field| match &field.ty {
                 app::FieldTy::BelongsTo(rel) => {
-                    Some(self.gen_model_relation_belongs_to_method(field.id, rel))
+                    Some(self.gen_model_relation_belongs_to_method(rel, field.id))
                 }
                 app::FieldTy::HasMany(_) => Some(self.gen_model_relation_has_many_method(field.id)),
                 app::FieldTy::HasOne(_) => Some(self.gen_model_relation_has_one_method(field.id)),
@@ -17,8 +17,8 @@ impl<'a> Generator<'a> {
 
     fn gen_model_relation_belongs_to_method(
         &self,
-        field: app::FieldId,
         rel: &app::BelongsTo,
+        field: app::FieldId,
     ) -> TokenStream {
         let name = self.field_name(field);
         let strukt = self.target_struct_path(field, 0);
@@ -40,8 +40,8 @@ impl<'a> Generator<'a> {
         };
 
         quote! {
-            pub fn #name(&self) -> <#strukt as Model>::One {
-                <#strukt as Model>::One::from_select(
+            pub fn #name(&self) -> <#strukt as Relation>::One {
+                <#strukt as Relation>::One::from_stmt(
                     #strukt::filter(#filter).into_select()
                 )
             }
@@ -54,9 +54,9 @@ impl<'a> Generator<'a> {
         let const_name = self.field_const_name(field);
 
         quote! {
-            pub fn #name(&self) -> <#target_struct as Model>::Many {
-                <#target_struct as Model>::Many::from_stmt(
-                    stmt::Association::new(self.into_select(), Self::#const_name.into())
+            pub fn #name(&self) -> <#target_struct as Relation>::Many {
+                <#target_struct as Relation>::Many::from_stmt(
+                    stmt::Association::many(self.into_select(), Self::#const_name.into())
                 )
             }
         }
@@ -68,8 +68,8 @@ impl<'a> Generator<'a> {
         let const_name = self.self_const_name();
 
         quote! {
-            pub fn #name(&self) -> <#target_struct as Model>::One {
-                <#target_struct as Model>::One::from_select(
+            pub fn #name(&self) -> <#target_struct as Relation>::One {
+                <#target_struct as Relation>::One::from_select(
                     #target_struct::filter(
                         #target_struct::#const_name.in_query(self)
                     ).into_select()
@@ -90,7 +90,7 @@ impl<'a> Generator<'a> {
 
             #[derive(Debug)]
             pub struct One {
-                scope: stmt::Select<#strukt_name>,
+                stmt: stmt::Select<#strukt_name>,
             }
 
             pub struct ManyField {
@@ -141,12 +141,12 @@ impl<'a> Generator<'a> {
             }
 
             impl One {
-                pub fn from_select(stmt: stmt::Select<#strukt_name>) -> One {
-                    One { scope: stmt }
+                pub fn from_stmt(stmt: stmt::Select<#strukt_name>) -> One {
+                    One { stmt }
                 }
 
                 pub async fn get(self, db: &Db) -> Result<#strukt_name> {
-                    db.get(self.scope).await
+                    db.get(self.stmt.into_select()).await
                 }
             }
 
@@ -154,7 +154,7 @@ impl<'a> Generator<'a> {
                 type Model = #strukt_name;
 
                 fn into_select(self) -> stmt::Select<Self::Model> {
-                    self.scope
+                    self.stmt.into_select()
                 }
             }
 
@@ -180,6 +180,12 @@ impl<'a> Generator<'a> {
                     Q: stmt::IntoSelect<Model = super::#strukt_name>,
                 {
                     self.path.in_query(rhs)
+                }
+            }
+
+            impl Into<Path<#strukt_name>> for OneField {
+                fn into(self) -> Path<#strukt_name> {
+                    self.path
                 }
             }
         }
