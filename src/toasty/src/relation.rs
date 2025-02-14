@@ -15,4 +15,7 @@ pub trait Relation {
     type One;
 
     type OneField;
+
+    /// Option fields
+    type OptionOne;
 }

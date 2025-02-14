@@ -94,6 +94,7 @@ impl<'a> Generator<'a> {
                 type ManyField = relations::ManyField;
                 type One = relations::One;
                 type OneField = relations::OneField;
+                type OptionOne = relations::OptionOne;
             }
 
             impl stmt::IntoSelect for &#struct_name {

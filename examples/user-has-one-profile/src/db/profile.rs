@@ -65,6 +65,7 @@ impl Relation for Profile {
     type ManyField = relations::ManyField;
     type One = relations::One;
     type OneField = relations::OneField;
+    type OptionOne = relations::OptionOne;
 }
 impl stmt::IntoSelect for &Profile {
     type Model = Profile;
@@ -325,6 +326,10 @@ pub mod relations {
     pub struct One {
         stmt: stmt::Select<Profile>,
     }
+    #[derive(Debug)]
+    pub struct OptionOne {
+        stmt: stmt::Select<Profile>,
+    }
     pub struct ManyField {
         pub(super) path: Path<[super::Profile]>,
     }
@@ -375,6 +380,14 @@ pub mod relations {
         type Model = Profile;
         fn into_select(self) -> stmt::Select<Self::Model> {
             self.stmt.into_select()
+        }
+    }
+    impl OptionOne {
+        pub fn from_stmt(stmt: stmt::Select<Profile>) -> OptionOne {
+            OptionOne { stmt }
+        }
+        pub async fn get(self, db: &Db) -> Result<Option<Profile>> {
+            db.first(self.stmt.into_select()).await
         }
     }
     impl ManyField {

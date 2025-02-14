@@ -7,10 +7,10 @@ impl<'a> Generator<'a> {
             .iter()
             .filter_map(|field| match &field.ty {
                 app::FieldTy::BelongsTo(rel) => {
-                    Some(self.gen_model_relation_belongs_to_method(rel, field.id))
+                    Some(self.gen_model_relation_belongs_to_method(rel, field))
                 }
-                app::FieldTy::HasMany(_) => Some(self.gen_model_relation_has_many_method(field.id)),
-                app::FieldTy::HasOne(_) => Some(self.gen_model_relation_has_one_method(field.id)),
+                app::FieldTy::HasMany(_) => Some(self.gen_model_relation_has_many_method(field)),
+                app::FieldTy::HasOne(_) => Some(self.gen_model_relation_has_one_method(field)),
                 _ => None,
             })
     }
@@ -18,7 +18,7 @@ impl<'a> Generator<'a> {
     fn gen_model_relation_belongs_to_method(
         &self,
         rel: &app::BelongsTo,
-        field: app::FieldId,
+        field: &app::Field,
     ) -> TokenStream {
         let name = self.field_name(field);
         let strukt = self.target_struct_path(field, 0);
@@ -48,7 +48,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn gen_model_relation_has_many_method(&self, field: app::FieldId) -> TokenStream {
+    fn gen_model_relation_has_many_method(&self, field: &app::Field) -> TokenStream {
         let name = self.field_name(field);
         let target_struct = self.target_struct_path(field, 0);
         let const_name = self.field_const_name(field);
@@ -62,14 +62,19 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn gen_model_relation_has_one_method(&self, field: app::FieldId) -> TokenStream {
+    fn gen_model_relation_has_one_method(&self, field: &app::Field) -> TokenStream {
         let name = self.field_name(field);
         let target_struct = self.target_struct_path(field, 0);
         let const_name = self.self_const_name();
+        let mut target_relation = quote!(#target_struct);
+
+        if field.nullable {
+            target_relation = quote!(Option<#target_struct>);
+        }
 
         quote! {
-            pub fn #name(&self) -> <#target_struct as Relation>::One {
-                <#target_struct as Relation>::One::from_stmt(
+            pub fn #name(&self) -> <#target_relation as Relation>::One {
+                <#target_relation as Relation>::One::from_stmt(
                     #target_struct::filter(
                         #target_struct::#const_name.in_query(self)
                     ).into_select()
@@ -90,6 +95,11 @@ impl<'a> Generator<'a> {
 
             #[derive(Debug)]
             pub struct One {
+                stmt: stmt::Select<#strukt_name>,
+            }
+
+            #[derive(Debug)]
+            pub struct OptionOne {
                 stmt: stmt::Select<#strukt_name>,
             }
 
@@ -155,6 +165,16 @@ impl<'a> Generator<'a> {
 
                 fn into_select(self) -> stmt::Select<Self::Model> {
                     self.stmt.into_select()
+                }
+            }
+
+            impl OptionOne {
+                pub fn from_stmt(stmt: stmt::Select<#strukt_name>) -> OptionOne {
+                    OptionOne { stmt }
+                }
+
+                pub async fn get(self, db: &Db) -> Result<Option<#strukt_name>> {
+                    db.first(self.stmt.into_select()).await
                 }
             }
 
