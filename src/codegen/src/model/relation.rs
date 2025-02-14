@@ -69,7 +69,7 @@ impl<'a> Generator<'a> {
 
         quote! {
             pub fn #name(&self) -> <#target_struct as Relation>::One {
-                <#target_struct as Relation>::One::from_select(
+                <#target_struct as Relation>::One::from_stmt(
                     #target_struct::filter(
                         #target_struct::#const_name.in_query(self)
                     ).into_select()

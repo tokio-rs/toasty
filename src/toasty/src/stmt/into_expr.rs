@@ -51,6 +51,30 @@ impl IntoExpr<String> for String {
     }
 }
 
+impl<T1, T2> IntoExpr<T1> for Option<T2>
+where
+    T2: IntoExpr<T1>,
+{
+    fn into_expr(self) -> Expr<T1> {
+        match self {
+            Some(value) => value.into_expr(),
+            None => Expr::from_value(Value::Null),
+        }
+    }
+}
+
+impl<T1, T2> IntoExpr<T1> for &Option<T2>
+where
+    for<'a> &'a T2: IntoExpr<T1>,
+{
+    fn into_expr(self) -> Expr<T1> {
+        match self {
+            Some(value) => value.into_expr(),
+            None => Expr::from_value(Value::Null),
+        }
+    }
+}
+
 impl<T, U, const N: usize> IntoExpr<[T]> for &[U; N]
 where
     for<'a> &'a U: IntoExpr<T>,
