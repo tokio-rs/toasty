@@ -1,14 +1,17 @@
 use super::*;
 
 impl Simplify<'_> {
-    pub(super) fn simplify_via_association_for_delete(&mut self, stmt: &mut stmt::Delete) {
+    pub(super) fn simplify_via_association_for_delete(
+        &mut self,
+        stmt: &mut stmt::Delete,
+    ) -> Option<stmt::Statement> {
         if let stmt::Source::Model(model) = &mut stmt.from {
             if let Some(via) = model.via.take() {
-                todo!("delete via association; via={via:#?}");
-                // let filter = self.rewrite_association_as_filter(via);
-                // stmt.filter = stmt::Expr::and(stmt.filter.take(), filter);
+                return Some(self.rewrite_delete_association_as_update(via));
             }
         }
+
+        None
     }
 
     pub(super) fn simplify_via_association_for_insert(&mut self, stmt: &mut stmt::Insert) {
@@ -28,10 +31,7 @@ impl Simplify<'_> {
         }
     }
 
-    pub(super) fn rewrite_association_as_filter(
-        &mut self,
-        mut association: stmt::Association,
-    ) -> stmt::Expr {
+    fn rewrite_association_as_filter(&mut self, mut association: stmt::Association) -> stmt::Expr {
         // First, we want to simplify the association source.
         stmt::visit_mut::visit_stmt_query_mut(self, &mut *association.source);
 
@@ -44,5 +44,30 @@ impl Simplify<'_> {
             app::FieldTy::HasMany(rel) => stmt::Expr::in_subquery(rel.pair, *association.source),
             _ => todo!("field={field:#?}"),
         }
+    }
+
+    fn rewrite_delete_association_as_update(
+        &mut self,
+        mut association: stmt::Association,
+    ) -> stmt::Statement {
+        /*
+        // First, we want to simplify the association source.
+        stmt::visit_mut::visit_stmt_query_mut(self, &mut *association.source);
+
+        // For now, we only support paths with a single step
+        assert!(association.path.len() == 1, "TODO");
+
+        let field = association.path.resolve_field(&self.schema.app);
+
+        match &field.ty {
+            app::FieldTy::HasMany(rel) => {
+                let mut stmt = association.source.update();
+                stmt.assignments.remove(field.id.index, todo!());
+                stmt.into()
+            }
+            _ => todo!("field={field:#?}"),
+        }
+        */
+        todo!()
     }
 }

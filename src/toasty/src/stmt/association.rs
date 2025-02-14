@@ -2,13 +2,13 @@ use super::*;
 
 use std::{fmt, marker::PhantomData};
 
-pub struct Association<M: ?Sized> {
+pub struct Association<T: ?Sized> {
     pub(crate) untyped: stmt::Association,
-    _p: PhantomData<M>,
+    _p: PhantomData<T>,
 }
 
-impl<M: ?Sized> Association<M> {
-    pub fn new<T: Model>(source: Select<T>, path: Path<M>) -> Association<M> {
+impl<M: Model> Association<[M]> {
+    pub fn new<T: Model>(source: Select<T>, path: Path<[M]>) -> Association<[M]> {
         assert_eq!(path.untyped.root, T::ID);
 
         Association {
@@ -16,6 +16,19 @@ impl<M: ?Sized> Association<M> {
                 source: Box::new(source.untyped),
                 path: path.untyped,
             },
+            _p: PhantomData,
+        }
+    }
+
+    pub fn remove(self, expr: impl IntoExpr<M>) -> Statement<M> {
+        let [index] = self.untyped.path.projection.as_slice() else {
+            todo!()
+        };
+        let mut stmt = self.untyped.source.update();
+        stmt.assignments.remove(*index, expr.into_expr().untyped);
+
+        Statement {
+            untyped: stmt.into(),
             _p: PhantomData,
         }
     }
@@ -27,25 +40,7 @@ impl<M: ?Sized> fmt::Debug for Association<M> {
     }
 }
 
-impl<T: Model> IntoSelect for Association<T> {
-    type Model = T;
-
-    fn into_select(self) -> Select<T> {
-        Select::from_untyped(stmt::Query {
-            body: Box::new(stmt::ExprSet::Select(stmt::Select {
-                source: stmt::Source::Model(stmt::SourceModel {
-                    model: T::ID,
-                    via: Some(self.untyped),
-                    include: vec![],
-                }),
-                filter: true.into(),
-                returning: stmt::Returning::Star,
-            })),
-        })
-    }
-}
-
-impl<T: Model + ?Sized> IntoSelect for Association<[T]> {
+impl<T: Model> IntoSelect for Association<[T]> {
     type Model = T;
 
     fn into_select(self) -> Select<T> {

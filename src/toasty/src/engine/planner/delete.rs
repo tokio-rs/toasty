@@ -1,7 +1,7 @@
 use super::*;
 
 impl Planner<'_> {
-    pub(super) fn plan_stmt_delete(&mut self, mut stmt: stmt::Delete) {
+    pub(super) fn plan_stmt_delete(&mut self, stmt: stmt::Delete) {
         let model = self.model(stmt.from.as_model_id());
         let selection = stmt.selection();
 

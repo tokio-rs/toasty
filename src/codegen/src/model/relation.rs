@@ -112,18 +112,10 @@ impl<'a> Generator<'a> {
                     builder
                 }
 
-                /*
-                    pub async fn exec(self, db: &Db) -> Result<()> {
-                        let mut cursor = db.exec(self.stmt.into()).await?;
-                        assert!(cursor.next().await.is_none());
-                        Ok(())
-                    }
-                */
-
                 /// Remove items from the association
                 pub async fn remove(self, db: &Db, item: impl IntoExpr<#strukt_name>) -> Result<()> {
-                    let stmt = self.stmt.into_select().and(stmt::Path::<#strukt_name>::root().eq(item));
-                    db.exec(stmt.delete()).await?;
+                    let stmt = self.stmt.remove(item);
+                    db.exec(stmt).await?;
                     Ok(())
                 }
             }
