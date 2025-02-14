@@ -7,14 +7,13 @@ pub struct User {
 impl User {
     pub const ID: Path<Id<User>> = Path::from_field_index::<Self>(0);
     pub const NAME: Path<String> = Path::from_field_index::<Self>(1);
-    pub const PROFILE: <super::profile::Profile as Relation>::ManyField =
-        <super::profile::Profile as Relation>::ManyField::from_path(
-            Path::from_field_index::<Self>(2),
-        );
+    pub const PROFILE: <super::profile::Profile as Relation>::OneField =
+        <super::profile::Profile as Relation>::OneField::from_path(Path::from_field_index::<Self>(
+            2,
+        ));
     pub fn profile(&self) -> <Option<super::profile::Profile> as Relation>::One {
         <Option<super::profile::Profile> as Relation>::One::from_stmt(
-            super::profile::Profile::filter(super::profile::Profile::USER.in_query(self))
-                .into_select(),
+            stmt::Association::one(self.into_select(), Self::PROFILE.into()).into_select(),
         )
     }
     pub async fn get_by_id(db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {

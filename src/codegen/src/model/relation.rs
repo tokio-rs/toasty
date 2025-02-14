@@ -65,7 +65,7 @@ impl<'a> Generator<'a> {
     fn gen_model_relation_has_one_method(&self, field: &app::Field) -> TokenStream {
         let name = self.field_name(field);
         let target_struct = self.target_struct_path(field, 0);
-        let const_name = self.self_const_name();
+        let const_name = self.field_const_name(field);
         let mut target_relation = quote!(#target_struct);
 
         if field.nullable {
@@ -75,9 +75,7 @@ impl<'a> Generator<'a> {
         quote! {
             pub fn #name(&self) -> <#target_relation as Relation>::One {
                 <#target_relation as Relation>::One::from_stmt(
-                    #target_struct::filter(
-                        #target_struct::#const_name.in_query(self)
-                    ).into_select()
+                    stmt::Association::one(self.into_select(), Self::#const_name.into()).into_select()
                 )
             }
         }
@@ -126,6 +124,14 @@ impl<'a> Generator<'a> {
                     A: FromCursor<#strukt_name>
                 {
                     self.all(db).await?.collect().await
+                }
+
+                pub fn query(
+                    self,
+                    filter: stmt::Expr<bool>
+                ) -> super::Query {
+                    let query = self.into_select();
+                    super::Query::from_stmt(query.and(filter))
                 }
 
                 pub fn create(self) -> builders::#create_struct_name {

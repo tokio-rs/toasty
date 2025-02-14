@@ -19,7 +19,7 @@ impl<'a> Generator<'a> {
                             pub const #const_name: Path<#ty> = Path::from_field_index::<Self>(#field_offset);
                         }
                     }
-                    BelongsTo(_) => {
+                    HasOne(_) | BelongsTo(_) => {
                         let target_struct_path = self.target_struct_path(field, 0);
 
                         quote! {
@@ -29,7 +29,7 @@ impl<'a> Generator<'a> {
                                 );
                         }
                     }
-                    HasMany(..) | HasOne(..) => {
+                    HasMany(_) => {
                         let target_struct_path = self.target_struct_path(field, 0);
 
                         quote! {

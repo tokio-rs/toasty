@@ -116,7 +116,7 @@ impl<'a> Generator<'a> {
         } else {
             let expr = iter.map(|field| {
                 let name = self.field_name(field);
-                let amp = if by_ref { "&" } else { "" };
+                let amp = if by_ref { quote!(&) } else { quote!() };
                 quote!( #amp self.#name)
             });
 
