@@ -9,13 +9,11 @@ pub struct Todo {
 impl Todo {
     pub const ID: Path<Id<Todo>> = Path::from_field_index::<Self>(0);
     pub const USER_ID: Path<Id<super::user::User>> = Path::from_field_index::<Self>(1);
-    pub const USER: <super::user::User as Relation<'static>>::OneField =
-        <super::user::User as Relation<'static>>::OneField::from_path(
-            Path::from_field_index::<Self>(2),
-        );
+    pub const USER: <super::user::User as Model>::OneField =
+        <super::user::User as Model>::OneField::from_path(Path::from_field_index::<Self>(2));
     pub const TITLE: Path<String> = Path::from_field_index::<Self>(3);
-    pub fn user(&self) -> <super::user::User as Relation<'_>>::One {
-        <super::user::User as Relation<'_>>::One::from_select(
+    pub fn user(&self) -> <super::user::User as Model>::One {
+        <super::user::User as Model>::One::from_select(
             super::user::User::filter(super::user::User::ID.eq(&self.user_id)).into_select(),
         )
     }
@@ -56,6 +54,10 @@ impl Todo {
 impl Model for Todo {
     const ID: ModelId = ModelId(1);
     type Key = Id<Todo>;
+    type Many = relations::Many;
+    type ManyField = relations::ManyField;
+    type One = relations::One;
+    type OneField = relations::OneField;
     fn load(mut record: ValueRecord) -> Result<Self, Error> {
         Ok(Todo {
             id: Id::from_untyped(record[0].take().to_id()?),
@@ -64,12 +66,6 @@ impl Model for Todo {
             title: record[3].take().to_string()?,
         })
     }
-}
-impl<'a> Relation<'a> for Todo {
-    type Many = relations::Many;
-    type ManyField = relations::ManyField;
-    type One = relations::One;
-    type OneField = relations::OneField;
 }
 impl stmt::IntoSelect for &Todo {
     type Model = Todo;

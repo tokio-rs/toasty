@@ -11,13 +11,11 @@ impl User {
     pub const ID: Path<Id<User>> = Path::from_field_index::<Self>(0);
     pub const NAME: Path<String> = Path::from_field_index::<Self>(1);
     pub const EMAIL: Path<String> = Path::from_field_index::<Self>(2);
-    pub const TODOS: <super::todo::Todo as Relation<'static>>::ManyField =
-        <super::todo::Todo as Relation<'static>>::ManyField::from_path(Path::from_field_index::<
-            Self,
-        >(3));
+    pub const TODOS: <super::todo::Todo as Model>::ManyField =
+        <super::todo::Todo as Model>::ManyField::from_path(Path::from_field_index::<Self>(3));
     pub const MOTO: Path<String> = Path::from_field_index::<Self>(4);
-    pub fn todos(&self) -> <super::todo::Todo as Relation<'_>>::Many {
-        <super::todo::Todo as Relation<'_>>::Many::from_stmt(stmt::Association::new(
+    pub fn todos(&self) -> <super::todo::Todo as Model>::Many {
+        <super::todo::Todo as Model>::Many::from_stmt(stmt::Association::new(
             self.into_select(),
             Self::TODOS.into(),
         ))
@@ -56,6 +54,10 @@ impl User {
 impl Model for User {
     const ID: ModelId = ModelId(0);
     type Key = Id<User>;
+    type Many = relations::Many;
+    type ManyField = relations::ManyField;
+    type One = relations::One;
+    type OneField = relations::OneField;
     fn load(mut record: ValueRecord) -> Result<Self, Error> {
         Ok(User {
             id: Id::from_untyped(record[0].take().to_id()?),
@@ -65,12 +67,6 @@ impl Model for User {
             moto: record[4].take().to_option_string()?,
         })
     }
-}
-impl<'a> Relation<'a> for User {
-    type Many = relations::Many;
-    type ManyField = relations::ManyField;
-    type One = relations::One;
-    type OneField = relations::OneField;
 }
 impl stmt::IntoSelect for &User {
     type Model = User;

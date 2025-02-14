@@ -10,7 +10,7 @@ pub use db::Db;
 mod engine;
 
 mod model;
-pub use model::{Model, Relation};
+pub use model::Model;
 
 pub mod relation;
 
@@ -39,7 +39,7 @@ pub mod codegen_support {
         cursor::{Cursor, FromCursor},
         relation::{BelongsTo, HasMany},
         stmt::{self, Id, IntoExpr, IntoInsert, IntoSelect, Path},
-        Db, Error, Model, Relation, Result, Statement,
+        Db, Error, Model, Result, Statement,
     };
     pub use toasty_core::{
         driver,

@@ -23,8 +23,8 @@ impl<'a> Generator<'a> {
                         let target_struct_path = self.target_struct_path(field, 0);
 
                         quote! {
-                            pub const #const_name: <#target_struct_path as Relation<'static>>::OneField =
-                                <#target_struct_path as Relation<'static>>::OneField::from_path(
+                            pub const #const_name: <#target_struct_path as Model>::OneField =
+                                <#target_struct_path as Model>::OneField::from_path(
                                     Path::from_field_index::<Self>(#field_offset)
                                 );
                         }
@@ -33,8 +33,8 @@ impl<'a> Generator<'a> {
                         let target_struct_path = self.target_struct_path(field, 0);
 
                         quote! {
-                            pub const #const_name: <#target_struct_path as Relation<'static>>::ManyField =
-                                <#target_struct_path as Relation<'static>>::ManyField::from_path(
+                            pub const #const_name: <#target_struct_path as Model>::ManyField =
+                                <#target_struct_path as Model>::ManyField::from_path(
                                     Path::from_field_index::<Self>(#field_offset)
                                 );
                         }

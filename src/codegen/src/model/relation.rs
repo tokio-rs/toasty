@@ -10,6 +10,7 @@ impl<'a> Generator<'a> {
                     Some(self.gen_model_relation_belongs_to_method(field.id, rel))
                 }
                 app::FieldTy::HasMany(_) => Some(self.gen_model_relation_has_many_method(field.id)),
+                app::FieldTy::HasOne(_) => Some(self.gen_model_relation_has_one_method(field.id)),
                 _ => None,
             })
     }
@@ -39,8 +40,8 @@ impl<'a> Generator<'a> {
         };
 
         quote! {
-            pub fn #name(&self) -> <#strukt as Relation<'_>>::One {
-                <#strukt as Relation<'_>>::One::from_select(
+            pub fn #name(&self) -> <#strukt as Model>::One {
+                <#strukt as Model>::One::from_select(
                     #strukt::filter(#filter).into_select()
                 )
             }
@@ -53,14 +54,25 @@ impl<'a> Generator<'a> {
         let const_name = self.field_const_name(field);
 
         quote! {
-            pub fn #name(&self) -> <#target_struct as Relation<'_>>::Many {
-                <#target_struct as Relation<'_>>::Many::from_stmt(
+            pub fn #name(&self) -> <#target_struct as Model>::Many {
+                <#target_struct as Model>::Many::from_stmt(
                     stmt::Association::new(self.into_select(), Self::#const_name.into())
-                    /*
-                    #strukt::filter(
-                        #strukt::#const_name.in_query(self)
+                )
+            }
+        }
+    }
+
+    fn gen_model_relation_has_one_method(&self, field: app::FieldId) -> TokenStream {
+        let name = self.field_name(field);
+        let target_struct = self.target_struct_path(field, 0);
+        let const_name = self.self_const_name();
+
+        quote! {
+            pub fn #name(&self) -> <#target_struct as Model>::One {
+                <#target_struct as Model>::One::from_select(
+                    #target_struct::filter(
+                        #target_struct::#const_name.in_query(self)
                     ).into_select()
-                    */
                 )
             }
         }
