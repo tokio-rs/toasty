@@ -13,7 +13,7 @@ impl Model {
             cx,
             model: Model {
                 id,
-                name: Name::new(&node.ident.to_string()),
+                name: Name::new(node.ident.as_ref()),
                 fields: vec![],
                 primary_key: PrimaryKey {
                     fields: vec![],
