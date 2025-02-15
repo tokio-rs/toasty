@@ -194,7 +194,7 @@ impl Builder {
                         let mut builder = Query::find_by(id, model, by_fk);
 
                         for index_field in &fields {
-                            builder.field(model.field(index_field).id());
+                            builder.field(model.field(index_field.field).id());
                         }
 
                         /*
@@ -217,7 +217,7 @@ impl Builder {
                             builder.many();
 
                             for index_field in &index.fields {
-                                builder.field(model.field(index_field).id());
+                                builder.field(model.field(index_field.field).id());
                             }
 
                             self.queries.push(builder.build());
