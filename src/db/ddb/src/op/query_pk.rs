@@ -30,7 +30,7 @@ impl DynamoDB {
             res.items.into_iter().flatten().map(move |item| {
                 item_to_record(
                     &item,
-                    op.select.iter().map(|column_id| schema.column(column_id)),
+                    op.select.iter().map(|column_id| schema.column(*column_id)),
                 )
             }),
         )))

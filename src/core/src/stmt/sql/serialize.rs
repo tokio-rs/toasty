@@ -197,7 +197,7 @@ impl<'a, T: Params> Formatter<'a, T> {
 
         let mut s = "";
         for column_id in &insert_target.columns {
-            write!(self.dst, "{}\"{}\"", s, self.schema.column(column_id).name)?;
+            write!(self.dst, "{}\"{}\"", s, self.schema.column(*column_id).name)?;
             s = ", ";
         }
 

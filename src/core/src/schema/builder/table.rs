@@ -386,7 +386,7 @@ impl BuildMapping<'_> {
         // generate a placeholder value).
         for pk in &self.table.primary_key.columns {
             if !self.lowering_columns.contains(pk) {
-                let ty_enum = match &self.table.column(pk).ty {
+                let ty_enum = match &self.table.column(*pk).ty {
                     stmt::Type::Enum(ty_enum) => ty_enum,
                     _ => todo!(),
                 };
@@ -543,7 +543,7 @@ impl BuildMapping<'_> {
         let column = self.table.column(column_id);
 
         match &column.ty {
-            c_ty if *c_ty == primitive.ty => stmt::Expr::column(column),
+            c_ty if *c_ty == primitive.ty => stmt::Expr::column(column.id),
             stmt::Type::Enum(ty_enum) => {
                 let variant = ty_enum
                     .variants
@@ -555,13 +555,13 @@ impl BuildMapping<'_> {
                     .unwrap();
 
                 stmt::Expr::DecodeEnum(
-                    Box::new(stmt::Expr::column(column)),
+                    Box::new(stmt::Expr::column(column.id)),
                     primitive.ty.clone(),
                     variant.discriminant,
                 )
             }
             stmt::Type::String if primitive.ty.is_id() => {
-                stmt::Expr::cast(stmt::Expr::column(column), &primitive.ty)
+                stmt::Expr::cast(stmt::Expr::column(column.id), &primitive.ty)
             }
             _ => todo!("column={column:#?}; primitive={primitive:#?}"),
         }

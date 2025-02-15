@@ -19,7 +19,7 @@ impl DynamoDB {
                 .await?;
 
             if let Some(item) = res.item() {
-                let row = item_to_record(item, op.select.iter().map(|id| schema.column(id)))?;
+                let row = item_to_record(item, op.select.iter().map(|id| schema.column(*id)))?;
                 Ok(Response::from_value_stream(stmt::ValueStream::from_value(
                     row,
                 )))
@@ -67,7 +67,7 @@ impl DynamoDB {
                 items.into_iter().filter_map(move |item| {
                     let row = match item_to_record(
                         &item,
-                        op.select.iter().map(|column_id| schema.column(column_id)),
+                        op.select.iter().map(|column_id| schema.column(*column_id)),
                     ) {
                         Ok(row) => row,
                         Err(e) => return Some(Err(e)),

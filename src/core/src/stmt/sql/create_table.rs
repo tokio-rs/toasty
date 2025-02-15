@@ -20,7 +20,7 @@ impl Statement {
             name: Name::from(&table.name[..]),
             columns: table.columns.iter().map(ColumnDef::from_schema).collect(),
             primary_key: Some(Box::new(Expr::record(
-                table.primary_key.columns.iter().map(Expr::column),
+                table.primary_key.columns.iter().map(|col| Expr::column(*col)),
             ))),
         }
         .into()

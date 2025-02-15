@@ -250,12 +250,12 @@ impl DynamoDB {
                     let mut condition_expression = String::new();
 
                     for column_id in set_unique_attrs.keys() {
-                        let column = expr_attrs.column(schema.column(column_id)).to_string();
+                        let column = expr_attrs.column(schema.column(*column_id)).to_string();
                         condition_expression = format!("attribute_not_exists({column})");
                     }
 
                     for (column_id, prev) in &updated_unique_attrs {
-                        let column = expr_attrs.column(schema.column(column_id)).to_string();
+                        let column = expr_attrs.column(schema.column(*column_id)).to_string();
                         let value = expr_attrs.ddb_value(prev.clone());
 
                         condition_expression = format!("{column} = {value}");
@@ -284,7 +284,7 @@ impl DynamoDB {
                     );
 
                     for (column_id, prev) in &updated_unique_attrs {
-                        let name = &schema.column(column_id).name;
+                        let name = &schema.column(*column_id).name;
                         // Delete the index entry for all rows that are updating
                         // their unique attribute.
                         transact_items.push(
@@ -301,7 +301,7 @@ impl DynamoDB {
                     }
 
                     for column_id in updated_unique_attrs.keys().chain(set_unique_attrs.keys()) {
-                        let name = &schema.column(column_id).name;
+                        let name = &schema.column(*column_id).name;
 
                         // Create the new entry if there is one.
                         let mut index_insert_items = HashMap::new();
