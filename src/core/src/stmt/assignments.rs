@@ -1,7 +1,7 @@
 use super::*;
 
 use indexmap::{Equivalent, IndexMap};
-use std::{hash::Hash, ops};
+use std::{hash::Hash, iter::Map, ops};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Assignments {
@@ -119,7 +119,7 @@ impl Assignments {
     }
 
     pub fn keys(&self) -> impl Iterator<Item = usize> + '_ {
-        self.assignments.keys().map(|k| *k)
+        self.assignments.keys().copied()
     }
 
     pub fn exprs(&self) -> impl Iterator<Item = &Expr> + '_ {
@@ -145,7 +145,9 @@ impl IntoIterator for Assignments {
     type IntoIter = std::vec::IntoIter<(usize, Assignment)>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.assignments.into_iter().collect::<Vec<_>>().into_iter()
+        self.assignments
+            .into_iter()
+            .collect::<Vec<_>>().into_iter()
     }
 }
 
