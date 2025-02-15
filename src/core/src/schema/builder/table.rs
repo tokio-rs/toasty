@@ -520,10 +520,7 @@ impl BuildMapping<'_> {
                 let variant = ty_enum
                     .variants
                     .iter()
-                    .find(|variant| match &variant.fields[..] {
-                        [field_ty] if field_ty == ty => true,
-                        _ => false,
-                    })
+                    .find(|variant| matches!(&variant.fields[..], [field_ty] if field_ty == ty))
                     .unwrap();
 
                 stmt::Expr::concat_str((
