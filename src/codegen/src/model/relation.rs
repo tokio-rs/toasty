@@ -201,11 +201,7 @@ impl Generator<'_> {
             quote!(#target_struct_name)
         };
 
-        let relation_struct = if field.ty.is_belongs_to() {
-            quote!(#relation_struct_name<'a>)
-        } else {
-            quote!(#relation_struct_name<'a>)
-        };
+        let relation_struct = quote!(#relation_struct_name<'a>);
 
         let op_methods = if field.ty.is_belongs_to() {
             quote! {
