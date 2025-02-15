@@ -450,7 +450,7 @@ impl BuildMapping<'_> {
                 for (i, field_id) in model.primary_key.fields.iter().enumerate() {
                     if field_id.index == *step {
                         let mut p = projection.clone();
-                        p[0] = i.into();
+                        p[0] = i;
 
                         return p;
                     }
