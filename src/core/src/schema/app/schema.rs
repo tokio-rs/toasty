@@ -41,6 +41,7 @@ impl Schema {
 }
 
 impl Builder {
+    #[allow(clippy::wrong_self_convention)]
     fn from_ast(mut self, ast: &ast::Schema) -> Result<Schema> {
         // First, register all defined types with the resolver.
         for node in ast.models() {

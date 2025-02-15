@@ -12,6 +12,7 @@ async fn string_to_id_expr(s: impl Setup) {
 
     let db = s.setup(db::load_schema()).await;
 
+    #[allow(clippy::disallowed_names)]
     let foo = db::Foo::create().exec(&db).await.unwrap();
 
     let id = foo.id.to_string();

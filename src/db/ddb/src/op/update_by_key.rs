@@ -112,7 +112,7 @@ impl DynamoDB {
                             // First, if there is a filter, we need to check if the
                             // filter matches it. If it doesn't, then the update did
                             // not apply to the record.
-                            if let Some(_) = op.filter {
+                            if op.filter.is_some() {
                                 // TODO: can't support both for now
                                 assert!(op.condition.is_none());
                                 /*

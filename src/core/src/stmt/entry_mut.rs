@@ -6,10 +6,10 @@ pub enum EntryMut<'a> {
     Value(&'a mut Value),
 }
 
-impl<'a> EntryMut<'a> {
+impl EntryMut<'_> {
     pub fn as_expr(&self) -> &Expr {
         match self {
-            EntryMut::Expr(e) => &*e,
+            EntryMut::Expr(e) => e,
             _ => todo!(),
         }
     }

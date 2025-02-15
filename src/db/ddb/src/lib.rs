@@ -185,7 +185,7 @@ fn ddb_val(val: &stmt::Value) -> AttributeValue {
     }
 }
 
-fn ddb_to_val<'stmt>(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
+fn ddb_to_val(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
     use stmt::Type;
     use AttributeValue::*;
 

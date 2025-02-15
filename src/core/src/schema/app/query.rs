@@ -86,7 +86,7 @@ impl Query {
         stmt
     }
 
-    pub(crate) fn find_by<'a>(id: QueryId, model: &'a Model, by_fk: bool) -> FindByBuilder<'a> {
+    pub(crate) fn find_by(id: QueryId, model: &Model, by_fk: bool) -> FindByBuilder<'_> {
         FindByBuilder {
             id,
             model,
@@ -97,7 +97,7 @@ impl Query {
     }
 }
 
-impl<'a> FindByBuilder<'a> {
+impl FindByBuilder<'_> {
     pub(crate) fn many(&mut self) -> &mut Self {
         self.many = true;
         self
@@ -314,11 +314,5 @@ impl FindByArgType {
 impl QueryId {
     pub(crate) const fn placeholder() -> QueryId {
         QueryId(usize::MAX)
-    }
-}
-
-impl Into<QueryId> for &QueryId {
-    fn into(self) -> QueryId {
-        *self
     }
 }

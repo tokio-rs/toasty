@@ -189,7 +189,7 @@ impl Expr {
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
         struct Substitute<'a, I>(&'a mut I);
 
-        impl<'a, I> VisitMut for Substitute<'a, I>
+        impl<I> VisitMut for Substitute<'_, I>
         where
             I: substitute::Input,
         {

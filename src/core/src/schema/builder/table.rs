@@ -110,7 +110,7 @@ impl BuildTableFromModels<'_> {
 
             let mut scope = None;
 
-            for model in &*models {
+            for model in models {
                 let pk_index = &model.indices[0];
                 assert!(pk_index.primary_key);
 
@@ -370,7 +370,7 @@ impl BuildTableFromModels<'_> {
                     index.name.push_str("_and");
                 }
 
-                index.name.push_str("_");
+                index.name.push('_');
                 index.name.push_str(&column.name);
             }
         }

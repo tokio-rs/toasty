@@ -566,9 +566,8 @@ pub fn visit_value<V>(v: &mut V, node: &Value)
 where
     V: Visit + ?Sized,
 {
-    match node {
-        Value::Record(node) => v.visit_value_record(node),
-        _ => {}
+    if let Value::Record(node) = node {
+        v.visit_value_record(node)
     }
 }
 

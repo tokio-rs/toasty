@@ -137,11 +137,15 @@ impl Assignments {
             .iter_mut()
             .map(|(index, assignment)| (*index, assignment))
     }
+}
 
-    pub fn into_iter(self) -> impl Iterator<Item = (usize, Assignment)> {
-        self.assignments
-            .into_iter()
-            .map(|(index, assignment)| (index, assignment))
+impl IntoIterator for Assignments {
+    type Item = (usize, Assignment);
+
+    type IntoIter = std::vec::IntoIter<(usize, Assignment)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.assignments.into_iter().collect::<Vec<_>>().into_iter()
     }
 }
 

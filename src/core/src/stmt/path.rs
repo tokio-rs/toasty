@@ -38,6 +38,11 @@ impl Path {
         self.projection.len()
     }
 
+    /// Returns whether or 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn chain(&mut self, other: &Path) {
         for field in &other.projection[..] {
             self.projection.push(*field);

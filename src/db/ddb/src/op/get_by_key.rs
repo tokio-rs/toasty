@@ -1,7 +1,7 @@
 use super::*;
 
 impl DynamoDB {
-    pub(crate) async fn exec_get_by_key<'stmt>(
+    pub(crate) async fn exec_get_by_key(
         &self,
         schema: &Arc<Schema>,
         op: operation::GetByKey,

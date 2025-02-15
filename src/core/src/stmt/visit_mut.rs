@@ -401,8 +401,8 @@ pub fn visit_expr_map_mut<V>(v: &mut V, node: &mut ExprMap)
 where
     V: VisitMut + ?Sized,
 {
-    v.visit_expr_mut(&mut *node.base);
-    v.visit_expr_mut(&mut *node.map);
+    v.visit_expr_mut(&mut node.base);
+    v.visit_expr_mut(&mut node.map);
 }
 
 pub fn visit_expr_or_mut<V>(v: &mut V, node: &mut ExprOr)
@@ -487,9 +487,8 @@ pub fn visit_insert_target_mut<V>(v: &mut V, node: &mut InsertTarget)
 where
     V: VisitMut + ?Sized,
 {
-    match node {
-        InsertTarget::Scope(stmt) => v.visit_stmt_query_mut(stmt),
-        _ => {}
+    if let InsertTarget::Scope(stmt) = node {
+        v.visit_stmt_query_mut(stmt)
     }
 }
 
