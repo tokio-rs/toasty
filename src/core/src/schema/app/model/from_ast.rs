@@ -42,6 +42,7 @@ impl Model {
 }
 
 impl Builder<'_> {
+    #[allow(clippy::wrong_self_convention)]
     fn from_ast(mut self, node: &ast::Model) -> Model {
         // Process model-level attributes
         let attrs = node
