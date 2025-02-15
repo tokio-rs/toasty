@@ -47,7 +47,7 @@ impl<'a, I> TypedInput<'a, I> {
     }
 }
 
-impl<'a, I: Input> Input for TypedInput<'a, I> {
+impl<I: Input> Input for TypedInput<'_, I> {
     fn resolve_arg(
         &mut self,
         expr_arg: &stmt::ExprArg,

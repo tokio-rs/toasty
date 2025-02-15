@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_query_structs(&mut self) -> TokenStream {
         self.model
             .queries
@@ -453,7 +453,7 @@ impl<'a> Generator<'a> {
     ) -> TokenStream {
         assert!(exprs.len() > 1);
 
-        let [head, rest @ ..] = &exprs[..] else {
+        let [head, rest @ ..] = exprs else {
             panic!()
         };
 

@@ -46,7 +46,7 @@ impl<T: ?Sized> Path<T> {
 
     pub fn gt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         Expr {
-            untyped: stmt::Expr::gt(self.untyped.into_stmt(), rhs.into_expr().untyped).into(),
+            untyped: stmt::Expr::gt(self.untyped.into_stmt(), rhs.into_expr().untyped),
             _p: PhantomData,
         }
     }

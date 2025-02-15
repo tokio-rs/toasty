@@ -14,7 +14,7 @@ use toasty_core::schema::*;
 use std::rc::Rc;
 
 /// Generate client code for a schema
-pub fn generate<'a>(schema: &'a app::Schema, in_macro: bool) -> Output<'a> {
+pub fn generate(schema: &app::Schema, in_macro: bool) -> Output<'_> {
     // Compute names of structs, mods, etc...
     let names = Rc::new(Names::from_schema(schema));
 

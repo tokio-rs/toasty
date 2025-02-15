@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_body(&mut self) -> TokenStream {
         // Build field-level codegen state
         let model_id = util::int(self.model.id.0);
@@ -151,8 +151,8 @@ impl<'a> Generator<'a> {
             .map(|field| self.field_ty(field, 0));
 
         if tys.len() == 1 {
-            let ty = tys.next().unwrap();
-            ty
+
+            tys.next().unwrap()
         } else {
             quote! {
                 ( #( #tys, )* )

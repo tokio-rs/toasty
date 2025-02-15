@@ -60,8 +60,8 @@ impl<'a> VisitMut for Simplify<'_> {
         let maybe_expr = match i {
             Expr::BinaryOp(expr_binary_op) => self.simplify_expr_binary_op(
                 expr_binary_op.op,
-                &mut *expr_binary_op.lhs,
-                &mut *expr_binary_op.rhs,
+                &mut expr_binary_op.lhs,
+                &mut expr_binary_op.rhs,
             ),
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
             Expr::ConcatStr(expr) => self.simplify_expr_concat_str(expr),
@@ -83,7 +83,7 @@ impl<'a> VisitMut for Simplify<'_> {
 
     fn visit_expr_set_mut(&mut self, i: &mut stmt::ExprSet) {
         match i {
-            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 0 => {
+            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.is_empty() => {
                 todo!("is there anything we do here?");
             }
             stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 1 => {
@@ -212,7 +212,7 @@ impl<'a> Simplify<'a> {
                 }
                 stmt::ExprSet::Values(values) => {
                     if let Some(stmt::ExprSet::Values(tail)) = operands.last_mut() {
-                        tail.rows.extend(values.rows.drain(..));
+                        tail.rows.append(&mut values.rows);
                         continue;
                     }
 

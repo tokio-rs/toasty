@@ -201,7 +201,7 @@ fn ddb_to_val<'stmt>(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
             let value = match v {
                 V::Bool(v) => stmt::Value::Bool(v),
                 V::Null => stmt::Value::Null,
-                V::String(v) => stmt::Value::String(v.into()),
+                V::String(v) => stmt::Value::String(v),
                 V::Id(model, v) => stmt::Value::Id(stmt::Id::from_string(app::ModelId(model), v)),
                 V::I64(v) => stmt::Value::I64(v),
             };
@@ -265,8 +265,8 @@ fn item_to_record<'a, 'stmt>(
     ))
 }
 
-fn ddb_expression<'a>(
-    schema: &'a Schema,
+fn ddb_expression(
+    schema: &Schema,
     attrs: &mut ExprAttrs,
     primary: bool,
     expr: &stmt::Expr,

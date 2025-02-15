@@ -32,7 +32,7 @@ async fn crud_user_optional_profile_one_direction(s: impl Setup) {
         .await
         .unwrap();
 
-    assert!(!user.profile_id.is_none());
+    assert!(user.profile_id.is_some());
 }
 
 tests!(crud_user_optional_profile_one_direction,);

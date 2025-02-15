@@ -80,7 +80,7 @@ fn is_eq_constrained(expr: &stmt::Expr, column: &Column) -> bool {
     }
 }
 
-impl<'a> VisitMut for LowerStatement<'a> {
+impl VisitMut for LowerStatement<'_> {
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
 
@@ -134,7 +134,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
                     .app
                     .model(expr.query.body.as_select().source.as_model_id());
 
-                LowerStatement::from_model(&self.schema, sub_model)
+                LowerStatement::from_model(self.schema, sub_model)
                     .visit_stmt_query_mut(&mut expr.query);
 
                 let maybe_res = self.lower_expr_binary_op(
@@ -247,7 +247,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
     }
 }
 
-impl<'a> LowerStatement<'a> {
+impl LowerStatement<'_> {
     fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Expr) {
         // TODO: we really shouldn't have to simplify here, but until
         // simplification includes overlapping predicate pruning, we have to do
@@ -450,7 +450,7 @@ impl<I: Input> VisitMut for Substitute<I> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         match i {
             stmt::Expr::Field(expr_field) => {
-                *i = self.0.resolve_field(&expr_field);
+                *i = self.0.resolve_field(expr_field);
             }
             // Do not traverse these
             stmt::Expr::InSubquery(_) | stmt::Expr::Stmt(_) => {}

@@ -86,7 +86,7 @@ impl Names {
                 fields.insert(
                     field.id,
                     FieldNames {
-                        field_name: field_name,
+                        field_name,
                         const_name: util::ident(&util::const_name(&field.name)),
                     },
                 );

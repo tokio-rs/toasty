@@ -26,14 +26,14 @@ impl Partitioner<'_> {
     fn partition_expr(&mut self, expr: &mut stmt::Expr) -> Partition {
         match expr {
             stmt::Expr::Arg(expr) => Partition::Eval {
-                source: self.sources[expr.position].clone(),
+                source: self.sources[expr.position],
                 project: stmt::Expr::arg(0),
             },
             stmt::Expr::Column(_) => Partition::Stmt,
             stmt::Expr::InList(expr) => {
-                assert!(self.partition_expr(&mut *expr.expr).is_stmt(), "TODO");
+                assert!(self.partition_expr(&mut expr.expr).is_stmt(), "TODO");
 
-                if let Partition::Eval { source, project } = self.partition_expr(&mut *expr.list) {
+                if let Partition::Eval { source, project } = self.partition_expr(&mut expr.list) {
                     assert!(self.input.is_none());
                     let ty = self.planner.var_table.ty(&source).clone();
 
@@ -49,7 +49,7 @@ impl Partitioner<'_> {
                 Partition::Stmt
             }
             stmt::Expr::Map(expr) => {
-                let Partition::Eval { source, project } = self.partition_expr(&mut *expr.base)
+                let Partition::Eval { source, project } = self.partition_expr(&mut expr.base)
                 else {
                     todo!()
                 };

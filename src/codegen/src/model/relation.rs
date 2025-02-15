@@ -2,7 +2,7 @@ use super::*;
 
 use app::FieldTy;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_relation_structs(&self) -> TokenStream {
         self.model
             .fields

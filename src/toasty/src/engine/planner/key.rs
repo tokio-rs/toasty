@@ -43,7 +43,7 @@ impl Planner<'_> {
     }
 }
 
-impl<'a> TryConvert<'a> {
+impl TryConvert<'_> {
     fn try_convert(&mut self, expr: &stmt::Expr) -> Option<stmt::Expr> {
         use stmt::Expr::*;
 
@@ -61,7 +61,7 @@ impl<'a> TryConvert<'a> {
                 }
             }
             InList(e) => {
-                if !self.is_key_reference(&*e.expr) {
+                if !self.is_key_reference(&e.expr) {
                     return None;
                 }
 

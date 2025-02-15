@@ -11,38 +11,35 @@ impl Simplify<'_> {
     }
 
     fn rewrite_expr_in_list_when_model(&self, expr: &mut stmt::ExprInList) {
-        match &mut *expr.expr {
-            stmt::Expr::Key(expr_key) => {
-                let model = self.schema.app.model(expr_key.model);
+        if let stmt::Expr::Key(expr_key) = &mut *expr.expr {
+            let model = self.schema.app.model(expr_key.model);
 
-                let [pk_field_id] = &model.primary_key.fields[..] else {
-                    todo!()
-                };
-                let pk = self.schema.app.field(*pk_field_id);
+            let [pk_field_id] = &model.primary_key.fields[..] else {
+                todo!()
+            };
+            let pk = self.schema.app.field(*pk_field_id);
 
-                // Check RHS format
-                match &mut *expr.list {
-                    stmt::Expr::List(expr_list) => {
-                        for expr in &mut expr_list.items {
-                            match expr {
-                                stmt::Expr::Value(value) => {
-                                    assert!(value.is_a(&pk.ty.expect_primitive().ty));
-                                }
-                                _ => todo!("{expr:#?}"),
+            // Check RHS format
+            match &mut *expr.list {
+                stmt::Expr::List(expr_list) => {
+                    for expr in &mut expr_list.items {
+                        match expr {
+                            stmt::Expr::Value(value) => {
+                                assert!(value.is_a(&pk.ty.expect_primitive().ty));
                             }
+                            _ => todo!("{expr:#?}"),
                         }
                     }
-                    stmt::Expr::Value(stmt::Value::List(values)) => {
-                        for value in values {
-                            assert!(value.is_a(&pk.ty.expect_primitive().ty));
-                        }
-                    }
-                    _ => todo!("expr={expr:#?}"),
                 }
-
-                *expr.expr = stmt::Expr::field(pk);
+                stmt::Expr::Value(stmt::Value::List(values)) => {
+                    for value in values {
+                        assert!(value.is_a(&pk.ty.expect_primitive().ty));
+                    }
+                }
+                _ => todo!("expr={expr:#?}"),
             }
-            _ => {}
+
+            *expr.expr = stmt::Expr::field(pk);
         }
     }
 

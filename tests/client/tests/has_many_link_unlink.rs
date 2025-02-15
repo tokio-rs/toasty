@@ -77,8 +77,7 @@ async fn remove_add_single_relation_option_belongs_to(s: impl Setup) {
     let todos_reloaded: Vec<_> = user.todos().collect(&db).await.unwrap();
     assert!(todos_reloaded
         .iter()
-        .find(|t| t.id == todos[0].id)
-        .is_some());
+        .any(|t| t.id == todos[0].id));
     assert_ok!(user.todos().find_by_id(&todos[0].id).get(&db).await);
 }
 
@@ -122,7 +121,7 @@ async fn add_remove_single_relation_required_belongs_to(s: impl Setup) {
     assert_eq!(todos_reloaded.len(), 3);
 
     for id in ids {
-        assert!(todos_reloaded.iter().find(|t| t.id == id).is_some());
+        assert!(todos_reloaded.iter().any(|t| t.id == id));
     }
 
     // Unlinking a todo deletes it
@@ -228,7 +227,7 @@ async fn add_remove_multiple_relation_option_belongs_to(s: impl Setup) {
     assert_eq!(todos_reloaded.len(), 3);
 
     for id in ids {
-        assert!(todos_reloaded.iter().find(|t| t.id == id).is_some());
+        assert!(todos_reloaded.iter().any(|t| t.id == id));
     }
 }
 

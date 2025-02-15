@@ -11,11 +11,7 @@ impl DynamoDB {
         let mut expr_attrs = ExprAttrs::default();
         let key_expression = ddb_expression(schema, &mut expr_attrs, true, &op.pk_filter);
 
-        let filter_expression = if let Some(expr) = &op.filter {
-            Some(ddb_expression(schema, &mut expr_attrs, false, expr))
-        } else {
-            None
-        };
+        let filter_expression = op.filter.as_ref().map(|expr| ddb_expression(schema, &mut expr_attrs, false, expr));
 
         let res = self
             .client

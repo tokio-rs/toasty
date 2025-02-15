@@ -187,7 +187,7 @@ impl Partitioner<'_> {
             let fields: Vec<_> = expr_record
                 .fields
                 .into_iter()
-                .zip(field_tys.into_iter())
+                .zip(field_tys)
                 .map(|(field, ty)| self.push_stmt_field(field, ty))
                 .collect();
 

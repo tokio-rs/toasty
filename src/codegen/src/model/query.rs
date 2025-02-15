@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(crate) fn gen_query_struct(&self) -> TokenStream {
         let struct_name = self.self_struct_name();
         let relation_methods = self.gen_relation_methods();
