@@ -240,14 +240,14 @@ impl<V: Visit> Visit for &mut V {
 
 pub fn visit_assignment<V>(v: &mut V, node: &Assignment)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_expr(&node.expr);
 }
 
 pub fn visit_assignments<V>(v: &mut V, node: &Assignments)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     for (_, assignment) in node.iter() {
         v.visit_assignment(assignment);
@@ -256,7 +256,7 @@ where
 
 pub fn visit_expr<V>(v: &mut V, node: &Expr)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     match node {
         Expr::And(expr) => v.visit_expr_and(expr),
@@ -292,7 +292,7 @@ where
 
 pub fn visit_expr_and<V>(v: &mut V, node: &ExprAnd)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     for expr in node {
         v.visit_expr(expr);
@@ -301,13 +301,13 @@ where
 
 pub fn visit_expr_arg<V>(v: &mut V, node: &ExprArg)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
 }
 
 pub fn visit_expr_begins_with<V>(v: &mut V, node: &ExprBeginsWith)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_expr(&node.expr);
     v.visit_expr(&node.pattern);
@@ -315,7 +315,7 @@ where
 
 pub fn visit_expr_binary_op<V>(v: &mut V, node: &ExprBinaryOp)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_expr(&node.lhs);
     v.visit_expr(&node.rhs);
@@ -323,20 +323,20 @@ where
 
 pub fn visit_expr_cast<V>(v: &mut V, node: &ExprCast)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_expr(&node.expr);
 }
 
 pub fn visit_expr_column<V>(v: &mut V, node: &ExprColumn)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
 }
 
 pub fn visit_expr_concat<V>(v: &mut V, node: &ExprConcat)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     for expr in node {
         v.visit_expr(expr);
@@ -345,20 +345,20 @@ where
 
 pub fn visit_expr_enum<V>(v: &mut V, node: &ExprEnum)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_expr_record(&node.fields);
 }
 
 pub fn visit_expr_field<V>(_v: &mut V, _node: &ExprField)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
 }
 
 pub fn visit_expr_in_list<V>(v: &mut V, node: &ExprInList)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_expr(&node.expr);
     v.visit_expr(&node.list);
@@ -366,7 +366,7 @@ where
 
 pub fn visit_expr_in_subquery<V>(v: &mut V, node: &ExprInSubquery)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_expr(&node.expr);
     v.visit_stmt_query(&node.query);
@@ -374,14 +374,14 @@ where
 
 pub fn visit_expr_is_null<V>(v: &mut V, node: &ExprIsNull)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_expr(&node.expr);
 }
 
 pub fn visit_expr_like<V>(v: &mut V, node: &ExprLike)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_expr(&node.expr);
     v.visit_expr(&node.pattern);
@@ -389,13 +389,13 @@ where
 
 pub fn visit_expr_key<V>(v: &mut V, node: &ExprKey)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
 }
 
 pub fn visit_expr_or<V>(v: &mut V, node: &ExprOr)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     for expr in node {
         v.visit_expr(expr);
@@ -404,7 +404,7 @@ where
 
 pub fn visit_expr_list<V>(v: &mut V, node: &ExprList)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     for expr in &node.items {
         v.visit_expr(expr);
@@ -413,7 +413,7 @@ where
 
 pub fn visit_expr_record<V>(v: &mut V, node: &ExprRecord)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     for expr in &**node {
         v.visit_expr(expr);
@@ -422,7 +422,7 @@ where
 
 pub fn visit_expr_set<V>(v: &mut V, node: &ExprSet)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     match node {
         ExprSet::Select(expr) => v.visit_stmt_select(expr),
@@ -433,7 +433,7 @@ where
 
 pub fn visit_expr_set_op<V>(v: &mut V, node: &ExprSetOp)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     for operand in &node.operands {
         v.visit_expr_set(operand);
@@ -442,20 +442,20 @@ where
 
 pub fn visit_expr_stmt<V>(v: &mut V, node: &ExprStmt)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_stmt(&node.stmt);
 }
 
 pub fn visit_expr_ty<V>(v: &mut V, node: &ExprTy)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
 }
 
 pub fn visit_expr_pattern<V>(v: &mut V, node: &ExprPattern)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     match node {
         ExprPattern::BeginsWith(expr) => v.visit_expr_begins_with(expr),
@@ -465,7 +465,7 @@ where
 
 pub fn visit_expr_project<V>(v: &mut V, node: &ExprProject)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_expr(&node.base);
     v.visit_projection(&node.projection);
@@ -473,13 +473,13 @@ where
 
 pub fn visit_projection<V>(v: &mut V, node: &Projection)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
 }
 
 pub fn visit_returning<V>(v: &mut V, node: &Returning)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     match node {
         Returning::Star | Returning::Changed => {}
@@ -489,13 +489,13 @@ where
 
 pub fn visit_source<V>(_v: &mut V, _node: &Source)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
 }
 
 pub fn visit_stmt<V>(v: &mut V, node: &Statement)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     match node {
         Statement::Delete(stmt) => v.visit_stmt_delete(stmt),
@@ -507,7 +507,7 @@ where
 
 pub fn visit_stmt_delete<V>(v: &mut V, node: &Delete)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_source(&node.from);
     v.visit_expr(&node.filter);
@@ -519,7 +519,7 @@ where
 
 pub fn visit_stmt_insert<V>(v: &mut V, node: &Insert)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     if let InsertTarget::Scope(scope) = &node.target {
         v.visit_stmt_query(scope);
@@ -533,14 +533,14 @@ where
 
 pub fn visit_stmt_query<V>(v: &mut V, node: &Query)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_expr_set(&node.body);
 }
 
 pub fn visit_stmt_select<V>(v: &mut V, node: &Select)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_source(&node.source);
     v.visit_expr(&node.filter);
@@ -549,7 +549,7 @@ where
 
 pub fn visit_stmt_update<V>(v: &mut V, node: &Update)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     v.visit_assignments(&node.assignments);
 
@@ -564,7 +564,7 @@ where
 
 pub fn visit_value<V>(v: &mut V, node: &Value)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     if let Value::Record(node) = node {
         v.visit_value_record(node)
@@ -573,7 +573,7 @@ where
 
 pub fn visit_values<V>(v: &mut V, node: &Values)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     for expr in &node.rows {
         v.visit_expr(expr);
@@ -582,7 +582,7 @@ where
 
 pub fn visit_value_record<V>(v: &mut V, node: &ValueRecord)
 where
-    V: Visit + ?Sized,
+    V: Visit,
 {
     for value in node.iter() {
         v.visit_value(value);

@@ -64,7 +64,7 @@ impl<'a> Serializer<'a> {
     }
 }
 
-impl<'a, T: Params> Formatter<'a, T> {
+impl<T: Params> Formatter<'_, T> {
     fn statement(&mut self, statement: &DataStatement) -> fmt::Result {
         match statement {
             DataStatement::Delete(stmt) => self.delete(stmt)?,
@@ -320,11 +320,11 @@ impl<'a, T: Params> Formatter<'a, T> {
                 assert!(!lhs.is_value_null());
                 assert!(!rhs.is_value_null());
 
-                self.expr(&*lhs)?;
+                self.expr(lhs)?;
                 write!(self.dst, " ")?;
                 self.binary_op(op)?;
                 write!(self.dst, " ")?;
-                self.expr(&rhs)?;
+                self.expr(rhs)?;
             }
             Expr::Column(expr) => {
                 // TODO: at some point we need to conditionally scope the column
