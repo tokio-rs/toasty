@@ -404,7 +404,7 @@ impl BuildMapping<'_> {
             }
         }
 
-        assert!(self.model_to_table.len() > 0);
+        assert!(!self.model_to_table.is_empty());
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
 
         // Iterate fields again (including PK fields) and build the table -> model map.
