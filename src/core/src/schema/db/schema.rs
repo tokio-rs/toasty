@@ -14,6 +14,8 @@ impl Schema {
             .expect("invalid column ID")
     }
 
+    // NOTE: this is unlikely to confuse users given the context.
+    #[allow(clippy::should_implement_trait)]
     pub fn index(&self, id: IndexId) -> &Index {
         self.table(id.table)
             .indices
