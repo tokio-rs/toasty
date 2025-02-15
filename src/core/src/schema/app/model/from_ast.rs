@@ -41,7 +41,7 @@ impl Model {
     }
 }
 
-impl<'a> Builder<'a> {
+impl Builder<'_> {
     fn from_ast(mut self, node: &ast::Model) -> Model {
         // Process model-level attributes
         let attrs = node
