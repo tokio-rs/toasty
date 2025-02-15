@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use super::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -13,9 +15,11 @@ impl Ident {
     pub(crate) fn as_str(&self) -> &str {
         &self.name
     }
+}
 
-    pub(crate) fn to_string(&self) -> String {
-        self.name.clone()
+impl Display for Ident {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
     }
 }
 
