@@ -377,7 +377,7 @@ impl BuildTableFromModels<'_> {
     }
 }
 
-impl<'a> BuildMapping<'a> {
+impl BuildMapping<'_> {
     fn build_mapping(mut self, model: &Model) {
         self.map_model_fields_to_columns(model);
 
