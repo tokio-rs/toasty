@@ -169,7 +169,7 @@ impl Generator<'_> {
             .iter()
             .map(|field| match &field.ty {
                 FieldTy::HasMany(rel) => {
-                    let name = self.field_name(field);
+                    let name = self.field_name(field.id());
                     let ty = self.model_struct_path(rel.target, 0);
                     quote! {
                         #name: HasMany<#ty>,
@@ -177,14 +177,14 @@ impl Generator<'_> {
                 }
                 FieldTy::HasOne(_) => quote!(),
                 FieldTy::BelongsTo(rel) => {
-                    let name = self.field_name(field);
+                    let name = self.field_name(field.id());
                     let ty = self.model_struct_path(rel.target, 0);
                     quote! {
                         #name: BelongsTo<#ty>,
                     }
                 }
                 FieldTy::Primitive(..) => {
-                    let name = self.field_name(field);
+                    let name = self.field_name(field.id());
                     let mut ty = self.field_ty(field, 0);
 
                     if field.nullable {

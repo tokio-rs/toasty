@@ -202,7 +202,7 @@ impl BuildTableFromModels<'_> {
                     .primary_key
                     .fields
                     .get(i)
-                    .map(|field_id| model.field(field_id).name.clone())
+                    .map(|field_id| model.field(*field_id).name.clone())
                     .unwrap_or_else(|| format!("key_{i}"));
 
                 // If unit type, go straight to enum

@@ -152,7 +152,7 @@ impl Generator<'_> {
                     }
                 }
                 FieldTy::HasMany(rel) => {
-                    let singular = self.singular_name(field);
+                    let singular = self.singular_name(field.id());
                     let target_struct_name = self.model_struct_path(rel.target, 0);
                     let add_ident = ident!("add_{}", singular);
 
@@ -233,7 +233,7 @@ impl Generator<'_> {
                     }
                 }
                 FieldTy::HasMany(rel) => {
-                    let singular = self.singular_name(field);
+                    let singular = self.singular_name(field.id());
                     let target_struct_name = self.model_struct_path(rel.target, 0);
                     let add_ident = ident!("add_{}", singular);
 

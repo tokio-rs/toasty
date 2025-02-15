@@ -267,7 +267,7 @@ impl FindByBuilder<'_> {
 
             match find_by_arg.ty {
                 FindByArgType::Expr => {
-                    exprs.push(stmt::Expr::field(field));
+                    exprs.push(stmt::Expr::field(field.id()));
                     tys.push(field.expr_ty().clone());
                 }
                 FindByArgType::ForeignKey => {

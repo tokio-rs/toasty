@@ -8,7 +8,7 @@ impl<'a> Generator<'a> {
             .fields
             .iter()
             .map(move |field| {
-                let const_name = self.field_const_name(field);
+                let const_name = self.field_const_name(field.id());
                 let field_offset = util::int(field.id.index);
                 match &field.ty {
                     Primitive(primitive) => {
@@ -20,7 +20,7 @@ impl<'a> Generator<'a> {
                     }
                     HasMany(..) | HasOne(..) | BelongsTo(..) => {
                         let module_name = self.module_name(field.id.model, 0);
-                        let relation_struct_name = self.relation_struct_name(field);
+                        let relation_struct_name = self.relation_struct_name(field.id());
 
                         quote! {
                             pub const #const_name: #module_name::fields::#relation_struct_name =
@@ -41,7 +41,7 @@ impl<'a> Generator<'a> {
             .map(move |field| {
                 let name = self.field_name(field.id);
                 let struct_path = self.model_struct_path(model, 1);
-                let const_name = self.field_const_name(field);
+                let const_name = self.field_const_name(field.id());
 
                 match &field.ty {
                     Primitive(primitive) => {
@@ -62,7 +62,7 @@ impl<'a> Generator<'a> {
                         };
 
                         let module_name = self.module_name(field.id.model, depth);
-                        let relation_struct_name = self.relation_struct_name(field);
+                        let relation_struct_name = self.relation_struct_name(field.id());
 
                         // If this is a self-referencial relation, we don't need
                         // to prefix types with the module name.
