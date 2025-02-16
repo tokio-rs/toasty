@@ -64,16 +64,11 @@ impl DynamoDB {
             let schema = schema.clone();
 
             Ok(Response::from_value_stream(stmt::ValueStream::from_iter(
-                items.into_iter().filter_map(move |item| {
-                    let row = match item_to_record(
+                items.into_iter().map(move |item| {
+                    item_to_record(
                         &item,
                         op.select.iter().map(|column_id| schema.column(*column_id)),
-                    ) {
-                        Ok(row) => row,
-                        Err(e) => return Some(Err(e)),
-                    };
-
-                    Some(Ok(row))
+                    )
                 }),
             )))
         }
