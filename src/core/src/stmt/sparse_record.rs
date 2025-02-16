@@ -54,18 +54,24 @@ impl Type {
     }
 }
 
-impl SparseRecord {
-    pub fn into_iter(self) -> impl Iterator<Item = (usize, Value)> {
-        self.values
-            .into_iter()
-            .enumerate()
-            .flat_map(move |(i, value)| {
-                if self.fields.contains(i) {
-                    Some((i.into(), value))
-                } else {
-                    None
-                }
-            })
+impl IntoIterator for SparseRecord {
+    type Item = (usize, Value);
+
+    type IntoIter = Box<dyn Iterator<Item = (usize, Value)>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(
+            self.values
+                .into_iter()
+                .enumerate()
+                .filter_map(move |(i, value)| {
+                    if self.fields.contains(i) {
+                        Some((i, value))
+                    } else {
+                        None
+                    }
+                }),
+        )
     }
 }
 
