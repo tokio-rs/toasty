@@ -95,7 +95,7 @@ impl VisitMut for Simplify<'_> {
                 // query as a single disjuntive query.
                 let mut operands = vec![];
 
-                self.flatten_nested_unions(expr_set_op, &mut operands);
+                Self::flatten_nested_unions(expr_set_op, &mut operands);
 
                 expr_set_op.operands = operands;
             }
@@ -321,7 +321,6 @@ impl<'a> Simplify<'a> {
 
     /// Returns the source model
     fn flatten_nested_unions(
-        &self,
         expr_set_op: &mut stmt::ExprSetOp,
         operands: &mut Vec<stmt::ExprSet>,
     ) {
@@ -330,7 +329,7 @@ impl<'a> Simplify<'a> {
         for expr_set in &mut expr_set_op.operands {
             match expr_set {
                 stmt::ExprSet::SetOp(nested_set_op) if nested_set_op.is_union() => {
-                    self.flatten_nested_unions(nested_set_op, operands)
+                    Self::flatten_nested_unions(nested_set_op, operands)
                 }
                 // Just drop empty values
                 stmt::ExprSet::Values(values) if values.is_empty() => {}

@@ -332,8 +332,8 @@ impl LowerStatement<'_> {
                 ))
             }
             (stmt::Expr::Cast(expr_cast), other) if expr_cast.ty.is_id() => {
-                self.uncast_expr_id(lhs);
-                self.uncast_expr_id(other);
+                Self::uncast_expr_id(lhs);
+                Self::uncast_expr_id(other);
                 None
             }
             (stmt::Expr::Cast(_), stmt::Expr::Cast(_)) => todo!(),
@@ -356,17 +356,17 @@ impl LowerStatement<'_> {
                 None
             }
             (stmt::Expr::Cast(expr_cast), list) if expr_cast.ty.is_id() => {
-                self.uncast_expr_id(expr);
+                Self::uncast_expr_id(expr);
 
                 match list {
                     stmt::Expr::List(expr_list) => {
                         for expr in &mut expr_list.items {
-                            self.uncast_expr_id(expr);
+                            Self::uncast_expr_id(expr);
                         }
                     }
                     stmt::Expr::Value(stmt::Value::List(items)) => {
                         for item in items {
-                            self.uncast_value_id(item);
+                            Self::uncast_value_id(item);
                         }
                     }
                     stmt::Expr::Arg(_) => {
@@ -411,10 +411,10 @@ impl LowerStatement<'_> {
         *expr = lowered.into();
     }
 
-    fn uncast_expr_id(&self, expr: &mut stmt::Expr) {
+    fn uncast_expr_id(expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::Value(value) => {
-                self.uncast_value_id(value);
+                Self::uncast_value_id(value);
             }
             stmt::Expr::Cast(expr_cast) if expr_cast.ty.is_id() => {
                 *expr = expr_cast.expr.take();
@@ -426,14 +426,14 @@ impl LowerStatement<'_> {
             }
             stmt::Expr::List(expr_list) => {
                 for expr in &mut expr_list.items {
-                    self.uncast_expr_id(expr);
+                    Self::uncast_expr_id(expr);
                 }
             }
             _ => todo!("{expr:#?}"),
         }
     }
 
-    fn uncast_value_id(&self, value: &mut stmt::Value) {
+    fn uncast_value_id(value: &mut stmt::Value) {
         match value {
             stmt::Value::Id(_) => {
                 let uncast = value.take().into_id().into_primitive();
@@ -441,7 +441,7 @@ impl LowerStatement<'_> {
             }
             stmt::Value::List(items) => {
                 for item in items {
-                    self.uncast_value_id(item);
+                    Self::uncast_value_id(item);
                 }
             }
             _ => todo!("{value:#?}"),
