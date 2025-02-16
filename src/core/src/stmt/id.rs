@@ -58,14 +58,6 @@ impl Id {
         }
     }
 
-    /// Return a string representation of the record identifier.
-    pub fn to_string(&self) -> String {
-        match &self.repr {
-            Repr::Int(id) => id.to_string(),
-            Repr::String(id) => id.clone(),
-        }
-    }
-
     pub fn to_primitive(&self) -> stmt::Value {
         match &self.repr {
             Repr::Int(_) => todo!(),
@@ -84,6 +76,15 @@ impl Id {
         match (self.repr, ty) {
             (Repr::String(id), Type::String) => Ok(id.into()),
             (repr, _) => todo!("id={repr:#?}; ty={ty:#?}"),
+        }
+    }
+}
+
+impl std::fmt::Display for Id {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.repr {
+            Repr::Int(id) => write!(f, "{id}"),
+            Repr::String(id) => write!(f, "{id}"),
         }
     }
 }
