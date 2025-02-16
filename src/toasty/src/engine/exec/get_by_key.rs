@@ -9,7 +9,7 @@ impl Exec<'_> {
             .await?;
 
         let res = if keys.is_empty() {
-            ValueStream::new()
+            ValueStream::default()
         } else {
             let op = operation::GetByKey {
                 table: action.table,
