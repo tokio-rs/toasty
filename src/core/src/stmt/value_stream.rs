@@ -53,6 +53,7 @@ impl ValueStream {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_iter<T, I>(iter: I) -> ValueStream
     where
         T: Into<Value>,
