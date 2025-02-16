@@ -1,7 +1,7 @@
 use super::*;
 
 use indexmap::{Equivalent, IndexMap};
-use std::{hash::Hash, iter::Map, ops};
+use std::{hash::Hash, ops};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Assignments {
