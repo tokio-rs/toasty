@@ -110,12 +110,25 @@ impl<T: ?Sized> Path<T> {
 
 impl<M> Path<M> {}
 
+impl<T> Clone for Path<T> {
+    fn clone(&self) -> Path<T> {
+        Path {
+            untyped: self.untyped.clone(),
+            _p: PhantomData,
+        }
+    }
+}
+
 impl<T> IntoExpr<T> for Path<T> {
     fn into_expr(self) -> Expr<T> {
         Expr {
             untyped: self.untyped.into_stmt(),
             _p: PhantomData,
         }
+    }
+
+    fn by_ref(&self) -> Expr<T> {
+        Path::into_expr(self.clone())
     }
 }
 

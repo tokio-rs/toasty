@@ -125,10 +125,8 @@ impl<'a> Generator<'a> {
                 fn into_expr(self) -> stmt::Expr<#struct_name> {
                     #into_expr_body_val
                 }
-            }
 
-            impl stmt::IntoExpr<#struct_name> for &#struct_name {
-                fn into_expr(self) -> stmt::Expr<#struct_name> {
+                fn by_ref(&self) -> stmt::Expr<#struct_name> {
                     #into_expr_body_ref
                 }
             }
@@ -137,10 +135,8 @@ impl<'a> Generator<'a> {
                 fn into_expr(self) -> stmt::Expr<[#struct_name]> {
                     stmt::Expr::list([self])
                 }
-            }
 
-            impl stmt::IntoExpr<[#struct_name]> for &#struct_name {
-                fn into_expr(self) -> stmt::Expr<[#struct_name]> {
+                fn by_ref(&self) -> stmt::Expr<[#struct_name]> {
                     stmt::Expr::list([self])
                 }
             }

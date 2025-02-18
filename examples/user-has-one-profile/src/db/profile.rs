@@ -21,6 +21,9 @@ impl Profile {
     pub fn filter_by_id(id: impl IntoExpr<Id<Profile>>) -> Query {
         Query::default().filter_by_id(id)
     }
+    pub fn filter_by_id_batch(keys: impl IntoExpr<[Id<Profile>]>) -> Query {
+        Query::default().filter_by_id_batch(keys)
+    }
     pub async fn get_by_user_id(
         db: &Db,
         user_id: impl IntoExpr<Id<super::user::User>>,
@@ -89,9 +92,7 @@ impl stmt::IntoExpr<Profile> for Profile {
     fn into_expr(self) -> stmt::Expr<Profile> {
         self.id.into_expr().cast()
     }
-}
-impl stmt::IntoExpr<Profile> for &Profile {
-    fn into_expr(self) -> stmt::Expr<Profile> {
+    fn by_ref(&self) -> stmt::Expr<Profile> {
         (&self.id).into_expr().cast()
     }
 }
@@ -99,9 +100,7 @@ impl stmt::IntoExpr<[Profile]> for Profile {
     fn into_expr(self) -> stmt::Expr<[Profile]> {
         stmt::Expr::list([self])
     }
-}
-impl stmt::IntoExpr<[Profile]> for &Profile {
-    fn into_expr(self) -> stmt::Expr<[Profile]> {
+    fn by_ref(&self) -> stmt::Expr<[Profile]> {
         stmt::Expr::list([self])
     }
 }
@@ -115,6 +114,9 @@ impl Query {
     }
     pub fn filter_by_id(self, id: impl IntoExpr<Id<Profile>>) -> Query {
         self.filter(Profile::ID.eq(id))
+    }
+    pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<Profile>]>) -> Query {
+        self.filter(stmt::Expr::in_list(Profile::ID, keys))
     }
     pub fn filter_by_user_id(self, user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
         self.filter(Profile::USER_ID.eq(user_id))
@@ -202,10 +204,16 @@ pub mod builders {
         fn into_expr(self) -> stmt::Expr<Profile> {
             self.stmt.into()
         }
+        fn by_ref(&self) -> stmt::Expr<Profile> {
+            todo!()
+        }
     }
     impl IntoExpr<[Profile]> for CreateProfile {
         fn into_expr(self) -> stmt::Expr<[Profile]> {
             self.stmt.into_list_expr()
+        }
+        fn by_ref(&self) -> stmt::Expr<[Profile]> {
+            todo!()
         }
     }
     impl Default for CreateProfile {
@@ -349,6 +357,10 @@ pub mod relations {
             A: FromCursor<Profile>,
         {
             self.all(db).await?.collect().await
+        }
+        pub fn query(self, filter: stmt::Expr<bool>) -> super::Query {
+            let query = self.into_select();
+            super::Query::from_stmt(query.and(filter))
         }
         pub fn create(self) -> builders::CreateProfile {
             let mut builder = builders::CreateProfile::default();

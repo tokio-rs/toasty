@@ -23,6 +23,9 @@ impl Todo {
     pub fn filter_by_id(id: impl IntoExpr<Id<Todo>>) -> Query {
         Query::default().filter_by_id(id)
     }
+    pub fn filter_by_id_batch(keys: impl IntoExpr<[Id<Todo>]>) -> Query {
+        Query::default().filter_by_id_batch(keys)
+    }
     pub async fn get_by_user_id(
         db: &Db,
         user_id: impl IntoExpr<Id<super::user::User>>,
@@ -92,9 +95,7 @@ impl stmt::IntoExpr<Todo> for Todo {
     fn into_expr(self) -> stmt::Expr<Todo> {
         self.id.into_expr().cast()
     }
-}
-impl stmt::IntoExpr<Todo> for &Todo {
-    fn into_expr(self) -> stmt::Expr<Todo> {
+    fn by_ref(&self) -> stmt::Expr<Todo> {
         (&self.id).into_expr().cast()
     }
 }
@@ -102,9 +103,7 @@ impl stmt::IntoExpr<[Todo]> for Todo {
     fn into_expr(self) -> stmt::Expr<[Todo]> {
         stmt::Expr::list([self])
     }
-}
-impl stmt::IntoExpr<[Todo]> for &Todo {
-    fn into_expr(self) -> stmt::Expr<[Todo]> {
+    fn by_ref(&self) -> stmt::Expr<[Todo]> {
         stmt::Expr::list([self])
     }
 }
@@ -118,6 +117,9 @@ impl Query {
     }
     pub fn filter_by_id(self, id: impl IntoExpr<Id<Todo>>) -> Query {
         self.filter(Todo::ID.eq(id))
+    }
+    pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<Todo>]>) -> Query {
+        self.filter(stmt::Expr::in_list(Todo::ID, keys))
     }
     pub fn filter_by_user_id(self, user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
         self.filter(Todo::USER_ID.eq(user_id))
@@ -209,10 +211,16 @@ pub mod builders {
         fn into_expr(self) -> stmt::Expr<Todo> {
             self.stmt.into()
         }
+        fn by_ref(&self) -> stmt::Expr<Todo> {
+            todo!()
+        }
     }
     impl IntoExpr<[Todo]> for CreateTodo {
         fn into_expr(self) -> stmt::Expr<[Todo]> {
             self.stmt.into_list_expr()
+        }
+        fn by_ref(&self) -> stmt::Expr<[Todo]> {
+            todo!()
         }
     }
     impl Default for CreateTodo {
@@ -353,6 +361,10 @@ pub mod relations {
             A: FromCursor<Todo>,
         {
             self.all(db).await?.collect().await
+        }
+        pub fn query(self, filter: stmt::Expr<bool>) -> super::Query {
+            let query = self.into_select();
+            super::Query::from_stmt(query.and(filter))
         }
         pub fn create(self) -> builders::CreateTodo {
             let mut builder = builders::CreateTodo::default();

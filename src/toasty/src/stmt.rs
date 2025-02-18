@@ -91,15 +91,3 @@ impl<M> fmt::Debug for Statement<M> {
         self.untyped.fmt(fmt)
     }
 }
-
-// TODO: move
-pub fn in_set<L, R, T>(lhs: L, rhs: R) -> Expr<bool>
-where
-    L: IntoExpr<T>,
-    R: IntoExpr<[T]>,
-{
-    Expr {
-        untyped: stmt::Expr::in_list(lhs.into_expr().untyped, rhs.into_expr().untyped),
-        _p: PhantomData,
-    }
-}

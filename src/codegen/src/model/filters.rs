@@ -2,7 +2,11 @@ use super::*;
 
 /// Combination of fields for which filter a method should be generated.
 pub(super) struct Filter {
+    /// Fields to filter by
     fields: Vec<app::FieldId>,
+
+    /// When true, include a batch filter method
+    batch: bool,
 }
 
 struct BuildModelFilters<'a> {
@@ -25,12 +29,19 @@ impl<'a> Generator<'a> {
         self.filters
             .iter()
             .map(|filter| {
-                let get = self.gen_model_get_method(filter, depth);
-                let filter = self.gen_model_filter_method(filter, depth);
+                let get_method = self.gen_model_get_method(filter, depth);
+                let filter_method = self.gen_model_filter_method(filter, depth);
+
+                let filter_batch_method = if filter.batch {
+                    Some(self.gen_model_filter_batch_method(filter, depth))
+                } else {
+                    None
+                };
 
                 quote!(
-                    #get
-                    #filter
+                    #get_method
+                    #filter_method
+                    #filter_batch_method
                 )
             })
             .collect()
@@ -66,10 +77,34 @@ impl<'a> Generator<'a> {
         }
     }
 
+    fn gen_model_filter_batch_method(&self, filter: &Filter, depth: usize) -> TokenStream {
+        let ident = self.filter_method_batch_ident(filter);
+        let bound = self.gen_filter_batch_arg_bound(filter, depth);
+
+        quote! {
+            pub fn #ident(keys: impl IntoExpr<[#bound]>) -> Query {
+                Query::default()
+                    .#ident( keys )
+            }
+        }
+    }
+
     pub(super) fn gen_query_filter_methods(&self) -> TokenStream {
         self.filters
             .iter()
-            .map(|filter| self.gen_query_filter_method(filter))
+            .map(|filter| {
+                let filter_method = self.gen_query_filter_method(filter);
+                let filter_batch_method = if filter.batch {
+                    Some(self.gen_query_filter_batch_method(filter))
+                } else {
+                    None
+                };
+
+                quote! {
+                    #filter_method
+                    #filter_batch_method
+                }
+            })
             .collect()
     }
 
@@ -94,6 +129,29 @@ impl<'a> Generator<'a> {
         quote! {
             pub fn #ident(self, #( #args ),* ) -> Query {
                 self.filter(#body)
+            }
+        }
+    }
+
+    fn gen_query_filter_batch_method(&self, filter: &Filter) -> TokenStream {
+        let struct_name = self.self_struct_name();
+        let ident = self.filter_method_batch_ident(filter);
+        let bound = self.gen_filter_batch_arg_bound(filter, 0);
+
+        let lhs = filter.fields.iter().map(|field| {
+            let path = self.field_const_name(field);
+            quote!(#struct_name::#path)
+        });
+
+        let lhs = if filter.fields.len() == 1 {
+            quote!(#( #lhs )*)
+        } else {
+            quote!( ( #( #lhs ),* ) )
+        };
+
+        quote! {
+            pub fn #ident(self, keys: impl IntoExpr<[#bound]> ) -> Query {
+                self.filter( stmt::Expr::in_list( #lhs, keys ) )
             }
         }
     }
@@ -130,7 +188,10 @@ impl<'a> Generator<'a> {
             .primary_key_fields()
             .map(|field| field.id)
             .collect::<Vec<_>>();
-        let filter = Filter { fields };
+        let filter = Filter {
+            fields,
+            batch: false,
+        };
 
         let ident = self.filter_method_ident(&filter);
         let arg_idents = self.gen_filter_arg_idents(&filter);
@@ -145,19 +206,32 @@ impl<'a> Generator<'a> {
     }
 
     fn get_method_ident(&self, filter: &Filter) -> syn::Ident {
-        self.method_ident("get_by", filter)
+        self.method_ident(filter, "get_by", None)
     }
 
     fn filter_method_ident(&self, filter: &Filter) -> syn::Ident {
-        self.method_ident("filter_by", filter)
+        self.method_ident(filter, "filter_by", None)
     }
 
-    fn method_ident(&self, prefix: &str, filter: &Filter) -> syn::Ident {
+    fn filter_method_batch_ident(&self, filter: &Filter) -> syn::Ident {
+        self.method_ident(filter, "filter_by", Some("batch"))
+    }
+
+    fn method_ident(&self, filter: &Filter, prefix: &str, suffix: Option<&str>) -> syn::Ident {
         let mut name = prefix.to_string();
 
+        let mut prefix = "_";
+
         for field in &filter.fields {
-            name.push_str("_");
+            name.push_str(prefix);
             name.push_str(&self.model.fields[field.index].name);
+
+            prefix = "_and_";
+        }
+
+        if let Some(suffix) = suffix {
+            name.push_str("_");
+            name.push_str(suffix);
         }
 
         util::ident(&name)
@@ -174,6 +248,19 @@ impl<'a> Generator<'a> {
 
             quote!(#name: impl IntoExpr<#ty>    )
         })
+    }
+
+    fn gen_filter_batch_arg_bound(&self, filter: &Filter, depth: usize) -> TokenStream {
+        let parts = filter.fields.iter().map(move |field| {
+            let ty = self.field_ty(*field, depth);
+            quote!(#ty)
+        });
+
+        if filter.fields.len() == 1 {
+            quote!( #( #parts )* )
+        } else {
+            quote!( ( #( #parts ),* ) )
+        }
     }
 
     fn gen_filter_arg_idents<'b>(
@@ -207,12 +294,13 @@ impl<'a> BuildModelFilters<'a> {
                 .copied()
                 .collect::<Vec<_>>();
 
-            if !self.find_index(&fields).is_some() {
+            let Some(index) = self.find_index(&fields) else {
                 continue;
-            }
+            };
 
             self.filters.push(Filter {
                 fields: fields.clone(),
+                batch: index.primary_key && index.fields.len() == fields.len(),
             });
 
             self.recurse(&fields);

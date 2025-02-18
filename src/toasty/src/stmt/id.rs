@@ -32,11 +32,9 @@ impl<M: Model> IntoExpr<Id<M>> for Id<M> {
     fn into_expr(self) -> Expr<Id<M>> {
         Expr::from_value(self.inner.into())
     }
-}
 
-impl<M: Model> IntoExpr<Id<M>> for &Id<M> {
-    fn into_expr(self) -> Expr<Id<M>> {
-        Expr::from_value(Value::from(&self.inner))
+    fn by_ref(&self) -> Expr<Id<M>> {
+        Expr::from_value((&self.inner).into())
     }
 }
 
@@ -44,17 +42,19 @@ impl<M: Model> IntoExpr<Id<M>> for String {
     fn into_expr(self) -> Expr<Id<M>> {
         Expr::from_value(stmt::Id::from_string(M::ID, self).into())
     }
-}
 
-impl<M: Model> IntoExpr<Id<M>> for &String {
-    fn into_expr(self) -> Expr<Id<M>> {
-        Expr::from_value(stmt::Id::from_string(M::ID, self.clone()).into())
+    fn by_ref(&self) -> Expr<Id<M>> {
+        String::into_expr(self.clone())
     }
 }
 
 impl<M: Model> IntoExpr<Id<M>> for &str {
     fn into_expr(self) -> Expr<Id<M>> {
         Expr::from_value(stmt::Id::from_string(M::ID, self.into()).into())
+    }
+
+    fn by_ref(&self) -> Expr<Id<M>> {
+        Self::into_expr(*self)
     }
 }
 

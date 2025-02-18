@@ -32,11 +32,19 @@ impl<'a> Generator<'a> {
                 fn into_expr(self) -> stmt::Expr<#struct_name> {
                     self.stmt.into()
                 }
+
+                fn by_ref(&self) -> stmt::Expr<#struct_name> {
+                    todo!()
+                }
             }
 
             impl IntoExpr<[#struct_name]> for #create_struct_name {
                 fn into_expr(self) -> stmt::Expr<[#struct_name]> {
                     self.stmt.into_list_expr()
+                }
+
+                fn by_ref(&self) -> stmt::Expr<[#struct_name]> {
+                    todo!()
                 }
             }
 
