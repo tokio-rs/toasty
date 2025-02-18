@@ -84,6 +84,7 @@ impl<'a> Generator<'a> {
     pub(super) fn gen_relations_mod(&self) -> TokenStream {
         let strukt_name = self.self_struct_name();
         let create_struct_name = self.self_create_struct_name();
+        let filter_methods = self.gen_relation_filter_methods();
 
         quote! {
             #[derive(Debug)]
@@ -113,6 +114,8 @@ impl<'a> Generator<'a> {
                 pub fn from_stmt(stmt: stmt::Association<[#strukt_name]>) -> Many {
                     Many { stmt }
                 }
+
+                #filter_methods
 
                 /// Iterate all entries in the relation
                 pub async fn all(self, db: &Db) -> Result<Cursor<#strukt_name>> {

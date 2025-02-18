@@ -29,11 +29,11 @@ impl<'a> Generator<'a> {
         self.filters
             .iter()
             .map(|filter| {
-                let get_method = self.gen_model_get_method(filter, depth);
-                let filter_method = self.gen_model_filter_method(filter, depth);
+                let get_method = self.gen_model_get_method(filter, depth, false);
+                let filter_method = self.gen_model_filter_method(filter, depth, false);
 
                 let filter_batch_method = if filter.batch {
-                    Some(self.gen_model_filter_batch_method(filter, depth))
+                    Some(self.gen_model_filter_batch_method(filter, depth, false))
                 } else {
                     None
                 };
@@ -47,44 +47,86 @@ impl<'a> Generator<'a> {
             .collect()
     }
 
-    fn gen_model_get_method(&self, filter: &Filter, depth: usize) -> TokenStream {
+    fn gen_model_get_method(
+        &self,
+        filter: &Filter,
+        depth: usize,
+        self_into_select: bool,
+    ) -> TokenStream {
         let struct_name = self.self_struct_name();
         let ident = self.get_method_ident(filter);
         let filter_ident = self.filter_method_ident(filter);
         let args = self.gen_filter_args(filter, depth);
         let arg_idents = self.gen_filter_arg_idents(filter);
+        let self_arg;
+        let base;
+
+        if self_into_select {
+            self_arg = quote!(self,);
+            base = quote!(self.);
+        } else {
+            self_arg = quote!();
+            base = quote!(Self::);
+        }
 
         quote! {
-            pub async fn #ident(db: &Db, #( #args ),* ) -> Result<#struct_name> {
-                Query::default()
-                    .#filter_ident( #( #arg_idents ),* )
+            pub async fn #ident(#self_arg db: &Db, #( #args ),* ) -> Result<#struct_name> {
+                #base #filter_ident( #( #arg_idents ),* )
                     .get(db)
                     .await
             }
         }
     }
 
-    fn gen_model_filter_method(&self, filter: &Filter, depth: usize) -> TokenStream {
+    fn gen_model_filter_method(
+        &self,
+        filter: &Filter,
+        depth: usize,
+        self_into_select: bool,
+    ) -> TokenStream {
         let ident = self.filter_method_ident(filter);
         let args = self.gen_filter_args(filter, depth);
         let arg_idents = self.gen_filter_arg_idents(filter);
+        let self_arg;
+        let query;
+
+        if self_into_select {
+            self_arg = quote!(self,);
+            query = quote!(Query::from_stmt(self.into_select()));
+        } else {
+            self_arg = quote!();
+            query = quote!(Query::default());
+        }
 
         quote! {
-            pub fn #ident(#( #args ),* ) -> Query {
-                Query::default()
-                    .#ident( #( #arg_idents ),* )
+            pub fn #ident( #self_arg #( #args ),* ) -> Query {
+                #query.#ident( #( #arg_idents ),* )
             }
         }
     }
 
-    fn gen_model_filter_batch_method(&self, filter: &Filter, depth: usize) -> TokenStream {
+    fn gen_model_filter_batch_method(
+        &self,
+        filter: &Filter,
+        depth: usize,
+        self_into_select: bool,
+    ) -> TokenStream {
         let ident = self.filter_method_batch_ident(filter);
         let bound = self.gen_filter_batch_arg_bound(filter, depth);
+        let self_arg;
+        let query;
+
+        if self_into_select {
+            self_arg = quote!(self,);
+            query = quote!(Query::from_stmt(self.into_select()));
+        } else {
+            self_arg = quote!();
+            query = quote!(Query::default());
+        }
 
         quote! {
-            pub fn #ident(keys: impl IntoExpr<[#bound]>) -> Query {
-                Query::default()
-                    .#ident( keys )
+            pub fn #ident(#self_arg keys: impl IntoExpr<[#bound]>) -> Query {
+                #query.#ident( keys )
             }
         }
     }
@@ -104,6 +146,28 @@ impl<'a> Generator<'a> {
                     #filter_method
                     #filter_batch_method
                 }
+            })
+            .collect()
+    }
+
+    pub(super) fn gen_relation_filter_methods(&self) -> TokenStream {
+        self.filters
+            .iter()
+            .map(|filter| {
+                let get_method = self.gen_model_get_method(filter, 1, true);
+                let filter_method = self.gen_model_filter_method(filter, 1, true);
+
+                let filter_batch_method = if filter.batch {
+                    Some(self.gen_model_filter_batch_method(filter, 1, true))
+                } else {
+                    None
+                };
+
+                quote!(
+                    #get_method
+                    #filter_method
+                    #filter_batch_method
+                )
             })
             .collect()
     }
