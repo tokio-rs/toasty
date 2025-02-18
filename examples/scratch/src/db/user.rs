@@ -21,16 +21,13 @@ impl User {
         ))
     }
     pub async fn get_by_id(db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
-        Self::filter_by_id(id).get(db).await
+        Query::default().filter_by_id(id).get(db).await
     }
     pub fn filter_by_id(id: impl IntoExpr<Id<User>>) -> Query {
         Query::default().filter_by_id(id)
     }
-    pub fn filter_by_id_batch(keys: impl IntoExpr<[Id<User>]>) -> Query {
-        Query::default().filter_by_id_batch(keys)
-    }
     pub async fn get_by_email(db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-        Self::filter_by_email(email).get(db).await
+        Query::default().filter_by_email(email).get(db).await
     }
     pub fn filter_by_email(email: impl IntoExpr<String>) -> Query {
         Query::default().filter_by_email(email)
@@ -96,7 +93,9 @@ impl stmt::IntoExpr<User> for User {
     fn into_expr(self) -> stmt::Expr<User> {
         self.id.into_expr().cast()
     }
-    fn by_ref(&self) -> stmt::Expr<User> {
+}
+impl stmt::IntoExpr<User> for &User {
+    fn into_expr(self) -> stmt::Expr<User> {
         (&self.id).into_expr().cast()
     }
 }
@@ -104,7 +103,9 @@ impl stmt::IntoExpr<[User]> for User {
     fn into_expr(self) -> stmt::Expr<[User]> {
         stmt::Expr::list([self])
     }
-    fn by_ref(&self) -> stmt::Expr<[User]> {
+}
+impl stmt::IntoExpr<[User]> for &User {
+    fn into_expr(self) -> stmt::Expr<[User]> {
         stmt::Expr::list([self])
     }
 }
@@ -116,17 +117,8 @@ impl Query {
     pub const fn from_stmt(stmt: stmt::Select<User>) -> Query {
         Query { stmt }
     }
-    pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
-        self.filter_by_id(id).get(db).await
-    }
     pub fn filter_by_id(self, id: impl IntoExpr<Id<User>>) -> Query {
         self.filter(User::ID.eq(id))
-    }
-    pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<User>]>) -> Query {
-        self.filter(stmt::Expr::in_list(User::ID, keys))
-    }
-    pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-        self.filter_by_email(email).get(db).await
     }
     pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
         self.filter(User::EMAIL.eq(email))
@@ -157,9 +149,6 @@ impl Query {
         Query {
             stmt: self.stmt.and(expr),
         }
-    }
-    pub fn todos(mut self) -> super::todo::Query {
-        todo!()
     }
 }
 impl stmt::IntoSelect for Query {
@@ -222,16 +211,10 @@ pub mod builders {
         fn into_expr(self) -> stmt::Expr<User> {
             self.stmt.into()
         }
-        fn by_ref(&self) -> stmt::Expr<User> {
-            todo!()
-        }
     }
     impl IntoExpr<[User]> for CreateUser {
         fn into_expr(self) -> stmt::Expr<[User]> {
             self.stmt.into_list_expr()
-        }
-        fn by_ref(&self) -> stmt::Expr<[User]> {
-            todo!()
         }
     }
     impl Default for CreateUser {
@@ -381,21 +364,6 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Association<[User]>) -> Many {
             Many { stmt }
         }
-        pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
-            self.filter_by_id(id).get(db).await
-        }
-        pub fn filter_by_id(self, id: impl IntoExpr<Id<User>>) -> Query {
-            Query::from_stmt(self.into_select()).filter_by_id(id)
-        }
-        pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<User>]>) -> Query {
-            Query::from_stmt(self.into_select()).filter_by_id_batch(keys)
-        }
-        pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-            self.filter_by_email(email).get(db).await
-        }
-        pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
-            Query::from_stmt(self.into_select()).filter_by_email(email)
-        }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<User>> {
             db.all(self.stmt.into_select()).await
@@ -405,10 +373,6 @@ pub mod relations {
             A: FromCursor<User>,
         {
             self.all(db).await?.collect().await
-        }
-        pub fn query(self, filter: stmt::Expr<bool>) -> super::Query {
-            let query = self.into_select();
-            super::Query::from_stmt(query.and(filter))
         }
         pub fn create(self) -> builders::CreateUser {
             let mut builder = builders::CreateUser::default();

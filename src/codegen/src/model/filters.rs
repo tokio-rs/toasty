@@ -135,6 +135,7 @@ impl<'a> Generator<'a> {
         self.filters
             .iter()
             .map(|filter| {
+                let get_method = self.gen_model_get_method(filter, 0, true);
                 let filter_method = self.gen_query_filter_method(filter);
                 let filter_batch_method = if filter.batch {
                     Some(self.gen_query_filter_batch_method(filter))
@@ -143,6 +144,7 @@ impl<'a> Generator<'a> {
                 };
 
                 quote! {
+                    #get_method
                     #filter_method
                     #filter_batch_method
                 }

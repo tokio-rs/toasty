@@ -88,13 +88,24 @@ impl<'a> Generator<'a> {
             .iter()
             .filter_map(|field| match &field.ty {
                 FieldTy::Primitive(..) => None,
-                FieldTy::HasMany(..) => None,
+                FieldTy::HasMany(rel) => Some(self.gen_has_many_method(field.id, rel.target)),
                 FieldTy::BelongsTo(belongs_to) => {
                     Some(self.gen_belongs_to_method(field.id, belongs_to.target))
                 }
                 FieldTy::HasOne(..) => None,
             })
             .collect()
+    }
+
+    fn gen_has_many_method(&self, field: app::FieldId, target: app::ModelId) -> TokenStream {
+        let name = self.field_name(field);
+        let module_name = self.module_name(target, 0);
+
+        quote! {
+            pub fn #name(mut self) -> #module_name::Query {
+                todo!()
+            }
+        }
     }
 
     fn gen_belongs_to_method(&self, field: app::FieldId, target: app::ModelId) -> TokenStream {

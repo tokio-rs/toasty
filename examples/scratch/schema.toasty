@@ -1,0 +1,28 @@
+model User {
+    #[key]
+    #[auto]
+    id: Id,
+
+    name: String,
+
+    #[unique]
+    email: String,
+
+    todos: [Todo],
+
+    moto: Option<String>,
+}
+
+model Todo {
+    #[key]
+    #[auto]
+    id: Id,
+
+    #[index]
+    user_id: Id<User>,
+
+    #[relation(key = user_id, references = id)]
+    user: User,
+
+    title: String,
+}

@@ -345,8 +345,7 @@ async fn scoped_find_by_id(s: impl Setup) {
 
     let reloaded = db::User::filter_by_id(&user1.id)
         .todos()
-        .find_by_id(&todo.id)
-        .get(&db)
+        .get_by_id(&db, &todo.id)
         .await
         .unwrap();
 
