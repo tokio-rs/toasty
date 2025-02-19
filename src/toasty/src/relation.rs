@@ -7,6 +7,9 @@ pub use has_many::HasMany;
 pub mod option;
 
 pub trait Relation {
+    /// Query type
+    type Query;
+
     /// HasMany relation type
     type Many;
 

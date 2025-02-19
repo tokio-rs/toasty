@@ -90,6 +90,7 @@ impl<'a> Generator<'a> {
             }
 
             impl Relation for #struct_name {
+                type Query = Query;
                 type Many = relations::Many;
                 type ManyField = relations::ManyField;
                 type One = relations::One;

@@ -1,17 +1,13 @@
 use super::*;
 
 impl Simplify<'_> {
-    pub(super) fn simplify_via_association_for_delete(
-        &mut self,
-        stmt: &mut stmt::Delete,
-    ) -> Option<stmt::Statement> {
+    pub(super) fn simplify_via_association_for_delete(&mut self, stmt: &mut stmt::Delete) {
         if let stmt::Source::Model(model) = &mut stmt.from {
             if let Some(via) = model.via.take() {
-                return Some(self.rewrite_delete_association_as_update(via));
+                let filter = self.rewrite_association_as_filter(via);
+                stmt.filter = stmt::Expr::and(stmt.filter.take(), filter);
             }
         }
-
-        None
     }
 
     pub(super) fn simplify_via_association_for_insert(&mut self, stmt: &mut stmt::Insert) {
@@ -53,7 +49,7 @@ impl Simplify<'_> {
     fn rewrite_association_belongs_to_as_filter(
         &mut self,
         rel: &app::BelongsTo,
-        mut association: stmt::Association,
+        association: stmt::Association,
     ) -> stmt::Expr {
         /*
         let operands = rel.foreign_key.fields.iter().map(|fk_field| {
@@ -62,30 +58,5 @@ impl Simplify<'_> {
         */
 
         todo!("rel={rel:#?}, association={association:#?}");
-    }
-
-    fn rewrite_delete_association_as_update(
-        &mut self,
-        mut association: stmt::Association,
-    ) -> stmt::Statement {
-        /*
-        // First, we want to simplify the association source.
-        stmt::visit_mut::visit_stmt_query_mut(self, &mut *association.source);
-
-        // For now, we only support paths with a single step
-        assert!(association.path.len() == 1, "TODO");
-
-        let field = association.path.resolve_field(&self.schema.app);
-
-        match &field.ty {
-            app::FieldTy::HasMany(rel) => {
-                let mut stmt = association.source.update();
-                stmt.assignments.remove(field.id.index, todo!());
-                stmt.into()
-            }
-            _ => todo!("field={field:#?}"),
-        }
-        */
-        todo!()
     }
 }

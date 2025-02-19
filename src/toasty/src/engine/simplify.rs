@@ -112,24 +112,12 @@ impl<'a> VisitMut for Simplify<'_> {
         stmt::visit_mut::visit_expr_set_mut(self, i);
     }
 
-    fn visit_stmt_mut(&mut self, i: &mut stmt::Statement) {
-        if let stmt::Statement::Delete(stmt) = i {
-            // Simplifying the via association for delete statements may change
-            // the statement from a delete to an update where the update unsets
-            // the target's foreign key.
-            if let Some(stmt) = self.simplify_via_association_for_delete(stmt) {
-                *i = stmt;
-            }
-        }
-
-        stmt::visit_mut::visit_stmt_mut(self, i);
-    }
-
     fn visit_stmt_delete_mut(&mut self, stmt: &mut stmt::Delete) {
         let target = mem::replace(
             &mut self.target,
             ExprTarget::from_source(self.schema, &stmt.from),
         );
+        self.simplify_via_association_for_delete(stmt);
         stmt::visit_mut::visit_stmt_delete_mut(self, stmt);
         self.target = target;
     }

@@ -88,33 +88,37 @@ impl<'a> Generator<'a> {
             .iter()
             .filter_map(|field| match &field.ty {
                 FieldTy::Primitive(..) => None,
-                FieldTy::HasMany(rel) => Some(self.gen_has_many_method(field.id, rel.target)),
-                FieldTy::BelongsTo(belongs_to) => {
-                    Some(self.gen_belongs_to_method(field.id, belongs_to.target))
-                }
+                FieldTy::HasMany(_) => Some(self.gen_has_many_method(field.id)),
+                FieldTy::BelongsTo(_) => Some(self.gen_belongs_to_method(field.id)),
                 FieldTy::HasOne(..) => None,
             })
             .collect()
     }
 
-    fn gen_has_many_method(&self, field: app::FieldId, target: app::ModelId) -> TokenStream {
+    fn gen_has_many_method(&self, field: app::FieldId) -> TokenStream {
         let name = self.field_name(field);
-        let module_name = self.module_name(target, 0);
+        let const_name = self.field_const_name(field);
+        let strukt_path = self.self_struct_name();
+        let target_struct_path = self.target_struct_path(field, 0);
 
         quote! {
-            pub fn #name(mut self) -> #module_name::Query {
-                todo!()
+            pub fn #name(mut self) -> <#target_struct_path as Relation>::Query {
+                <#target_struct_path as Relation>::Query::from_stmt(
+                    stmt::Association::many(self.stmt, #strukt_path::#const_name.into()).into_select()
+                )
             }
         }
     }
 
-    fn gen_belongs_to_method(&self, field: app::FieldId, target: app::ModelId) -> TokenStream {
+    fn gen_belongs_to_method(&self, field: app::FieldId) -> TokenStream {
         let name = self.field_name(field);
-        let module_name = self.module_name(target, 0);
+        let target_struct_path = self.target_struct_path(field, 0);
 
         quote! {
-            pub fn #name(mut self) -> #module_name::Query {
-                todo!()
+            pub fn #name(mut self) -> <#target_struct_path as Relation>::Query {
+                <#target_struct_path as Relation>::Query::from_stmt(
+                    todo!()
+                )
             }
         }
     }
