@@ -385,7 +385,7 @@ pub mod relations {
             self.filter_by_id(id).get(db).await
         }
         pub fn filter_by_id(self, id: impl IntoExpr<Id<User>>) -> Query {
-            Query::from_stmt(self.into_select()).filter_by_id(id)
+            Query::from_stmt(self.into_select()).filter(User::ID.eq(id))
         }
         pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<User>]>) -> Query {
             Query::from_stmt(self.into_select()).filter_by_id_batch(keys)
@@ -394,7 +394,7 @@ pub mod relations {
             self.filter_by_email(email).get(db).await
         }
         pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
-            Query::from_stmt(self.into_select()).filter_by_email(email)
+            Query::from_stmt(self.into_select()).filter(User::EMAIL.eq(email))
         }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<User>> {

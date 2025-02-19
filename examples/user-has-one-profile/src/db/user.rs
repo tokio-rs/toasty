@@ -17,7 +17,7 @@ impl User {
         )
     }
     pub async fn get_by_id(db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
-        Query::default().filter_by_id(id).get(db).await
+        Self::filter_by_id(id).get(db).await
     }
     pub fn filter_by_id(id: impl IntoExpr<Id<User>>) -> Query {
         Query::default().filter_by_id(id)
@@ -102,6 +102,9 @@ pub struct Query {
 impl Query {
     pub const fn from_stmt(stmt: stmt::Select<User>) -> Query {
         Query { stmt }
+    }
+    pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
+        self.filter_by_id(id).get(db).await
     }
     pub fn filter_by_id(self, id: impl IntoExpr<Id<User>>) -> Query {
         self.filter(User::ID.eq(id))
@@ -324,6 +327,15 @@ pub mod relations {
     impl Many {
         pub fn from_stmt(stmt: stmt::Association<[User]>) -> Many {
             Many { stmt }
+        }
+        pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
+            self.filter_by_id(id).get(db).await
+        }
+        pub fn filter_by_id(self, id: impl IntoExpr<Id<User>>) -> Query {
+            Query::from_stmt(self.into_select()).filter(User::ID.eq(id))
+        }
+        pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<User>]>) -> Query {
+            Query::from_stmt(self.into_select()).filter_by_id_batch(keys)
         }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<User>> {

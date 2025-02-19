@@ -1,5 +1,7 @@
 use super::*;
 
+use std::collections::HashMap;
+
 /// Combination of fields for which filter a method should be generated.
 pub(super) struct Filter {
     /// Fields to filter by
@@ -7,18 +9,21 @@ pub(super) struct Filter {
 
     /// When true, include a batch filter method
     batch: bool,
+
+    /// When true, only include the filter on relation structs
+    only_relation: bool,
 }
 
 struct BuildModelFilters<'a> {
     model: &'a app::Model,
-    filters: Vec<Filter>,
+    filters: HashMap<Vec<app::FieldId>, Filter>,
 }
 
 impl Filter {
     pub(super) fn build_model_filters(model: &app::Model) -> Vec<Filter> {
         BuildModelFilters {
             model,
-            filters: vec![],
+            filters: HashMap::new(),
         }
         .build()
     }
@@ -28,6 +33,7 @@ impl<'a> Generator<'a> {
     pub(super) fn gen_model_filter_methods(&self, depth: usize) -> TokenStream {
         self.filters
             .iter()
+            .filter(|f| !f.only_relation)
             .map(|filter| {
                 let get_method = self.gen_model_get_method(filter, depth, false);
                 let filter_method = self.gen_model_filter_method(filter, depth, false);
@@ -54,10 +60,10 @@ impl<'a> Generator<'a> {
         self_into_select: bool,
     ) -> TokenStream {
         let struct_name = self.self_struct_name();
-        let ident = self.get_method_ident(filter);
-        let filter_ident = self.filter_method_ident(filter);
+        let ident = self.get_method_ident(&filter.fields);
+        let filter_ident = self.filter_method_ident(&filter.fields);
         let args = self.gen_filter_args(filter, depth);
-        let arg_idents = self.gen_filter_arg_idents(filter);
+        let arg_idents = self.gen_filter_arg_idents(&filter.fields);
         let self_arg;
         let base;
 
@@ -84,23 +90,29 @@ impl<'a> Generator<'a> {
         depth: usize,
         self_into_select: bool,
     ) -> TokenStream {
-        let ident = self.filter_method_ident(filter);
+        let ident = self.filter_method_ident(&filter.fields);
         let args = self.gen_filter_args(filter, depth);
-        let arg_idents = self.gen_filter_arg_idents(filter);
+        let arg_idents = self.gen_filter_arg_idents(&filter.fields);
         let self_arg;
-        let query;
+        let body;
 
         if self_into_select {
+            let expr = self.gen_query_filter_expr(filter);
+
             self_arg = quote!(self,);
-            query = quote!(Query::from_stmt(self.into_select()));
+            body = quote! {
+                Query::from_stmt(self.into_select()).filter( #expr )
+            };
         } else {
             self_arg = quote!();
-            query = quote!(Query::default());
+            body = quote! {
+                Query::default().#ident( #( #arg_idents ),* )
+            };
         }
 
         quote! {
             pub fn #ident( #self_arg #( #args ),* ) -> Query {
-                #query.#ident( #( #arg_idents ),* )
+                #body
             }
         }
     }
@@ -111,7 +123,7 @@ impl<'a> Generator<'a> {
         depth: usize,
         self_into_select: bool,
     ) -> TokenStream {
-        let ident = self.filter_method_batch_ident(filter);
+        let ident = self.filter_method_batch_ident(&filter.fields);
         let bound = self.gen_filter_batch_arg_bound(filter, depth);
         let self_arg;
         let query;
@@ -134,6 +146,7 @@ impl<'a> Generator<'a> {
     pub(super) fn gen_query_filter_methods(&self) -> TokenStream {
         self.filters
             .iter()
+            .filter(|f| !f.only_relation)
             .map(|filter| {
                 let get_method = self.gen_model_get_method(filter, 0, true);
                 let filter_method = self.gen_query_filter_method(filter);
@@ -175,10 +188,19 @@ impl<'a> Generator<'a> {
     }
 
     fn gen_query_filter_method(&self, filter: &Filter) -> TokenStream {
-        let struct_name = self.self_struct_name();
-        let ident = self.filter_method_ident(filter);
+        let ident = self.filter_method_ident(&filter.fields);
         let args = self.gen_filter_args(filter, 0);
+        let expr = self.gen_query_filter_expr(filter);
 
+        quote! {
+            pub fn #ident(self, #( #args ),* ) -> Query {
+                self.filter(#expr)
+            }
+        }
+    }
+
+    fn gen_query_filter_expr(&self, filter: &Filter) -> TokenStream {
+        let struct_name = self.self_struct_name();
         let body = filter.fields.iter().map(|field| {
             let name = self.field_name(*field);
             let path = self.field_const_name(field);
@@ -186,22 +208,16 @@ impl<'a> Generator<'a> {
             quote!(#struct_name::#path.eq(#name))
         });
 
-        let body = if filter.fields.len() == 1 {
+        if filter.fields.len() == 1 {
             quote!(#( #body )*)
         } else {
             quote!(stmt::Expr::and_all( [ #( #body ),* ] ))
-        };
-
-        quote! {
-            pub fn #ident(self, #( #args ),* ) -> Query {
-                self.filter(#body)
-            }
         }
     }
 
     fn gen_query_filter_batch_method(&self, filter: &Filter) -> TokenStream {
         let struct_name = self.self_struct_name();
-        let ident = self.filter_method_batch_ident(filter);
+        let ident = self.filter_method_batch_ident(&filter.fields);
         let bound = self.gen_filter_batch_arg_bound(filter, 0);
 
         let lhs = filter.fields.iter().map(|field| {
@@ -254,13 +270,9 @@ impl<'a> Generator<'a> {
             .primary_key_fields()
             .map(|field| field.id)
             .collect::<Vec<_>>();
-        let filter = Filter {
-            fields,
-            batch: false,
-        };
 
-        let ident = self.filter_method_ident(&filter);
-        let arg_idents = self.gen_filter_arg_idents(&filter);
+        let ident = self.filter_method_ident(&fields);
+        let arg_idents = self.gen_filter_arg_idents(&fields);
 
         let amp = if by_ref { quote!(&) } else { quote!() };
 
@@ -271,24 +283,29 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn get_method_ident(&self, filter: &Filter) -> syn::Ident {
-        self.method_ident(filter, "get_by", None)
+    fn get_method_ident(&self, fields: &[app::FieldId]) -> syn::Ident {
+        self.method_ident(fields, "get_by", None)
     }
 
-    fn filter_method_ident(&self, filter: &Filter) -> syn::Ident {
-        self.method_ident(filter, "filter_by", None)
+    fn filter_method_ident(&self, fields: &[app::FieldId]) -> syn::Ident {
+        self.method_ident(fields, "filter_by", None)
     }
 
-    fn filter_method_batch_ident(&self, filter: &Filter) -> syn::Ident {
-        self.method_ident(filter, "filter_by", Some("batch"))
+    fn filter_method_batch_ident(&self, fields: &[app::FieldId]) -> syn::Ident {
+        self.method_ident(fields, "filter_by", Some("batch"))
     }
 
-    fn method_ident(&self, filter: &Filter, prefix: &str, suffix: Option<&str>) -> syn::Ident {
+    fn method_ident(
+        &self,
+        fields: &[app::FieldId],
+        prefix: &str,
+        suffix: Option<&str>,
+    ) -> syn::Ident {
         let mut name = prefix.to_string();
 
         let mut prefix = "_";
 
-        for field in &filter.fields {
+        for field in fields {
             name.push_str(prefix);
             name.push_str(&self.model.fields[field.index].name);
 
@@ -331,9 +348,9 @@ impl<'a> Generator<'a> {
 
     fn gen_filter_arg_idents<'b>(
         &'b self,
-        filter: &'b Filter,
+        fields: &'b [app::FieldId],
     ) -> impl Iterator<Item = TokenStream> + 'b {
-        filter.fields.iter().map(move |field| {
+        fields.iter().map(move |field| {
             let name = self.field_name(*field);
 
             quote!(#name)
@@ -344,8 +361,7 @@ impl<'a> Generator<'a> {
 impl<'a> BuildModelFilters<'a> {
     fn build(mut self) -> Vec<Filter> {
         self.recurse(&[]);
-
-        self.filters
+        self.filters.into_iter().map(|(_, filter)| filter).collect()
     }
 
     fn recurse(&mut self, prefix: &[app::FieldId]) {
@@ -364,10 +380,36 @@ impl<'a> BuildModelFilters<'a> {
                 continue;
             };
 
-            self.filters.push(Filter {
-                fields: fields.clone(),
-                batch: index.primary_key && index.fields.len() == fields.len(),
-            });
+            if let Some(filter) = self.filters.get_mut(&fields) {
+                filter.batch |= index.primary_key && index.fields.len() == fields.len();
+                filter.only_relation = false;
+            } else {
+                self.filters.insert(
+                    fields.clone(),
+                    Filter {
+                        fields: fields.clone(),
+                        batch: index.primary_key && index.fields.len() == fields.len(),
+                        only_relation: false,
+                    },
+                );
+            }
+
+            // Now add fitlers for relation structs
+
+            for i in 0..fields.len() {
+                let fields = fields[i..].to_vec();
+
+                if !self.filters.contains_key(&fields) {
+                    self.filters.insert(
+                        fields.clone(),
+                        Filter {
+                            fields: fields.clone(),
+                            batch: false,
+                            only_relation: true,
+                        },
+                    );
+                }
+            }
 
             self.recurse(&fields);
         }

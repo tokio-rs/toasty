@@ -17,24 +17,12 @@ impl Package {
             super::user::User::filter(super::user::User::ID.eq(&self.user_id)).into_select(),
         )
     }
-    pub async fn get_by_user_id(
-        db: &Db,
-        user_id: impl IntoExpr<Id<super::user::User>>,
-    ) -> Result<Package> {
-        Query::default().filter_by_user_id(user_id).get(db).await
-    }
-    pub fn filter_by_user_id(user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
-        Query::default().filter_by_user_id(user_id)
-    }
     pub async fn get_by_user_id_and_id(
         db: &Db,
         user_id: impl IntoExpr<Id<super::user::User>>,
         id: impl IntoExpr<Id<Package>>,
     ) -> Result<Package> {
-        Query::default()
-            .filter_by_user_id_and_id(user_id, id)
-            .get(db)
-            .await
+        Self::filter_by_user_id_and_id(user_id, id).get(db).await
     }
     pub fn filter_by_user_id_and_id(
         user_id: impl IntoExpr<Id<super::user::User>>,
@@ -46,6 +34,15 @@ impl Package {
         keys: impl IntoExpr<[(Id<super::user::User>, Id<Package>)]>,
     ) -> Query {
         Query::default().filter_by_user_id_and_id_batch(keys)
+    }
+    pub async fn get_by_user_id(
+        db: &Db,
+        user_id: impl IntoExpr<Id<super::user::User>>,
+    ) -> Result<Package> {
+        Self::filter_by_user_id(user_id).get(db).await
+    }
+    pub fn filter_by_user_id(user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
+        Query::default().filter_by_user_id(user_id)
     }
     pub fn create() -> builders::CreatePackage {
         builders::CreatePackage::default()
@@ -131,8 +128,13 @@ impl Query {
     pub const fn from_stmt(stmt: stmt::Select<Package>) -> Query {
         Query { stmt }
     }
-    pub fn filter_by_user_id(self, user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
-        self.filter(Package::USER_ID.eq(user_id))
+    pub async fn get_by_user_id_and_id(
+        self,
+        db: &Db,
+        user_id: impl IntoExpr<Id<super::user::User>>,
+        id: impl IntoExpr<Id<Package>>,
+    ) -> Result<Package> {
+        self.filter_by_user_id_and_id(user_id, id).get(db).await
     }
     pub fn filter_by_user_id_and_id(
         self,
@@ -149,6 +151,16 @@ impl Query {
         keys: impl IntoExpr<[(Id<super::user::User>, Id<Package>)]>,
     ) -> Query {
         self.filter(stmt::Expr::in_list((Package::USER_ID, Package::ID), keys))
+    }
+    pub async fn get_by_user_id(
+        self,
+        db: &Db,
+        user_id: impl IntoExpr<Id<super::user::User>>,
+    ) -> Result<Package> {
+        self.filter_by_user_id(user_id).get(db).await
+    }
+    pub fn filter_by_user_id(self, user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
+        self.filter(Package::USER_ID.eq(user_id))
     }
     pub async fn all(self, db: &Db) -> Result<Cursor<Package>> {
         db.all(self.stmt).await
@@ -377,6 +389,49 @@ pub mod relations {
     impl Many {
         pub fn from_stmt(stmt: stmt::Association<[Package]>) -> Many {
             Many { stmt }
+        }
+        pub async fn get_by_user_id_and_id(
+            self,
+            db: &Db,
+            user_id: impl IntoExpr<Id<super::super::user::User>>,
+            id: impl IntoExpr<Id<Package>>,
+        ) -> Result<Package> {
+            self.filter_by_user_id_and_id(user_id, id).get(db).await
+        }
+        pub fn filter_by_user_id_and_id(
+            self,
+            user_id: impl IntoExpr<Id<super::super::user::User>>,
+            id: impl IntoExpr<Id<Package>>,
+        ) -> Query {
+            Query::from_stmt(self.into_select()).filter(stmt::Expr::and_all([
+                Package::USER_ID.eq(user_id),
+                Package::ID.eq(id),
+            ]))
+        }
+        pub fn filter_by_user_id_and_id_batch(
+            self,
+            keys: impl IntoExpr<[(Id<super::super::user::User>, Id<Package>)]>,
+        ) -> Query {
+            Query::from_stmt(self.into_select()).filter_by_user_id_and_id_batch(keys)
+        }
+        pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<Package>>) -> Result<Package> {
+            self.filter_by_id(id).get(db).await
+        }
+        pub fn filter_by_id(self, id: impl IntoExpr<Id<Package>>) -> Query {
+            Query::from_stmt(self.into_select()).filter(Package::ID.eq(id))
+        }
+        pub async fn get_by_user_id(
+            self,
+            db: &Db,
+            user_id: impl IntoExpr<Id<super::super::user::User>>,
+        ) -> Result<Package> {
+            self.filter_by_user_id(user_id).get(db).await
+        }
+        pub fn filter_by_user_id(
+            self,
+            user_id: impl IntoExpr<Id<super::super::user::User>>,
+        ) -> Query {
+            Query::from_stmt(self.into_select()).filter(Package::USER_ID.eq(user_id))
         }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<Package>> {

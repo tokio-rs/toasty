@@ -366,7 +366,7 @@ pub mod relations {
             self.filter_by_id(id).get(db).await
         }
         pub fn filter_by_id(self, id: impl IntoExpr<Id<Todo>>) -> Query {
-            Query::from_stmt(self.into_select()).filter_by_id(id)
+            Query::from_stmt(self.into_select()).filter(Todo::ID.eq(id))
         }
         pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<Todo>]>) -> Query {
             Query::from_stmt(self.into_select()).filter_by_id_batch(keys)
@@ -382,7 +382,7 @@ pub mod relations {
             self,
             user_id: impl IntoExpr<Id<super::super::user::User>>,
         ) -> Query {
-            Query::from_stmt(self.into_select()).filter_by_user_id(user_id)
+            Query::from_stmt(self.into_select()).filter(Todo::USER_ID.eq(user_id))
         }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<Todo>> {
