@@ -67,6 +67,7 @@ impl Model for User {
     }
 }
 impl Relation for User {
+    type Query = Query;
     type Many = relations::Many;
     type ManyField = relations::ManyField;
     type One = relations::One;
@@ -157,8 +158,10 @@ impl Query {
             stmt: self.stmt.and(expr),
         }
     }
-    pub fn packages(mut self) -> super::package::Query {
-        todo!()
+    pub fn packages(mut self) -> <super::package::Package as Relation>::Query {
+        <super::package::Package as Relation>::Query::from_stmt(
+            stmt::Association::many(self.stmt, User::PACKAGES.into()).into_select(),
+        )
     }
 }
 impl stmt::IntoSelect for Query {

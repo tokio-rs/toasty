@@ -602,6 +602,10 @@ pub fn visit_update_target_mut<V>(v: &mut V, node: &mut UpdateTarget)
 where
     V: VisitMut + ?Sized,
 {
+    match node {
+        UpdateTarget::Query(stmt) => v.visit_stmt_query_mut(stmt),
+        _ => {}
+    }
 }
 
 pub fn visit_value_mut<V>(v: &mut V, node: &mut Value)

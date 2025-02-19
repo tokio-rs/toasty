@@ -55,6 +55,7 @@ impl Model for User {
     }
 }
 impl Relation for User {
+    type Query = Query;
     type Many = relations::Many;
     type ManyField = relations::ManyField;
     type One = relations::One;

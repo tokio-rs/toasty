@@ -67,6 +67,7 @@ impl Model for Todo {
     }
 }
 impl Relation for Todo {
+    type Query = Query;
     type Many = relations::Many;
     type ManyField = relations::ManyField;
     type One = relations::One;
@@ -161,8 +162,8 @@ impl Query {
             stmt: self.stmt.and(expr),
         }
     }
-    pub fn user(mut self) -> super::user::Query {
-        todo!()
+    pub fn user(mut self) -> <super::user::User as Relation>::Query {
+        <super::user::User as Relation>::Query::from_stmt(todo!())
     }
 }
 impl stmt::IntoSelect for Query {

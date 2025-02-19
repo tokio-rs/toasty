@@ -160,10 +160,33 @@ impl<'a> VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
+        // If the update target is a query, start by simplifying the query, then
+        // rewriting it to be a filter.
+        if let stmt::UpdateTarget::Query(query) = &mut stmt.target {
+            self.visit_stmt_query_mut(query);
+
+            let stmt::ExprSet::Select(select) = &mut *query.body else {
+                todo!()
+            };
+
+            assert!(select.returning.is_star());
+
+            stmt.filter = if let Some(filter) = stmt.filter.take() {
+                Some(stmt::Expr::and(filter, select.filter.take()))
+            } else if !select.filter.is_true() {
+                Some(select.filter.take())
+            } else {
+                None
+            };
+
+            stmt.target = stmt::UpdateTarget::Model(select.source.as_model_id());
+        }
+
         let target = mem::replace(
             &mut self.target,
             ExprTarget::from_update_target(self.schema, &stmt.target),
         );
+
         stmt::visit_mut::visit_stmt_update_mut(self, stmt);
         self.target = target;
     }

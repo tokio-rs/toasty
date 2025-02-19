@@ -147,6 +147,10 @@ pub trait Visit: Sized {
         visit_stmt_update(self, i);
     }
 
+    fn visit_update_target(&mut self, i: &UpdateTarget) {
+        visit_update_target(self, i);
+    }
+
     fn visit_value(&mut self, i: &Value) {
         visit_value(self, i);
     }
@@ -551,6 +555,7 @@ pub fn visit_stmt_update<V>(v: &mut V, node: &Update)
 where
     V: Visit + ?Sized,
 {
+    v.visit_update_target(&node.target);
     v.visit_assignments(&node.assignments);
 
     if let Some(expr) = &node.filter {
@@ -559,6 +564,16 @@ where
 
     if let Some(expr) = &node.condition {
         v.visit_expr(expr);
+    }
+}
+
+pub fn visit_update_target<V>(v: &mut V, node: &UpdateTarget)
+where
+    V: Visit + ?Sized,
+{
+    match node {
+        UpdateTarget::Query(query) => v.visit_stmt_query(query),
+        _ => {}
     }
 }
 

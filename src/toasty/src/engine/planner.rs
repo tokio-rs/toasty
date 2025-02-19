@@ -19,11 +19,7 @@ use var::VarTable;
 
 use crate::{
     driver::capability::{self, Capability},
-    engine::{
-        eval, plan,
-        simplify::{self, Simplify},
-        Plan,
-    },
+    engine::{eval, plan, simplify, Plan},
 };
 use toasty_core::{
     schema::*,
