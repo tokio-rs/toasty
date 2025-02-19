@@ -8,7 +8,13 @@ pub struct Update<M> {
 }
 
 impl<M: Model> Update<M> {
-    pub fn new(selection: Select<M>) -> Update<M> {
+    pub fn new(mut selection: Select<M>) -> Update<M> {
+        if let stmt::ExprSet::Values(values) = &mut *selection.untyped.body {
+            let rows = std::mem::take(&mut values.rows);
+            let filter = stmt::Expr::in_list(stmt::Expr::key(M::ID), rows);
+            *selection.untyped.body = stmt::ExprSet::Select(stmt::Select::new(M::ID, filter));
+        }
+
         let mut stmt = selection.untyped.update();
         stmt.returning = Some(stmt::Returning::Changed);
 
