@@ -320,10 +320,7 @@ impl<'a> Simplify<'a> {
     }
 
     /// Returns the source model
-    fn flatten_nested_unions(
-        expr_set_op: &mut stmt::ExprSetOp,
-        operands: &mut Vec<stmt::ExprSet>,
-    ) {
+    fn flatten_nested_unions(expr_set_op: &mut stmt::ExprSetOp, operands: &mut Vec<stmt::ExprSet>) {
         assert!(expr_set_op.is_union());
 
         for expr_set in &mut expr_set_op.operands {

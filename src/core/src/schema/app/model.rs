@@ -76,9 +76,7 @@ impl Model {
             .map(|pk_field| &self.fields[pk_field.index])
     }
 
-    pub(crate) fn primary_key_primitives(
-        &self,
-    ) -> impl Iterator<Item = &'_ FieldPrimitive> {
+    pub(crate) fn primary_key_primitives(&self) -> impl Iterator<Item = &'_ FieldPrimitive> {
         self.primary_key_fields()
             .map(|field| field.ty.expect_primitive())
     }

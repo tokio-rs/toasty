@@ -38,7 +38,7 @@ impl Path {
         self.projection.len()
     }
 
-    /// Returns whether or 
+    /// Returns whether or
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }

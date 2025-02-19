@@ -145,9 +145,7 @@ impl IntoIterator for Assignments {
     type IntoIter = std::vec::IntoIter<(usize, Assignment)>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.assignments
-            .into_iter()
-            .collect::<Vec<_>>().into_iter()
+        self.assignments.into_iter().collect::<Vec<_>>().into_iter()
     }
 }
 

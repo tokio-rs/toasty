@@ -453,9 +453,7 @@ impl Generator<'_> {
     ) -> TokenStream {
         assert!(exprs.len() > 1);
 
-        let [head, rest @ ..] = exprs else {
-            panic!()
-        };
+        let [head, rest @ ..] = exprs else { panic!() };
 
         let mut expr = self.gen_expr_from_stmt(model_id, args, head, depth);
 

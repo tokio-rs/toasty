@@ -113,8 +113,6 @@ impl Field {
             FieldTy::HasOne(has_one) => Some(has_one.pair),
         }
     }
-
-
 }
 
 impl FieldTy {
