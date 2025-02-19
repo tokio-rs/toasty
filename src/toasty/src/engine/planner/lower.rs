@@ -80,7 +80,7 @@ fn is_eq_constrained(expr: &stmt::Expr, column: &Column) -> bool {
     }
 }
 
-impl<'a> VisitMut for LowerStatement<'a> {
+impl VisitMut for LowerStatement<'_> {
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
 
@@ -134,7 +134,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
                     .app
                     .model(expr.query.body.as_select().source.as_model_id());
 
-                LowerStatement::from_model(&self.schema, sub_model)
+                LowerStatement::from_model(self.schema, sub_model)
                     .visit_stmt_query_mut(&mut expr.query);
 
                 let maybe_res = self.lower_expr_binary_op(
@@ -247,7 +247,7 @@ impl<'a> VisitMut for LowerStatement<'a> {
     }
 }
 
-impl<'a> LowerStatement<'a> {
+impl LowerStatement<'_> {
     fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Expr) {
         // TODO: we really shouldn't have to simplify here, but until
         // simplification includes overlapping predicate pruning, we have to do
@@ -279,7 +279,10 @@ impl<'a> LowerStatement<'a> {
 
             assert_eq!(self.mapping.columns[column.id.index], column.id);
 
-            operands.push(stmt::Expr::begins_with(stmt::Expr::column(column), pattern));
+            operands.push(stmt::Expr::begins_with(
+                stmt::Expr::column(column.id),
+                pattern,
+            ));
         }
 
         if operands.is_empty() {
@@ -329,8 +332,8 @@ impl<'a> LowerStatement<'a> {
                 ))
             }
             (stmt::Expr::Cast(expr_cast), other) if expr_cast.ty.is_id() => {
-                self.uncast_expr_id(lhs);
-                self.uncast_expr_id(other);
+                Self::uncast_expr_id(lhs);
+                Self::uncast_expr_id(other);
                 None
             }
             (stmt::Expr::Cast(_), stmt::Expr::Cast(_)) => todo!(),
@@ -353,17 +356,17 @@ impl<'a> LowerStatement<'a> {
                 None
             }
             (stmt::Expr::Cast(expr_cast), list) if expr_cast.ty.is_id() => {
-                self.uncast_expr_id(expr);
+                Self::uncast_expr_id(expr);
 
                 match list {
                     stmt::Expr::List(expr_list) => {
                         for expr in &mut expr_list.items {
-                            self.uncast_expr_id(expr);
+                            Self::uncast_expr_id(expr);
                         }
                     }
                     stmt::Expr::Value(stmt::Value::List(items)) => {
                         for item in items {
-                            self.uncast_value_id(item);
+                            Self::uncast_value_id(item);
                         }
                     }
                     stmt::Expr::Arg(_) => {
@@ -408,10 +411,10 @@ impl<'a> LowerStatement<'a> {
         *expr = lowered.into();
     }
 
-    fn uncast_expr_id(&self, expr: &mut stmt::Expr) {
+    fn uncast_expr_id(expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::Value(value) => {
-                self.uncast_value_id(value);
+                Self::uncast_value_id(value);
             }
             stmt::Expr::Cast(expr_cast) if expr_cast.ty.is_id() => {
                 *expr = expr_cast.expr.take();
@@ -423,14 +426,14 @@ impl<'a> LowerStatement<'a> {
             }
             stmt::Expr::List(expr_list) => {
                 for expr in &mut expr_list.items {
-                    self.uncast_expr_id(expr);
+                    Self::uncast_expr_id(expr);
                 }
             }
             _ => todo!("{expr:#?}"),
         }
     }
 
-    fn uncast_value_id(&self, value: &mut stmt::Value) {
+    fn uncast_value_id(value: &mut stmt::Value) {
         match value {
             stmt::Value::Id(_) => {
                 let uncast = value.take().into_id().into_primitive();
@@ -438,7 +441,7 @@ impl<'a> LowerStatement<'a> {
             }
             stmt::Value::List(items) => {
                 for item in items {
-                    self.uncast_value_id(item);
+                    Self::uncast_value_id(item);
                 }
             }
             _ => todo!("{value:#?}"),
@@ -450,7 +453,7 @@ impl<I: Input> VisitMut for Substitute<I> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         match i {
             stmt::Expr::Field(expr_field) => {
-                *i = self.0.resolve_field(&expr_field);
+                *i = self.0.resolve_field(expr_field);
             }
             // Do not traverse these
             stmt::Expr::InSubquery(_) | stmt::Expr::Stmt(_) => {}

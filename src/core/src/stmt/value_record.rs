@@ -2,16 +2,12 @@ use super::*;
 
 use std::ops;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct ValueRecord {
     pub fields: Vec<Value>,
 }
 
 impl ValueRecord {
-    pub fn new() -> ValueRecord {
-        ValueRecord { fields: vec![] }
-    }
-
     pub fn from_vec(fields: Vec<Value>) -> ValueRecord {
         ValueRecord { fields }
     }

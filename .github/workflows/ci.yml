@@ -27,6 +27,20 @@ jobs:
         - name: cargo fmt
           run: cargo fmt --all --check
 
+    clippy:
+        name: cargo clippy
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+          with:
+            components: clippy
+        - uses: Swatinem/rust-cache@v2
+          with:
+            save-if: ${{ github.ref == 'refs/heads/main' }}
+        - name: cargo clippy
+          run: cargo clippy --workspace --all-features
+
     test-all-databases:
         needs: check
         name: Run tests with all databases

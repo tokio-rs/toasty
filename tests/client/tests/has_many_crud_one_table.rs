@@ -121,7 +121,7 @@ async fn crud_user_todos(s: impl Setup) {
         .collect();
 
     for (id, expect) in &created {
-        assert_eq!(expect.title, loaded[&id].title);
+        assert_eq!(expect.title, loaded[id].title);
     }
 
     // Create a second user

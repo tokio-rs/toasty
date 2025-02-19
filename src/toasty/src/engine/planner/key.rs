@@ -43,7 +43,7 @@ impl Planner<'_> {
     }
 }
 
-impl<'a> TryConvert<'a> {
+impl TryConvert<'_> {
     fn try_convert(&mut self, expr: &stmt::Expr) -> Option<stmt::Expr> {
         use stmt::Expr::*;
 
@@ -61,7 +61,7 @@ impl<'a> TryConvert<'a> {
                 }
             }
             InList(e) => {
-                if !self.is_key_reference(&*e.expr) {
+                if !self.is_key_reference(&e.expr) {
                     return None;
                 }
 
@@ -97,15 +97,12 @@ impl<'a> TryConvert<'a> {
                     };
 
                     // Find the index field the operand references
-                    let Some((index, _)) = self
+                    let (index, _) = self
                         .index
                         .columns
                         .iter()
                         .enumerate()
-                        .find(|(_, c)| expr_column.column == c.column)
-                    else {
-                        return None;
-                    };
+                        .find(|(_, c)| expr_column.column == c.column)?;
 
                     assert!(fields[index].is_value_null());
 
@@ -123,9 +120,7 @@ impl<'a> TryConvert<'a> {
                 let mut entries = vec![];
 
                 for operand in &e.operands {
-                    let Some(key) = self.try_convert(operand) else {
-                        return None;
-                    };
+                    let key = self.try_convert(operand)?;
 
                     match key {
                         stmt::Expr::Value(_) | stmt::Expr::Record(_) => entries.push(key),

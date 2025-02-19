@@ -12,7 +12,7 @@ impl Expr {
     where
         T: Into<Expr>,
     {
-        Expr::Record(ExprRecord::from_iter(items.into_iter()))
+        Expr::Record(ExprRecord::from_iter(items))
     }
 
     pub fn record_from_vec(fields: Vec<Expr>) -> Expr {
@@ -39,13 +39,6 @@ impl Expr {
 }
 
 impl ExprRecord {
-    pub fn from_iter<T>(iter: impl Iterator<Item = T>) -> ExprRecord
-    where
-        T: Into<Expr>,
-    {
-        ExprRecord::from_vec(iter.map(Into::into).collect())
-    }
-
     pub fn from_vec(fields: Vec<Expr>) -> ExprRecord {
         ExprRecord { fields }
     }
@@ -56,6 +49,15 @@ impl ExprRecord {
 
     pub fn resize(&mut self, new_len: usize, value: impl Into<stmt::Expr>) {
         self.fields.resize(new_len, value.into());
+    }
+}
+
+impl<A> FromIterator<A> for ExprRecord
+where
+    A: Into<Expr>,
+{
+    fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
+        ExprRecord::from_vec(iter.into_iter().map(Into::into).collect())
     }
 }
 

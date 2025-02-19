@@ -2,7 +2,7 @@ use super::*;
 
 use app::FieldTy;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn self_update_struct_name(&self) -> &syn::Ident {
         self.update_struct_name_for(self.model.id)
     }
@@ -152,7 +152,7 @@ impl<'a> Generator<'a> {
                     }
                 }
                 FieldTy::HasMany(rel) => {
-                    let singular = self.singular_name(field);
+                    let singular = self.singular_name(field.id());
                     let target_struct_name = self.model_struct_path(rel.target, 0);
                     let add_ident = ident!("add_{}", singular);
 
@@ -233,7 +233,7 @@ impl<'a> Generator<'a> {
                     }
                 }
                 FieldTy::HasMany(rel) => {
-                    let singular = self.singular_name(field);
+                    let singular = self.singular_name(field.id());
                     let target_struct_name = self.model_struct_path(rel.target, 0);
                     let add_ident = ident!("add_{}", singular);
 

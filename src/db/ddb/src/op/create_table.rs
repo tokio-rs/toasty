@@ -61,7 +61,7 @@ impl DynamoDB {
             }
 
             assert_eq!(1, index.columns.len());
-            let field = &table.column(&index.columns[0]);
+            let field = &table.column(index.columns[0].column);
             defined_attributes.insert(field.id);
 
             gsis.push(
@@ -82,7 +82,7 @@ impl DynamoDB {
         let attribute_definitions = defined_attributes
             .iter()
             .map(|column_id| {
-                let column = table.column(column_id);
+                let column = table.column(*column_id);
                 let ty = ddb_ty(&column.ty);
 
                 AttributeDefinition::builder()

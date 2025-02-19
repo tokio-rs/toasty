@@ -17,7 +17,7 @@ impl Exec<'_> {
 
         if keys.is_empty() {
             if let Some(output) = &action.output {
-                self.vars.store(output.var, ValueStream::new());
+                self.vars.store(output.var, ValueStream::default());
             }
         } else {
             let op = operation::UpdateByKey {

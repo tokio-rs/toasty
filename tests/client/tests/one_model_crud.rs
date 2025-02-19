@@ -35,6 +35,7 @@ async fn crud_no_fields(s: impl Setup) {
     let mut ids = vec![];
 
     for _ in 0..MORE {
+        #[allow(clippy::disallowed_names)]
         let foo = db::Foo::create().exec(&db).await.unwrap();
         assert_ne!(foo.id, created.id);
         ids.push(foo.id);
@@ -76,6 +77,7 @@ async fn crud_no_fields(s: impl Setup) {
 
         // Assert other foos remain
         for id in &ids {
+            #[allow(clippy::disallowed_names)]
             let foo = db::Foo::find_by_id(id).get(&db).await.unwrap();
             assert_eq!(*id, foo.id);
         }
@@ -120,6 +122,7 @@ async fn crud_one_string(s: impl Setup) {
     let mut ids = vec![];
 
     for i in 0..10 {
+        #[allow(clippy::disallowed_names)]
         let foo = db::Foo::create()
             .val(format!("hello {i}"))
             .exec(&db)
@@ -469,6 +472,7 @@ async fn batch_get_by_id(s: impl Setup) {
     let mut keys = vec![];
 
     for _ in 0..5 {
+        #[allow(clippy::disallowed_names)]
         let foo = db::Foo::create().exec(&db).await.unwrap();
         keys.push(foo.id);
     }
@@ -483,6 +487,7 @@ async fn batch_get_by_id(s: impl Setup) {
 
     assert_eq!(3, foos.len());
 
+    #[allow(clippy::disallowed_names)]
     for foo in foos {
         assert!(keys.iter().any(|key| foo.id == *key));
     }
@@ -502,6 +507,7 @@ async fn empty_batch_get_by_id(s: impl Setup) {
     let mut ids = vec![];
 
     for _ in 0..5 {
+        #[allow(clippy::disallowed_names)]
         let foo = db::Foo::create().exec(&db).await.unwrap();
         ids.push(foo.id);
     }

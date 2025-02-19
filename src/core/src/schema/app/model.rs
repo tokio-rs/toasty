@@ -69,16 +69,14 @@ impl Model {
 
     /// Iterate over the fields used for the model's primary key.
     /// TODO: extract type?
-    pub fn primary_key_fields<'a>(&'a self) -> impl ExactSizeIterator<Item = &'a Field> + 'a {
+    pub fn primary_key_fields(&self) -> impl ExactSizeIterator<Item = &'_ Field> {
         self.primary_key
             .fields
             .iter()
             .map(|pk_field| &self.fields[pk_field.index])
     }
 
-    pub(crate) fn primary_key_primitives<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = &'a FieldPrimitive> + 'a {
+    pub(crate) fn primary_key_primitives(&self) -> impl Iterator<Item = &'_ FieldPrimitive> {
         self.primary_key_fields()
             .map(|field| field.ty.expect_primitive())
     }

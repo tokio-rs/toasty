@@ -16,6 +16,7 @@ async fn batch_get_by_key(s: impl Setup) {
     let mut keys = vec![];
 
     for i in 0..5 {
+        #[allow(clippy::disallowed_names)]
         let foo = db::Foo::create()
             .one(format!("foo-{i}"))
             .two(format!("bar-{i}"))
@@ -36,6 +37,7 @@ async fn batch_get_by_key(s: impl Setup) {
 
     assert_eq!(3, foos.len());
 
+    #[allow(clippy::disallowed_names)]
     for foo in foos {
         assert!(keys.iter().any(|key| foo.one == key.0 && foo.two == key.1));
     }

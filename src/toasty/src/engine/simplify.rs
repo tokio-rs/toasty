@@ -51,7 +51,7 @@ pub(crate) fn simplify_expr<'a>(
     .visit_expr_mut(expr);
 }
 
-impl<'a> VisitMut for Simplify<'_> {
+impl VisitMut for Simplify<'_> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         // First, simplify the expression.
         stmt::visit_mut::visit_expr_mut(self, i);
@@ -60,8 +60,8 @@ impl<'a> VisitMut for Simplify<'_> {
         let maybe_expr = match i {
             Expr::BinaryOp(expr_binary_op) => self.simplify_expr_binary_op(
                 expr_binary_op.op,
-                &mut *expr_binary_op.lhs,
-                &mut *expr_binary_op.rhs,
+                &mut expr_binary_op.lhs,
+                &mut expr_binary_op.rhs,
             ),
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
             Expr::ConcatStr(expr) => self.simplify_expr_concat_str(expr),
@@ -83,7 +83,7 @@ impl<'a> VisitMut for Simplify<'_> {
 
     fn visit_expr_set_mut(&mut self, i: &mut stmt::ExprSet) {
         match i {
-            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 0 => {
+            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.is_empty() => {
                 todo!("is there anything we do here?");
             }
             stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 1 => {
@@ -95,7 +95,7 @@ impl<'a> VisitMut for Simplify<'_> {
                 // query as a single disjuntive query.
                 let mut operands = vec![];
 
-                self.flatten_nested_unions(expr_set_op, &mut operands);
+                Self::flatten_nested_unions(expr_set_op, &mut operands);
 
                 expr_set_op.operands = operands;
             }
@@ -173,6 +173,142 @@ impl<'a> VisitMut for Simplify<'_> {
             assert_eq!(actual, width, "target={:#?}", self.target);
         }
     }
+
+    fn visit_mut<N: stmt::Node>(&mut self, i: &mut N) {
+        i.visit_mut(self);
+    }
+
+    fn visit_assignment_mut(&mut self, i: &mut stmt::Assignment) {
+        stmt::visit_mut::visit_assignment_mut(self, i);
+    }
+
+    fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
+        stmt::visit_mut::visit_assignments_mut(self, i);
+    }
+
+    fn visit_expr_and_mut(&mut self, i: &mut stmt::ExprAnd) {
+        stmt::visit_mut::visit_expr_and_mut(self, i);
+    }
+
+    fn visit_expr_arg_mut(&mut self, i: &mut stmt::ExprArg) {
+        stmt::visit_mut::visit_expr_arg_mut(self, i);
+    }
+
+    fn visit_expr_begins_with_mut(&mut self, i: &mut stmt::ExprBeginsWith) {
+        stmt::visit_mut::visit_expr_begins_with_mut(self, i);
+    }
+
+    fn visit_expr_binary_op_mut(&mut self, i: &mut stmt::ExprBinaryOp) {
+        stmt::visit_mut::visit_expr_binary_op_mut(self, i);
+    }
+
+    fn visit_expr_cast_mut(&mut self, i: &mut stmt::ExprCast) {
+        stmt::visit_mut::visit_expr_cast_mut(self, i);
+    }
+
+    fn visit_expr_column_mut(&mut self, i: &mut stmt::ExprColumn) {
+        stmt::visit_mut::visit_expr_column_mut(self, i);
+    }
+
+    fn visit_expr_concat_mut(&mut self, i: &mut stmt::ExprConcat) {
+        stmt::visit_mut::visit_expr_concat_mut(self, i);
+    }
+
+    fn visit_expr_enum_mut(&mut self, i: &mut stmt::ExprEnum) {
+        stmt::visit_mut::visit_expr_enum_mut(self, i);
+    }
+
+    fn visit_expr_field_mut(&mut self, i: &mut stmt::ExprField) {
+        stmt::visit_mut::visit_expr_field_mut(self, i);
+    }
+
+    fn visit_expr_in_list_mut(&mut self, i: &mut stmt::ExprInList) {
+        stmt::visit_mut::visit_expr_in_list_mut(self, i);
+    }
+
+    fn visit_expr_in_subquery_mut(&mut self, i: &mut stmt::ExprInSubquery) {
+        stmt::visit_mut::visit_expr_in_subquery_mut(self, i);
+    }
+
+    fn visit_expr_is_null_mut(&mut self, i: &mut stmt::ExprIsNull) {
+        stmt::visit_mut::visit_expr_is_null_mut(self, i);
+    }
+
+    fn visit_expr_like_mut(&mut self, i: &mut stmt::ExprLike) {
+        stmt::visit_mut::visit_expr_like_mut(self, i);
+    }
+
+    fn visit_expr_key_mut(&mut self, i: &mut stmt::ExprKey) {
+        stmt::visit_mut::visit_expr_key_mut(self, i);
+    }
+
+    fn visit_expr_map_mut(&mut self, i: &mut stmt::ExprMap) {
+        stmt::visit_mut::visit_expr_map_mut(self, i);
+    }
+
+    fn visit_expr_or_mut(&mut self, i: &mut stmt::ExprOr) {
+        stmt::visit_mut::visit_expr_or_mut(self, i);
+    }
+
+    fn visit_expr_list_mut(&mut self, i: &mut stmt::ExprList) {
+        stmt::visit_mut::visit_expr_list_mut(self, i);
+    }
+
+    fn visit_expr_record_mut(&mut self, i: &mut stmt::ExprRecord) {
+        stmt::visit_mut::visit_expr_record_mut(self, i);
+    }
+
+    fn visit_expr_set_op_mut(&mut self, i: &mut stmt::ExprSetOp) {
+        stmt::visit_mut::visit_expr_set_op_mut(self, i);
+    }
+
+    fn visit_expr_stmt_mut(&mut self, i: &mut stmt::ExprStmt) {
+        stmt::visit_mut::visit_expr_stmt_mut(self, i);
+    }
+
+    fn visit_expr_ty_mut(&mut self, i: &mut stmt::ExprTy) {
+        stmt::visit_mut::visit_expr_ty_mut(self, i);
+    }
+
+    fn visit_expr_pattern_mut(&mut self, i: &mut stmt::ExprPattern) {
+        stmt::visit_mut::visit_expr_pattern_mut(self, i);
+    }
+
+    fn visit_expr_project_mut(&mut self, i: &mut stmt::ExprProject) {
+        stmt::visit_mut::visit_expr_project_mut(self, i);
+    }
+
+    fn visit_insert_target_mut(&mut self, i: &mut stmt::InsertTarget) {
+        stmt::visit_mut::visit_insert_target_mut(self, i);
+    }
+
+    fn visit_projection_mut(&mut self, i: &mut stmt::Projection) {
+        stmt::visit_mut::visit_projection_mut(self, i);
+    }
+
+    fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
+        stmt::visit_mut::visit_returning_mut(self, i);
+    }
+
+    fn visit_source_mut(&mut self, i: &mut stmt::Source) {
+        stmt::visit_mut::visit_source_mut(self, i);
+    }
+
+    fn visit_stmt_mut(&mut self, i: &mut stmt::Statement) {
+        stmt::visit_mut::visit_stmt_mut(self, i);
+    }
+
+    fn visit_stmt_query_mut(&mut self, i: &mut stmt::Query) {
+        stmt::visit_mut::visit_stmt_query_mut(self, i);
+    }
+
+    fn visit_update_target_mut(&mut self, i: &mut stmt::UpdateTarget) {
+        stmt::visit_mut::visit_update_target_mut(self, i);
+    }
+
+    fn visit_value_mut(&mut self, i: &mut stmt::Value) {
+        stmt::visit_mut::visit_value_mut(self, i);
+    }
 }
 
 impl<'a> Simplify<'a> {
@@ -184,17 +320,13 @@ impl<'a> Simplify<'a> {
     }
 
     /// Returns the source model
-    fn flatten_nested_unions(
-        &self,
-        expr_set_op: &mut stmt::ExprSetOp,
-        operands: &mut Vec<stmt::ExprSet>,
-    ) {
+    fn flatten_nested_unions(expr_set_op: &mut stmt::ExprSetOp, operands: &mut Vec<stmt::ExprSet>) {
         assert!(expr_set_op.is_union());
 
         for expr_set in &mut expr_set_op.operands {
             match expr_set {
                 stmt::ExprSet::SetOp(nested_set_op) if nested_set_op.is_union() => {
-                    self.flatten_nested_unions(nested_set_op, operands)
+                    Self::flatten_nested_unions(nested_set_op, operands)
                 }
                 // Just drop empty values
                 stmt::ExprSet::Values(values) if values.is_empty() => {}
@@ -212,7 +344,7 @@ impl<'a> Simplify<'a> {
                 }
                 stmt::ExprSet::Values(values) => {
                     if let Some(stmt::ExprSet::Values(tail)) = operands.last_mut() {
-                        tail.rows.extend(values.rows.drain(..));
+                        tail.rows.append(&mut values.rows);
                         continue;
                     }
 

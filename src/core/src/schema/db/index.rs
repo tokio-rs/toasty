@@ -62,12 +62,6 @@ impl IndexColumn {
     }
 }
 
-impl Into<ColumnId> for &IndexColumn {
-    fn into(self) -> ColumnId {
-        self.column
-    }
-}
-
 impl IndexScope {
     pub fn is_partition(self) -> bool {
         matches!(self, IndexScope::Partition)

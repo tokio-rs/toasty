@@ -38,7 +38,7 @@ impl Exec<'_> {
         Ok(if let Some(returning) = pipeline.returning {
             self.vars.load(returning)
         } else {
-            ValueStream::new()
+            ValueStream::default()
         })
     }
 

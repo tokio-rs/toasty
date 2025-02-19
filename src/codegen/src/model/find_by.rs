@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_query_structs(&mut self) -> TokenStream {
         self.model
             .queries
@@ -94,7 +94,7 @@ impl<'a> Generator<'a> {
                 FieldTy::Primitive(..) => None,
                 FieldTy::HasMany(_) | FieldTy::HasOne(_) => {
                     let name = self.field_name(field.id);
-                    let relation_query_struct_path = self.relation_query_struct_path(field, 0);
+                    let relation_query_struct_path = self.relation_query_struct_path(field.id(), 0);
 
                     Some(quote! {
                         pub fn #name(mut self) -> #relation_query_struct_path {
@@ -281,8 +281,8 @@ impl<'a> Generator<'a> {
                     )
                 }
                 stmt::Type::ForeignKey(field_id) => {
-                    let field_name = self.field_name(field_id);
-                    let relation_struct_name = self.relation_struct_name(field_id);
+                    let field_name = self.field_name(*field_id);
+                    let relation_struct_name = self.relation_struct_name(*field_id);
 
                     quote!(
                         #name: impl stmt::IntoExpr<super::relation::#field_name::#relation_struct_name>
@@ -308,8 +308,8 @@ impl<'a> Generator<'a> {
                 quote!( #target_struct_name )
             }
             stmt::Type::ForeignKey(field_id) => {
-                let field_name = self.field_name(field_id);
-                let relation_struct_name = self.relation_struct_name(field_id);
+                let field_name = self.field_name(*field_id);
+                let relation_struct_name = self.relation_struct_name(*field_id);
 
                 quote!( super::relation::#field_name::#relation_struct_name )
             }
@@ -453,9 +453,7 @@ impl<'a> Generator<'a> {
     ) -> TokenStream {
         assert!(exprs.len() > 1);
 
-        let [head, rest @ ..] = &exprs[..] else {
-            panic!()
-        };
+        let [head, rest @ ..] = exprs else { panic!() };
 
         let mut expr = self.gen_expr_from_stmt(model_id, args, head, depth);
 

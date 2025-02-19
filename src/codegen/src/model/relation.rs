@@ -2,7 +2,7 @@ use super::*;
 
 use app::FieldTy;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_relation_structs(&self) -> TokenStream {
         self.model
             .fields
@@ -190,7 +190,7 @@ impl<'a> Generator<'a> {
 
     fn gen_relation_field(&self, field: &app::Field, target: app::ModelId) -> TokenStream {
         let field_name = self.field_name(field.id);
-        let relation_struct_name = self.relation_struct_name(field);
+        let relation_struct_name = self.relation_struct_name(field.id());
         let target_struct_name = self.model_struct_path(target, 1);
 
         let path_methods = self.gen_path_methods(self.schema.model(target), 1);
@@ -201,11 +201,7 @@ impl<'a> Generator<'a> {
             quote!(#target_struct_name)
         };
 
-        let relation_struct = if field.ty.is_belongs_to() {
-            quote!(#relation_struct_name<'a>)
-        } else {
-            quote!(#relation_struct_name<'a>)
-        };
+        let relation_struct = quote!(#relation_struct_name<'a>);
 
         let op_methods = if field.ty.is_belongs_to() {
             quote! {
@@ -260,10 +256,10 @@ impl<'a> Generator<'a> {
     }
 
     fn gen_has_one_struct(&self, rel: &app::HasOne, field: &app::Field) -> TokenStream {
-        let field_name = self.field_name(field);
+        let field_name = self.field_name(field.id());
         let pair_field_const_name = self.field_const_name(rel.pair);
         let model_struct_name = self.self_struct_name();
-        let relation_struct_name = self.relation_struct_name(field);
+        let relation_struct_name = self.relation_struct_name(field.id());
         let target_struct_name = self.model_struct_path(rel.target, 2);
         let target_create_struct_path = self.create_struct_path(rel.target, 2);
         let get_ret_ty;

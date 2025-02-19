@@ -29,7 +29,7 @@ impl Response {
 
     pub fn empty_value_stream() -> Response {
         Response {
-            rows: Rows::Values(ValueStream::new()),
+            rows: Rows::Values(ValueStream::default()),
         }
     }
 }

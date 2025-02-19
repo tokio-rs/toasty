@@ -126,7 +126,7 @@ impl<'a> Generator<'a> {
             Primitive(field_ty) => self.ty(&field_ty.ty, depth),
             BelongsTo(_) | HasOne(_) | HasMany(_) => {
                 let module_name = self.module_name(field.id.model, depth);
-                let relation_struct_name = self.relation_struct_name(field);
+                let relation_struct_name = self.relation_struct_name(field.id());
 
                 quote! {
                     #module_name::relation::#relation_struct_name

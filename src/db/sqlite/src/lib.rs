@@ -139,15 +139,13 @@ impl Driver for Sqlite {
         }
 
         // Some special handling
-        if sql.is_update() {
-            if pre_condition {
-                if ret.is_empty() {
-                    // Just assume the precondition failed here... we will
-                    // need to make this transactional later.
-                    anyhow::bail!("pre condition failed");
-                } else {
-                    return Ok(Response::from_count(ret.len()));
-                }
+        if sql.is_update() && pre_condition {
+            if ret.is_empty() {
+                // Just assume the precondition failed here... we will
+                // need to make this transactional later.
+                anyhow::bail!("pre condition failed");
+            } else {
+                return Ok(Response::from_count(ret.len()));
             }
         }
 
@@ -200,7 +198,7 @@ enum V {
     Id(usize, String),
 }
 
-fn value_from_param<'a>(value: &'a stmt::Value) -> rusqlite::types::ToSqlOutput<'a> {
+fn value_from_param(value: &stmt::Value) -> rusqlite::types::ToSqlOutput<'_> {
     use rusqlite::types::{ToSqlOutput, Value, ValueRef};
     use stmt::Value::*;
 
@@ -242,7 +240,7 @@ fn load(row: &rusqlite::Row, index: usize) -> stmt::Value {
     match value {
         Some(SqlValue::Null) => stmt::Value::Null,
         Some(SqlValue::Integer(value)) => stmt::Value::I64(value),
-        Some(SqlValue::Text(value)) => stmt::Value::String(value.into()),
+        Some(SqlValue::Text(value)) => stmt::Value::String(value),
         None => stmt::Value::Null,
         _ => todo!("value={value:#?}"),
     }

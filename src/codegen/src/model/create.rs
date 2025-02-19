@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_create_struct(&self) -> TokenStream {
         let struct_name = self.self_struct_name();
         let create_struct_name = self.self_create_struct_name();
@@ -74,7 +74,7 @@ impl<'a> Generator<'a> {
 
             match &field.ty {
                 FieldTy::HasMany(rel) => {
-                    let singular = self.singular_name(field);
+                    let singular = self.singular_name(field.id());
                     let target_struct_name = self.model_struct_path(rel.target, 0);
 
                     quote! {

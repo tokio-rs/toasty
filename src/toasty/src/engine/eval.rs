@@ -119,8 +119,8 @@ fn eval(expr: &stmt::Expr, input: &mut impl Input) -> Result<stmt::Value> {
         }
         Arg(expr_arg) => Ok(input.resolve_arg(expr_arg, &stmt::Projection::identity())),
         BinaryOp(expr_binary_op) => {
-            let lhs = eval(&*expr_binary_op.lhs, input)?;
-            let rhs = eval(&*expr_binary_op.rhs, input)?;
+            let lhs = eval(&expr_binary_op.lhs, input)?;
+            let rhs = eval(&expr_binary_op.rhs, input)?;
 
             match expr_binary_op.op {
                 stmt::BinaryOp::Eq => Ok((lhs == rhs).into()),
@@ -128,9 +128,9 @@ fn eval(expr: &stmt::Expr, input: &mut impl Input) -> Result<stmt::Value> {
                 _ => todo!("{:#?}", expr),
             }
         }
-        Cast(expr_cast) => expr_cast.ty.cast(eval(&*expr_cast.expr, input)?),
+        Cast(expr_cast) => expr_cast.ty.cast(eval(&expr_cast.expr, input)?),
         IsNull(expr_is_null) => {
-            let value = eval(&*expr_is_null.expr, input)?;
+            let value = eval(&expr_is_null.expr, input)?;
             Ok((value.is_null() != expr_is_null.negate).into())
         }
         List(exprs) => {
@@ -143,7 +143,7 @@ fn eval(expr: &stmt::Expr, input: &mut impl Input) -> Result<stmt::Value> {
             Ok(stmt::Value::List(ret))
         }
         Map(expr_map) => {
-            let mut base = eval(&*expr_map.base, input)?;
+            let mut base = eval(&expr_map.base, input)?;
 
             let stmt::Value::List(ref mut items) = &mut base else {
                 todo!("base={base:#?}")
@@ -151,7 +151,7 @@ fn eval(expr: &stmt::Expr, input: &mut impl Input) -> Result<stmt::Value> {
 
             for item in items.iter_mut() {
                 let i = item.take();
-                *item = eval(&*expr_map.map, &mut &[i])?;
+                *item = eval(&expr_map.map, &mut &[i])?;
             }
 
             Ok(base)
@@ -160,7 +160,7 @@ fn eval(expr: &stmt::Expr, input: &mut impl Input) -> Result<stmt::Value> {
             if let Arg(expr_arg) = &*expr_project.base {
                 Ok(input.resolve_arg(expr_arg, &expr_project.projection))
             } else {
-                let base = eval(&*expr_project.base, input)?;
+                let base = eval(&expr_project.base, input)?;
                 Ok(base.entry(&expr_project.projection).to_value())
             }
         }
@@ -175,7 +175,7 @@ fn eval(expr: &stmt::Expr, input: &mut impl Input) -> Result<stmt::Value> {
         }
         Value(value) => Ok(value.clone()),
         DecodeEnum(expr, ty, variant) => {
-            let stmt::Value::String(base) = eval(&*expr, input)? else {
+            let stmt::Value::String(base) = eval(expr, input)? else {
                 todo!()
             };
             let (decoded_variant, rest) = base.split_once("#").unwrap();
@@ -197,16 +197,16 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
     match expr {
         Arg(_) => true,
         And(expr_and) => expr_and.operands.iter().all(verify_expr),
-        BinaryOp(expr) => verify_expr(&*expr.lhs) && verify_expr(&*expr.rhs),
-        Cast(expr) => verify_expr(&*expr.expr),
+        BinaryOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
+        Cast(expr) => verify_expr(&expr.expr),
         Column(_) => false,
         Field(_) => false,
         List(expr) => expr.items.iter().all(verify_expr),
-        Map(expr) => verify_expr(&*expr.base) && verify_expr(&*expr.map),
-        Project(expr) => verify_expr(&*expr.base),
+        Map(expr) => verify_expr(&expr.base) && verify_expr(&expr.map),
+        Project(expr) => verify_expr(&expr.base),
         Record(expr) => expr.fields.iter().all(verify_expr),
         Value(_) => true,
-        DecodeEnum(expr, _, _) => verify_expr(&*expr),
+        DecodeEnum(expr, _, _) => verify_expr(expr),
         _ => todo!("expr={expr:#?}"),
     }
 }
@@ -221,10 +221,10 @@ fn convert_and_verify_expr(expr: &mut stmt::Expr, convert: &mut impl Convert) ->
             .iter_mut()
             .all(|e| convert_and_verify_expr(e, convert)),
         BinaryOp(expr) => {
-            convert_and_verify_expr(&mut *expr.lhs, convert)
-                && convert_and_verify_expr(&mut *expr.rhs, convert)
+            convert_and_verify_expr(&mut expr.lhs, convert)
+                && convert_and_verify_expr(&mut expr.rhs, convert)
         }
-        Cast(expr) => convert_and_verify_expr(&mut *expr.expr, convert),
+        Cast(expr) => convert_and_verify_expr(&mut expr.expr, convert),
         Column(e) => {
             let Some(e) = convert.convert_expr_column(e) else {
                 return false;
@@ -244,8 +244,8 @@ fn convert_and_verify_expr(expr: &mut stmt::Expr, convert: &mut impl Convert) ->
             .items
             .iter_mut()
             .all(|e| convert_and_verify_expr(e, convert)),
-        Map(expr) => convert_and_verify_expr(&mut *expr.base, convert) && verify_expr(&*expr.map),
-        Project(expr) => convert_and_verify_expr(&mut *expr.base, convert),
+        Map(expr) => convert_and_verify_expr(&mut expr.base, convert) && verify_expr(&expr.map),
+        Project(expr) => convert_and_verify_expr(&mut expr.base, convert),
         Record(expr) => expr
             .fields
             .iter_mut()

@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_body(&mut self) -> TokenStream {
         // Build field-level codegen state
         let model_id = util::int(self.model.id.0);
@@ -151,8 +151,7 @@ impl<'a> Generator<'a> {
             .map(|field| self.field_ty(field, 0));
 
         if tys.len() == 1 {
-            let ty = tys.next().unwrap();
-            ty
+            tys.next().unwrap()
         } else {
             quote! {
                 ( #( #tys, )* )
@@ -169,7 +168,7 @@ impl<'a> Generator<'a> {
             .iter()
             .map(|field| match &field.ty {
                 FieldTy::HasMany(rel) => {
-                    let name = self.field_name(field);
+                    let name = self.field_name(field.id());
                     let ty = self.model_struct_path(rel.target, 0);
                     quote! {
                         #name: HasMany<#ty>,
@@ -177,14 +176,14 @@ impl<'a> Generator<'a> {
                 }
                 FieldTy::HasOne(_) => quote!(),
                 FieldTy::BelongsTo(rel) => {
-                    let name = self.field_name(field);
+                    let name = self.field_name(field.id());
                     let ty = self.model_struct_path(rel.target, 0);
                     quote! {
                         #name: BelongsTo<#ty>,
                     }
                 }
                 FieldTy::Primitive(..) => {
-                    let name = self.field_name(field);
+                    let name = self.field_name(field.id());
                     let mut ty = self.field_ty(field, 0);
 
                     if field.nullable {
