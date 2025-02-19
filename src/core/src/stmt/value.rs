@@ -261,3 +261,37 @@ impl From<ValueRecord> for Value {
         Value::Record(value)
     }
 }
+
+#[cfg(feature = "postgres")]
+mod postgres_impl {
+    use super::*;
+    use postgres::types::accepts;
+    use postgres::types::private::BytesMut;
+    use postgres::types::to_sql_checked;
+    use postgres::types::IsNull;
+    use postgres::types::ToSql;
+    use postgres::types::Type;
+
+    impl ToSql for Value {
+        fn to_sql(
+            &self,
+            ty: &Type,
+            out: &mut BytesMut,
+        ) -> std::result::Result<IsNull, Box<dyn std::error::Error + Sync + Send>>
+        where
+            Self: Sized,
+        {
+            match self {
+                stmt::Value::Bool(value) => value.to_sql(ty, out),
+                stmt::Value::I64(value) => value.to_sql(ty, out),
+                stmt::Value::Id(value) => value.to_string().to_sql(ty, out),
+                stmt::Value::Null => Ok(IsNull::Yes),
+                stmt::Value::String(value) => value.to_sql(ty, out),
+                value => todo!("{:#?}", value),
+            }
+        }
+
+        accepts!(BOOL, INT4, TEXT);
+        to_sql_checked!();
+    }
+}

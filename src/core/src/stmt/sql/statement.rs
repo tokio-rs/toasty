@@ -1,12 +1,14 @@
 use super::*;
 
 use crate::schema::db::Schema;
+use crate::stmt::sql::serialize::SerializeResult;
 use crate::stmt::Statement as DataStatement;
 
 #[derive(Debug, Clone)]
 pub enum Statement {
     CreateIndex(CreateIndex),
     CreateTable(CreateTable),
+    DropTable(DropTable),
     Delete(Delete),
     Insert(Insert),
     Query(Query),
@@ -14,7 +16,7 @@ pub enum Statement {
 }
 
 impl Statement {
-    pub fn serialize(&self, schema: &Schema, params: &mut impl Params) -> String {
+    pub fn serialize(&self, schema: &Schema, params: &mut impl Params) -> SerializeResult {
         Serializer::new(schema).serialize_sql_stmt(self, params)
     }
 }
