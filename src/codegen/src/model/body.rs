@@ -209,7 +209,7 @@ impl<'a> Generator<'a> {
                     let name = self.field_name(field);
                     let ty = self.model_struct_path(rel.target, 0);
                     quote! {
-                        #name: HasMany<#ty>,
+                        pub #name: HasMany<#ty>,
                     }
                 }
                 FieldTy::HasOne(_) => quote!(),
@@ -217,7 +217,7 @@ impl<'a> Generator<'a> {
                     let name = self.field_name(field);
                     let ty = self.model_struct_path(rel.target, 0);
                     quote! {
-                        #name: BelongsTo<#ty>,
+                        pub #name: BelongsTo<#ty>,
                     }
                 }
                 FieldTy::Primitive(..) => {

@@ -53,6 +53,11 @@ impl<'a> Generator<'a> {
                     }
                 }
 
+                pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> Self {
+                    self.stmt.include(path.into());
+                    self
+                }
+
                 #relation_methods
             }
 
