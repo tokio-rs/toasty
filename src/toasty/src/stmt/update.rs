@@ -9,8 +9,11 @@ pub struct Update<M> {
 
 impl<M: Model> Update<M> {
     pub fn new(selection: Select<M>) -> Update<M> {
+        let mut stmt = selection.untyped.update();
+        stmt.returning = Some(stmt::Returning::Changed);
+
         Update {
-            untyped: selection.untyped.update(),
+            untyped: stmt,
             _p: PhantomData,
         }
     }
