@@ -44,7 +44,7 @@ async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
     assert_eq!("Make pizza", todos[0].title);
 
     // Find the todo by ID
-    let todo = db::Todo::find_by_id(&todos[0].id).get(&db).await.unwrap();
+    let todo = db::Todo::get_by_id(&db, &todos[0].id).await.unwrap();
     assert_eq!("Make pizza", todo.title);
 }
 
@@ -112,12 +112,11 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
     assert_eq!("Make pizza", todos[0].title);
 
     // Find the todo by ID
-    let todo = db::Todo::find_by_id(&todos[0].id).get(&db).await.unwrap();
+    let todo = db::Todo::get_by_id(&db, &todos[0].id).await.unwrap();
     assert_eq!("Make pizza", todo.title);
 
     // Find the category by ID
-    let category = db::Category::find_by_id(&todo.category_id)
-        .get(&db)
+    let category = db::Category::get_by_id(&db, &todo.category_id)
         .await
         .unwrap();
     assert_eq!(category.name, "Eating");
@@ -149,7 +148,7 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
     let mut categories = vec![];
 
     for todo in &todos {
-        categories.push(todo.category().find(&db).await.unwrap());
+        categories.push(todo.category().get(&db).await.unwrap());
     }
 
     assert_eq_unordered!(
