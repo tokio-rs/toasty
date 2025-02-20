@@ -39,24 +39,24 @@ async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
         .unwrap();
 
     // Find the user, include TODOs
-    let user = db::User::find_by_id(&user.id)
+    let user = db::User::filter_by_id(&user.id)
         .include(db::User::TODOS)
         .get(&db)
         .await
         .unwrap();
 
     // This will panic
-    assert_eq!(3, user.todos().get().len());
+    assert_eq!(3, user.todos.get().len());
 
-    let id = user.todos().get()[0].id.clone();
+    let id = user.todos.get()[0].id.clone();
 
-    let todo = db::Todo::find_by_id(&id)
+    let todo = db::Todo::filter_by_id(&id)
         .include(db::Todo::USER)
         .get(&db)
         .await
         .unwrap();
 
-    assert_eq!(user.id, todo.user().get().id);
+    assert_eq!(user.id, todo.user.get().id);
 }
 
 tests!(basic_has_many_and_belongs_to_preload,);

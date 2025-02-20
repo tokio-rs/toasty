@@ -21,7 +21,12 @@ impl<'a> Generator<'a> {
         field: &app::Field,
     ) -> TokenStream {
         let name = self.field_name(field);
-        let strukt = self.target_struct_path(field, 0);
+        let target_struct = self.target_struct_path(field, 0);
+        let mut target_relation = quote!(#target_struct);
+
+        if field.nullable {
+            target_relation = quote!(Option<#target_struct>);
+        }
 
         // For proc macros, this will be updated to use field attributes instead of looking at the schema types
         let operands = rel.foreign_key.fields.iter().map(|fk_field| {
@@ -29,7 +34,7 @@ impl<'a> Generator<'a> {
             let source_field_name = self.field_name(fk_field.source);
 
             quote! {
-                #strukt::#target_field_const.eq(&self.#source_field_name)
+                #target_struct::#target_field_const.eq(&self.#source_field_name)
             }
         });
 
@@ -40,9 +45,9 @@ impl<'a> Generator<'a> {
         };
 
         quote! {
-            pub fn #name(&self) -> <#strukt as Relation>::One {
-                <#strukt as Relation>::One::from_stmt(
-                    #strukt::filter(#filter).into_select()
+            pub fn #name(&self) -> <#target_relation as Relation>::One {
+                <#target_relation as Relation>::One::from_stmt(
+                    #target_struct::filter(#filter).into_select()
                 )
             }
         }
@@ -171,6 +176,13 @@ impl<'a> Generator<'a> {
                     One { stmt }
                 }
 
+                /// Create a new associated record
+                pub fn create(self) -> builders::#create_struct_name {
+                    let mut builder = builders::#create_struct_name::default();
+                    builder.stmt.set_scope(self.stmt.into_select());
+                    builder
+                }
+
                 pub async fn get(self, db: &Db) -> Result<#strukt_name> {
                     db.get(self.stmt.into_select()).await
                 }
@@ -187,6 +199,13 @@ impl<'a> Generator<'a> {
             impl OptionOne {
                 pub fn from_stmt(stmt: stmt::Select<#strukt_name>) -> OptionOne {
                     OptionOne { stmt }
+                }
+
+                /// Create a new associated record
+                pub fn create(self) -> builders::#create_struct_name {
+                    let mut builder = builders::#create_struct_name::default();
+                    builder.stmt.set_scope(self.stmt.into_select());
+                    builder
                 }
 
                 pub async fn get(self, db: &Db) -> Result<Option<#strukt_name>> {
