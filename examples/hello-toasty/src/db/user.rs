@@ -4,7 +4,7 @@ pub struct User {
     pub id: Id<User>,
     pub name: String,
     pub email: String,
-    todos: HasMany<super::todo::Todo>,
+    pub todos: HasMany<super::todo::Todo>,
     pub moto: Option<String>,
 }
 impl User {
@@ -20,6 +20,12 @@ impl User {
             Self::TODOS.into(),
         ))
     }
+    pub async fn get_by_email(db: &Db, email: impl IntoExpr<String>) -> Result<User> {
+        Self::filter_by_email(email).get(db).await
+    }
+    pub fn filter_by_email(email: impl IntoExpr<String>) -> Query {
+        Query::default().filter_by_email(email)
+    }
     pub async fn get_by_id(db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
         Self::filter_by_id(id).get(db).await
     }
@@ -28,12 +34,6 @@ impl User {
     }
     pub fn filter_by_id_batch(keys: impl IntoExpr<[Id<User>]>) -> Query {
         Query::default().filter_by_id_batch(keys)
-    }
-    pub async fn get_by_email(db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-        Self::filter_by_email(email).get(db).await
-    }
-    pub fn filter_by_email(email: impl IntoExpr<String>) -> Query {
-        Query::default().filter_by_email(email)
     }
     pub fn create() -> builders::CreateUser {
         builders::CreateUser::default()
@@ -117,6 +117,12 @@ impl Query {
     pub const fn from_stmt(stmt: stmt::Select<User>) -> Query {
         Query { stmt }
     }
+    pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
+        self.filter_by_email(email).get(db).await
+    }
+    pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
+        self.filter(User::EMAIL.eq(email))
+    }
     pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
         self.filter_by_id(id).get(db).await
     }
@@ -125,12 +131,6 @@ impl Query {
     }
     pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<User>]>) -> Query {
         self.filter(stmt::Expr::in_list(User::ID, keys))
-    }
-    pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-        self.filter_by_email(email).get(db).await
-    }
-    pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
-        self.filter(User::EMAIL.eq(email))
     }
     pub async fn all(self, db: &Db) -> Result<Cursor<User>> {
         db.all(self.stmt).await
@@ -158,6 +158,10 @@ impl Query {
         Query {
             stmt: self.stmt.and(expr),
         }
+    }
+    pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> Self {
+        self.stmt.include(path.into());
+        self
     }
     pub fn todos(mut self) -> <super::todo::Todo as Relation>::Query {
         <super::todo::Todo as Relation>::Query::from_stmt(
@@ -384,6 +388,12 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Association<[User]>) -> Many {
             Many { stmt }
         }
+        pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
+            self.filter_by_email(email).get(db).await
+        }
+        pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
+            Query::from_stmt(self.into_select()).filter(User::EMAIL.eq(email))
+        }
         pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
             self.filter_by_id(id).get(db).await
         }
@@ -392,12 +402,6 @@ pub mod relations {
         }
         pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<User>]>) -> Query {
             Query::from_stmt(self.into_select()).filter_by_id_batch(keys)
-        }
-        pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-            self.filter_by_email(email).get(db).await
-        }
-        pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
-            Query::from_stmt(self.into_select()).filter(User::EMAIL.eq(email))
         }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<User>> {
@@ -466,6 +470,12 @@ pub mod relations {
     impl OneField {
         pub const fn from_path(path: Path<super::User>) -> OneField {
             OneField { path }
+        }
+        pub fn eq<T>(self, rhs: T) -> stmt::Expr<bool>
+        where
+            T: IntoExpr<super::User>,
+        {
+            self.path.eq(rhs.into_expr())
         }
         pub fn in_query<Q>(self, rhs: Q) -> toasty::stmt::Expr<bool>
         where

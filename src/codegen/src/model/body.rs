@@ -25,14 +25,6 @@ impl<'a> Generator<'a> {
 
         let relation_methods = self.gen_model_relation_methods();
 
-        /*
-        let relation_query_structs = self.gen_relation_structs();
-        let relation_fields = self.gen_relation_fields();
-        let query_structs = self.gen_query_structs();
-
-        let struct_into_expr = self.gen_struct_into_expr();
-        */
-
         let into_expr_body_ref = self.gen_model_into_expr_body(true);
         let into_expr_body_val = self.gen_model_into_expr_body(false);
         let into_select_body_ref = self.gen_model_into_select_body(true);
@@ -157,27 +149,6 @@ impl<'a> Generator<'a> {
 
                 #relations_mod
             }
-
-            /*
-            pub mod fields {
-                use super::*;
-
-                #relation_fields
-            }
-
-            pub mod relation {
-                use super::*;
-                use toasty::Cursor;
-
-                #relation_query_structs
-            }
-
-            pub mod queries {
-                use super::*;
-
-                #query_structs
-            }
-            */
         }
     }
 
@@ -266,42 +237,4 @@ impl<'a> Generator<'a> {
             })
             .collect()
     }
-
-    /*
-    fn gen_struct_into_expr(&self) -> TokenStream {
-        use app::FieldTy;
-
-        let mut pk_exprs = vec![];
-
-        for field in self.model.primary_key_fields() {
-            let field_name = self.field_name(field.id);
-
-            match &field.ty {
-                FieldTy::Primitive(_) => {
-                    pk_exprs.push(quote! {
-                        &self.#field_name
-                    });
-                }
-                FieldTy::BelongsTo(belongs_to) => {
-                    for fk in &belongs_to.foreign_key.fields {
-                        let fk_name = self.field_name(fk.target);
-                        pk_exprs.push(quote! {
-                            &self.#field_name.#fk_name
-                        });
-                    }
-                }
-                _ => todo!(),
-            }
-        }
-
-        let pk_expr = match &pk_exprs[..] {
-            [pk_expr] => quote!( #pk_expr ),
-            pk_exprs => quote!( ( #( #pk_exprs, )* ) ),
-        };
-
-        quote! {
-            stmt::Key::from_expr(#pk_expr)
-        }
-    }
-    */
 }

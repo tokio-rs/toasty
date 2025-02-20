@@ -204,6 +204,13 @@ impl<'a> Generator<'a> {
                     OneField { path }
                 }
 
+                pub fn eq<T>(self, rhs: T) -> stmt::Expr<bool>
+                where
+                    T: IntoExpr<super::#strukt_name>,
+                {
+                    self.path.eq(rhs.into_expr())
+                }
+
                 pub fn in_query<Q>(self, rhs: Q) -> toasty::stmt::Expr<bool>
                 where
                     Q: stmt::IntoSelect<Model = super::#strukt_name>,
