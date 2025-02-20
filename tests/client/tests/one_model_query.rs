@@ -32,7 +32,7 @@ async fn query_index_eq(s: impl Setup) {
             .unwrap();
     }
 
-    let users = db::User::find_by_name("one")
+    let users = db::User::filter_by_name("one")
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
@@ -49,7 +49,7 @@ async fn query_index_eq(s: impl Setup) {
         .await
         .unwrap();
 
-    let mut users = db::User::find_by_name("one")
+    let mut users = db::User::filter_by_name("one")
         .all(&db)
         .await
         .unwrap()
@@ -236,7 +236,7 @@ async fn query_local_key_cmp(s: impl Setup) {
             .unwrap();
     }
 
-    let events: Vec<_> = db::Event::find_by_kind("info")
+    let events: Vec<_> = db::Event::filter_by_kind("info")
         .filter(db::Event::TIMESTAMP.ne(10))
         .collect(&db)
         .await
@@ -247,7 +247,7 @@ async fn query_local_key_cmp(s: impl Setup) {
         [&0, &2, &4, &6, &8, &12, &14, &16, &18,]
     );
 
-    let events: Vec<_> = db::Event::find_by_kind("info")
+    let events: Vec<_> = db::Event::filter_by_kind("info")
         .filter(db::Event::TIMESTAMP.gt(10))
         .collect(&db)
         .await
@@ -258,7 +258,7 @@ async fn query_local_key_cmp(s: impl Setup) {
         [&12, &14, &16, &18,]
     );
 
-    let events: Vec<_> = db::Event::find_by_kind("info")
+    let events: Vec<_> = db::Event::filter_by_kind("info")
         .filter(db::Event::TIMESTAMP.ge(10))
         .collect(&db)
         .await
@@ -269,7 +269,7 @@ async fn query_local_key_cmp(s: impl Setup) {
         [&10, &12, &14, &16, &18,]
     );
 
-    let events: Vec<_> = db::Event::find_by_kind("info")
+    let events: Vec<_> = db::Event::filter_by_kind("info")
         .filter(db::Event::TIMESTAMP.lt(10))
         .collect(&db)
         .await
@@ -280,7 +280,7 @@ async fn query_local_key_cmp(s: impl Setup) {
         [&0, &2, &4, &6, &8]
     );
 
-    let events: Vec<_> = db::Event::find_by_kind("info")
+    let events: Vec<_> = db::Event::filter_by_kind("info")
         .filter(db::Event::TIMESTAMP.le(10))
         .collect(&db)
         .await

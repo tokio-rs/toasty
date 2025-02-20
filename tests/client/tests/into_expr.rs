@@ -17,15 +17,15 @@ async fn string_to_id_expr(s: impl Setup) {
     let id = foo.id.to_string();
 
     // Find the record using the ID as a &String
-    let foo2 = db::Foo::find_by_id(&id).get(&db).await.unwrap();
+    let foo2 = db::Foo::get_by_id(&db, &id).await.unwrap();
     assert_eq!(foo2.id, foo.id);
 
     // Find the record using the ID as a &str
-    let foo2 = db::Foo::find_by_id(&id[..]).get(&db).await.unwrap();
+    let foo2 = db::Foo::get_by_id(&db, &id[..]).await.unwrap();
     assert_eq!(foo2.id, foo.id);
 
     // Find the record using the ID as a String
-    let foo2 = db::Foo::find_by_id(id).get(&db).await.unwrap();
+    let foo2 = db::Foo::get_by_id(&db, id).await.unwrap();
     assert_eq!(foo2.id, foo.id);
 }
 

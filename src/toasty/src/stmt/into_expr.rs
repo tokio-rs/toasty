@@ -158,6 +158,6 @@ where
     }
 
     fn by_ref(&self) -> Expr<(T1, U1)> {
-        todo!()
+        (&self.0, &self.1).into_expr()
     }
 }

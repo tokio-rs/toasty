@@ -239,28 +239,40 @@ impl<'a> Generator<'a> {
     }
 
     pub(crate) fn gen_model_into_expr_body(&self, by_ref: bool) -> TokenStream {
-        let iter = self.model.primary_key_fields();
-
-        if iter.len() == 1 {
-            let expr = iter.map(|field| {
+        if self.model.primary_key.fields.len() == 1 {
+            let expr = self.model.primary_key_fields().map(|field| {
                 let name = self.field_name(field);
+                let ty = self.field_ty(field, 0);
 
-                if by_ref {
-                    quote!((&self.#name).into_expr().cast())
+                let into_expr = if by_ref {
+                    quote!((&self.#name))
                 } else {
-                    quote!(self.#name.into_expr().cast())
+                    quote!(self.#name)
+                };
+
+                quote! {
+                    let expr: stmt::Expr<#ty> = #into_expr.into_expr();
+                    expr.cast()
                 }
             });
 
             quote!( #( #expr )* )
         } else {
-            let expr = iter.map(|field| {
+            let expr = self.model.primary_key_fields().map(|field| {
                 let name = self.field_name(field);
                 let amp = if by_ref { quote!(&) } else { quote!() };
                 quote!( #amp self.#name)
             });
 
-            quote!( ( #( #expr ),* ).into_expr().cast() )
+            let ty = self
+                .model
+                .primary_key_fields()
+                .map(|field| self.field_ty(field, 0));
+
+            quote! {
+                let expr: stmt::Expr<( #( #ty ),* )> = ( #( #expr ),* ).into_expr();
+                expr.cast()
+            }
         }
     }
 
