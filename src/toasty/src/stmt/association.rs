@@ -20,6 +20,20 @@ impl<M: Model> Association<[M]> {
         }
     }
 
+    pub fn insert(self, expr: impl IntoExpr<[M]>) -> Statement<M> {
+        let [index] = self.untyped.path.projection.as_slice() else {
+            todo!()
+        };
+
+        let mut stmt = self.untyped.source.update();
+        stmt.assignments.insert(*index, expr.into_expr().untyped);
+
+        Statement {
+            untyped: stmt.into(),
+            _p: PhantomData,
+        }
+    }
+
     pub fn remove(self, expr: impl IntoExpr<M>) -> Statement<M> {
         let [index] = self.untyped.path.projection.as_slice() else {
             todo!()

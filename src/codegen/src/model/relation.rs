@@ -143,6 +143,13 @@ impl<'a> Generator<'a> {
                     builder
                 }
 
+                /// Add an item to the association
+                pub async fn insert(self, db: &Db, item: impl IntoExpr<[#strukt_name]>) -> Result<()> {
+                    let stmt = self.stmt.insert(item);
+                    db.exec(stmt).await?;
+                    Ok(())
+                }
+
                 /// Remove items from the association
                 pub async fn remove(self, db: &Db, item: impl IntoExpr<#strukt_name>) -> Result<()> {
                     let stmt = self.stmt.remove(item);

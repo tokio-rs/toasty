@@ -37,7 +37,11 @@ impl<T: ?Sized> IntoExpr<T> for Expr<T> {
     }
 }
 
-impl<T, E: IntoExpr<T> + ?Sized> IntoExpr<T> for &E {
+impl<T, E> IntoExpr<T> for &E
+where
+    T: ?Sized,
+    E: IntoExpr<T>,
+{
     fn into_expr(self) -> Expr<T> {
         IntoExpr::by_ref(self)
     }
@@ -96,19 +100,6 @@ where
 
     fn by_ref(&self) -> Expr<[T]> {
         Expr::list(self)
-    }
-}
-
-impl<T, U, const N: usize> IntoExpr<[T]> for &[U; N]
-where
-    U: IntoExpr<T>,
-{
-    fn into_expr(self) -> Expr<[T]> {
-        Expr::list(self)
-    }
-
-    fn by_ref(&self) -> Expr<[T]> {
-        Expr::list(*self)
     }
 }
 
