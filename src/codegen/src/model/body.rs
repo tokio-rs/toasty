@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_model_body(&mut self) -> TokenStream {
         // Build field-level codegen state
         let model_id = util::int(self.model.id.0);

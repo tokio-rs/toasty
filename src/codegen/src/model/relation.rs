@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_model_relation_methods(&self) -> impl Iterator<Item = TokenStream> + '_ {
         self.model
             .fields

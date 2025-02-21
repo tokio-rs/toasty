@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_model_field_consts(&self) -> TokenStream {
         use app::FieldTy::*;
 

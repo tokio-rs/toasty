@@ -2,7 +2,7 @@ use super::*;
 
 use app::FieldTy;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn self_update_struct_name(&self) -> &syn::Ident {
         self.update_struct_name_for(self.model.id)
     }

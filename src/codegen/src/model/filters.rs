@@ -29,7 +29,7 @@ impl Filter {
     }
 }
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_model_filter_methods(&self, depth: usize) -> TokenStream {
         self.filters
             .iter()

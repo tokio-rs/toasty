@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Generator<'a> {
+impl Generator<'_> {
     pub(super) fn gen_create_struct(&self) -> TokenStream {
         let struct_name = self.self_struct_name();
         let create_struct_name = self.self_create_struct_name();
