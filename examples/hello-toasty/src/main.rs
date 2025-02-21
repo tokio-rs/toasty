@@ -6,16 +6,11 @@ use db::{Todo, User};
 use toasty::Db;
 use toasty_sqlite::Sqlite;
 
-fn assert_sync_send<T: Send>(_: T) {}
-
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
     let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
 
     let schema = toasty::schema::from_file(schema_file)?;
-
-    // NOTE enable this to see the enstire structure in STDOUT
-    // println!("{schema:#?}");
 
     // Use the in-memory sqlite driver
     let driver = Sqlite::in_memory();
@@ -23,8 +18,6 @@ async fn main() -> toasty::Result<()> {
     let db = Db::new(schema, driver).await?;
     // For now, reset!s
     db.reset_db().await?;
-
-    assert_sync_send(db::User::find_by_email("hello").first(&db));
 
     println!("==> let u1 = User::create()");
     let u1 = User::create()
@@ -42,12 +35,12 @@ async fn main() -> toasty::Result<()> {
 
     // Find by ID
     println!("==> let user = User::find_by_id(&u1.id)");
-    let user = User::find_by_id(&u1.id).get(&db).await?;
+    let user = User::get_by_id(&db, &u1.id).await?;
     println!("USER = {user:#?}");
 
     // Find by email!
     println!("==> let user = User::find_by_email(&u1.email)");
-    let mut user = User::find_by_email(&u1.email).get(&db).await?;
+    let mut user = User::get_by_email(&db, &u1.email).await?;
     println!("USER = {user:#?}");
 
     assert!(User::create()
@@ -59,10 +52,10 @@ async fn main() -> toasty::Result<()> {
 
     user.update().name("Foo bar").exec(&db).await?;
     assert_eq!(user.name, "Foo bar");
-    assert_eq!(User::find_by_id(&user.id).get(&db).await?.name, user.name);
+    assert_eq!(User::get_by_id(&db, &user.id).await?.name, user.name);
 
     // Load the user again
-    let user = User::find_by_id(&u1.id).get(&db).await?;
+    let user = User::get_by_id(&db, &u1.id).await?;
     println!("  reloaded, notice change to the user's name -> {user:#?}");
 
     println!(" ~~~~~~~~~~~ CREATE TODOs ~~~~~~~~~~~~");
@@ -76,13 +69,13 @@ async fn main() -> toasty::Result<()> {
     while let Some(todo) = todos.next().await {
         let todo = todo?;
         println!("TODO = {todo:#?}");
-        println!("-> user {:?}", todo.user().find(&db).await?);
+        println!("-> user {:?}", todo.user().get(&db).await?);
     }
 
     // Delete user
-    let user = User::find_by_id(&u2.id).get(&db).await?;
+    let user = User::get_by_id(&db, &u2.id).await?;
     user.delete(&db).await?;
-    assert!(User::find_by_id(&u2.id).get(&db).await.is_err());
+    assert!(User::get_by_id(&db, &u2.id).await.is_err());
 
     // Create a batch of users
     User::create_many()
@@ -110,7 +103,7 @@ async fn main() -> toasty::Result<()> {
     let todos = user.todos().collect::<Vec<_>>(&db).await?;
     let len = todos.len();
 
-    user.todos().remove(todos.last().unwrap()).exec(&db).await?;
+    user.todos().remove(&db, todos.last().unwrap()).await?;
 
     assert_eq!(len - 1, user.todos().collect::<Vec<_>>(&db).await?.len());
 

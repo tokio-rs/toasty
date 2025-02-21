@@ -1,6 +1,9 @@
 mod assignments;
 pub use assignments::{Assignment, AssignmentOp, Assignments};
 
+mod association;
+pub use association::Association;
+
 mod delete;
 pub use delete::Delete;
 

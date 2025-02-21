@@ -2,7 +2,6 @@ use super::*;
 
 use std::{fmt, marker::PhantomData};
 
-// TODO: rename to Query?
 pub struct Select<M> {
     /// How to filter the data source
     pub(crate) untyped: stmt::Query,

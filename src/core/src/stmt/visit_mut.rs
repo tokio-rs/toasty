@@ -2,8 +2,11 @@
 
 use super::*;
 
-pub trait VisitMut: Sized {
-    fn visit_mut<N: Node>(&mut self, i: &mut N) {
+pub trait VisitMut {
+    fn visit_mut<N: Node>(&mut self, i: &mut N)
+    where
+        Self: Sized,
+    {
         i.visit_mut(self);
     }
 
@@ -13,6 +16,10 @@ pub trait VisitMut: Sized {
 
     fn visit_assignments_mut(&mut self, i: &mut Assignments) {
         visit_assignments_mut(self, i);
+    }
+
+    fn visit_association_mut(&mut self, i: &mut Association) {
+        visit_association_mut(self, i);
     }
 
     fn visit_expr_mut(&mut self, i: &mut Expr) {
@@ -244,23 +251,30 @@ impl<V: VisitMut> VisitMut for &mut V {
 
 pub fn visit_assignment_mut<V>(v: &mut V, node: &mut Assignment)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.expr);
 }
 
 pub fn visit_assignments_mut<V>(v: &mut V, node: &mut Assignments)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     for (_, assignment) in node.iter_mut() {
         v.visit_assignment_mut(assignment);
     }
 }
 
+pub fn visit_association_mut<V>(v: &mut V, node: &mut Association)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_stmt_query_mut(&mut node.source);
+}
+
 pub fn visit_expr_mut<V>(v: &mut V, node: &mut Expr)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     match node {
         Expr::And(expr) => v.visit_expr_and_mut(expr),
@@ -296,7 +310,7 @@ where
 
 pub fn visit_expr_and_mut<V>(v: &mut V, node: &mut ExprAnd)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     for expr in node {
         v.visit_expr_mut(expr);
@@ -305,13 +319,13 @@ where
 
 pub fn visit_expr_arg_mut<V>(v: &mut V, node: &mut ExprArg)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
 }
 
 pub fn visit_expr_begins_with_mut<V>(v: &mut V, node: &mut ExprBeginsWith)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.expr);
     v.visit_expr_mut(&mut node.pattern);
@@ -319,7 +333,7 @@ where
 
 pub fn visit_expr_binary_op_mut<V>(v: &mut V, node: &mut ExprBinaryOp)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.lhs);
     v.visit_expr_mut(&mut node.rhs);
@@ -327,20 +341,20 @@ where
 
 pub fn visit_expr_cast_mut<V>(v: &mut V, node: &mut ExprCast)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.expr);
 }
 
 pub fn visit_expr_column_mut<V>(v: &mut V, node: &mut ExprColumn)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
 }
 
 pub fn visit_expr_concat_mut<V>(v: &mut V, node: &mut ExprConcat)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     for expr in node {
         v.visit_expr_mut(expr);
@@ -349,20 +363,20 @@ where
 
 pub fn visit_expr_enum_mut<V>(v: &mut V, node: &mut ExprEnum)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_record_mut(&mut node.fields);
 }
 
 pub fn visit_expr_field_mut<V>(_v: &mut V, _node: &mut ExprField)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
 }
 
 pub fn visit_expr_in_list_mut<V>(v: &mut V, node: &mut ExprInList)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.expr);
     v.visit_expr_mut(&mut node.list);
@@ -370,7 +384,7 @@ where
 
 pub fn visit_expr_in_subquery_mut<V>(v: &mut V, node: &mut ExprInSubquery)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.expr);
     v.visit_stmt_query_mut(&mut node.query);
@@ -378,14 +392,14 @@ where
 
 pub fn visit_expr_is_null_mut<V>(v: &mut V, node: &mut ExprIsNull)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.expr);
 }
 
 pub fn visit_expr_like_mut<V>(v: &mut V, node: &mut ExprLike)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.expr);
     v.visit_expr_mut(&mut node.pattern);
@@ -393,13 +407,13 @@ where
 
 pub fn visit_expr_key_mut<V>(v: &mut V, node: &mut ExprKey)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
 }
 
 pub fn visit_expr_map_mut<V>(v: &mut V, node: &mut ExprMap)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.base);
     v.visit_expr_mut(&mut node.map);
@@ -407,7 +421,7 @@ where
 
 pub fn visit_expr_or_mut<V>(v: &mut V, node: &mut ExprOr)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     for expr in node {
         v.visit_expr_mut(expr);
@@ -416,7 +430,7 @@ where
 
 pub fn visit_expr_list_mut<V>(v: &mut V, node: &mut ExprList)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     for e in &mut node.items {
         v.visit_expr_mut(e);
@@ -425,7 +439,7 @@ where
 
 pub fn visit_expr_record_mut<V>(v: &mut V, node: &mut ExprRecord)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     for expr in &mut **node {
         v.visit_expr_mut(expr);
@@ -434,7 +448,7 @@ where
 
 pub fn visit_expr_set_mut<V>(v: &mut V, node: &mut ExprSet)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     match node {
         ExprSet::Select(expr) => v.visit_stmt_select_mut(expr),
@@ -445,7 +459,7 @@ where
 
 pub fn visit_expr_set_op_mut<V>(v: &mut V, node: &mut ExprSetOp)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     for operand in &mut node.operands {
         v.visit_expr_set_mut(operand);
@@ -454,20 +468,20 @@ where
 
 pub fn visit_expr_stmt_mut<V>(v: &mut V, node: &mut ExprStmt)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_stmt_mut(&mut node.stmt);
 }
 
 pub fn visit_expr_ty_mut<V>(v: &mut V, node: &mut ExprTy)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
 }
 
 pub fn visit_expr_pattern_mut<V>(v: &mut V, node: &mut ExprPattern)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     match node {
         ExprPattern::BeginsWith(expr) => v.visit_expr_begins_with_mut(expr),
@@ -477,7 +491,7 @@ where
 
 pub fn visit_expr_project_mut<V>(v: &mut V, node: &mut ExprProject)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.base);
     v.visit_projection_mut(&mut node.projection);
@@ -485,7 +499,7 @@ where
 
 pub fn visit_insert_target_mut<V>(v: &mut V, node: &mut InsertTarget)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     if let InsertTarget::Scope(stmt) = node {
         v.visit_stmt_query_mut(stmt)
@@ -494,13 +508,13 @@ where
 
 pub fn visit_projection_mut<V>(v: &mut V, node: &mut Projection)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
 }
 
 pub fn visit_returning_mut<V>(v: &mut V, node: &mut Returning)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     match node {
         Returning::Star | Returning::Changed => {}
@@ -510,13 +524,13 @@ where
 
 pub fn visit_source_mut<V>(_v: &mut V, _node: &mut Source)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
 }
 
 pub fn visit_stmt_mut<V>(v: &mut V, node: &mut Statement)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     match node {
         Statement::Delete(stmt) => v.visit_stmt_delete_mut(stmt),
@@ -528,7 +542,7 @@ where
 
 pub fn visit_stmt_select_mut<V>(v: &mut V, node: &mut Select)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_source_mut(&mut node.source);
     v.visit_expr_mut(&mut node.filter);
@@ -537,7 +551,7 @@ where
 
 pub fn visit_stmt_insert_mut<V>(v: &mut V, node: &mut Insert)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_insert_target_mut(&mut node.target);
     v.visit_stmt_query_mut(&mut node.source);
@@ -549,14 +563,14 @@ where
 
 pub fn visit_stmt_query_mut<V>(v: &mut V, node: &mut Query)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_expr_set_mut(&mut node.body);
 }
 
 pub fn visit_stmt_update_mut<V>(v: &mut V, node: &mut Update)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_update_target_mut(&mut node.target);
     v.visit_assignments_mut(&mut node.assignments);
@@ -576,7 +590,7 @@ where
 
 pub fn visit_stmt_delete_mut<V>(v: &mut V, node: &mut Delete)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     v.visit_source_mut(&mut node.from);
     v.visit_expr_mut(&mut node.filter);
@@ -588,19 +602,22 @@ where
 
 pub fn visit_update_target_mut<V>(v: &mut V, node: &mut UpdateTarget)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
+    if let UpdateTarget::Query(stmt) = node {
+        v.visit_stmt_query_mut(stmt)
+    }
 }
 
 pub fn visit_value_mut<V>(v: &mut V, node: &mut Value)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
 }
 
 pub fn visit_values_mut<V>(v: &mut V, node: &mut Values)
 where
-    V: VisitMut,
+    V: VisitMut + ?Sized,
 {
     for expr in &mut node.rows {
         v.visit_expr_mut(expr);

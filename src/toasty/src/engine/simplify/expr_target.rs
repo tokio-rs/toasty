@@ -64,6 +64,11 @@ impl<'a> ExprTarget<'a> {
         target: &stmt::UpdateTarget,
     ) -> ExprTarget<'a> {
         match target {
+            stmt::UpdateTarget::Query(query) => {
+                let model_id = query.body.as_select().source.as_model_id();
+                let model = schema.app.model(model_id);
+                ExprTarget::from(model)
+            }
             stmt::UpdateTarget::Model(model_id) => {
                 let model = schema.app.model(*model_id);
                 ExprTarget::from(model)

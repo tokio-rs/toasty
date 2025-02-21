@@ -55,7 +55,7 @@ async fn crud_user_todos(s: impl Setup) {
         .unwrap();
 
     // Find the todo by user & ID
-    let list = db::Todo::find_by_user_id_and_id(&user.id, &todo.id)
+    let list = db::Todo::filter_by_user_id_and_id(&user.id, &todo.id)
         .all(&db)
         .await
         .unwrap()
@@ -67,7 +67,7 @@ async fn crud_user_todos(s: impl Setup) {
     assert_eq!(todo.id, list[0].id);
 
     // Find the TODO by user ID
-    let list = db::Todo::find_by_user_id(&user.id)
+    let list = db::Todo::filter_by_user_id(&user.id)
         .all(&db)
         .await
         .unwrap()
@@ -154,45 +154,39 @@ async fn crud_user_todos(s: impl Setup) {
     }
 
     // Delete a TODO by value
-    let todo = db::Todo::find_by_user_id_and_id(&user.id, &ids[0])
-        .get(&db)
+    let todo = db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[0])
         .await
         .unwrap();
     todo.delete(&db).await.unwrap();
 
     // Can no longer get the todo via id
-    assert_err!(
-        db::Todo::find_by_user_id_and_id(&user.id, &ids[0])
-            .get(&db)
-            .await
-    );
+    assert_err!(db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[0]).await);
 
     // Can no longer get the todo scoped
-    assert_err!(user.todos().find_by_id(&ids[0]).get(&db).await);
+    assert_err!(user.todos().get_by_id(&db, &ids[0]).await);
 
     // Delete a TODO by scope
-    user.todos().find_by_id(&ids[1]).delete(&db).await.unwrap();
+    user.todos()
+        .filter_by_id(&ids[1])
+        .delete(&db)
+        .await
+        .unwrap();
 
     // Can no longer get the todo via id
-    assert_err!(
-        db::Todo::find_by_user_id_and_id(&user.id, &ids[1])
-            .get(&db)
-            .await
-    );
+    assert_err!(db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[1]).await);
 
     // Can no longer get the todo scoped
-    assert_err!(user.todos().find_by_id(&ids[1]).get(&db).await);
+    assert_err!(user.todos().get_by_id(&db, &ids[1]).await);
 
     // Successfuly a todo by scope
     user.todos()
-        .find_by_id(&ids[2])
+        .filter_by_id(&ids[2])
         .update()
         .title("batch update 1")
         .exec(&db)
         .await
         .unwrap();
-    let todo = db::Todo::find_by_user_id_and_id(&user.id, &ids[2])
-        .get(&db)
+    let todo = db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[2])
         .await
         .unwrap();
     assert_eq!(todo.title, "batch update 1");
@@ -200,14 +194,13 @@ async fn crud_user_todos(s: impl Setup) {
     // Now fail to update it by scoping by other user
     user2
         .todos()
-        .find_by_id(&ids[2])
+        .filter_by_id(&ids[2])
         .update()
         .title("batch update 2")
         .exec(&db)
         .await
         .unwrap();
-    let todo = db::Todo::find_by_user_id_and_id(&user.id, &ids[2])
-        .get(&db)
+    let todo = db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[2])
         .await
         .unwrap();
     assert_eq!(todo.title, "batch update 1");
@@ -255,17 +248,21 @@ async fn scoped_find_by_id(s: impl Setup) {
         .unwrap();
 
     // Find it scoped by user1
-    let reloaded = user1.todos().find_by_id(&todo.id).get(&db).await.unwrap();
+    let reloaded = user1.todos().get_by_id(&db, &todo.id).await.unwrap();
     assert_eq!(reloaded.id, todo.id);
     assert_eq!(reloaded.title, todo.title);
 
     // Trying to find the same todo scoped by user2 is missing
-    assert_none!(user2.todos().find_by_id(&todo.id).first(&db).await.unwrap());
-
-    let reloaded = db::User::find_by_id(&user1.id)
+    assert_none!(user2
         .todos()
-        .find_by_id(&todo.id)
-        .get(&db)
+        .filter_by_id(&todo.id)
+        .first(&db)
+        .await
+        .unwrap());
+
+    let reloaded = db::User::filter_by_id(&user1.id)
+        .todos()
+        .get_by_id(&db, &todo.id)
         .await
         .unwrap();
 
@@ -275,11 +272,11 @@ async fn scoped_find_by_id(s: impl Setup) {
     // Deleting the TODO from the user 2 scope fails
     user2
         .todos()
-        .find_by_id(&todo.id)
+        .filter_by_id(&todo.id)
         .delete(&db)
         .await
         .unwrap();
-    let reloaded = user1.todos().find_by_id(&todo.id).get(&db).await.unwrap();
+    let reloaded = user1.todos().get_by_id(&db, &todo.id).await.unwrap();
     assert_eq!(reloaded.id, todo.id);
 }
 

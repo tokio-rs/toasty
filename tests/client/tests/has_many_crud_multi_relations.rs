@@ -111,7 +111,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
     let lists = [
         category.todos().collect::<Vec<_>>(&db).await.unwrap(),
         user.todos().collect::<Vec<_>>(&db).await.unwrap(),
-        db::Todo::find_by_user_id(&user.id)
+        db::Todo::filter_by_user_id(&user.id)
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
@@ -191,7 +191,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
 
     check_todo_list(
         &expect,
-        db::Todo::find_by_user_id(&user.id)
+        db::Todo::filter_by_user_id(&user.id)
             .filter(db::Todo::CATEGORY.eq(&category))
             .collect::<Vec<_>>(&db)
             .await

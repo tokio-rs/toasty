@@ -1,10 +1,12 @@
 mod body;
 mod create;
 mod fields;
-mod find_by;
+mod filters;
 mod query;
 mod relation;
 mod update;
+
+use filters::Filter;
 
 use crate::*;
 
@@ -14,58 +16,42 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use std::rc::Rc;
 
-pub(crate) fn generate<'a>(
-    schema: &'a app::Schema,
-    model: &'a app::Model,
-    names: Rc<Names>,
-    in_macro: bool,
-) -> ModelOutput<'a> {
-    let mut gen = Generator::new(schema, model, names, in_macro);
+pub(crate) fn generate(model: &app::Model, names: Rc<Names>, in_macro: bool) -> ModelOutput<'_> {
+    let mut gen = Generator::new(model, names, in_macro);
     let module_name = gen.names.models[&model.id].module_name.clone();
 
     ModelOutput {
         model,
         module_name,
-        body: gen.gen_body(),
+        body: gen.gen_model_body(),
     }
 }
 
 /// Generate the Rust Toasty client for the specified model.
 pub(crate) struct Generator<'a> {
-    pub schema: &'a app::Schema,
-
     /// Model being generated
-    pub model: &'a app::Model,
+    model: &'a app::Model,
+
+    /// Model filters to generate methods for
+    filters: Vec<Filter>,
 
     /// Stores various names
-    pub names: Rc<Names>,
+    names: Rc<Names>,
 
     /// Whether or not generating code from within a macro
-    pub in_macro: bool,
+    in_macro: bool,
 }
 
 impl<'a> Generator<'a> {
     /// Create a new `GenModel` for the provided model
-    pub(crate) fn new(
-        schema: &'a app::Schema,
-        model: &'a app::Model,
-        names: Rc<Names>,
-        in_macro: bool,
-    ) -> Generator<'a> {
+    pub(crate) fn new(model: &'a app::Model, names: Rc<Names>, in_macro: bool) -> Generator<'a> {
+        let filters = Filter::build_model_filters(model);
+
         Generator {
-            schema,
             model,
+            filters,
             names,
             in_macro,
-        }
-    }
-
-    pub(crate) fn module_path(&self, mid: app::ModelId, depth: usize) -> TokenStream {
-        if mid == self.model.id {
-            quote!()
-        } else {
-            let path = self.module_name(mid, depth);
-            quote!(#path::)
         }
     }
 
@@ -119,8 +105,13 @@ impl<'a> Generator<'a> {
         self.names.relations[&field].singular_name.as_ref().unwrap()
     }
 
-    pub(crate) fn field_ty(&self, field: &app::Field, depth: usize) -> TokenStream {
+    pub(crate) fn field_ty(&self, field: impl Into<app::FieldId>, depth: usize) -> TokenStream {
         use app::FieldTy::*;
+
+        let field = field.into();
+        assert_eq!(field.model, self.model.id);
+
+        let field = &self.model.fields[field.index];
 
         match &field.ty {
             Primitive(field_ty) => self.ty(&field_ty.ty, depth),
@@ -133,14 +124,6 @@ impl<'a> Generator<'a> {
                 }
             }
         }
-    }
-
-    pub(crate) fn query(&self, id: impl Into<app::QueryId>) -> &app::Query {
-        self.schema.query(id.into())
-    }
-
-    pub(crate) fn pk_query(&self) -> &app::Query {
-        self.schema.query(self.model.primary_key.query)
     }
 
     pub(crate) fn ty(&self, ty: &stmt::Type, depth: usize) -> TokenStream {
@@ -176,40 +159,28 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub(crate) fn relation_struct_name(&self, field: impl Into<app::FieldId>) -> &syn::Ident {
-        let field = field.into();
-        &self.names.relations[&field].struct_name
-    }
-
-    pub(crate) fn relation_query_struct_path(
+    pub(crate) fn target_struct_path(
         &self,
         field: impl Into<app::FieldId>,
         depth: usize,
     ) -> TokenStream {
         let field = field.into();
-        let target_mod_name = self.module_name(field.model, depth);
-        let field_name = self.field_name(field);
-        quote!(#target_mod_name::relation::#field_name::Query)
+
+        assert!(field.model == self.model.id);
+
+        let target = match &self.model.fields[field.index].ty {
+            app::FieldTy::HasOne(rel) => rel.target,
+            app::FieldTy::HasMany(rel) => rel.target,
+            app::FieldTy::BelongsTo(rel) => rel.target,
+            app::FieldTy::Primitive(_) => unreachable!(),
+        };
+
+        self.model_struct_path(target, depth)
     }
 
-    pub(crate) fn model_pk_query_method_name(&self, id: app::ModelId) -> &syn::Ident {
-        let query = self.schema.model(id).primary_key.query;
-        self.query_method_name(query)
-    }
-
-    pub(crate) fn query_method_name(&self, query: app::QueryId) -> &syn::Ident {
-        &self.names.queries[&query].method_name
-    }
-
-    pub(crate) fn scoped_query_method_name(&self, query: app::QueryId) -> &syn::Ident {
-        self.names.queries[&query]
-            .scoped_method_name
-            .as_ref()
-            .unwrap()
-    }
-
-    pub(crate) fn query_struct_name(&self, query: app::QueryId) -> &syn::Ident {
-        &self.names.queries[&query].struct_name
+    pub(crate) fn relation_struct_name(&self, field: impl Into<app::FieldId>) -> &syn::Ident {
+        let field = field.into();
+        &self.names.relations[&field].struct_name
     }
 
     pub(crate) fn container_import(&self) -> TokenStream {

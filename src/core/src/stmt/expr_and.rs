@@ -13,6 +13,8 @@ impl Expr {
         let rhs = rhs.into();
 
         match (&mut lhs, rhs) {
+            (expr, rhs) if expr.is_true() => rhs,
+            (_, expr) if expr.is_true() => lhs,
             (Expr::And(lhs_and), Expr::And(rhs_and)) => {
                 lhs_and.operands.extend(rhs_and.operands);
                 lhs

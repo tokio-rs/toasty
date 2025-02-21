@@ -18,7 +18,7 @@ async fn ensure_types_sync_send(s: impl Setup) {
 
     let db = s.setup(db::load_schema()).await;
 
-    assert_sync_send(db::User::find_by_email("hello@example.com").first(&db));
+    assert_sync_send(db::User::filter_by_email("hello@example.com").first(&db));
 }
 
 tests!(ensure_types_sync_send);

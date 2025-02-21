@@ -5,6 +5,8 @@ pub(crate) use expr_target::ExprTarget;
 pub(crate) mod flatten_bool_ops;
 pub(crate) mod lift_pk_select;
 
+mod association;
+mod expr_and;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_concat_str;
@@ -23,7 +25,7 @@ mod rewrite_root_path_expr;
 
 use toasty_core::{
     schema::*,
-    stmt::{self, VisitMut},
+    stmt::{self, Node, VisitMut},
 };
 
 use std::mem;
@@ -36,6 +38,10 @@ pub(crate) struct Simplify<'a> {
     /// The context in which expressions are evaluated. This is a model or
     /// table.
     target: ExprTarget<'a>,
+}
+
+pub(crate) fn simplify_stmt<T: Node>(schema: &Schema, stmt: &mut T) {
+    Simplify::new(schema).visit_mut(stmt);
 }
 
 // TODO: get rid of this
@@ -58,6 +64,7 @@ impl VisitMut for Simplify<'_> {
 
         // If an in-subquery expression, then try lifting it.
         let maybe_expr = match i {
+            Expr::And(expr_and) => self.simplify_expr_and(expr_and),
             Expr::BinaryOp(expr_binary_op) => self.simplify_expr_binary_op(
                 expr_binary_op.op,
                 &mut expr_binary_op.lhs,
@@ -110,6 +117,7 @@ impl VisitMut for Simplify<'_> {
             &mut self.target,
             ExprTarget::from_source(self.schema, &stmt.from),
         );
+        self.simplify_via_association_for_delete(stmt);
         stmt::visit_mut::visit_stmt_delete_mut(self, stmt);
         self.target = target;
     }
@@ -119,24 +127,66 @@ impl VisitMut for Simplify<'_> {
             &mut self.target,
             ExprTarget::from_insert_target(self.schema, &stmt.target),
         );
+
+        self.simplify_via_association_for_insert(stmt);
+
         stmt::visit_mut::visit_stmt_insert_mut(self, stmt);
         self.target = target;
     }
 
+    fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
+        self.simplify_via_association_for_query(stmt);
+
+        stmt::visit_mut::visit_stmt_query_mut(self, stmt);
+    }
+
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
+        // Swap the current simplification target
         let target = mem::replace(
             &mut self.target,
             ExprTarget::from_source(self.schema, &stmt.source),
         );
+
+        if let stmt::Source::Model(model) = &mut stmt.source {
+            if let Some(via) = model.via.take() {
+                todo!("via={via:#?}");
+            }
+        }
+
         stmt::visit_mut::visit_stmt_select_mut(self, stmt);
+
+        // Replace the current simplification target
         self.target = target;
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
+        // If the update target is a query, start by simplifying the query, then
+        // rewriting it to be a filter.
+        if let stmt::UpdateTarget::Query(query) = &mut stmt.target {
+            self.visit_stmt_query_mut(query);
+
+            let stmt::ExprSet::Select(select) = &mut *query.body else {
+                todo!()
+            };
+
+            assert!(select.returning.is_star());
+
+            stmt.filter = if let Some(filter) = stmt.filter.take() {
+                Some(stmt::Expr::and(filter, select.filter.take()))
+            } else if !select.filter.is_true() {
+                Some(select.filter.take())
+            } else {
+                None
+            };
+
+            stmt.target = stmt::UpdateTarget::Model(select.source.as_model_id());
+        }
+
         let target = mem::replace(
             &mut self.target,
             ExprTarget::from_update_target(self.schema, &stmt.target),
         );
+
         stmt::visit_mut::visit_stmt_update_mut(self, stmt);
         self.target = target;
     }
@@ -172,142 +222,6 @@ impl VisitMut for Simplify<'_> {
 
             assert_eq!(actual, width, "target={:#?}", self.target);
         }
-    }
-
-    fn visit_mut<N: stmt::Node>(&mut self, i: &mut N) {
-        i.visit_mut(self);
-    }
-
-    fn visit_assignment_mut(&mut self, i: &mut stmt::Assignment) {
-        stmt::visit_mut::visit_assignment_mut(self, i);
-    }
-
-    fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
-        stmt::visit_mut::visit_assignments_mut(self, i);
-    }
-
-    fn visit_expr_and_mut(&mut self, i: &mut stmt::ExprAnd) {
-        stmt::visit_mut::visit_expr_and_mut(self, i);
-    }
-
-    fn visit_expr_arg_mut(&mut self, i: &mut stmt::ExprArg) {
-        stmt::visit_mut::visit_expr_arg_mut(self, i);
-    }
-
-    fn visit_expr_begins_with_mut(&mut self, i: &mut stmt::ExprBeginsWith) {
-        stmt::visit_mut::visit_expr_begins_with_mut(self, i);
-    }
-
-    fn visit_expr_binary_op_mut(&mut self, i: &mut stmt::ExprBinaryOp) {
-        stmt::visit_mut::visit_expr_binary_op_mut(self, i);
-    }
-
-    fn visit_expr_cast_mut(&mut self, i: &mut stmt::ExprCast) {
-        stmt::visit_mut::visit_expr_cast_mut(self, i);
-    }
-
-    fn visit_expr_column_mut(&mut self, i: &mut stmt::ExprColumn) {
-        stmt::visit_mut::visit_expr_column_mut(self, i);
-    }
-
-    fn visit_expr_concat_mut(&mut self, i: &mut stmt::ExprConcat) {
-        stmt::visit_mut::visit_expr_concat_mut(self, i);
-    }
-
-    fn visit_expr_enum_mut(&mut self, i: &mut stmt::ExprEnum) {
-        stmt::visit_mut::visit_expr_enum_mut(self, i);
-    }
-
-    fn visit_expr_field_mut(&mut self, i: &mut stmt::ExprField) {
-        stmt::visit_mut::visit_expr_field_mut(self, i);
-    }
-
-    fn visit_expr_in_list_mut(&mut self, i: &mut stmt::ExprInList) {
-        stmt::visit_mut::visit_expr_in_list_mut(self, i);
-    }
-
-    fn visit_expr_in_subquery_mut(&mut self, i: &mut stmt::ExprInSubquery) {
-        stmt::visit_mut::visit_expr_in_subquery_mut(self, i);
-    }
-
-    fn visit_expr_is_null_mut(&mut self, i: &mut stmt::ExprIsNull) {
-        stmt::visit_mut::visit_expr_is_null_mut(self, i);
-    }
-
-    fn visit_expr_like_mut(&mut self, i: &mut stmt::ExprLike) {
-        stmt::visit_mut::visit_expr_like_mut(self, i);
-    }
-
-    fn visit_expr_key_mut(&mut self, i: &mut stmt::ExprKey) {
-        stmt::visit_mut::visit_expr_key_mut(self, i);
-    }
-
-    fn visit_expr_map_mut(&mut self, i: &mut stmt::ExprMap) {
-        stmt::visit_mut::visit_expr_map_mut(self, i);
-    }
-
-    fn visit_expr_or_mut(&mut self, i: &mut stmt::ExprOr) {
-        stmt::visit_mut::visit_expr_or_mut(self, i);
-    }
-
-    fn visit_expr_list_mut(&mut self, i: &mut stmt::ExprList) {
-        stmt::visit_mut::visit_expr_list_mut(self, i);
-    }
-
-    fn visit_expr_record_mut(&mut self, i: &mut stmt::ExprRecord) {
-        stmt::visit_mut::visit_expr_record_mut(self, i);
-    }
-
-    fn visit_expr_set_op_mut(&mut self, i: &mut stmt::ExprSetOp) {
-        stmt::visit_mut::visit_expr_set_op_mut(self, i);
-    }
-
-    fn visit_expr_stmt_mut(&mut self, i: &mut stmt::ExprStmt) {
-        stmt::visit_mut::visit_expr_stmt_mut(self, i);
-    }
-
-    fn visit_expr_ty_mut(&mut self, i: &mut stmt::ExprTy) {
-        stmt::visit_mut::visit_expr_ty_mut(self, i);
-    }
-
-    fn visit_expr_pattern_mut(&mut self, i: &mut stmt::ExprPattern) {
-        stmt::visit_mut::visit_expr_pattern_mut(self, i);
-    }
-
-    fn visit_expr_project_mut(&mut self, i: &mut stmt::ExprProject) {
-        stmt::visit_mut::visit_expr_project_mut(self, i);
-    }
-
-    fn visit_insert_target_mut(&mut self, i: &mut stmt::InsertTarget) {
-        stmt::visit_mut::visit_insert_target_mut(self, i);
-    }
-
-    fn visit_projection_mut(&mut self, i: &mut stmt::Projection) {
-        stmt::visit_mut::visit_projection_mut(self, i);
-    }
-
-    fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
-        stmt::visit_mut::visit_returning_mut(self, i);
-    }
-
-    fn visit_source_mut(&mut self, i: &mut stmt::Source) {
-        stmt::visit_mut::visit_source_mut(self, i);
-    }
-
-    fn visit_stmt_mut(&mut self, i: &mut stmt::Statement) {
-        stmt::visit_mut::visit_stmt_mut(self, i);
-    }
-
-    fn visit_stmt_query_mut(&mut self, i: &mut stmt::Query) {
-        stmt::visit_mut::visit_stmt_query_mut(self, i);
-    }
-
-    fn visit_update_target_mut(&mut self, i: &mut stmt::UpdateTarget) {
-        stmt::visit_mut::visit_update_target_mut(self, i);
-    }
-
-    fn visit_value_mut(&mut self, i: &mut stmt::Value) {
-        stmt::visit_mut::visit_value_mut(self, i);
     }
 }
 

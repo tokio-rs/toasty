@@ -53,7 +53,7 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
     assert_eq!(profile.id, profile_reload.id);
 
     // Load the user via the profile
-    let user_reload = profile.user().find(&db).await.unwrap().unwrap();
+    let user_reload = profile.user().get(&db).await.unwrap().unwrap();
     assert_eq!(user.id, user_reload.id);
 
     // Create a new user with a profile
@@ -68,7 +68,7 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
     assert_eq!(profile.bio, "an apple a day");
 
     // The new profile is associated with the user
-    assert_eq!(user.id, profile.user().find(&db).await.unwrap().unwrap().id);
+    assert_eq!(user.id, profile.user().get(&db).await.unwrap().unwrap().id);
 
     // Update a user, creating a new profile.
     user.update()
@@ -80,7 +80,7 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
     // The user's profile is updated
     let profile = user.profile().get(&db).await.unwrap().unwrap();
     assert_eq!(profile.bio, "keeps the doctor away");
-    assert_eq!(user.id, profile.user().find(&db).await.unwrap().unwrap().id);
+    assert_eq!(user.id, profile.user().get(&db).await.unwrap().unwrap().id);
 
     // Unset the profile via an update. This will nullify user on the profile.
     let mut update = user.update();
@@ -90,7 +90,10 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
     // The profile is none
     assert!(user.profile().get(&db).await.unwrap().is_none());
 
-    let profile_reloaded = db::Profile::find_by_id(&profile.id).get(&db).await.unwrap();
+    let profile_reloaded = db::Profile::filter_by_id(&profile.id)
+        .get(&db)
+        .await
+        .unwrap();
     assert_none!(profile_reloaded.user_id);
 
     user.update()
@@ -99,13 +102,13 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
         .await
         .unwrap();
 
-    let profile_reloaded = db::Profile::find_by_id(&profile.id).get(&db).await.unwrap();
+    let profile_reloaded = db::Profile::get_by_id(&db, &profile.id).await.unwrap();
     assert_eq!(&user.id, profile_reloaded.user_id.as_ref().unwrap());
 
     // Deleting the profile will nullify the profile field for the user
     profile_reloaded.delete(&db).await.unwrap();
 
-    let mut user_reloaded = db::User::find_by_id(&user.id).get(&db).await.unwrap();
+    let mut user_reloaded = db::User::get_by_id(&db, &user.id).await.unwrap();
     assert_none!(user_reloaded.profile().get(&db).await.unwrap());
 
     // Create a new profile for the user
@@ -121,7 +124,7 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
     // Delete the user
     user_reloaded.delete(&db).await.unwrap();
 
-    let profile_reloaded = db::Profile::find_by_id(&profile_id).get(&db).await.unwrap();
+    let profile_reloaded = db::Profile::get_by_id(&db, &profile_id).await.unwrap();
     assert_none!(profile_reloaded.user_id);
 }
 
@@ -168,11 +171,11 @@ async fn crud_has_one_required_belongs_to_optional(s: impl Setup) {
     assert_eq!(profile.bio, "an apple a day");
 
     // The new profile is associated with the user
-    assert_eq!(user.id, profile.user().find(&db).await.unwrap().unwrap().id);
+    assert_eq!(user.id, profile.user().get(&db).await.unwrap().unwrap().id);
 
     // Deleting the user leaves the profile in place.
     user.delete(&db).await.unwrap();
-    let profile_reloaded = db::Profile::find_by_id(&profile.id).get(&db).await.unwrap();
+    let profile_reloaded = db::Profile::get_by_id(&db, &profile.id).await.unwrap();
     assert_none!(profile_reloaded.user_id);
 
     // Try creating a user **without** a user: error
@@ -240,9 +243,9 @@ async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
     println!("--------------");
     // assert_eq!(u2.id, p1.user().find(&db).await.unwrap().unwrap().id);
     // u1 is deleted
-    assert_err!(db::User::find_by_id(&u1.id).get(&db).await);
+    assert_err!(db::User::get_by_id(&db, &u1.id).await);
     // p2 ID is null
-    let p2_reloaded = db::Profile::find_by_id(&p2.id).get(&db).await.unwrap();
+    let p2_reloaded = db::Profile::get_by_id(&db, &p2.id).await.unwrap();
     assert_none!(p2_reloaded.user_id);
 
     /*
@@ -336,11 +339,11 @@ async fn crud_has_one_optional_belongs_to_required(s: impl Setup) {
     assert_eq!(profile.bio, "an apple a day");
 
     // The new profile is associated with the user
-    assert_eq!(user.id, profile.user().find(&db).await.unwrap().id);
+    assert_eq!(user.id, profile.user().get(&db).await.unwrap().id);
 
     // Deleting the user also deletes the profile
     user.delete(&db).await.unwrap();
-    assert_err!(db::Profile::find_by_id(&profile.id).get(&db).await);
+    assert_err!(db::Profile::get_by_id(&db, &profile.id).await);
 }
 
 async fn has_one_must_specify_relation_on_one_side(_s: impl Setup) {
@@ -423,7 +426,7 @@ async fn set_has_one_by_value_in_update_query(s: impl Setup) {
     let user = db::User::create().exec(&db).await.unwrap();
     let profile = db::Profile::create().exec(&db).await.unwrap();
 
-    db::User::find_by_id(&user.id)
+    db::User::filter_by_id(&user.id)
         .update()
         .profile(&profile)
         .exec(&db)
@@ -473,12 +476,12 @@ async fn unset_has_one_with_required_pair_in_pk_query_update(s: impl Setup) {
     let profile = user.profile().get(&db).await.unwrap().unwrap();
 
     println!("=======> here");
-    let mut update = db::User::find_by_id(&user.id).update();
+    let mut update = db::User::filter_by_id(&user.id).update();
     update.unset_profile();
     update.exec(&db).await.unwrap();
 
     // Profile is deleted
-    assert_err!(db::Profile::find_by_id(&profile.id).get(&db).await);
+    assert_err!(db::Profile::get_by_id(&db, &profile.id).await);
 }
 
 async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) {
@@ -520,12 +523,12 @@ async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) 
     let profile = user.profile().get(&db).await.unwrap().unwrap();
 
     println!("=======> here");
-    let mut update = db::User::find_by_email(&user.email).update();
+    let mut update = db::User::filter_by_email(&user.email).update();
     update.unset_profile();
     update.exec(&db).await.unwrap();
 
     // Profile is deleted
-    assert_err!(db::Profile::find_by_id(&profile.id).get(&db).await);
+    assert_err!(db::Profile::get_by_id(&db, &profile.id).await);
 }
 
 async fn associate_has_one_by_val_on_insert(s: impl Setup) {
@@ -615,26 +618,26 @@ async fn associate_has_one_by_val_on_update_query_with_filter(s: impl Setup) {
         .await
         .unwrap();
 
-    db::User::find_by_id(&u1.id)
+    db::User::filter_by_id(&u1.id)
         .update()
         .profile(&p1)
         .exec(&db)
         .await
         .unwrap();
 
-    let u1_reloaded = db::User::find_by_id(&u1.id).get(&db).await.unwrap();
+    let u1_reloaded = db::User::get_by_id(&db, &u1.id).await.unwrap();
     assert_eq!(
         p1.id,
         u1_reloaded.profile().get(&db).await.unwrap().unwrap().id
     );
 
     // Unset
-    let mut update = db::User::find_by_id(&u1.id).update();
+    let mut update = db::User::filter_by_id(&u1.id).update();
     update.unset_profile();
     update.exec(&db).await.unwrap();
 
     // Getting this to work will require a big chunk of work in the planner.
-    db::User::find_by_id(&u1.id)
+    db::User::filter_by_id(&u1.id)
         .filter(db::User::NAME.eq("anon"))
         .update()
         .profile(&p1)

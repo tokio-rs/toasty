@@ -31,7 +31,10 @@ async fn batch_create_one(s: impl Setup) {
 
     assert_eq!(res[0].title, "hello");
 
-    let reloaded: Vec<_> = db::Todo::find_by_id(&res[0].id).collect(&db).await.unwrap();
+    let reloaded: Vec<_> = db::Todo::filter_by_id(&res[0].id)
+        .collect(&db)
+        .await
+        .unwrap();
     assert_eq!(1, reloaded.len());
     assert_eq!(reloaded[0].id, res[0].id);
 }
@@ -52,7 +55,7 @@ async fn batch_create_many(s: impl Setup) {
     assert_eq!(res[1].title, "todo 2");
 
     for todo in &res {
-        let reloaded: Vec<_> = db::Todo::find_by_id(&todo.id).collect(&db).await.unwrap();
+        let reloaded: Vec<_> = db::Todo::filter_by_id(&todo.id).collect(&db).await.unwrap();
         assert_eq!(1, reloaded.len());
         assert_eq!(reloaded[0].id, todo.id);
     }
@@ -81,7 +84,7 @@ async fn batch_create_fails_if_any_record_missing_fields(s: impl Setup) {
 
     assert!(res.is_empty());
 
-    let users: Vec<_> = db::User::find_by_email("me@carllerche.com")
+    let users: Vec<_> = db::User::filter_by_email("me@carllerche.com")
         .collect(&db)
         .await
         .unwrap();
@@ -120,11 +123,11 @@ async fn batch_create_model_with_unique_field_index_all_unique(s: impl Setup) {
 
     // We can fetch the user by ID and email
     for user in &res {
-        let found = db::User::find_by_id(&user.id).get(&db).await.unwrap();
+        let found = db::User::get_by_id(&db, &user.id).await.unwrap();
         assert_eq!(found.id, user.id);
         assert_eq!(found.email, user.email);
 
-        let found = db::User::find_by_email(&user.email).get(&db).await.unwrap();
+        let found = db::User::get_by_email(&db, &user.email).await.unwrap();
         assert_eq!(found.id, user.id);
         assert_eq!(found.email, user.email);
     }

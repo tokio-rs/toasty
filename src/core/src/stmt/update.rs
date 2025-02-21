@@ -26,6 +26,9 @@ impl Statement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UpdateTarget {
+    /// The query must return a "model" for it to be updated.
+    Query(Query),
+
     /// Update a model
     Model(ModelId),
 
@@ -47,6 +50,7 @@ impl UpdateTarget {
     pub fn as_model_id(&self) -> ModelId {
         match self {
             UpdateTarget::Model(model_id) => *model_id,
+            UpdateTarget::Query(query) => query.body.as_select().source.as_model_id(),
             _ => todo!(),
         }
     }

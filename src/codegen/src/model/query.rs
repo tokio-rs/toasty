@@ -4,6 +4,7 @@ impl Generator<'_> {
     pub(crate) fn gen_query_struct(&self) -> TokenStream {
         let struct_name = self.self_struct_name();
         let relation_methods = self.gen_relation_methods();
+        let filter_methods = self.gen_query_filter_methods();
 
         quote! {
             #[derive(Debug)]
@@ -15,6 +16,8 @@ impl Generator<'_> {
                 pub const fn from_stmt(stmt: stmt::Select<#struct_name>) -> Query {
                     Query { stmt }
                 }
+
+                #filter_methods
 
                 pub async fn all(self, db: &Db) -> Result<Cursor<#struct_name>> {
                     db.all(self.stmt).await
@@ -28,8 +31,8 @@ impl Generator<'_> {
                     db.get(self.stmt).await
                 }
 
-                pub fn update(self) -> UpdateQuery {
-                    UpdateQuery::from(self)
+                pub fn update(self) -> builders::UpdateQuery {
+                    builders::UpdateQuery::from(self)
                 }
 
                 pub async fn delete(self, db: &Db) -> Result<()> {
@@ -48,6 +51,11 @@ impl Generator<'_> {
                     Query {
                         stmt: self.stmt.and(expr),
                     }
+                }
+
+                pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> Self {
+                    self.stmt.include(path.into());
+                    self
                 }
 
                 #relation_methods
@@ -85,22 +93,39 @@ impl Generator<'_> {
             .iter()
             .filter_map(|field| match &field.ty {
                 FieldTy::Primitive(..) => None,
-                FieldTy::HasMany(..) => None,
-                FieldTy::BelongsTo(belongs_to) => {
-                    Some(self.gen_belongs_to_method(field.id, belongs_to.target))
-                }
+                FieldTy::HasMany(_) => Some(self.gen_has_many_method(field.id)),
+                FieldTy::BelongsTo(_) => Some(self.gen_belongs_to_method(field.id)),
                 FieldTy::HasOne(..) => None,
             })
             .collect()
     }
 
-    fn gen_belongs_to_method(&self, field: app::FieldId, target: app::ModelId) -> TokenStream {
+    fn gen_has_many_method(&self, field: app::FieldId) -> TokenStream {
+        let strukt_path = self.self_struct_name();
         let name = self.field_name(field);
-        let module_name = self.module_name(target, 0);
+        let const_name = self.field_const_name(field);
+        let target_struct_path = self.target_struct_path(field, 0);
 
         quote! {
-            pub fn #name(mut self) -> #module_name::Query {
-                todo!()
+            pub fn #name(mut self) -> <#target_struct_path as Relation>::Query {
+                <#target_struct_path as Relation>::Query::from_stmt(
+                    stmt::Association::many(self.stmt, #strukt_path::#const_name.into()).into_select()
+                )
+            }
+        }
+    }
+
+    fn gen_belongs_to_method(&self, field: app::FieldId) -> TokenStream {
+        let strukt_path = self.self_struct_name();
+        let name = self.field_name(field);
+        let const_name = self.field_const_name(field);
+        let target_struct_path = self.target_struct_path(field, 0);
+
+        quote! {
+            pub fn #name(mut self) -> <#target_struct_path as Relation>::Query {
+                <#target_struct_path as Relation>::Query::from_stmt(
+                    stmt::Association::many_via_one(self.stmt, #strukt_path::#const_name.into()).into_select()
+                )
             }
         }
     }

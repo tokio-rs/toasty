@@ -19,7 +19,7 @@ async fn crud_no_fields(s: impl Setup) {
     let created = db::Foo::create().exec(&db).await.unwrap();
 
     // Find Foo
-    let read = db::Foo::find_by_id(&created.id)
+    let read = db::Foo::filter_by_id(&created.id)
         .all(&db)
         .await
         .unwrap()
@@ -35,7 +35,6 @@ async fn crud_no_fields(s: impl Setup) {
     let mut ids = vec![];
 
     for _ in 0..MORE {
-        #[allow(clippy::disallowed_names)]
         let foo = db::Foo::create().exec(&db).await.unwrap();
         assert_ne!(foo.id, created.id);
         ids.push(foo.id);
@@ -44,7 +43,7 @@ async fn crud_no_fields(s: impl Setup) {
     std_util::assert_unique!(ids);
 
     for id in &ids {
-        let read = db::Foo::find_by_id(id)
+        let read = db::Foo::filter_by_id(id)
             .all(&db)
             .await
             .unwrap()
@@ -65,20 +64,19 @@ async fn crud_no_fields(s: impl Setup) {
 
         if i.is_even() {
             // Delete by object
-            let val = db::Foo::find_by_id(&id).get(&db).await.unwrap();
+            let val = db::Foo::get_by_id(&db, &id).await.unwrap();
             val.delete(&db).await.unwrap();
         } else {
             // Delete by ID
-            db::Foo::find_by_id(&id).delete(&db).await.unwrap();
+            db::Foo::filter_by_id(&id).delete(&db).await.unwrap();
         }
 
         // Assert deleted
-        assert_err!(db::Foo::find_by_id(id).get(&db).await);
+        assert_err!(db::Foo::get_by_id(&db, id).await);
 
         // Assert other foos remain
         for id in &ids {
-            #[allow(clippy::disallowed_names)]
-            let foo = db::Foo::find_by_id(id).get(&db).await.unwrap();
+            let foo = db::Foo::get_by_id(&db, id).await.unwrap();
             assert_eq!(*id, foo.id);
         }
     }
@@ -107,7 +105,7 @@ async fn crud_one_string(s: impl Setup) {
     assert_eq!(created.val, "hello world");
 
     // Find Foo
-    let read = db::Foo::find_by_id(&created.id)
+    let read = db::Foo::filter_by_id(&created.id)
         .all(&db)
         .await
         .unwrap()
@@ -122,7 +120,6 @@ async fn crud_one_string(s: impl Setup) {
     let mut ids = vec![];
 
     for i in 0..10 {
-        #[allow(clippy::disallowed_names)]
         let foo = db::Foo::create()
             .val(format!("hello {i}"))
             .exec(&db)
@@ -136,7 +133,7 @@ async fn crud_one_string(s: impl Setup) {
     std_util::assert_unique!(ids);
 
     for (i, id) in ids.iter().enumerate() {
-        let read = db::Foo::find_by_id(id)
+        let read = db::Foo::filter_by_id(id)
             .all(&db)
             .await
             .unwrap()
@@ -153,30 +150,30 @@ async fn crud_one_string(s: impl Setup) {
     created.update().val("updated!").exec(&db).await.unwrap();
     assert_eq!(created.val, "updated!");
 
-    let reload = db::Foo::find_by_id(&created.id).get(&db).await.unwrap();
+    let reload = db::Foo::get_by_id(&db, &created.id).await.unwrap();
     assert_eq!(reload.val, created.val);
 
     // Update by ID
-    db::Foo::find_by_id(&created.id)
+    db::Foo::filter_by_id(&created.id)
         .update()
         .val("updated again!")
         .exec(&db)
         .await
         .unwrap();
-    let reload = db::Foo::find_by_id(&created.id).get(&db).await.unwrap();
+    let reload = db::Foo::get_by_id(&db, &created.id).await.unwrap();
     assert_eq!(reload.val, "updated again!");
 
     // Delete the record
     reload.delete(&db).await.unwrap();
 
     // It is gone
-    assert_err!(db::Foo::find_by_id(&created.id).get(&db).await);
+    assert_err!(db::Foo::get_by_id(&db, &created.id).await);
 
     // Delete by ID
-    db::Foo::find_by_id(&ids[0]).delete(&db).await.unwrap();
+    db::Foo::filter_by_id(&ids[0]).delete(&db).await.unwrap();
 
     // It is gone
-    assert_err!(db::Foo::find_by_id(&ids[0]).get(&db).await);
+    assert_err!(db::Foo::get_by_id(&db, &ids[0]).await);
 }
 
 async fn required_field_create_without_setting(s: impl Setup) {
@@ -223,7 +220,7 @@ async fn unique_index_required_field_update(s: impl Setup) {
     assert_err!(db::User::create().email(email).exec(&db).await);
 
     // Loading the user by email
-    let user_reloaded = db::User::find_by_email(email).get(&db).await.unwrap();
+    let user_reloaded = db::User::get_by_email(&db, email).await.unwrap();
     assert_eq!(user.id, user_reloaded.id);
     assert_eq!(user_reloaded.email, email);
 
@@ -240,7 +237,7 @@ async fn unique_index_required_field_update(s: impl Setup) {
     user.delete(&db).await.unwrap();
 
     // Finding by the email returns None
-    assert_none!(db::User::find_by_email(email).first(&db).await.unwrap());
+    assert_none!(db::User::filter_by_email(email).first(&db).await.unwrap());
 
     let mut user2 = db::User::create().email(email).exec(&db).await.unwrap();
     assert_ne!(user2.id, user_reloaded.id);
@@ -257,12 +254,12 @@ async fn unique_index_required_field_update(s: impl Setup) {
         .unwrap();
 
     // Reload the user by ID
-    let user_reloaded = db::User::find_by_id(&user2.id).get(&db).await.unwrap();
+    let user_reloaded = db::User::filter_by_id(&user2.id).get(&db).await.unwrap();
     assert_eq!(user2.id, user_reloaded.id);
     assert_eq!(user_reloaded.email, "user2@example.com");
 
     // Finding by the email returns None
-    assert_none!(db::User::find_by_email(email).first(&db).await.unwrap());
+    assert_none!(db::User::filter_by_email(email).first(&db).await.unwrap());
 
     // Trying to create a user with the updated email address fails
     assert_err!(
@@ -278,7 +275,7 @@ async fn unique_index_required_field_update(s: impl Setup) {
     assert_ne!(user3.id, user2.id);
 
     // Updating the email address by ID
-    db::User::find_by_id(&user2.id)
+    db::User::filter_by_id(&user2.id)
         .update()
         .email("user3@example.com")
         .exec(&db)
@@ -286,13 +283,13 @@ async fn unique_index_required_field_update(s: impl Setup) {
         .unwrap();
 
     // Finding by the email returns None
-    assert_none!(db::User::find_by_email(&user2.email)
+    assert_none!(db::User::filter_by_email(&user2.email)
         .first(&db)
         .await
         .unwrap());
 
     // Find the user by the new address.
-    let u = db::User::find_by_email("user3@example.com")
+    let u = db::User::filter_by_email("user3@example.com")
         .get(&db)
         .await
         .unwrap();
@@ -339,11 +336,11 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
     assert!(u2.email.is_none());
 
     // Reload u1 and make sure email is still set.
-    let u1_reload = db::User::find_by_id(&u1.id).get(&db).await.unwrap();
+    let u1_reload = db::User::get_by_id(&db, &u1.id).await.unwrap();
     assert!(u1_reload.email.is_none());
 
     // Finding by a bogus email finds nothing
-    assert_none!(db::User::find_by_email("foo@example.com")
+    assert_none!(db::User::filter_by_email("foo@example.com")
         .first(&db)
         .await
         .unwrap());
@@ -356,8 +353,7 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
         .unwrap();
     assert_eq!(u3.email, Some("three@example.com".to_string()));
 
-    let u3_reload = db::User::find_by_email("three@example.com")
-        .get(&db)
+    let u3_reload = db::User::get_by_email(&db, "three@example.com")
         .await
         .unwrap();
     assert_eq!(u3_reload.id, u3.id);
@@ -371,8 +367,7 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
     assert_eq!(u1.email, Some("one@example.com".to_string()));
 
     // Find it
-    let u1_reload = db::User::find_by_email("one@example.com")
-        .get(&db)
+    let u1_reload = db::User::get_by_email(&db, "one@example.com")
         .await
         .unwrap();
     assert_eq!(u1.id, u1_reload.id);
@@ -381,8 +376,7 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
     assert_err!(u2.update().email("three@example.com").exec(&db).await);
 
     // Can still fetch user 3
-    let u3_reload = db::User::find_by_email("three@example.com")
-        .get(&db)
+    let u3_reload = db::User::get_by_email(&db, "three@example.com")
         .await
         .unwrap();
     assert_eq!(u3_reload.id, u3.id);
@@ -393,8 +387,7 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
-    let u2_reload = db::User::find_by_email("two@example.com")
-        .get(&db)
+    let u2_reload = db::User::get_by_email(&db, "two@example.com")
         .await
         .unwrap();
     assert_eq!(u2_reload.id, u2.id);
@@ -411,7 +404,7 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
-    let u4_reload = db::User::find_by_email("three@example.com")
+    let u4_reload = db::User::filter_by_email("three@example.com")
         .get(&db)
         .await
         .unwrap();
@@ -442,7 +435,7 @@ async fn unique_index_no_update(s: impl Setup) {
         .await
         .unwrap();
 
-    let u = db::User::find_by_id(&user.id).get(&db).await.unwrap();
+    let u = db::User::filter_by_id(&user.id).get(&db).await.unwrap();
     assert_eq!(user.name, u.name);
 
     // Update the name by value
@@ -450,11 +443,11 @@ async fn unique_index_no_update(s: impl Setup) {
 
     assert_eq!("Jane Doe", user.name);
 
-    let u = db::User::find_by_id(&user.id).get(&db).await.unwrap();
+    let u = db::User::get_by_id(&db, &user.id).await.unwrap();
     assert_eq!(user.name, u.name);
 
     // Find by email still works
-    let u = db::User::find_by_email(&user.email).get(&db).await.unwrap();
+    let u = db::User::get_by_email(&db, &user.email).await.unwrap();
     assert_eq!(user.name, u.name);
 }
 
@@ -472,22 +465,17 @@ async fn batch_get_by_id(s: impl Setup) {
     let mut keys = vec![];
 
     for _ in 0..5 {
-        #[allow(clippy::disallowed_names)]
         let foo = db::Foo::create().exec(&db).await.unwrap();
         keys.push(foo.id);
     }
 
-    let foos: Vec<_> = db::Foo::find_many_by_id()
-        .item(&keys[0])
-        .item(&keys[1])
-        .item(&keys[2])
+    let foos: Vec<_> = db::Foo::filter_by_id_batch(&[&keys[0], &keys[1], &keys[2]])
         .collect(&db)
         .await
         .unwrap();
 
     assert_eq!(3, foos.len());
 
-    #[allow(clippy::disallowed_names)]
     for foo in foos {
         assert!(keys.iter().any(|key| foo.id == *key));
     }
@@ -507,12 +495,14 @@ async fn empty_batch_get_by_id(s: impl Setup) {
     let mut ids = vec![];
 
     for _ in 0..5 {
-        #[allow(clippy::disallowed_names)]
         let foo = db::Foo::create().exec(&db).await.unwrap();
         ids.push(foo.id);
     }
 
-    let foos: Vec<_> = db::Foo::find_many_by_id().collect(&db).await.unwrap();
+    let foos: Vec<_> = db::Foo::filter_by_id_batch(&[] as &[toasty::stmt::Id<db::Foo>])
+        .collect(&db)
+        .await
+        .unwrap();
 
     assert_eq!(0, foos.len());
 }

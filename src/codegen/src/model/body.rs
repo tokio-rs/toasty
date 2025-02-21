@@ -1,7 +1,7 @@
 use super::*;
 
 impl Generator<'_> {
-    pub(super) fn gen_body(&mut self) -> TokenStream {
+    pub(super) fn gen_model_body(&mut self) -> TokenStream {
         // Build field-level codegen state
         let model_id = util::int(self.model.id.0);
 
@@ -19,16 +19,18 @@ impl Generator<'_> {
         let update_method_def = self.gen_model_update_method_def();
 
         let field_consts = self.gen_model_field_consts();
+
         let query_struct = self.gen_query_struct();
+        let model_filters = self.gen_model_filter_methods(0);
 
-        let relation_query_structs = self.gen_relation_structs();
-        let relation_fields = self.gen_relation_fields();
-        let query_structs = self.gen_query_structs();
+        let relation_methods = self.gen_model_relation_methods();
 
-        let struct_into_expr = self.gen_struct_into_expr();
+        let into_expr_body_ref = self.gen_model_into_expr_body(true);
+        let into_expr_body_val = self.gen_model_into_expr_body(false);
+        let into_select_body_ref = self.gen_model_into_select_body(true);
+        let into_select_body_value = self.gen_model_into_select_body(false);
 
-        let into_select_impl_ref = self.gen_into_select_impl(true);
-        let into_select_impl_value = self.gen_into_select_impl(false);
+        let relations_mod = self.gen_relations_mod();
 
         quote! {
             #container_import
@@ -43,19 +45,23 @@ impl Generator<'_> {
             impl #struct_name {
                 #field_consts
 
-                pub fn create() -> #create_struct_name {
-                    #create_struct_name::default()
+                #( #relation_methods )*
+
+                #model_filters
+
+                pub fn create() -> builders::#create_struct_name {
+                    builders::#create_struct_name::default()
                 }
 
                 pub fn create_many() -> CreateMany<#struct_name> {
                     CreateMany::default()
                 }
 
+                #update_method_def
+
                 pub fn filter(expr: stmt::Expr<bool>) -> Query {
                     Query::from_stmt(stmt::Select::filter(expr))
                 }
-
-                #update_method_def
 
                 pub async fn delete(self, db: &Db) -> Result<()> {
                     let stmt = self.into_select().delete();
@@ -75,11 +81,20 @@ impl Generator<'_> {
                 }
             }
 
+            impl Relation for #struct_name {
+                type Query = Query;
+                type Many = relations::Many;
+                type ManyField = relations::ManyField;
+                type One = relations::One;
+                type OneField = relations::OneField;
+                type OptionOne = relations::OptionOne;
+            }
+
             impl stmt::IntoSelect for &#struct_name {
                 type Model = #struct_name;
 
                 fn into_select(self) -> stmt::Select<Self::Model> {
-                    #into_select_impl_ref
+                    #into_select_body_ref
                 }
             }
 
@@ -95,51 +110,44 @@ impl Generator<'_> {
                 type Model = #struct_name;
 
                 fn into_select(self) -> stmt::Select<Self::Model> {
-                    #into_select_impl_value
+                    #into_select_body_value
                 }
             }
 
             impl stmt::IntoExpr<#struct_name> for #struct_name {
                 fn into_expr(self) -> stmt::Expr<#struct_name> {
-                    todo!()
+                    #into_expr_body_val
+                }
+
+                fn by_ref(&self) -> stmt::Expr<#struct_name> {
+                    #into_expr_body_ref
                 }
             }
 
-            impl stmt::IntoExpr<#struct_name> for &#struct_name {
-                fn into_expr(self) -> stmt::Expr<#struct_name> {
-                    #struct_into_expr.into()
-                }
-            }
-
-            impl stmt::IntoExpr<[#struct_name]> for &#struct_name {
+            impl stmt::IntoExpr<[#struct_name]> for #struct_name {
                 fn into_expr(self) -> stmt::Expr<[#struct_name]> {
+                    stmt::Expr::list([self])
+                }
+
+                fn by_ref(&self) -> stmt::Expr<[#struct_name]> {
                     stmt::Expr::list([self])
                 }
             }
 
             #query_struct
 
-            #create_struct_def
-
-            #update_struct_def
-
-            pub mod fields {
+            pub mod builders {
                 use super::*;
 
-                #relation_fields
+                #create_struct_def
+
+                #update_struct_def
             }
 
-            pub mod relation {
-                use super::*;
-                use toasty::Cursor;
-
-                #relation_query_structs
-            }
-
-            pub mod queries {
+            pub mod relations {
                 use super::*;
 
-                #query_structs
+                #relations_mod
             }
         }
     }
@@ -168,22 +176,22 @@ impl Generator<'_> {
             .iter()
             .map(|field| match &field.ty {
                 FieldTy::HasMany(rel) => {
-                    let name = self.field_name(field.id());
+                    let name = self.field_name(field);
                     let ty = self.model_struct_path(rel.target, 0);
                     quote! {
-                        #name: HasMany<#ty>,
+                        pub #name: HasMany<#ty>,
                     }
                 }
                 FieldTy::HasOne(_) => quote!(),
                 FieldTy::BelongsTo(rel) => {
-                    let name = self.field_name(field.id());
+                    let name = self.field_name(field);
                     let ty = self.model_struct_path(rel.target, 0);
                     quote! {
-                        #name: BelongsTo<#ty>,
+                        pub #name: BelongsTo<#ty>,
                     }
                 }
                 FieldTy::Primitive(..) => {
-                    let name = self.field_name(field.id());
+                    let name = self.field_name(field);
                     let mut ty = self.field_ty(field, 0);
 
                     if field.nullable {
@@ -227,61 +235,5 @@ impl Generator<'_> {
                 }
             })
             .collect()
-    }
-
-    fn gen_struct_into_expr(&self) -> TokenStream {
-        use app::FieldTy;
-
-        let mut pk_exprs = vec![];
-
-        for field in self.model.primary_key_fields() {
-            let field_name = self.field_name(field.id);
-
-            match &field.ty {
-                FieldTy::Primitive(_) => {
-                    pk_exprs.push(quote! {
-                        &self.#field_name
-                    });
-                }
-                FieldTy::BelongsTo(belongs_to) => {
-                    for fk in &belongs_to.foreign_key.fields {
-                        let fk_name = self.field_name(fk.target);
-                        pk_exprs.push(quote! {
-                            &self.#field_name.#fk_name
-                        });
-                    }
-                }
-                _ => todo!(),
-            }
-        }
-
-        let pk_expr = match &pk_exprs[..] {
-            [pk_expr] => quote!( #pk_expr ),
-            pk_exprs => quote!( ( #( #pk_exprs, )* ) ),
-        };
-
-        quote! {
-            stmt::Key::from_expr(#pk_expr)
-        }
-    }
-
-    fn gen_into_select_impl(&self, is_ref: bool) -> TokenStream {
-        let struct_name = self.self_struct_name();
-        let query = self.pk_query();
-        let query_name = self.query_method_name(query.id);
-
-        let args = query.args.iter().map(|arg| {
-            let name = util::ident(&arg.name);
-
-            if is_ref {
-                quote!(&self.#name,)
-            } else {
-                quote!(self.#name,)
-            }
-        });
-
-        quote! {
-            #struct_name::#query_name(#( #args )*).into_select()
-        }
     }
 }

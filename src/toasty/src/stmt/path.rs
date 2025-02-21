@@ -1,7 +1,9 @@
 use super::*;
 
+use std::fmt;
+
 pub struct Path<T: ?Sized> {
-    untyped: stmt::Path,
+    pub(super) untyped: stmt::Path,
     _p: PhantomData<T>,
 }
 
@@ -9,6 +11,19 @@ impl<T: ?Sized> Path<T> {
     pub const fn new(raw: stmt::Path) -> Path<T> {
         Path {
             untyped: raw,
+            _p: PhantomData,
+        }
+    }
+
+    pub const fn root() -> Path<T>
+    where
+        T: Model,
+    {
+        Path {
+            untyped: stmt::Path {
+                root: T::ID,
+                projection: stmt::Projection::identity(),
+            },
             _p: PhantomData,
         }
     }
@@ -95,6 +110,15 @@ impl<T: ?Sized> Path<T> {
 
 impl<M> Path<M> {}
 
+impl<T> Clone for Path<T> {
+    fn clone(&self) -> Path<T> {
+        Path {
+            untyped: self.untyped.clone(),
+            _p: PhantomData,
+        }
+    }
+}
+
 impl<T> IntoExpr<T> for Path<T> {
     fn into_expr(self) -> Expr<T> {
         Expr {
@@ -102,10 +126,20 @@ impl<T> IntoExpr<T> for Path<T> {
             _p: PhantomData,
         }
     }
+
+    fn by_ref(&self) -> Expr<T> {
+        Path::into_expr(self.clone())
+    }
 }
 
 impl<T: ?Sized> From<Path<T>> for stmt::Path {
     fn from(value: Path<T>) -> Self {
         value.untyped
+    }
+}
+
+impl<T: ?Sized> fmt::Debug for Path<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.untyped)
     }
 }

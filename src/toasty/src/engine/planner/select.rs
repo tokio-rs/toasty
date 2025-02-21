@@ -1,30 +1,8 @@
 use super::*;
 use app::{FieldTy, Model, ModelId};
 
-#[derive(Debug, Default)]
-pub(super) struct Context {
-    /// If the statement references any arguments (`stmt::ExprArg`), this
-    /// informs the planner how to access those arguments.
-    input: Vec<plan::InputSource>,
-}
-
 impl Planner<'_> {
-    /// Plan a select statement, returning the variable ID where the output will
-    /// be stored.
-    pub(super) fn plan_select(&mut self, stmt: stmt::Query) -> plan::VarId {
-        self.plan_select2(&Context::default(), stmt)
-    }
-
-    fn plan_select2(&mut self, cx: &Context, mut stmt: stmt::Query) -> plan::VarId {
-        self.simplify_stmt_query(&mut stmt);
-        self.plan_simplified_select(cx, stmt)
-    }
-
-    pub(super) fn plan_simplified_select(
-        &mut self,
-        cx: &Context,
-        mut stmt: stmt::Query,
-    ) -> plan::VarId {
+    pub(super) fn plan_stmt_select(&mut self, cx: &Context, mut stmt: stmt::Query) -> plan::VarId {
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.app.model(source_model.model);
@@ -325,7 +303,10 @@ impl Planner<'_> {
                     ),
                 );
 
-                let out = self.plan_select2(&cx, stmt::Query::filter(rel.target, filter));
+                let Some(out) = self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())
+                else {
+                    todo!()
+                };
 
                 // Associate target records with the source
                 self.push_action(plan::Associate {
@@ -350,7 +331,10 @@ impl Planner<'_> {
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.source),
                     ),
                 );
-                let out = self.plan_select2(&cx, stmt::Query::filter(rel.target, filter));
+                let Some(out) = self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())
+                else {
+                    todo!()
+                };
 
                 // Associate target records with the source
                 self.push_action(plan::Associate {

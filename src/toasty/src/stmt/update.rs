@@ -8,10 +8,20 @@ pub struct Update<M> {
 }
 
 impl<M: Model> Update<M> {
-    pub fn new(selection: Select<M>) -> Update<M> {
-        let mut stmt = Update::default();
-        stmt.set_selection(selection);
-        stmt
+    pub fn new(mut selection: Select<M>) -> Update<M> {
+        if let stmt::ExprSet::Values(values) = &mut *selection.untyped.body {
+            let rows = std::mem::take(&mut values.rows);
+            let filter = stmt::Expr::in_list(stmt::Expr::key(M::ID), rows);
+            *selection.untyped.body = stmt::ExprSet::Select(stmt::Select::new(M::ID, filter));
+        }
+
+        let mut stmt = selection.untyped.update();
+        stmt.returning = Some(stmt::Returning::Changed);
+
+        Update {
+            untyped: stmt,
+            _p: PhantomData,
+        }
     }
 
     pub const fn from_untyped(untyped: stmt::Update) -> Update<M> {
@@ -31,25 +41,6 @@ impl<M: Model> Update<M> {
 
     pub fn remove(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.remove(field, expr);
-    }
-
-    pub fn set_selection(&mut self, selection: Select<M>) {
-        let query = selection.untyped;
-
-        match *query.body {
-            stmt::ExprSet::Select(select) => {
-                debug_assert_eq!(
-                    select.source.as_model_id(),
-                    self.untyped.target.as_model_id()
-                );
-
-                self.untyped.filter = Some(select.filter);
-            }
-            stmt::ExprSet::Values(values) => {
-                self.untyped.filter = Some(stmt::Expr::in_list(stmt::Expr::key(M::ID), values.rows))
-            }
-            body => todo!("selection={body:#?}"),
-        }
     }
 
     /// Don't return anything

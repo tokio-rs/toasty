@@ -69,13 +69,13 @@ async fn crud_person_self_referential(s: impl Setup) {
     assert(&children);
 
     // Try preloading this time
-    let p1 = db::Person::find_by_id(&p1.id)
+    let p1 = db::Person::filter_by_id(&p1.id)
         .include(db::Person::CHILDREN)
         .get(&db)
         .await
         .unwrap();
 
-    assert(p1.children().get());
+    assert(p1.children.get());
 }
 
 tests!(crud_person_self_referential,);

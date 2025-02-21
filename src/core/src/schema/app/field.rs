@@ -252,6 +252,24 @@ impl FieldId {
     }
 }
 
+impl From<&FieldId> for FieldId {
+    fn from(val: &FieldId) -> Self {
+        *val
+    }
+}
+
+impl From<&Field> for FieldId {
+    fn from(val: &Field) -> Self {
+        val.id
+    }
+}
+
+impl From<FieldId> for usize {
+    fn from(val: FieldId) -> Self {
+        val.index
+    }
+}
+
 impl fmt::Debug for FieldId {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(fmt, "FieldId({}/{})", self.model.0, self.index)

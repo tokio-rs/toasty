@@ -25,14 +25,16 @@ impl Query {
     }
 
     pub fn update(self) -> Update {
-        let ExprSet::Select(select) = *self.body else {
+        let ExprSet::Select(select) = &*self.body else {
             todo!("stmt={self:#?}");
         };
 
+        assert!(select.source.is_model());
+
         stmt::Update {
-            target: UpdateTarget::Model(select.source.as_model_id()),
+            target: UpdateTarget::Query(self),
             assignments: stmt::Assignments::default(),
-            filter: Some(select.filter),
+            filter: None,
             condition: None,
             returning: None,
         }

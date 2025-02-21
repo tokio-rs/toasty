@@ -27,13 +27,14 @@ async fn batch_get_by_key(s: impl Setup) {
         keys.push((foo.one.clone(), foo.two.clone()));
     }
 
-    let foos: Vec<_> = db::Foo::find_many_by_one_and_two()
-        .item(&keys[0].0, &keys[0].1)
-        .item(&keys[1].0, &keys[1].1)
-        .item(&keys[2].0, &keys[2].1)
-        .collect(&db)
-        .await
-        .unwrap();
+    let foos: Vec<_> = db::Foo::filter_by_one_and_two_batch(&[
+        (&keys[0].0, &keys[0].1),
+        (&keys[1].0, &keys[1].1),
+        (&keys[2].0, &keys[2].1),
+    ])
+    .collect(&db)
+    .await
+    .unwrap();
 
     assert_eq!(3, foos.len());
 

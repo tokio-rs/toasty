@@ -36,22 +36,22 @@ impl<'a> LowerStatement<'a> {
 impl Planner<'_> {
     pub(crate) fn lower_stmt_delete(&self, model: &app::Model, stmt: &mut stmt::Delete) {
         LowerStatement::from_model(self.schema, model).visit_stmt_delete_mut(stmt);
-        self.simplify_stmt_delete(stmt);
+        simplify::simplify_stmt(self.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_query(&self, model: &app::Model, stmt: &mut stmt::Query) {
         LowerStatement::from_model(self.schema, model).visit_stmt_query_mut(stmt);
-        self.simplify_stmt_query(stmt);
+        simplify::simplify_stmt(self.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_insert(&self, model: &app::Model, stmt: &mut stmt::Insert) {
         LowerStatement::from_model(self.schema, model).visit_stmt_insert_mut(stmt);
-        self.simplify_stmt_insert(stmt);
+        simplify::simplify_stmt(self.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_update(&self, model: &app::Model, stmt: &mut stmt::Update) {
         LowerStatement::from_model(self.schema, model).visit_stmt_update_mut(stmt);
-        self.simplify_stmt_update(stmt);
+        simplify::simplify_stmt(self.schema, stmt);
     }
 }
 

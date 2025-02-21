@@ -15,7 +15,7 @@ pub struct Select {
 }
 
 impl Select {
-    pub(crate) fn new(source: impl Into<Source>, filter: impl Into<Expr>) -> Select {
+    pub fn new(source: impl Into<Source>, filter: impl Into<Expr>) -> Select {
         Select {
             source: source.into(),
             filter: filter.into(),

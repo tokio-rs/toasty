@@ -41,7 +41,7 @@ async fn different_field_name(s: impl Setup) {
         .unwrap();
 
     // Load the user
-    let user_reloaded = todo.owner().find(&db).await.unwrap();
+    let user_reloaded = todo.owner().get(&db).await.unwrap();
 
     assert_eq!(user.id, user_reloaded.id)
 }
