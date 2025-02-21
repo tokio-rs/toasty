@@ -58,7 +58,7 @@ macro_rules! tests {
             $f:ident,
         )+
     ) => {
-        crate::tests!( $(
+        $crate::tests!( $(
             $( #[$attrs] )*
             $f
         ),+ );

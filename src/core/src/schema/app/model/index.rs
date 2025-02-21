@@ -51,9 +51,3 @@ impl ModelIndex {
             .unwrap_or(self.fields.len())
     }
 }
-
-impl Into<FieldId> for &ModelIndexField {
-    fn into(self) -> FieldId {
-        self.field
-    }
-}

@@ -41,6 +41,7 @@ impl Schema {
 }
 
 impl Builder {
+    #[allow(clippy::wrong_self_convention)]
     fn from_ast(mut self, ast: &ast::Schema) -> Result<Schema> {
         // First, register all defined types with the resolver.
         for node in ast.models() {
@@ -193,7 +194,7 @@ impl Builder {
                         let mut builder = Query::find_by(id, model, by_fk);
 
                         for index_field in &fields {
-                            builder.field(model.field(index_field));
+                            builder.field(model.field(index_field.field).id());
                         }
 
                         /*
@@ -216,7 +217,7 @@ impl Builder {
                             builder.many();
 
                             for index_field in &index.fields {
-                                builder.field(model.field(index_field));
+                                builder.field(model.field(index_field.field).id());
                             }
 
                             self.queries.push(builder.build());
@@ -273,7 +274,7 @@ impl Builder {
                 // Add all the target's primary key fields
                 for field in fields {
                     // Assert the field is not part of the scope
-                    builder.field(field);
+                    builder.field(field.id());
                 }
 
                 let query = builder.build();

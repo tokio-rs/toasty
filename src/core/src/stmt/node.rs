@@ -7,7 +7,5 @@ pub trait Node: fmt::Debug {
     where
         Self: Sized;
 
-    fn visit_mut<V: VisitMut>(&mut self, visit: V)
-    where
-        Self: Sized;
+    fn visit_mut<V: VisitMut>(&mut self, visit: V);
 }

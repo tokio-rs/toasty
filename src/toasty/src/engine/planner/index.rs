@@ -209,7 +209,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                 }
                 _ => todo!("expr={:#?}", expr),
             },
-            InList(e) => self.match_expr_in_list(&*e.expr, expr),
+            InList(e) => self.match_expr_in_list(&e.expr, expr),
             IsNull(e) => match &*e.expr {
                 Column(expr_column) => {
                     self.match_expr_binary_op_column(expr_column, expr, stmt::BinaryOp::Eq)

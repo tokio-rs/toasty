@@ -7,9 +7,9 @@ impl Simplify<'_> {
         // First, flatten any nested ands
         for i in 0..expr.operands.len() {
             if let stmt::Expr::And(and) = &mut expr.operands[i] {
-                let mut nested = mem::replace(&mut and.operands, vec![]);
+                let mut nested = mem::take(&mut and.operands);
                 expr.operands[i] = true.into();
-                expr.operands.extend(nested.drain(..));
+                expr.operands.append(&mut nested);
             }
         }
 

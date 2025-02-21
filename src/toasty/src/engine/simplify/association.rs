@@ -29,7 +29,7 @@ impl Simplify<'_> {
 
     fn rewrite_association_as_filter(&mut self, mut association: stmt::Association) -> stmt::Expr {
         // First, we want to simplify the association source.
-        stmt::visit_mut::visit_stmt_query_mut(self, &mut *association.source);
+        stmt::visit_mut::visit_stmt_query_mut(self, &mut association.source);
 
         // For now, we only support paths with a single step
         assert!(association.path.len() == 1, "TODO");

@@ -22,9 +22,11 @@ impl<M> Id<M> {
             _p: PhantomData,
         }
     }
+}
 
-    pub fn to_string(&self) -> String {
-        self.inner.to_string()
+impl<M> std::fmt::Display for Id<M> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.inner)
     }
 }
 

@@ -64,9 +64,7 @@ impl Planner<'_> {
         }
 
         if stmt.assignments.is_empty() {
-            if stmt.returning.is_none() {
-                return None;
-            }
+            stmt.returning.as_ref()?;
 
             let value = stmt::Value::empty_sparse_record();
             return Some(self.set_var(
@@ -133,7 +131,7 @@ impl Planner<'_> {
         let output_var = output.as_ref().map(|o| o.var);
 
         if index_plan.index.primary_key {
-            let Some(key) = self.try_build_key_filter(&index_plan.index, &index_plan.index_filter)
+            let Some(key) = self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
             else {
                 todo!("index_filter={:#?}", index_plan.index_filter);
             };

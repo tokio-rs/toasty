@@ -325,7 +325,7 @@ impl<'a> Generator<'a> {
         }
 
         if let Some(suffix) = suffix {
-            name.push_str("_");
+            name.push('_');
             name.push_str(suffix);
         }
 
@@ -373,7 +373,7 @@ impl<'a> Generator<'a> {
 impl<'a> BuildModelFilters<'a> {
     fn build(mut self) -> Vec<Filter> {
         self.recurse(&[]);
-        self.filters.into_iter().map(|(_, filter)| filter).collect()
+        self.filters.into_values().collect()
     }
 
     fn recurse(&mut self, prefix: &[app::FieldId]) {

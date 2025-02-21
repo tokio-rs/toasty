@@ -8,6 +8,7 @@ use std::{
 };
 use tokio_stream::{Stream, StreamExt};
 
+#[derive(Default)]
 pub struct ValueStream {
     buffer: Buffer,
     stream: Option<DynStream>,
@@ -18,8 +19,9 @@ struct Iter<I> {
     iter: I,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default, PartialEq)]
 enum Buffer {
+    #[default]
     Empty,
     One(Value),
     Many(VecDeque<Value>),
@@ -28,13 +30,6 @@ enum Buffer {
 type DynStream = Pin<Box<dyn Stream<Item = crate::Result<Value>> + Send + 'static>>;
 
 impl ValueStream {
-    pub fn new() -> ValueStream {
-        ValueStream {
-            buffer: Buffer::Empty,
-            stream: None,
-        }
-    }
-
     pub fn from_value(value: impl Into<Value>) -> ValueStream {
         ValueStream {
             buffer: Buffer::One(value.into()),
@@ -58,6 +53,7 @@ impl ValueStream {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_iter<T, I>(iter: I) -> ValueStream
     where
         T: Into<Value>,
@@ -139,6 +135,13 @@ impl ValueStream {
             Buffer::One(v) => Box::new(Some(v).into_iter()),
             Buffer::Many(v) => Box::new(v.iter_mut()) as Box<dyn Iterator<Item = &mut Value>>,
         }
+    }
+
+    // NOTE: this method is only used for testing purposes. It should not ever be made
+    // available via the public API.
+    #[cfg(test)]
+    fn into_inner(self) -> (Buffer, Option<DynStream>) {
+        (self.buffer, self.stream)
     }
 }
 
@@ -270,8 +273,14 @@ impl Buffer {
     }
 }
 
-impl Default for Buffer {
-    fn default() -> Self {
-        Buffer::Empty
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default() {
+        let (buffer, stream) = ValueStream::default().into_inner();
+        assert!(buffer == Buffer::Empty);
+        assert!(stream.is_none());
     }
 }

@@ -39,7 +39,7 @@ impl From<&Field> for ExprField {
 
 impl From<&Field> for Expr {
     fn from(value: &Field) -> Self {
-        Expr::field(value)
+        Expr::field(value.id())
     }
 }
 

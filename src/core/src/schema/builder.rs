@@ -32,11 +32,11 @@ impl Schema {
         for model in &app.models {
             let table = if let Some(table_name) = &model.table_name {
                 if !builder.table_lookup.contains_key(table_name) {
-                    let id = builder.register_table(&table_name);
+                    let id = builder.register_table(table_name);
                     builder.tables.push(Table::new(id, table_name.clone()));
                 }
 
-                builder.table_lookup.get(table_name).unwrap().clone()
+                *builder.table_lookup.get(table_name).unwrap()
             } else {
                 builder.build_table_stub_for_model(model)
             };

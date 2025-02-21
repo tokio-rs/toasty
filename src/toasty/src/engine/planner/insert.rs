@@ -321,7 +321,7 @@ impl Planner<'_> {
             insert_table
                 .columns
                 .iter()
-                .map(|column_id| self.schema.db.column(column_id).ty.clone())
+                .map(|column_id| self.schema.db.column(*column_id).ty.clone())
                 .collect(),
         );
 

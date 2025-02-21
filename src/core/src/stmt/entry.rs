@@ -6,7 +6,7 @@ pub enum Entry<'a> {
     Value(&'a Value),
 }
 
-impl<'a> Entry<'a> {
+impl Entry<'_> {
     pub fn is_expr(&self) -> bool {
         matches!(self, Entry::Expr(_))
     }

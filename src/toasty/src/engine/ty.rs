@@ -50,13 +50,13 @@ pub(crate) fn infer_expr_ty(
         Field(e) => resolve.resolve_field(e).clone(),
         IsNull(_) => stmt::Type::Bool,
         Map(e) => {
-            let base = infer_expr_ty(&*e.base, args, resolve);
-            let ty = infer_expr_ty(&*e.map, &[base], resolve);
+            let base = infer_expr_ty(&e.base, args, resolve);
+            let ty = infer_expr_ty(&e.map, &[base], resolve);
             stmt::Type::list(ty)
         }
         Or(_) => stmt::Type::Bool,
         Project(e) => {
-            let mut base = infer_expr_ty(&*e.base, args, resolve);
+            let mut base = infer_expr_ty(&e.base, args, resolve);
 
             for step in e.projection.iter() {
                 base = match &mut base {

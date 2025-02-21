@@ -57,7 +57,7 @@ pub(crate) fn simplify_expr<'a>(
     .visit_expr_mut(expr);
 }
 
-impl<'a> VisitMut for Simplify<'_> {
+impl VisitMut for Simplify<'_> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         // First, simplify the expression.
         stmt::visit_mut::visit_expr_mut(self, i);
@@ -67,8 +67,8 @@ impl<'a> VisitMut for Simplify<'_> {
             Expr::And(expr_and) => self.simplify_expr_and(expr_and),
             Expr::BinaryOp(expr_binary_op) => self.simplify_expr_binary_op(
                 expr_binary_op.op,
-                &mut *expr_binary_op.lhs,
-                &mut *expr_binary_op.rhs,
+                &mut expr_binary_op.lhs,
+                &mut expr_binary_op.rhs,
             ),
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
             Expr::ConcatStr(expr) => self.simplify_expr_concat_str(expr),
@@ -90,7 +90,7 @@ impl<'a> VisitMut for Simplify<'_> {
 
     fn visit_expr_set_mut(&mut self, i: &mut stmt::ExprSet) {
         match i {
-            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 0 => {
+            stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.is_empty() => {
                 todo!("is there anything we do here?");
             }
             stmt::ExprSet::SetOp(expr_set_op) if expr_set_op.operands.len() == 1 => {
@@ -102,7 +102,7 @@ impl<'a> VisitMut for Simplify<'_> {
                 // query as a single disjuntive query.
                 let mut operands = vec![];
 
-                self.flatten_nested_unions(expr_set_op, &mut operands);
+                Self::flatten_nested_unions(expr_set_op, &mut operands);
 
                 expr_set_op.operands = operands;
             }
@@ -234,17 +234,13 @@ impl<'a> Simplify<'a> {
     }
 
     /// Returns the source model
-    fn flatten_nested_unions(
-        &self,
-        expr_set_op: &mut stmt::ExprSetOp,
-        operands: &mut Vec<stmt::ExprSet>,
-    ) {
+    fn flatten_nested_unions(expr_set_op: &mut stmt::ExprSetOp, operands: &mut Vec<stmt::ExprSet>) {
         assert!(expr_set_op.is_union());
 
         for expr_set in &mut expr_set_op.operands {
             match expr_set {
                 stmt::ExprSet::SetOp(nested_set_op) if nested_set_op.is_union() => {
-                    self.flatten_nested_unions(nested_set_op, operands)
+                    Self::flatten_nested_unions(nested_set_op, operands)
                 }
                 // Just drop empty values
                 stmt::ExprSet::Values(values) if values.is_empty() => {}
@@ -262,7 +258,7 @@ impl<'a> Simplify<'a> {
                 }
                 stmt::ExprSet::Values(values) => {
                     if let Some(stmt::ExprSet::Values(tail)) = operands.last_mut() {
-                        tail.rows.extend(values.rows.drain(..));
+                        tail.rows.append(&mut values.rows);
                         continue;
                     }
 

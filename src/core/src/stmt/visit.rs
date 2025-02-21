@@ -2,8 +2,11 @@
 
 use super::*;
 
-pub trait Visit: Sized {
-    fn visit<N: Node>(&mut self, i: &N) {
+pub trait Visit {
+    fn visit<N: Node>(&mut self, i: &N)
+    where
+        Self: Sized,
+    {
         i.visit(self);
     }
 
@@ -571,9 +574,8 @@ pub fn visit_update_target<V>(v: &mut V, node: &UpdateTarget)
 where
     V: Visit + ?Sized,
 {
-    match node {
-        UpdateTarget::Query(query) => v.visit_stmt_query(query),
-        _ => {}
+    if let UpdateTarget::Query(query) = node {
+        v.visit_stmt_query(query)
     }
 }
 
@@ -581,9 +583,8 @@ pub fn visit_value<V>(v: &mut V, node: &Value)
 where
     V: Visit + ?Sized,
 {
-    match node {
-        Value::Record(node) => v.visit_value_record(node),
-        _ => {}
+    if let Value::Record(node) = node {
+        v.visit_value_record(node)
     }
 }
 

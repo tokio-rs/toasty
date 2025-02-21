@@ -16,11 +16,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use std::rc::Rc;
 
-pub(crate) fn generate<'a>(
-    model: &'a app::Model,
-    names: Rc<Names>,
-    in_macro: bool,
-) -> ModelOutput<'a> {
+pub(crate) fn generate(model: &app::Model, names: Rc<Names>, in_macro: bool) -> ModelOutput<'_> {
     let mut gen = Generator::new(model, names, in_macro);
     let module_name = gen.names.models[&model.id].module_name.clone();
 
@@ -121,7 +117,7 @@ impl<'a> Generator<'a> {
             Primitive(field_ty) => self.ty(&field_ty.ty, depth),
             BelongsTo(_) | HasOne(_) | HasMany(_) => {
                 let module_name = self.module_name(field.id.model, depth);
-                let relation_struct_name = self.relation_struct_name(field);
+                let relation_struct_name = self.relation_struct_name(field.id());
 
                 quote! {
                     #module_name::relation::#relation_struct_name

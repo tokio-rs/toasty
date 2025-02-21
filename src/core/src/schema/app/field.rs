@@ -41,6 +41,36 @@ pub enum FieldTy {
 }
 
 impl Field {
+    /// Gets the id.
+    pub fn id(&self) -> FieldId {
+        self.id
+    }
+
+    /// Gets the name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Gets the type.
+    pub fn ty(&self) -> &FieldTy {
+        &self.ty
+    }
+
+    /// Gets whether the field is nullable.
+    pub fn nullable(&self) -> bool {
+        self.nullable
+    }
+
+    /// Gets the primary key.
+    pub fn primary_key(&self) -> bool {
+        self.primary_key
+    }
+
+    /// Gets the [`Auto`].
+    pub fn auto(&self) -> Option<&Auto> {
+        self.auto.as_ref()
+    }
+
     pub fn is_relation(&self) -> bool {
         self.ty.is_relation()
     }
@@ -222,21 +252,21 @@ impl FieldId {
     }
 }
 
-impl Into<FieldId> for &FieldId {
-    fn into(self) -> FieldId {
-        *self
+impl From<&FieldId> for FieldId {
+    fn from(val: &FieldId) -> Self {
+        *val
     }
 }
 
-impl Into<FieldId> for &Field {
-    fn into(self) -> FieldId {
-        self.id
+impl From<&Field> for FieldId {
+    fn from(val: &Field) -> Self {
+        val.id
     }
 }
 
-impl Into<usize> for FieldId {
-    fn into(self) -> usize {
-        self.index
+impl From<FieldId> for usize {
+    fn from(val: FieldId) -> Self {
+        val.index
     }
 }
 

@@ -1,7 +1,7 @@
 use super::*;
 use app::Model;
 
-impl<'db> Simplify<'db> {
+impl Simplify<'_> {
     /// Rewrites expressions where one half is a path referencing `self`. In
     /// this case, the expression can be rewritten to be an expression on the
     /// primary key.

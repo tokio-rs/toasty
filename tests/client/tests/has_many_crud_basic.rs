@@ -128,7 +128,7 @@ async fn crud_user_todos(s: impl Setup) {
     assert_eq!(6, loaded.len());
 
     for (id, expect) in &created {
-        assert_eq!(expect.title, loaded[&id].title);
+        assert_eq!(expect.title, loaded[id].title);
     }
 
     // Find all TODOs by user (using the belongs_to queries)
@@ -489,7 +489,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
     assert_eq!(6, loaded.len());
 
     for (id, expect) in &created {
-        assert_eq!(expect.title, loaded[&id].title);
+        assert_eq!(expect.title, loaded[id].title);
     }
 
     // Find all TODOs by user (using the belongs_to queries)

@@ -110,7 +110,7 @@ impl BuildTableFromModels<'_> {
 
             let mut scope = None;
 
-            for model in &*models {
+            for model in models {
                 let pk_index = &model.indices[0];
                 assert!(pk_index.primary_key);
 
@@ -202,7 +202,7 @@ impl BuildTableFromModels<'_> {
                     .primary_key
                     .fields
                     .get(i)
-                    .map(|field_id| model.field(field_id).name.clone())
+                    .map(|field_id| model.field(*field_id).name.clone())
                     .unwrap_or_else(|| format!("key_{i}"));
 
                 // If unit type, go straight to enum
@@ -370,14 +370,14 @@ impl BuildTableFromModels<'_> {
                     index.name.push_str("_and");
                 }
 
-                index.name.push_str("_");
+                index.name.push('_');
                 index.name.push_str(&column.name);
             }
         }
     }
 }
 
-impl<'a> BuildMapping<'a> {
+impl BuildMapping<'_> {
     fn build_mapping(mut self, model: &Model) {
         self.map_model_fields_to_columns(model);
 
@@ -386,7 +386,7 @@ impl<'a> BuildMapping<'a> {
         // generate a placeholder value).
         for pk in &self.table.primary_key.columns {
             if !self.lowering_columns.contains(pk) {
-                let ty_enum = match &self.table.column(pk).ty {
+                let ty_enum = match &self.table.column(*pk).ty {
                     stmt::Type::Enum(ty_enum) => ty_enum,
                     _ => todo!(),
                 };
@@ -404,7 +404,7 @@ impl<'a> BuildMapping<'a> {
             }
         }
 
-        assert!(self.model_to_table.len() > 0);
+        assert!(!self.model_to_table.is_empty());
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
 
         // Iterate fields again (including PK fields) and build the table -> model map.
@@ -450,7 +450,7 @@ impl<'a> BuildMapping<'a> {
                 for (i, field_id) in model.primary_key.fields.iter().enumerate() {
                     if field_id.index == *step {
                         let mut p = projection.clone();
-                        p[0] = i.into();
+                        p[0] = i;
 
                         return p;
                     }
@@ -520,10 +520,7 @@ impl<'a> BuildMapping<'a> {
                 let variant = ty_enum
                     .variants
                     .iter()
-                    .find(|variant| match &variant.fields[..] {
-                        [field_ty] if field_ty == ty => true,
-                        _ => false,
-                    })
+                    .find(|variant| matches!(&variant.fields[..], [field_ty] if field_ty == ty))
                     .unwrap();
 
                 stmt::Expr::concat_str((
@@ -546,7 +543,7 @@ impl<'a> BuildMapping<'a> {
         let column = self.table.column(column_id);
 
         match &column.ty {
-            c_ty if *c_ty == primitive.ty => stmt::Expr::column(column),
+            c_ty if *c_ty == primitive.ty => stmt::Expr::column(column.id),
             stmt::Type::Enum(ty_enum) => {
                 let variant = ty_enum
                     .variants
@@ -558,13 +555,13 @@ impl<'a> BuildMapping<'a> {
                     .unwrap();
 
                 stmt::Expr::DecodeEnum(
-                    Box::new(stmt::Expr::column(column)),
+                    Box::new(stmt::Expr::column(column.id)),
                     primitive.ty.clone(),
                     variant.discriminant,
                 )
             }
             stmt::Type::String if primitive.ty.is_id() => {
-                stmt::Expr::cast(stmt::Expr::column(column), &primitive.ty)
+                stmt::Expr::cast(stmt::Expr::column(column.id), &primitive.ty)
             }
             _ => todo!("column={column:#?}; primitive={primitive:#?}"),
         }

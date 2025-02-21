@@ -56,8 +56,6 @@ impl Query {
     }
 
     pub fn union(&mut self, query: impl Into<Query>) {
-        use std::mem;
-
         let rhs = query.into();
 
         match (&mut *self.body, *rhs.body) {
@@ -67,7 +65,7 @@ impl Query {
             }
             (_, ExprSet::SetOp(_)) => todo!(),
             (me, rhs) => {
-                let lhs = mem::replace(me, ExprSet::default());
+                let lhs = std::mem::take(me);
                 *me = ExprSet::SetOp(ExprSetOp {
                     op: SetOp::Union,
                     operands: vec![lhs, rhs],

@@ -3,7 +3,7 @@ use sparse_record::SparseRecord;
 use super::*;
 use crate::Result;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum Value {
     /// Boolean value
     Bool(bool),
@@ -21,6 +21,7 @@ pub enum Value {
     SparseRecord(SparseRecord),
 
     /// Null value
+    #[default]
     Null,
 
     /// Record value, either borrowed or owned
@@ -210,12 +211,6 @@ impl Value {
 
     pub fn take(&mut self) -> Value {
         std::mem::take(self)
-    }
-}
-
-impl Default for Value {
-    fn default() -> Value {
-        Value::Null
     }
 }
 

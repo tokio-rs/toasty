@@ -58,7 +58,7 @@ impl Expr<bool> {
         exprs
             .into_iter()
             .map(|expr| expr.into_expr().untyped)
-            .reduce(|lhs, rhs| stmt::Expr::and(lhs, rhs))
+            .reduce(stmt::Expr::and)
             .map(Expr::from_untyped)
             .unwrap_or_else(|| Expr::from_untyped(true))
     }
@@ -90,7 +90,7 @@ impl<T: ?Sized> From<Expr<T>> for stmt::Expr {
     }
 }
 
-impl<'stmt, T: ?Sized> From<Insert<T>> for Expr<T> {
+impl<T: ?Sized> From<Insert<T>> for Expr<T> {
     fn from(value: Insert<T>) -> Self {
         Expr::from_untyped(stmt::Expr::Stmt(value.untyped.into()))
     }

@@ -401,6 +401,12 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Association<[Package]>) -> Many {
             Many { stmt }
         }
+        pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<Package>>) -> Result<Package> {
+            self.filter_by_id(id).get(db).await
+        }
+        pub fn filter_by_id(self, id: impl IntoExpr<Id<Package>>) -> Query {
+            Query::from_stmt(self.into_select()).filter(Package::ID.eq(id))
+        }
         pub async fn get_by_user_id_and_id(
             self,
             db: &Db,
@@ -424,12 +430,6 @@ pub mod relations {
             keys: impl IntoExpr<[(Id<super::super::user::User>, Id<Package>)]>,
         ) -> Query {
             Query::from_stmt(self.into_select()).filter_by_user_id_and_id_batch(keys)
-        }
-        pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<Package>>) -> Result<Package> {
-            self.filter_by_id(id).get(db).await
-        }
-        pub fn filter_by_id(self, id: impl IntoExpr<Id<Package>>) -> Query {
-            Query::from_stmt(self.into_select()).filter(Package::ID.eq(id))
         }
         pub async fn get_by_user_id(
             self,

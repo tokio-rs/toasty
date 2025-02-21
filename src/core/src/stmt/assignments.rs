@@ -119,7 +119,7 @@ impl Assignments {
     }
 
     pub fn keys(&self) -> impl Iterator<Item = usize> + '_ {
-        self.assignments.keys().map(|k| *k)
+        self.assignments.keys().copied()
     }
 
     pub fn exprs(&self) -> impl Iterator<Item = &Expr> + '_ {
@@ -137,11 +137,15 @@ impl Assignments {
             .iter_mut()
             .map(|(index, assignment)| (*index, assignment))
     }
+}
 
-    pub fn into_iter(self) -> impl Iterator<Item = (usize, Assignment)> {
-        self.assignments
-            .into_iter()
-            .map(|(index, assignment)| (index, assignment))
+impl IntoIterator for Assignments {
+    type Item = (usize, Assignment);
+
+    type IntoIter = std::vec::IntoIter<(usize, Assignment)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.assignments.into_iter().collect::<Vec<_>>().into_iter()
     }
 }
 

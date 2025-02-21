@@ -30,7 +30,7 @@ impl Planner<'_> {
             FieldTy::BelongsTo(_) => {
                 self.plan_mut_belongs_to_expr(field, expr, selection, is_insert);
             }
-            _ => return,
+            _ => (),
         }
     }
 
