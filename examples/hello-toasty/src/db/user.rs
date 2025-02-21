@@ -20,12 +20,6 @@ impl User {
             Self::TODOS.into(),
         ))
     }
-    pub async fn get_by_email(db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-        Self::filter_by_email(email).get(db).await
-    }
-    pub fn filter_by_email(email: impl IntoExpr<String>) -> Query {
-        Query::default().filter_by_email(email)
-    }
     pub async fn get_by_id(db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
         Self::filter_by_id(id).get(db).await
     }
@@ -34,6 +28,12 @@ impl User {
     }
     pub fn filter_by_id_batch(keys: impl IntoExpr<[Id<User>]>) -> Query {
         Query::default().filter_by_id_batch(keys)
+    }
+    pub async fn get_by_email(db: &Db, email: impl IntoExpr<String>) -> Result<User> {
+        Self::filter_by_email(email).get(db).await
+    }
+    pub fn filter_by_email(email: impl IntoExpr<String>) -> Query {
+        Query::default().filter_by_email(email)
     }
     pub fn create() -> builders::CreateUser {
         builders::CreateUser::default()
@@ -95,10 +95,12 @@ impl stmt::IntoSelect for User {
 }
 impl stmt::IntoExpr<User> for User {
     fn into_expr(self) -> stmt::Expr<User> {
-        self.id.into_expr().cast()
+        let expr: stmt::Expr<Id<User>> = self.id.into_expr();
+        expr.cast()
     }
     fn by_ref(&self) -> stmt::Expr<User> {
-        (&self.id).into_expr().cast()
+        let expr: stmt::Expr<Id<User>> = (&self.id).into_expr();
+        expr.cast()
     }
 }
 impl stmt::IntoExpr<[User]> for User {
@@ -117,12 +119,6 @@ impl Query {
     pub const fn from_stmt(stmt: stmt::Select<User>) -> Query {
         Query { stmt }
     }
-    pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-        self.filter_by_email(email).get(db).await
-    }
-    pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
-        self.filter(User::EMAIL.eq(email))
-    }
     pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
         self.filter_by_id(id).get(db).await
     }
@@ -131,6 +127,12 @@ impl Query {
     }
     pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<User>]>) -> Query {
         self.filter(stmt::Expr::in_list(User::ID, keys))
+    }
+    pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
+        self.filter_by_email(email).get(db).await
+    }
+    pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
+        self.filter(User::EMAIL.eq(email))
     }
     pub async fn all(self, db: &Db) -> Result<Cursor<User>> {
         db.all(self.stmt).await
@@ -388,12 +390,6 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Association<[User]>) -> Many {
             Many { stmt }
         }
-        pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-            self.filter_by_email(email).get(db).await
-        }
-        pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
-            Query::from_stmt(self.into_select()).filter(User::EMAIL.eq(email))
-        }
         pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
             self.filter_by_id(id).get(db).await
         }
@@ -402,6 +398,12 @@ pub mod relations {
         }
         pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<User>]>) -> Query {
             Query::from_stmt(self.into_select()).filter_by_id_batch(keys)
+        }
+        pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
+            self.filter_by_email(email).get(db).await
+        }
+        pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
+            Query::from_stmt(self.into_select()).filter(User::EMAIL.eq(email))
         }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<User>> {
@@ -422,6 +424,12 @@ pub mod relations {
             builder.stmt.set_scope(self.stmt.into_select());
             builder
         }
+        #[doc = r" Add an item to the association"]
+        pub async fn insert(self, db: &Db, item: impl IntoExpr<[User]>) -> Result<()> {
+            let stmt = self.stmt.insert(item);
+            db.exec(stmt).await?;
+            Ok(())
+        }
         #[doc = r" Remove items from the association"]
         pub async fn remove(self, db: &Db, item: impl IntoExpr<User>) -> Result<()> {
             let stmt = self.stmt.remove(item);
@@ -439,6 +447,12 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Select<User>) -> One {
             One { stmt }
         }
+        #[doc = r" Create a new associated record"]
+        pub fn create(self) -> builders::CreateUser {
+            let mut builder = builders::CreateUser::default();
+            builder.stmt.set_scope(self.stmt.into_select());
+            builder
+        }
         pub async fn get(self, db: &Db) -> Result<User> {
             db.get(self.stmt.into_select()).await
         }
@@ -452,6 +466,12 @@ pub mod relations {
     impl OptionOne {
         pub fn from_stmt(stmt: stmt::Select<User>) -> OptionOne {
             OptionOne { stmt }
+        }
+        #[doc = r" Create a new associated record"]
+        pub fn create(self) -> builders::CreateUser {
+            let mut builder = builders::CreateUser::default();
+            builder.stmt.set_scope(self.stmt.into_select());
+            builder
         }
         pub async fn get(self, db: &Db) -> Result<Option<User>> {
             db.first(self.stmt.into_select()).await

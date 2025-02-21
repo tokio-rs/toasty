@@ -16,9 +16,6 @@ pub(crate) struct Names {
 
     /// Structs generated for each relation
     pub relations: HashMap<app::FieldId, RelationNames>,
-
-    /// Queries generated for an index
-    pub queries: HashMap<app::QueryId, QueryNames>,
 }
 
 pub(crate) struct ModelNames {
@@ -27,9 +24,6 @@ pub(crate) struct ModelNames {
 
     /// Primary model struct name
     pub struct_name: syn::Ident,
-
-    /// Constantized version of the struct name
-    pub const_name: syn::Ident,
 
     /// Create model instance builder
     pub create_name: syn::Ident,
@@ -54,27 +48,11 @@ pub(crate) struct RelationNames {
     pub singular_name: Option<syn::Ident>,
 }
 
-pub(crate) struct QueryNames {
-    /// Name of the query
-    pub method_name: syn::Ident,
-
-    /// Name of the query struct
-    pub struct_name: syn::Ident,
-
-    /// Method name if this is a scoped query
-    pub scoped_method_name: Option<syn::Ident>,
-}
-
 impl Names {
     pub(crate) fn from_schema(schema: &app::Schema) -> Names {
         let mut models = HashMap::new();
         let mut fields = HashMap::new();
         let mut relations = HashMap::new();
-        let mut queries = HashMap::new();
-
-        for query in &schema.queries {
-            queries.insert(query.id, QueryNames::from_query(query));
-        }
 
         for model in &schema.models {
             // Generate model names
@@ -104,12 +82,6 @@ impl Names {
                                 singular_name,
                             },
                         );
-
-                        for scoped_query in &rel.queries {
-                            let query = queries.get_mut(&scoped_query.id).unwrap();
-                            query.scoped_method_name =
-                                Some(util::ident(&scoped_query.name.snake_case()));
-                        }
                     }
                     FieldTy::BelongsTo(..) | FieldTy::HasOne(..) => {
                         relations.insert(
@@ -131,7 +103,6 @@ impl Names {
             models,
             fields,
             relations,
-            queries,
         }
     }
 }
@@ -140,26 +111,14 @@ impl ModelNames {
     fn from_model(model: &app::Model) -> ModelNames {
         let module_name = util::ident(&model.name.snake_case());
         let struct_name = util::ident(&model.name.upper_camel_case());
-        let const_name = util::ident(&model.name.upper_snake_case());
         let create_name = util::ident(&format!("Create{}", model.name.upper_camel_case()));
         let update_name = util::ident(&format!("Update{}", model.name.upper_camel_case()));
 
         ModelNames {
             module_name,
             struct_name,
-            const_name,
             create_name,
             update_name,
-        }
-    }
-}
-
-impl QueryNames {
-    fn from_query(query: &app::Query) -> QueryNames {
-        QueryNames {
-            method_name: util::ident(&query.name),
-            struct_name: util::ident(&util::type_name(&query.name)),
-            scoped_method_name: None,
         }
     }
 }

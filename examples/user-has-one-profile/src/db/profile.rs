@@ -2,7 +2,7 @@ use toasty::codegen_support::*;
 #[derive(Debug)]
 pub struct Profile {
     pub id: Id<Profile>,
-    user: BelongsTo<super::user::User>,
+    pub user: BelongsTo<super::user::User>,
     pub user_id: Option<Id<super::user::User>>,
 }
 impl Profile {
@@ -10,19 +10,10 @@ impl Profile {
     pub const USER: <super::user::User as Relation>::OneField =
         <super::user::User as Relation>::OneField::from_path(Path::from_field_index::<Self>(1));
     pub const USER_ID: Path<Id<super::user::User>> = Path::from_field_index::<Self>(2);
-    pub fn user(&self) -> <super::user::User as Relation>::One {
-        <super::user::User as Relation>::One::from_stmt(
+    pub fn user(&self) -> <Option<super::user::User> as Relation>::One {
+        <Option<super::user::User> as Relation>::One::from_stmt(
             super::user::User::filter(super::user::User::ID.eq(&self.user_id)).into_select(),
         )
-    }
-    pub async fn get_by_id(db: &Db, id: impl IntoExpr<Id<Profile>>) -> Result<Profile> {
-        Self::filter_by_id(id).get(db).await
-    }
-    pub fn filter_by_id(id: impl IntoExpr<Id<Profile>>) -> Query {
-        Query::default().filter_by_id(id)
-    }
-    pub fn filter_by_id_batch(keys: impl IntoExpr<[Id<Profile>]>) -> Query {
-        Query::default().filter_by_id_batch(keys)
     }
     pub async fn get_by_user_id(
         db: &Db,
@@ -32,6 +23,15 @@ impl Profile {
     }
     pub fn filter_by_user_id(user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
         Query::default().filter_by_user_id(user_id)
+    }
+    pub async fn get_by_id(db: &Db, id: impl IntoExpr<Id<Profile>>) -> Result<Profile> {
+        Self::filter_by_id(id).get(db).await
+    }
+    pub fn filter_by_id(id: impl IntoExpr<Id<Profile>>) -> Query {
+        Query::default().filter_by_id(id)
+    }
+    pub fn filter_by_id_batch(keys: impl IntoExpr<[Id<Profile>]>) -> Query {
+        Query::default().filter_by_id_batch(keys)
     }
     pub fn create() -> builders::CreateProfile {
         builders::CreateProfile::default()
@@ -91,10 +91,12 @@ impl stmt::IntoSelect for Profile {
 }
 impl stmt::IntoExpr<Profile> for Profile {
     fn into_expr(self) -> stmt::Expr<Profile> {
-        self.id.into_expr().cast()
+        let expr: stmt::Expr<Id<Profile>> = self.id.into_expr();
+        expr.cast()
     }
     fn by_ref(&self) -> stmt::Expr<Profile> {
-        (&self.id).into_expr().cast()
+        let expr: stmt::Expr<Id<Profile>> = (&self.id).into_expr();
+        expr.cast()
     }
 }
 impl stmt::IntoExpr<[Profile]> for Profile {
@@ -113,15 +115,6 @@ impl Query {
     pub const fn from_stmt(stmt: stmt::Select<Profile>) -> Query {
         Query { stmt }
     }
-    pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<Profile>>) -> Result<Profile> {
-        self.filter_by_id(id).get(db).await
-    }
-    pub fn filter_by_id(self, id: impl IntoExpr<Id<Profile>>) -> Query {
-        self.filter(Profile::ID.eq(id))
-    }
-    pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<Profile>]>) -> Query {
-        self.filter(stmt::Expr::in_list(Profile::ID, keys))
-    }
     pub async fn get_by_user_id(
         self,
         db: &Db,
@@ -131,6 +124,15 @@ impl Query {
     }
     pub fn filter_by_user_id(self, user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
         self.filter(Profile::USER_ID.eq(user_id))
+    }
+    pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<Profile>>) -> Result<Profile> {
+        self.filter_by_id(id).get(db).await
+    }
+    pub fn filter_by_id(self, id: impl IntoExpr<Id<Profile>>) -> Query {
+        self.filter(Profile::ID.eq(id))
+    }
+    pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<Profile>]>) -> Query {
+        self.filter(stmt::Expr::in_list(Profile::ID, keys))
     }
     pub async fn all(self, db: &Db) -> Result<Cursor<Profile>> {
         db.all(self.stmt).await
@@ -159,8 +161,14 @@ impl Query {
             stmt: self.stmt.and(expr),
         }
     }
+    pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> Self {
+        self.stmt.include(path.into());
+        self
+    }
     pub fn user(mut self) -> <super::user::User as Relation>::Query {
-        <super::user::User as Relation>::Query::from_stmt(todo!())
+        <super::user::User as Relation>::Query::from_stmt(
+            stmt::Association::many_via_one(self.stmt, Profile::USER.into()).into_select(),
+        )
     }
 }
 impl stmt::IntoSelect for Query {
@@ -359,15 +367,6 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Association<[Profile]>) -> Many {
             Many { stmt }
         }
-        pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<Profile>>) -> Result<Profile> {
-            self.filter_by_id(id).get(db).await
-        }
-        pub fn filter_by_id(self, id: impl IntoExpr<Id<Profile>>) -> Query {
-            Query::from_stmt(self.into_select()).filter(Profile::ID.eq(id))
-        }
-        pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<Profile>]>) -> Query {
-            Query::from_stmt(self.into_select()).filter_by_id_batch(keys)
-        }
         pub async fn get_by_user_id(
             self,
             db: &Db,
@@ -380,6 +379,15 @@ pub mod relations {
             user_id: impl IntoExpr<Id<super::super::user::User>>,
         ) -> Query {
             Query::from_stmt(self.into_select()).filter(Profile::USER_ID.eq(user_id))
+        }
+        pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<Profile>>) -> Result<Profile> {
+            self.filter_by_id(id).get(db).await
+        }
+        pub fn filter_by_id(self, id: impl IntoExpr<Id<Profile>>) -> Query {
+            Query::from_stmt(self.into_select()).filter(Profile::ID.eq(id))
+        }
+        pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<Profile>]>) -> Query {
+            Query::from_stmt(self.into_select()).filter_by_id_batch(keys)
         }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<Profile>> {
@@ -400,6 +408,12 @@ pub mod relations {
             builder.stmt.set_scope(self.stmt.into_select());
             builder
         }
+        #[doc = r" Add an item to the association"]
+        pub async fn insert(self, db: &Db, item: impl IntoExpr<[Profile]>) -> Result<()> {
+            let stmt = self.stmt.insert(item);
+            db.exec(stmt).await?;
+            Ok(())
+        }
         #[doc = r" Remove items from the association"]
         pub async fn remove(self, db: &Db, item: impl IntoExpr<Profile>) -> Result<()> {
             let stmt = self.stmt.remove(item);
@@ -417,6 +431,12 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Select<Profile>) -> One {
             One { stmt }
         }
+        #[doc = r" Create a new associated record"]
+        pub fn create(self) -> builders::CreateProfile {
+            let mut builder = builders::CreateProfile::default();
+            builder.stmt.set_scope(self.stmt.into_select());
+            builder
+        }
         pub async fn get(self, db: &Db) -> Result<Profile> {
             db.get(self.stmt.into_select()).await
         }
@@ -430,6 +450,12 @@ pub mod relations {
     impl OptionOne {
         pub fn from_stmt(stmt: stmt::Select<Profile>) -> OptionOne {
             OptionOne { stmt }
+        }
+        #[doc = r" Create a new associated record"]
+        pub fn create(self) -> builders::CreateProfile {
+            let mut builder = builders::CreateProfile::default();
+            builder.stmt.set_scope(self.stmt.into_select());
+            builder
         }
         pub async fn get(self, db: &Db) -> Result<Option<Profile>> {
             db.first(self.stmt.into_select()).await
@@ -448,6 +474,12 @@ pub mod relations {
     impl OneField {
         pub const fn from_path(path: Path<super::Profile>) -> OneField {
             OneField { path }
+        }
+        pub fn eq<T>(self, rhs: T) -> stmt::Expr<bool>
+        where
+            T: IntoExpr<super::Profile>,
+        {
+            self.path.eq(rhs.into_expr())
         }
         pub fn in_query<Q>(self, rhs: Q) -> toasty::stmt::Expr<bool>
         where

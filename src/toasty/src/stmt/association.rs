@@ -8,7 +8,22 @@ pub struct Association<T: ?Sized> {
 }
 
 impl<M: Model> Association<[M]> {
+    /// A basic has_many association
     pub fn many<T: Model>(source: Select<T>, path: Path<[M]>) -> Association<[M]> {
+        assert_eq!(path.untyped.root, T::ID);
+
+        Association {
+            untyped: stmt::Association {
+                source: Box::new(source.untyped),
+                path: path.untyped,
+            },
+            _p: PhantomData,
+        }
+    }
+
+    /// A has_one or belongs_to association via a query, which implies there
+    /// could be more than one result.
+    pub fn many_via_one<T: Model>(source: Select<T>, path: Path<M>) -> Association<[M]> {
         assert_eq!(path.untyped.root, T::ID);
 
         Association {

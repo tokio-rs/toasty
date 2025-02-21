@@ -94,10 +94,12 @@ impl stmt::IntoSelect for Todo {
 }
 impl stmt::IntoExpr<Todo> for Todo {
     fn into_expr(self) -> stmt::Expr<Todo> {
-        self.id.into_expr().cast()
+        let expr: stmt::Expr<Id<Todo>> = self.id.into_expr();
+        expr.cast()
     }
     fn by_ref(&self) -> stmt::Expr<Todo> {
-        (&self.id).into_expr().cast()
+        let expr: stmt::Expr<Id<Todo>> = (&self.id).into_expr();
+        expr.cast()
     }
 }
 impl stmt::IntoExpr<[Todo]> for Todo {
@@ -167,7 +169,9 @@ impl Query {
         self
     }
     pub fn user(mut self) -> <super::user::User as Relation>::Query {
-        <super::user::User as Relation>::Query::from_stmt(todo!())
+        <super::user::User as Relation>::Query::from_stmt(
+            stmt::Association::many_via_one(self.stmt, Todo::USER.into()).into_select(),
+        )
     }
 }
 impl stmt::IntoSelect for Query {
@@ -408,6 +412,12 @@ pub mod relations {
             builder.stmt.set_scope(self.stmt.into_select());
             builder
         }
+        #[doc = r" Add an item to the association"]
+        pub async fn insert(self, db: &Db, item: impl IntoExpr<[Todo]>) -> Result<()> {
+            let stmt = self.stmt.insert(item);
+            db.exec(stmt).await?;
+            Ok(())
+        }
         #[doc = r" Remove items from the association"]
         pub async fn remove(self, db: &Db, item: impl IntoExpr<Todo>) -> Result<()> {
             let stmt = self.stmt.remove(item);
@@ -425,6 +435,12 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Select<Todo>) -> One {
             One { stmt }
         }
+        #[doc = r" Create a new associated record"]
+        pub fn create(self) -> builders::CreateTodo {
+            let mut builder = builders::CreateTodo::default();
+            builder.stmt.set_scope(self.stmt.into_select());
+            builder
+        }
         pub async fn get(self, db: &Db) -> Result<Todo> {
             db.get(self.stmt.into_select()).await
         }
@@ -438,6 +454,12 @@ pub mod relations {
     impl OptionOne {
         pub fn from_stmt(stmt: stmt::Select<Todo>) -> OptionOne {
             OptionOne { stmt }
+        }
+        #[doc = r" Create a new associated record"]
+        pub fn create(self) -> builders::CreateTodo {
+            let mut builder = builders::CreateTodo::default();
+            builder.stmt.set_scope(self.stmt.into_select());
+            builder
         }
         pub async fn get(self, db: &Db) -> Result<Option<Todo>> {
             db.first(self.stmt.into_select()).await

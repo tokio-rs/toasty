@@ -82,10 +82,12 @@ impl stmt::IntoSelect for User {
 }
 impl stmt::IntoExpr<User> for User {
     fn into_expr(self) -> stmt::Expr<User> {
-        self.id.into_expr().cast()
+        let expr: stmt::Expr<Id<User>> = self.id.into_expr();
+        expr.cast()
     }
     fn by_ref(&self) -> stmt::Expr<User> {
-        (&self.id).into_expr().cast()
+        let expr: stmt::Expr<Id<User>> = (&self.id).into_expr();
+        expr.cast()
     }
 }
 impl stmt::IntoExpr<[User]> for User {
@@ -139,6 +141,10 @@ impl Query {
         Query {
             stmt: self.stmt.and(expr),
         }
+    }
+    pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> Self {
+        self.stmt.include(path.into());
+        self
     }
 }
 impl stmt::IntoSelect for Query {
@@ -357,6 +363,12 @@ pub mod relations {
             builder.stmt.set_scope(self.stmt.into_select());
             builder
         }
+        #[doc = r" Add an item to the association"]
+        pub async fn insert(self, db: &Db, item: impl IntoExpr<[User]>) -> Result<()> {
+            let stmt = self.stmt.insert(item);
+            db.exec(stmt).await?;
+            Ok(())
+        }
         #[doc = r" Remove items from the association"]
         pub async fn remove(self, db: &Db, item: impl IntoExpr<User>) -> Result<()> {
             let stmt = self.stmt.remove(item);
@@ -374,6 +386,12 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Select<User>) -> One {
             One { stmt }
         }
+        #[doc = r" Create a new associated record"]
+        pub fn create(self) -> builders::CreateUser {
+            let mut builder = builders::CreateUser::default();
+            builder.stmt.set_scope(self.stmt.into_select());
+            builder
+        }
         pub async fn get(self, db: &Db) -> Result<User> {
             db.get(self.stmt.into_select()).await
         }
@@ -387,6 +405,12 @@ pub mod relations {
     impl OptionOne {
         pub fn from_stmt(stmt: stmt::Select<User>) -> OptionOne {
             OptionOne { stmt }
+        }
+        #[doc = r" Create a new associated record"]
+        pub fn create(self) -> builders::CreateUser {
+            let mut builder = builders::CreateUser::default();
+            builder.stmt.set_scope(self.stmt.into_select());
+            builder
         }
         pub async fn get(self, db: &Db) -> Result<Option<User>> {
             db.first(self.stmt.into_select()).await
@@ -405,6 +429,12 @@ pub mod relations {
     impl OneField {
         pub const fn from_path(path: Path<super::User>) -> OneField {
             OneField { path }
+        }
+        pub fn eq<T>(self, rhs: T) -> stmt::Expr<bool>
+        where
+            T: IntoExpr<super::User>,
+        {
+            self.path.eq(rhs.into_expr())
         }
         pub fn in_query<Q>(self, rhs: Q) -> toasty::stmt::Expr<bool>
         where

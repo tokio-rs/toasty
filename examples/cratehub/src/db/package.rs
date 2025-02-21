@@ -1,7 +1,7 @@
 use toasty::codegen_support::*;
 #[derive(Debug)]
 pub struct Package {
-    user: BelongsTo<super::user::User>,
+    pub user: BelongsTo<super::user::User>,
     pub user_id: Id<super::user::User>,
     pub id: Id<Package>,
     pub name: String,
@@ -107,10 +107,14 @@ impl stmt::IntoSelect for Package {
 }
 impl stmt::IntoExpr<Package> for Package {
     fn into_expr(self) -> stmt::Expr<Package> {
-        (self.user_id, self.id).into_expr().cast()
+        let expr: stmt::Expr<(Id<super::user::User>, Id<Package>)> =
+            (self.user_id, self.id).into_expr();
+        expr.cast()
     }
     fn by_ref(&self) -> stmt::Expr<Package> {
-        (&self.user_id, &self.id).into_expr().cast()
+        let expr: stmt::Expr<(Id<super::user::User>, Id<Package>)> =
+            (&self.user_id, &self.id).into_expr();
+        expr.cast()
     }
 }
 impl stmt::IntoExpr<[Package]> for Package {
@@ -190,8 +194,14 @@ impl Query {
             stmt: self.stmt.and(expr),
         }
     }
+    pub fn include<T: ?Sized>(mut self, path: impl Into<Path<T>>) -> Self {
+        self.stmt.include(path.into());
+        self
+    }
     pub fn user(mut self) -> <super::user::User as Relation>::Query {
-        <super::user::User as Relation>::Query::from_stmt(todo!())
+        <super::user::User as Relation>::Query::from_stmt(
+            stmt::Association::many_via_one(self.stmt, Package::USER.into()).into_select(),
+        )
     }
 }
 impl stmt::IntoSelect for Query {
@@ -453,6 +463,12 @@ pub mod relations {
             builder.stmt.set_scope(self.stmt.into_select());
             builder
         }
+        #[doc = r" Add an item to the association"]
+        pub async fn insert(self, db: &Db, item: impl IntoExpr<[Package]>) -> Result<()> {
+            let stmt = self.stmt.insert(item);
+            db.exec(stmt).await?;
+            Ok(())
+        }
         #[doc = r" Remove items from the association"]
         pub async fn remove(self, db: &Db, item: impl IntoExpr<Package>) -> Result<()> {
             let stmt = self.stmt.remove(item);
@@ -470,6 +486,12 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Select<Package>) -> One {
             One { stmt }
         }
+        #[doc = r" Create a new associated record"]
+        pub fn create(self) -> builders::CreatePackage {
+            let mut builder = builders::CreatePackage::default();
+            builder.stmt.set_scope(self.stmt.into_select());
+            builder
+        }
         pub async fn get(self, db: &Db) -> Result<Package> {
             db.get(self.stmt.into_select()).await
         }
@@ -483,6 +505,12 @@ pub mod relations {
     impl OptionOne {
         pub fn from_stmt(stmt: stmt::Select<Package>) -> OptionOne {
             OptionOne { stmt }
+        }
+        #[doc = r" Create a new associated record"]
+        pub fn create(self) -> builders::CreatePackage {
+            let mut builder = builders::CreatePackage::default();
+            builder.stmt.set_scope(self.stmt.into_select());
+            builder
         }
         pub async fn get(self, db: &Db) -> Result<Option<Package>> {
             db.first(self.stmt.into_select()).await
@@ -501,6 +529,12 @@ pub mod relations {
     impl OneField {
         pub const fn from_path(path: Path<super::Package>) -> OneField {
             OneField { path }
+        }
+        pub fn eq<T>(self, rhs: T) -> stmt::Expr<bool>
+        where
+            T: IntoExpr<super::Package>,
+        {
+            self.path.eq(rhs.into_expr())
         }
         pub fn in_query<Q>(self, rhs: Q) -> toasty::stmt::Expr<bool>
         where

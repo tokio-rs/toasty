@@ -101,9 +101,9 @@ impl<'a> Generator<'a> {
     }
 
     fn gen_has_many_method(&self, field: app::FieldId) -> TokenStream {
+        let strukt_path = self.self_struct_name();
         let name = self.field_name(field);
         let const_name = self.field_const_name(field);
-        let strukt_path = self.self_struct_name();
         let target_struct_path = self.target_struct_path(field, 0);
 
         quote! {
@@ -116,13 +116,15 @@ impl<'a> Generator<'a> {
     }
 
     fn gen_belongs_to_method(&self, field: app::FieldId) -> TokenStream {
+        let strukt_path = self.self_struct_name();
         let name = self.field_name(field);
+        let const_name = self.field_const_name(field);
         let target_struct_path = self.target_struct_path(field, 0);
 
         quote! {
             pub fn #name(mut self) -> <#target_struct_path as Relation>::Query {
                 <#target_struct_path as Relation>::Query::from_stmt(
-                    todo!()
+                    stmt::Association::many_via_one(self.stmt, #strukt_path::#const_name.into()).into_select()
                 )
             }
         }

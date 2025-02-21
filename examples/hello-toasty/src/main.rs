@@ -6,8 +6,6 @@ use db::{Todo, User};
 use toasty::Db;
 use toasty_sqlite::Sqlite;
 
-fn assert_sync_send<T: Send>(_: T) {}
-
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
     let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
