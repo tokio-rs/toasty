@@ -31,12 +31,18 @@ done
 for dir in "${directories[@]}"; do
     cargo run -p toasty-cli -- gen --schema "examples/$dir/schema.toasty" "examples/$dir/src/db"
 
+    FEATURES_ARG=""
+
+    if [[ $dir == "hello-toasty" ]]; then
+        FEATURES_ARG="--features sqlite"
+    fi
+
     case "$@" in
     run)
-        cargo run -p example-$dir
+        cargo run -p example-$dir $FEATURES_ARG
         ;;
     *)
-        cargo check -p example-$dir
+        cargo check -p example-$dir $FEATURES_ARG
         ;;
     esac
 done
