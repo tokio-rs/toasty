@@ -8,7 +8,6 @@ publish = false
 anyhow.workspace = true
 async-trait.workspace = true
 indexmap.workspace = true
-postgres = { workspace = true, optional = true }
 std-util.workspace = true
 tokio-stream.workspace = true
 
@@ -17,4 +16,3 @@ pretty_assertions.workspace = true
 
 [features]
 default = []
-postgres = ["dep:postgres"]

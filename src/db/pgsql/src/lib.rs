@@ -1,3 +1,6 @@
+mod value;
+pub(crate) use value::Value;
+
 use std::sync::Arc;
 
 use postgres::{
@@ -150,6 +153,7 @@ impl Driver for PostgreSQL {
             .into_inner();
 
         let stmt = self.client.prepare(&sql_as_str).await?;
+        let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
 
         let args = params
             .iter()

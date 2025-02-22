@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+toasty-core = { workspace = true }
+
 postgres.workspace = true
-toasty-core = { workspace = true, features = ["postgres"] }
 tokio.workspace = true
 tokio-postgres.workspace = true
