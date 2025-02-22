@@ -103,12 +103,12 @@ impl PostgreSQL {
 
         let sql = if if_exists {
             stmt::sql::Statement::drop_table_if_exists(table)
-            .serialize(schema, &mut params)
-            .into_inner()
+                .serialize(schema, &mut params)
+                .into_inner()
         } else {
             stmt::sql::Statement::drop_table(table)
-            .serialize(schema, &mut params)
-            .into_inner()
+                .serialize(schema, &mut params)
+                .into_inner()
         };
 
         assert!(
