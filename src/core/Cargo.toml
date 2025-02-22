@@ -13,6 +13,3 @@ tokio-stream.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
-
-[features]
-default = []

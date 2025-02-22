@@ -15,8 +15,14 @@ async fn main() -> toasty::Result<()> {
             }
         } else if #[cfg(feature = "postgresql")] {
             async fn create_db(schema: Schema) -> toasty::Result<Db> {
-                let url = std::env::var("DATABASE_URL")
-                    .expect("`DATABASE_URL` environment variable is required when using the `postgresql` feature");
+                let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+                        panic!(
+                            "`DATABASE_URL` environment variable is required when using \
+                            the `postgresql` feature (e.g., \
+                            `DATABASE_URL=postgresql://postgres@localhost/toasty`)"
+                        );
+                    }
+                );
                 let driver = toasty_pgsql::PostgreSQL::connect(&url, postgres::NoTls).await?;
                 Db::new(schema, driver).await
             }
@@ -29,9 +35,6 @@ async fn main() -> toasty::Result<()> {
 
     let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
     let schema = toasty::schema::from_file(schema_file)?;
-
-    // NOTE enable this to see the enstire structure in STDOUT
-    // println!("{schema:#?}");
 
     let db = create_db(schema).await?;
     // For now, reset!s
