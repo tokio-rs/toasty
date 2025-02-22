@@ -58,6 +58,31 @@ jobs:
         - name: cargo test
           run: cargo test --workspace --all-features
 
+    test-postgresql:
+        needs: check
+        name: Run tests for PostgreSQL
+        runs-on: ubuntu-latest
+        services:
+          postgresql:
+            image: postgres:17
+            env:
+              POSTGRES_USER: toasty
+              POSTGRES_PASSWORD: toasty
+              POSTGRES_DB: toasty
+            ports:
+              - 5432:5432
+            options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+        env:
+            DATABASE_URL: postgres://toasty:toasty@localhost/toasty
+        steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+        - uses: Swatinem/rust-cache@v2
+          with:
+            save-if: ${{ github.ref == 'refs/heads/main' }}
+        - name: cargo test
+          run: cargo run --bin example-hello-toasty --features postgresql
+
     test-all-os:
         needs: check
         name: Run tests on all operating systems
