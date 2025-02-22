@@ -6,6 +6,14 @@ publish = false
 
 [dependencies]
 toasty = { path = "../../src/toasty" }
-toasty-sqlite = { path = "../../src/db/sqlite" }
+toasty-sqlite = { path = "../../src/db/sqlite", optional = true }
+toasty-pgsql = { path = "../../src/db/pgsql", optional = true }
 
+postgres = { workspace = true, optional = true }
+cfg-if.workspace = true
 tokio.workspace = true
+
+[features]
+default = []
+sqlite = ["dep:toasty-sqlite"]
+postgresql = ["dep:postgres", "dep:toasty-pgsql"]

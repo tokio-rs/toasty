@@ -80,3 +80,16 @@ jobs:
           run: cargo test --workspace
         - name: Run examples
           run: scripts/gen-examples run
+
+    examples:
+        needs: check
+        name: Build the `hello-toasty` example with each feature
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+        - uses: Swatinem/rust-cache@v2
+          with:
+            save-if: ${{ github.ref == 'refs/heads/main' }}
+        - run: cargo install cargo-hack
+        - run: cd examples/hello-toasty && cargo hack build --each-feature

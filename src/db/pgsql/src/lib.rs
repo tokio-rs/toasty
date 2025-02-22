@@ -95,11 +95,18 @@ impl PostgreSQL {
     }
 
     /// Drops a table.
-    pub async fn drop_table(&self, schema: &Schema, table: &Table) -> Result<()> {
+    pub async fn drop_table(&self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
         let mut params = Vec::new();
-        let sql = stmt::sql::Statement::drop_table(table)
+
+        let sql = if if_exists {
+            stmt::sql::Statement::drop_table_if_exists(table)
             .serialize(schema, &mut params)
-            .into_inner();
+            .into_inner()
+        } else {
+            stmt::sql::Statement::drop_table(table)
+            .serialize(schema, &mut params)
+            .into_inner()
+        };
 
         assert!(
             params.is_empty(),
@@ -178,7 +185,7 @@ impl Driver for PostgreSQL {
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
-            self.drop_table(schema, table).await?;
+            self.drop_table(schema, table, true).await?;
             self.create_table(schema, table).await?;
         }
 

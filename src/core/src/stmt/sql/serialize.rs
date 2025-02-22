@@ -217,6 +217,11 @@ impl<T: Params> Formatter<'_, T> {
 
     fn drop_table(&mut self, stmt: &DropTable) -> fmt::Result {
         write!(self.dst, "DROP TABLE ")?;
+
+        if stmt.if_exists {
+            write!(self.dst, "IF EXISTS")?;
+        }
+
         self.name(&stmt.name)?;
 
         Ok(())

@@ -18,7 +18,6 @@ members = [
     # Examples
     "examples/composite-key",
     "examples/hello-toasty",
-    "examples/hello-toasty-pgsql",
     "examples/cratehub",
     "examples/user-has-one-profile",
 
@@ -33,6 +32,7 @@ async-recursion = "1.1.1"
 async-stream = "0.3.6"
 async-trait = "0.1.83"
 by_address = "1.2.1"
+cfg-if = "1.0.0"
 clap = { version = "4.5.20", features = ["derive"] }
 heck = "0.5.0"
 indexmap = "2.6.0"

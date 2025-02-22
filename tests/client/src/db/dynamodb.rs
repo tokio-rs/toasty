@@ -1,4 +1,8 @@
-use super::*;
+use toasty::driver::Capability;
+use toasty::schema::app::Schema;
+use toasty::Db;
+
+use crate::Setup;
 
 pub struct SetupDynamoDb;
 
