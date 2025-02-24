@@ -214,6 +214,172 @@ impl Statement {
             _ => todo!("stmt={self:#?}"),
         }
     }
+
+    /// Returns the number of returned elements within the statement (if one exists).
+    pub fn returning_len(&self) -> Option<usize> {
+        match self {
+            Statement::Delete(delete) => delete
+                .returning
+                .as_ref()
+                .map(|ret| ret.as_expr().as_record().len()),
+            Statement::Insert(insert) => insert
+                .returning
+                .as_ref()
+                .map(|ret| ret.as_expr().as_record().len()),
+            Statement::Query(query) => match &*query.body {
+                ExprSet::Select(select) => Some(select.returning.as_expr().as_record().len()),
+                stmt => todo!("returning_len, stmt={stmt:#?}"),
+            },
+            Statement::Update(update) => update
+                .returning
+                .as_ref()
+                .map(|ret| ret.as_expr().as_record().len()),
+        }
+    }
+
+    /// Attempts to return a reference to an inner [`Delete`].
+    ///
+    /// * If `self` is a [`Statement::Delete`], a reference to the inner [`Delete`] is
+    ///   returned wrapped in [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn as_delete(&self) -> Option<&Delete> {
+        match self {
+            Statement::Delete(delete) => Some(delete),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and attempts to return the inner [`Delete`].
+    ///
+    /// * If `self` is a [`Statement::Delete`], inner [`Delete`] is returned wrapped in
+    ///   [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn into_delete(self) -> Option<Delete> {
+        match self {
+            Statement::Delete(delete) => Some(delete),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and returns the inner [`Delete`].
+    ///
+    /// # Panics
+    ///
+    /// If `self` is not a [`Statement::Delete`].
+    pub fn unwrap_delete(self) -> Delete {
+        match self {
+            Statement::Delete(delete) => delete,
+            v => panic!("expected `Delete`, found {:#?}", v),
+        }
+    }
+
+    /// Attempts to return a reference to an inner [`Insert`].
+    ///
+    /// * If `self` is a [`Statement::Insert`], a reference to the inner [`Insert`] is
+    ///   returned wrapped in [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn as_insert(&self) -> Option<&Insert> {
+        match self {
+            Statement::Insert(insert) => Some(insert),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and attempts to return the inner [`Insert`].
+    ///
+    /// * If `self` is a [`Statement::Insert`], inner [`Insert`] is returned wrapped in
+    ///   [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn into_insert(self) -> Option<Insert> {
+        match self {
+            Statement::Insert(insert) => Some(insert),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and returns the inner [`Insert`].
+    ///
+    /// # Panics
+    ///
+    /// If `self` is not a [`Statement::Insert`].
+    pub fn unwrap_insert(self) -> Insert {
+        match self {
+            Statement::Insert(insert) => insert,
+            v => panic!("expected `Insert`, found {:#?}", v),
+        }
+    }
+
+    /// Attempts to return a reference to an inner [`Query`].
+    ///
+    /// * If `self` is a [`Statement::Query`], a reference to the inner [`Query`] is
+    ///   returned wrapped in [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn as_query(&self) -> Option<&Query> {
+        match self {
+            Statement::Query(query) => Some(query),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and attempts to return the inner [`Query`].
+    ///
+    /// * If `self` is a [`Statement::Query`], inner [`Query`] is returned wrapped in
+    ///   [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn into_query(self) -> Option<Query> {
+        match self {
+            Statement::Query(query) => Some(query),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and returns the inner [`Query`].
+    ///
+    /// # Panics
+    ///
+    /// If `self` is not a [`Statement::Query`].
+    pub fn unwrap_query(self) -> Query {
+        match self {
+            Statement::Query(query) => query,
+            v => panic!("expected `Query`, found {:#?}", v),
+        }
+    }
+
+    /// Attempts to return a reference to an inner [`Update`].
+    ///
+    /// * If `self` is a [`Statement::Update`], a reference to the inner [`Update`] is
+    ///   returned wrapped in [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn as_update(&self) -> Option<&Update> {
+        match self {
+            Statement::Update(update) => Some(update),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and attempts to return the inner [`Update`].
+    ///
+    /// * If `self` is a [`Statement::Update`], inner [`Update`] is returned wrapped in
+    ///   [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn into_update(self) -> Option<Update> {
+        match self {
+            Statement::Update(update) => Some(update),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and returns the inner [`Update`].
+    ///
+    /// # Panics
+    ///
+    /// If `self` is not a [`Statement::Update`].
+    pub fn unwrap_update(self) -> Update {
+        match self {
+            Statement::Update(update) => update,
+            v => panic!("expected `Update`, found {:#?}", v),
+        }
+    }
 }
 
 impl Node for Statement {

@@ -36,4 +36,4 @@ trybuild = { version = "1.0.89", features = ["diff"] }
 [dev-dependencies]
 
 # Tokio
-tokio = { version = "1.18", features = ["full"] }
+tokio.workspace = true

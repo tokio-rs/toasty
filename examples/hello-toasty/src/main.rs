@@ -3,19 +3,40 @@ use std::path::PathBuf;
 
 use db::{Todo, User};
 
-use toasty::Db;
-use toasty_sqlite::Sqlite;
+use toasty::{schema::app::Schema, Db};
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "sqlite")] {
+            async fn create_db(schema: Schema) -> toasty::Result<Db> {
+                let driver = toasty_sqlite::Sqlite::in_memory();
+                Db::new(schema, driver).await
+            }
+        } else if #[cfg(feature = "postgresql")] {
+            async fn create_db(schema: Schema) -> toasty::Result<Db> {
+                let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+                        panic!(
+                            "`DATABASE_URL` environment variable is required when using \
+                            the `postgresql` feature (e.g., \
+                            `DATABASE_URL=postgresql://postgres@localhost/toasty`)"
+                        );
+                    }
+                );
+                let driver = toasty_pgsql::PostgreSQL::connect(&url, postgres::NoTls).await?;
+                Db::new(schema, driver).await
+            }
+        } else {
+            async fn create_db(_: Schema) -> toasty::Result<Db> {
+                panic!("you must run this example with a database-related feature enabled (e.g., `--features sqlite`)");
+            }
+        }
+    }
 
+    let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
     let schema = toasty::schema::from_file(schema_file)?;
 
-    // Use the in-memory sqlite driver
-    let driver = Sqlite::in_memory();
-
-    let db = Db::new(schema, driver).await?;
+    let db = create_db(schema).await?;
     // For now, reset!s
     db.reset_db().await?;
 

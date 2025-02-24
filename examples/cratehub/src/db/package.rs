@@ -17,6 +17,15 @@ impl Package {
             super::user::User::filter(super::user::User::ID.eq(&self.user_id)).into_select(),
         )
     }
+    pub async fn get_by_user_id(
+        db: &Db,
+        user_id: impl IntoExpr<Id<super::user::User>>,
+    ) -> Result<Package> {
+        Self::filter_by_user_id(user_id).get(db).await
+    }
+    pub fn filter_by_user_id(user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
+        Query::default().filter_by_user_id(user_id)
+    }
     pub async fn get_by_user_id_and_id(
         db: &Db,
         user_id: impl IntoExpr<Id<super::user::User>>,
@@ -34,15 +43,6 @@ impl Package {
         keys: impl IntoExpr<[(Id<super::user::User>, Id<Package>)]>,
     ) -> Query {
         Query::default().filter_by_user_id_and_id_batch(keys)
-    }
-    pub async fn get_by_user_id(
-        db: &Db,
-        user_id: impl IntoExpr<Id<super::user::User>>,
-    ) -> Result<Package> {
-        Self::filter_by_user_id(user_id).get(db).await
-    }
-    pub fn filter_by_user_id(user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
-        Query::default().filter_by_user_id(user_id)
     }
     pub fn create() -> builders::CreatePackage {
         builders::CreatePackage::default()
@@ -133,6 +133,16 @@ impl Query {
     pub const fn from_stmt(stmt: stmt::Select<Package>) -> Query {
         Query { stmt }
     }
+    pub async fn get_by_user_id(
+        self,
+        db: &Db,
+        user_id: impl IntoExpr<Id<super::user::User>>,
+    ) -> Result<Package> {
+        self.filter_by_user_id(user_id).get(db).await
+    }
+    pub fn filter_by_user_id(self, user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
+        self.filter(Package::USER_ID.eq(user_id))
+    }
     pub async fn get_by_user_id_and_id(
         self,
         db: &Db,
@@ -156,16 +166,6 @@ impl Query {
         keys: impl IntoExpr<[(Id<super::user::User>, Id<Package>)]>,
     ) -> Query {
         self.filter(stmt::Expr::in_list((Package::USER_ID, Package::ID), keys))
-    }
-    pub async fn get_by_user_id(
-        self,
-        db: &Db,
-        user_id: impl IntoExpr<Id<super::user::User>>,
-    ) -> Result<Package> {
-        self.filter_by_user_id(user_id).get(db).await
-    }
-    pub fn filter_by_user_id(self, user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
-        self.filter(Package::USER_ID.eq(user_id))
     }
     pub async fn all(self, db: &Db) -> Result<Cursor<Package>> {
         db.all(self.stmt).await
@@ -407,6 +407,19 @@ pub mod relations {
         pub fn filter_by_id(self, id: impl IntoExpr<Id<Package>>) -> Query {
             Query::from_stmt(self.into_select()).filter(Package::ID.eq(id))
         }
+        pub async fn get_by_user_id(
+            self,
+            db: &Db,
+            user_id: impl IntoExpr<Id<super::super::user::User>>,
+        ) -> Result<Package> {
+            self.filter_by_user_id(user_id).get(db).await
+        }
+        pub fn filter_by_user_id(
+            self,
+            user_id: impl IntoExpr<Id<super::super::user::User>>,
+        ) -> Query {
+            Query::from_stmt(self.into_select()).filter(Package::USER_ID.eq(user_id))
+        }
         pub async fn get_by_user_id_and_id(
             self,
             db: &Db,
@@ -430,19 +443,6 @@ pub mod relations {
             keys: impl IntoExpr<[(Id<super::super::user::User>, Id<Package>)]>,
         ) -> Query {
             Query::from_stmt(self.into_select()).filter_by_user_id_and_id_batch(keys)
-        }
-        pub async fn get_by_user_id(
-            self,
-            db: &Db,
-            user_id: impl IntoExpr<Id<super::super::user::User>>,
-        ) -> Result<Package> {
-            self.filter_by_user_id(user_id).get(db).await
-        }
-        pub fn filter_by_user_id(
-            self,
-            user_id: impl IntoExpr<Id<super::super::user::User>>,
-        ) -> Query {
-            Query::from_stmt(self.into_select()).filter(Package::USER_ID.eq(user_id))
         }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<Package>> {
