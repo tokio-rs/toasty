@@ -7,9 +7,6 @@ pub trait Model: Sized {
     /// Identifiers are *not* unique across schemas.
     const ID: ModelId;
 
-    /// Model key type
-    type Key;
-
     /// Load an instance of the model, populating fields using the given row.
     fn load(row: stmt::ValueRecord) -> Result<Self, Error>;
 }
