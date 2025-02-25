@@ -7,7 +7,6 @@ impl Generator<'_> {
 
         let container_import = self.container_import();
 
-        let key_ty = self.self_key_ty();
         let struct_name = self.self_struct_name();
         let struct_fields = self.gen_struct_fields();
         let struct_load_fields = self.gen_struct_load_fields();
@@ -72,7 +71,6 @@ impl Generator<'_> {
 
             impl Model for #struct_name {
                 const ID: ModelId = ModelId(#model_id);
-                type Key = #key_ty;
 
                 fn load(mut record: ValueRecord) -> Result<Self, Error> {
                     Ok(#struct_name {
@@ -148,21 +146,6 @@ impl Generator<'_> {
                 use super::*;
 
                 #relations_mod
-            }
-        }
-    }
-
-    fn self_key_ty(&self) -> TokenStream {
-        let mut tys = self
-            .model
-            .primary_key_fields()
-            .map(|field| self.field_ty(field, 0));
-
-        if tys.len() == 1 {
-            tys.next().unwrap()
-        } else {
-            quote! {
-                ( #( #tys, )* )
             }
         }
     }

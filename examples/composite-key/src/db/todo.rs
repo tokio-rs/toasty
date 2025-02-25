@@ -67,7 +67,6 @@ impl Todo {
 }
 impl Model for Todo {
     const ID: ModelId = ModelId(1);
-    type Key = (Id<super::user::User>, Id<Todo>);
     fn load(mut record: ValueRecord) -> Result<Self, Error> {
         Ok(Todo {
             id: Id::from_untyped(record[0].take().to_id()?),
@@ -445,6 +444,12 @@ pub mod relations {
         ) -> Query {
             Query::from_stmt(self.into_select()).filter_by_user_id_and_id_batch(keys)
         }
+        pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<Todo>>) -> Result<Todo> {
+            self.filter_by_id(id).get(db).await
+        }
+        pub fn filter_by_id(self, id: impl IntoExpr<Id<Todo>>) -> Query {
+            Query::from_stmt(self.into_select()).filter(Todo::ID.eq(id))
+        }
         pub async fn get_by_user_id(
             self,
             db: &Db,
@@ -457,12 +462,6 @@ pub mod relations {
             user_id: impl IntoExpr<Id<super::super::user::User>>,
         ) -> Query {
             Query::from_stmt(self.into_select()).filter(Todo::USER_ID.eq(user_id))
-        }
-        pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<Todo>>) -> Result<Todo> {
-            self.filter_by_id(id).get(db).await
-        }
-        pub fn filter_by_id(self, id: impl IntoExpr<Id<Todo>>) -> Query {
-            Query::from_stmt(self.into_select()).filter(Todo::ID.eq(id))
         }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<Todo>> {

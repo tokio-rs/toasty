@@ -20,6 +20,12 @@ impl User {
             Self::TODOS.into(),
         ))
     }
+    pub async fn get_by_email(db: &Db, email: impl IntoExpr<String>) -> Result<User> {
+        Self::filter_by_email(email).get(db).await
+    }
+    pub fn filter_by_email(email: impl IntoExpr<String>) -> Query {
+        Query::default().filter_by_email(email)
+    }
     pub async fn get_by_id(db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
         Self::filter_by_id(id).get(db).await
     }
@@ -28,12 +34,6 @@ impl User {
     }
     pub fn filter_by_id_batch(keys: impl IntoExpr<[Id<User>]>) -> Query {
         Query::default().filter_by_id_batch(keys)
-    }
-    pub async fn get_by_email(db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-        Self::filter_by_email(email).get(db).await
-    }
-    pub fn filter_by_email(email: impl IntoExpr<String>) -> Query {
-        Query::default().filter_by_email(email)
     }
     pub fn create() -> builders::CreateUser {
         builders::CreateUser::default()
@@ -56,7 +56,6 @@ impl User {
 }
 impl Model for User {
     const ID: ModelId = ModelId(0);
-    type Key = Id<User>;
     fn load(mut record: ValueRecord) -> Result<Self, Error> {
         Ok(User {
             id: Id::from_untyped(record[0].take().to_id()?),
@@ -119,6 +118,12 @@ impl Query {
     pub const fn from_stmt(stmt: stmt::Select<User>) -> Query {
         Query { stmt }
     }
+    pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
+        self.filter_by_email(email).get(db).await
+    }
+    pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
+        self.filter(User::EMAIL.eq(email))
+    }
     pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
         self.filter_by_id(id).get(db).await
     }
@@ -127,12 +132,6 @@ impl Query {
     }
     pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<User>]>) -> Query {
         self.filter(stmt::Expr::in_list(User::ID, keys))
-    }
-    pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-        self.filter_by_email(email).get(db).await
-    }
-    pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
-        self.filter(User::EMAIL.eq(email))
     }
     pub async fn all(self, db: &Db) -> Result<Cursor<User>> {
         db.all(self.stmt).await
@@ -390,6 +389,12 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Association<[User]>) -> Many {
             Many { stmt }
         }
+        pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
+            self.filter_by_email(email).get(db).await
+        }
+        pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
+            Query::from_stmt(self.into_select()).filter(User::EMAIL.eq(email))
+        }
         pub async fn get_by_id(self, db: &Db, id: impl IntoExpr<Id<User>>) -> Result<User> {
             self.filter_by_id(id).get(db).await
         }
@@ -398,12 +403,6 @@ pub mod relations {
         }
         pub fn filter_by_id_batch(self, keys: impl IntoExpr<[Id<User>]>) -> Query {
             Query::from_stmt(self.into_select()).filter_by_id_batch(keys)
-        }
-        pub async fn get_by_email(self, db: &Db, email: impl IntoExpr<String>) -> Result<User> {
-            self.filter_by_email(email).get(db).await
-        }
-        pub fn filter_by_email(self, email: impl IntoExpr<String>) -> Query {
-            Query::from_stmt(self.into_select()).filter(User::EMAIL.eq(email))
         }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<User>> {
