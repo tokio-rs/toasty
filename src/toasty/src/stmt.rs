@@ -22,9 +22,6 @@ pub use into_insert::IntoInsert;
 mod into_select;
 pub use into_select::IntoSelect;
 
-mod key;
-pub use key::Key;
-
 mod path;
 pub use path::Path;
 
