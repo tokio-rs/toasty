@@ -12,4 +12,12 @@ impl Name {
         let parts = snake.split("_").map(String::from).collect();
         Name { parts }
     }
+
+    pub(crate) fn ident_name(&self) -> String {
+        self.parts.join("_").to_lowercase()
+    }
+
+    pub(crate) fn const_name(&self) -> String {
+        self.parts.join("_").to_uppercase()
+    }
 }

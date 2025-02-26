@@ -42,6 +42,7 @@ pub mod codegen_support {
         stmt::{self, Id, IntoExpr, IntoInsert, IntoSelect, Path},
         Db, Error, Model, Relation, Result, Statement,
     };
+    pub use std::{convert::Into, default::Default, option::Option};
     pub use toasty_core::{
         driver,
         schema::{self, app::ModelId},

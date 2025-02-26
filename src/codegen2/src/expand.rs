@@ -1,33 +1,49 @@
+mod create;
+mod fields;
+mod filters;
+mod model;
+mod query;
+mod util;
+
+use filters::Filter;
+
 use crate::schema::Model;
 
 use proc_macro2::TokenStream;
 use quote::quote;
 
-pub(super) fn model(model: &Model) -> TokenStream {
-    let toasty = quote!(_toasty::codegen_support);
-    let ident = &model.ident;
-    let id = gen_model_id();
+struct Expand<'a> {
+    /// The model being expanded
+    model: &'a Model,
 
-    println!("ID = {id}");
+    /// Model filter methods
+    filters: Vec<Filter>,
 
-    let code = quote! {
-        impl #toasty::Model for #ident {
-            const ID: #toasty::ModelId = #toasty::ModelId(#id);
-            type Key = ();
-
-            fn load(row: #toasty::ValueRecord) -> Result<Self, #toasty::Error> {
-                todo!()
-            }
-        }
-    };
-
-    wrap_in_const(code)
+    /// Path prefix for toasty types
+    toasty: TokenStream,
 }
 
-fn gen_model_id() -> usize {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static COUNT: AtomicUsize = AtomicUsize::new(0);
-    COUNT.fetch_add(1, Ordering::Relaxed)
+impl Expand<'_> {
+    fn expand(&self) -> TokenStream {
+        let model_impls = self.expand_model_impls();
+        let query_struct = self.expand_query_struct();
+        let create_builder = self.expand_create_builder();
+
+        wrap_in_const(quote! {
+            #model_impls
+            #query_struct
+            #create_builder
+        })
+    }
+}
+
+pub(super) fn model(model: &Model) -> TokenStream {
+    Expand {
+        model,
+        filters: Filter::build_model_filters(model),
+        toasty: quote!(_toasty::codegen_support),
+    }
+    .expand()
 }
 
 fn wrap_in_const(code: TokenStream) -> TokenStream {
