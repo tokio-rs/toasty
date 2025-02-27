@@ -31,8 +31,8 @@ pub(crate) struct Model {
 }
 
 impl Model {
-    pub(crate) fn from_ast(ast: &syn::ItemStruct) -> syn::Result<Model> {
-        let syn::Fields::Named(node) = &ast.fields else {
+    pub(crate) fn from_ast(ast: &mut syn::ItemStruct) -> syn::Result<Model> {
+        let syn::Fields::Named(node) = &mut ast.fields else {
             return Err(syn::Error::new_spanned(
                 &ast.fields,
                 "model fields must be named",
@@ -43,7 +43,7 @@ impl Model {
         let mut indices = vec![];
         let mut errs = ErrorSet::new();
 
-        for (index, node) in node.named.iter().enumerate() {
+        for (index, node) in node.named.iter_mut().enumerate() {
             match Field::from_ast(index, node) {
                 Ok(field) => fields.push(field),
                 Err(err) => errs.push(err),

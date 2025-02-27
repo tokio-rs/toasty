@@ -9,6 +9,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.query_struct_ident;
+        let filter_methods = self.expand_query_filter_methods();
 
         quote! {
             #[derive(Debug)]
@@ -21,7 +22,7 @@ impl Expand<'_> {
                     #query_struct_ident { stmt }
                 }
 
-                // #filter_methods
+                #filter_methods
 
                 #vis async fn all(self, db: &#toasty::Db) -> #toasty::Result<#toasty::Cursor<#model_ident>> {
                     db.all(self.stmt).await

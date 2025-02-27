@@ -12,15 +12,16 @@ impl Expand<'_> {
         let field_consts = self.expand_model_field_consts();
         let query_struct_ident = &self.model.query_struct_ident;
         let create_builder_ident = &self.model.create_builder_struct_ident;
+        let filter_methods = self.expand_model_filter_methods();
 
-        /*
-        let into_select_body_ref = self.gen_model_into_select_body(true);
-        let into_select_body_value = self.gen_model_into_select_body(false);
-        */
+        let into_select_body_ref = self.expand_model_into_select_body(true);
+        let into_select_body_value = self.expand_model_into_select_body(false);
 
         quote! {
             impl #model_ident {
                 #field_consts
+
+                #filter_methods
 
                 #vis fn create() -> #create_builder_ident {
                     #create_builder_ident::default()
@@ -49,52 +50,40 @@ impl Expand<'_> {
             impl #toasty::stmt::IntoSelect for &#model_ident {
                 type Model = #model_ident;
 
-                fn into_select(self) -> stmt::Select<Self::Model> {
-                    // #into_select_body_ref
-                    todo!()
+                fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
+                    #into_select_body_ref
                 }
             }
 
-            impl stmt::IntoSelect for &mut #model_ident {
+            impl #toasty::stmt::IntoSelect for &mut #model_ident {
                 type Model = #model_ident;
 
-                fn into_select(self) -> stmt::Select<Self::Model> {
+                fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
                     (&*self).into_select()
                 }
             }
 
-            impl stmt::IntoSelect for #model_ident {
+            impl #toasty::stmt::IntoSelect for #model_ident {
                 type Model = #model_ident;
 
-                fn into_select(self) -> stmt::Select<Self::Model> {
-                    // #into_select_body_value
-                    todo!()
+                fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
+                    #into_select_body_value
                 }
             }
         }
     }
 
-    pub(super) fn gen_model_into_select_body(&self, by_ref: bool) -> TokenStream {
-        /*
-        let fields = self
-            .model
-            .primary_key_fields()
-            .map(|field| field.index)
-            .collect::<Vec<_>>();
-
-        let ident = self.filter_method_ident(&fields);
-        let arg_idents = self.gen_filter_arg_idents(&fields);
-
+    pub(super) fn expand_model_into_select_body(&self, by_ref: bool) -> TokenStream {
+        let filter = self.primary_key_filter();
+        let query_struct_ident = &self.model.query_struct_ident;
+        let filter_method_ident = &filter.filter_method_ident;
+        let arg_idents = self.expand_filter_arg_idents(&filter);
         let amp = if by_ref { quote!(&) } else { quote!() };
 
         quote! {
-            Query::default()
-                .#ident( #( #amp self.#arg_idents ),* )
+            #query_struct_ident::default()
+                .#filter_method_ident( #( #amp self.#arg_idents ),* )
                 .stmt
-        }
-        */
-        quote! {
-            todo!("implement `gen_model_into_select_body`");
         }
     }
 }

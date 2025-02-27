@@ -1,8 +1,8 @@
 #[toasty_macros::model]
 struct User {
     #[key]
-    #[auto]
-    id: i32,
+    // #[auto]
+    id: i64,
 
     name: String,
 }

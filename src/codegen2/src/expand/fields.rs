@@ -16,10 +16,7 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(primitive) => {
-                        // let ty = self.ty(&primitive.ty, 0);
-                        let ty = quote!(());
-
+                    Primitive(ty) => {
                         quote! {
                             pub const #const_ident: #toasty::Path<#ty> =
                                 #toasty::Path::from_field_index::<Self>(#field_offset);

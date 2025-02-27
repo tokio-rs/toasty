@@ -27,7 +27,7 @@ pub(crate) enum FieldTy {
 }
 
 impl Field {
-    pub(super) fn from_ast(id: usize, field: &syn::Field) -> syn::Result<Field> {
+    pub(super) fn from_ast(id: usize, field: &mut syn::Field) -> syn::Result<Field> {
         let Some(ident) = &field.ident else {
             return Err(syn::Error::new_spanned(field, "model fields must be named"));
         };
@@ -37,14 +37,24 @@ impl Field {
         let mut errs = ErrorSet::new();
         let mut attrs = FieldAttrs { key: false };
 
-        for attr in &field.attrs {
+        let mut i = 0;
+        while i < field.attrs.len() {
+            let attr = &field.attrs[i];
+
             if attr.path().is_ident("key") {
                 if attrs.key {
                     errs.push(syn::Error::new_spanned(attr, "duplicate #[key] attribute"));
                 } else {
                     attrs.key = true;
                 }
+            } else if attr.path().is_ident("auto") {
+                todo!();
+            } else {
+                i += 1;
+                continue;
             }
+
+            field.attrs.remove(i);
         }
 
         if let Some(err) = errs.collect() {
