@@ -32,16 +32,16 @@ struct BuildModelFilters<'a> {
 }
 
 impl Expand<'_> {
-    pub(super) fn gen_model_filter_methods(&self) -> TokenStream {
+    pub(super) fn expand_model_filter_methods(&self) -> TokenStream {
         self.filters
             .iter()
             .filter(|f| !f.only_relation)
             .map(|filter| {
-                let get_method = self.gen_model_get_method(filter, false);
-                let filter_method = self.gen_model_filter_method(filter, false);
+                let get_method = self.expand_model_get_method(filter, false);
+                let filter_method = self.expand_model_filter_method(filter, false);
 
                 let filter_batch_method = if filter.batch {
-                    Some(self.gen_model_filter_batch_method(filter, false))
+                    Some(self.expand_model_filter_batch_method(filter, false))
                 } else {
                     None
                 };
@@ -55,14 +55,14 @@ impl Expand<'_> {
             .collect()
     }
 
-    fn gen_model_get_method(&self, filter: &Filter, self_into_select: bool) -> TokenStream {
+    fn expand_model_get_method(&self, filter: &Filter, self_into_select: bool) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let get_method_ident = &filter.get_method_ident;
         let filter_method_ident = &filter.filter_method_ident;
-        let args = self.gen_filter_args(filter);
-        let arg_idents = self.gen_filter_arg_idents(&filter.fields);
+        let args = self.expand_filter_args(filter);
+        let arg_idents = self.expand_filter_arg_idents(&filter.fields);
         let self_arg;
         let base;
 
@@ -75,49 +75,54 @@ impl Expand<'_> {
         }
 
         quote! {
-            pub async fn #ident(#self_arg db: &Db, #( #args ),* ) -> Result<#struct_name> {
-                #base #filter_ident( #( #arg_idents ),* )
+            #vis async fn #get_method_ident(#self_arg db: &#toasty::Db, #( #args ),* ) -> #toasty::Result<#model_ident> {
+                #base #filter_method_ident( #( #arg_idents ),* )
                     .get(db)
                     .await
             }
         }
     }
 
-    fn gen_model_filter_method(&self, filter: &Filter, self_into_select: bool) -> TokenStream {
-        let ident = self.filter_method_ident(&filter.fields);
-        let args = self.gen_filter_args(filter, depth);
-        let arg_idents = self.gen_filter_arg_idents(&filter.fields);
+    fn expand_model_filter_method(&self, filter: &Filter, self_into_select: bool) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let query_struct_ident = &self.model.query_struct_ident;
+        let filter_method_ident = &filter.filter_method_ident;
+        let args = self.expand_filter_args(filter);
+        let arg_idents = self.expand_filter_arg_idents(&filter.fields);
         let self_arg;
         let body;
 
         if self_into_select {
-            let expr = self.gen_query_filter_expr(filter);
+            let expr = self.expand_query_filter_expr(filter);
 
             self_arg = quote!(self,);
             body = quote! {
-                Query::from_stmt(self.into_select()).filter( #expr )
+                use #toasty::IntoSelect;
+                #query_struct_ident::from_stmt(self.into_select()).filter( #expr )
             };
         } else {
             self_arg = quote!();
             body = quote! {
-                Query::default().#ident( #( #arg_idents ),* )
+                #query_struct_ident::default()
+                    .#filter_method_ident( #( #arg_idents ),* )
             };
         }
 
         quote! {
-            pub fn #ident( #self_arg #( #args ),* ) -> Query {
+            #vis fn #filter_method_ident( #self_arg #( #args ),* ) -> #query_struct_ident {
                 #body
             }
         }
     }
 
-    fn gen_model_filter_batch_method(
+    fn expand_model_filter_batch_method(
         &self,
         filter: &Filter,
         self_into_select: bool,
     ) -> TokenStream {
-        let ident = self.filter_method_batch_ident(&filter.fields);
-        let bound = self.gen_filter_batch_arg_bound(filter, depth);
+        let ident = &filter.filter_method_batch_ident;
+        let bound = self.expand_filter_batch_arg_bound(filter);
         let self_arg;
         let query;
 
@@ -136,15 +141,15 @@ impl Expand<'_> {
         }
     }
 
-    pub(super) fn gen_query_filter_methods(&self) -> TokenStream {
+    pub(super) fn expand_query_filter_methods(&self) -> TokenStream {
         self.filters
             .iter()
             .filter(|f| !f.only_relation)
             .map(|filter| {
-                let get_method = self.gen_model_get_method(filter, 0, true);
-                let filter_method = self.gen_query_filter_method(filter);
+                let get_method = self.expand_model_get_method(filter, true);
+                let filter_method = self.expand_query_filter_method(filter);
                 let filter_batch_method = if filter.batch {
-                    Some(self.gen_query_filter_batch_method(filter))
+                    Some(self.expand_query_filter_batch_method(filter))
                 } else {
                     None
                 };
@@ -158,15 +163,15 @@ impl Expand<'_> {
             .collect()
     }
 
-    pub(super) fn gen_relation_filter_methods(&self) -> TokenStream {
+    pub(super) fn expand_relation_filter_methods(&self) -> TokenStream {
         self.filters
             .iter()
             .map(|filter| {
-                let get_method = self.gen_model_get_method(filter, 1, true);
-                let filter_method = self.gen_model_filter_method(filter, 1, true);
+                let get_method = self.expand_model_get_method(filter, true);
+                let filter_method = self.expand_model_filter_method(filter, true);
 
                 let filter_batch_method = if filter.batch {
-                    Some(self.gen_model_filter_batch_method(filter, 1, true))
+                    Some(self.expand_model_filter_batch_method(filter, true))
                 } else {
                     None
                 };
@@ -180,42 +185,50 @@ impl Expand<'_> {
             .collect()
     }
 
-    fn gen_query_filter_method(&self, filter: &Filter) -> TokenStream {
-        let ident = self.filter_method_ident(&filter.fields);
-        let args = self.gen_filter_args(filter, 0);
-        let expr = self.gen_query_filter_expr(filter);
+    fn expand_query_filter_method(&self, filter: &Filter) -> TokenStream {
+        let vis = &self.model.vis;
+        let query_struct_ident = &self.model.query_struct_ident;
+        let filter_method_ident = &filter.filter_method_ident;
+        let args = self.expand_filter_args(filter);
+        let expr = self.expand_query_filter_expr(filter);
 
         quote! {
-            pub fn #ident(self, #( #args ),* ) -> Query {
+            #vis fn #filter_method_ident(self, #( #args ),* ) -> #query_struct_ident {
                 self.filter(#expr)
             }
         }
     }
 
-    fn gen_query_filter_expr(&self, filter: &Filter) -> TokenStream {
-        let struct_name = self.self_struct_name();
-        let body = filter.fields.iter().map(|field| {
-            let name = self.field_name(*field);
-            let path = self.field_const_name(field);
+    fn expand_query_filter_expr(&self, filter: &Filter) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+        let body = filter.fields.iter().map(|index| {
+            let field = &self.model.fields[*index];
+            let field_ident = &field.name.ident;
+            let field_const_ident = &field.name.const_ident;
 
-            quote!(#struct_name::#path.eq(#name))
+            quote!(#model_ident::#field_const_ident.eq(#field_ident))
         });
 
         if filter.fields.len() == 1 {
             quote!(#( #body )*)
         } else {
-            quote!(stmt::Expr::and_all( [ #( #body ),* ] ))
+            quote!(#toasty::stmt::Expr::and_all( [ #( #body ),* ] ))
         }
     }
 
-    fn gen_query_filter_batch_method(&self, filter: &Filter) -> TokenStream {
-        let struct_name = self.self_struct_name();
-        let ident = self.filter_method_batch_ident(&filter.fields);
-        let bound = self.gen_filter_batch_arg_bound(filter, 0);
+    fn expand_query_filter_batch_method(&self, filter: &Filter) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+        let query_struct_ident = &self.model.query_struct_ident;
+        let query_filter_batch_ident = &filter.filter_method_batch_ident;
+        let bound = self.expand_filter_batch_arg_bound(filter);
 
-        let lhs = filter.fields.iter().map(|field| {
-            let path = self.field_const_name(field);
-            quote!(#struct_name::#path)
+        let lhs = filter.fields.iter().map(|index| {
+            let field = &self.model.fields[*index];
+            let field_const_ident = &field.name.const_ident;
+            quote!(#model_ident::#field_const_ident)
         });
 
         let lhs = if filter.fields.len() == 1 {
@@ -225,26 +238,31 @@ impl Expand<'_> {
         };
 
         quote! {
-            pub fn #ident(self, keys: impl IntoExpr<[#bound]> ) -> Query {
+            #vis fn #query_filter_batch_ident(self, keys: impl #toasty::IntoExpr<[#bound]> ) -> #query_struct_ident {
                 self.filter( stmt::Expr::in_list( #lhs, keys ) )
             }
         }
     }
 
-    pub(crate) fn gen_model_into_expr_body(&self, by_ref: bool) -> TokenStream {
+    pub(crate) fn expand_model_into_expr_body(&self, by_ref: bool) -> TokenStream {
+        let toasty = &self.toasty;
+
         if self.model.primary_key.fields.len() == 1 {
             let expr = self.model.primary_key_fields().map(|field| {
-                let name = self.field_name(field);
-                let ty = self.field_ty(field, 0);
+                let field_ident = &field.name.ident;
+                let ty = match &field.ty {
+                    FieldTy::Primitive(ty) => ty,
+                    _ => todo!(),
+                };
 
                 let into_expr = if by_ref {
-                    quote!((&self.#name))
+                    quote!((&self.#field_ident))
                 } else {
-                    quote!(self.#name)
+                    quote!(self.#field_ident)
                 };
 
                 quote! {
-                    let expr: stmt::Expr<#ty> = #into_expr.into_expr();
+                    let expr: #toasty::stmt::Expr<#ty> = #toasty::IntoExpr::into_expr(#into_expr);
                     expr.cast()
                 }
             });
@@ -252,58 +270,67 @@ impl Expand<'_> {
             quote!( #( #expr )* )
         } else {
             let expr = self.model.primary_key_fields().map(|field| {
-                let name = self.field_name(field);
+                let field_ident = &field.name.ident;
                 let amp = if by_ref { quote!(&) } else { quote!() };
-                quote!( #amp self.#name)
+                quote!( #amp self.#field_ident)
             });
 
             let ty = self
                 .model
                 .primary_key_fields()
-                .map(|field| self.field_ty(field, 0));
+                .map(|field| match &field.ty {
+                    FieldTy::Primitive(ty) => ty,
+                    _ => todo!(),
+                });
 
             quote! {
-                let expr: stmt::Expr<( #( #ty ),* )> = ( #( #expr ),* ).into_expr();
+                let expr: #toasty::stmt::Expr<( #( #ty ),* )> =
+                    #toasty::IntoExpr::into_expr(( #( #expr ),* ));
                 expr.cast()
             }
         }
     }
 
-    pub(super) fn gen_model_into_select_body(&self, by_ref: bool) -> TokenStream {
-        let fields = self
-            .model
-            .primary_key_fields()
-            .map(|field| field.id)
-            .collect::<Vec<_>>();
-
-        let ident = self.filter_method_ident(&fields);
-        let arg_idents = self.gen_filter_arg_idents(&fields);
-
+    pub(super) fn expand_model_into_select_body(&self, by_ref: bool) -> TokenStream {
+        let filter = self.primary_key_filter();
+        let query_struct_ident = &self.model.query_struct_ident;
+        let filter_method_ident = &filter.filter_method_ident;
+        let arg_idents = self.expand_filter_arg_idents(&filter.fields);
         let amp = if by_ref { quote!(&) } else { quote!() };
 
         quote! {
-            Query::default()
-                .#ident( #( #amp self.#arg_idents ),* )
+            #query_struct_ident::default()
+                .#filter_method_ident( #( #amp self.#arg_idents ),* )
                 .stmt
         }
     }
 
-    fn gen_filter_args<'b>(
+    fn expand_filter_args<'b>(
         &'b self,
         filter: &'b Filter,
-        depth: usize,
     ) -> impl Iterator<Item = TokenStream> + 'b {
-        filter.fields.iter().map(move |field| {
-            let name = self.field_name(*field);
-            let ty = self.field_ty(*field, depth);
+        let toasty = &self.toasty;
 
-            quote!(#name: impl IntoExpr<#ty>    )
+        filter.fields.iter().map(move |index| {
+            let field = &self.model.fields[*index];
+            let name = &field.name.ident;
+            let ty = match &field.ty {
+                FieldTy::Primitive(ty) => ty,
+                _ => todo!(),
+            };
+
+            quote!(#name: impl #toasty::IntoExpr<#ty>)
         })
     }
 
-    fn gen_filter_batch_arg_bound(&self, filter: &Filter) -> TokenStream {
-        let parts = filter.fields.iter().map(move |field| {
-            let ty = self.field_ty(*field, depth);
+    fn expand_filter_batch_arg_bound(&self, filter: &Filter) -> TokenStream {
+        let parts = filter.fields.iter().map(move |index| {
+            let field = &self.model.fields[*index];
+            let ty = match &field.ty {
+                FieldTy::Primitive(ty) => ty,
+                _ => todo!(),
+            };
+
             quote!(#ty)
         });
 
@@ -314,15 +341,24 @@ impl Expand<'_> {
         }
     }
 
-    fn gen_filter_arg_idents<'b>(
+    fn expand_filter_arg_idents<'b>(
         &'b self,
-        fields: &'b [app::FieldId],
+        fields: &'b [usize],
     ) -> impl Iterator<Item = TokenStream> + 'b {
         fields.iter().map(move |field| {
-            let name = self.field_name(*field);
-
+            let name = &self.model.fields[*field].name.ident;
             quote!(#name)
         })
+    }
+
+    fn primary_key_filter(&self) -> &Filter {
+        let fields = self
+            .model
+            .primary_key_fields()
+            .map(|field| field.id)
+            .collect::<Vec<_>>();
+
+        self.filters.iter().find(|f| f.fields == fields).unwrap()
     }
 }
 
@@ -432,7 +468,7 @@ impl<'a> BuildModelFilters<'a> {
 
         for index in fields {
             name.push_str(prefix);
-            name.push_str(&self.model.fields[*index].name.ident_name());
+            name.push_str(&self.model.fields[*index].name.ident.to_string());
 
             prefix = "_and_";
         }

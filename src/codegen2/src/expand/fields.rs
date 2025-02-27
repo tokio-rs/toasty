@@ -12,7 +12,7 @@ impl Expand<'_> {
             .enumerate()
             .map(move |(offset, field)| {
                 let toasty = &self.toasty;
-                let ident = &field.const_ident;
+                let const_ident = &field.name.const_ident;
                 let field_offset = util::int(offset);
 
                 match &field.ty {
@@ -21,7 +21,7 @@ impl Expand<'_> {
                         let ty = quote!(());
 
                         quote! {
-                            pub const #ident: #toasty::Path<#ty> =
+                            pub const #const_ident: #toasty::Path<#ty> =
                                 #toasty::Path::from_field_index::<Self>(#field_offset);
                         }
                     } /*

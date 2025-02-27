@@ -11,9 +11,6 @@ pub(crate) struct Field {
     /// Field name
     pub(crate) name: Name,
 
-    /// Field constant identifier
-    pub(crate) const_ident: syn::Ident,
-
     /// Field type
     pub(crate) ty: FieldTy,
 }
@@ -36,7 +33,6 @@ impl Field {
         };
 
         let name = Name::from_ident(ident);
-        let const_ident = syn::Ident::new(&name.const_name(), ident.span());
 
         let mut errs = ErrorSet::new();
         let mut attrs = FieldAttrs { key: false };
@@ -59,7 +55,6 @@ impl Field {
             id,
             attrs,
             name,
-            const_ident,
             ty: FieldTy::Primitive(field.ty.clone()),
         })
     }
