@@ -9,5 +9,5 @@ pub struct PrimaryKey {
     pub query: QueryId,
 
     /// Primary key index
-    pub index: ModelIndexId,
+    pub index: IndexId,
 }

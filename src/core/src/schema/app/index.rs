@@ -1,12 +1,12 @@
 use super::*;
 
 #[derive(Debug, PartialEq)]
-pub struct ModelIndex {
+pub struct Index {
     /// Uniquely identifies the model index within the schema
-    pub id: ModelIndexId,
+    pub id: IndexId,
 
     /// Fields included in the index.
-    pub fields: Vec<ModelIndexField>,
+    pub fields: Vec<IndexField>,
 
     /// When `true`, indexed entries are unique
     pub unique: bool,
@@ -16,13 +16,13 @@ pub struct ModelIndex {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ModelIndexId {
+pub struct IndexId {
     pub model: ModelId,
     pub index: usize,
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
-pub struct ModelIndexField {
+pub struct IndexField {
     /// The field being indexed
     pub field: FieldId,
 
@@ -33,13 +33,13 @@ pub struct ModelIndexField {
     pub scope: IndexScope,
 }
 
-impl ModelIndex {
-    pub fn partition_fields(&self) -> &[ModelIndexField] {
+impl Index {
+    pub fn partition_fields(&self) -> &[IndexField] {
         let i = self.index_of_first_local_field();
         &self.fields[0..i]
     }
 
-    pub fn local_fields(&self) -> &[ModelIndexField] {
+    pub fn local_fields(&self) -> &[IndexField] {
         let i = self.index_of_first_local_field();
         &self.fields[i..]
     }
