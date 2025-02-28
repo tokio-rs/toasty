@@ -9,6 +9,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let id = gen_model_id();
+        let model_schema = self.expand_model_schema();
         let field_consts = self.expand_model_field_consts();
         let query_struct_ident = &self.model.query_struct_ident;
         let create_builder_ident = &self.model.create_builder_struct_ident;
@@ -19,8 +20,8 @@ impl Expand<'_> {
 
         quote! {
             impl #model_ident {
+                #model_schema
                 #field_consts
-
                 #filter_methods
 
                 #vis fn create() -> #create_builder_ident {

@@ -15,5 +15,9 @@ struct User {
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
+    let schema = toasty::schema::from_macro(&[User::schema()]);
+
+    println!("schema={schema:#?}");
+
     Ok(())
 }

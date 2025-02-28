@@ -3,6 +3,7 @@ mod fields;
 mod filters;
 mod model;
 mod query;
+mod schema;
 mod util;
 
 use filters::Filter;

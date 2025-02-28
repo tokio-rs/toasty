@@ -15,6 +15,8 @@ pub use model::Model;
 pub mod relation;
 pub use relation::Relation;
 
+pub mod schema;
+
 pub mod stmt;
 pub use stmt::Statement;
 
@@ -23,10 +25,6 @@ pub use ty::Type;
 
 pub mod driver {
     pub use toasty_core::driver::*;
-}
-
-pub mod schema {
-    pub use toasty_core::schema::*;
 }
 
 pub use toasty_macros::{create, query};
