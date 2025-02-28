@@ -18,15 +18,15 @@ impl Model {
                 primary_key: PrimaryKey {
                     fields: vec![],
                     query: QueryId::placeholder(),
-                    index: ModelIndexId {
+                    index: IndexId {
                         model: id,
                         index: 0,
                     },
                 },
                 // Queries will be populated later
                 queries: vec![],
-                indices: vec![ModelIndex {
-                    id: ModelIndexId {
+                indices: vec![Index {
+                    id: IndexId {
                         model: id,
                         index: 0,
                     },
@@ -112,12 +112,12 @@ impl Builder<'_> {
                 let field = self.model.fields.last_mut().unwrap();
 
                 if attr.is_index() {
-                    self.model.indices.push(ModelIndex {
-                        id: ModelIndexId {
+                    self.model.indices.push(Index {
+                        id: IndexId {
                             model: self.model.id,
                             index: self.model.indices.len(),
                         },
-                        fields: vec![ModelIndexField {
+                        fields: vec![IndexField {
                             field: field_id,
                             op: IndexOp::Eq,
                             scope: IndexScope::Partition,
@@ -130,7 +130,7 @@ impl Builder<'_> {
                 if attr.is_key() {
                     field.primary_key = true;
                     self.model.primary_key.fields.push(field_id);
-                    self.model.indices[0].fields.push(ModelIndexField {
+                    self.model.indices[0].fields.push(IndexField {
                         field: field_id,
                         op: IndexOp::Eq,
                         scope: IndexScope::Partition,
@@ -164,7 +164,7 @@ impl Builder<'_> {
                         field.primary_key = true;
 
                         self.model.primary_key.fields.push(field_id);
-                        self.model.indices[0].fields.push(ModelIndexField {
+                        self.model.indices[0].fields.push(IndexField {
                             field: field_id,
                             op: IndexOp::Eq,
                             scope: IndexScope::Partition,
@@ -178,7 +178,7 @@ impl Builder<'_> {
                         field.primary_key = true;
 
                         self.model.primary_key.fields.push(field_id);
-                        self.model.indices[0].fields.push(ModelIndexField {
+                        self.model.indices[0].fields.push(IndexField {
                             field: field_id,
                             op: IndexOp::Eq,
                             scope: IndexScope::Local,

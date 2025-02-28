@@ -427,7 +427,7 @@ impl<'a> BuildModelFilters<'a> {
         }
     }
 
-    fn find_index(&self, fields: &[app::FieldId]) -> Option<&'a app::ModelIndex> {
+    fn find_index(&self, fields: &[app::FieldId]) -> Option<&'a app::Index> {
         for index in &self.model.indices {
             if index.fields.len() < fields.len() {
                 continue;

@@ -12,8 +12,14 @@ use context::Context;
 mod field;
 pub use field::{Field, FieldId, FieldPrimitive, FieldTy};
 
+mod index;
+pub use index::{Index, IndexField, IndexId};
+
 mod model;
-pub use model::{Model, ModelId, ModelIndex, ModelIndexField, ModelIndexId};
+pub use model::{Model, ModelId};
+
+mod pk;
+pub use pk::PrimaryKey;
 
 mod query;
 pub use query::{Query, QueryId};

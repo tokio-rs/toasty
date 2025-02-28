@@ -1,12 +1,5 @@
 pub(super) mod attr;
-
 mod from_ast;
-
-mod index;
-pub use index::{ModelIndex, ModelIndexField, ModelIndexId};
-
-mod pk;
-pub use pk::PrimaryKey;
 
 use super::*;
 
@@ -30,7 +23,7 @@ pub struct Model {
     /// Prepared queries that query this model
     pub queries: Vec<QueryId>,
 
-    pub indices: Vec<ModelIndex>,
+    pub indices: Vec<Index>,
 
     /// If the schema specifies a table to map the model to, this is set.
     pub table_name: Option<String>,
