@@ -1,16 +1,17 @@
 use super::*;
 
 use crate::Result;
+use indexmap::IndexMap;
 
 #[derive(Debug, Default)]
 pub struct Schema {
-    pub models: Vec<Model>,
+    pub models: IndexMap<ModelId, Model>,
     pub queries: Vec<Query>,
 }
 
 #[derive(Default)]
 struct Builder {
-    models: Vec<Model>,
+    models: IndexMap<ModelId, Model>,
     queries: Vec<Query>,
     cx: Context,
 }
@@ -34,9 +35,13 @@ impl Schema {
             .expect("invalid field ID")
     }
 
+    pub fn models(&self) -> impl Iterator<Item = &Model> {
+        self.models.values()
+    }
+
     /// Get a model by ID
     pub fn model(&self, id: impl Into<ModelId>) -> &Model {
-        self.models.get(id.into().0).expect("invalid model ID")
+        self.models.get(&id.into()).expect("invalid model ID")
     }
 
     pub fn query(&self, id: impl Into<QueryId>) -> &Query {
@@ -58,7 +63,7 @@ impl Builder {
                 ast::SchemaItem::Model(node) => {
                     let model = Model::from_ast(&mut self.cx, node)?;
                     assert_eq!(self.models.len(), model.id.0);
-                    self.models.push(model);
+                    self.models.insert(model.id, model);
                 }
             }
         }
@@ -68,7 +73,9 @@ impl Builder {
     }
 
     pub(crate) fn from_macro(mut self, models: &[Model]) -> Result<Schema> {
-        self.models.extend(models.iter().cloned());
+        for model in models {
+            self.models.insert(model.id, model.clone());
+        }
 
         self.process_models()?;
         self.into_schema()
@@ -196,7 +203,7 @@ impl Builder {
     }
 
     fn build_queries(&mut self) -> Result<()> {
-        for model in &mut self.models {
+        for model in self.models.values_mut() {
             for index in &model.indices {
                 let mut fields = index.partition_fields().to_vec();
                 let mut local_fields = index.local_fields().to_vec();
@@ -315,7 +322,7 @@ impl Builder {
     }
 
     fn find_belongs_to_pair(&self, src: usize, target: ModelId) -> Option<FieldId> {
-        let target = match self.models.get(target.0) {
+        let target = match self.models.get(&target) {
             Some(target) => target,
             None => todo!("lol no"),
         };

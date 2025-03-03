@@ -18,7 +18,7 @@ impl Verify<'_> {
     fn verify(&self) {
         debug_assert!(self.verify_ids_populated());
 
-        for model in &self.schema.app.models {
+        for model in self.schema.app.models() {
             for field in &model.fields {
                 self.verify_relations_are_indexed(field);
             }
@@ -34,7 +34,7 @@ impl Verify<'_> {
     // TODO: move these methods to separate modules?
 
     fn verify_ids_populated(&self) -> bool {
-        for model in &self.schema.app.models {
+        for model in self.schema.app.models() {
             assert_ne!(model.id, ModelId::placeholder());
 
             for field in &model.fields {
@@ -72,7 +72,7 @@ impl Verify<'_> {
     }
 
     fn verify_model_indices_are_scoped_correctly(&self) {
-        for model in &self.schema.app.models {
+        for model in self.schema.app.models() {
             for index in &model.indices {
                 let mut seen_local = false;
 

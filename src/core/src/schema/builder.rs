@@ -29,7 +29,7 @@ impl Schema {
 
         // Find all models that specified a table name, ensure a table is
         // created for that model, and link the model with the table.
-        for model in &app.models {
+        for model in app.models() {
             let table = if let Some(table_name) = &model.table_name {
                 if !builder.table_lookup.contains_key(table_name) {
                     let id = builder.register_table(table_name);
