@@ -25,6 +25,9 @@ pub use into_select::IntoSelect;
 mod path;
 pub use path::Path;
 
+mod primitive;
+pub use primitive::Primitive;
+
 mod select;
 pub use select::Select;
 

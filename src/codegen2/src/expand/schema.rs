@@ -11,10 +11,19 @@ impl Expand<'_> {
         let id = &self.tokenized_id;
         let name = self.expand_model_name();
         let fields = self.expand_model_fields();
+        let primary_key = self.expand_primary_key();
+        let indices = self.expand_model_indices();
 
         quote! {
             #vis fn schema() -> #toasty::schema::app::Model {
-                use #toasty::{schema::{app::*, Name}, Type};
+                use #toasty::{
+                    schema::{
+                        app::*,
+                        db::{IndexOp, IndexScope},
+                        Name
+                    },
+                    Type,
+                };
 
                 let id = #toasty::ModelId(#id);
 
@@ -22,16 +31,9 @@ impl Expand<'_> {
                     id,
                     name: #name,
                     fields: #fields,
-                    primary_key: PrimaryKey {
-                        fields: vec![],
-                        query: QueryId(usize::MAX),
-                        index: IndexId {
-                            model: id,
-                            index: 0,
-                        },
-                    },
+                    primary_key: #primary_key,
                     queries: vec![],
-                    indices: vec![],
+                    indices: #indices,
                     table_name: None,
                 }
             }
@@ -56,26 +58,27 @@ impl Expand<'_> {
         let model_id = &self.tokenized_id;
 
         let fields = self.model.fields.iter().enumerate().map(|(index, field)| {
-            let index = util::int(index);
+            let index_tokenized = util::int(index);
             let name = field.name.ident.to_string();
             let ty = match &field.ty {
                 FieldTy::Primitive(ty) => {
                     quote!(FieldTy::Primitive(FieldPrimitive {
-                        ty: Type::primitive::<#ty>(),
+                        ty: <#ty as #toasty::stmt::Primitive>::TYPE,
                     }))
                 }
             };
+            let primary_key = self.model.primary_key.fields.contains(&index);
 
             quote! {
                 Field {
                     id: FieldId {
                         model: #toasty::ModelId(#model_id),
-                        index: #index,
+                        index: #index_tokenized,
                     },
                     name: #name.to_string(),
                     ty: #ty,
                     nullable: false,
-                    primary_key: false,
+                    primary_key: #primary_key,
                     auto: None,
                 }
             }
@@ -83,6 +86,74 @@ impl Expand<'_> {
 
         quote! {
             vec![ #( #fields ),* ]
+        }
+    }
+
+    fn expand_primary_key(&self) -> TokenStream {
+        let fields = self.model.primary_key.fields.iter().map(|field| {
+            let field_tokenized = util::int(*field);
+
+            quote! {
+                FieldId {
+                    model: id,
+                    index: #field_tokenized,
+                }
+            }
+        });
+
+        quote! {
+            PrimaryKey {
+                fields: vec![ #( #fields ),* ],
+                query: QueryId(usize::MAX),
+                index: IndexId {
+                    model: id,
+                    index: 0,
+                },
+            }
+        }
+    }
+
+    fn expand_model_indices(&self) -> TokenStream {
+        let indices = self
+            .model
+            .indices
+            .iter()
+            .enumerate()
+            .map(|(index, model_index)| {
+                let index_tokenized = util::int(index);
+                let unique = &model_index.unique;
+                let primary_key = &model_index.primary_key;
+
+                let fields = model_index.fields.iter().map(|index_field| {
+                    let field_tokenized = util::int(index_field.field);
+
+                    quote! {
+                        IndexField {
+                            field: FieldId {
+                                model: id,
+                                index: #field_tokenized,
+                            },
+                            op: IndexOp::Eq,
+                            scope: IndexScope::Partition,
+                        }
+                    }
+                });
+
+                quote! {
+                    Index {
+                        id: IndexId {
+                            model: id,
+                            index: #index_tokenized,
+                        },
+                        fields: vec![ #( #fields ),* ],
+                        unique: #unique,
+                        primary_key: #primary_key,
+                    }
+                }
+            });
+
+        quote! {
+            vec![ #( #indices ),* ]
         }
     }
 }
