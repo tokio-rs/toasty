@@ -68,6 +68,11 @@ impl Expand<'_> {
                 }
             };
             let primary_key = self.model.primary_key.fields.contains(&index);
+            let auto = if field.attrs.auto {
+                quote!(Some(Auto::Id))
+            } else {
+                quote!(None)
+            };
 
             quote! {
                 Field {
@@ -79,7 +84,7 @@ impl Expand<'_> {
                     ty: #ty,
                     nullable: false,
                     primary_key: #primary_key,
-                    auto: None,
+                    auto: #auto,
                 }
             }
         });

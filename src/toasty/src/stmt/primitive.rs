@@ -1,3 +1,5 @@
+use crate::{stmt::Id, Model};
+
 use toasty_core::stmt;
 
 pub trait Primitive {
@@ -19,6 +21,14 @@ impl Primitive for String {
 
     fn load(value: stmt::Value) -> Self {
         value.to_string().unwrap()
+    }
+}
+
+impl<T: Model> Primitive for Id<T> {
+    const TYPE: stmt::Type = stmt::Type::Id(T::ID);
+
+    fn load(value: stmt::Value) -> Self {
+        Id::from_untyped(value.to_id().unwrap())
     }
 }
 

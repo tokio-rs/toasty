@@ -2,8 +2,8 @@
 #[toasty_macros::model]
 struct User {
     #[key]
-    // #[auto]
-    id: i64,
+    #[auto]
+    id: toasty::stmt::Id<User>,
 
     name: String,
 }
@@ -25,7 +25,7 @@ async fn main() -> toasty::Result<()> {
     // For now, reset!s
     db.reset_db().await?;
 
-    let user = User::create().id(1).name("John Doe").exec(&db).await?;
+    let user = User::create().name("John Doe").exec(&db).await?;
 
     println!("{user:#?}");
 
