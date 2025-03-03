@@ -6,12 +6,13 @@ use quote::quote;
 
 impl Expand<'_> {
     pub(super) fn expand_model_field_consts(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
         self.model
             .fields
             .iter()
             .enumerate()
             .map(move |(offset, field)| {
-                let toasty = &self.toasty;
                 let const_ident = &field.name.const_ident;
                 let field_offset = util::int(offset);
 

@@ -1,4 +1,5 @@
-use super::Expand;
+use super::{util, Expand};
+use crate::schema::FieldTy;
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -9,9 +10,9 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let create_builder_ident = &self.model.create_builder_struct_ident;
+        let create_methods = self.expand_create_methods();
         /*
         let create_struct_name = self.self_create_struct_name();
-        let create_methods = self.gen_create_methods();
         */
 
         quote! {
@@ -21,7 +22,7 @@ impl Expand<'_> {
             }
 
             impl #create_builder_ident {
-                // #create_methods
+                #create_methods
 
                 #vis async fn exec(self, db: &#toasty::Db) -> #toasty::Result<#model_ident> {
                     db.exec_insert_one(self.stmt).await
@@ -66,5 +67,65 @@ impl Expand<'_> {
                 }
             }
         }
+    }
+
+    fn expand_create_methods(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        self.model
+            .fields
+            .iter()
+            .enumerate()
+            .map(move |(index, field)| {
+                let name = &field.name.ident;
+                let index_tokenized = util::int(index);
+
+                match &field.ty {
+                    /*
+                    FieldTy::HasMany(rel) => {
+                        let singular = self.singular_name(field);
+                        let target_struct_name = self.model_struct_path(rel.target, 1);
+
+                        quote! {
+                            pub fn #singular(mut self, #singular: impl IntoExpr<#target_struct_name>) -> Self {
+                                self.stmt.insert(#index, #singular.into_expr());
+                                self
+                            }
+                        }
+                    }
+                    FieldTy::HasOne(rel) => {
+                        let target_struct_name = self.model_struct_path(rel.target, 1);
+
+                        quote! {
+                            pub fn #name(mut self, #name: impl IntoExpr<#target_struct_name>) -> Self {
+                                self.stmt.set(#index, #name.into_expr());
+                                self
+                            }
+                        }
+                    }
+                    FieldTy::BelongsTo(rel) => {
+                        let target_struct_name = self.model_struct_path(rel.target, 1);
+
+                        quote! {
+                            pub fn #name(mut self, #name: impl IntoExpr<#target_struct_name>) -> Self {
+                                self.stmt.set(#index, #name.into_expr());
+                                self
+                            }
+                        }
+                    }
+                    */
+                    FieldTy::Primitive(ty) => {
+                        let ty = quote!(impl #toasty::IntoExpr<#ty>);
+
+                        quote! {
+                            pub fn #name(mut self, #name: #ty) -> Self {
+                                self.stmt.set(#index_tokenized, #name.into_expr());
+                                self
+                            }
+                        }
+                    }
+                }
+            })
+            .collect()
     }
 }
