@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct BelongsTo {
     /// Model that owns the relation
     pub target: ModelId,
@@ -17,12 +17,12 @@ pub struct BelongsTo {
     pub foreign_key: ForeignKey,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ForeignKey {
     pub fields: Vec<ForeignKeyField>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ForeignKeyField {
     /// The field on the source model that is acting as the foreign key
     pub source: FieldId,

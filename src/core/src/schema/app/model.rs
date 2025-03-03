@@ -5,7 +5,7 @@ use super::*;
 
 use std::fmt;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Model {
     /// Uniquely identifies the model within the schema
     pub id: ModelId,

@@ -21,6 +21,11 @@ impl Schema {
         builder.from_ast(ast)
     }
 
+    pub fn from_macro(models: &[Model]) -> Result<Schema> {
+        let builder = Builder::default();
+        builder.from_macro(models)
+    }
+
     /// Get a field by ID
     pub fn field(&self, id: FieldId) -> &Field {
         self.model(id.model)
@@ -58,6 +63,25 @@ impl Builder {
             }
         }
 
+        self.process_models()?;
+        self.into_schema()
+    }
+
+    pub(crate) fn from_macro(mut self, models: &[Model]) -> Result<Schema> {
+        self.models.extend(models.iter().cloned());
+
+        self.process_models()?;
+        self.into_schema()
+    }
+
+    fn into_schema(self) -> Result<Schema> {
+        Ok(Schema {
+            models: self.models,
+            queries: self.queries,
+        })
+    }
+
+    fn process_models(&mut self) -> Result<()> {
         // All models have been discovered and initialized at some level, now do
         // the relation linking.
         self.link_relations()?;
@@ -68,10 +92,7 @@ impl Builder {
         // Build queries on relationships
         self.build_relation_queries()?;
 
-        Ok(Schema {
-            models: self.models,
-            queries: self.queries,
-        })
+        Ok(())
     }
 
     /// Go through all relations and link them to their pairs
