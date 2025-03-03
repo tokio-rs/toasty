@@ -1,6 +1,6 @@
 use super::*;
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 /// Combination of fields for which filter a method should be generated.
 pub(super) struct Filter {
@@ -16,14 +16,14 @@ pub(super) struct Filter {
 
 struct BuildModelFilters<'a> {
     model: &'a app::Model,
-    filters: HashMap<Vec<app::FieldId>, Filter>,
+    filters: IndexMap<Vec<app::FieldId>, Filter>,
 }
 
 impl Filter {
     pub(super) fn build_model_filters(model: &app::Model) -> Vec<Filter> {
         BuildModelFilters {
             model,
-            filters: HashMap::new(),
+            filters: IndexMap::new(),
         }
         .build()
     }
