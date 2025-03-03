@@ -20,9 +20,6 @@ pub mod schema;
 pub mod stmt;
 pub use stmt::Statement;
 
-mod ty;
-pub use ty::Type;
-
 pub mod driver {
     pub use toasty_core::driver::*;
 }

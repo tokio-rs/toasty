@@ -19,6 +19,15 @@ impl Todo {
             super::user::User::filter(super::user::User::ID.eq(&self.user_id)).into_select(),
         )
     }
+    pub async fn get_by_user_id(
+        db: &Db,
+        user_id: impl IntoExpr<Id<super::user::User>>,
+    ) -> Result<Todo> {
+        Self::filter_by_user_id(user_id).get(db).await
+    }
+    pub fn filter_by_user_id(user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
+        Query::default().filter_by_user_id(user_id)
+    }
     pub async fn get_by_user_id_and_id(
         db: &Db,
         user_id: impl IntoExpr<Id<super::user::User>>,
@@ -36,15 +45,6 @@ impl Todo {
         keys: impl IntoExpr<[(Id<super::user::User>, Id<Todo>)]>,
     ) -> Query {
         Query::default().filter_by_user_id_and_id_batch(keys)
-    }
-    pub async fn get_by_user_id(
-        db: &Db,
-        user_id: impl IntoExpr<Id<super::user::User>>,
-    ) -> Result<Todo> {
-        Self::filter_by_user_id(user_id).get(db).await
-    }
-    pub fn filter_by_user_id(user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
-        Query::default().filter_by_user_id(user_id)
     }
     pub fn create() -> builders::CreateTodo {
         builders::CreateTodo::default()
@@ -135,6 +135,16 @@ impl Query {
     pub const fn from_stmt(stmt: stmt::Select<Todo>) -> Query {
         Query { stmt }
     }
+    pub async fn get_by_user_id(
+        self,
+        db: &Db,
+        user_id: impl IntoExpr<Id<super::user::User>>,
+    ) -> Result<Todo> {
+        self.filter_by_user_id(user_id).get(db).await
+    }
+    pub fn filter_by_user_id(self, user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
+        self.filter(Todo::USER_ID.eq(user_id))
+    }
     pub async fn get_by_user_id_and_id(
         self,
         db: &Db,
@@ -158,16 +168,6 @@ impl Query {
         keys: impl IntoExpr<[(Id<super::user::User>, Id<Todo>)]>,
     ) -> Query {
         self.filter(stmt::Expr::in_list((Todo::USER_ID, Todo::ID), keys))
-    }
-    pub async fn get_by_user_id(
-        self,
-        db: &Db,
-        user_id: impl IntoExpr<Id<super::user::User>>,
-    ) -> Result<Todo> {
-        self.filter_by_user_id(user_id).get(db).await
-    }
-    pub fn filter_by_user_id(self, user_id: impl IntoExpr<Id<super::user::User>>) -> Query {
-        self.filter(Todo::USER_ID.eq(user_id))
     }
     pub async fn all(self, db: &Db) -> Result<Cursor<Todo>> {
         db.all(self.stmt).await
@@ -420,6 +420,19 @@ pub mod relations {
         pub fn from_stmt(stmt: stmt::Association<[Todo]>) -> Many {
             Many { stmt }
         }
+        pub async fn get_by_user_id(
+            self,
+            db: &Db,
+            user_id: impl IntoExpr<Id<super::super::user::User>>,
+        ) -> Result<Todo> {
+            self.filter_by_user_id(user_id).get(db).await
+        }
+        pub fn filter_by_user_id(
+            self,
+            user_id: impl IntoExpr<Id<super::super::user::User>>,
+        ) -> Query {
+            Query::from_stmt(self.into_select()).filter(Todo::USER_ID.eq(user_id))
+        }
         pub async fn get_by_user_id_and_id(
             self,
             db: &Db,
@@ -449,19 +462,6 @@ pub mod relations {
         }
         pub fn filter_by_id(self, id: impl IntoExpr<Id<Todo>>) -> Query {
             Query::from_stmt(self.into_select()).filter(Todo::ID.eq(id))
-        }
-        pub async fn get_by_user_id(
-            self,
-            db: &Db,
-            user_id: impl IntoExpr<Id<super::super::user::User>>,
-        ) -> Result<Todo> {
-            self.filter_by_user_id(user_id).get(db).await
-        }
-        pub fn filter_by_user_id(
-            self,
-            user_id: impl IntoExpr<Id<super::super::user::User>>,
-        ) -> Query {
-            Query::from_stmt(self.into_select()).filter(Todo::USER_ID.eq(user_id))
         }
         #[doc = r" Iterate all entries in the relation"]
         pub async fn all(self, db: &Db) -> Result<Cursor<Todo>> {
