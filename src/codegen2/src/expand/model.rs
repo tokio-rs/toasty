@@ -1,4 +1,5 @@
-use super::Expand;
+use super::{util, Expand};
+use crate::schema::FieldTy;
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -11,6 +12,7 @@ impl Expand<'_> {
         let id = &self.tokenized_id;
         let model_schema = self.expand_model_schema();
         let field_consts = self.expand_model_field_consts();
+        let struct_load_fields = self.expand_struct_load_fields();
         let query_struct_ident = &self.model.query_struct_ident;
         let create_builder_ident = &self.model.create_builder_struct_ident;
         let filter_methods = self.expand_model_filter_methods();
@@ -43,8 +45,10 @@ impl Expand<'_> {
             impl #toasty::Model for #model_ident {
                 const ID: #toasty::ModelId = #toasty::ModelId(#id);
 
-                fn load(row: #toasty::ValueRecord) -> #toasty::Result<Self> {
-                    todo!()
+                fn load(mut record: #toasty::ValueRecord) -> #toasty::Result<Self> {
+                    Ok(Self {
+                        #struct_load_fields
+                    })
                 }
             }
 
@@ -86,5 +90,34 @@ impl Expand<'_> {
                 .#filter_method_ident( #( #amp self.#arg_idents ),* )
                 .stmt
         }
+    }
+
+    fn expand_struct_load_fields(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        self.model
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| {
+                let index_tokenized = util::int(index);
+                let name = &field.name.ident;
+
+                match &field.ty {
+                    /*
+                    FieldTy::HasMany(_) => {
+                        quote!(#name: HasMany::load(record[#index].take())?,)
+                    }
+                    FieldTy::HasOne(_) => quote!(),
+                    FieldTy::BelongsTo(_) => {
+                        quote!(#name: BelongsTo::load(record[#index].take())?,)
+                    }
+                    */
+                    FieldTy::Primitive(ty) => {
+                        quote!(#name: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take()),)
+                    }
+                }
+            })
+            .collect()
     }
 }
