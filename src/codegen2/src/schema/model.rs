@@ -2,6 +2,9 @@ use super::{ErrorSet, Field, Index, IndexField, Name, PrimaryKey};
 
 #[derive(Debug)]
 pub(crate) struct Model {
+    /// Generated model identifier
+    pub(crate) id: usize,
+
     /// Model name
     pub(crate) name: Name,
 
@@ -88,7 +91,10 @@ impl Model {
             primary_key: true,
         });
 
+        let id = gen_model_id();
+
         Ok(Model {
+            id,
             vis: ast.vis.clone(),
             name: Name::from_ident(&ast.ident),
             ident: ast.ident.clone(),
@@ -114,4 +120,10 @@ impl Model {
 
 fn struct_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
     syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
+}
+
+fn gen_model_id() -> usize {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNT: AtomicUsize = AtomicUsize::new(0);
+    COUNT.fetch_add(1, Ordering::Relaxed)
 }

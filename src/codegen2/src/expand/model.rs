@@ -8,7 +8,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let id = gen_model_id();
+        let id = &self.tokenized_id;
         let model_schema = self.expand_model_schema();
         let field_consts = self.expand_model_field_consts();
         let query_struct_ident = &self.model.query_struct_ident;
@@ -87,10 +87,4 @@ impl Expand<'_> {
                 .stmt
         }
     }
-}
-
-fn gen_model_id() -> usize {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static COUNT: AtomicUsize = AtomicUsize::new(0);
-    COUNT.fetch_add(1, Ordering::Relaxed)
 }
