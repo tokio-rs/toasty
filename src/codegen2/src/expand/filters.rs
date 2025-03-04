@@ -453,7 +453,7 @@ impl<'a> BuildModelFilters<'a> {
     fn method_ident(&self, fields: &[usize], prefix: &str, suffix: Option<&str>) -> syn::Ident {
         let mut name = prefix.to_string();
 
-        let mut prefix = "_";
+        let mut prefix = "_by_";
 
         for index in fields {
             name.push_str(prefix);

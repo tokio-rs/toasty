@@ -20,6 +20,9 @@ pub(crate) struct FieldAttrs {
     /// True if the field is annotated with `#[key]`
     pub(crate) key: bool,
 
+    /// True if the field is annotated with `#[unique]`
+    pub(crate) unique: bool,
+
     /// True if toasty should automatically set the value
     pub(crate) auto: bool,
 }
@@ -40,6 +43,7 @@ impl Field {
         let mut errs = ErrorSet::new();
         let mut attrs = FieldAttrs {
             key: false,
+            unique: false,
             auto: false,
         };
 
@@ -58,6 +62,15 @@ impl Field {
                     errs.push(syn::Error::new_spanned(attr, "duplicate #[auto] attribute"));
                 } else {
                     attrs.auto = true;
+                }
+            } else if attr.path().is_ident("unique") {
+                if attrs.unique {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[unique] attribute",
+                    ));
+                } else {
+                    attrs.unique = true;
                 }
             } else {
                 i += 1;

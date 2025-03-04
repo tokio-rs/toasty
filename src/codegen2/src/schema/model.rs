@@ -91,6 +91,20 @@ impl Model {
             primary_key: true,
         });
 
+        // Create indices for all fields annotated with unique
+        for (index, field) in fields.iter().enumerate() {
+            if field.attrs.unique {
+                let id = indices.len();
+
+                indices.push(Index {
+                    id,
+                    fields: vec![IndexField { field: index }],
+                    unique: true,
+                    primary_key: false,
+                });
+            }
+        }
+
         let id = gen_model_id();
 
         Ok(Model {
