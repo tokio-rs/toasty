@@ -17,9 +17,12 @@ impl Expand<'_> {
         let query_struct_ident = &self.model.query_struct_ident;
         let create_builder_ident = &self.model.create_builder_struct_ident;
         let filter_methods = self.expand_model_filter_methods();
+        let field_name_to_id = self.expand_field_name_to_id();
 
         let into_select_body_ref = self.expand_model_into_select_body(true);
         let into_select_body_value = self.expand_model_into_select_body(false);
+        let into_expr_body_ref = self.expand_model_into_expr_body(true);
+        let into_expr_body_val = self.expand_model_into_expr_body(false);
 
         quote! {
             impl #model_ident {
@@ -62,6 +65,28 @@ impl Expand<'_> {
                 type One = One;
                 type OneField = OneField;
                 type OptionOne = OptionOne;
+
+                #field_name_to_id
+            }
+
+            impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
+                fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
+                    #into_expr_body_val
+                }
+
+                fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
+                    #into_expr_body_ref
+                }
+            }
+
+            impl #toasty::stmt::IntoExpr<[#model_ident]> for #model_ident {
+                fn into_expr(self) -> #toasty::stmt::Expr<[#model_ident]> {
+                    #toasty::stmt::Expr::list([self])
+                }
+
+                fn by_ref(&self) -> #toasty::stmt::Expr<[#model_ident]> {
+                    #toasty::stmt::Expr::list([self])
+                }
             }
 
             impl #toasty::stmt::IntoSelect for &#model_ident {

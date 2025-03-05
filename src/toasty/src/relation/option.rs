@@ -18,4 +18,8 @@ impl<T: Relation2> Relation2 for Option<T> {
     type One = T::OptionOne;
     type OneField = T::OneField;
     type OptionOne = T::OptionOne;
+
+    fn field_name_to_id(name: &str) -> FieldId {
+        T::field_name_to_id(name)
+    }
 }

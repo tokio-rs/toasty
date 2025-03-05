@@ -98,4 +98,31 @@ impl Expand<'_> {
             };
         )
     }
+
+    pub(super) fn expand_field_name_to_id(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let fields = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .map(move |(offset, field)| {
+                let field_name = field.name.ident.to_string();
+                let field_offset = util::int(offset);
+
+                quote!( #field_name => FieldId { model: Self::ID, index: #field_offset }, )
+            });
+
+        quote! {
+            fn field_name_to_id(name: &str) -> #toasty::FieldId {
+                use #toasty::FieldId;
+
+                match name {
+                    #( #fields )*
+                    _ => todo!("field_name_to_id: {}", name),
+                }
+            }
+        }
+    }
 }

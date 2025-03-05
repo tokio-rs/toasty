@@ -3,7 +3,7 @@ pub use belongs_to::BelongsTo;
 
 mod has_many;
 pub use has_many::HasMany;
-use toasty_core::schema::app::ModelId;
+use toasty_core::schema::app::{FieldId, ModelId};
 
 pub mod option;
 
@@ -44,4 +44,6 @@ pub trait Relation2 {
 
     /// Option fields
     type OptionOne;
+
+    fn field_name_to_id(name: &str) -> FieldId;
 }

@@ -47,7 +47,11 @@ async fn main() -> toasty::Result<()> {
     let user = User::get_by_email(&db, "john@example.com").await.unwrap();
     println!("{user:#?}");
 
-    let todo = Todo::create().name("Buy milk").exec(&db).await?;
+    let todo = Todo::create()
+        .user(&user)
+        .name("Buy milk")
+        .exec(&db)
+        .await?;
     println!("{todo:#?}");
 
     Ok(())

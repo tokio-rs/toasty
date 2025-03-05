@@ -69,13 +69,28 @@ impl Expand<'_> {
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
 
+                    let fk_fields = rel.foreign_key.iter().map(|fk_field| {
+                        let source = util::int(fk_field.source);
+                        let target = fk_field.target.to_string();
+
+                        quote! {
+                            ForeignKeyField {
+                                source: FieldId {
+                                    model: #toasty::ModelId(#model_id),
+                                    index: #source,
+                                },
+                                target: <#ty as #toasty::Relation>::field_name_to_id(#target),
+                            }
+                        }
+                    });
+
                     quote!(FieldTy::BelongsTo(BelongsTo {
                         target:  <#ty as #toasty::Relation>::ID,
                         expr_ty: Type::Model(<#ty as #toasty::Relation>::ID),
                         // The pair is populated at runtime.
                         pair: None,
                         foreign_key: ForeignKey {
-                            fields: vec![],
+                            fields: vec![ #( #fk_fields ),* ],
                         },
                     }))
                 }

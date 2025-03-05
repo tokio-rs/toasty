@@ -11,6 +11,8 @@ pub struct Schema {
 
 #[derive(Default)]
 struct Builder {
+    /// True when building from the proc macro
+    is_macro: bool,
     models: IndexMap<ModelId, Model>,
     queries: Vec<Query>,
     cx: Context,
@@ -73,6 +75,8 @@ impl Builder {
     }
 
     pub(crate) fn from_macro(mut self, models: &[Model]) -> Result<Schema> {
+        self.is_macro = true;
+
         for model in models {
             self.models.insert(model.id, model.clone());
         }
@@ -145,6 +149,10 @@ impl Builder {
                         self.models[src].fields[index].ty.expect_has_one_mut().pair = pair;
                     }
                     FieldTy::BelongsTo(belongs_to) => {
+                        if self.is_macro {
+                            assert!(!belongs_to.foreign_key.is_placeholder());
+                            continue;
+                        }
                         assert!(belongs_to.foreign_key.is_placeholder());
 
                         // Compute foreign key fields.
