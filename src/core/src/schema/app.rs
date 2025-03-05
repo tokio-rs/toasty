@@ -12,6 +12,9 @@ use context::Context;
 mod field;
 pub use field::{Field, FieldId, FieldPrimitive, FieldTy};
 
+mod fk;
+pub use fk::{ForeignKey, ForeignKeyField};
+
 mod index;
 pub use index::{Index, IndexField, IndexId};
 
