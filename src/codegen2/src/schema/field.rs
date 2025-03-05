@@ -1,4 +1,6 @@
-use super::{ErrorSet, Name};
+use syn::parse_quote;
+
+use super::{BelongsTo, ErrorSet, Name};
 
 #[derive(Debug)]
 pub(crate) struct Field {
@@ -25,15 +27,23 @@ pub(crate) struct FieldAttrs {
 
     /// True if toasty should automatically set the value
     pub(crate) auto: bool,
+
+    /// True if the field is indexed
+    pub(crate) index: bool,
 }
 
 #[derive(Debug)]
 pub(crate) enum FieldTy {
     Primitive(syn::Type),
+    BelongsTo(BelongsTo),
 }
 
 impl Field {
-    pub(super) fn from_ast(id: usize, field: &mut syn::Field) -> syn::Result<Field> {
+    pub(super) fn from_ast(
+        field: &mut syn::Field,
+        id: usize,
+        names: &[syn::Ident],
+    ) -> syn::Result<Field> {
         let Some(ident) = &field.ident else {
             return Err(syn::Error::new_spanned(field, "model fields must be named"));
         };
@@ -45,7 +55,9 @@ impl Field {
             key: false,
             unique: false,
             auto: false,
+            index: false,
         };
+        let mut belongs_to = None;
 
         let mut i = 0;
         while i < field.attrs.len() {
@@ -72,6 +84,17 @@ impl Field {
                 } else {
                     attrs.unique = true;
                 }
+            } else if attr.path().is_ident("index") {
+                if attrs.index {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[index] attribute",
+                    ));
+                } else {
+                    attrs.index = true;
+                }
+            } else if attr.path().is_ident("relation") {
+                belongs_to = Some(BelongsTo::from_ast(attr, &field.ty, names)?);
             } else {
                 i += 1;
                 continue;
@@ -84,11 +107,20 @@ impl Field {
             return Err(err);
         }
 
+        if belongs_to.is_some() {
+            let ty = &field.ty;
+            field.ty = parse_quote!(toasty::codegen_support::BelongsTo<#ty>);
+        }
+
         Ok(Field {
             id,
             attrs,
             name,
-            ty: FieldTy::Primitive(field.ty.clone()),
+            ty: if let Some(belongs_to) = belongs_to {
+                FieldTy::BelongsTo(belongs_to)
+            } else {
+                FieldTy::Primitive(field.ty.clone())
+            },
         })
     }
 }

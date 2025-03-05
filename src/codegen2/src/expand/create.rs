@@ -103,17 +103,18 @@ impl Expand<'_> {
                             }
                         }
                     }
+                    */
                     FieldTy::BelongsTo(rel) => {
-                        let target_struct_name = self.model_struct_path(rel.target, 1);
+                        let ty = &rel.ty;
+                        let ty = quote!(impl #toasty::IntoExpr<#ty>);
 
                         quote! {
-                            pub fn #name(mut self, #name: impl IntoExpr<#target_struct_name>) -> Self {
-                                self.stmt.set(#index, #name.into_expr());
+                            pub fn #name(mut self, #name: #ty) -> Self {
+                                self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }
                         }
                     }
-                    */
                     FieldTy::Primitive(ty) => {
                         let ty = quote!(impl #toasty::IntoExpr<#ty>);
 

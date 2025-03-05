@@ -66,6 +66,16 @@ impl Expand<'_> {
                         ty: <#ty as #toasty::stmt::Primitive>::TYPE,
                     }))
                 }
+                FieldTy::BelongsTo(rel) => {
+                    let ty = &rel.ty;
+
+                    quote!(FieldTy::BelongsTo(BelongsTo {
+                        target:  <#ty as #toasty::Relation>::ID,
+                        expr_ty: todo!(),
+                        pair: todo!(),
+                        foreign_key: todo!(),
+                    }))
+                }
             };
             let primary_key = self.model.primary_key.fields.contains(&index);
             let auto = if field.attrs.auto {

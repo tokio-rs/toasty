@@ -3,6 +3,7 @@ mod fields;
 mod filters;
 mod model;
 mod query;
+mod relation;
 mod schema;
 mod util;
 
@@ -30,19 +31,23 @@ struct Expand<'a> {
 impl Expand<'_> {
     fn expand(&self) -> TokenStream {
         let model_impls = self.expand_model_impls();
+        let model_field_struct = self.expand_model_field_struct();
         let query_struct = self.expand_query_struct();
         let create_builder = self.expand_create_builder();
+        let relation_structs = self.expand_relation_structs();
 
         wrap_in_const(quote! {
             #model_impls
+            #model_field_struct
             #query_struct
             #create_builder
+            #relation_structs
         })
     }
 }
 
 pub(super) fn model(model: &Model) -> TokenStream {
-    let toasty = quote!(_toasty::codegen_support);
+    let toasty = quote!(_toasty::codegen_support2);
     let tokenized_id = util::int(model.id);
 
     Expand {

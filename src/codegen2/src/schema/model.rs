@@ -23,6 +23,9 @@ pub(crate) struct Model {
     /// Tracks fields in the primary key
     pub(crate) primary_key: PrimaryKey,
 
+    /// The field struct identifier
+    pub(crate) field_struct_ident: syn::Ident,
+
     /// The query struct identifier
     pub(crate) query_struct_ident: syn::Ident,
 
@@ -42,12 +45,23 @@ impl Model {
             ));
         };
 
+        // First, map field names to identifiers
+        let mut names = vec![];
+
+        for field in node.named.iter() {
+            if let Some(ident) = &field.ident {
+                names.push(ident.clone());
+            } else {
+                return Err(syn::Error::new_spanned(field, "model fields must be named"));
+            }
+        }
+
         let mut fields = vec![];
         let mut indices = vec![];
         let mut errs = ErrorSet::new();
 
         for (index, node) in node.named.iter_mut().enumerate() {
-            match Field::from_ast(index, node) {
+            match Field::from_ast(node, index, &names) {
                 Ok(field) => fields.push(field),
                 Err(err) => errs.push(err),
             }
@@ -118,6 +132,7 @@ impl Model {
                 fields: primary_key_fields,
                 index: 0,
             },
+            field_struct_ident: struct_ident("Fields", ast),
             query_struct_ident: struct_ident("Query", ast),
             create_builder_struct_ident: struct_ident("Create", ast),
             update_builder_struct_ident: struct_ident("Update", ast),

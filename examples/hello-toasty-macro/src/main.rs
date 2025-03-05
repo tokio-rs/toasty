@@ -18,6 +18,12 @@ struct Todo {
     #[auto]
     id: toasty::stmt::Id<Todo>,
     name: String,
+
+    #[index]
+    user_id: toasty::stmt::Id<User>,
+
+    #[relation(key = user_id, references = id)]
+    user: User,
 }
 
 #[tokio::main]

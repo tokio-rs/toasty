@@ -1,8 +1,14 @@
+mod belongs_to;
+pub(crate) use belongs_to::BelongsTo;
+
 mod error;
 pub(crate) use error::ErrorSet;
 
 mod field;
 pub(crate) use field::{Field, FieldTy};
+
+mod fk;
+pub(crate) use fk::ForeignKeyField;
 
 mod index;
 pub(crate) use index::{Index, IndexField};

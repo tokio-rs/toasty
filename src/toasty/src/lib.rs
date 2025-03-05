@@ -44,3 +44,21 @@ pub mod codegen_support {
         stmt::{Type, Value, ValueRecord, ValueStream},
     };
 }
+
+#[doc(hidden)]
+pub mod codegen_support2 {
+    pub use crate::{
+        batch::CreateMany,
+        cursor::{Cursor, FromCursor},
+        relation::Relation2 as Relation,
+        relation::{BelongsTo, HasMany},
+        stmt::{self, Id, IntoExpr, IntoInsert, IntoSelect, Path},
+        Db, Error, Model, Result, Statement,
+    };
+    pub use std::{convert::Into, default::Default, option::Option};
+    pub use toasty_core::{
+        driver,
+        schema::{self, app::ModelId},
+        stmt::{Type, Value, ValueRecord, ValueStream},
+    };
+}

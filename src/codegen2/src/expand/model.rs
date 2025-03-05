@@ -11,7 +11,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let id = &self.tokenized_id;
         let model_schema = self.expand_model_schema();
-        let field_consts = self.expand_model_field_consts();
+        let model_fields = self.expand_model_field_struct_init();
         let struct_load_fields = self.expand_struct_load_fields();
         let query_struct_ident = &self.model.query_struct_ident;
         let create_builder_ident = &self.model.create_builder_struct_ident;
@@ -23,7 +23,7 @@ impl Expand<'_> {
         quote! {
             impl #model_ident {
                 #model_schema
-                #field_consts
+                #model_fields
                 #filter_methods
 
                 #vis fn create() -> #create_builder_ident {
@@ -50,6 +50,16 @@ impl Expand<'_> {
                         #struct_load_fields
                     })
                 }
+            }
+
+            impl #toasty::Relation for #model_ident {
+                const ID: #toasty::ModelId = #toasty::ModelId(#id);
+                type Query = #query_struct_ident;
+                type Many = Many;
+                type ManyField = ManyField;
+                type One = One;
+                type OneField = OneField;
+                type OptionOne = OptionOne;
             }
 
             impl #toasty::stmt::IntoSelect for &#model_ident {
@@ -109,10 +119,10 @@ impl Expand<'_> {
                         quote!(#name: HasMany::load(record[#index].take())?,)
                     }
                     FieldTy::HasOne(_) => quote!(),
-                    FieldTy::BelongsTo(_) => {
-                        quote!(#name: BelongsTo::load(record[#index].take())?,)
-                    }
                     */
+                    FieldTy::BelongsTo(_) => {
+                        quote!(#name: #toasty::BelongsTo::load(record[#index].take())?,)
+                    }
                     FieldTy::Primitive(ty) => {
                         quote!(#name: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take()),)
                     }
