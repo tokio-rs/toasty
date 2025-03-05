@@ -71,10 +71,12 @@ impl Expand<'_> {
 
                     quote!(FieldTy::BelongsTo(BelongsTo {
                         target:  <#ty as #toasty::Relation>::ID,
-                        expr_ty: todo!(),
+                        expr_ty: Type::Model(<#ty as #toasty::Relation>::ID),
                         // The pair is populated at runtime.
                         pair: None,
-                        foreign_key: todo!(),
+                        foreign_key: ForeignKey {
+                            fields: vec![],
+                        },
                     }))
                 }
             };
