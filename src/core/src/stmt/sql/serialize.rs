@@ -16,6 +16,8 @@ pub trait Params {
 /// Serialize a statement to a SQL string
 pub struct Serializer<'a> {
     schema: &'a db::Schema,
+    quoted_table_names: bool,
+    quoted_column_names: bool,
 }
 
 struct Formatter<'a, T> {
@@ -27,6 +29,12 @@ struct Formatter<'a, T> {
 
     /// Query paramaters (referenced by placeholders) are stored here.
     params: &'a mut T,
+
+    /// Config option for quoting table names
+    quoted_table_names: bool,
+
+    /// Config option for quoting column names
+    quoted_column_names: bool,
 }
 
 impl Params for Vec<stmt::Value> {
@@ -88,7 +96,19 @@ impl AsRef<str> for SerializeResult {
 
 impl<'a> Serializer<'a> {
     pub fn new(schema: &'a db::Schema) -> Serializer<'a> {
-        Serializer { schema }
+        Serializer {
+            schema,
+            quoted_table_names: true,
+            quoted_column_names: true,
+        }
+    }
+    pub fn with_quoted_table_names(mut self, enabled: bool) -> Self {
+        self.quoted_table_names = enabled;
+        self
+    }
+    pub fn with_quoted_column_names(mut self, enabled: bool) -> Self {
+        self.quoted_column_names = enabled;
+        self
     }
 
     pub fn serialize_stmt(
@@ -102,6 +122,8 @@ impl<'a> Serializer<'a> {
             dst: &mut ret,
             schema: self.schema,
             params,
+            quoted_table_names: self.quoted_table_names,
+            quoted_column_names: self.quoted_column_names,
         };
 
         fmt.statement(stmt).unwrap();
@@ -119,6 +141,8 @@ impl<'a> Serializer<'a> {
             dst: &mut ret,
             schema: self.schema,
             params,
+            quoted_table_names: self.quoted_table_names,
+            quoted_column_names: self.quoted_column_names,
         };
 
         fmt.sql_statement(stmt).unwrap();
@@ -167,7 +191,10 @@ impl<T: Params> Formatter<'_, T> {
         write!(self.dst, " ON ")?;
 
         let table = self.schema.table(stmt.on);
-        self.ident_str(&table.name)?;
+
+        if self.quoted_table_names {
+            self.ident_str(&table.name)?;
+        }
 
         write!(self.dst, " (")?;
 
@@ -228,7 +255,9 @@ impl<T: Params> Formatter<'_, T> {
     }
 
     fn column_def(&mut self, stmt: &ColumnDef) -> fmt::Result {
-        self.ident(&stmt.name)?;
+        if self.quoted_column_names {
+            self.ident(&stmt.name)?;
+        }
         write!(self.dst, " ")?;
         self.ty(&stmt.ty)?;
         Ok(())
@@ -249,7 +278,12 @@ impl<T: Params> Formatter<'_, T> {
 
         for table_with_join in delete.from.as_table_with_joins() {
             let table = self.schema.table(table_with_join.table);
-            write!(self.dst, "\"{}\"", table.name)?;
+
+            if self.quoted_table_names {
+                write!(self.dst, "\"{}\"", table.name)?;
+            } else {
+                write!(self.dst, "{}", table.name)?;
+            }
         }
 
         write!(self.dst, " WHERE ")?;
@@ -264,15 +298,27 @@ impl<T: Params> Formatter<'_, T> {
             todo!()
         };
 
-        write!(
-            self.dst,
-            "INSERT INTO \"{}\" (",
-            self.schema.table(insert_target).name
-        )?;
+        if self.quoted_table_names {
+            write!(
+                self.dst,
+                "INSERT INTO \"{}\" (",
+                self.schema.table(insert_target).name
+            )?;
+        } else {
+            write!(
+                self.dst,
+                "INSERT INTO {} (",
+                self.schema.table(insert_target).name
+            )?;
+        }
 
         let mut s = "";
         for column_id in &insert_target.columns {
-            write!(self.dst, "{}\"{}\"", s, self.schema.column(*column_id).name)?;
+            if self.quoted_column_names {
+                write!(self.dst, "{}\"{}\"", s, self.schema.column(*column_id).name)?;
+            } else {
+                write!(self.dst, "{}{}", s, self.schema.column(*column_id).name)?;
+            }
             s = ", ";
         }
 
@@ -294,11 +340,20 @@ impl<T: Params> Formatter<'_, T> {
     fn update(&mut self, update: &Update) -> fmt::Result {
         let table = self.schema.table(update.target.as_table().table);
 
-        write!(self.dst, "UPDATE \"{}\" SET", table.name)?;
+        if self.quoted_table_names {
+            write!(self.dst, "UPDATE \"{}\" SET", table.name)?;
+        } else {
+            write!(self.dst, "UPDATE {} SET", table.name)?;
+        }
 
         for (index, assignment) in update.assignments.iter() {
             let column = &table.columns[index];
-            write!(self.dst, " \"{}\" = ", column.name)?;
+
+            if self.quoted_column_names {
+                write!(self.dst, " \"{}\" = ", column.name)?;
+            } else {
+                write!(self.dst, " {} = ", column.name)?;
+            }
 
             self.expr(&assignment.expr)?;
         }
@@ -336,7 +391,12 @@ impl<T: Params> Formatter<'_, T> {
 
         for table_with_join in select.source.as_table_with_joins() {
             let table = self.schema.table(table_with_join.table);
-            write!(self.dst, "\"{}\"", table.name)?;
+
+            if self.quoted_table_names {
+                write!(self.dst, "\"{}\"", table.name)?;
+            } else {
+                write!(self.dst, "{}", table.name)?;
+            }
         }
 
         write!(self.dst, " WHERE ")?;
@@ -405,7 +465,9 @@ impl<T: Params> Formatter<'_, T> {
                 // TODO: at some point we need to conditionally scope the column
                 // name.
                 let column = self.schema.column(expr.column);
-                self.ident_str(&column.name)?;
+                if self.quoted_column_names {
+                    self.ident_str(&column.name)?;
+                }
             }
             Expr::InList(ExprInList { expr, list }) => {
                 self.expr(expr)?;
@@ -529,7 +591,9 @@ impl<T: Params> Formatter<'_, T> {
     fn name(&mut self, name: &Name) -> fmt::Result {
         let mut s = "";
         for ident in &name.0 {
-            self.ident(ident)?;
+            if self.quoted_table_names {
+                self.ident(ident)?;
+            }
             write!(self.dst, "{s}")?;
             s = ".";
         }
