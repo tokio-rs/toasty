@@ -1,4 +1,4 @@
-use super::{FieldId, Field, Schema};
+use super::{Field, FieldId, Schema};
 
 #[derive(Debug, PartialEq)]
 pub struct ForeignKey {
