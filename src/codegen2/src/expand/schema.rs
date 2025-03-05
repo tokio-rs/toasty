@@ -72,7 +72,8 @@ impl Expand<'_> {
                     quote!(FieldTy::BelongsTo(BelongsTo {
                         target:  <#ty as #toasty::Relation>::ID,
                         expr_ty: todo!(),
-                        pair: todo!(),
+                        // The pair is populated at runtime.
+                        pair: None,
                         foreign_key: todo!(),
                     }))
                 }

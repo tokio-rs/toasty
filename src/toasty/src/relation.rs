@@ -27,6 +27,9 @@ pub trait Relation {
 pub trait Relation2 {
     const ID: ModelId;
 
+    /// Fields type
+    type Fields;
+
     /// Query type
     type Query;
 

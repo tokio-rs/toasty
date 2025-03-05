@@ -12,6 +12,7 @@ impl Expand<'_> {
         let id = &self.tokenized_id;
         let model_schema = self.expand_model_schema();
         let model_fields = self.expand_model_field_struct_init();
+        let fields_struct_ident = &self.model.field_struct_ident;
         let struct_load_fields = self.expand_struct_load_fields();
         let query_struct_ident = &self.model.query_struct_ident;
         let create_builder_ident = &self.model.create_builder_struct_ident;
@@ -54,6 +55,7 @@ impl Expand<'_> {
 
             impl #toasty::Relation for #model_ident {
                 const ID: #toasty::ModelId = #toasty::ModelId(#id);
+                type Fields = #fields_struct_ident;
                 type Query = #query_struct_ident;
                 type Many = Many;
                 type ManyField = ManyField;

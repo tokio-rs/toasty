@@ -1,4 +1,4 @@
-use crate::{stmt::Id, Model};
+use crate::{Model, stmt::Id};
 
 use toasty_core::stmt;
 
