@@ -222,7 +222,7 @@ impl Builder<'_> {
                     expr_ty: stmt::Type::Model(target),
                     pair: None,
                     // This will be populated at a later step.
-                    foreign_key: relation::ForeignKey::placeholder(),
+                    foreign_key: ForeignKey::placeholder(),
                 }
                 .into()
             } else {

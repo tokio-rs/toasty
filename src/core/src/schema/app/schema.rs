@@ -324,12 +324,7 @@ impl Builder {
         todo!("missing relation attribute")
     }
 
-    fn foreign_key_for(
-        &self,
-        source: &Model,
-        source_field: &Field,
-        target: ModelId,
-    ) -> relation::ForeignKey {
+    fn foreign_key_for(&self, source: &Model, source_field: &Field, target: ModelId) -> ForeignKey {
         let attr = self.cx.get_relation_attr(source_field.id);
 
         assert_eq!(
@@ -347,12 +342,12 @@ impl Builder {
                 .field_by_name(references.as_str())
                 .expect("missing filed");
 
-            fields.push(relation::ForeignKeyField {
+            fields.push(ForeignKeyField {
                 source: field_source.id,
                 target: field_target.id,
             });
         }
 
-        relation::ForeignKey { fields }
+        ForeignKey { fields }
     }
 }
