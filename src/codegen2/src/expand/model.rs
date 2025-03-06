@@ -15,7 +15,9 @@ impl Expand<'_> {
         let fields_struct_ident = &self.model.field_struct_ident;
         let struct_load_fields = self.expand_struct_load_fields();
         let query_struct_ident = &self.model.query_struct_ident;
-        let create_builder_ident = &self.model.create_struct_ident;
+        let create_struct_ident = &self.model.create_struct_ident;
+        let update_struct_ident = &self.model.update_struct_ident;
+        let update_query_struct_ident = &self.model.update_query_struct_ident;
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
 
@@ -30,8 +32,17 @@ impl Expand<'_> {
                 #model_fields
                 #filter_methods
 
-                #vis fn create() -> #create_builder_ident {
-                    #create_builder_ident::default()
+                #vis fn create() -> #create_struct_ident {
+                    #create_struct_ident::default()
+                }
+
+                #vis fn update(&mut self) -> #update_struct_ident {
+                    use #toasty::IntoSelect;
+                    let query = #update_query_struct_ident::from(self.into_select());
+                    #update_struct_ident {
+                        model: self,
+                        query,
+                    }
                 }
 
                 #vis fn filter(expr: #toasty::stmt::Expr<bool>) -> #query_struct_ident {
