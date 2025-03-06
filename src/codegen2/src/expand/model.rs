@@ -15,7 +15,7 @@ impl Expand<'_> {
         let fields_struct_ident = &self.model.field_struct_ident;
         let struct_load_fields = self.expand_struct_load_fields();
         let query_struct_ident = &self.model.query_struct_ident;
-        let create_builder_ident = &self.model.create_builder_struct_ident;
+        let create_builder_ident = &self.model.create_struct_ident;
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
 
@@ -144,14 +144,11 @@ impl Expand<'_> {
                     FieldTy::HasMany(_) => {
                         quote!(#name: #toasty::HasMany::load(record[#index].take())?,)
                     }
-                    /*
-                    FieldTy::HasOne(_) => quote!(),
-                    */
                     FieldTy::BelongsTo(_) => {
                         quote!(#name: #toasty::BelongsTo::load(record[#index].take())?,)
                     }
                     FieldTy::Primitive(ty) => {
-                        quote!(#name: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take()),)
+                        quote!(#name: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take())?,)
                     }
                 }
             })

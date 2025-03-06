@@ -5,6 +5,7 @@ mod model;
 mod query;
 mod relation;
 mod schema;
+mod update;
 mod util;
 
 use filters::Filter;
@@ -34,6 +35,7 @@ impl Expand<'_> {
         let model_field_struct = self.expand_model_field_struct();
         let query_struct = self.expand_query_struct();
         let create_builder = self.expand_create_builder();
+        let update_builder = self.expand_update_builder();
         let relation_structs = self.expand_relation_structs();
 
         wrap_in_const(quote! {
@@ -41,6 +43,7 @@ impl Expand<'_> {
             #model_field_struct
             #query_struct
             #create_builder
+            #update_builder
             #relation_structs
         })
     }

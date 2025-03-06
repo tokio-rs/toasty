@@ -9,7 +9,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let query_ident = &self.model.query_struct_ident;
-        let create_builder_ident = &self.model.create_builder_struct_ident;
+        let create_builder_ident = &self.model.create_struct_ident;
 
         quote! {
             #[derive(Debug)]

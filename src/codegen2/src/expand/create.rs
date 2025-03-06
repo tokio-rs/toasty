@@ -9,11 +9,8 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let create_builder_ident = &self.model.create_builder_struct_ident;
+        let create_builder_ident = &self.model.create_struct_ident;
         let create_methods = self.expand_create_methods();
-        /*
-        let create_struct_name = self.self_create_struct_name();
-        */
 
         quote! {
             #[derive(Debug)]

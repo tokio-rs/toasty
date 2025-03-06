@@ -15,6 +15,9 @@ pub(crate) struct Field {
 
     /// Field type
     pub(crate) ty: FieldTy,
+
+    /// Identifier for setter method on update builder
+    pub(crate) set_ident: syn::Ident,
 }
 
 #[derive(Debug)]
@@ -50,6 +53,7 @@ impl Field {
         };
 
         let name = Name::from_ident(ident);
+        let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
 
         let mut errs = ErrorSet::new();
         let mut attrs = FieldAttrs {
@@ -133,6 +137,7 @@ impl Field {
             attrs,
             name,
             ty,
+            set_ident,
         })
     }
 }

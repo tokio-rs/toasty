@@ -30,10 +30,13 @@ pub(crate) struct Model {
     pub(crate) query_struct_ident: syn::Ident,
 
     /// Create builder struct identifier
-    pub(crate) create_builder_struct_ident: syn::Ident,
+    pub(crate) create_struct_ident: syn::Ident,
 
     /// Update builder struct identifier
-    pub(crate) update_builder_struct_ident: syn::Ident,
+    pub(crate) update_struct_ident: syn::Ident,
+
+    /// Update by query builder struct identifier
+    pub(crate) update_query_struct_ident: syn::Ident,
 }
 
 impl Model {
@@ -143,8 +146,9 @@ impl Model {
             },
             field_struct_ident: struct_ident("Fields", ast),
             query_struct_ident: struct_ident("Query", ast),
-            create_builder_struct_ident: struct_ident("Create", ast),
-            update_builder_struct_ident: struct_ident("Update", ast),
+            create_struct_ident: struct_ident("Create", ast),
+            update_struct_ident: struct_ident("Update", ast),
+            update_query_struct_ident: struct_ident("UpdateQuery", ast),
         })
     }
 

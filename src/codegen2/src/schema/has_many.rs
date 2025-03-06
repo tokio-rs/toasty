@@ -7,6 +7,9 @@ pub(crate) struct HasMany {
 
     /// Singular field name
     pub(crate) singular: Name,
+
+    /// Insert method ident
+    pub(crate) insert_ident: syn::Ident,
 }
 
 impl HasMany {
@@ -16,10 +19,12 @@ impl HasMany {
         };
 
         let singular = Name::from_str(&std_util::str::singularize(&name.to_string()), name.span());
+        let insert_ident = syn::Ident::new(&format!("insert_{}", singular.ident), name.span());
 
         Ok(HasMany {
             ty: (*ty_slice.elem).clone(),
             singular,
+            insert_ident,
         })
     }
 }
