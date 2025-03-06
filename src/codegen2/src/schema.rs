@@ -10,6 +10,9 @@ pub(crate) use field::{Field, FieldTy};
 mod fk;
 pub(crate) use fk::ForeignKeyField;
 
+mod has_many;
+pub(crate) use has_many::HasMany;
+
 mod index;
 pub(crate) use index::{Index, IndexField};
 

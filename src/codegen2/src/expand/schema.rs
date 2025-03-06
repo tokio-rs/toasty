@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::FieldTy;
+use crate::schema::{FieldTy, Name};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -41,16 +41,7 @@ impl Expand<'_> {
     }
 
     fn expand_model_name(&self) -> TokenStream {
-        let parts = self.model.name.parts.iter().map(|part| {
-            let part = part.to_string();
-            quote! { #part.to_string() }
-        });
-
-        quote! {
-            Name {
-                parts: vec![#( #parts ),*],
-            }
-        }
+        expand_name(&self.model.name)
     }
 
     fn expand_model_fields(&self) -> TokenStream {
@@ -92,6 +83,22 @@ impl Expand<'_> {
                         foreign_key: ForeignKey {
                             fields: vec![ #( #fk_fields ),* ],
                         },
+                    }))
+                }
+                FieldTy::HasMany(rel) => {
+                    let ty = &rel.ty;
+                    let singular_name = expand_name(&rel.singular);
+
+                    quote!(FieldTy::HasMany(HasMany {
+                        target: <#ty as #toasty::Relation>::ID,
+                        expr_ty: Type::List(Box::new(Type::Model(<#ty as #toasty::Relation>::ID))),
+                        singular: #singular_name,
+                        // The pair is populated at runtime.
+                        pair: FieldId {
+                            model: ModelId(usize::MAX),
+                            index: usize::MAX,
+                        },
+                        queries: vec![],
                     }))
                 }
             };
@@ -187,6 +194,19 @@ impl Expand<'_> {
 
         quote! {
             vec![ #( #indices ),* ]
+        }
+    }
+}
+
+fn expand_name(name: &Name) -> TokenStream {
+    let parts = name.parts.iter().map(|part| {
+        let part = part.to_string();
+        quote! { #part.to_string() }
+    });
+
+    quote! {
+        Name {
+            parts: vec![#( #parts ),*],
         }
     }
 }

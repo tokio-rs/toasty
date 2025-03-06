@@ -116,6 +116,15 @@ impl Model {
                     unique: true,
                     primary_key: false,
                 });
+            } else if field.attrs.index {
+                let id = indices.len();
+
+                indices.push(Index {
+                    id,
+                    fields: vec![IndexField { field: index }],
+                    unique: false,
+                    primary_key: false,
+                });
             }
         }
 

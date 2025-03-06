@@ -82,17 +82,6 @@ impl Expand<'_> {
 
                 match &field.ty {
                     /*
-                    FieldTy::HasMany(rel) => {
-                        let singular = self.singular_name(field);
-                        let target_struct_name = self.model_struct_path(rel.target, 1);
-
-                        quote! {
-                            pub fn #singular(mut self, #singular: impl IntoExpr<#target_struct_name>) -> Self {
-                                self.stmt.insert(#index, #singular.into_expr());
-                                self
-                            }
-                        }
-                    }
                     FieldTy::HasOne(rel) => {
                         let target_struct_name = self.model_struct_path(rel.target, 1);
 
@@ -104,22 +93,30 @@ impl Expand<'_> {
                         }
                     }
                     */
-                    FieldTy::BelongsTo(rel) => {
+                    FieldTy::HasMany(rel) => {
+                        let singular = &rel.singular.ident;
                         let ty = &rel.ty;
-                        let ty = quote!(impl #toasty::IntoExpr<#ty>);
 
                         quote! {
-                            pub fn #name(mut self, #name: #ty) -> Self {
+                            pub fn #singular(mut self, #singular: impl #toasty::IntoExpr<#ty>) -> Self {
+                                self.stmt.insert(#index, #singular.into_expr());
+                                self
+                            }
+                        }
+                    }
+                    FieldTy::BelongsTo(rel) => {
+                        let ty = &rel.ty;
+
+                        quote! {
+                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }
                         }
                     }
                     FieldTy::Primitive(ty) => {
-                        let ty = quote!(impl #toasty::IntoExpr<#ty>);
-
                         quote! {
-                            pub fn #name(mut self, #name: #ty) -> Self {
+                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }

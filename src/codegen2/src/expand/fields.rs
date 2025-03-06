@@ -26,18 +26,13 @@ impl Expand<'_> {
                             #vis #field_ident: <#ty as #toasty::Relation>::OneField,
                         }
                     }
-                    /*
-                    HasMany(_) => {
-                        let target_struct_path = self.target_struct_path(field, 0);
+                    HasMany(rel) => {
+                        let ty = &rel.ty;
 
                         quote! {
-                            pub const #const_name: <#target_struct_path as Relation>::ManyField =
-                                <#target_struct_path as Relation>::ManyField::from_path(
-                                    Path::from_field_index::<Self>(#field_offset)
-                                );
+                            #vis #field_ident: <#ty as #toasty::Relation>::ManyField,
                         }
                     }
-                    */
                 }
         });
 
@@ -77,18 +72,15 @@ impl Expand<'_> {
                             ),
                         }
                     }
-                    /*
-                    HasMany(_) => {
-                        let target_struct_path = self.target_struct_path(field, 0);
+                    HasMany(rel) => {
+                        let ty = &rel.ty;
 
                         quote! {
-                            pub const #const_name: <#target_struct_path as Relation>::ManyField =
-                                <#target_struct_path as Relation>::ManyField::from_path(
-                                    Path::from_field_index::<Self>(#field_offset)
-                                );
+                            #field_ident: <#ty as #toasty::Relation>::ManyField::from_path(
+                                #toasty::Path::from_field_index::<Self>(#field_offset)
+                            ),
                         }
                     }
-                    */
                 }
             });
 

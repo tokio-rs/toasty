@@ -141,10 +141,10 @@ impl Expand<'_> {
                 let name = &field.name.ident;
 
                 match &field.ty {
-                    /*
                     FieldTy::HasMany(_) => {
-                        quote!(#name: HasMany::load(record[#index].take())?,)
+                        quote!(#name: #toasty::HasMany::load(record[#index].take())?,)
                     }
+                    /*
                     FieldTy::HasOne(_) => quote!(),
                     */
                     FieldTy::BelongsTo(_) => {

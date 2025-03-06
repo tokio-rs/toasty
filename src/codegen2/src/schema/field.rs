@@ -1,6 +1,6 @@
 use syn::parse_quote;
 
-use super::{BelongsTo, ErrorSet, Name};
+use super::{BelongsTo, ErrorSet, HasMany, Name};
 
 #[derive(Debug)]
 pub(crate) struct Field {
@@ -36,6 +36,7 @@ pub(crate) struct FieldAttrs {
 pub(crate) enum FieldTy {
     Primitive(syn::Type),
     BelongsTo(BelongsTo),
+    HasMany(HasMany),
 }
 
 impl Field {
@@ -57,7 +58,7 @@ impl Field {
             auto: false,
             index: false,
         };
-        let mut belongs_to = None;
+        let mut ty = None;
 
         let mut i = 0;
         while i < field.attrs.len() {
@@ -93,8 +94,14 @@ impl Field {
                 } else {
                     attrs.index = true;
                 }
-            } else if attr.path().is_ident("relation") {
-                belongs_to = Some(BelongsTo::from_ast(attr, &field.ty, names)?);
+            } else if attr.path().is_ident("belongs_to") {
+                assert!(ty.is_none());
+                ty = Some(FieldTy::BelongsTo(BelongsTo::from_ast(
+                    attr, &field.ty, names,
+                )?));
+            } else if attr.path().is_ident("has_many") {
+                assert!(ty.is_none());
+                ty = Some(FieldTy::HasMany(HasMany::from_ast(ident, &field.ty)?));
             } else {
                 i += 1;
                 continue;
@@ -107,20 +114,25 @@ impl Field {
             return Err(err);
         }
 
-        if belongs_to.is_some() {
-            let ty = &field.ty;
-            field.ty = parse_quote!(toasty::codegen_support::BelongsTo<#ty>);
+        let ty = ty.unwrap_or_else(|| FieldTy::Primitive(field.ty.clone()));
+
+        match &ty {
+            FieldTy::BelongsTo(rel) => {
+                let ty = &rel.ty;
+                field.ty = parse_quote!(toasty::codegen_support::BelongsTo<#ty>);
+            }
+            FieldTy::HasMany(rel) => {
+                let ty = &rel.ty;
+                field.ty = parse_quote!(toasty::codegen_support::HasMany<#ty>);
+            }
+            FieldTy::Primitive(_) => {}
         }
 
         Ok(Field {
             id,
             attrs,
             name,
-            ty: if let Some(belongs_to) = belongs_to {
-                FieldTy::BelongsTo(belongs_to)
-            } else {
-                FieldTy::Primitive(field.ty.clone())
-            },
+            ty,
         })
     }
 }

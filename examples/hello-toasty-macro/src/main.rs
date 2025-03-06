@@ -9,6 +9,9 @@ struct User {
 
     #[unique]
     email: String,
+
+    #[has_many]
+    todos: [Todo],
 }
 
 #[derive(Debug)]
@@ -22,7 +25,7 @@ struct Todo {
     #[index]
     user_id: toasty::stmt::Id<User>,
 
-    #[relation(key = user_id, references = id)]
+    #[belongs_to(key = user_id, references = id)]
     user: User,
 }
 
