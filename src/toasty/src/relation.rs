@@ -46,4 +46,8 @@ pub trait Relation2 {
     type OptionOne;
 
     fn field_name_to_id(name: &str) -> FieldId;
+
+    fn nullable() -> bool {
+        false
+    }
 }

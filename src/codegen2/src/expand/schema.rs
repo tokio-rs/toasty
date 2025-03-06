@@ -51,11 +51,15 @@ impl Expand<'_> {
         let fields = self.model.fields.iter().enumerate().map(|(index, field)| {
             let index_tokenized = util::int(index);
             let name = field.name.ident.to_string();
-            let ty = match &field.ty {
+            let field_ty;
+            let nullable;
+
+            match &field.ty {
                 FieldTy::Primitive(ty) => {
-                    quote!(FieldTy::Primitive(FieldPrimitive {
+                    nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
+                    field_ty = quote!(FieldTy::Primitive(FieldPrimitive {
                         ty: <#ty as #toasty::stmt::Primitive>::TYPE,
-                    }))
+                    }));
                 }
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
@@ -75,7 +79,8 @@ impl Expand<'_> {
                         }
                     });
 
-                    quote!(FieldTy::BelongsTo(BelongsTo {
+                    nullable = quote!(<#ty as #toasty::Relation>::nullable());
+                    field_ty = quote!(FieldTy::BelongsTo(BelongsTo {
                         target:  <#ty as #toasty::Relation>::ID,
                         expr_ty: Type::Model(<#ty as #toasty::Relation>::ID),
                         // The pair is populated at runtime.
@@ -83,13 +88,14 @@ impl Expand<'_> {
                         foreign_key: ForeignKey {
                             fields: vec![ #( #fk_fields ),* ],
                         },
-                    }))
+                    }));
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     let singular_name = expand_name(&rel.singular);
 
-                    quote!(FieldTy::HasMany(HasMany {
+                    nullable = quote!(<#ty as #toasty::Relation>::nullable());
+                    field_ty = quote!(FieldTy::HasMany(HasMany {
                         target: <#ty as #toasty::Relation>::ID,
                         expr_ty: Type::List(Box::new(Type::Model(<#ty as #toasty::Relation>::ID))),
                         singular: #singular_name,
@@ -99,9 +105,10 @@ impl Expand<'_> {
                             index: usize::MAX,
                         },
                         queries: vec![],
-                    }))
+                    }));
                 }
-            };
+            }
+
             let primary_key = self.model.primary_key.fields.contains(&index);
             let auto = if field.attrs.auto {
                 quote!(Some(Auto::Id))
@@ -116,8 +123,8 @@ impl Expand<'_> {
                         index: #index_tokenized,
                     },
                     name: #name.to_string(),
-                    ty: #ty,
-                    nullable: false,
+                    ty: #field_ty,
+                    nullable: #nullable,
                     primary_key: #primary_key,
                     auto: #auto,
                 }

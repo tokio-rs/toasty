@@ -22,4 +22,8 @@ impl<T: Relation2> Relation2 for Option<T> {
     fn field_name_to_id(name: &str) -> FieldId {
         T::field_name_to_id(name)
     }
+
+    fn nullable() -> bool {
+        true
+    }
 }

@@ -4,8 +4,14 @@ use toasty_core::stmt;
 
 pub trait Primitive: Sized {
     const TYPE: stmt::Type;
+    const NULLABLE: bool = false;
 
     fn load(value: stmt::Value) -> Result<Self>;
+
+    /// Returns `true` if the primitive represents a nullable type (e.g. `Option`).
+    fn nullable() -> bool {
+        false
+    }
 }
 
 impl Primitive for i64 {
@@ -34,6 +40,7 @@ impl<T: Model> Primitive for Id<T> {
 
 impl<T: Primitive> Primitive for Option<T> {
     const TYPE: stmt::Type = T::TYPE;
+    const NULLABLE: bool = true;
 
     fn load(value: stmt::Value) -> Result<Self> {
         if value.is_null() {
