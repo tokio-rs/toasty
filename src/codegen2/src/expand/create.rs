@@ -9,16 +9,16 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let create_builder_ident = &self.model.create_struct_ident;
+        let create_struct_ident = &self.model.create_struct_ident;
         let create_methods = self.expand_create_methods();
 
         quote! {
             #[derive(Debug)]
-            #vis struct #create_builder_ident {
+            #vis struct #create_struct_ident {
                 stmt: #toasty::stmt::Insert<#model_ident>,
             }
 
-            impl #create_builder_ident {
+            impl #create_struct_ident {
                 #create_methods
 
                 #vis async fn exec(self, db: &#toasty::Db) -> #toasty::Result<#model_ident> {
@@ -26,39 +26,37 @@ impl Expand<'_> {
                 }
             }
 
-            /*
-            impl IntoInsert for #create_struct_name {
-                type Model = #struct_name;
+            impl #toasty::IntoInsert for #create_struct_ident {
+                type Model = #model_ident;
 
-                fn into_insert(self) -> stmt::Insert<#struct_name> {
+                fn into_insert(self) -> #toasty::stmt::Insert<#model_ident> {
                     self.stmt
                 }
             }
 
-            impl IntoExpr<#struct_name> for #create_struct_name {
-                fn into_expr(self) -> stmt::Expr<#struct_name> {
+            impl #toasty::IntoExpr<#model_ident> for #create_struct_ident {
+                fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
                     self.stmt.into()
                 }
 
-                fn by_ref(&self) -> stmt::Expr<#struct_name> {
+                fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
                     todo!()
                 }
             }
 
-            impl IntoExpr<[#struct_name]> for #create_struct_name {
-                fn into_expr(self) -> stmt::Expr<[#struct_name]> {
+            impl #toasty::IntoExpr<[#model_ident]> for #create_struct_ident {
+                fn into_expr(self) -> #toasty::stmt::Expr<[#model_ident]> {
                     self.stmt.into_list_expr()
                 }
 
-                fn by_ref(&self) -> stmt::Expr<[#struct_name]> {
+                fn by_ref(&self) -> #toasty::stmt::Expr<[#model_ident]> {
                     todo!()
                 }
             }
-            */
 
-            impl Default for #create_builder_ident {
-                fn default() -> #create_builder_ident {
-                    #create_builder_ident {
+            impl Default for #create_struct_ident {
+                fn default() -> #create_struct_ident {
+                    #create_struct_ident {
                         stmt: #toasty::stmt::Insert::blank(),
                     }
                 }

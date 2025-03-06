@@ -10,17 +10,17 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let id = &self.tokenized_id;
-        let model_schema = self.expand_model_schema();
-        let model_fields = self.expand_model_field_struct_init();
         let fields_struct_ident = &self.model.field_struct_ident;
-        let struct_load_fields = self.expand_struct_load_fields();
         let query_struct_ident = &self.model.query_struct_ident;
         let create_struct_ident = &self.model.create_struct_ident;
         let update_struct_ident = &self.model.update_struct_ident;
         let update_query_struct_ident = &self.model.update_query_struct_ident;
+        let model_schema = self.expand_model_schema();
+        let model_fields = self.expand_model_field_struct_init();
+        let struct_load_fields = self.expand_struct_load_fields();
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
-
+        let relation_methods = self.expand_model_relation_methods();
         let into_select_body_ref = self.expand_model_into_select_body(true);
         let into_select_body_value = self.expand_model_into_select_body(false);
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
@@ -31,9 +31,14 @@ impl Expand<'_> {
                 #model_schema
                 #model_fields
                 #filter_methods
+                #relation_methods
 
                 #vis fn create() -> #create_struct_ident {
                     #create_struct_ident::default()
+                }
+
+                #vis fn create_many() -> #toasty::CreateMany<#model_ident> {
+                    #toasty::CreateMany::default()
                 }
 
                 #vis fn update(&mut self) -> #update_struct_ident {
