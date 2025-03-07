@@ -10,7 +10,6 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let id = &self.tokenized_id;
-        let fields_struct_ident = &self.model.field_struct_ident;
         let query_struct_ident = &self.model.query_struct_ident;
         let create_struct_ident = &self.model.create_struct_ident;
         let update_struct_ident = &self.model.update_struct_ident;
@@ -28,7 +27,6 @@ impl Expand<'_> {
 
         quote! {
             impl #model_ident {
-                #model_schema
                 #model_fields
                 #filter_methods
                 #relation_methods
@@ -70,6 +68,8 @@ impl Expand<'_> {
                         #struct_load_fields
                     })
                 }
+
+                #model_schema
             }
 
             impl #toasty::Relation for #model_ident {

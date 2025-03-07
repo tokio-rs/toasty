@@ -34,11 +34,11 @@ struct Todo {
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    let schema = toasty::schema::from_macro(&[User::schema(), Todo::schema()])?;
-    println!("{schema:#?}");
-
-    let driver = toasty_sqlite::Sqlite::in_memory();
-    let db = toasty::Db::new(schema, driver).await?;
+    let db = toasty::Db::builder()
+        .register::<User>()
+        .register::<Todo>()
+        .build(toasty_sqlite::Sqlite::in_memory())
+        .await?;
 
     // For now, reset!s
     db.reset_db().await?;

@@ -13,7 +13,16 @@ pub struct Db {
     pub(crate) schema: Arc<Schema>,
 }
 
+pub struct Builder {
+    /// Model definitions from macro
+    models: Vec<app::Model>,
+}
+
 impl Db {
+    pub fn builder() -> Builder {
+        Builder { models: vec![] }
+    }
+
     pub async fn new(schema: app::Schema, mut driver: impl Driver) -> Result<Db> {
         let schema = Schema::from_app(schema, driver.capability())?;
 
@@ -96,5 +105,17 @@ impl Db {
     /// TODO: remove
     pub async fn reset_db(&self) -> Result<()> {
         self.driver.reset_db(&self.schema.db).await
+    }
+}
+
+impl Builder {
+    pub fn register<T: Model>(&mut self) -> &mut Self {
+        self.models.push(T::schema());
+        self
+    }
+
+    pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
+        let schema = app::Schema::from_macro(&self.models)?;
+        Db::new(schema, driver).await
     }
 }

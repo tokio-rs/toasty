@@ -7,7 +7,6 @@ use quote::quote;
 impl Expand<'_> {
     pub(super) fn expand_model_schema(&self) -> TokenStream {
         let toasty = &self.toasty;
-        let vis = &self.model.vis;
         let id = &self.tokenized_id;
         let name = self.expand_model_name();
         let fields = self.expand_model_fields();
@@ -15,7 +14,7 @@ impl Expand<'_> {
         let indices = self.expand_model_indices();
 
         quote! {
-            #vis fn schema() -> #toasty::schema::app::Model {
+            fn schema() -> #toasty::schema::app::Model {
                 use #toasty::{
                     schema::{
                         app::*,
