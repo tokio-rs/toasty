@@ -37,17 +37,74 @@ impl<T: ?Sized> IntoExpr<T> for Expr<T> {
     }
 }
 
-impl<T, E> IntoExpr<T> for &E
-where
-    T: ?Sized,
-    E: IntoExpr<T>,
-{
+impl<T: IntoExpr<T> + ?Sized> IntoExpr<T> for &T {
     fn into_expr(self) -> Expr<T> {
-        IntoExpr::by_ref(self)
+        IntoExpr::<T>::by_ref(self)
     }
 
     fn by_ref(&self) -> Expr<T> {
-        IntoExpr::by_ref(*self)
+        // IntoExpr::by_ref(*self)
+        todo!()
+    }
+}
+
+impl<T: IntoExpr<T>> IntoExpr<Option<T>> for Option<T> {
+    fn into_expr(self) -> Expr<Option<T>> {
+        // Expr::from_value(Value::from(Some(self)))
+        todo!()
+    }
+
+    fn by_ref(&self) -> Expr<Option<T>> {
+        // Expr::from_value(Value::from(Some(self.clone())))
+        todo!()
+    }
+}
+
+impl<T: IntoExpr<T>> IntoExpr<Option<T>> for T {
+    fn into_expr(self) -> Expr<Option<T>> {
+        // Expr::from_value(Value::from(Some(self)))
+        todo!()
+    }
+
+    fn by_ref(&self) -> Expr<Option<T>> {
+        // Expr::from_value(Value::from(Some(self.clone())))
+        todo!()
+    }
+}
+
+// impl<T: IntoExpr<T>> IntoExpr<T> for Option<T> {
+//     fn into_expr(self) -> Expr<T> {
+//         // match self {
+//         //     Some(value) => value.into_expr(),
+//         //     None => Expr::from_value(Value::Null),
+//         // }
+//         todo!()
+//     }
+
+//     fn by_ref(&self) -> Expr<T> {
+//         // match self {
+//         //     Some(value) => IntoExpr::by_ref(value),
+//         //     None => Expr::from_value(Value::Null),
+//         // }
+//         todo!()
+//     }
+// }
+
+impl<T: IntoExpr<T>> IntoExpr<T> for &Option<T> {
+    fn into_expr(self) -> Expr<T> {
+        // match self {
+        //     Some(value) => value.into_expr(),
+        //     None => Expr::from_value(Value::Null),
+        // }
+        todo!()
+    }
+
+    fn by_ref(&self) -> Expr<T> {
+        // match self {
+        //     Some(value) => IntoExpr::by_ref(value),
+        //     None => Expr::from_value(Value::Null),
+        // }
+        todo!()
     }
 }
 
@@ -57,6 +114,16 @@ impl IntoExpr<String> for &str {
     }
 
     fn by_ref(&self) -> Expr<String> {
+        Expr::from_value(Value::from(*self))
+    }
+}
+
+impl IntoExpr<Option<String>> for &str {
+    fn into_expr(self) -> Expr<Option<String>> {
+        Expr::from_value(Value::from(self))
+    }
+
+    fn by_ref(&self) -> Expr<Option<String>> {
         Expr::from_value(Value::from(*self))
     }
 }
@@ -71,45 +138,70 @@ impl IntoExpr<String> for String {
     }
 }
 
-impl<T1, T2> IntoExpr<T1> for Option<T2>
-where
-    T2: IntoExpr<T1>,
-{
-    fn into_expr(self) -> Expr<T1> {
-        match self {
-            Some(value) => value.into_expr(),
-            None => Expr::from_value(Value::Null),
-        }
-    }
+// impl<T1, T2> IntoExpr<T1> for Option<T2>
+// where
+//     T2: IntoExpr<T1>,
+// {
+//     fn into_expr(self) -> Expr<T1> {
+//         match self {
+//             Some(value) => value.into_expr(),
+//             None => Expr::from_value(Value::Null),
+//         }
+//     }
 
-    fn by_ref(&self) -> Expr<T1> {
-        match self {
-            Some(value) => IntoExpr::by_ref(value),
-            None => Expr::from_value(Value::Null),
-        }
-    }
-}
+//     fn by_ref(&self) -> Expr<T1> {
+//         match self {
+//             Some(value) => IntoExpr::by_ref(value),
+//             None => Expr::from_value(Value::Null),
+//         }
+//     }
+// }
 
 impl<T, U, const N: usize> IntoExpr<[T]> for [U; N]
 where
     U: IntoExpr<T>,
 {
     fn into_expr(self) -> Expr<[T]> {
-        Expr::list(&self)
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| U::by_ref(item).untyped),
+        ))
     }
 
     fn by_ref(&self) -> Expr<[T]> {
-        Expr::list(self)
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| U::by_ref(item).untyped),
+        ))
+    }
+}
+
+impl<T, U, const N: usize> IntoExpr<[T]> for &[U; N]
+where
+    U: IntoExpr<T>,
+{
+    fn into_expr(self) -> Expr<[T]> {
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| U::by_ref(item).untyped),
+        ))
+    }
+
+    fn by_ref(&self) -> Expr<[T]> {
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| U::by_ref(item).untyped),
+        ))
     }
 }
 
 impl<T, E: IntoExpr<T>> IntoExpr<[T]> for &[E] {
     fn into_expr(self) -> Expr<[T]> {
-        Expr::list(self)
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| E::by_ref(item).untyped),
+        ))
     }
 
     fn by_ref(&self) -> Expr<[T]> {
-        Expr::list(*self)
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| E::by_ref(item).untyped),
+        ))
     }
 }
 
@@ -158,6 +250,18 @@ where
     }
 
     fn by_ref(&self) -> Expr<(T1, U1)> {
-        (&self.0, &self.1).into_expr()
+        // (&self.0, &self.1).into_expr()
+        todo!()
     }
+}
+
+#[test]
+fn assert_bounds() {
+    fn assert_into_expr<T: ?Sized, E: IntoExpr<T>>() {}
+
+    assert_into_expr::<i64, i64>();
+    assert_into_expr::<(String, String), (&String, &String)>();
+    assert_into_expr::<[(String, String)], &[(&String, &String)]>();
+    assert_into_expr::<[(String, String)], [(&String, &String); 3]>();
+    assert_into_expr::<[(String, String)], &[(&String, &String); 3]>();
 }

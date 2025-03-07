@@ -172,55 +172,50 @@ async fn crud_one_string(s: impl Setup) {
 }
 
 async fn required_field_create_without_setting(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+    }
 
-            name: String,
-        }
-    "
-    );
-
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User)).await;
 
     // Try creating a user without setting the name field results in an error
-    assert_err!(db::User::create().exec(&db).await);
+    assert_err!(User::create().exec(&db).await);
 }
 
 async fn unique_index_required_field_update(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            email: String,
-        }"
-    );
+        #[unique]
+        email: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User)).await;
 
     let email = "user1@example.com";
 
-    let user = db::User::create().email(email).exec(&db).await.unwrap();
+    let user = User::create().email(email).exec(&db).await.unwrap();
 
     assert_eq!("user1@example.com", user.email);
 
     // Trying to create a user with the same email address fails
-    assert_err!(db::User::create().email(email).exec(&db).await);
+    assert_err!(User::create().email(email).exec(&db).await);
 
     // Loading the user by email
-    let user_reloaded = db::User::get_by_email(&db, email).await.unwrap();
+    let user_reloaded = User::get_by_email(&db, email).await.unwrap();
     assert_eq!(user.id, user_reloaded.id);
     assert_eq!(user_reloaded.email, email);
 
     // Creating a user with a different email works
-    let user_alt_email = db::User::create()
+    let user_alt_email = User::create()
         .email("alt-email@example.com")
         .exec(&db)
         .await
@@ -232,13 +227,13 @@ async fn unique_index_required_field_update(s: impl Setup) {
     user.delete(&db).await.unwrap();
 
     // Finding by the email returns None
-    assert_none!(db::User::filter_by_email(email).first(&db).await.unwrap());
+    assert_none!(User::filter_by_email(email).first(&db).await.unwrap());
 
-    let mut user2 = db::User::create().email(email).exec(&db).await.unwrap();
+    let mut user2 = User::create().email(email).exec(&db).await.unwrap();
     assert_ne!(user2.id, user_reloaded.id);
 
     // Trying to create a third user with that email address fails.
-    assert_err!(db::User::create().email(email).exec(&db).await);
+    assert_err!(User::create().email(email).exec(&db).await);
 
     // Updating the email address by object
     user2
@@ -249,28 +244,23 @@ async fn unique_index_required_field_update(s: impl Setup) {
         .unwrap();
 
     // Reload the user by ID
-    let user_reloaded = db::User::filter_by_id(&user2.id).get(&db).await.unwrap();
+    let user_reloaded = User::filter_by_id(&user2.id).get(&db).await.unwrap();
     assert_eq!(user2.id, user_reloaded.id);
     assert_eq!(user_reloaded.email, "user2@example.com");
 
     // Finding by the email returns None
-    assert_none!(db::User::filter_by_email(email).first(&db).await.unwrap());
+    assert_none!(User::filter_by_email(email).first(&db).await.unwrap());
 
     // Trying to create a user with the updated email address fails
-    assert_err!(
-        db::User::create()
-            .email("user2@example.com")
-            .exec(&db)
-            .await
-    );
+    assert_err!(User::create().email("user2@example.com").exec(&db).await);
 
     // Creating a user with the **old** email address succeeds
-    let user3 = db::User::create().email(email).exec(&db).await.unwrap();
+    let user3 = User::create().email(email).exec(&db).await.unwrap();
     assert_eq!(user3.email, email);
     assert_ne!(user3.id, user2.id);
 
     // Updating the email address by ID
-    db::User::filter_by_id(&user2.id)
+    User::filter_by_id(&user2.id)
         .update()
         .email("user3@example.com")
         .exec(&db)
@@ -278,79 +268,66 @@ async fn unique_index_required_field_update(s: impl Setup) {
         .unwrap();
 
     // Finding by the email returns None
-    assert_none!(db::User::filter_by_email(&user2.email)
+    assert_none!(User::filter_by_email(&user2.email)
         .first(&db)
         .await
         .unwrap());
 
     // Find the user by the new address.
-    let u = db::User::filter_by_email("user3@example.com")
+    let u = User::filter_by_email("user3@example.com")
         .get(&db)
         .await
         .unwrap();
 
     assert_eq!(u.id, user2.id);
 
-    assert_err!(
-        db::User::create()
-            .email("user3@example.com")
-            .exec(&db)
-            .await
-    );
+    assert_err!(User::create().email("user3@example.com").exec(&db).await);
 
     // But we *can* create a user w/ the old email
-    assert_ok!(
-        db::User::create()
-            .email("user2@example.com")
-            .exec(&db)
-            .await
-    );
+    assert_ok!(User::create().email("user2@example.com").exec(&db).await);
 }
 
 async fn unique_index_nullable_field_update(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            email: Option<String>,
-        }"
-    );
+        #[unique]
+        email: Option<String>,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User)).await;
 
     // Create a user without an email address
-    let mut u1 = db::User::create().exec(&db).await.unwrap();
+    let mut u1 = User::create().exec(&db).await.unwrap();
     assert!(u1.email.is_none());
 
     // Create a second user without an email address
-    let mut u2 = db::User::create().exec(&db).await.unwrap();
+    let mut u2 = User::create().exec(&db).await.unwrap();
     assert!(u2.email.is_none());
 
     // Reload u1 and make sure email is still set.
-    let u1_reload = db::User::get_by_id(&db, &u1.id).await.unwrap();
+    let u1_reload = User::get_by_id(&db, &u1.id).await.unwrap();
     assert!(u1_reload.email.is_none());
 
     // Finding by a bogus email finds nothing
-    assert_none!(db::User::filter_by_email("foo@example.com")
+    assert_none!(User::filter_by_email("foo@example.com")
         .first(&db)
         .await
         .unwrap());
 
     // Create a user **with** an email
-    let mut u3 = db::User::create()
+    let mut u3 = User::create()
         .email("three@example.com")
         .exec(&db)
         .await
         .unwrap();
     assert_eq!(u3.email, Some("three@example.com".to_string()));
 
-    let u3_reload = db::User::get_by_email(&db, "three@example.com")
-        .await
-        .unwrap();
+    let u3_reload = User::get_by_email(&db, "three@example.com").await.unwrap();
     assert_eq!(u3_reload.id, u3.id);
 
     // Now, set u1's email to something
@@ -362,18 +339,14 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
     assert_eq!(u1.email, Some("one@example.com".to_string()));
 
     // Find it
-    let u1_reload = db::User::get_by_email(&db, "one@example.com")
-        .await
-        .unwrap();
+    let u1_reload = User::get_by_email(&db, "one@example.com").await.unwrap();
     assert_eq!(u1.id, u1_reload.id);
 
     // Try updating user 2 to an already taken email address
     assert_err!(u2.update().email("three@example.com").exec(&db).await);
 
     // Can still fetch user 3
-    let u3_reload = db::User::get_by_email(&db, "three@example.com")
-        .await
-        .unwrap();
+    let u3_reload = User::get_by_email(&db, "three@example.com").await.unwrap();
     assert_eq!(u3_reload.id, u3.id);
 
     // Update user 2 to set an actual email now.
@@ -382,24 +355,22 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
-    let u2_reload = db::User::get_by_email(&db, "two@example.com")
-        .await
-        .unwrap();
+    let u2_reload = User::get_by_email(&db, "two@example.com").await.unwrap();
     assert_eq!(u2_reload.id, u2.id);
 
     // Update a user to **remove** the email attribute
     let mut update = u3.update();
-    update.unset_email();
+    update.set_email(None);
     update.exec(&db).await.unwrap();
     assert!(u3.email.is_none());
 
     // We can create a new user using the freed email
-    let u4 = db::User::create()
+    let u4 = User::create()
         .email("three@example.com")
         .exec(&db)
         .await
         .unwrap();
-    let u4_reload = db::User::filter_by_email("three@example.com")
+    let u4_reload = User::filter_by_email("three@example.com")
         .get(&db)
         .await
         .unwrap();
