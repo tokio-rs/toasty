@@ -3,7 +3,7 @@ pub use belongs_to::BelongsTo;
 
 mod has_many;
 pub use has_many::HasMany;
-use toasty_core::schema::app::{FieldId, ModelId};
+use toasty_core::schema::app::FieldId;
 
 pub mod option;
 
@@ -29,12 +29,6 @@ pub trait Relation {
 pub trait Relation2 {
     /// The target model
     type Model: Model;
-
-    /// Fields type
-    type Fields;
-
-    /// Query type
-    type Query;
 
     /// HasMany relation type
     type Many;

@@ -11,8 +11,6 @@ impl<T: Relation> Relation for Option<T> {
 
 impl<T: Relation2> Relation2 for Option<T> {
     type Model = T::Model;
-    type Fields = T::Fields;
-    type Query = T::Query;
     type Many = T::Many;
     type ManyField = T::ManyField;
     type One = T::OptionOne;

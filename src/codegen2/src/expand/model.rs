@@ -74,8 +74,6 @@ impl Expand<'_> {
 
             impl #toasty::Relation for #model_ident {
                 type Model = #model_ident;
-                type Fields = #fields_struct_ident;
-                type Query = #query_struct_ident;
                 type Many = Many;
                 type ManyField = ManyField;
                 type One = One;
