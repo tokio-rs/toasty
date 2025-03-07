@@ -23,6 +23,18 @@ macro_rules! schema {
 }
 
 #[macro_export]
+macro_rules! models {
+    (
+        $( $model:ident ),*
+    ) => {
+        toasty::Db::builder()
+            $( .register::<$model>() )*
+            .build_app_schema()
+            .unwrap()
+    };
+}
+
+#[macro_export]
 macro_rules! tests {
     (
         $(

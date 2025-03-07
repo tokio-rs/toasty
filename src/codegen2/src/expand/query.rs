@@ -9,6 +9,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.query_struct_ident;
+        let update_query_struct_ident = &self.model.update_query_struct_ident;
         let filter_methods = self.expand_query_filter_methods();
 
         quote! {
@@ -35,11 +36,9 @@ impl Expand<'_> {
                     db.get(self.stmt).await
                 }
 
-                /*
-                #vis fn update(self) -> builders::UpdateQuery {
-                    builders::UpdateQuery::from(self)
+                #vis fn update(self) -> #update_query_struct_ident {
+                    #update_query_struct_ident::from(self)
                 }
-                */
 
                 #vis async fn delete(self, db: &#toasty::Db) -> #toasty::Result<()> {
                     db.exec(self.stmt.delete()).await?;

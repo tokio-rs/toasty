@@ -2,13 +2,13 @@ mod table;
 
 use super::*;
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 /// Used to resolve types during parsing
 struct Builder {
     /// Maps table names to identifiers. The identifiers are reserved before the
     /// table objects are actually created.
-    table_lookup: HashMap<String, TableId>,
+    table_lookup: IndexMap<String, TableId>,
 
     // ----- OLD -----
     /// Tables as they are built
@@ -21,10 +21,12 @@ struct Builder {
 impl Schema {
     pub fn from_app(app: app::Schema, db: &driver::Capability) -> Result<Schema> {
         let mut builder = Builder {
-            table_lookup: HashMap::new(),
+            table_lookup: IndexMap::new(),
 
             tables: vec![],
-            mapping: Mapping { models: vec![] },
+            mapping: Mapping {
+                models: IndexMap::new(),
+            },
         };
 
         // Find all models that specified a table name, ensure a table is
@@ -42,26 +44,29 @@ impl Schema {
             };
 
             // Create a mapping stub for the model
-            builder.mapping.models.push(mapping::Model {
-                id: model.id,
-                table,
-                columns: vec![],
-                // Create a mapping stub for each primitive field
-                fields: model
-                    .fields
-                    .iter()
-                    .map(|field| match &field.ty {
-                        app::FieldTy::Primitive(_) => Some(mapping::Field {
-                            column: ColumnId::placeholder(),
-                            lowering: 0,
-                        }),
-                        _ => None,
-                    })
-                    .collect(),
-                model_to_table: stmt::ExprRecord::default(),
-                model_pk_to_table: stmt::Expr::default(),
-                table_to_model: stmt::ExprRecord::default(),
-            });
+            builder.mapping.models.insert(
+                model.id,
+                mapping::Model {
+                    id: model.id,
+                    table,
+                    columns: vec![],
+                    // Create a mapping stub for each primitive field
+                    fields: model
+                        .fields
+                        .iter()
+                        .map(|field| match &field.ty {
+                            app::FieldTy::Primitive(_) => Some(mapping::Field {
+                                column: ColumnId::placeholder(),
+                                lowering: 0,
+                            }),
+                            _ => None,
+                        })
+                        .collect(),
+                    model_to_table: stmt::ExprRecord::default(),
+                    model_pk_to_table: stmt::Expr::default(),
+                    table_to_model: stmt::ExprRecord::default(),
+                },
+            );
         }
 
         builder.build_tables_from_models(&app, db);

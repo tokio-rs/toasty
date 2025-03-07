@@ -1,25 +1,25 @@
 use tests_client::*;
 
 use std_util::prelude::*;
+use toasty::stmt::Id;
 
 const MORE: i32 = 10;
 
 async fn crud_no_fields(s: impl Setup) {
-    schema!(
-        "
-        model Foo {
-            #[key]
-            #[auto]
-            id: Id,
-        }"
-    );
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(Foo)).await;
 
-    let created = db::Foo::create().exec(&db).await.unwrap();
+    let created = Foo::create().exec(&db).await.unwrap();
 
     // Find Foo
-    let read = db::Foo::filter_by_id(&created.id)
+    let read = Foo::filter_by_id(&created.id)
         .all(&db)
         .await
         .unwrap()
@@ -35,7 +35,7 @@ async fn crud_no_fields(s: impl Setup) {
     let mut ids = vec![];
 
     for _ in 0..MORE {
-        let foo = db::Foo::create().exec(&db).await.unwrap();
+        let foo = Foo::create().exec(&db).await.unwrap();
         assert_ne!(foo.id, created.id);
         ids.push(foo.id);
     }
@@ -43,7 +43,7 @@ async fn crud_no_fields(s: impl Setup) {
     std_util::assert_unique!(ids);
 
     for id in &ids {
-        let read = db::Foo::filter_by_id(id)
+        let read = Foo::filter_by_id(id)
             .all(&db)
             .await
             .unwrap()
@@ -64,48 +64,43 @@ async fn crud_no_fields(s: impl Setup) {
 
         if i.is_even() {
             // Delete by object
-            let val = db::Foo::get_by_id(&db, &id).await.unwrap();
+            let val = Foo::get_by_id(&db, &id).await.unwrap();
             val.delete(&db).await.unwrap();
         } else {
             // Delete by ID
-            db::Foo::filter_by_id(&id).delete(&db).await.unwrap();
+            Foo::filter_by_id(&id).delete(&db).await.unwrap();
         }
 
         // Assert deleted
-        assert_err!(db::Foo::get_by_id(&db, id).await);
+        assert_err!(Foo::get_by_id(&db, id).await);
 
         // Assert other foos remain
         for id in &ids {
-            let foo = db::Foo::get_by_id(&db, id).await.unwrap();
+            let foo = Foo::get_by_id(&db, id).await.unwrap();
             assert_eq!(*id, foo.id);
         }
     }
 }
 
 async fn crud_one_string(s: impl Setup) {
-    schema!(
-        "
-        model Foo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            val: String,
-        }"
-    );
+        val: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(Foo)).await;
 
-    let mut created = db::Foo::create()
-        .val("hello world")
-        .exec(&db)
-        .await
-        .unwrap();
+    let mut created = Foo::create().val("hello world").exec(&db).await.unwrap();
 
     assert_eq!(created.val, "hello world");
 
     // Find Foo
-    let read = db::Foo::filter_by_id(&created.id)
+    let read = Foo::filter_by_id(&created.id)
         .all(&db)
         .await
         .unwrap()
@@ -120,7 +115,7 @@ async fn crud_one_string(s: impl Setup) {
     let mut ids = vec![];
 
     for i in 0..10 {
-        let foo = db::Foo::create()
+        let foo = Foo::create()
             .val(format!("hello {i}"))
             .exec(&db)
             .await
@@ -133,7 +128,7 @@ async fn crud_one_string(s: impl Setup) {
     std_util::assert_unique!(ids);
 
     for (i, id) in ids.iter().enumerate() {
-        let read = db::Foo::filter_by_id(id)
+        let read = Foo::filter_by_id(id)
             .all(&db)
             .await
             .unwrap()
@@ -150,30 +145,30 @@ async fn crud_one_string(s: impl Setup) {
     created.update().val("updated!").exec(&db).await.unwrap();
     assert_eq!(created.val, "updated!");
 
-    let reload = db::Foo::get_by_id(&db, &created.id).await.unwrap();
+    let reload = Foo::get_by_id(&db, &created.id).await.unwrap();
     assert_eq!(reload.val, created.val);
 
     // Update by ID
-    db::Foo::filter_by_id(&created.id)
+    Foo::filter_by_id(&created.id)
         .update()
         .val("updated again!")
         .exec(&db)
         .await
         .unwrap();
-    let reload = db::Foo::get_by_id(&db, &created.id).await.unwrap();
+    let reload = Foo::get_by_id(&db, &created.id).await.unwrap();
     assert_eq!(reload.val, "updated again!");
 
     // Delete the record
     reload.delete(&db).await.unwrap();
 
     // It is gone
-    assert_err!(db::Foo::get_by_id(&db, &created.id).await);
+    assert_err!(Foo::get_by_id(&db, &created.id).await);
 
     // Delete by ID
-    db::Foo::filter_by_id(&ids[0]).delete(&db).await.unwrap();
+    Foo::filter_by_id(&ids[0]).delete(&db).await.unwrap();
 
     // It is gone
-    assert_err!(db::Foo::get_by_id(&db, &ids[0]).await);
+    assert_err!(Foo::get_by_id(&db, &ids[0]).await);
 }
 
 async fn required_field_create_without_setting(s: impl Setup) {
