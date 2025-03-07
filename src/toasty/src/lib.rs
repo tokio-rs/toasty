@@ -24,7 +24,7 @@ pub mod driver {
     pub use toasty_core::driver::*;
 }
 
-pub use toasty_macros::{create, query};
+pub use toasty_macros::{create, model, query};
 
 pub use anyhow::{Error, Result};
 

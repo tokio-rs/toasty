@@ -17,13 +17,11 @@ impl Expand<'_> {
         let reload_model = self.expand_reload_model_expr();
 
         quote! {
-            #[derive(Debug)]
             #vis struct #update_struct_ident<'a> {
                 model: &'a mut #model_ident,
                 query: #update_query_struct_ident,
             }
 
-            #[derive(Debug)]
             #vis struct #update_query_struct_ident {
                 stmt: #toasty::stmt::Update<#model_ident>,
             }

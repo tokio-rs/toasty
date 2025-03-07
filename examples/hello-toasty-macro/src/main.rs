@@ -1,9 +1,8 @@
-#[derive(Debug)]
 #[toasty_macros::model]
 struct User {
     #[key]
     #[auto]
-    id: toasty::stmt::Id<User>,
+    id: toasty::stmt::Id<Self>,
 
     name: String,
 
@@ -16,7 +15,6 @@ struct User {
     moto: Option<String>,
 }
 
-#[derive(Debug)]
 #[toasty_macros::model]
 struct Todo {
     #[key]
@@ -43,6 +41,7 @@ async fn main() -> toasty::Result<()> {
     // For now, reset!s
     db.reset_db().await?;
 
+    /*
     println!("==> let u1 = User::create()");
     let u1 = User::create()
         .name("John Doe")
@@ -132,6 +131,7 @@ async fn main() -> toasty::Result<()> {
     assert_eq!(len - 1, user.todos().collect::<Vec<_>>(&db).await?.len());
 
     println!(">>> DONE <<<");
+    */
 
     Ok(())
 }

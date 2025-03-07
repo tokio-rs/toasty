@@ -48,6 +48,14 @@ impl Model {
             ));
         };
 
+        // Generics are not supported yet
+        if !ast.generics.params.is_empty() {
+            return Err(syn::Error::new_spanned(
+                &ast.generics,
+                "model generics are not supported",
+            ));
+        }
+
         // First, map field names to identifiers
         let mut names = vec![];
 
@@ -64,7 +72,7 @@ impl Model {
         let mut errs = ErrorSet::new();
 
         for (index, node) in node.named.iter_mut().enumerate() {
-            match Field::from_ast(node, index, &names) {
+            match Field::from_ast(node, &ast.ident, index, &names) {
                 Ok(field) => fields.push(field),
                 Err(err) => errs.push(err),
             }

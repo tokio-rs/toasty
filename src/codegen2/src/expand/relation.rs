@@ -13,27 +13,22 @@ impl Expand<'_> {
         let create_builder_ident = &self.model.create_struct_ident;
 
         quote! {
-            #[derive(Debug)]
             #vis struct Many {
                 stmt: #toasty::stmt::Association<[#model_ident]>,
             }
 
-            #[derive(Debug)]
             #vis struct One {
                 stmt: #toasty::stmt::Select<#model_ident>,
             }
 
-            #[derive(Debug)]
             #vis struct OptionOne {
                 stmt: #toasty::stmt::Select<#model_ident>,
             }
 
-            #[derive(Debug)]
             #vis struct ManyField {
                 path: #toasty::Path<[#model_ident]>,
             }
 
-            #[derive(Debug)]
             #vis struct OneField {
                 path: #toasty::Path<#model_ident>,
             }

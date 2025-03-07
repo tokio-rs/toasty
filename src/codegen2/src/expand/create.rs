@@ -13,7 +13,6 @@ impl Expand<'_> {
         let create_methods = self.expand_create_methods();
 
         quote! {
-            #[derive(Debug)]
             #vis struct #create_struct_ident {
                 stmt: #toasty::stmt::Insert<#model_ident>,
             }

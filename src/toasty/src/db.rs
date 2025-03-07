@@ -114,8 +114,12 @@ impl Builder {
         self
     }
 
+    pub fn build_app_schema(&self) -> Result<app::Schema> {
+        app::Schema::from_macro(&self.models)
+    }
+
     pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
-        let schema = app::Schema::from_macro(&self.models)?;
+        let schema = self.build_app_schema()?;
         Db::new(schema, driver).await
     }
 }

@@ -48,7 +48,7 @@ rand = "0.8.5"
 serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.132"
 std-util = { path = "src/std-util" }
-syn = { version = "2.0.86", features = ["full", "extra-traits"] }
+syn = { version = "2.0.86", features = ["full", "extra-traits", "visit-mut"] }
 tokio = { version = "1.18", features = ["full"] }
 tokio-postgres = "0.7.13"
 tokio-stream = { version = "0.1.16", default-features = false }

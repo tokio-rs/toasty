@@ -12,7 +12,6 @@ impl Expand<'_> {
         let filter_methods = self.expand_query_filter_methods();
 
         quote! {
-            #[derive(Debug)]
             #vis struct #query_struct_ident {
                 stmt: #toasty::stmt::Select<#model_ident>,
             }

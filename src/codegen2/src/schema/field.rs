@@ -45,6 +45,7 @@ pub(crate) enum FieldTy {
 impl Field {
     pub(super) fn from_ast(
         field: &mut syn::Field,
+        model_ident: &syn::Ident,
         id: usize,
         names: &[syn::Ident],
     ) -> syn::Result<Field> {
@@ -118,18 +119,22 @@ impl Field {
             return Err(err);
         }
 
-        let ty = ty.unwrap_or_else(|| FieldTy::Primitive(field.ty.clone()));
+        let mut ty = ty.unwrap_or_else(|| FieldTy::Primitive(field.ty.clone()));
 
-        match &ty {
+        match &mut ty {
             FieldTy::BelongsTo(rel) => {
                 let ty = &rel.ty;
                 field.ty = parse_quote!(toasty::codegen_support::BelongsTo<#ty>);
+                rewrite_self(&mut rel.ty, model_ident);
             }
             FieldTy::HasMany(rel) => {
                 let ty = &rel.ty;
                 field.ty = parse_quote!(toasty::codegen_support::HasMany<#ty>);
+                rewrite_self(&mut rel.ty, model_ident);
             }
-            FieldTy::Primitive(_) => {}
+            FieldTy::Primitive(ty) => {
+                rewrite_self(ty, model_ident);
+            }
         }
 
         Ok(Field {
@@ -140,4 +145,22 @@ impl Field {
             set_ident,
         })
     }
+}
+
+fn rewrite_self(ty: &mut syn::Type, model: &syn::Ident) {
+    use syn::visit_mut::VisitMut;
+
+    struct RewriteSelf<'a>(&'a syn::Ident);
+
+    impl VisitMut for RewriteSelf<'_> {
+        fn visit_path_mut(&mut self, path: &mut syn::Path) {
+            syn::visit_mut::visit_path_mut(self, path);
+
+            if path.is_ident("Self") {
+                path.segments[0].ident = self.0.clone();
+            }
+        }
+    }
+
+    RewriteSelf(model).visit_type_mut(ty);
 }
