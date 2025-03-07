@@ -22,12 +22,13 @@ impl Expand<'_> {
                         db::{IndexOp, IndexScope},
                         Name
                     },
+                    Model,
                     Type,
                 };
 
                 let id = #toasty::ModelId(#id);
 
-                Model {
+                #toasty::schema::app::Model {
                     id,
                     name: #name,
                     fields: #fields,
@@ -81,8 +82,8 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(FieldTy::BelongsTo(BelongsTo {
-                        target:  <#ty as #toasty::Relation>::ID,
-                        expr_ty: Type::Model(<#ty as #toasty::Relation>::ID),
+                        target:  <#ty as #toasty::Relation>::Model::ID,
+                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::ID),
                         // The pair is populated at runtime.
                         pair: None,
                         foreign_key: ForeignKey {
@@ -96,8 +97,8 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(FieldTy::HasMany(HasMany {
-                        target: <#ty as #toasty::Relation>::ID,
-                        expr_ty: Type::List(Box::new(Type::Model(<#ty as #toasty::Relation>::ID))),
+                        target: <#ty as #toasty::Relation>::Model::ID,
+                        expr_ty: Type::List(Box::new(Type::Model(<#ty as #toasty::Relation>::Model::ID))),
                         singular: #singular_name,
                         // The pair is populated at runtime.
                         pair: FieldId {

@@ -210,35 +210,28 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-        /*
-        let mut target_relation = quote!(#target_struct);
 
-        if field.nullable {
-            target_relation = quote!(Option<#target_struct>);
-        }
-
-        // For proc macros, this will be updated to use field attributes instead of looking at the schema types
-        let operands = rel.foreign_key.fields.iter().map(|fk_field| {
-            let target_field_const = self.field_const_name(fk_field.target);
-            let source_field_name = self.field_name(fk_field.source);
+        let operands = rel.foreign_key.iter().map(|fk_field| {
+            let source = &self.model.fields[fk_field.source];
+            let source_field_ident = &source.name.ident;
+            let target = &fk_field.target;
 
             quote! {
-                #target_struct::#target_field_const.eq(&self.#source_field_name)
+                <#ty as #toasty::Relation>::Model::FIELDS.#target.eq(&self.#source_field_ident)
             }
         });
 
-        let filter = if rel.foreign_key.fields.len() == 1 {
+        let filter = if rel.foreign_key.len() == 1 {
             quote!( #( #operands )* )
         } else {
             quote!( stmt::Expr::and_all([ #(#operands),* ]) )
         };
-        */
 
         quote! {
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::One {
+                use #toasty::IntoSelect;
                 <#ty as #toasty::Relation>::One::from_stmt(
-                    todo!()
-                    // #target_struct::filter(#filter).into_select()
+                    <#ty as #toasty::Relation>::Model::filter(#filter).into_select()
                 )
             }
         }

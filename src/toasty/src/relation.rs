@@ -7,6 +7,8 @@ use toasty_core::schema::app::{FieldId, ModelId};
 
 pub mod option;
 
+use super::Model;
+
 pub trait Relation {
     /// Query type
     type Query;
@@ -25,7 +27,8 @@ pub trait Relation {
 }
 
 pub trait Relation2 {
-    const ID: ModelId;
+    /// The target model
+    type Model: Model;
 
     /// Fields type
     type Fields;

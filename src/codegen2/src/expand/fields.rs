@@ -108,7 +108,7 @@ impl Expand<'_> {
 
         quote! {
             fn field_name_to_id(name: &str) -> #toasty::FieldId {
-                use #toasty::FieldId;
+                use #toasty::{FieldId, Model};
 
                 match name {
                     #( #fields )*

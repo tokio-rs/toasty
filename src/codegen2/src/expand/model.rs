@@ -73,7 +73,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::Relation for #model_ident {
-                const ID: #toasty::ModelId = #toasty::ModelId(#id);
+                type Model = #model_ident;
                 type Fields = #fields_struct_ident;
                 type Query = #query_struct_ident;
                 type Many = Many;
