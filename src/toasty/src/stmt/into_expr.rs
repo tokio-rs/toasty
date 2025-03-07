@@ -48,6 +48,18 @@ impl<T: IntoExpr<T> + ?Sized> IntoExpr<T> for &T {
     }
 }
 
+impl<T: IntoExpr<T>> IntoExpr<[T]> for &T {
+    fn into_expr(self) -> Expr<[T]> {
+        // IntoExpr::<T>::by_ref(self)
+        todo!()
+    }
+
+    fn by_ref(&self) -> Expr<[T]> {
+        // IntoExpr::by_ref(*self)
+        todo!()
+    }
+}
+
 impl<T: IntoExpr<T>> IntoExpr<Option<T>> for Option<T> {
     fn into_expr(self) -> Expr<Option<T>> {
         // Expr::from_value(Value::from(Some(self)))
