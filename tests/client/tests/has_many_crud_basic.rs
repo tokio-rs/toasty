@@ -241,37 +241,39 @@ async fn crud_user_todos(s: impl Setup) {
 }
 
 async fn has_many_insert_on_update(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
+        #[has_many]
+        todos: [Todo],
 
-            name: String,
-        }
+        name: String,
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[index]
+        user_id: Id<User>,
 
-            #[index]
-            user_id: Id<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a user, no TODOs
-    let mut user = db::User::create().name("Alice").exec(&db).await.unwrap();
+    let mut user = User::create().name("Alice").exec(&db).await.unwrap();
     assert!(user
         .todos()
         .collect::<Vec<_>>(&db)
@@ -282,7 +284,7 @@ async fn has_many_insert_on_update(s: impl Setup) {
     // Update the user and create a todo in a batch
     user.update()
         .name("Bob")
-        .todo(db::Todo::create().title("change name"))
+        .todo(Todo::create().title("change name"))
         .exec(&db)
         .await
         .unwrap();
