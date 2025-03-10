@@ -17,3 +17,17 @@ pub trait Model: Sized {
         todo!()
     }
 }
+
+// TODO: This is a hack to aid in the transition from schema code gen to proc
+// macro. This should be removed once the proc macro is implemented.
+impl<T: Model> Model for Option<T> {
+    const ID: ModelId = T::ID;
+
+    fn load(row: stmt::ValueRecord) -> Result<Self, Error> {
+        Ok(Some(T::load(row)?))
+    }
+
+    fn schema() -> app::Model {
+        todo!()
+    }
+}

@@ -95,3 +95,9 @@ impl<T: ?Sized> From<Insert<T>> for Expr<T> {
         Expr::from_untyped(stmt::Expr::Stmt(value.untyped.into()))
     }
 }
+
+impl<T> From<Insert<T>> for Expr<Option<T>> {
+    fn from(value: Insert<T>) -> Self {
+        Expr::from_untyped(stmt::Expr::Stmt(value.untyped.into()))
+    }
+}

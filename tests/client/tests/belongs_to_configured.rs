@@ -1,35 +1,37 @@
 use tests_client::*;
 
 async fn different_field_name(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: toasty::stmt::Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: toasty::stmt::Id<Self>,
 
-            #[relation(key = owner_id, references = id)]
-            owner: User,
+        #[belongs_to(key = owner_id, references = id)]
+        owner: User,
 
-            #[index]
-            owner_id: Id<User>,
+        #[index]
+        owner_id: toasty::stmt::Id<User>,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a user
-    let user = db::User::create().exec(&db).await.unwrap();
+    let user = User::create().exec(&db).await.unwrap();
 
     // Create a Todo associated with the user
     let todo = user

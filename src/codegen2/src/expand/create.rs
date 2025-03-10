@@ -43,6 +43,16 @@ impl Expand<'_> {
                 }
             }
 
+            impl #toasty::IntoExpr<Option<#model_ident>> for #create_struct_ident {
+                fn into_expr(self) -> #toasty::stmt::Expr<Option<#model_ident>> {
+                    self.stmt.into()
+                }
+
+                fn by_ref(&self) -> #toasty::stmt::Expr<Option<#model_ident>> {
+                    todo!()
+                }
+            }
+
             impl #toasty::IntoExpr<[#model_ident]> for #create_struct_ident {
                 fn into_expr(self) -> #toasty::stmt::Expr<[#model_ident]> {
                     self.stmt.into_list_expr()
