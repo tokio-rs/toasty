@@ -1,8 +1,5 @@
 #[derive(Debug)]
 pub(crate) struct Index {
-    /// Uniquely identifies the index within the model.
-    pub(crate) id: usize,
-
     /// Fields included in the index.
     pub(crate) fields: Vec<IndexField>,
 
@@ -17,4 +14,16 @@ pub(crate) struct Index {
 pub(crate) struct IndexField {
     /// The field being indexed
     pub(crate) field: usize,
+
+    /// The scope of the index
+    pub(crate) scope: IndexScope,
+}
+
+#[derive(Debug)]
+pub(crate) enum IndexScope {
+    /// The index column is used to partition rows across nodes of a distributed database.
+    Partition,
+
+    /// The index column is scoped to a physical node.
+    Local,
 }

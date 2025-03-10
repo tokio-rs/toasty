@@ -381,31 +381,33 @@ async fn has_many_when_target_indexes_fk_and_pk(_s: impl Setup) {}
 
 // When the FK is composite, things should still work
 async fn has_many_when_fk_is_composite(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        #[key(partition = user_id, local = id)]
-        model Todo {
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    #[key(partition = user_id, local = id)]
+    struct Todo {
+        #[auto]
+        id: Id<Self>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        user_id: Id<User>,
 
-            user_id: Id<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a user
     let user = db::User::create().exec(&db).await.unwrap();

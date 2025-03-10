@@ -1,4 +1,4 @@
-use super::{ErrorSet, Field, Index, IndexField, Name, PrimaryKey};
+use super::{ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey};
 
 #[derive(Debug)]
 pub(crate) struct Model {
@@ -67,13 +67,30 @@ impl Model {
             }
         }
 
+        let mut model_attr = ModelAttr::default();
         let mut fields = vec![];
         let mut indices = vec![];
+        let mut pk_index_fields = vec![];
         let mut errs = ErrorSet::new();
+
+        if let Err(err) = model_attr.populate_from_ast(&mut ast.attrs, &names) {
+            errs.push(err);
+        }
 
         for (index, node) in node.named.iter_mut().enumerate() {
             match Field::from_ast(node, &ast.ident, index, &names) {
-                Ok(field) => fields.push(field),
+                Ok(field) => {
+                    if model_attr.key.is_some() {
+                        if let Some(field) = &field.attrs.key {
+                            errs.push(syn::Error::new_spanned(
+                                field,
+                                "field cannot have #[key] attribute when model has #[key] attribute",
+                            ));
+                        }
+                    }
+
+                    fields.push(field);
+                }
                 Err(err) => errs.push(err),
             }
         }
@@ -82,36 +99,49 @@ impl Model {
             return Err(err);
         }
 
-        let primary_key_fields: Vec<_> = fields
-            .iter()
-            .enumerate()
-            .filter_map(
-                |(index, field)| {
-                    if field.attrs.key {
-                        Some(index)
-                    } else {
-                        None
-                    }
-                },
-            )
-            .collect();
+        if let Some(attr) = &model_attr.key {
+            for field in &attr.partition {
+                let index = names.iter().position(|name| name == field).unwrap();
+                pk_index_fields.push(IndexField {
+                    field: index,
+                    scope: IndexScope::Partition,
+                });
+            }
+
+            for field in &attr.local {
+                let index = names.iter().position(|name| name == field).unwrap();
+                pk_index_fields.push(IndexField {
+                    field: index,
+                    scope: IndexScope::Local,
+                });
+            }
+        } else {
+            for (offset, field) in fields.iter().enumerate() {
+                if field.attrs.key.is_some() {
+                    pk_index_fields.push(IndexField {
+                        field: offset,
+                        scope: IndexScope::Partition,
+                    });
+                }
+            }
+        }
 
         // Return an error if no primary key fields were found
-        if primary_key_fields.is_empty() {
+        if pk_index_fields.is_empty() {
             return Err(syn::Error::new_spanned(
                 &ast,
-                "model must have at least one #[key] field",
+                "model must either have a struct-level `#[key]` attribute or at least one field-level `#[key]` attribute",
             ));
         }
 
+        let pk_fields = pk_index_fields
+            .iter()
+            .map(|index_field| index_field.field)
+            .collect();
+
         // Create an index for the primary key
         indices.push(Index {
-            id: 0,
-            fields: primary_key_fields
-                .iter()
-                .copied()
-                .map(|field| IndexField { field })
-                .collect(),
+            fields: pk_index_fields,
             unique: true,
             primary_key: true,
         });
@@ -119,20 +149,20 @@ impl Model {
         // Create indices for all fields annotated with unique
         for (index, field) in fields.iter().enumerate() {
             if field.attrs.unique {
-                let id = indices.len();
-
                 indices.push(Index {
-                    id,
-                    fields: vec![IndexField { field: index }],
+                    fields: vec![IndexField {
+                        field: index,
+                        scope: IndexScope::Partition,
+                    }],
                     unique: true,
                     primary_key: false,
                 });
             } else if field.attrs.index {
-                let id = indices.len();
-
                 indices.push(Index {
-                    id,
-                    fields: vec![IndexField { field: index }],
+                    fields: vec![IndexField {
+                        field: index,
+                        scope: IndexScope::Partition,
+                    }],
                     unique: false,
                     primary_key: false,
                 });
@@ -148,10 +178,7 @@ impl Model {
             ident: ast.ident.clone(),
             fields,
             indices,
-            primary_key: PrimaryKey {
-                fields: primary_key_fields,
-                index: 0,
-            },
+            primary_key: PrimaryKey { fields: pk_fields },
             field_struct_ident: struct_ident("Fields", ast),
             query_struct_ident: struct_ident("Query", ast),
             create_struct_ident: struct_ident("Create", ast),

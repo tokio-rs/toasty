@@ -1,22 +1,46 @@
-mod db;
-use std::path::PathBuf;
+use toasty::stmt::Id;
 
-use db::User;
+#[derive(Debug)]
+#[toasty::model]
+struct User {
+    #[key]
+    #[auto]
+    id: Id<Self>,
 
-use toasty::Db;
-use toasty_sqlite::Sqlite;
+    name: String,
+
+    #[unique]
+    email: String,
+
+    #[has_many]
+    todos: [Todo],
+}
+
+#[derive(Debug)]
+#[toasty::model]
+#[key(partition = user_id, local = id)]
+struct Todo {
+    #[auto]
+    id: Id<Self>,
+
+    title: String,
+
+    order: i64,
+
+    #[belongs_to(key = user_id, references = id)]
+    user: User,
+
+    user_id: Id<User>,
+}
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
-    let schema = toasty::schema::from_file(schema_file)?;
+    let db = toasty::Db::builder()
+        .register::<User>()
+        .register::<Todo>()
+        .build(toasty_sqlite::Sqlite::in_memory())
+        .await?;
 
-    println!("{schema:#?}");
-
-    // Use the in-memory sqlite driver
-    let driver = Sqlite::in_memory();
-
-    let db = Db::new(schema, driver).await?;
     // For now, reset!s
     db.reset_db().await?;
 
@@ -46,7 +70,11 @@ async fn main() -> toasty::Result<()> {
     println!("--- QUERY ---");
     println!("====================");
 
-    let mut todos = user.todos().query(db::Todo::ORDER.eq(1)).all(&db).await?;
+    let mut todos = user
+        .todos()
+        .query(Todo::FIELDS.order.eq(1))
+        .all(&db)
+        .await?;
 
     while let Some(todo) = todos.next().await {
         let todo = todo?;

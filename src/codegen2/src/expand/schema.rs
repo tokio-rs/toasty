@@ -161,6 +161,8 @@ impl Expand<'_> {
     }
 
     fn expand_model_indices(&self) -> TokenStream {
+        use crate::schema::IndexScope;
+
         let indices = self
             .model
             .indices
@@ -173,6 +175,10 @@ impl Expand<'_> {
 
                 let fields = model_index.fields.iter().map(|index_field| {
                     let field_tokenized = util::int(index_field.field);
+                    let scope = match &index_field.scope {
+                        IndexScope::Partition => quote!(IndexScope::Partition),
+                        IndexScope::Local => quote!(IndexScope::Local),
+                    };
 
                     quote! {
                         IndexField {
@@ -181,7 +187,7 @@ impl Expand<'_> {
                                 index: #field_tokenized,
                             },
                             op: IndexOp::Eq,
-                            scope: IndexScope::Partition,
+                            scope: #scope,
                         }
                     }
                 });

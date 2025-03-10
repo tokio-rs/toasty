@@ -8,7 +8,7 @@ pub(crate) struct Field {
     pub(crate) id: usize,
 
     /// Field attributes
-    pub(crate) attrs: FieldAttrs,
+    pub(crate) attrs: FieldAttr,
 
     /// Field name
     pub(crate) name: Name,
@@ -21,9 +21,9 @@ pub(crate) struct Field {
 }
 
 #[derive(Debug)]
-pub(crate) struct FieldAttrs {
+pub(crate) struct FieldAttr {
     /// True if the field is annotated with `#[key]`
-    pub(crate) key: bool,
+    pub(crate) key: Option<syn::Attribute>,
 
     /// True if the field is annotated with `#[unique]`
     pub(crate) unique: bool,
@@ -57,8 +57,8 @@ impl Field {
         let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
 
         let mut errs = ErrorSet::new();
-        let mut attrs = FieldAttrs {
-            key: false,
+        let mut attrs = FieldAttr {
+            key: None,
             unique: false,
             auto: false,
             index: false,
@@ -70,10 +70,10 @@ impl Field {
             let attr = &field.attrs[i];
 
             if attr.path().is_ident("key") {
-                if attrs.key {
+                if attrs.key.is_some() {
                     errs.push(syn::Error::new_spanned(attr, "duplicate #[key] attribute"));
                 } else {
-                    attrs.key = true;
+                    attrs.key = Some(attr.clone());
                 }
             } else if attr.path().is_ident("auto") {
                 if attrs.auto {

@@ -14,10 +14,16 @@ mod has_many;
 pub(crate) use has_many::HasMany;
 
 mod index;
-pub(crate) use index::{Index, IndexField};
+pub(crate) use index::{Index, IndexField, IndexScope};
+
+mod key_attr;
+pub(crate) use key_attr::KeyAttr;
 
 mod model;
 pub(crate) use model::Model;
+
+mod model_attr;
+pub(crate) use model_attr::ModelAttr;
 
 mod name;
 pub(crate) use name::Name;
