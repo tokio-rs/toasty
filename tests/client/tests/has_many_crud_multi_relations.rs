@@ -4,57 +4,58 @@ use std::collections::HashMap;
 use toasty::stmt::Id;
 
 async fn crud_user_todos_categories(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            #[index]
-            category_id: Id<Category>,
+        #[index]
+        category_id: Id<Category>,
 
-            #[relation(key = category_id, references = id)]
-            category: Category,
+        #[belongs_to(key = category_id, references = id)]
+        category: Category,
 
-            title: String,
-        }
+        title: String,
+    }
 
-        model Category {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Category {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            todos: [Todo],
-        }"
-    );
+        #[has_many]
+        todos: [Todo],
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo, Category)).await;
 
     // Create a user
-    let user = db::User::create()
-        .name("Ann Chovey")
-        .exec(&db)
-        .await
-        .unwrap();
+    let user = User::create().name("Ann Chovey").exec(&db).await.unwrap();
 
     // No TODOs
     assert_empty!(user
@@ -67,7 +68,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         .unwrap());
 
     // Create a category
-    let category = db::Category::create().name("Food").exec(&db).await.unwrap();
+    let category = Category::create().name("Food").exec(&db).await.unwrap();
 
     let mut todos = vec![];
 
@@ -83,7 +84,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
     );
 
     todos.push(
-        db::Todo::create()
+        Todo::create()
             .title("two")
             .user(&user)
             .category(&category)
@@ -111,7 +112,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
     let lists = [
         category.todos().collect::<Vec<_>>(&db).await.unwrap(),
         user.todos().collect::<Vec<_>>(&db).await.unwrap(),
-        db::Todo::filter_by_user_id(&user.id)
+        Todo::filter_by_user_id(&user.id)
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
@@ -132,12 +133,8 @@ async fn crud_user_todos_categories(s: impl Setup) {
     }
 
     // Create another user and category
-    let user2 = db::User::create().name("Not ann").exec(&db).await.unwrap();
-    let category2 = db::Category::create()
-        .name("drink")
-        .exec(&db)
-        .await
-        .unwrap();
+    let user2 = User::create().name("Not ann").exec(&db).await.unwrap();
+    let category2 = Category::create().name("drink").exec(&db).await.unwrap();
 
     category
         .todos()
@@ -155,7 +152,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         .await
         .unwrap();
 
-    fn check_todo_list(expect: &HashMap<Id<db::Todo>, db::Todo>, list: Vec<db::Todo>) {
+    fn check_todo_list(expect: &HashMap<Id<Todo>, Todo>, list: Vec<Todo>) {
         assert_eq!(3, list.len(), "list={list:#?}");
 
         let actual: HashMap<_, _> = list
@@ -174,7 +171,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         &expect,
         category
             .todos()
-            .query(db::Todo::USER.eq(&user))
+            .query(Todo::FIELDS.user.eq(&user))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
@@ -183,7 +180,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
     check_todo_list(
         &expect,
         user.todos()
-            .query(db::Todo::CATEGORY.eq(&category))
+            .query(Todo::FIELDS.category.eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
@@ -191,8 +188,8 @@ async fn crud_user_todos_categories(s: impl Setup) {
 
     check_todo_list(
         &expect,
-        db::Todo::filter_by_user_id(&user.id)
-            .filter(db::Todo::CATEGORY.eq(&category))
+        Todo::filter_by_user_id(&user.id)
+            .filter(Todo::FIELDS.category.eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),

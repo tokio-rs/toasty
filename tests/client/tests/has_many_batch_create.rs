@@ -1,39 +1,43 @@
 use tests_client::*;
 
+use toasty::stmt::Id;
+
 async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a user with some todos
-    let user = db::User::create()
+    let user = User::create()
         .name("Ann Chovey")
-        .todo(db::Todo::create().title("Make pizza"))
+        .todo(Todo::create().title("Make pizza"))
         .exec(&db)
         .await
         .unwrap();
@@ -44,63 +48,68 @@ async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
     assert_eq!("Make pizza", todos[0].title);
 
     // Find the todo by ID
-    let todo = db::Todo::get_by_id(&db, &todos[0].id).await.unwrap();
+    let todo = Todo::get_by_id(&db, &todos[0].id).await.unwrap();
     assert_eq!("Make pizza", todo.title);
 }
 
 async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            #[index]
-            category_id: Id<Category>,
+        #[index]
+        category_id: Id<Category>,
 
-            #[relation(key = category_id, references = id)]
-            category: Category,
+        #[belongs_to(key = category_id, references = id)]
+        category: Category,
 
-            title: String,
-        }
+        title: String,
+    }
 
-        model Category {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Category {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            todos: [Todo],
-        }"
-    );
+        #[has_many]
+        todos: [Todo],
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo, Category)).await;
 
     // Create a user with some todos
-    let user = db::User::create()
+    let user = User::create()
         .name("Ann Chovey")
         .todo(
-            db::Todo::create()
+            Todo::create()
                 .title("Make pizza")
-                .category(db::Category::create().name("Eating")),
+                .category(Category::create().name("Eating")),
         )
         .exec(&db)
         .await
@@ -112,27 +121,25 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
     assert_eq!("Make pizza", todos[0].title);
 
     // Find the todo by ID
-    let todo = db::Todo::get_by_id(&db, &todos[0].id).await.unwrap();
+    let todo = Todo::get_by_id(&db, &todos[0].id).await.unwrap();
     assert_eq!("Make pizza", todo.title);
 
     // Find the category by ID
-    let category = db::Category::get_by_id(&db, &todo.category_id)
-        .await
-        .unwrap();
+    let category = Category::get_by_id(&db, &todo.category_id).await.unwrap();
     assert_eq!(category.name, "Eating");
 
     // Create more than one todo per user
-    let user = db::User::create()
+    let user = User::create()
         .name("John Doe")
         .todo(
-            db::Todo::create()
+            Todo::create()
                 .title("do something")
-                .category(db::Category::create().name("things")),
+                .category(Category::create().name("things")),
         )
         .todo(
-            db::Todo::create()
+            Todo::create()
                 .title("do something else")
-                .category(db::Category::create().name("other things")),
+                .category(Category::create().name("other things")),
         )
         .exec(&db)
         .await
@@ -158,61 +165,62 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
 }
 
 async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            #[index]
-            category_id: Id<Category>,
+        #[index]
+        category_id: Id<Category>,
 
-            #[relation(key = category_id, references = id)]
-            category: Category,
+        #[belongs_to(key = category_id, references = id)]
+        category: Category,
 
-            title: String,
-        }
+        title: String,
+    }
 
-        model Category {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Category {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            todos: [Todo],
-        }"
-    );
+        #[has_many]
+        todos: [Todo],
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo, Category)).await;
 
-    let category = db::Category::create()
-        .name("Eating")
-        .exec(&db)
-        .await
-        .unwrap();
+    let category = Category::create().name("Eating").exec(&db).await.unwrap();
 
-    let user = db::User::create()
+    let user = User::create()
         .name("John Doe")
-        .todo(db::Todo::create().title("Pizza").category(&category))
-        .todo(db::Todo::create().title("Hamburger").category(&category))
+        .todo(Todo::create().title("Pizza").category(&category))
+        .todo(Todo::create().title("Hamburger").category(&category))
         .exec(&db)
         .await
         .unwrap();
