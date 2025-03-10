@@ -410,7 +410,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
     let db = s.setup(models!(User, Todo)).await;
 
     // Create a user
-    let user = db::User::create().exec(&db).await.unwrap();
+    let user = User::create().exec(&db).await.unwrap();
 
     // No TODOs
     assert_empty!(user
@@ -432,7 +432,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
         .unwrap();
 
     // Find the todo by ID
-    let list = db::Todo::filter_by_user_id_and_id(&user.id, &todo.id)
+    let list = Todo::filter_by_user_id_and_id(&user.id, &todo.id)
         .all(&db)
         .await
         .unwrap()
@@ -444,7 +444,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
     assert_eq!(todo.id, list[0].id);
 
     // Find the TODO by user ID
-    let list = db::Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(&user.id)
         .all(&db)
         .await
         .unwrap()
@@ -468,7 +468,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
             user.todos().create().title(title).exec(&db).await.unwrap()
         } else {
             // Create via todo builder
-            db::Todo::create()
+            Todo::create()
                 .user(&user)
                 .title(title)
                 .exec(&db)
@@ -503,7 +503,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
     }
 
     // Find all TODOs by user (using the belongs_to queries)
-    let list = db::Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(&user.id)
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
@@ -521,7 +521,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
     }
 
     // Create a second user
-    let user2 = db::User::create().exec(&db).await.unwrap();
+    let user2 = User::create().exec(&db).await.unwrap();
 
     // No TODOs associated with `user2`
     assert_empty!(user2
@@ -550,13 +550,13 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
     }
 
     // Delete a TODO by value
-    let todo = db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[0])
+    let todo = Todo::get_by_user_id_and_id(&db, &user.id, &ids[0])
         .await
         .unwrap();
     todo.delete(&db).await.unwrap();
 
     // Can no longer get the todo via id
-    assert_err!(db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[0]).await);
+    assert_err!(Todo::get_by_user_id_and_id(&db, &user.id, &ids[0]).await);
 
     // Can no longer get the todo scoped
     assert_err!(user.todos().get_by_id(&db, &ids[0]).await);
@@ -569,7 +569,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
         .unwrap();
 
     // Can no longer get the todo via id
-    assert_err!(db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[1]).await);
+    assert_err!(Todo::get_by_user_id_and_id(&db, &user.id, &ids[1]).await);
 
     // Can no longer get the todo scoped
     assert_err!(user.todos().get_by_id(&db, &ids[1]).await);
@@ -582,7 +582,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
-    let todo = db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[2])
+    let todo = Todo::get_by_user_id_and_id(&db, &user.id, &ids[2])
         .await
         .unwrap();
     assert_eq!(todo.title, "batch update 1");
@@ -596,7 +596,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
-    let todo = db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[2])
+    let todo = Todo::get_by_user_id_and_id(&db, &user.id, &ids[2])
         .await
         .unwrap();
     assert_eq!(todo.title, "batch update 1");
