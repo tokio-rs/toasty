@@ -378,30 +378,29 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
 }
 
 async fn unique_index_no_update(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            email: String,
+        #[unique]
+        email: String,
 
-            name: String,
-        }"
-    );
+        name: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User)).await;
 
-    let mut user = db::User::create()
+    let mut user = User::create()
         .email("user@example.com")
         .name("John Doe")
         .exec(&db)
         .await
         .unwrap();
 
-    let u = db::User::filter_by_id(&user.id).get(&db).await.unwrap();
+    let u = User::filter_by_id(&user.id).get(&db).await.unwrap();
     assert_eq!(user.name, u.name);
 
     // Update the name by value
@@ -409,33 +408,32 @@ async fn unique_index_no_update(s: impl Setup) {
 
     assert_eq!("Jane Doe", user.name);
 
-    let u = db::User::get_by_id(&db, &user.id).await.unwrap();
+    let u = User::get_by_id(&db, &user.id).await.unwrap();
     assert_eq!(user.name, u.name);
 
     // Find by email still works
-    let u = db::User::get_by_email(&db, &user.email).await.unwrap();
+    let u = User::get_by_email(&db, &user.email).await.unwrap();
     assert_eq!(user.name, u.name);
 }
 
 async fn batch_get_by_id(s: impl Setup) {
-    schema!(
-        "
-        model Foo {
-            #[key]
-            #[auto]
-            id: Id,
-        }"
-    );
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(Foo)).await;
     let mut keys = vec![];
 
     for _ in 0..5 {
-        let foo = db::Foo::create().exec(&db).await.unwrap();
+        let foo = Foo::create().exec(&db).await.unwrap();
         keys.push(foo.id);
     }
 
-    let foos: Vec<_> = db::Foo::filter_by_id_batch(&[&keys[0], &keys[1], &keys[2]])
+    let foos: Vec<_> = Foo::filter_by_id_batch(&[&keys[0], &keys[1], &keys[2]])
         .collect(&db)
         .await
         .unwrap();
@@ -448,24 +446,23 @@ async fn batch_get_by_id(s: impl Setup) {
 }
 
 async fn empty_batch_get_by_id(s: impl Setup) {
-    schema!(
-        "
-        model Foo {
-            #[key]
-            #[auto]
-            id: Id,
-        }"
-    );
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(Foo)).await;
     let mut ids = vec![];
 
     for _ in 0..5 {
-        let foo = db::Foo::create().exec(&db).await.unwrap();
+        let foo = Foo::create().exec(&db).await.unwrap();
         ids.push(foo.id);
     }
 
-    let foos: Vec<_> = db::Foo::filter_by_id_batch(&[] as &[toasty::stmt::Id<db::Foo>])
+    let foos: Vec<_> = Foo::filter_by_id_batch(&[] as &[toasty::stmt::Id<Foo>])
         .collect(&db)
         .await
         .unwrap();
