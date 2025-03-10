@@ -1,4 +1,5 @@
 use super::Expand;
+use crate::schema::{BelongsTo, Field, FieldTy, HasMany};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -11,6 +12,7 @@ impl Expand<'_> {
         let query_struct_ident = &self.model.query_struct_ident;
         let update_query_struct_ident = &self.model.update_query_struct_ident;
         let filter_methods = self.expand_query_filter_methods();
+        let relation_methods = self.expand_relation_methods();
 
         quote! {
             #vis struct #query_struct_ident {
@@ -63,7 +65,7 @@ impl Expand<'_> {
                     self
                 }
 
-                // #relation_methods
+                #relation_methods
             }
 
             impl #toasty::stmt::IntoSelect for #query_struct_ident {
@@ -86,6 +88,56 @@ impl Expand<'_> {
                 fn default() -> #query_struct_ident {
                     #query_struct_ident { stmt: #toasty::stmt::Select::all() }
                 }
+            }
+        }
+    }
+
+    fn expand_relation_methods(&self) -> TokenStream {
+        self.model
+            .fields
+            .iter()
+            .filter_map(|field| match &field.ty {
+                FieldTy::Primitive(..) => None,
+                FieldTy::HasMany(rel) => Some(self.expand_has_many_method(field, rel)),
+                FieldTy::BelongsTo(rel) => Some(self.expand_belongs_to_method(field, rel)),
+            })
+            .collect()
+    }
+
+    fn expand_has_many_method(&self, field: &Field, rel: &HasMany) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let target = &rel.ty;
+        let model_ident = &self.model.ident;
+        let field_ident = &field.name.ident;
+
+        quote! {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+                use #toasty::IntoSelect;
+                <#target as #toasty::Relation>::Query::from_stmt(
+                    #toasty::stmt::Association::many(
+                        self.stmt, #model_ident::FIELDS.#field_ident.into()
+                    ).into_select()
+                )
+            }
+        }
+    }
+
+    fn expand_belongs_to_method(&self, field: &Field, rel: &BelongsTo) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let target = &rel.ty;
+        let model_ident = &self.model.ident;
+        let field_ident = &field.name.ident;
+
+        quote! {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+                use #toasty::IntoSelect;
+                <#target as #toasty::Relation>::Query::from_stmt(
+                    #toasty::stmt::Association::many_via_one(
+                        self.stmt, #model_ident::FIELDS.#field_ident.into()
+                    ).into_select()
+                )
             }
         }
     }

@@ -296,36 +296,38 @@ async fn has_many_insert_on_update(s: impl Setup) {
 }
 
 async fn scoped_find_by_id(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a couple of users
-    let user1 = db::User::create().exec(&db).await.unwrap();
-    let user2 = db::User::create().exec(&db).await.unwrap();
+    let user1 = User::create().exec(&db).await.unwrap();
+    let user2 = User::create().exec(&db).await.unwrap();
 
     // Create a todo
     let todo = user1
@@ -349,7 +351,7 @@ async fn scoped_find_by_id(s: impl Setup) {
         .await
         .unwrap());
 
-    let reloaded = db::User::filter_by_id(&user1.id)
+    let reloaded = User::filter_by_id(&user1.id)
         .todos()
         .get_by_id(&db, &todo.id)
         .await

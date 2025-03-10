@@ -30,6 +30,8 @@ pub trait Relation2 {
     /// The target model
     type Model: Model;
 
+    type Query;
+
     /// HasMany relation type
     type Many;
 
