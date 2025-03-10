@@ -1,22 +1,20 @@
 use tests_client::*;
 
 async fn query_index_eq(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: toasty::stmt::Id<Self>,
 
-            #[index]
-            name: String,
+        #[index]
+        name: String,
 
-            email: String,
-        }
-        "
-    );
+        email: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User)).await;
 
     // Create a few users
     for &(name, email) in &[
@@ -24,7 +22,7 @@ async fn query_index_eq(s: impl Setup) {
         ("two", "two@example.com"),
         ("three", "three@example.com"),
     ] {
-        db::User::create()
+        User::create()
             .name(name)
             .email(email)
             .exec(&db)
@@ -32,7 +30,7 @@ async fn query_index_eq(s: impl Setup) {
             .unwrap();
     }
 
-    let users = db::User::filter_by_name("one")
+    let users = User::filter_by_name("one")
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
@@ -42,14 +40,14 @@ async fn query_index_eq(s: impl Setup) {
 
     // Create a second user named "one"
 
-    db::User::create()
+    User::create()
         .name("one")
         .email("one-two@example.com")
         .exec(&db)
         .await
         .unwrap();
 
-    let mut users = db::User::filter_by_name("one")
+    let mut users = User::filter_by_name("one")
         .all(&db)
         .await
         .unwrap()
@@ -68,19 +66,18 @@ async fn query_index_eq(s: impl Setup) {
 }
 
 async fn query_partition_key_string_eq(s: impl Setup) {
-    schema!(
-        "
-        #[key(partition = league, local = name)]
-        model Team {
-            league: String,
+    #[derive(Debug)]
+    #[toasty::model]
+    #[key(partition = league, local = name)]
+    struct Team {
+        league: String,
 
-            name: String,
+        name: String,
 
-            founded: i64,
-        }"
-    );
+        founded: i64,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(Team)).await;
 
     // Create some teams
     for (league, name, founded) in [
@@ -101,7 +98,7 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     ]
     .into_iter()
     {
-        db::Team::create()
+        Team::create()
             .league(league)
             .name(name)
             .founded(founded)
@@ -111,7 +108,7 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     }
 
     // Query on the partition key only
-    let teams = db::Team::filter(db::Team::LEAGUE.eq("EPL"))
+    let teams = Team::filter(Team::FIELDS.league.eq("EPL"))
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
@@ -125,10 +122,11 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     );
 
     // Query on the partition key and local key
-    let teams = db::Team::filter(
-        db::Team::LEAGUE
+    let teams = Team::filter(
+        Team::FIELDS
+            .league
             .eq("MLS")
-            .and(db::Team::NAME.eq("Portland Timbers")),
+            .and(Team::FIELDS.name.eq("Portland Timbers")),
     )
     .all(&db)
     .await
@@ -143,13 +141,18 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     assert_eq!(names, ["Portland Timbers"]);
 
     // Query on the partition key and a non-index field
-    let teams = db::Team::filter(db::Team::LEAGUE.eq("MLS").and(db::Team::FOUNDED.eq(2009)))
-        .all(&db)
-        .await
-        .unwrap()
-        .collect::<Vec<_>>()
-        .await
-        .unwrap();
+    let teams = Team::filter(
+        Team::FIELDS
+            .league
+            .eq("MLS")
+            .and(Team::FIELDS.founded.eq(2009)),
+    )
+    .all(&db)
+    .await
+    .unwrap()
+    .collect::<Vec<_>>()
+    .await
+    .unwrap();
 
     let mut names = teams.iter().map(|team| &team.name).collect::<Vec<_>>();
     names.sort();
@@ -157,11 +160,12 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     assert_eq!(names, ["Portland Timbers", "Vancouver Whitecaps FC"]);
 
     // Query on the partition key, local key, and a non-index field with a match
-    let teams = db::Team::filter(
-        db::Team::LEAGUE
+    let teams = Team::filter(
+        Team::FIELDS
+            .league
             .eq("MLS")
-            .and(db::Team::FOUNDED.eq(2009))
-            .and(db::Team::NAME.eq("Portland Timbers")),
+            .and(Team::FIELDS.founded.eq(2009))
+            .and(Team::FIELDS.name.eq("Portland Timbers")),
     )
     .all(&db)
     .await
@@ -176,11 +180,12 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     assert_eq!(names, ["Portland Timbers"]);
 
     // Query on the partition key, local key, and a non-index field without a match
-    let teams = db::Team::filter(
-        db::Team::LEAGUE
+    let teams = Team::filter(
+        Team::FIELDS
+            .league
             .eq("MLS")
-            .and(db::Team::FOUNDED.eq(2009))
-            .and(db::Team::NAME.eq("LA Galaxy")),
+            .and(Team::FIELDS.founded.eq(2009))
+            .and(Team::FIELDS.name.eq("LA Galaxy")),
     )
     .all(&db)
     .await
@@ -193,17 +198,16 @@ async fn query_partition_key_string_eq(s: impl Setup) {
 }
 
 async fn query_local_key_cmp(s: impl Setup) {
-    schema!(
-        "
-        #[key(partition = kind, local = timestamp)]
-        model Event {
-            kind: String,
+    #[derive(Debug)]
+    #[toasty::model]
+    #[key(partition = kind, local = timestamp)]
+    struct Event {
+        kind: String,
 
-            timestamp: i64,
-        }"
-    );
+        timestamp: i64,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(Event)).await;
 
     // Create a bunch of entries
     for (kind, ts) in [
@@ -228,7 +232,7 @@ async fn query_local_key_cmp(s: impl Setup) {
         ("info", 18),
         ("warn", 19),
     ] {
-        db::Event::create()
+        Event::create()
             .kind(kind)
             .timestamp(ts)
             .exec(&db)
@@ -236,8 +240,8 @@ async fn query_local_key_cmp(s: impl Setup) {
             .unwrap();
     }
 
-    let events: Vec<_> = db::Event::filter_by_kind("info")
-        .filter(db::Event::TIMESTAMP.ne(10))
+    let events: Vec<_> = Event::filter_by_kind("info")
+        .filter(Event::FIELDS.timestamp.ne(10))
         .collect(&db)
         .await
         .unwrap();
@@ -247,8 +251,8 @@ async fn query_local_key_cmp(s: impl Setup) {
         [&0, &2, &4, &6, &8, &12, &14, &16, &18,]
     );
 
-    let events: Vec<_> = db::Event::filter_by_kind("info")
-        .filter(db::Event::TIMESTAMP.gt(10))
+    let events: Vec<_> = Event::filter_by_kind("info")
+        .filter(Event::FIELDS.timestamp.gt(10))
         .collect(&db)
         .await
         .unwrap();
@@ -258,8 +262,8 @@ async fn query_local_key_cmp(s: impl Setup) {
         [&12, &14, &16, &18,]
     );
 
-    let events: Vec<_> = db::Event::filter_by_kind("info")
-        .filter(db::Event::TIMESTAMP.ge(10))
+    let events: Vec<_> = Event::filter_by_kind("info")
+        .filter(Event::FIELDS.timestamp.ge(10))
         .collect(&db)
         .await
         .unwrap();
@@ -269,8 +273,8 @@ async fn query_local_key_cmp(s: impl Setup) {
         [&10, &12, &14, &16, &18,]
     );
 
-    let events: Vec<_> = db::Event::filter_by_kind("info")
-        .filter(db::Event::TIMESTAMP.lt(10))
+    let events: Vec<_> = Event::filter_by_kind("info")
+        .filter(Event::FIELDS.timestamp.lt(10))
         .collect(&db)
         .await
         .unwrap();
@@ -280,8 +284,8 @@ async fn query_local_key_cmp(s: impl Setup) {
         [&0, &2, &4, &6, &8]
     );
 
-    let events: Vec<_> = db::Event::filter_by_kind("info")
-        .filter(db::Event::TIMESTAMP.le(10))
+    let events: Vec<_> = Event::filter_by_kind("info")
+        .filter(Event::FIELDS.timestamp.le(10))
         .collect(&db)
         .await
         .unwrap();
@@ -293,25 +297,24 @@ async fn query_local_key_cmp(s: impl Setup) {
 }
 
 async fn query_arbitrary_constraint(s: impl Setup) {
-    schema!(
-        "
-        model Event {
-            #[key]
-            #[auto]
-            id: Id,
-
-            kind: String,
-
-            timestamp: i64,
-        }"
-    );
-
     // Only supported by SQL
     if !s.capability().is_sql() {
         return;
     }
 
-    let db = s.setup(db::load_schema()).await;
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Event {
+        #[key]
+        #[auto]
+        id: toasty::stmt::Id<Self>,
+
+        kind: String,
+
+        timestamp: i64,
+    }
+
+    let db = s.setup(models!(Event)).await;
 
     // Create a bunch of entries
     for (kind, ts) in [
@@ -336,7 +339,7 @@ async fn query_arbitrary_constraint(s: impl Setup) {
         ("info", 18),
         ("warn", 19),
     ] {
-        db::Event::create()
+        Event::create()
             .kind(kind)
             .timestamp(ts)
             .exec(&db)
@@ -344,7 +347,7 @@ async fn query_arbitrary_constraint(s: impl Setup) {
             .unwrap();
     }
 
-    let events: Vec<_> = db::Event::filter(db::Event::TIMESTAMP.gt(12))
+    let events: Vec<_> = Event::filter(Event::FIELDS.timestamp.gt(12))
         .collect(&db)
         .await
         .unwrap();
@@ -354,66 +357,90 @@ async fn query_arbitrary_constraint(s: impl Setup) {
         [&13, &14, &15, &16, &17, &18, &19,]
     );
 
-    let events: Vec<_> =
-        db::Event::filter(db::Event::TIMESTAMP.gt(12).and(db::Event::KIND.ne("info")))
-            .collect(&db)
-            .await
-            .unwrap();
+    let events: Vec<_> = Event::filter(
+        Event::FIELDS
+            .timestamp
+            .gt(12)
+            .and(Event::FIELDS.kind.ne("info")),
+    )
+    .collect(&db)
+    .await
+    .unwrap();
 
     assert_eq_unordered!(
         events.iter().map(|event| event.timestamp),
         [&13, &15, &17, &19,]
     );
 
-    let events: Vec<_> =
-        db::Event::filter(db::Event::KIND.eq("info").and(db::Event::TIMESTAMP.ne(10)))
-            .collect(&db)
-            .await
-            .unwrap();
+    let events: Vec<_> = Event::filter(
+        Event::FIELDS
+            .kind
+            .eq("info")
+            .and(Event::FIELDS.timestamp.ne(10)),
+    )
+    .collect(&db)
+    .await
+    .unwrap();
 
     assert_eq_unordered!(
         events.iter().map(|event| event.timestamp),
         [&0, &2, &4, &6, &8, &12, &14, &16, &18,]
     );
 
-    let events: Vec<_> =
-        db::Event::filter(db::Event::KIND.eq("info").and(db::Event::TIMESTAMP.gt(10)))
-            .collect(&db)
-            .await
-            .unwrap();
+    let events: Vec<_> = Event::filter(
+        Event::FIELDS
+            .kind
+            .eq("info")
+            .and(Event::FIELDS.timestamp.gt(10)),
+    )
+    .collect(&db)
+    .await
+    .unwrap();
 
     assert_eq_unordered!(
         events.iter().map(|event| event.timestamp),
         [&12, &14, &16, &18,]
     );
 
-    let events: Vec<_> =
-        db::Event::filter(db::Event::KIND.eq("info").and(db::Event::TIMESTAMP.ge(10)))
-            .collect(&db)
-            .await
-            .unwrap();
+    let events: Vec<_> = Event::filter(
+        Event::FIELDS
+            .kind
+            .eq("info")
+            .and(Event::FIELDS.timestamp.ge(10)),
+    )
+    .collect(&db)
+    .await
+    .unwrap();
 
     assert_eq_unordered!(
         events.iter().map(|event| event.timestamp),
         [&10, &12, &14, &16, &18,]
     );
 
-    let events: Vec<_> =
-        db::Event::filter(db::Event::KIND.eq("info").and(db::Event::TIMESTAMP.lt(10)))
-            .collect(&db)
-            .await
-            .unwrap();
+    let events: Vec<_> = Event::filter(
+        Event::FIELDS
+            .kind
+            .eq("info")
+            .and(Event::FIELDS.timestamp.lt(10)),
+    )
+    .collect(&db)
+    .await
+    .unwrap();
 
     assert_eq_unordered!(
         events.iter().map(|event| event.timestamp),
         [&0, &2, &4, &6, &8]
     );
 
-    let events: Vec<_> =
-        db::Event::filter(db::Event::KIND.eq("info").and(db::Event::TIMESTAMP.le(10)))
-            .collect(&db)
-            .await
-            .unwrap();
+    let events: Vec<_> = Event::filter(
+        Event::FIELDS
+            .kind
+            .eq("info")
+            .and(Event::FIELDS.timestamp.le(10)),
+    )
+    .collect(&db)
+    .await
+    .unwrap();
 
     assert_eq_unordered!(
         events.iter().map(|event| event.timestamp),
