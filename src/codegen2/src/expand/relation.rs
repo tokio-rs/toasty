@@ -11,6 +11,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_ident = &self.model.query_struct_ident;
         let create_builder_ident = &self.model.create_struct_ident;
+        let filter_methods = self.expand_relation_filter_methods();
 
         quote! {
             #vis struct Many {
@@ -38,7 +39,7 @@ impl Expand<'_> {
                     Many { stmt }
                 }
 
-                // #filter_methods
+                #filter_methods
 
                 /// Iterate all entries in the relation
                 #vis async fn all(self, db: &#toasty::Db) -> #toasty::Result<#toasty::Cursor<#model_ident>> {

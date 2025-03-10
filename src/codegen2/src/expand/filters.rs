@@ -139,6 +139,7 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #filter_method_batch_ident(#self_arg keys: impl #toasty::IntoExpr<[#bound]>) -> #query_struct_ident {
+                use #toasty::IntoSelect;
                 #query.#filter_method_batch_ident( keys )
             }
         }
