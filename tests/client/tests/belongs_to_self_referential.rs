@@ -1,40 +1,36 @@
 use tests_client::*;
+use toasty::stmt::Id;
 
 use std::collections::HashSet;
 
 async fn crud_person_self_referential(s: impl Setup) {
-    schema!(
-        "
-        model Person {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Person {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            #[index]
-            parent_id: Option<Id<Person>>,
+        #[index]
+        parent_id: Option<Id<Person>>,
 
-            #[relation(key = parent_id, references = id)]
-            parent: Option<Person>,
+        #[belongs_to(key = parent_id, references = id)]
+        parent: Option<Person>,
 
-            children: [Person],
-        }
-        "
-    );
+        #[has_many]
+        children: [Person],
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(Person)).await;
 
-    let p1 = db::Person::create()
-        .name("person 1")
-        .exec(&db)
-        .await
-        .unwrap();
+    let p1 = Person::create().name("person 1").exec(&db).await.unwrap();
 
     assert_none!(p1.parent_id);
 
     // Associate P2 with P1 on creation by value.
-    let p2 = db::Person::create()
+    let p2 = Person::create()
         .name("person 2")
         .parent(&p1)
         .exec(&db)
@@ -44,7 +40,7 @@ async fn crud_person_self_referential(s: impl Setup) {
     assert_eq!(p2.parent_id, Some(p1.id.clone()));
 
     // Associate P3 with P1 by ID.
-    let p3 = db::Person::create()
+    let p3 = Person::create()
         .name("person 3")
         .parent_id(&p1.id)
         .exec(&db)
@@ -53,7 +49,7 @@ async fn crud_person_self_referential(s: impl Setup) {
 
     assert_eq!(p3.parent_id, Some(p1.id.clone()));
 
-    let assert = |children: &[db::Person]| {
+    let assert = |children: &[Person]| {
         assert_eq!(children.len(), 2);
 
         let ids: HashSet<_> = children.iter().map(|p| p.id.clone()).collect();
@@ -69,8 +65,8 @@ async fn crud_person_self_referential(s: impl Setup) {
     assert(&children);
 
     // Try preloading this time
-    let p1 = db::Person::filter_by_id(&p1.id)
-        .include(db::Person::CHILDREN)
+    let p1 = Person::filter_by_id(&p1.id)
+        .include(Person::FIELDS.children)
         .get(&db)
         .await
         .unwrap();

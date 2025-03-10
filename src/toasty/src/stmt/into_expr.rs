@@ -83,6 +83,16 @@ impl<T: IntoExpr<T>> IntoExpr<Option<T>> for T {
     }
 }
 
+impl<T: IntoExpr<T>> IntoExpr<Option<T>> for &T {
+    fn into_expr(self) -> Expr<Option<T>> {
+        self.by_ref().cast()
+    }
+
+    fn by_ref(&self) -> Expr<Option<T>> {
+        (*self).by_ref().cast()
+    }
+}
+
 impl<T: IntoExpr<T>> IntoExpr<T> for &Option<T> {
     fn into_expr(self) -> Expr<T> {
         match self {
