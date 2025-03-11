@@ -174,6 +174,9 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     .await
     .unwrap();
 
+    assert_eq!(1, teams.len());
+    assert!(teams.iter().all(|team| team.founded == 2009));
+
     let mut names = teams.iter().map(|team| &team.name).collect::<Vec<_>>();
     names.sort();
 
@@ -366,6 +369,8 @@ async fn query_arbitrary_constraint(s: impl Setup) {
     .collect(&db)
     .await
     .unwrap();
+
+    assert!(events.iter().all(|event| event.kind != "info"));
 
     assert_eq_unordered!(
         events.iter().map(|event| event.timestamp),

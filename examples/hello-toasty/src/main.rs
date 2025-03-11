@@ -36,8 +36,10 @@ struct Todo {
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
+    #[allow(unused_variables)] // TODO fix
     let builder = toasty::Db::builder().register::<User>().register::<Todo>();
 
+    #[allow(unused_variables)] // TODO fix
     let db: toasty::Db;
 
     cfg_if::cfg_if! {
@@ -59,6 +61,7 @@ async fn main() -> toasty::Result<()> {
         }
     };
 
+    #[allow(unreachable_code)] // TODO: fix
     // For now, reset!s
     db.reset_db().await?;
 

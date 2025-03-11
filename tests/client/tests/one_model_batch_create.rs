@@ -66,6 +66,7 @@ async fn batch_create_fails_if_any_record_missing_fields(s: impl Setup) {
         #[key]
         email: String,
 
+        #[allow(dead_code)]
         name: String,
     }
 
@@ -137,6 +138,7 @@ async fn batch_create_model_with_unique_field_index_all_dups(s: impl Setup) {
         id: Id<Self>,
 
         #[unique]
+        #[allow(dead_code)]
         email: String,
     }
 

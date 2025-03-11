@@ -25,17 +25,15 @@ async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
 
         #[belongs_to(key = user_id, references = id)]
         user: User,
-
-        title: String,
     }
 
     let db = s.setup(models!(User, Todo)).await;
 
     // Create a user with a few todos
     let user = User::create()
-        .todo(Todo::create().title("one"))
-        .todo(Todo::create().title("two"))
-        .todo(Todo::create().title("three"))
+        .todo(Todo::create())
+        .todo(Todo::create())
+        .todo(Todo::create())
         .exec(&db)
         .await
         .unwrap();
@@ -59,6 +57,7 @@ async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
         .unwrap();
 
     assert_eq!(user.id, todo.user.get().id);
+    assert_eq!(user.id, todo.user_id);
 }
 
 tests!(basic_has_many_and_belongs_to_preload,);

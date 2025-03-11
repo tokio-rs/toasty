@@ -1,7 +1,9 @@
 use tests_client::*;
 use toasty::stmt::Id;
 
-fn assert_sync_send<T: Send>(_: T) {}
+fn assert_sync_send<T: Send>(val: T) -> T {
+    val
+}
 
 async fn ensure_types_sync_send(s: impl Setup) {
     #[derive(Debug)]
@@ -17,7 +19,11 @@ async fn ensure_types_sync_send(s: impl Setup) {
 
     let db = s.setup(models!(User)).await;
 
-    assert_sync_send(User::filter_by_email("hello@example.com").first(&db));
+    let user = assert_sync_send(User::filter_by_email("hello@example.com").first(&db))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(user.email, "hello@example.com");
 }
 
 tests!(ensure_types_sync_send);
