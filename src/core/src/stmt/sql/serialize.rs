@@ -5,7 +5,7 @@ use crate::schema::db;
 use crate::stmt::Statement as DataStatement;
 
 use std::{
-    fmt::{self, Write},
+    fmt::{self, Display, Write},
     ops::Deref,
 };
 
@@ -16,6 +16,28 @@ pub trait Params {
 /// Serialize a statement to a SQL string
 pub struct Serializer<'a> {
     schema: &'a db::Schema,
+    quoted_table_names: bool,
+    quoted_column_names: bool,
+}
+
+struct MaybeQuote<'a> {
+    value: &'a str,
+    quote: bool,
+}
+
+impl<'a> MaybeQuote<'a> {
+    fn new(value: &'a str, quote: bool) -> Self {
+        Self { value, quote }
+    }
+}
+impl Display for MaybeQuote<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.quote {
+            write!(f, "\"{}\"", self.value)
+        } else {
+            write!(f, "{}", self.value)
+        }
+    }
 }
 
 struct Formatter<'a, T> {
@@ -27,6 +49,12 @@ struct Formatter<'a, T> {
 
     /// Query paramaters (referenced by placeholders) are stored here.
     params: &'a mut T,
+
+    /// Config option for quoting table names
+    quoted_table_names: bool,
+
+    /// Config option for quoting column names
+    quoted_column_names: bool,
 }
 
 impl Params for Vec<stmt::Value> {
@@ -88,7 +116,19 @@ impl AsRef<str> for SerializeResult {
 
 impl<'a> Serializer<'a> {
     pub fn new(schema: &'a db::Schema) -> Serializer<'a> {
-        Serializer { schema }
+        Serializer {
+            schema,
+            quoted_table_names: true,
+            quoted_column_names: true,
+        }
+    }
+    pub fn with_quoted_table_names(mut self, enabled: bool) -> Self {
+        self.quoted_table_names = enabled;
+        self
+    }
+    pub fn with_quoted_column_names(mut self, enabled: bool) -> Self {
+        self.quoted_column_names = enabled;
+        self
     }
 
     pub fn serialize_stmt(
@@ -102,6 +142,8 @@ impl<'a> Serializer<'a> {
             dst: &mut ret,
             schema: self.schema,
             params,
+            quoted_table_names: self.quoted_table_names,
+            quoted_column_names: self.quoted_column_names,
         };
 
         fmt.statement(stmt).unwrap();
@@ -119,6 +161,8 @@ impl<'a> Serializer<'a> {
             dst: &mut ret,
             schema: self.schema,
             params,
+            quoted_table_names: self.quoted_table_names,
+            quoted_column_names: self.quoted_column_names,
         };
 
         fmt.sql_statement(stmt).unwrap();
@@ -167,7 +211,7 @@ impl<T: Params> Formatter<'_, T> {
         write!(self.dst, " ON ")?;
 
         let table = self.schema.table(stmt.on);
-        self.ident_str(&table.name)?;
+        self.ident_str(&table.name, self.quoted_table_names)?;
 
         write!(self.dst, " (")?;
 
@@ -228,7 +272,7 @@ impl<T: Params> Formatter<'_, T> {
     }
 
     fn column_def(&mut self, stmt: &ColumnDef) -> fmt::Result {
-        self.ident(&stmt.name)?;
+        self.ident(&stmt.name, self.quoted_column_names)?;
         write!(self.dst, " ")?;
         self.ty(&stmt.ty)?;
         Ok(())
@@ -249,7 +293,11 @@ impl<T: Params> Formatter<'_, T> {
 
         for table_with_join in delete.from.as_table_with_joins() {
             let table = self.schema.table(table_with_join.table);
-            write!(self.dst, "\"{}\"", table.name)?;
+            write!(
+                self.dst,
+                "{}",
+                MaybeQuote::new(&table.name, self.quoted_table_names)
+            )?;
         }
 
         write!(self.dst, " WHERE ")?;
@@ -266,13 +314,24 @@ impl<T: Params> Formatter<'_, T> {
 
         write!(
             self.dst,
-            "INSERT INTO \"{}\" (",
-            self.schema.table(insert_target).name
+            "INSERT INTO {} (",
+            MaybeQuote::new(
+                &self.schema.table(insert_target).name,
+                self.quoted_table_names
+            )
         )?;
 
         let mut s = "";
         for column_id in &insert_target.columns {
-            write!(self.dst, "{}\"{}\"", s, self.schema.column(*column_id).name)?;
+            write!(
+                self.dst,
+                "{}{}",
+                s,
+                MaybeQuote::new(
+                    &self.schema.column(*column_id).name,
+                    self.quoted_column_names
+                )
+            )?;
             s = ", ";
         }
 
@@ -294,11 +353,19 @@ impl<T: Params> Formatter<'_, T> {
     fn update(&mut self, update: &Update) -> fmt::Result {
         let table = self.schema.table(update.target.as_table().table);
 
-        write!(self.dst, "UPDATE \"{}\" SET", table.name)?;
+        write!(
+            self.dst,
+            "UPDATE {} SET",
+            MaybeQuote::new(&table.name, self.quoted_table_names)
+        )?;
 
         for (index, assignment) in update.assignments.iter() {
             let column = &table.columns[index];
-            write!(self.dst, " \"{}\" = ", column.name)?;
+            write!(
+                self.dst,
+                " {} = ",
+                MaybeQuote::new(&column.name, self.quoted_column_names)
+            )?;
 
             self.expr(&assignment.expr)?;
         }
@@ -336,7 +403,11 @@ impl<T: Params> Formatter<'_, T> {
 
         for table_with_join in select.source.as_table_with_joins() {
             let table = self.schema.table(table_with_join.table);
-            write!(self.dst, "\"{}\"", table.name)?;
+            write!(
+                self.dst,
+                "{}",
+                MaybeQuote::new(&table.name, self.quoted_table_names)
+            )?;
         }
 
         write!(self.dst, " WHERE ")?;
@@ -405,7 +476,7 @@ impl<T: Params> Formatter<'_, T> {
                 // TODO: at some point we need to conditionally scope the column
                 // name.
                 let column = self.schema.column(expr.column);
-                self.ident_str(&column.name)?;
+                self.ident_str(&column.name, self.quoted_column_names)?;
             }
             Expr::InList(ExprInList { expr, list }) => {
                 self.expr(expr)?;
@@ -529,7 +600,7 @@ impl<T: Params> Formatter<'_, T> {
     fn name(&mut self, name: &Name) -> fmt::Result {
         let mut s = "";
         for ident in &name.0 {
-            self.ident(ident)?;
+            self.ident(ident, self.quoted_table_names)?;
             write!(self.dst, "{s}")?;
             s = ".";
         }
@@ -537,12 +608,12 @@ impl<T: Params> Formatter<'_, T> {
         Ok(())
     }
 
-    fn ident(&mut self, ident: &Ident) -> fmt::Result {
-        self.ident_str(&ident.0)
+    fn ident(&mut self, ident: &Ident, quote: bool) -> fmt::Result {
+        self.ident_str(&ident.0, quote)
     }
 
-    fn ident_str(&mut self, ident: &str) -> fmt::Result {
-        write!(self.dst, "\"{ident}\"")?;
+    fn ident_str(&mut self, ident: &str, quote: bool) -> fmt::Result {
+        write!(self.dst, "{}", MaybeQuote::new(ident, quote))?;
         Ok(())
     }
 }
