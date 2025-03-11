@@ -2,7 +2,11 @@ use super::{ErrorSet, KeyAttr};
 
 #[derive(Debug, Default)]
 pub(crate) struct ModelAttr {
+    /// Primary key definition
     pub(crate) key: Option<KeyAttr>,
+
+    /// Optional database table name to map the model to
+    pub(crate) table: Option<syn::Ident>,
 }
 
 impl ModelAttr {

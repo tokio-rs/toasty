@@ -1,20 +1,44 @@
-mod db;
-use std::path::PathBuf;
+use toasty::stmt::Id;
 
-use db::*;
+#[derive(Debug)]
+#[toasty::model(table = user_and_packages)]
+struct User {
+    #[key]
+    #[auto]
+    id: Id<Self>,
 
-use toasty::Db;
-use toasty_sqlite::Sqlite;
+    name: String,
+
+    #[unique]
+    email: String,
+
+    #[has_many]
+    packages: [Package],
+}
+
+#[derive(Debug)]
+#[toasty::model(table = user_and_packages)]
+#[key(partition = user_id, local = id)]
+struct Package {
+    #[belongs_to(key = user_id, references = id)]
+    user: User,
+
+    user_id: Id<User>,
+
+    #[auto]
+    id: Id<Self>,
+
+    name: String,
+}
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
-    let schema = toasty::schema::from_file(schema_file)?;
+    let db = toasty::Db::builder()
+        .register::<User>()
+        .register::<Package>()
+        .build(toasty_sqlite::Sqlite::in_memory())
+        .await?;
 
-    // Use the in-memory sqlite driver
-    let driver = Sqlite::in_memory();
-
-    let db = Db::new(schema, driver).await?;
     // For now, reset!s
     db.reset_db().await?;
 

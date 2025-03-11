@@ -5,8 +5,8 @@ use proc_macro2::Span;
 use quote::quote;
 
 #[proc_macro_attribute]
-pub fn model(_args: TokenStream, input: TokenStream) -> TokenStream {
-    match toasty_codegen2::generate(input.into()) {
+pub fn model(args: TokenStream, input: TokenStream) -> TokenStream {
+    match toasty_codegen2::generate(args.into(), input.into()) {
         Ok(output) => output.into(),
         Err(e) => e.to_compile_error().into(),
     }

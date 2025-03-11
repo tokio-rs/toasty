@@ -12,6 +12,7 @@ impl Expand<'_> {
         let fields = self.expand_model_fields();
         let primary_key = self.expand_primary_key();
         let indices = self.expand_model_indices();
+        let table_name = self.expand_table_name();
 
         quote! {
             fn schema() -> #toasty::schema::app::Model {
@@ -34,7 +35,7 @@ impl Expand<'_> {
                     primary_key: #primary_key,
                     queries: vec![],
                     indices: #indices,
-                    table_name: None,
+                    table_name: #table_name,
                 }
             }
         }
@@ -207,6 +208,15 @@ impl Expand<'_> {
 
         quote! {
             vec![ #( #indices ),* ]
+        }
+    }
+
+    fn expand_table_name(&self) -> TokenStream {
+        if let Some(table_name) = &self.model.table {
+            let table_name = table_name.to_string();
+            quote! { Some(#table_name.to_string()) }
+        } else {
+            quote! { None }
         }
     }
 }

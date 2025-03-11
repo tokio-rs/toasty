@@ -1,5 +1,7 @@
 use super::{ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey};
 
+use proc_macro2::TokenStream;
+
 #[derive(Debug)]
 pub(crate) struct Model {
     /// Generated model identifier
@@ -37,10 +39,13 @@ pub(crate) struct Model {
 
     /// Update by query builder struct identifier
     pub(crate) update_query_struct_ident: syn::Ident,
+
+    /// Optional table to map the model to
+    pub(crate) table: Option<syn::Ident>,
 }
 
 impl Model {
-    pub(crate) fn from_ast(ast: &mut syn::ItemStruct) -> syn::Result<Model> {
+    pub(crate) fn from_ast(ast: &mut syn::ItemStruct, args: TokenStream) -> syn::Result<Model> {
         let syn::Fields::Named(node) = &mut ast.fields else {
             return Err(syn::Error::new_spanned(
                 &ast.fields,
@@ -72,6 +77,28 @@ impl Model {
         let mut indices = vec![];
         let mut pk_index_fields = vec![];
         let mut errs = ErrorSet::new();
+
+        // If macro arguments are provided, parse them
+        let arg_parser = syn::meta::parser(|meta| {
+            if meta.path.is_ident("table") {
+                if model_attr.table.is_some() {
+                    return Err(syn::Error::new_spanned(
+                        meta.path,
+                        "duplicate `table` attribute",
+                    ));
+                }
+
+                let value = meta.value()?;
+                model_attr.table = Some(value.parse()?);
+            } else {
+                return Err(syn::Error::new_spanned(meta.path, "unknown attribute"));
+            }
+
+            Ok(())
+        });
+        if let Err(err) = syn::parse::Parser::parse2(arg_parser, args) {
+            errs.push(err);
+        }
 
         if let Err(err) = model_attr.populate_from_ast(&mut ast.attrs, &names) {
             errs.push(err);
@@ -184,6 +211,7 @@ impl Model {
             create_struct_ident: struct_ident("Create", ast),
             update_struct_ident: struct_ident("Update", ast),
             update_query_struct_ident: struct_ident("UpdateQuery", ast),
+            table: model_attr.table,
         })
     }
 

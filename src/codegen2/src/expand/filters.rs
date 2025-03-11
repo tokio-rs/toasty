@@ -6,6 +6,7 @@ use quote::quote;
 use std::collections::HashMap;
 
 /// Combination of fields for which filter a method should be generated.
+#[derive(Debug)]
 pub(super) struct Filter {
     /// Fields to filter by
     fields: Vec<usize>,
@@ -148,7 +149,7 @@ impl Expand<'_> {
     pub(super) fn expand_query_filter_methods(&self) -> TokenStream {
         self.filters
             .iter()
-            .filter(|f| !f.only_relation)
+            // .filter(|f| !f.only_relation)
             .map(|filter| {
                 let get_method = self.expand_model_get_method(filter, true);
                 let filter_method = self.expand_query_filter_method(filter);
