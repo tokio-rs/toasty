@@ -37,7 +37,8 @@ struct Todo {
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
     #[allow(unused_variables)] // TODO fix
-    let builder = toasty::Db::builder().register::<User>().register::<Todo>();
+    let mut builder = toasty::Db::builder();
+    builder.register::<User>().register::<Todo>();
 
     #[allow(unused_variables)] // TODO fix
     let db: toasty::Db;
