@@ -46,14 +46,14 @@ impl KeyAttr {
 
         if partition.is_empty() {
             return Err(syn::Error::new_spanned(
-                &attr,
+                attr,
                 "expected at least one `partition` attribute",
             ));
         }
 
         if local.is_empty() {
             return Err(syn::Error::new_spanned(
-                &attr,
+                attr,
                 "expected at least one `local` attribute",
             ));
         }

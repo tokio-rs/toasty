@@ -199,7 +199,7 @@ where
 
     fn by_ref(&self) -> Expr<[T]> {
         Expr::from_untyped(stmt::Expr::list(
-            self.into_iter().map(|item| item.by_ref().untyped),
+            self.iter().map(|item| item.by_ref().untyped),
         ))
     }
 }

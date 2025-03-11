@@ -38,21 +38,21 @@ impl BelongsTo {
 
         if fk_sources.len() != fk_targets.len() {
             return Err(syn::Error::new_spanned(
-                &attr,
+                attr,
                 "number of `key` and `references` attributes must match",
             ));
         }
 
         if fk_sources.is_empty() {
             return Err(syn::Error::new_spanned(
-                &attr,
+                attr,
                 "expected at least one `key` and `references` attribute",
             ));
         }
 
-        let mut parts = fk_sources.into_iter().zip(fk_targets.into_iter());
+        let parts = fk_sources.into_iter().zip(fk_targets);
 
-        while let Some((source, target)) = parts.next() {
+        for (source, target) in parts {
             let source = names
                 .iter()
                 .position(|name| name == &source)

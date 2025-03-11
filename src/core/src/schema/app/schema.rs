@@ -20,13 +20,11 @@ struct Builder {
 
 impl Schema {
     pub(crate) fn from_ast(ast: &ast::Schema) -> Result<Schema> {
-        let builder = Builder::default();
-        builder.from_ast(ast)
+        Builder::from_ast(ast)
     }
 
     pub fn from_macro(models: &[Model]) -> Result<Schema> {
-        let builder = Builder::default();
-        builder.from_macro(models)
+        Builder::from_macro(models)
     }
 
     /// Get a field by ID
@@ -54,35 +52,40 @@ impl Schema {
 
 impl Builder {
     #[allow(clippy::wrong_self_convention)]
-    fn from_ast(mut self, ast: &ast::Schema) -> Result<Schema> {
+    fn from_ast(ast: &ast::Schema) -> Result<Schema> {
+        let mut builder = Builder::default();
+
         // First, register all defined types with the resolver.
         for node in ast.models() {
-            self.cx.register_model(&node.ident);
+            builder.cx.register_model(&node.ident);
         }
 
         for item in &ast.items {
             match item {
                 ast::SchemaItem::Model(node) => {
-                    let model = Model::from_ast(&mut self.cx, node)?;
-                    assert_eq!(self.models.len(), model.id.0);
-                    self.models.insert(model.id, model);
+                    let model = Model::from_ast(&mut builder.cx, node)?;
+                    assert_eq!(builder.models.len(), model.id.0);
+                    builder.models.insert(model.id, model);
                 }
             }
         }
 
-        self.process_models()?;
-        self.into_schema()
+        builder.process_models()?;
+        builder.into_schema()
     }
 
-    pub(crate) fn from_macro(mut self, models: &[Model]) -> Result<Schema> {
-        self.is_macro = true;
+    pub(crate) fn from_macro(models: &[Model]) -> Result<Schema> {
+        let mut builder = Builder {
+            is_macro: true,
+            ..Builder::default()
+        };
 
         for model in models {
-            self.models.insert(model.id, model.clone());
+            builder.models.insert(model.id, model.clone());
         }
 
-        self.process_models()?;
-        self.into_schema()
+        builder.process_models()?;
+        builder.into_schema()
     }
 
     fn into_schema(self) -> Result<Schema> {

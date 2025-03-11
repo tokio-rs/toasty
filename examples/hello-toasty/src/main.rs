@@ -36,16 +36,12 @@ struct Todo {
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    #[allow(unused_variables)] // TODO fix
     let mut builder = toasty::Db::builder();
     builder.register::<User>().register::<Todo>();
 
-    #[allow(unused_variables)] // TODO fix
-    let db: toasty::Db;
-
     cfg_if::cfg_if! {
         if #[cfg(feature = "sqlite")] {
-            db = builder.build(toasty_sqlite::Sqlite::in_memory()).await?;
+            let db = builder.build(toasty_sqlite::Sqlite::in_memory()).await?;
         } else if #[cfg(feature = "postgresql")] {
                 let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
                         panic!(
@@ -58,6 +54,9 @@ async fn main() -> toasty::Result<()> {
 
             let db = builder.build(toasty_pgsql::PostgreSQL::connect(&url, postgres::NoTls)).await?;
         } else {
+            drop(builder);
+            #[allow(unused_variables)]
+            let db: toasty::Db;
             panic!("you must run this example with a database-related feature enabled (e.g., `--features sqlite`)")
         }
     };

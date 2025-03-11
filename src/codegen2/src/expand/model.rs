@@ -134,7 +134,7 @@ impl Expand<'_> {
         let filter = self.primary_key_filter();
         let query_struct_ident = &self.model.query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
-        let arg_idents = self.expand_filter_arg_idents(&filter);
+        let arg_idents = self.expand_filter_arg_idents(filter);
         let amp = if by_ref { quote!(&) } else { quote!() };
 
         quote! {

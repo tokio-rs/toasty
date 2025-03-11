@@ -63,7 +63,7 @@ impl Expand<'_> {
         let get_method_ident = &filter.get_method_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let args = self.expand_filter_args(filter);
-        let arg_idents = self.expand_filter_arg_idents(&filter);
+        let arg_idents = self.expand_filter_arg_idents(filter);
         let self_arg;
         let base;
 
@@ -90,7 +90,7 @@ impl Expand<'_> {
         let query_struct_ident = &self.model.query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let args = self.expand_filter_args(filter);
-        let arg_idents = self.expand_filter_arg_idents(&filter);
+        let arg_idents = self.expand_filter_arg_idents(filter);
         let self_arg;
         let body;
 
