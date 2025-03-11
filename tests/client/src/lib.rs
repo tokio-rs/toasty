@@ -16,13 +16,6 @@ pub trait Setup {
 }
 
 #[macro_export]
-macro_rules! schema {
-    ($schema:literal) => {
-        toasty_macros::schema!($schema);
-    };
-}
-
-#[macro_export]
 macro_rules! models {
     (
         $( $model:ident ),*
