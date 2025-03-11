@@ -43,16 +43,17 @@ async fn main() -> toasty::Result<()> {
         if #[cfg(feature = "sqlite")] {
             let db = builder.build(toasty_sqlite::Sqlite::in_memory()).await?;
         } else if #[cfg(feature = "postgresql")] {
-                let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-                        panic!(
-                            "`DATABASE_URL` environment variable is required when using \
-                            the `postgresql` feature (e.g., \
-                            `DATABASE_URL=postgresql://postgres@localhost/toasty`)"
-                        );
-                    }
-                );
+            let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+                    panic!(
+                        "`DATABASE_URL` environment variable is required when using \
+                        the `postgresql` feature (e.g., \
+                        `DATABASE_URL=postgresql://postgres@localhost/toasty`)"
+                    );
+                }
+            );
 
-            let db = builder.build(toasty_pgsql::PostgreSQL::connect(&url, postgres::NoTls)).await?;
+            let driver = toasty_pgsql::PostgreSQL::connect(&url, postgres::NoTls).await?;
+            let db = builder.build(driver).await?;
         } else {
             drop(builder);
             #[allow(unused_variables)]
