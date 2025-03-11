@@ -1,20 +1,49 @@
-mod db;
-use std::path::PathBuf;
+use toasty::stmt::Id;
 
-use db::{Todo, User};
+#[derive(Debug)]
+#[toasty::model]
+struct User {
+    #[key]
+    #[auto]
+    id: Id<Self>,
 
-use toasty::{schema::app::Schema, Db};
+    name: String,
+
+    #[unique]
+    email: String,
+
+    #[has_many]
+    todos: [Todo],
+
+    moto: Option<String>,
+}
+
+#[derive(Debug)]
+#[toasty::model]
+struct Todo {
+    #[key]
+    #[auto]
+    id: Id<Self>,
+
+    #[index]
+    user_id: Id<User>,
+
+    #[belongs_to(key = user_id, references = id)]
+    user: User,
+
+    title: String,
+}
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
+    let builder = toasty::Db::builder().register::<User>().register::<Todo>();
+
+    let db: toasty::Db;
+
     cfg_if::cfg_if! {
         if #[cfg(feature = "sqlite")] {
-            async fn create_db(schema: Schema) -> toasty::Result<Db> {
-                let driver = toasty_sqlite::Sqlite::in_memory();
-                Db::new(schema, driver).await
-            }
+            db = builder.build(toasty_sqlite::Sqlite::in_memory()).await?;
         } else if #[cfg(feature = "postgresql")] {
-            async fn create_db(schema: Schema) -> toasty::Result<Db> {
                 let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
                         panic!(
                             "`DATABASE_URL` environment variable is required when using \
@@ -23,20 +52,13 @@ async fn main() -> toasty::Result<()> {
                         );
                     }
                 );
-                let driver = toasty_pgsql::PostgreSQL::connect(&url, postgres::NoTls).await?;
-                Db::new(schema, driver).await
-            }
+
+            let db = builder.build(toasty_pgsql::PostgreSQL::connect(&url, postgres::NoTls)).await?;
         } else {
-            async fn create_db(_: Schema) -> toasty::Result<Db> {
-                panic!("you must run this example with a database-related feature enabled (e.g., `--features sqlite`)");
-            }
+            panic!("you must run this example with a database-related feature enabled (e.g., `--features sqlite`)")
         }
-    }
+    };
 
-    let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
-    let schema = toasty::schema::from_file(schema_file)?;
-
-    let db = create_db(schema).await?;
     // For now, reset!s
     db.reset_db().await?;
 
