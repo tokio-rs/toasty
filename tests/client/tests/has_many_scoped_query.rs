@@ -1,39 +1,42 @@
 use tests_client::*;
+use toasty::stmt::Id;
 
 use std::collections::HashSet;
 
 async fn scoped_query_eq(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        #[key(partition = user_id, local = id)]
-        model Todo {
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    #[key(partition = user_id, local = id)]
+    struct Todo {
+        #[auto]
+        id: Id<Self>,
 
-            user_id: Id<User>,
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
+        title: String,
 
-            order: i64,
-        }"
-    );
+        order: i64,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create some users
-    let u1 = db::User::create().exec(&db).await.unwrap();
-    let u2 = db::User::create().exec(&db).await.unwrap();
+    let u1 = User::create().exec(&db).await.unwrap();
+    let u2 = User::create().exec(&db).await.unwrap();
 
     let mut u1_todo_ids = vec![];
 
@@ -71,7 +74,7 @@ async fn scoped_query_eq(s: impl Setup) {
     // Query todos scoped by user 1
     let todos = u1
         .todos()
-        .query(db::Todo::ORDER.eq(0))
+        .query(Todo::FIELDS.order.eq(0))
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
@@ -82,7 +85,7 @@ async fn scoped_query_eq(s: impl Setup) {
     // Querying todos scoped by user 2
     let todos = u2
         .todos()
-        .query(db::Todo::ORDER.eq(0))
+        .query(Todo::FIELDS.order.eq(0))
         .all(&db)
         .await
         .unwrap()
@@ -108,7 +111,7 @@ async fn scoped_query_eq(s: impl Setup) {
     // Query for order 0 todos again
     let mut todos = u1
         .todos()
-        .query(db::Todo::ORDER.eq(0))
+        .query(Todo::FIELDS.order.eq(0))
         .all(&db)
         .await
         .unwrap();
@@ -126,7 +129,7 @@ async fn scoped_query_eq(s: impl Setup) {
     // Query for non-existent TODOs
     let todos = u2
         .todos()
-        .query(db::Todo::ORDER.eq(1))
+        .query(Todo::FIELDS.order.eq(1))
         .all(&db)
         .await
         .unwrap()
@@ -138,42 +141,44 @@ async fn scoped_query_eq(s: impl Setup) {
 }
 
 async fn scoped_query_gt(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        #[key(partition = user_id, local = id)]
-        model Todo {
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    #[key(partition = user_id, local = id)]
+    struct Todo {
+        #[auto]
+        id: Id<Self>,
 
-            user_id: Id<User>,
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
+        title: String,
 
-            order: i64,
-        }"
-    );
+        order: i64,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
-    let user = db::User::create().exec(&db).await.unwrap();
+    let user = User::create().exec(&db).await.unwrap();
 
-    let todos = db::Todo::create_many()
-        .item(db::Todo::create().user(&user).title("First").order(0))
-        .item(db::Todo::create().user(&user).title("Second").order(1))
-        .item(db::Todo::create().user(&user).title("Third").order(2))
-        .item(db::Todo::create().user(&user).title("Fourth").order(3))
-        .item(db::Todo::create().user(&user).title("Fifth").order(4))
+    let todos = Todo::create_many()
+        .item(Todo::create().user(&user).title("First").order(0))
+        .item(Todo::create().user(&user).title("Second").order(1))
+        .item(Todo::create().user(&user).title("Third").order(2))
+        .item(Todo::create().user(&user).title("Fourth").order(3))
+        .item(Todo::create().user(&user).title("Fifth").order(4))
         .exec(&db)
         .await
         .unwrap();
@@ -183,7 +188,7 @@ async fn scoped_query_gt(s: impl Setup) {
     // Find all != 2
     let todos: Vec<_> = user
         .todos()
-        .query(db::Todo::ORDER.ne(2))
+        .query(Todo::FIELDS.order.ne(2))
         .collect(&db)
         .await
         .unwrap();
@@ -196,7 +201,7 @@ async fn scoped_query_gt(s: impl Setup) {
     // Find all greater than 2
     let todos: Vec<_> = user
         .todos()
-        .query(db::Todo::ORDER.gt(2))
+        .query(Todo::FIELDS.order.gt(2))
         .collect(&db)
         .await
         .unwrap();
@@ -209,7 +214,7 @@ async fn scoped_query_gt(s: impl Setup) {
     // Find all greater than or equal to 2
     let todos: Vec<_> = user
         .todos()
-        .query(db::Todo::ORDER.ge(2))
+        .query(Todo::FIELDS.order.ge(2))
         .collect(&db)
         .await
         .unwrap();
@@ -222,7 +227,7 @@ async fn scoped_query_gt(s: impl Setup) {
     // Find all less than to 2
     let todos: Vec<_> = user
         .todos()
-        .query(db::Todo::ORDER.lt(2))
+        .query(Todo::FIELDS.order.lt(2))
         .collect(&db)
         .await
         .unwrap();
@@ -235,7 +240,7 @@ async fn scoped_query_gt(s: impl Setup) {
     // Find all less than or equal to 2
     let todos: Vec<_> = user
         .todos()
-        .query(db::Todo::ORDER.le(2))
+        .query(Todo::FIELDS.order.le(2))
         .collect(&db)
         .await
         .unwrap();
