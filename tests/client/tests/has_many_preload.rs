@@ -1,46 +1,48 @@
 use tests_client::*;
+use toasty::stmt::Id;
 
 async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }
-        "
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a user with a few todos
-    let user = db::User::create()
-        .todo(db::Todo::create().title("one"))
-        .todo(db::Todo::create().title("two"))
-        .todo(db::Todo::create().title("three"))
+    let user = User::create()
+        .todo(Todo::create().title("one"))
+        .todo(Todo::create().title("two"))
+        .todo(Todo::create().title("three"))
         .exec(&db)
         .await
         .unwrap();
 
     // Find the user, include TODOs
-    let user = db::User::filter_by_id(&user.id)
-        .include(db::User::TODOS)
+    let user = User::filter_by_id(&user.id)
+        .include(User::FIELDS::todos)
         .get(&db)
         .await
         .unwrap();
@@ -50,8 +52,8 @@ async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
 
     let id = user.todos.get()[0].id.clone();
 
-    let todo = db::Todo::filter_by_id(&id)
-        .include(db::Todo::USER)
+    let todo = Todo::filter_by_id(&id)
+        .include(Todo::FIELDS.user)
         .get(&db)
         .await
         .unwrap();
