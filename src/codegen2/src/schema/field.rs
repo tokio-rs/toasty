@@ -1,6 +1,6 @@
 use syn::parse_quote;
 
-use super::{BelongsTo, ErrorSet, HasMany, Name};
+use super::{BelongsTo, ErrorSet, HasMany, HasOne, Name};
 
 #[derive(Debug)]
 pub(crate) struct Field {
@@ -40,6 +40,7 @@ pub(crate) enum FieldTy {
     Primitive(syn::Type),
     BelongsTo(BelongsTo),
     HasMany(HasMany),
+    HasOne(HasOne),
 }
 
 impl Field {
@@ -107,6 +108,9 @@ impl Field {
             } else if attr.path().is_ident("has_many") {
                 assert!(ty.is_none());
                 ty = Some(FieldTy::HasMany(HasMany::from_ast(ident, &field.ty)?));
+            } else if attr.path().is_ident("has_one") {
+                assert!(ty.is_none());
+                ty = Some(FieldTy::HasOne(HasOne::from_ast(&field.ty)?));
             } else {
                 i += 1;
                 continue;
@@ -124,12 +128,17 @@ impl Field {
         match &mut ty {
             FieldTy::BelongsTo(rel) => {
                 let ty = &rel.ty;
-                field.ty = parse_quote!(toasty::codegen_support::BelongsTo<#ty>);
+                field.ty = parse_quote!(toasty::codegen_support2::BelongsTo<#ty>);
                 rewrite_self(&mut rel.ty, model_ident);
             }
             FieldTy::HasMany(rel) => {
                 let ty = &rel.ty;
-                field.ty = parse_quote!(toasty::codegen_support::HasMany<#ty>);
+                field.ty = parse_quote!(toasty::codegen_support2::HasMany<#ty>);
+                rewrite_self(&mut rel.ty, model_ident);
+            }
+            FieldTy::HasOne(rel) => {
+                let ty = &rel.ty;
+                field.ty = parse_quote!(toasty::codegen_support2::HasOne<#ty>);
                 rewrite_self(&mut rel.ty, model_ident);
             }
             FieldTy::Primitive(ty) => {

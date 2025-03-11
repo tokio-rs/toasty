@@ -85,18 +85,16 @@ impl Expand<'_> {
                 let index_tokenized = util::int(index);
 
                 match &field.ty {
-                    /*
-                    FieldTy::HasOne(rel) => {
-                        let target_struct_name = self.model_struct_path(rel.target, 1);
+                    FieldTy::BelongsTo(rel) => {
+                        let ty = &rel.ty;
 
                         quote! {
-                            pub fn #name(mut self, #name: impl IntoExpr<#target_struct_name>) -> Self {
-                                self.stmt.set(#index, #name.into_expr());
+                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {
+                                self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }
                         }
                     }
-                    */
                     FieldTy::HasMany(rel) => {
                         let singular = &rel.singular.ident;
                         let ty = &rel.ty;
@@ -108,7 +106,7 @@ impl Expand<'_> {
                             }
                         }
                     }
-                    FieldTy::BelongsTo(rel) => {
+                    FieldTy::HasOne(rel) => {
                         let ty = &rel.ty;
 
                         quote! {

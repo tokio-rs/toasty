@@ -14,26 +14,33 @@ impl Expand<'_> {
             let field_ident = &field.name.ident;
 
             match &field.ty {
-                    Primitive(ty) => {
-                        quote! {
-                            #vis #field_ident: #toasty::Path<#ty>,
-                        }
-                    }
-                    BelongsTo(rel) /* | HasOne(_) */ => {
-                        let ty = &rel.ty;
-
-                        quote! {
-                            #vis #field_ident: <#ty as #toasty::Relation>::OneField,
-                        }
-                    }
-                    HasMany(rel) => {
-                        let ty = &rel.ty;
-
-                        quote! {
-                            #vis #field_ident: <#ty as #toasty::Relation>::ManyField,
-                        }
+                Primitive(ty) => {
+                    quote! {
+                        #vis #field_ident: #toasty::Path<#ty>,
                     }
                 }
+                BelongsTo(rel) => {
+                    let ty = &rel.ty;
+
+                    quote! {
+                        #vis #field_ident: <#ty as #toasty::Relation>::OneField,
+                    }
+                }
+                HasMany(rel) => {
+                    let ty = &rel.ty;
+
+                    quote! {
+                        #vis #field_ident: <#ty as #toasty::Relation>::ManyField,
+                    }
+                }
+                HasOne(rel) => {
+                    let ty = &rel.ty;
+
+                    quote! {
+                        #vis #field_ident: <#ty as #toasty::Relation>::OneField,
+                    }
+                }
+            }
         });
 
         quote!(
@@ -63,7 +70,7 @@ impl Expand<'_> {
                             #field_ident: #toasty::Path::from_field_index::<Self>(#field_offset),
                         }
                     }
-                    BelongsTo(rel) /* | HasOne(_) */ => {
+                    BelongsTo(rel) => {
                         let ty = &rel.ty;
 
                         quote! {
@@ -77,6 +84,15 @@ impl Expand<'_> {
 
                         quote! {
                             #field_ident: <#ty as #toasty::Relation>::ManyField::from_path(
+                                #toasty::Path::from_field_index::<Self>(#field_offset)
+                            ),
+                        }
+                    }
+                    HasOne(rel) => {
+                        let ty = &rel.ty;
+
+                        quote! {
+                            #field_ident: <#ty as #toasty::Relation>::OneField::from_path(
                                 #toasty::Path::from_field_index::<Self>(#field_offset)
                             ),
                         }

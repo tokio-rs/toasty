@@ -5,7 +5,6 @@ use std_util::str;
 pub(crate) struct Name {
     pub(crate) parts: Vec<String>,
     pub(crate) ident: syn::Ident,
-    pub(crate) const_ident: syn::Ident,
 }
 
 impl Name {
@@ -19,12 +18,7 @@ impl Name {
         let parts: Vec<_> = snake.split("_").map(String::from).collect();
 
         let ident = syn::Ident::new(&parts.join("_"), span);
-        let const_ident = syn::Ident::new(&parts.join("_").to_uppercase(), span);
 
-        Name {
-            parts,
-            ident,
-            const_ident,
-        }
+        Name { parts, ident }
     }
 }

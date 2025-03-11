@@ -108,6 +108,20 @@ impl Expand<'_> {
                         queries: vec![],
                     }));
                 }
+                FieldTy::HasOne(rel) => {
+                    let ty = &rel.ty;
+
+                    nullable = quote!(<#ty as #toasty::Relation>::nullable());
+                    field_ty = quote!(FieldTy::HasOne(HasOne {
+                        target: <#ty as #toasty::Relation>::Model::ID,
+                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::ID),
+                        // The pair is populated at runtime.
+                        pair: FieldId {
+                            model: ModelId(usize::MAX),
+                            index: usize::MAX,
+                        },
+                    }));
+                }
             }
 
             let primary_key = self.model.primary_key.fields.contains(&index);

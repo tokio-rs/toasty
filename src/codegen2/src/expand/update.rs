@@ -94,7 +94,9 @@ impl Expand<'_> {
             let set_field_ident = &field.set_ident;
 
             match &field.ty {
-                FieldTy::Primitive(ty) => {
+                FieldTy::BelongsTo(rel) => {
+                    let ty = &rel.ty;
+
                     quote! {
                         #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
                             self.query.#set_field_ident(#field_ident);
@@ -124,9 +126,22 @@ impl Expand<'_> {
                         }
                     }
                 }
-                FieldTy::BelongsTo(rel) => {
+                FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
 
+                    quote! {
+                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
+                            self.query.#set_field_ident(#field_ident);
+                            self
+                        }
+
+                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
+                            self.query.#set_field_ident(#field_ident);
+                            self
+                        }
+                    }
+                }
+                FieldTy::Primitive(ty) => {
                     quote! {
                         #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
                             self.query.#set_field_ident(#field_ident);
@@ -153,7 +168,9 @@ impl Expand<'_> {
             let set_field_ident = &field.set_ident;
 
             match &field.ty {
-                FieldTy::Primitive(ty) => {
+                FieldTy::BelongsTo(rel) => {
+                    let ty = &rel.ty;
+
                     quote! {
                         #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
                             self.#set_field_ident(#field_ident);
@@ -183,9 +200,22 @@ impl Expand<'_> {
                         }
                     }
                 }
-                FieldTy::BelongsTo(rel) => {
+                FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
 
+                    quote! {
+                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
+                            self.#set_field_ident(#field_ident);
+                            self
+                        }
+
+                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
+                            self.stmt.set(#index, #field_ident.into_expr());
+                            self
+                        }
+                    }
+                }
+                FieldTy::Primitive(ty) => {
                     quote! {
                         #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
                             self.#set_field_ident(#field_ident);

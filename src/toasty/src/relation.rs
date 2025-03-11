@@ -3,11 +3,15 @@ pub use belongs_to::BelongsTo;
 
 mod has_many;
 pub use has_many::HasMany;
-use toasty_core::schema::app::FieldId;
+
+mod has_one;
+pub use has_one::HasOne;
 
 pub mod option;
 
 use super::Model;
+
+use toasty_core::schema::app::FieldId;
 
 pub trait Relation {
     /// Query type

@@ -13,6 +13,9 @@ pub(crate) use fk::ForeignKeyField;
 mod has_many;
 pub(crate) use has_many::HasMany;
 
+mod has_one;
+pub(crate) use has_one::HasOne;
+
 mod index;
 pub(crate) use index::{Index, IndexField, IndexScope};
 

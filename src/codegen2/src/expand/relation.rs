@@ -1,5 +1,5 @@
 use super::Expand;
-use crate::schema::{BelongsTo, Field, FieldTy, HasMany};
+use crate::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -191,8 +191,8 @@ impl Expand<'_> {
                 FieldTy::HasMany(rel) => {
                     Some(self.expand_model_relation_has_many_method(rel, field))
                 }
-                // FieldTy::HasOne(_) => Some(self.gen_model_relation_has_one_method(field)),
-                _ => None,
+                FieldTy::HasOne(rel) => Some(self.expand_model_relation_has_one_method(rel, field)),
+                FieldTy::Primitive(_) => None,
             })
             .collect()
     }
@@ -245,6 +245,23 @@ impl Expand<'_> {
 
                 <#ty as #toasty::Relation>::Many::from_stmt(
                     #toasty::stmt::Association::many(self.into_select(), Self::FIELDS.#field_ident.into())
+                )
+            }
+        }
+    }
+
+    fn expand_model_relation_has_one_method(&self, rel: &HasOne, field: &Field) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let field_ident = &field.name.ident;
+        let ty = &rel.ty;
+
+        quote! {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::One {
+                use #toasty::IntoSelect;
+
+                <#ty as #toasty::Relation>::One::from_stmt(
+                    #toasty::stmt::Association::one(self.into_select(), Self::FIELDS.#field_ident.into()).into_select()
                 )
             }
         }

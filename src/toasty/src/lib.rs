@@ -51,7 +51,7 @@ pub mod codegen_support2 {
         batch::CreateMany,
         cursor::{Cursor, FromCursor},
         relation::Relation2 as Relation,
-        relation::{BelongsTo, HasMany},
+        relation::{BelongsTo, HasMany, HasOne},
         stmt::{self, Id, IntoExpr, IntoInsert, IntoSelect, Path},
         Db, Error, Model, Result, Statement,
     };

@@ -1,5 +1,5 @@
 use super::Expand;
-use crate::schema::{BelongsTo, Field, FieldTy, HasMany};
+use crate::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -97,11 +97,31 @@ impl Expand<'_> {
             .fields
             .iter()
             .filter_map(|field| match &field.ty {
-                FieldTy::Primitive(..) => None,
-                FieldTy::HasMany(rel) => Some(self.expand_has_many_method(field, rel)),
                 FieldTy::BelongsTo(rel) => Some(self.expand_belongs_to_method(field, rel)),
+                FieldTy::HasMany(rel) => Some(self.expand_has_many_method(field, rel)),
+                FieldTy::HasOne(rel) => Some(self.expand_has_one_method(field, rel)),
+                FieldTy::Primitive(..) => None,
             })
             .collect()
+    }
+
+    fn expand_belongs_to_method(&self, field: &Field, rel: &BelongsTo) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let target = &rel.ty;
+        let model_ident = &self.model.ident;
+        let field_ident = &field.name.ident;
+
+        quote! {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+                use #toasty::IntoSelect;
+                <#target as #toasty::Relation>::Query::from_stmt(
+                    #toasty::stmt::Association::many_via_one(
+                        self.stmt, #model_ident::FIELDS.#field_ident.into()
+                    ).into_select()
+                )
+            }
+        }
     }
 
     fn expand_has_many_method(&self, field: &Field, rel: &HasMany) -> TokenStream {
@@ -123,7 +143,7 @@ impl Expand<'_> {
         }
     }
 
-    fn expand_belongs_to_method(&self, field: &Field, rel: &BelongsTo) -> TokenStream {
+    fn expand_has_one_method(&self, field: &Field, rel: &HasOne) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let target = &rel.ty;

@@ -1,38 +1,40 @@
 use tests_client::*;
+use toasty::stmt::Id;
 
 async fn crud_has_one_bi_direction_optional(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            profile: Option<Profile>,
-        }
+        #[has_one]
+        profile: Option<Profile>,
+    }
 
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            user_id: Option<Id<User>>,
+        #[unique]
+        user_id: Option<Id<User>>,
 
-            #[relation(key = user_id, references = id)]
-            user: Option<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: Option<User>,
 
-            bio: String,
-        }
-        "
-    );
+        bio: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Profile)).await;
 
     // Create a user without a profile
-    let user = db::User::create().name("Jane Doe").exec(&db).await.unwrap();
+    let user = User::create().name("Jane Doe").exec(&db).await.unwrap();
 
     // No profile
     assert_none!(user.profile().get(&db).await.unwrap());
