@@ -1,24 +1,30 @@
 use super::*;
 
 use crate::Result;
+use indexmap::IndexMap;
 
 #[derive(Debug, Default)]
 pub struct Schema {
-    pub models: Vec<Model>,
+    pub models: IndexMap<ModelId, Model>,
     pub queries: Vec<Query>,
 }
 
 #[derive(Default)]
 struct Builder {
-    models: Vec<Model>,
+    /// True when building from the proc macro
+    is_macro: bool,
+    models: IndexMap<ModelId, Model>,
     queries: Vec<Query>,
     cx: Context,
 }
 
 impl Schema {
     pub(crate) fn from_ast(ast: &ast::Schema) -> Result<Schema> {
-        let builder = Builder::default();
-        builder.from_ast(ast)
+        Builder::from_ast(ast)
+    }
+
+    pub fn from_macro(models: &[Model]) -> Result<Schema> {
+        Builder::from_macro(models)
     }
 
     /// Get a field by ID
@@ -29,9 +35,13 @@ impl Schema {
             .expect("invalid field ID")
     }
 
+    pub fn models(&self) -> impl Iterator<Item = &Model> {
+        self.models.values()
+    }
+
     /// Get a model by ID
     pub fn model(&self, id: impl Into<ModelId>) -> &Model {
-        self.models.get(id.into().0).expect("invalid model ID")
+        self.models.get(&id.into()).expect("invalid model ID")
     }
 
     pub fn query(&self, id: impl Into<QueryId>) -> &Query {
@@ -42,22 +52,50 @@ impl Schema {
 
 impl Builder {
     #[allow(clippy::wrong_self_convention)]
-    fn from_ast(mut self, ast: &ast::Schema) -> Result<Schema> {
+    fn from_ast(ast: &ast::Schema) -> Result<Schema> {
+        let mut builder = Builder::default();
+
         // First, register all defined types with the resolver.
         for node in ast.models() {
-            self.cx.register_model(&node.ident);
+            builder.cx.register_model(&node.ident);
         }
 
         for item in &ast.items {
             match item {
                 ast::SchemaItem::Model(node) => {
-                    let model = Model::from_ast(&mut self.cx, node)?;
-                    assert_eq!(self.models.len(), model.id.0);
-                    self.models.push(model);
+                    let model = Model::from_ast(&mut builder.cx, node)?;
+                    assert_eq!(builder.models.len(), model.id.0);
+                    builder.models.insert(model.id, model);
                 }
             }
         }
 
+        builder.process_models()?;
+        builder.into_schema()
+    }
+
+    pub(crate) fn from_macro(models: &[Model]) -> Result<Schema> {
+        let mut builder = Builder {
+            is_macro: true,
+            ..Builder::default()
+        };
+
+        for model in models {
+            builder.models.insert(model.id, model.clone());
+        }
+
+        builder.process_models()?;
+        builder.into_schema()
+    }
+
+    fn into_schema(self) -> Result<Schema> {
+        Ok(Schema {
+            models: self.models,
+            queries: self.queries,
+        })
+    }
+
+    fn process_models(&mut self) -> Result<()> {
         // All models have been discovered and initialized at some level, now do
         // the relation linking.
         self.link_relations()?;
@@ -68,10 +106,7 @@ impl Builder {
         // Build queries on relationships
         self.build_relation_queries()?;
 
-        Ok(Schema {
-            models: self.models,
-            queries: self.queries,
-        })
+        Ok(())
     }
 
     /// Go through all relations and link them to their pairs
@@ -83,21 +118,27 @@ impl Builder {
         // First, link all HasMany relations. HasManys are linked first because
         // linking them may result in converting HasOne relations to BelongTo.
         // We need this conversion to happen before any of the other processing.
-        for src in 0..self.models.len() {
-            for index in 0..self.models[src].fields.len() {
-                let field = &self.models[src].fields[index];
+        for curr in 0..self.models.len() {
+            for index in 0..self.models[curr].fields.len() {
+                let model = &self.models[curr];
+                let src = model.id;
+                let field = &model.fields[index];
 
                 if let FieldTy::HasMany(has_many) = &field.ty {
                     let pair = self.find_has_many_pair(src, has_many.target);
-                    self.models[src].fields[index].ty.expect_has_many_mut().pair = pair;
+                    self.models[curr].fields[index]
+                        .ty
+                        .expect_has_many_mut()
+                        .pair = pair;
                 }
             }
         }
 
         // Link HasOne relations and compute BelongsTo foreign keys
-        for src in 0..self.models.len() {
-            for index in 0..self.models[src].fields.len() {
-                let model = &self.models[src];
+        for curr in 0..self.models.len() {
+            for index in 0..self.models[curr].fields.len() {
+                let model = &self.models[curr];
+                let src = model.id;
                 let field = &model.fields[index];
 
                 match &field.ty {
@@ -105,7 +146,7 @@ impl Builder {
                         let pair = match self.find_belongs_to_pair(src, has_one.target) {
                             Some(pair) => pair,
                             None => {
-                                let model = &self.models[src];
+                                let model = &self.models[curr];
                                 panic!(
                                     "no relation pair for {}::{}",
                                     model.name.upper_camel_case(),
@@ -114,15 +155,19 @@ impl Builder {
                             }
                         };
 
-                        self.models[src].fields[index].ty.expect_has_one_mut().pair = pair;
+                        self.models[curr].fields[index].ty.expect_has_one_mut().pair = pair;
                     }
                     FieldTy::BelongsTo(belongs_to) => {
+                        if self.is_macro {
+                            assert!(!belongs_to.foreign_key.is_placeholder());
+                            continue;
+                        }
                         assert!(belongs_to.foreign_key.is_placeholder());
 
                         // Compute foreign key fields.
                         let foreign_key = self.foreign_key_for(model, field, belongs_to.target);
 
-                        self.models[src].fields[index]
+                        self.models[curr].fields[index]
                             .ty
                             .expect_belongs_to_mut()
                             .foreign_key = foreign_key;
@@ -133,23 +178,25 @@ impl Builder {
         }
 
         // Finally, link BelongsTo relations with their pairs
-        for src in 0..self.models.len() {
-            for index in 0..self.models[src].fields.len() {
-                let field_id = self.models[src].fields[index].id;
+        for curr in 0..self.models.len() {
+            for index in 0..self.models[curr].fields.len() {
+                let model = &self.models[curr];
+                let field_id = model.fields[index].id;
 
-                let pair = match &self.models[src].fields[index].ty {
+                let pair = match &self.models[curr].fields[index].ty {
                     FieldTy::BelongsTo(belongs_to) => {
                         let mut pair = None;
+                        let target = self.models.get_index_of(&belongs_to.target).unwrap();
 
-                        for target_index in 0..self.models[belongs_to.target.0].fields.len() {
-                            pair = match &self.models[belongs_to.target.0].fields[target_index].ty {
+                        for target_index in 0..self.models[target].fields.len() {
+                            pair = match &self.models[target].fields[target_index].ty {
                                 FieldTy::HasMany(has_many) if has_many.pair == field_id => {
                                     assert!(pair.is_none());
-                                    Some(self.models[belongs_to.target.0].fields[target_index].id)
+                                    Some(self.models[target].fields[target_index].id)
                                 }
                                 FieldTy::HasOne(has_one) if has_one.pair == field_id => {
                                     assert!(pair.is_none());
-                                    Some(self.models[belongs_to.target.0].fields[target_index].id)
+                                    Some(self.models[target].fields[target_index].id)
                                 }
                                 _ => continue,
                             }
@@ -164,7 +211,7 @@ impl Builder {
                     _ => continue,
                 };
 
-                self.models[src].fields[index]
+                self.models[curr].fields[index]
                     .ty
                     .expect_belongs_to_mut()
                     .pair = pair;
@@ -175,7 +222,7 @@ impl Builder {
     }
 
     fn build_queries(&mut self) -> Result<()> {
-        for model in &mut self.models {
+        for model in self.models.values_mut() {
             for index in &model.indices {
                 let mut fields = index.partition_fields().to_vec();
                 let mut local_fields = index.local_fields().to_vec();
@@ -238,19 +285,19 @@ impl Builder {
     }
 
     fn build_relation_queries(&mut self) -> Result<()> {
-        for model_id in 0..self.models.len() {
-            for field_id in 0..self.models[model_id].fields.len() {
-                let model = &self.models[model_id];
+        for curr in 0..self.models.len() {
+            for field_id in 0..self.models[curr].fields.len() {
+                let model = &self.models[curr];
 
                 // If this is a `HasMany`, get the target & field pair
                 let Some(rel) = model.fields[field_id].ty.as_has_many() else {
                     continue;
                 };
-                let pair = self.models[rel.pair.model.0].fields[rel.pair.index]
+                let pair = self.models[&rel.pair.model].fields[rel.pair.index]
                     .ty
                     .expect_belongs_to();
 
-                let target = &self.models[rel.target.0];
+                let target = &self.models[&rel.target];
                 let query_id = QueryId(self.queries.len());
 
                 let mut builder = Query::find_by(query_id, target, false);
@@ -280,7 +327,7 @@ impl Builder {
                 let query = builder.build();
                 let scoped_query = ScopedQuery::new(&query);
 
-                self.models[model_id].fields[field_id]
+                self.models[curr].fields[field_id]
                     .ty
                     .expect_has_many_mut()
                     .queries
@@ -293,8 +340,8 @@ impl Builder {
         Ok(())
     }
 
-    fn find_belongs_to_pair(&self, src: usize, target: ModelId) -> Option<FieldId> {
-        let target = match self.models.get(target.0) {
+    fn find_belongs_to_pair(&self, src: ModelId, target: ModelId) -> Option<FieldId> {
+        let target = match self.models.get(&target) {
             Some(target) => target,
             None => todo!("lol no"),
         };
@@ -304,7 +351,7 @@ impl Builder {
             .fields
             .iter()
             .filter(|field| match &field.ty {
-                FieldTy::BelongsTo(rel) => rel.target == ModelId(src),
+                FieldTy::BelongsTo(rel) => rel.target == src,
                 _ => false,
             })
             .collect();
@@ -316,12 +363,16 @@ impl Builder {
         }
     }
 
-    fn find_has_many_pair(&mut self, src: usize, target: ModelId) -> FieldId {
+    fn find_has_many_pair(&mut self, src: ModelId, target: ModelId) -> FieldId {
         if let Some(field_id) = self.find_belongs_to_pair(src, target) {
             return field_id;
         }
 
-        todo!("missing relation attribute")
+        todo!(
+            "missing relation attribute; source={:#?}; target={:#?}",
+            src,
+            self.models.get(&target)
+        );
     }
 
     fn foreign_key_for(&self, source: &Model, source_field: &Field, target: ModelId) -> ForeignKey {

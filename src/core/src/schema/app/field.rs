@@ -5,7 +5,7 @@ use super::*;
 
 use std::fmt;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Field {
     /// Uniquely identifies the field within the containing model.
     pub id: FieldId,
@@ -32,7 +32,7 @@ pub struct FieldId {
     pub index: usize,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum FieldTy {
     Primitive(FieldPrimitive),
     BelongsTo(BelongsTo),

@@ -1,26 +1,45 @@
-mod db;
+use toasty::stmt::Id;
 
-use std::path::PathBuf;
+#[derive(Debug)]
+#[toasty::model]
+struct User {
+    #[key]
+    #[auto]
+    id: Id<Self>,
 
-use toasty::Db;
-use toasty_sqlite::Sqlite;
+    name: String,
+
+    #[has_one]
+    profile: Option<Profile>,
+}
+
+#[derive(Debug)]
+#[toasty::model]
+struct Profile {
+    #[key]
+    #[auto]
+    id: Id<Self>,
+
+    #[belongs_to(key = user_id, references = id)]
+    user: Option<User>,
+
+    #[unique]
+    user_id: Option<Id<User>>,
+}
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    let schema_file = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema.toasty");
-
-    let schema = toasty::schema::from_file(schema_file)?;
-
-    // Use the in-memory sqlite driver
-    let driver = Sqlite::in_memory();
-
-    let db = Db::new(schema, driver).await?;
+    let db = toasty::Db::builder()
+        .register::<User>()
+        .register::<Profile>()
+        .build(toasty_sqlite::Sqlite::in_memory())
+        .await?;
 
     // For now, reset!s
     db.reset_db().await?;
 
     // Create a user without a profile
-    let user = db::User::create().name("John Doe").exec(&db).await?;
+    let user = User::create().name("John Doe").exec(&db).await?;
 
     println!("user = {user:#?}");
     println!("profile: {:#?}", user.profile().get(&db).await);

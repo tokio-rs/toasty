@@ -3,39 +3,43 @@
 
 use tests_client::*;
 
+use toasty::stmt::Id;
+
 use std::collections::HashMap;
 use std_util::prelude::*;
 
 async fn crud_user_todos(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[index]
+        user_id: Id<User>,
 
-            #[index]
-            user_id: Id<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a user
-    let user = db::User::create().exec(&db).await.unwrap();
+    let user = User::create().exec(&db).await.unwrap();
 
     // No TODOs
     assert_empty!(user
@@ -57,7 +61,7 @@ async fn crud_user_todos(s: impl Setup) {
         .unwrap();
 
     // Find the todo by ID
-    let list = db::Todo::filter_by_id(&todo.id)
+    let list = Todo::filter_by_id(&todo.id)
         .all(&db)
         .await
         .unwrap()
@@ -69,7 +73,7 @@ async fn crud_user_todos(s: impl Setup) {
     assert_eq!(todo.id, list[0].id);
 
     // Find the TODO by user ID
-    let list = db::Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(&user.id)
         .all(&db)
         .await
         .unwrap()
@@ -81,7 +85,7 @@ async fn crud_user_todos(s: impl Setup) {
     assert_eq!(todo.id, list[0].id);
 
     // Find the User using the Todo
-    let user_reload = db::User::get_by_id(&db, &todo.user_id).await.unwrap();
+    let user_reload = User::get_by_id(&db, &todo.user_id).await.unwrap();
     assert_eq!(user.id, user_reload.id);
 
     let mut created = HashMap::new();
@@ -97,7 +101,7 @@ async fn crud_user_todos(s: impl Setup) {
             user.todos().create().title(title).exec(&db).await.unwrap()
         } else {
             // Create via todo builder
-            db::Todo::create()
+            Todo::create()
                 .user(&user)
                 .title(title)
                 .exec(&db)
@@ -132,7 +136,7 @@ async fn crud_user_todos(s: impl Setup) {
     }
 
     // Find all TODOs by user (using the belongs_to queries)
-    let list = db::Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(&user.id)
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
@@ -150,7 +154,7 @@ async fn crud_user_todos(s: impl Setup) {
     }
 
     // Create a second user
-    let user2 = db::User::create().exec(&db).await.unwrap();
+    let user2 = User::create().exec(&db).await.unwrap();
 
     // No TODOs associated with `user2`
     assert_empty!(user2
@@ -181,11 +185,11 @@ async fn crud_user_todos(s: impl Setup) {
     }
 
     // Delete a TODO by value
-    let todo = db::Todo::get_by_id(&db, &ids[0]).await.unwrap();
+    let todo = Todo::get_by_id(&db, &ids[0]).await.unwrap();
     todo.delete(&db).await.unwrap();
 
     // Can no longer get the todo via id
-    assert_err!(db::Todo::get_by_id(&db, &ids[0]).await);
+    assert_err!(Todo::get_by_id(&db, &ids[0]).await);
 
     // Can no longer get the todo scoped
     assert_err!(user.todos().get_by_id(&db, &ids[0]).await);
@@ -198,7 +202,7 @@ async fn crud_user_todos(s: impl Setup) {
         .unwrap();
 
     // Can no longer get the todo via id
-    assert_err!(db::Todo::get_by_id(&db, &ids[1]).await);
+    assert_err!(Todo::get_by_id(&db, &ids[1]).await);
 
     // Can no longer get the todo scoped
     assert_err!(user.todos().get_by_id(&db, &ids[1]).await);
@@ -212,7 +216,7 @@ async fn crud_user_todos(s: impl Setup) {
         .await
         .unwrap();
 
-    let todo = db::Todo::get_by_id(&db, &ids[2]).await.unwrap();
+    let todo = Todo::get_by_id(&db, &ids[2]).await.unwrap();
     assert_eq!(todo.title, "batch update 1");
 
     // Now fail to update it by scoping by other user
@@ -225,49 +229,51 @@ async fn crud_user_todos(s: impl Setup) {
         .await
         .unwrap();
 
-    let todo = db::Todo::get_by_id(&db, &ids[2]).await.unwrap();
+    let todo = Todo::get_by_id(&db, &ids[2]).await.unwrap();
     assert_eq!(todo.title, "batch update 1");
 
     let id = user.id.clone();
 
     // Delete the user and associated TODOs are deleted
     user.delete(&db).await.unwrap();
-    assert_err!(db::User::get_by_id(&db, &id).await);
-    assert_err!(db::Todo::get_by_id(&db, &ids[2]).await);
+    assert_err!(User::get_by_id(&db, &id).await);
+    assert_err!(Todo::get_by_id(&db, &ids[2]).await);
 }
 
 async fn has_many_insert_on_update(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
+        #[has_many]
+        todos: [Todo],
 
-            name: String,
-        }
+        name: String,
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[index]
+        user_id: Id<User>,
 
-            #[index]
-            user_id: Id<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a user, no TODOs
-    let mut user = db::User::create().name("Alice").exec(&db).await.unwrap();
+    let mut user = User::create().name("Alice").exec(&db).await.unwrap();
     assert!(user
         .todos()
         .collect::<Vec<_>>(&db)
@@ -278,7 +284,7 @@ async fn has_many_insert_on_update(s: impl Setup) {
     // Update the user and create a todo in a batch
     user.update()
         .name("Bob")
-        .todo(db::Todo::create().title("change name"))
+        .todo(Todo::create().title("change name"))
         .exec(&db)
         .await
         .unwrap();
@@ -290,36 +296,38 @@ async fn has_many_insert_on_update(s: impl Setup) {
 }
 
 async fn scoped_find_by_id(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a couple of users
-    let user1 = db::User::create().exec(&db).await.unwrap();
-    let user2 = db::User::create().exec(&db).await.unwrap();
+    let user1 = User::create().exec(&db).await.unwrap();
+    let user2 = User::create().exec(&db).await.unwrap();
 
     // Create a todo
     let todo = user1
@@ -343,7 +351,7 @@ async fn scoped_find_by_id(s: impl Setup) {
         .await
         .unwrap());
 
-    let reloaded = db::User::filter_by_id(&user1.id)
+    let reloaded = User::filter_by_id(&user1.id)
         .todos()
         .get_by_id(&db, &todo.id)
         .await
@@ -373,34 +381,36 @@ async fn has_many_when_target_indexes_fk_and_pk(_s: impl Setup) {}
 
 // When the FK is composite, things should still work
 async fn has_many_when_fk_is_composite(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        #[key(partition = user_id, local = id)]
-        model Todo {
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    #[key(partition = user_id, local = id)]
+    struct Todo {
+        #[auto]
+        id: Id<Self>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        user_id: Id<User>,
 
-            user_id: Id<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a user
-    let user = db::User::create().exec(&db).await.unwrap();
+    let user = User::create().exec(&db).await.unwrap();
 
     // No TODOs
     assert_empty!(user
@@ -422,7 +432,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
         .unwrap();
 
     // Find the todo by ID
-    let list = db::Todo::filter_by_user_id_and_id(&user.id, &todo.id)
+    let list = Todo::filter_by_user_id_and_id(&user.id, &todo.id)
         .all(&db)
         .await
         .unwrap()
@@ -434,7 +444,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
     assert_eq!(todo.id, list[0].id);
 
     // Find the TODO by user ID
-    let list = db::Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(&user.id)
         .all(&db)
         .await
         .unwrap()
@@ -458,7 +468,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
             user.todos().create().title(title).exec(&db).await.unwrap()
         } else {
             // Create via todo builder
-            db::Todo::create()
+            Todo::create()
                 .user(&user)
                 .title(title)
                 .exec(&db)
@@ -493,7 +503,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
     }
 
     // Find all TODOs by user (using the belongs_to queries)
-    let list = db::Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(&user.id)
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
@@ -511,7 +521,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
     }
 
     // Create a second user
-    let user2 = db::User::create().exec(&db).await.unwrap();
+    let user2 = User::create().exec(&db).await.unwrap();
 
     // No TODOs associated with `user2`
     assert_empty!(user2
@@ -540,13 +550,13 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
     }
 
     // Delete a TODO by value
-    let todo = db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[0])
+    let todo = Todo::get_by_user_id_and_id(&db, &user.id, &ids[0])
         .await
         .unwrap();
     todo.delete(&db).await.unwrap();
 
     // Can no longer get the todo via id
-    assert_err!(db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[0]).await);
+    assert_err!(Todo::get_by_user_id_and_id(&db, &user.id, &ids[0]).await);
 
     // Can no longer get the todo scoped
     assert_err!(user.todos().get_by_id(&db, &ids[0]).await);
@@ -559,7 +569,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
         .unwrap();
 
     // Can no longer get the todo via id
-    assert_err!(db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[1]).await);
+    assert_err!(Todo::get_by_user_id_and_id(&db, &user.id, &ids[1]).await);
 
     // Can no longer get the todo scoped
     assert_err!(user.todos().get_by_id(&db, &ids[1]).await);
@@ -572,7 +582,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
-    let todo = db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[2])
+    let todo = Todo::get_by_user_id_and_id(&db, &user.id, &ids[2])
         .await
         .unwrap();
     assert_eq!(todo.title, "batch update 1");
@@ -586,7 +596,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
-    let todo = db::Todo::get_by_user_id_and_id(&db, &user.id, &ids[2])
+    let todo = Todo::get_by_user_id_and_id(&db, &user.id, &ids[2])
         .await
         .unwrap();
     assert_eq!(todo.title, "batch update 1");
@@ -599,34 +609,36 @@ async fn has_many_when_pk_is_composite(_s: impl Setup) {}
 async fn has_many_when_fk_and_pk_are_composite(_s: impl Setup) {}
 
 async fn belongs_to_required(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
-    db::Todo::create()
+    Todo::create()
         .title("missing user")
         .exec(&db)
         .await
@@ -634,34 +646,36 @@ async fn belongs_to_required(s: impl Setup) {
 }
 
 async fn delete_when_belongs_to_optional(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Option<Id<User>>,
+        #[index]
+        user_id: Option<Id<User>>,
 
-            #[relation(key = user_id, references = id)]
-            user: Option<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: Option<User>,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
-    let user = db::User::create().exec(&db).await.unwrap();
+    let user = User::create().exec(&db).await.unwrap();
     let mut ids = vec![];
 
     for i in 0..3 {
@@ -680,7 +694,7 @@ async fn delete_when_belongs_to_optional(s: impl Setup) {
 
     // All the todos still exist and `user` is set to `None`.
     for id in ids {
-        let todo = db::Todo::get_by_id(&db, id).await.unwrap();
+        let todo = Todo::get_by_id(&db, id).await.unwrap();
         assert_none!(todo.user_id);
     }
 
@@ -688,36 +702,38 @@ async fn delete_when_belongs_to_optional(s: impl Setup) {
 }
 
 async fn associate_new_user_with_todo_on_update_via_creation(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a user with a todo
-    let u1 = db::User::create()
-        .todo(db::Todo::create().title("hello world"))
+    let u1 = User::create()
+        .todo(Todo::create().title("hello world"))
         .exec(&db)
         .await
         .unwrap();
@@ -727,44 +743,42 @@ async fn associate_new_user_with_todo_on_update_via_creation(s: impl Setup) {
     assert_eq!(1, todos.len());
     let mut todo = todos.into_iter().next().unwrap();
 
-    todo.update()
-        .user(db::User::create())
-        .exec(&db)
-        .await
-        .unwrap();
+    todo.update().user(User::create()).exec(&db).await.unwrap();
 }
 
 async fn associate_new_user_with_todo_on_update_query_via_creation(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a user with a todo
-    let u1 = db::User::create()
-        .todo(db::Todo::create().title("hello world"))
+    let u1 = User::create()
+        .todo(Todo::create().title("hello world"))
         .exec(&db)
         .await
         .unwrap();
@@ -774,47 +788,49 @@ async fn associate_new_user_with_todo_on_update_query_via_creation(s: impl Setup
     assert_eq!(1, todos.len());
     let todo = todos.into_iter().next().unwrap();
 
-    db::Todo::filter_by_id(&todo.id)
+    Todo::filter_by_id(&todo.id)
         .update()
-        .user(db::User::create())
+        .user(User::create())
         .exec(&db)
         .await
         .unwrap();
 }
 
 async fn update_user_with_null_todo_is_err(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
     use toasty::stmt::{self, IntoExpr};
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
     // Create a user with a todo
-    let u1 = db::User::create()
-        .todo(db::Todo::create().title("hello world"))
+    let u1 = User::create()
+        .todo(Todo::create().title("hello world"))
         .exec(&db)
         .await
         .unwrap();
@@ -825,56 +841,58 @@ async fn update_user_with_null_todo_is_err(s: impl Setup) {
     let todo = todos.into_iter().next().unwrap();
 
     // Updating the todo w/ null is an error. Thus requires a bit of a hack to make work
-    let mut stmt: stmt::Update<db::Todo> =
+    let mut stmt: stmt::Update<Todo> =
         stmt::Update::new(stmt::Select::from_expr((&todo).into_expr()));
     stmt.set(2, toasty_core::stmt::Value::Null);
     let _ = db.exec(stmt.into()).await.unwrap();
 
     // User is not deleted
-    let u1_reloaded = db::User::get_by_id(&db, &u1.id).await.unwrap();
+    let u1_reloaded = User::get_by_id(&db, &u1.id).await.unwrap();
     assert_eq!(u1_reloaded.id, u1.id);
 }
 
 async fn assign_todo_that_already_has_user_on_create(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
-    let todo = db::Todo::create()
+    let todo = Todo::create()
         .title("hello")
-        .user(db::User::create())
+        .user(User::create())
         .exec(&db)
         .await
         .unwrap();
 
     let u1 = todo.user().get(&db).await.unwrap();
 
-    let u2 = db::User::create().todo(&todo).exec(&db).await.unwrap();
+    let u2 = User::create().todo(&todo).exec(&db).await.unwrap();
 
-    let todo_reload = db::Todo::get_by_id(&db, &todo.id).await.unwrap();
+    let todo_reload = Todo::get_by_id(&db, &todo.id).await.unwrap();
 
     assert_eq!(u2.id, todo_reload.user_id);
 
@@ -889,48 +907,50 @@ async fn assign_todo_that_already_has_user_on_create(s: impl Setup) {
 }
 
 async fn assign_todo_that_already_has_user_on_update(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
-    let todo = db::Todo::create()
+    let todo = Todo::create()
         .title("hello")
-        .user(db::User::create())
+        .user(User::create())
         .exec(&db)
         .await
         .unwrap();
 
     let u1 = todo.user().get(&db).await.unwrap();
 
-    let mut u2 = db::User::create().exec(&db).await.unwrap();
+    let mut u2 = User::create().exec(&db).await.unwrap();
 
     // Update the user
     u2.update().todo(&todo).exec(&db).await.unwrap();
 
-    let todo_reload = db::Todo::get_by_id(&db, &todo.id).await.unwrap();
+    let todo_reload = Todo::get_by_id(&db, &todo.id).await.unwrap();
 
     assert_eq!(u2.id, todo_reload.user_id);
 
@@ -945,48 +965,50 @@ async fn assign_todo_that_already_has_user_on_update(s: impl Setup) {
 }
 
 async fn assign_existing_user_to_todo(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
-    let mut todo = db::Todo::create()
+    let mut todo = Todo::create()
         .title("hello")
-        .user(db::User::create())
+        .user(User::create())
         .exec(&db)
         .await
         .unwrap();
 
     let u1 = todo.user().get(&db).await.unwrap();
 
-    let u2 = db::User::create().exec(&db).await.unwrap();
+    let u2 = User::create().exec(&db).await.unwrap();
 
     // Update the todo
     todo.update().user(&u2).exec(&db).await.unwrap();
 
-    let todo_reload = db::Todo::get_by_id(&db, &todo.id).await.unwrap();
+    let todo_reload = Todo::get_by_id(&db, &todo.id).await.unwrap();
 
     assert_eq!(u2.id, todo_reload.user_id);
 
@@ -1001,38 +1023,40 @@ async fn assign_existing_user_to_todo(s: impl Setup) {
 }
 
 async fn assign_todo_to_user_on_update_query(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            todos: [Todo],
-        }
+        #[has_many]
+        todos: [Todo],
+    }
 
-        model Todo {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            user_id: Id<User>,
+        #[index]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            title: String,
-        }"
-    );
+        title: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Todo)).await;
 
-    let user = db::User::create().exec(&db).await.unwrap();
+    let user = User::create().exec(&db).await.unwrap();
 
-    db::User::filter_by_id(&user.id)
+    User::filter_by_id(&user.id)
         .update()
-        .todo(db::Todo::create().title("hello"))
+        .todo(Todo::create().title("hello"))
         .exec(&db)
         .await
         .unwrap();

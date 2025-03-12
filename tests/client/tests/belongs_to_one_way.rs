@@ -1,33 +1,35 @@
 use tests_client::*;
 
+use toasty::stmt::Id;
+
 async fn crud_user_optional_profile_one_direction(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[index]
-            profile_id: Option<Id<Profile>>,
+        #[index]
+        profile_id: Option<Id<Profile>>,
 
-            #[relation(key = profile_id, references = id)]
-            profile: Option<Profile>,
-        }
+        #[belongs_to(key = profile_id, references = id)]
+        profile: Option<Profile>,
+    }
 
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
-        }
-        "
-    );
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Profile)).await;
 
     // Create a user
-    let user = db::User::create()
-        .profile(db::Profile::create())
+    let user = User::create()
+        .profile(Profile::create())
         .exec(&db)
         .await
         .unwrap();

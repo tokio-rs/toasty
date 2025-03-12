@@ -1,38 +1,40 @@
 use tests_client::*;
+use toasty::stmt::Id;
 
 async fn crud_has_one_bi_direction_optional(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            profile: Option<Profile>,
-        }
+        #[has_one]
+        profile: Option<Profile>,
+    }
 
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            user_id: Option<Id<User>>,
+        #[unique]
+        user_id: Option<Id<User>>,
 
-            #[relation(key = user_id, references = id)]
-            user: Option<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: Option<User>,
 
-            bio: String,
-        }
-        "
-    );
+        bio: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Profile)).await;
 
     // Create a user without a profile
-    let user = db::User::create().name("Jane Doe").exec(&db).await.unwrap();
+    let user = User::create().name("Jane Doe").exec(&db).await.unwrap();
 
     // No profile
     assert_none!(user.profile().get(&db).await.unwrap());
@@ -57,9 +59,9 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
     assert_eq!(user.id, user_reload.id);
 
     // Create a new user with a profile
-    let mut user = db::User::create()
+    let mut user = User::create()
         .name("Tim Apple")
-        .profile(db::Profile::create().bio("an apple a day"))
+        .profile(Profile::create().bio("an apple a day"))
         .exec(&db)
         .await
         .unwrap();
@@ -72,7 +74,7 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
 
     // Update a user, creating a new profile.
     user.update()
-        .profile(db::Profile::create().bio("keeps the doctor away"))
+        .profile(Profile::create().bio("keeps the doctor away"))
         .exec(&db)
         .await
         .unwrap();
@@ -83,17 +85,12 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
     assert_eq!(user.id, profile.user().get(&db).await.unwrap().unwrap().id);
 
     // Unset the profile via an update. This will nullify user on the profile.
-    let mut update = user.update();
-    update.unset_profile();
-    update.exec(&db).await.unwrap();
+    user.update().profile(None).exec(&db).await.unwrap();
 
     // The profile is none
     assert!(user.profile().get(&db).await.unwrap().is_none());
 
-    let profile_reloaded = db::Profile::filter_by_id(&profile.id)
-        .get(&db)
-        .await
-        .unwrap();
+    let profile_reloaded = Profile::filter_by_id(&profile.id).get(&db).await.unwrap();
     assert_none!(profile_reloaded.user_id);
 
     user.update()
@@ -102,19 +99,19 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
         .await
         .unwrap();
 
-    let profile_reloaded = db::Profile::get_by_id(&db, &profile.id).await.unwrap();
+    let profile_reloaded = Profile::get_by_id(&db, &profile.id).await.unwrap();
     assert_eq!(&user.id, profile_reloaded.user_id.as_ref().unwrap());
 
     // Deleting the profile will nullify the profile field for the user
     profile_reloaded.delete(&db).await.unwrap();
 
-    let mut user_reloaded = db::User::get_by_id(&db, &user.id).await.unwrap();
+    let mut user_reloaded = User::get_by_id(&db, &user.id).await.unwrap();
     assert_none!(user_reloaded.profile().get(&db).await.unwrap());
 
     // Create a new profile for the user
     user_reloaded
         .update()
-        .profile(db::Profile::create().bio("hello"))
+        .profile(Profile::create().bio("hello"))
         .exec(&db)
         .await
         .unwrap();
@@ -124,45 +121,46 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
     // Delete the user
     user_reloaded.delete(&db).await.unwrap();
 
-    let profile_reloaded = db::Profile::get_by_id(&db, &profile_id).await.unwrap();
+    let profile_reloaded = Profile::get_by_id(&db, &profile_id).await.unwrap();
     assert_none!(profile_reloaded.user_id);
 }
 
 async fn crud_has_one_required_belongs_to_optional(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            profile: Profile,
-        }
+        #[has_one]
+        profile: Profile,
+    }
 
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            user_id: Option<Id<User>>,
+        #[unique]
+        user_id: Option<Id<User>>,
 
-            #[relation(key = user_id, references = id)]
-            user: Option<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: Option<User>,
 
-            bio: String,
-        }
-        "
-    );
+        bio: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Profile)).await;
 
     // Create a new user with a profile
-    let user = db::User::create()
+    let user = User::create()
         .name("Tim Apple")
-        .profile(db::Profile::create().bio("an apple a day"))
+        .profile(Profile::create().bio("an apple a day"))
         .exec(&db)
         .await
         .unwrap();
@@ -175,48 +173,49 @@ async fn crud_has_one_required_belongs_to_optional(s: impl Setup) {
 
     // Deleting the user leaves the profile in place.
     user.delete(&db).await.unwrap();
-    let profile_reloaded = db::Profile::get_by_id(&db, &profile.id).await.unwrap();
+    let profile_reloaded = Profile::get_by_id(&db, &profile.id).await.unwrap();
     assert_none!(profile_reloaded.user_id);
 
     // Try creating a user **without** a user: error
-    assert_err!(db::User::create().name("Nop Rofile").exec(&db).await);
+    assert_err!(User::create().name("Nop Rofile").exec(&db).await);
 }
 
 async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            profile: Profile,
-        }
+        #[has_one]
+        profile: Profile,
+    }
 
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            user_id: Option<Id<User>>,
+        #[unique]
+        user_id: Option<Id<User>>,
 
-            #[relation(key = user_id, references = id)]
-            user: Option<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: Option<User>,
 
-            bio: String,
-        }
-        "
-    );
+        bio: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Profile)).await;
 
     // Create a user with a profile
-    let u1 = db::User::create()
+    let u1 = User::create()
         .name("Tim Apple")
-        .profile(db::Profile::create().bio("an apple a day"))
+        .profile(Profile::create().bio("an apple a day"))
         .exec(&db)
         .await
         .unwrap();
@@ -227,9 +226,9 @@ async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
     assert_ne!(u1.id.to_string(), p1.id.to_string());
 
     // Associate the profile with a new user by value
-    let u2 = db::User::create()
+    let u2 = User::create()
         .name("Johnny Appleseed")
-        .profile(db::Profile::create().bio("I plant trees"))
+        .profile(Profile::create().bio("I plant trees"))
         .exec(&db)
         .await
         .unwrap();
@@ -240,12 +239,11 @@ async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
     // Associate the original profile w/ the new user by value
     p1.update().user(&u2).exec(&db).await.unwrap();
 
-    println!("--------------");
     // assert_eq!(u2.id, p1.user().find(&db).await.unwrap().unwrap().id);
     // u1 is deleted
-    assert_err!(db::User::get_by_id(&db, &u1.id).await);
+    assert_err!(User::get_by_id(&db, &u1.id).await);
     // p2 ID is null
-    let p2_reloaded = db::Profile::get_by_id(&db, &p2.id).await.unwrap();
+    let p2_reloaded = Profile::get_by_id(&db, &p2.id).await.unwrap();
     assert_none!(p2_reloaded.user_id);
 
     /*
@@ -297,40 +295,41 @@ async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
 }
 
 async fn crud_has_one_optional_belongs_to_required(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            profile: Option<Profile>,
-        }
+        #[has_one]
+        profile: Option<Profile>,
+    }
 
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            user_id: Id<User>,
+        #[unique]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
 
-            bio: String,
-        }
-        "
-    );
+        bio: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Profile)).await;
 
     // Create a new user with a profile
-    let user = db::User::create()
+    let user = User::create()
         .name("Tim Apple")
-        .profile(db::Profile::create().bio("an apple a day"))
+        .profile(Profile::create().bio("an apple a day"))
         .exec(&db)
         .await
         .unwrap();
@@ -343,7 +342,7 @@ async fn crud_has_one_optional_belongs_to_required(s: impl Setup) {
 
     // Deleting the user also deletes the profile
     user.delete(&db).await.unwrap();
-    assert_err!(db::Profile::get_by_id(&db, &profile.id).await);
+    assert_err!(Profile::get_by_id(&db, &profile.id).await);
 }
 
 async fn has_one_must_specify_relation_on_one_side(_s: impl Setup) {
@@ -397,36 +396,37 @@ async fn has_one_must_specify_be_uniquely_indexed(_s: impl Setup) {
 }
 
 async fn set_has_one_by_value_in_update_query(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            profile: Option<Profile>,
-        }
+        #[has_one]
+        profile: Option<Profile>,
+    }
 
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            user_id: Option<Id<User>>,
+        #[unique]
+        user_id: Option<Id<User>>,
 
-            #[relation(key = user_id, references = id)]
-            user: Option<User>,
-        }
-        "
-    );
+        #[belongs_to(key = user_id, references = id)]
+        user: Option<User>,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Profile)).await;
 
-    let user = db::User::create().exec(&db).await.unwrap();
-    let profile = db::Profile::create().exec(&db).await.unwrap();
+    let user = User::create().exec(&db).await.unwrap();
+    let profile = Profile::create().exec(&db).await.unwrap();
 
-    db::User::filter_by_id(&user.id)
+    User::filter_by_id(&user.id)
         .update()
         .profile(&profile)
         .exec(&db)
@@ -442,135 +442,142 @@ async fn set_has_one_by_value_in_update_query(s: impl Setup) {
 async fn unset_has_one_in_batch_update(_s: impl Setup) {}
 
 async fn unset_has_one_with_required_pair_in_pk_query_update(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            profile: Option<Profile>,
-        }
+        #[has_one]
+        profile: Option<Profile>,
+    }
 
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            user_id: Id<User>,
+        #[unique]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
-        }
-        "
-    );
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Profile)).await;
 
-    let user = db::User::create()
-        .profile(db::Profile::create())
+    let user = User::create()
+        .profile(Profile::create())
         .exec(&db)
         .await
         .unwrap();
     let profile = user.profile().get(&db).await.unwrap().unwrap();
 
-    println!("=======> here");
-    let mut update = db::User::filter_by_id(&user.id).update();
-    update.unset_profile();
-    update.exec(&db).await.unwrap();
+    User::filter_by_id(&user.id)
+        .update()
+        .profile(None)
+        .exec(&db)
+        .await
+        .unwrap();
 
     // Profile is deleted
-    assert_err!(db::Profile::get_by_id(&db, &profile.id).await);
+    assert_err!(Profile::get_by_id(&db, &profile.id).await);
 }
 
 async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            email: String,
+        #[unique]
+        email: String,
 
-            profile: Option<Profile>,
-        }
+        #[has_one]
+        profile: Option<Profile>,
+    }
 
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            user_id: Id<User>,
+        #[unique]
+        user_id: Id<User>,
 
-            #[relation(key = user_id, references = id)]
-            user: User,
-        }
-        "
-    );
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Profile)).await;
 
-    let user = db::User::create()
+    let user = User::create()
         .email("foo@example.com")
-        .profile(db::Profile::create())
+        .profile(Profile::create())
         .exec(&db)
         .await
         .unwrap();
     let profile = user.profile().get(&db).await.unwrap().unwrap();
 
-    println!("=======> here");
-    let mut update = db::User::filter_by_email(&user.email).update();
-    update.unset_profile();
-    update.exec(&db).await.unwrap();
+    User::filter_by_email(&user.email)
+        .update()
+        .profile(None)
+        .exec(&db)
+        .await
+        .unwrap();
 
     // Profile is deleted
-    assert_err!(db::Profile::get_by_id(&db, &profile.id).await);
+    assert_err!(Profile::get_by_id(&db, &profile.id).await);
 }
 
 async fn associate_has_one_by_val_on_insert(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            profile: Profile,
-        }
+        #[has_one]
+        profile: Profile,
+    }
 
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            user_id: Option<Id<User>>,
+        #[unique]
+        user_id: Option<Id<User>>,
 
-            #[relation(key = user_id, references = id)]
-            user: Option<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: Option<User>,
 
-            bio: String,
-        }
-        "
-    );
+        bio: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Profile)).await;
 
     // Create a profile
-    let profile = db::Profile::create()
+    let profile = Profile::create()
         .bio("hello world")
         .exec(&db)
         .await
         .unwrap();
 
     // Create a user and associate the profile with it, by value
-    let u1 = db::User::create()
+    let u1 = User::create()
         .name("User 1")
         .profile(&profile)
         .exec(&db)
@@ -581,64 +588,68 @@ async fn associate_has_one_by_val_on_insert(s: impl Setup) {
 }
 
 async fn associate_has_one_by_val_on_update_query_with_filter(s: impl Setup) {
-    schema!(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            name: String,
+        name: String,
 
-            profile: Option<Profile>,
-        }
+        #[has_one]
+        profile: Option<Profile>,
+    }
 
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
+    #[derive(Debug)]
+    #[toasty::model]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: Id<Self>,
 
-            #[unique]
-            user_id: Option<Id<User>>,
+        #[unique]
+        user_id: Option<Id<User>>,
 
-            #[relation(key = user_id, references = id)]
-            user: Option<User>,
+        #[belongs_to(key = user_id, references = id)]
+        user: Option<User>,
 
-            bio: String,
-        }
-        "
-    );
+        bio: String,
+    }
 
-    let db = s.setup(db::load_schema()).await;
+    let db = s.setup(models!(User, Profile)).await;
 
-    let u1 = db::User::create().name("user 1").exec(&db).await.unwrap();
-    let p1 = db::Profile::create()
+    let u1 = User::create().name("user 1").exec(&db).await.unwrap();
+    let p1 = Profile::create()
         .bio("hello world")
         .exec(&db)
         .await
         .unwrap();
 
-    db::User::filter_by_id(&u1.id)
+    User::filter_by_id(&u1.id)
         .update()
         .profile(&p1)
         .exec(&db)
         .await
         .unwrap();
 
-    let u1_reloaded = db::User::get_by_id(&db, &u1.id).await.unwrap();
+    let u1_reloaded = User::get_by_id(&db, &u1.id).await.unwrap();
     assert_eq!(
         p1.id,
         u1_reloaded.profile().get(&db).await.unwrap().unwrap().id
     );
 
     // Unset
-    let mut update = db::User::filter_by_id(&u1.id).update();
-    update.unset_profile();
-    update.exec(&db).await.unwrap();
+    User::filter_by_id(&u1.id)
+        .update()
+        .profile(None)
+        .exec(&db)
+        .await
+        .unwrap();
 
     // Getting this to work will require a big chunk of work in the planner.
-    db::User::filter_by_id(&u1.id)
-        .filter(db::User::NAME.eq("anon"))
+    User::filter_by_id(&u1.id)
+        .filter(User::FIELDS.name.eq("anon"))
         .update()
         .profile(&p1)
         .exec(&db)

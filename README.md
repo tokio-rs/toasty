@@ -10,44 +10,45 @@ Instead, Toasty exposes features based on the target database.
 
 ## Using Toasty
 
-Projects that use toasty create a schema file to define the application's data
-model. Here is the schema file from the
-[hello-toasty](examples/hello-toasty/schema.toasty) example:
+You will define your data model using Rust structs annotated with the
+`#[toasty::model]` procedural macro. Here is the
+[hello-toasty](examples/hello-toasty/src/main.rs) example.
 
 ```rust
-model User {
+#[derive(Debug)]
+#[toasty::model]
+struct User {
     #[key]
     #[auto]
-    id: Id,
+    id: Id<Self>,
 
     name: String,
 
     #[unique]
     email: String,
 
+    #[has_many]
     todos: [Todo],
 
     moto: Option<String>,
 }
 
-model Todo {
+#[derive(Debug)]
+#[toasty::model]
+struct Todo {
     #[key]
     #[auto]
-    id: Id,
+    id: Id<Self>,
 
     #[index]
     user_id: Id<User>,
 
-    #[relation(key = user_id, references = id)]
+    #[belongs_to(key = user_id, references = id)]
     user: User,
 
     title: String,
 }
 ```
-
-Using the Toasty CLI tool, you will generate all necessary Rust code for working
-with this data model. The generated code for the above schema is
-[here](examples/hello-toasty/src/db).
 
 Then, you can easily work with the data model:
 
@@ -63,7 +64,7 @@ let user = User::create()
     .await?;
 
 // Load the user from the database
-let user = User::find_by_id(&user.id).get(&db).await?
+let user = User::get_by_id(&db, &user.id).await?
 
 // Load and iterate the user's todos
 let mut todos = user.todos().all(&db).await.unwrap();
@@ -96,36 +97,39 @@ default, a toasty application schema will map 1-1 with a database schema.
 However, additional annotations may be specified to customize how the
 application data model maps to the database schema.
 
-For example, the [crate-hub](examples/cratehub/schema.toasty) examples shows how
+For example, the [crate-hub](examples/cratehub/src/main.rs) examples shows how
 to map multiple application models to a single database table.
 
 ```rust
-table user_and_packages {
-    model User {
-        #[key]
-        #[auto]
-        id: Id,
+#[derive(Debug)]
+#[toasty::model(table = user_and_packages)]
+struct User {
+    #[key]
+    #[auto]
+    id: Id<Self>,
 
-        name: String,
+    name: String,
 
-        #[unique]
-        email: String,
+    #[unique]
+    email: String,
 
-        packages: [Package],
-    }
+    #[has_many]
+    packages: [Package],
+}
 
-    #[key(partition = user_id, local = id)]
-    model Package {
-        #[relation(key = user_id, references = id)]
-        user: User,
+#[derive(Debug)]
+#[toasty::model(table = user_and_packages)]
+#[key(partition = user_id, local = id)]
+struct Package {
+    #[belongs_to(key = user_id, references = id)]
+    user: User,
 
-        user_id: Id<User>,
+    user_id: Id<User>,
 
-        #[auto]
-        id: Id,
+    #[auto]
+    id: Id<Self>,
 
-        name: String,
-    }
+    name: String,
 }
 ```
 

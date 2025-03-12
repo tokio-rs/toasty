@@ -54,7 +54,7 @@ impl Names {
         let mut fields = HashMap::new();
         let mut relations = HashMap::new();
 
-        for model in &schema.models {
+        for model in schema.models() {
             // Generate model names
             let names = ModelNames::from_model(model);
             models.insert(model.id, names);

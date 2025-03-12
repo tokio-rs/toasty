@@ -19,8 +19,7 @@ pub fn generate(schema: &app::Schema, in_macro: bool) -> Output<'_> {
     let names = Rc::new(Names::from_schema(schema));
 
     let models = schema
-        .models
-        .iter()
+        .models()
         .map(|model| model::generate(model, names.clone(), in_macro))
         .collect();
 

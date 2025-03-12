@@ -60,6 +60,16 @@ impl<M: Model> IntoExpr<Id<M>> for &str {
     }
 }
 
+impl<M: Model> IntoExpr<Id<M>> for &String {
+    fn into_expr(self) -> Expr<Id<M>> {
+        Expr::from_value(stmt::Id::from_string(M::ID, self.into()).into())
+    }
+
+    fn by_ref(&self) -> Expr<Id<M>> {
+        Self::into_expr(*self)
+    }
+}
+
 impl<M: Model> From<Id<M>> for stmt::Expr {
     fn from(value: Id<M>) -> Self {
         stmt::Expr::Value(value.inner.into())

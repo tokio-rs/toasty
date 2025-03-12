@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct PrimaryKey {
     /// Fields composing the primary key
     pub fields: Vec<FieldId>,

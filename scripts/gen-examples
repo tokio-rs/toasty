@@ -29,8 +29,6 @@ done
 
 # Main loop to execute the command for each directory
 for dir in "${directories[@]}"; do
-    cargo run -p toasty-cli -- gen --schema "examples/$dir/schema.toasty" "examples/$dir/src/db"
-
     FEATURES_ARG=""
 
     if [[ $dir == "hello-toasty" ]]; then

@@ -37,8 +37,7 @@ impl Builder {
     pub(super) fn build_tables_from_models(&mut self, app: &app::Schema, db: &driver::Capability) {
         for table in &mut self.tables {
             let models = app
-                .models
-                .iter()
+                .models()
                 .filter(|model| self.mapping.model(model.id).table == table.id)
                 .collect::<Vec<_>>();
 

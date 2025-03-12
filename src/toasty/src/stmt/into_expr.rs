@@ -37,17 +37,75 @@ impl<T: ?Sized> IntoExpr<T> for Expr<T> {
     }
 }
 
-impl<T, E> IntoExpr<T> for &E
-where
-    T: ?Sized,
-    E: IntoExpr<T>,
-{
+impl<T: IntoExpr<T> + ?Sized> IntoExpr<T> for &T {
     fn into_expr(self) -> Expr<T> {
-        IntoExpr::by_ref(self)
+        self.by_ref()
     }
 
     fn by_ref(&self) -> Expr<T> {
-        IntoExpr::by_ref(*self)
+        (*self).by_ref()
+    }
+}
+
+impl<T: IntoExpr<T>> IntoExpr<[T]> for &T {
+    fn into_expr(self) -> Expr<[T]> {
+        self.by_ref().cast()
+    }
+
+    fn by_ref(&self) -> Expr<[T]> {
+        (*self).by_ref().cast()
+    }
+}
+
+impl<T: IntoExpr<T>> IntoExpr<Option<T>> for Option<T> {
+    fn into_expr(self) -> Expr<Option<T>> {
+        match self {
+            Some(value) => value.into_expr().cast(),
+            None => Expr::from_value(Value::Null),
+        }
+    }
+
+    fn by_ref(&self) -> Expr<Option<T>> {
+        match self {
+            Some(value) => value.by_ref().cast(),
+            None => Expr::from_value(Value::Null),
+        }
+    }
+}
+
+impl<T: IntoExpr<T>> IntoExpr<Option<T>> for T {
+    fn into_expr(self) -> Expr<Option<T>> {
+        self.into_expr().cast()
+    }
+
+    fn by_ref(&self) -> Expr<Option<T>> {
+        self.by_ref().cast()
+    }
+}
+
+impl<T: IntoExpr<T>> IntoExpr<Option<T>> for &T {
+    fn into_expr(self) -> Expr<Option<T>> {
+        self.by_ref().cast()
+    }
+
+    fn by_ref(&self) -> Expr<Option<T>> {
+        (*self).by_ref().cast()
+    }
+}
+
+impl<T: IntoExpr<T>> IntoExpr<T> for &Option<T> {
+    fn into_expr(self) -> Expr<T> {
+        match self {
+            Some(value) => value.into_expr(),
+            None => Expr::from_value(Value::Null),
+        }
+    }
+
+    fn by_ref(&self) -> Expr<T> {
+        match self {
+            Some(value) => value.by_ref(),
+            None => Expr::from_value(Value::Null),
+        }
     }
 }
 
@@ -57,6 +115,16 @@ impl IntoExpr<String> for &str {
     }
 
     fn by_ref(&self) -> Expr<String> {
+        Expr::from_value(Value::from(*self))
+    }
+}
+
+impl IntoExpr<Option<String>> for &str {
+    fn into_expr(self) -> Expr<Option<String>> {
+        Expr::from_value(Value::from(self))
+    }
+
+    fn by_ref(&self) -> Expr<Option<String>> {
         Expr::from_value(Value::from(*self))
     }
 }
@@ -71,60 +139,51 @@ impl IntoExpr<String> for String {
     }
 }
 
-impl<T1, T2> IntoExpr<T1> for Option<T2>
-where
-    T2: IntoExpr<T1>,
-{
-    fn into_expr(self) -> Expr<T1> {
-        match self {
-            Some(value) => value.into_expr(),
-            None => Expr::from_value(Value::Null),
-        }
-    }
-
-    fn by_ref(&self) -> Expr<T1> {
-        match self {
-            Some(value) => IntoExpr::by_ref(value),
-            None => Expr::from_value(Value::Null),
-        }
-    }
-}
-
 impl<T, U, const N: usize> IntoExpr<[T]> for [U; N]
 where
     U: IntoExpr<T>,
 {
     fn into_expr(self) -> Expr<[T]> {
-        Expr::list(&self)
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| U::by_ref(item).untyped),
+        ))
     }
 
     fn by_ref(&self) -> Expr<[T]> {
-        Expr::list(self)
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| U::by_ref(item).untyped),
+        ))
+    }
+}
+
+impl<T, U, const N: usize> IntoExpr<[T]> for &[U; N]
+where
+    U: IntoExpr<T>,
+{
+    fn into_expr(self) -> Expr<[T]> {
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| U::by_ref(item).untyped),
+        ))
+    }
+
+    fn by_ref(&self) -> Expr<[T]> {
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| U::by_ref(item).untyped),
+        ))
     }
 }
 
 impl<T, E: IntoExpr<T>> IntoExpr<[T]> for &[E] {
     fn into_expr(self) -> Expr<[T]> {
-        Expr::list(self)
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| E::by_ref(item).untyped),
+        ))
     }
 
     fn by_ref(&self) -> Expr<[T]> {
-        Expr::list(*self)
-    }
-}
-
-impl<T1, T2> IntoExpr<(T1,)> for (T2,)
-where
-    T2: IntoExpr<T1>,
-{
-    fn into_expr(self) -> Expr<(T1,)> {
-        let record = stmt::ExprRecord::from_vec(vec![self.0.into_expr().untyped]);
-        let untyped = stmt::Expr::Record(record);
-        Expr::from_untyped(untyped)
-    }
-
-    fn by_ref(&self) -> Expr<(T1,)> {
-        todo!()
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| E::by_ref(item).untyped),
+        ))
     }
 }
 
@@ -139,25 +198,75 @@ where
     }
 
     fn by_ref(&self) -> Expr<[T]> {
-        todo!()
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| item.by_ref().untyped),
+        ))
     }
 }
 
-impl<T1, T2, U1, U2> IntoExpr<(T1, U1)> for (T2, U2)
-where
-    T2: IntoExpr<T1>,
-    U2: IntoExpr<U1>,
-{
-    fn into_expr(self) -> Expr<(T1, U1)> {
-        let record = stmt::ExprRecord::from_vec(vec![
-            self.0.into_expr().untyped,
-            self.1.into_expr().untyped,
-        ]);
-        let untyped = stmt::Expr::Record(record);
-        Expr::from_untyped(untyped)
-    }
+macro_rules! impl_into_expr_for_tuple {
+    (! $( $n:tt $t:ident $e:ident )* ) => {
+        impl<$( $t, $e ),*> IntoExpr<($( $t, )*)> for ($( $e, )*)
+        where
+            $( $e: IntoExpr<$t>, )*
+        {
+            fn into_expr(self) -> Expr<($( $t, )*)> {
+                let record = stmt::ExprRecord::from_vec(vec![
+                    $( self.$n.into_expr().untyped, )*
+                ]);
+                let untyped = stmt::Expr::Record(record);
+                Expr::from_untyped(untyped)
+            }
 
-    fn by_ref(&self) -> Expr<(T1, U1)> {
-        (&self.0, &self.1).into_expr()
-    }
+            fn by_ref(&self) -> Expr<($( $t, )*)> {
+                let record = stmt::ExprRecord::from_vec(vec![
+                    $( self.$n.by_ref().untyped, )*
+                ]);
+                let untyped = stmt::Expr::Record(record);
+                Expr::from_untyped(untyped)
+            }
+        }
+    };
+
+    (
+        ( $( $n_base:tt $t_base:ident $e_base:ident )* )
+        $n:tt $t:ident $e:ident
+        $( $rest:tt )*
+    ) => {
+        // Implement for tuples at this level
+        impl_into_expr_for_tuple!(! $( $n_base $t_base $e_base )* $n $t $e);
+
+        // Recurse
+        impl_into_expr_for_tuple!(
+            ( $( $n_base $t_base $e_base )* $n $t $e )
+            $( $rest )*
+        );
+    };
+
+    ( ( $( $n:tt $t:ident $e:ident )* ) ) => {}
+}
+
+impl_into_expr_for_tuple! {
+    ()
+    0 T0 E0
+    1 T1 E1
+    2 T2 E2
+    3 T3 E3
+    4 T4 E4
+    5 T5 E5
+    6 T6 E6
+    7 T7 E7
+    8 T8 E8
+    9 T9 E9
+}
+
+#[test]
+fn assert_bounds() {
+    fn assert_into_expr<T: ?Sized, E: IntoExpr<T>>() {}
+
+    assert_into_expr::<i64, i64>();
+    assert_into_expr::<(String, String), (&String, &String)>();
+    assert_into_expr::<[(String, String)], &[(&String, &String)]>();
+    assert_into_expr::<[(String, String)], [(&String, &String); 3]>();
+    assert_into_expr::<[(String, String)], &[(&String, &String); 3]>();
 }
