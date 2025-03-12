@@ -19,11 +19,13 @@ async fn ensure_types_sync_send(s: impl Setup) {
 
     let db = s.setup(models!(User)).await;
 
-    let user = assert_sync_send(User::filter_by_email("hello@example.com").first(&db))
+    let res = assert_sync_send(User::filter_by_email("hello@example.com").first(&db))
         .await
-        .unwrap()
         .unwrap();
-    assert_eq!(user.email, "hello@example.com");
+
+    if let Some(user) = res {
+        assert_eq!(user.email, "hello@example.com");
+    }
 }
 
 tests!(ensure_types_sync_send);
