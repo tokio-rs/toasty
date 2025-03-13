@@ -17,6 +17,9 @@ pub(crate) enum Connection {
     #[cfg(feature = "dynamodb")]
     DynamoDb(toasty_dynamodb::DynamoDb),
 
+    #[cfg(feature = "postgresql")]
+    PostgreSQL(toasty_pgsql::PostgreSQL),
+
     #[cfg(feature = "sqlite")]
     Sqlite(toasty_sqlite::Sqlite),
 }
@@ -27,6 +30,7 @@ impl Connection {
 
         match url.scheme() {
             "dynamodb" => Self::connect_dynamodb(&url).await,
+            "postgresql" => Self::connect_postgresql(&url).await,
             "sqlite" => Self::connect_sqlite(&url),
             _ => return Err(anyhow::anyhow!("unsupported database; url={url}")),
         }
@@ -41,6 +45,17 @@ impl Connection {
     #[cfg(not(feature = "dynamodb"))]
     async fn connect_dynamodb(_url: &Url) -> Result<Connection> {
         Err(anyhow::anyhow!("`dynamodb` feature not enabled"))
+    }
+
+    #[cfg(feature = "postgresql")]
+    async fn connect_postgresql(url: &Url) -> Result<Connection> {
+        let driver = toasty_pgsql::PostgreSQL::connect(url.as_str()).await?;
+        Ok(Connection::PostgreSQL(driver))
+    }
+
+    #[cfg(not(feature = "postgresql"))]
+    async fn connect_postgresql(_url: &Url) -> Result<Connection> {
+        Err(anyhow::anyhow!("`postgresql` feature not enabled"))
     }
 
     #[cfg(feature = "sqlite")]
@@ -60,6 +75,9 @@ macro_rules! match_db {
         match *$self {
             #[cfg(feature = "dynamodb")]
             Connection::DynamoDb($driver) => $e,
+
+            #[cfg(feature = "postgresql")]
+            Connection::PostgreSQL($driver) => $e,
 
             #[cfg(feature = "sqlite")]
             Connection::Sqlite($driver) => $e,

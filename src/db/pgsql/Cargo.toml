@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 toasty-core = { workspace = true }
 
+anyhow.workspace = true
 postgres.workspace = true
 tokio.workspace = true
 tokio-postgres.workspace = true
+url.workspace = true

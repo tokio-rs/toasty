@@ -36,7 +36,8 @@ async fn main() -> toasty::Result<()> {
         .register::<User>()
         .register::<Todo>()
         // .connect("sqlite::memory:")
-        .connect("dynamodb://localhost:8000?test=true")
+        // .connect("dynamodb://localhost:8000?test=true")
+        .connect("postgresql://localhost/carllerche")
         .await?;
 
     // For now, reset!s
