@@ -19,7 +19,6 @@ members = [
     # Examples
     "examples/composite-key",
     "examples/hello-toasty",
-    "examples/hello-toasty-macro",
     "examples/cratehub",
     "examples/user-has-one-profile",
 

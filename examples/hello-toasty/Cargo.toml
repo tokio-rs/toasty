@@ -10,7 +10,6 @@ dynamodb = [ "toasty/dynamodb" ]
 postgresql = [ "toasty/postgresql" ]
 sqlite = [ "toasty/sqlite" ]
 
-
 [dependencies]
 toasty.workspace = true
 tokio.workspace = true
