@@ -16,6 +16,7 @@ use toasty_core::{
     Driver, Result,
 };
 use tokio_postgres::{Client, Config};
+use url::Url;
 
 #[derive(Debug)]
 pub struct PostgreSQL {
@@ -24,29 +25,50 @@ pub struct PostgreSQL {
 }
 
 impl PostgreSQL {
+    /// Initialize a Toasty PostgreSQL driver using an initialized connection.
+    pub fn new(connection: Client) -> Self {
+        Self { client: connection }
+    }
+
     /// Connects to a PostgreSQL database using a connection string.
     ///
     /// See [`postgres::Client::connect`] for more information.
-    pub async fn connect<T>(params: &str, tls: T) -> Result<Self>
-    where
-        T: MakeTlsConnect<Socket> + 'static,
-        T::Stream: Send,
-    {
-        let (client, connection) = tokio_postgres::connect(params, tls).await?;
+    pub async fn connect(url: &str) -> Result<Self> {
+        let url = Url::parse(url)?;
 
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
-            }
-        });
+        if url.scheme() != "postgresql" {
+            return Err(anyhow::anyhow!(
+                "connection URL does not have a `postgresql` scheme; url={}",
+                url
+            ));
+        }
 
-        Ok(Self { client })
+        let host = url
+            .host_str()
+            .ok_or_else(|| anyhow::anyhow!("missing host in connection URL; url={}", url))?;
+
+        if url.path().is_empty() {
+            return Err(anyhow::anyhow!(
+                "no database specified - missing path in connection URL; url={}",
+                url
+            ));
+        }
+
+        let mut config = Config::new();
+        config.host(host);
+        config.dbname(url.path().trim_start_matches('/'));
+
+        if let Some(port) = url.port() {
+            config.port(port);
+        }
+
+        Self::connect_with_config(config, tokio_postgres::NoTls).await
     }
 
     /// Connects to a PostgreSQL database using a [`postgres::Config`].
     ///
     /// See [`postgres::Client::configure`] for more information.
-    pub async fn connect_using_config<T>(config: Config, tls: T) -> Result<Self>
+    pub async fn connect_with_config<T>(config: Config, tls: T) -> Result<Self>
     where
         T: MakeTlsConnect<Socket> + 'static,
         T::Stream: Send,
@@ -59,7 +81,7 @@ impl PostgreSQL {
             }
         });
 
-        Ok(Self { client })
+        Ok(Self::new(client))
     }
 
     /// Creates a table.

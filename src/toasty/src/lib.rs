@@ -7,6 +7,8 @@ pub use cursor::Cursor;
 mod db;
 pub use db::Db;
 
+pub mod driver;
+
 mod engine;
 
 mod model;
@@ -19,10 +21,6 @@ pub mod schema;
 
 pub mod stmt;
 pub use stmt::Statement;
-
-pub mod driver {
-    pub use toasty_core::driver::*;
-}
 
 pub use toasty_macros::{create, model, query};
 

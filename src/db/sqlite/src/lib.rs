@@ -1,15 +1,15 @@
 use toasty_core::{
     driver::{operation::Operation, Capability, Driver, Response},
     schema::db::{Schema, Table},
-    stmt,
+    stmt, Result,
 };
 
-use anyhow::Result;
 use rusqlite::Connection;
 use std::{
     path::Path,
     sync::{Arc, Mutex},
 };
+use url::Url;
 
 #[derive(Debug)]
 pub struct Sqlite {
@@ -17,6 +17,22 @@ pub struct Sqlite {
 }
 
 impl Sqlite {
+    pub fn connect(url: &str) -> Result<Sqlite> {
+        let url = Url::parse(url)?;
+
+        if url.scheme() != "sqlite" {
+            return Err(anyhow::anyhow!(
+                "connection URL does not have a `sqlite` scheme; url={url}"
+            ));
+        }
+
+        if url.path() == ":memory:" {
+            Ok(Sqlite::in_memory())
+        } else {
+            Sqlite::open(url.path())
+        }
+    }
+
     pub fn in_memory() -> Sqlite {
         let connection = Connection::open_in_memory().unwrap();
 

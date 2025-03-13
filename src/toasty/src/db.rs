@@ -118,6 +118,11 @@ impl Builder {
         app::Schema::from_macro(&self.models)
     }
 
+    pub async fn connect(&mut self, url: &str) -> Result<Db> {
+        use crate::driver::Connection;
+        self.build(Connection::connect(url).await?).await
+    }
+
     pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
         let schema = self.build_app_schema()?;
         Db::new(schema, driver).await

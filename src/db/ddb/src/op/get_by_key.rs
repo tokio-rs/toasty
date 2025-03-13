@@ -1,6 +1,6 @@
 use super::*;
 
-impl DynamoDB {
+impl DynamoDb {
     pub(crate) async fn exec_get_by_key(
         &self,
         schema: &Arc<Schema>,

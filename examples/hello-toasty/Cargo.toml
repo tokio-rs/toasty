@@ -4,16 +4,12 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
-[dependencies]
-toasty = { path = "../../src/toasty" }
-toasty-sqlite = { path = "../../src/db/sqlite", optional = true }
-toasty-pgsql = { path = "../../src/db/pgsql", optional = true }
-
-postgres = { workspace = true, optional = true }
-cfg-if.workspace = true
-tokio.workspace = true
-
 [features]
-default = []
-sqlite = ["dep:toasty-sqlite"]
-postgresql = ["dep:postgres", "dep:toasty-pgsql"]
+default = [ "sqlite" ]
+dynamodb = [ "toasty/dynamodb" ]
+postgresql = [ "toasty/postgresql" ]
+sqlite = [ "toasty/sqlite" ]
+
+[dependencies]
+toasty.workspace = true
+tokio.workspace = true

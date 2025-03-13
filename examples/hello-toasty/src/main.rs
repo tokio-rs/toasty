@@ -36,33 +36,16 @@ struct Todo {
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    let mut builder = toasty::Db::builder();
-    builder.register::<User>().register::<Todo>();
+    let db = toasty::Db::builder()
+        .register::<User>()
+        .register::<Todo>()
+        .connect(
+            std::env::var("TOASTY_CONNECTION_URL")
+                .as_deref()
+                .unwrap_or("sqlite::memory:"),
+        )
+        .await?;
 
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "sqlite")] {
-            let db = builder.build(toasty_sqlite::Sqlite::in_memory()).await?;
-        } else if #[cfg(feature = "postgresql")] {
-            let url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-                    panic!(
-                        "`DATABASE_URL` environment variable is required when using \
-                        the `postgresql` feature (e.g., \
-                        `DATABASE_URL=postgresql://postgres@localhost/toasty`)"
-                    );
-                }
-            );
-
-            let driver = toasty_pgsql::PostgreSQL::connect(&url, postgres::NoTls).await?;
-            let db = builder.build(driver).await?;
-        } else {
-            drop(builder);
-            #[allow(unused_variables)]
-            let db: toasty::Db;
-            panic!("you must run this example with a database-related feature enabled (e.g., `--features sqlite`)")
-        }
-    };
-
-    #[allow(unreachable_code)] // TODO: fix
     // For now, reset!s
     db.reset_db().await?;
 

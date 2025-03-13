@@ -5,9 +5,11 @@ edition = "2021"
 publish = false
 
 [dependencies]
+toasty-core.workspace = true
+
 anyhow.workspace = true
 aws-config = "1"
 aws-sdk-dynamodb = { version = "1.3.0", features = ["test-util"] }
 serde.workspace = true
 serde_json.workspace = true
-toasty-core.workspace = true
+url.workspace = true

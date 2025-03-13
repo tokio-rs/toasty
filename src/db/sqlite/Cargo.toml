@@ -8,6 +8,7 @@ publish = false
 anyhow.workspace = true
 rusqlite = { version = "0.32", features = ["bundled"] }
 toasty-core.workspace = true
+url.workspace = true
 
 # TODO: get rid of
 serde.workspace = true
