@@ -14,6 +14,9 @@ use url::Url;
 
 #[derive(Debug)]
 pub(crate) enum Connection {
+    #[cfg(feature = "dynamodb")]
+    DynamoDb(toasty_dynamodb::DynamoDb),
+
     #[cfg(feature = "sqlite")]
     Sqlite(toasty_sqlite::Sqlite),
 }
@@ -23,19 +26,31 @@ impl Connection {
         let url = Url::parse(url)?;
 
         match url.scheme() {
-            "sqlite" => Self::from_sqlite(&url),
+            "dynamodb" => Self::connect_dynamodb(&url).await,
+            "sqlite" => Self::connect_sqlite(&url),
             _ => return Err(anyhow::anyhow!("unsupported database; url={url}")),
         }
     }
 
+    #[cfg(feature = "dynamodb")]
+    async fn connect_dynamodb(url: &Url) -> Result<Connection> {
+        let driver = toasty_dynamodb::DynamoDb::connect(url.as_str()).await?;
+        Ok(Connection::DynamoDb(driver))
+    }
+
+    #[cfg(not(feature = "dynamodb"))]
+    async fn connect_dynamodb(_url: &Url) -> Result<Connection> {
+        Err(anyhow::anyhow!("`dynamodb` feature not enabled"))
+    }
+
     #[cfg(feature = "sqlite")]
-    fn from_sqlite(url: &Url) -> Result<Connection> {
-        let driver = toasty_sqlite::Sqlite::from_url(url.as_str())?;
+    fn connect_sqlite(url: &Url) -> Result<Connection> {
+        let driver = toasty_sqlite::Sqlite::connect(url.as_str())?;
         Ok(Connection::Sqlite(driver))
     }
 
     #[cfg(not(feature = "sqlite"))]
-    fn from_sqlite(_url: &Url) -> Result<Connection> {
+    fn connect_sqlite(_url: &Url) -> Result<Connection> {
         Err(anyhow::anyhow!("`sqlite` feature not enabled"))
     }
 }
@@ -43,6 +58,9 @@ impl Connection {
 macro_rules! match_db {
     ($self:expr, $driver:pat => $e:expr) => {
         match *$self {
+            #[cfg(feature = "dynamodb")]
+            Connection::DynamoDb($driver) => $e,
+
             #[cfg(feature = "sqlite")]
             Connection::Sqlite($driver) => $e,
         }

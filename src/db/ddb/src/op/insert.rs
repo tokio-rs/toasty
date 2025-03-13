@@ -1,6 +1,6 @@
 use super::*;
 
-impl DynamoDB {
+impl DynamoDb {
     pub(crate) async fn exec_insert(
         &self,
         schema: &Schema,

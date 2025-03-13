@@ -6,6 +6,7 @@ publish = false
 
 [features]
 default = [ "sqlite" ]
+dynamodb = [ "toasty/dynamodb" ]
 sqlite = [ "toasty/sqlite" ]
 
 

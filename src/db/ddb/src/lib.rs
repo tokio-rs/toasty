@@ -18,9 +18,10 @@ use aws_sdk_dynamodb::{
     error::SdkError, operation::update_item::UpdateItemError, types::*, Client,
 };
 use std::{collections::HashMap, fmt::Write, sync::Arc};
+use url::Url;
 
 #[derive(Debug)]
-pub struct DynamoDB {
+pub struct DynamoDb {
     /// Handle to the AWS SDK client
     client: Client,
 
@@ -29,15 +30,48 @@ pub struct DynamoDB {
     table_prefix: Option<String>,
 }
 
-impl DynamoDB {
-    pub fn new(client: Client, table_prefix: Option<String>) -> DynamoDB {
-        DynamoDB {
+impl DynamoDb {
+    pub fn new(client: Client, table_prefix: Option<String>) -> DynamoDb {
+        DynamoDb {
             client,
             table_prefix,
         }
     }
 
-    pub async fn from_env() -> Result<DynamoDB> {
+    pub async fn connect(url: &str) -> Result<DynamoDb> {
+        let url = Url::parse(url)?;
+
+        if url.scheme() != "dynamodb" {
+            return Err(anyhow::anyhow!(
+                "connection URL does not have a `dynamodb` scheme; url={url}"
+            ));
+        }
+
+        let Some(host) = url.host() else {
+            return Err(anyhow::anyhow!("missing host; url={url}"));
+        };
+
+        let endpoint_url = format!("http://{}:{}", host, url.port().unwrap_or(8000));
+
+        use aws_config::BehaviorVersion;
+        use aws_sdk_dynamodb::config::Credentials;
+
+        let sdk_config = aws_config::defaults(BehaviorVersion::latest())
+            .region("foo")
+            .credentials_provider(Credentials::for_tests())
+            .endpoint_url(&endpoint_url)
+            .load()
+            .await;
+
+        let client = Client::new(&sdk_config);
+
+        Ok(DynamoDb {
+            client,
+            table_prefix: None,
+        })
+    }
+
+    pub async fn from_env() -> Result<DynamoDb> {
         use aws_config::BehaviorVersion;
         use aws_sdk_dynamodb::config::Credentials;
 
@@ -50,21 +84,21 @@ impl DynamoDB {
 
         let client = Client::new(&sdk_config);
 
-        Ok(DynamoDB {
+        Ok(DynamoDb {
             client,
             table_prefix: None,
         })
     }
 
-    pub async fn from_env_with_prefix(table_prefix: &str) -> Result<DynamoDB> {
-        let mut ddb = DynamoDB::from_env().await?;
+    pub async fn from_env_with_prefix(table_prefix: &str) -> Result<DynamoDb> {
+        let mut ddb = DynamoDb::from_env().await?;
         ddb.table_prefix = Some(table_prefix.to_string());
         Ok(ddb)
     }
 }
 
 #[toasty_core::async_trait]
-impl Driver for DynamoDB {
+impl Driver for DynamoDb {
     fn capability(&self) -> &Capability {
         &Capability::KeyValue(capability::KeyValue {
             primary_key_ne_predicate: false,
@@ -88,7 +122,7 @@ impl Driver for DynamoDB {
     }
 }
 
-impl DynamoDB {
+impl DynamoDb {
     async fn exec2(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         use Operation::*;
 

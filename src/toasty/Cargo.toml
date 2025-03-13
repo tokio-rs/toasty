@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 default = []
+dynamodb = ["dep:toasty-dynamodb"]
 sqlite = ["dep:toasty-sqlite"]
 
 
@@ -14,6 +15,7 @@ toasty-macros = { path = "../macros" }
 toasty-core.workspace = true
 
 # Built-in database drivers
+toasty-dynamodb = { workspace = true, optional = true }
 toasty-sqlite = { workspace = true, optional = true }
 
 anyhow = "1"

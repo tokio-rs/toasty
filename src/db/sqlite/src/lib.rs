@@ -17,7 +17,7 @@ pub struct Sqlite {
 }
 
 impl Sqlite {
-    pub fn from_url(url: &str) -> Result<Sqlite> {
+    pub fn connect(url: &str) -> Result<Sqlite> {
         let url = Url::parse(url)?;
 
         if url.scheme() != "sqlite" {
