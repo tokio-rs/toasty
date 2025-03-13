@@ -56,6 +56,17 @@ macro_rules! tests {
                 }
             )*
         }
+
+        #[cfg(feature = "libsql")]
+        mod libsql {
+            $(
+                #[tokio::test]
+                $( #[$attrs] )*
+                async fn $f() {
+                    super::$f($crate::db::libsql::SetupLibSQL).await;
+                }
+            )*
+        }
     };
     (
         $(

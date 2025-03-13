@@ -9,6 +9,9 @@ default = ["sqlite"]
 sqlite = [
     "dep:toasty-sqlite",
 ]
+libsql = [
+    "dep:toasty-libsql",
+]
 dynamodb = [
     "dep:toasty-dynamodb",
     "dep:aws-config",
@@ -23,6 +26,9 @@ toasty-macros = { path = "../../src/macros" }
 
 # Sqlite driver
 toasty-sqlite = { path = "../../src/db/sqlite", optional = true }
+
+# LibSQL driver
+toasty-libsql = { path = "../../src/db/libsql", optional = true }
 
 # DyanmoDB driver
 toasty-dynamodb = { path = "../../src/db/ddb", optional = true }
