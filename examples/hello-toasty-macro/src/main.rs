@@ -35,7 +35,7 @@ async fn main() -> toasty::Result<()> {
     let db = toasty::Db::builder()
         .register::<User>()
         .register::<Todo>()
-        .build(toasty_sqlite::Sqlite::in_memory())
+        .connect("sqlite::memory:")
         .await?;
 
     // For now, reset!s
