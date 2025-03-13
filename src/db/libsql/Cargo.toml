@@ -1,0 +1,14 @@
+[package]
+name = "toasty-libsql"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+libsql = "0.6.0"
+toasty-core.workspace = true
+url.workspace = true
+
+# TODO: get rid of
+serde.workspace = true
+serde_json.workspace = true

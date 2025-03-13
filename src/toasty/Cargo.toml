@@ -8,6 +8,7 @@ default = []
 dynamodb = ["dep:toasty-dynamodb"]
 postgresql = ["dep:toasty-pgsql"]
 sqlite = ["dep:toasty-sqlite"]
+libsql = ["dep:toasty-libsql"]
 
 
 [dependencies]
@@ -18,6 +19,7 @@ toasty-core.workspace = true
 toasty-dynamodb = { workspace = true, optional = true }
 toasty-pgsql = { workspace = true, optional = true }
 toasty-sqlite = { workspace = true, optional = true }
+toasty-libsql = { workspace = true, optional = true }
 
 anyhow.workspace = true
 async-stream.workspace = true
