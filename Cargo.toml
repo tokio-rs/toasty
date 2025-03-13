@@ -29,10 +29,12 @@ members = [
 
 
 [workspace.dependencies]
+toasty = { path = "src/toasty" }
 toasty-codegen = { path = "src/codegen" }
 toasty-codegen2 = { path = "src/codegen2" }
 toasty-core = { path = "src/core" }
 toasty-driver = { path = "src/driver" }
+toasty-macros = { path = "src/macros" }
 
 # Driver implementations
 toasty-sqlite = { path = "src/db/sqlite" }

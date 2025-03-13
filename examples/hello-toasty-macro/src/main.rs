@@ -1,4 +1,4 @@
-#[toasty_macros::model]
+#[toasty::model]
 struct User {
     #[key]
     #[auto]
@@ -15,7 +15,7 @@ struct User {
     moto: Option<String>,
 }
 
-#[toasty_macros::model]
+#[toasty::model]
 struct Todo {
     #[key]
     #[auto]
@@ -35,9 +35,11 @@ async fn main() -> toasty::Result<()> {
     let db = toasty::Db::builder()
         .register::<User>()
         .register::<Todo>()
-        // .connect("sqlite::memory:")
-        // .connect("dynamodb://localhost:8000?test=true")
-        .connect("postgresql://localhost/carllerche")
+        .connect(
+            std::env::var("TOASTY_CONNECTION_URL")
+                .as_deref()
+                .unwrap_or("sqlite::memory:"),
+        )
         .await?;
 
     // For now, reset!s

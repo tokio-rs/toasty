@@ -12,7 +12,5 @@ sqlite = [ "toasty/sqlite" ]
 
 
 [dependencies]
-toasty = { path = "../../src/toasty" }
-toasty-macros = { path = "../../src/macros" }
-
+toasty.workspace = true
 tokio.workspace = true

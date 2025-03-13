@@ -3,7 +3,6 @@ name = "toasty"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 default = []
 dynamodb = ["dep:toasty-dynamodb"]
@@ -12,7 +11,7 @@ sqlite = ["dep:toasty-sqlite"]
 
 
 [dependencies]
-toasty-macros = { path = "../macros" }
+toasty-macros.workspace = true
 toasty-core.workspace = true
 
 # Built-in database drivers
@@ -20,11 +19,10 @@ toasty-dynamodb = { workspace = true, optional = true }
 toasty-pgsql = { workspace = true, optional = true }
 toasty-sqlite = { workspace = true, optional = true }
 
-anyhow = "1"
-async-stream = "0.3.5"
-async-recursion = "1.0.4"
-tokio-stream = { version = "0.1.12", default-features = false }
-uuid = { version = "1.3.0", features = ["v4", "fast-rng"] }
-indexmap = "2.1.0"
-by_address = "1.2.1"
+anyhow.workspace = true
+async-stream.workspace = true
+tokio-stream.workspace = true
+uuid.workspace = true
+indexmap.workspace = true
+by_address.workspace = true
 url.workspace = true
