@@ -1,10 +1,7 @@
 use super::Db;
 use crate::{driver::Driver, Model, Result};
 
-use toasty_core::{
-    schema::{self, app},
-    Schema,
-};
+use toasty_core::schema::{self, app};
 
 use std::sync::Arc;
 
