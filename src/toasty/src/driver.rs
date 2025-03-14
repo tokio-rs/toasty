@@ -22,6 +22,9 @@ pub(crate) enum Connection {
 
     #[cfg(feature = "sqlite")]
     Sqlite(toasty_sqlite::Sqlite),
+
+    #[cfg(feature = "libsql")]
+    LibSQL(toasty_libsql::LibSQL),
 }
 
 impl Connection {
@@ -32,6 +35,7 @@ impl Connection {
             "dynamodb" => Self::connect_dynamodb(&url).await,
             "postgresql" => Self::connect_postgresql(&url).await,
             "sqlite" => Self::connect_sqlite(&url),
+            "libsql" => Self::connect_libsql(&url).await,
             _ => Err(anyhow::anyhow!("unsupported database; url={url}")),
         }
     }
@@ -68,6 +72,17 @@ impl Connection {
     fn connect_sqlite(_url: &Url) -> Result<Connection> {
         Err(anyhow::anyhow!("`sqlite` feature not enabled"))
     }
+
+    #[cfg(feature = "libsql")]
+    async fn connect_libsql(url: &Url) -> Result<Connection> {
+        let driver = toasty_libsql::LibSQL::connect(url.as_str(), None).await?;
+        Ok(Connection::LibSQL(driver))
+    }
+
+    #[cfg(not(feature = "libsql"))]
+    async fn connect_libsql(_url: &Url) -> Result<Connection> {
+        Err(anyhow::anyhow!("`libsql` feature not enabled"))
+    }
 }
 
 macro_rules! match_db {
@@ -81,6 +96,9 @@ macro_rules! match_db {
 
             #[cfg(feature = "sqlite")]
             Connection::Sqlite($driver) => $e,
+
+            #[cfg(feature = "libsql")]
+            Connection::LibSQL($driver) => $e,
         }
     };
 }

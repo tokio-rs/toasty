@@ -12,6 +12,7 @@ members = [
     "src/db/ddb",
     "src/db/sqlite",
     "src/db/pgsql",
+    "src/db/libsql",
 
     # General utilities.
     "src/std-util",
@@ -39,6 +40,7 @@ toasty-macros = { path = "src/macros" }
 toasty-sqlite = { path = "src/db/sqlite" }
 toasty-dynamodb = { path = "src/db/ddb" }
 toasty-pgsql = { path = "src/db/pgsql" }
+toasty-libsql = { path = "src/db/libsql" }
 
 anyhow = "1.0.92"
 async-recursion = "1.1.1"
