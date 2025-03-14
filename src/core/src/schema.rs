@@ -1,6 +1,7 @@
 pub mod app;
 
 mod builder;
+pub use builder::Builder;
 
 pub mod db;
 
@@ -52,6 +53,10 @@ pub fn from_str(source: &str) -> Result<app::Schema> {
 }
 
 impl Schema {
+    pub fn builder() -> Builder {
+        Builder::default()
+    }
+
     pub fn mapping_for(&self, id: impl Into<ModelId>) -> &mapping::Model {
         self.mapping.model(id)
     }
