@@ -47,21 +47,24 @@ impl DynamoDb {
             ));
         }
 
-        let Some(host) = url.host() else {
-            return Err(anyhow::anyhow!("missing host; url={url}"));
-        };
-
-        let endpoint_url = format!("http://{}:{}", host, url.port().unwrap_or(8000));
-
         use aws_config::BehaviorVersion;
         use aws_sdk_dynamodb::config::Credentials;
 
-        let sdk_config = aws_config::defaults(BehaviorVersion::latest())
+        let mut aws_config = aws_config::defaults(BehaviorVersion::latest())
             .region("foo")
-            .credentials_provider(Credentials::for_tests())
-            .endpoint_url(&endpoint_url)
-            .load()
-            .await;
+            .credentials_provider(Credentials::for_tests());
+
+        if let Some(host) = url.host() {
+            let mut endpoint_url = format!("http://{host}");
+
+            if let Some(port) = url.port() {
+                endpoint_url.push_str(&format!(":{}", port));
+            }
+
+            aws_config = aws_config.endpoint_url(&endpoint_url);
+        }
+
+        let sdk_config = aws_config.load().await;
 
         let client = Client::new(&sdk_config);
 

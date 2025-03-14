@@ -6,28 +6,21 @@ publish = false
 
 [features]
 default = ["sqlite"]
-sqlite = [
-    "dep:toasty-sqlite",
-]
-dynamodb = [
-    "dep:toasty-dynamodb",
-    "dep:aws-config",
-    "dep:aws-sdk-dynamodb",
-]
+sqlite = ["toasty/sqlite"]
+dynamodb = ["toasty/dynamodb"]
 
 [dependencies]
-async-trait = "0.1"
-toasty = { path = "../../src/toasty" }
-toasty-core = { path = "../../src/core" }
-toasty-macros = { path = "../../src/macros" }
-
-# Sqlite driver
-toasty-sqlite = { path = "../../src/db/sqlite", optional = true }
+async-trait.workspace = true
+toasty.workspace = true
+toasty-core.workspace = true
+toasty-macros.workspace = true
 
 # DyanmoDB driver
 toasty-dynamodb = { path = "../../src/db/ddb", optional = true }
 aws-config = { version = "1", optional = true }
-aws-sdk-dynamodb = { version = "1.3.0", features = ["test-util"], optional = true }
+aws-sdk-dynamodb = { version = "1.3.0", features = [
+    "test-util",
+], optional = true }
 
 # Utilities
 std-util = { path = "../../src/std-util" }
