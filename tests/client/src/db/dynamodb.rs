@@ -1,5 +1,4 @@
 use toasty::driver::Capability;
-use toasty::schema::app::Schema;
 use toasty::{db, Db};
 
 use crate::Setup;
