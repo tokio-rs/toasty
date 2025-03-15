@@ -25,13 +25,24 @@ struct BuildMapping<'a> {
     table_to_model: Vec<stmt::Expr>,
 }
 
-impl Builder {
+impl BuildSchema<'_> {
     pub(super) fn build_table_stub_for_model(&mut self, model: &Model) -> TableId {
-        let name = name_from_model(&model.name);
-        let id = self.register_table(&name);
+        if let Some(table_name) = &model.table_name {
+            let table_name = self.prefix_table_name(table_name);
 
-        self.tables.push(Table::new(id, name));
-        id
+            if !self.table_lookup.contains_key(&table_name) {
+                let id = self.register_table(&table_name);
+                self.tables.push(Table::new(id, table_name.clone()));
+            }
+
+            *self.table_lookup.get(&table_name).unwrap()
+        } else {
+            let name = self.table_name_from_model(&model.name);
+            let id = self.register_table(&name);
+
+            self.tables.push(Table::new(id, name));
+            id
+        }
     }
 
     pub(super) fn build_tables_from_models(&mut self, app: &app::Schema, db: &driver::Capability) {
@@ -56,6 +67,19 @@ impl Builder {
         let id = TableId(self.table_lookup.len());
         self.table_lookup.insert(name.as_ref().to_string(), id);
         id
+    }
+
+    fn table_name_from_model(&self, model_name: &Name) -> String {
+        let base = std_util::str::pluralize(&model_name.snake_case());
+        self.prefix_table_name(&base)
+    }
+
+    fn prefix_table_name(&self, name: &str) -> String {
+        if let Some(prefix) = &self.builder.table_name_prefix {
+            format!("{}{}", prefix, name)
+        } else {
+            name.to_string()
+        }
     }
 }
 
@@ -243,7 +267,7 @@ impl BuildTableFromModels<'_> {
 
     fn map_model_fields(&mut self, model: &Model) {
         let prefix = if self.prefix_table_names {
-            Some(name_from_model(&model.name))
+            Some(model.name.snake_case())
         } else {
             None
         };
@@ -565,10 +589,6 @@ impl BuildMapping<'_> {
             _ => todo!("column={column:#?}; primitive={primitive:#?}"),
         }
     }
-}
-
-fn name_from_model(model_name: &Name) -> String {
-    std_util::str::pluralize(&model_name.snake_case())
 }
 
 fn stmt_ty_to_table(ty: stmt::Type) -> stmt::Type {

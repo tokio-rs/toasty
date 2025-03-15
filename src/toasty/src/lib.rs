@@ -4,9 +4,10 @@ pub use batch::CreateMany;
 pub mod cursor;
 pub use cursor::Cursor;
 
-mod db;
+pub mod db;
 pub use db::Db;
 
+// TODO: move to `db` module
 pub mod driver;
 
 mod engine;

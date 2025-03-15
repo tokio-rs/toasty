@@ -3,14 +3,14 @@ mod macros;
 
 pub mod db;
 
-use toasty::{schema::app::Schema, Db};
+use toasty::Db;
 use toasty_core::driver::Capability;
 
 pub use std_util::*;
 
 #[async_trait::async_trait]
 pub trait Setup {
-    async fn setup(&self, schema: Schema) -> Db;
+    async fn setup(&self, db: toasty::db::Builder) -> Db;
 
     fn capability(&self) -> &Capability;
 }
@@ -19,12 +19,11 @@ pub trait Setup {
 macro_rules! models {
     (
         $( $model:ident ),*
-    ) => {
-        toasty::Db::builder()
-            $( .register::<$model>() )*
-            .build_app_schema()
-            .unwrap()
-    };
+    ) => {{
+        let mut builder = toasty::Db::builder();
+        $( builder.register::<$model>(); )*
+        builder
+    }};
 }
 
 #[macro_export]

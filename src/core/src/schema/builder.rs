@@ -4,25 +4,44 @@ use super::*;
 
 use indexmap::IndexMap;
 
-/// Used to resolve types during parsing
-struct Builder {
+#[derive(Debug)]
+pub struct Builder {
+    /// If set, prefix all table names with this string
+    table_name_prefix: Option<String>,
+}
+
+/// Used to track state during the build process
+struct BuildSchema<'a> {
+    /// Build options
+    builder: &'a Builder,
+
     /// Maps table names to identifiers. The identifiers are reserved before the
     /// table objects are actually created.
     table_lookup: IndexMap<String, TableId>,
 
-    // ----- OLD -----
     /// Tables as they are built
-    pub(crate) tables: Vec<Table>,
+    tables: Vec<Table>,
 
     /// App-level to db-level schema mapping
-    pub(crate) mapping: Mapping,
+    mapping: Mapping,
 }
 
-impl Schema {
-    pub fn from_app(app: app::Schema, db: &driver::Capability) -> Result<Schema> {
-        let mut builder = Builder {
-            table_lookup: IndexMap::new(),
+impl Builder {
+    pub fn new() -> Self {
+        Self {
+            table_name_prefix: None,
+        }
+    }
 
+    pub fn table_name_prefix(&mut self, prefix: &str) -> &mut Self {
+        self.table_name_prefix = Some(prefix.to_string());
+        self
+    }
+
+    pub fn build(&self, app: app::Schema, db: &driver::Capability) -> Result<Schema> {
+        let mut builder = BuildSchema {
+            builder: self,
+            table_lookup: IndexMap::new(),
             tables: vec![],
             mapping: Mapping {
                 models: IndexMap::new(),
@@ -32,16 +51,7 @@ impl Schema {
         // Find all models that specified a table name, ensure a table is
         // created for that model, and link the model with the table.
         for model in app.models() {
-            let table = if let Some(table_name) = &model.table_name {
-                if !builder.table_lookup.contains_key(table_name) {
-                    let id = builder.register_table(table_name);
-                    builder.tables.push(Table::new(id, table_name.clone()));
-                }
-
-                *builder.table_lookup.get(table_name).unwrap()
-            } else {
-                builder.build_table_stub_for_model(model)
-            };
+            let table = builder.build_table_stub_for_model(model);
 
             // Create a mapping stub for the model
             builder.mapping.models.insert(
@@ -83,5 +93,11 @@ impl Schema {
         schema.verify();
 
         Ok(schema)
+    }
+}
+
+impl Default for Builder {
+    fn default() -> Builder {
+        Builder::new()
     }
 }
