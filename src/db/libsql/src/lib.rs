@@ -52,6 +52,12 @@ impl LibSQL {
     }
 }
 
+impl From<libsql::Connection> for LibSQL {
+    fn from(connection: Connection) -> Self {
+        LibSQL { connection }
+    }
+}
+
 #[toasty_core::async_trait]
 impl Driver for LibSQL {
     fn capability(&self) -> &Capability {
