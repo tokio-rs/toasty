@@ -55,6 +55,17 @@ macro_rules! tests {
                 }
             )*
         }
+
+        #[cfg(feature = "postgresql")]
+        mod postgresql {
+            $(
+                #[tokio::test]
+                $( #[$attrs] )*
+                async fn $f() {
+                    super::$f($crate::db::postgresql::SetupPostgreSQL).await;
+                }
+            )*
+        }
     };
     (
         $(
