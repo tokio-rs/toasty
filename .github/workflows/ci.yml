@@ -94,6 +94,7 @@ jobs:
               - ubuntu-latest
               - macos-latest
         env:
+            AWS_REGION: "foo"
             AWS_ENDPOINT_URL: http://localhost:8000
         steps:
         - uses: actions/checkout@v4
