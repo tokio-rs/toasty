@@ -19,7 +19,7 @@ impl DynamoDb {
         let res = self
             .client
             .query()
-            .table_name(self.table_name(table))
+            .table_name(&table.name)
             .key_condition_expression(key_expression)
             .set_filter_expression(filter_expression)
             .set_expression_attribute_names(Some(expr_attrs.attr_names))

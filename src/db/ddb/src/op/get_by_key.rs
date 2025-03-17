@@ -13,7 +13,7 @@ impl DynamoDb {
             let res = self
                 .client
                 .get_item()
-                .table_name(self.table_name(table))
+                .table_name(&table.name)
                 .set_key(Some(ddb_key(table, &op.keys[0])))
                 .send()
                 .await?;
@@ -43,7 +43,7 @@ impl DynamoDb {
                 .set_request_items(Some({
                     let mut items = HashMap::new();
                     items.insert(
-                        self.table_name(table),
+                        table.name.clone(),
                         KeysAndAttributes::builder()
                             .set_keys(Some(keys))
                             .build()
@@ -57,7 +57,7 @@ impl DynamoDb {
             let Some(mut responses) = res.responses else {
                 return Ok(Response::empty_value_stream());
             };
-            let Some(items) = responses.remove(&self.table_name(table)) else {
+            let Some(items) = responses.remove(&table.name) else {
                 return Ok(Response::empty_value_stream());
             };
 
