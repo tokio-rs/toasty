@@ -59,14 +59,14 @@ impl DynamoDb {
 
                     self.client
                         .put_item()
-                        .table_name(self.table_name(table))
+                        .table_name(&table.name)
                         .set_item(Some(insert_items))
                         .send()
                         .await?;
                 } else {
                     let mut request_items = HashMap::new();
                     request_items.insert(
-                        self.table_name(table),
+                        table.name.clone(),
                         insert_items
                             .into_iter()
                             .map(|insert_item| {
@@ -127,7 +127,7 @@ impl DynamoDb {
                             TransactWriteItem::builder()
                                 .put(
                                     Put::builder()
-                                        .table_name(self.index_table_name(index))
+                                        .table_name(&index.name)
                                         .set_item(Some(index_insert_items))
                                         .condition_expression(condition_expression)
                                         .set_expression_attribute_names(Some(expression_names))
@@ -142,7 +142,7 @@ impl DynamoDb {
                         TransactWriteItem::builder()
                             .put(
                                 Put::builder()
-                                    .table_name(self.table_name(table))
+                                    .table_name(&table.name)
                                     .set_item(Some(insert_items))
                                     .build()
                                     .unwrap(),

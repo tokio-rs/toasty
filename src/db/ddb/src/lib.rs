@@ -8,7 +8,7 @@ use toasty_core::{
     },
     schema::{
         app,
-        db::{Column, ColumnId, Index, Schema, Table},
+        db::{Column, ColumnId, Schema, Table},
     },
     stmt,
 };
@@ -24,18 +24,11 @@ use url::Url;
 pub struct DynamoDb {
     /// Handle to the AWS SDK client
     client: Client,
-
-    /// Prefix for all table names. Toasty schema table names have this prefix
-    /// appended before passing it to the DDB client.
-    table_prefix: Option<String>,
 }
 
 impl DynamoDb {
-    pub fn new(client: Client, table_prefix: Option<String>) -> DynamoDb {
-        DynamoDb {
-            client,
-            table_prefix,
-        }
+    pub fn new(client: Client) -> DynamoDb {
+        DynamoDb { client }
     }
 
     pub async fn connect(url: &str) -> Result<DynamoDb> {
@@ -68,10 +61,7 @@ impl DynamoDb {
 
         let client = Client::new(&sdk_config);
 
-        Ok(DynamoDb {
-            client,
-            table_prefix: None,
-        })
+        Ok(DynamoDb { client })
     }
 
     pub async fn from_env() -> Result<DynamoDb> {
@@ -87,16 +77,7 @@ impl DynamoDb {
 
         let client = Client::new(&sdk_config);
 
-        Ok(DynamoDb {
-            client,
-            table_prefix: None,
-        })
-    }
-
-    pub async fn from_env_with_prefix(table_prefix: &str) -> Result<DynamoDb> {
-        let mut ddb = DynamoDb::from_env().await?;
-        ddb.table_prefix = Some(table_prefix.to_string());
-        Ok(ddb)
+        Ok(DynamoDb { client })
     }
 }
 
@@ -140,22 +121,6 @@ impl DynamoDb {
                 _ => todo!("op={:#?}", op),
             },
             _ => todo!("op={op:#?}"),
-        }
-    }
-
-    fn table_name(&self, table: &Table) -> String {
-        if let Some(prefix) = &self.table_prefix {
-            format!("{}{}", prefix, table.name)
-        } else {
-            table.name.to_string()
-        }
-    }
-
-    fn index_table_name(&self, index: &Index) -> String {
-        if let Some(prefix) = &self.table_prefix {
-            format!("{}{}", prefix, index.name)
-        } else {
-            index.name.to_string()
         }
     }
 }
