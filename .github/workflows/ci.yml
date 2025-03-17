@@ -9,6 +9,8 @@ on:
 env:
     CARGO_TERM_COLOR: always
     RUSTFLAGS: -D warnings
+    AWS_REGION: "foo"
+    AWS_ENDPOINT_URL: http://localhost:8000
 
 jobs:
     check:
@@ -45,8 +47,6 @@ jobs:
         needs: check
         name: Run tests with all databases
         runs-on: ubuntu-latest
-        env:
-            AWS_ENDPOINT_URL: http://localhost:8000
         steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
@@ -93,8 +93,6 @@ jobs:
               - windows-latest
               - ubuntu-latest
               - macos-latest
-        env:
-            AWS_ENDPOINT_URL_DYNAMODB: http://localhost:8000
         steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
