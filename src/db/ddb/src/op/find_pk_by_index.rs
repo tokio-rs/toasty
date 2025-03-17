@@ -15,7 +15,7 @@ impl DynamoDb {
         let res = if index.unique {
             self.client
                 .query()
-                .table_name(self.index_table_name(index))
+                .table_name(&index.name)
                 .key_condition_expression(key_expression)
                 .set_expression_attribute_names(Some(expr_attrs.attr_names))
                 .set_expression_attribute_values(Some(expr_attrs.attr_values))
@@ -24,8 +24,8 @@ impl DynamoDb {
         } else {
             self.client
                 .query()
-                .table_name(self.table_name(table))
-                .index_name(self.index_table_name(index))
+                .table_name(&table.name)
+                .index_name(&index.name)
                 .key_condition_expression(key_expression)
                 .set_expression_attribute_names(Some(expr_attrs.attr_names))
                 .set_expression_attribute_values(Some(expr_attrs.attr_values))
