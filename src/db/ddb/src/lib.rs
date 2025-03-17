@@ -51,7 +51,6 @@ impl DynamoDb {
         use aws_sdk_dynamodb::config::Credentials;
 
         let mut aws_config = aws_config::defaults(BehaviorVersion::latest())
-            .region("foo")
             .credentials_provider(Credentials::for_tests());
 
         if let Some(host) = url.host() {
