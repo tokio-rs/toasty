@@ -72,7 +72,7 @@ jobs:
               - 5432:5432
             options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
         env:
-            DATABASE_URL: postgres://toasty:toasty@localhost/toasty
+            TOASTY_CONNECTION_URL: postgres://toasty:toasty@localhost/toasty
         steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
