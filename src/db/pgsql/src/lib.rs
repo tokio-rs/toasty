@@ -170,6 +170,7 @@ impl Driver for PostgreSQL {
 
         let mut params = Vec::new();
         let sql_as_str = stmt::sql::Serializer::new(schema)
+            .with_update_in_cte(true)
             .serialize_stmt(&sql, &mut params)
             .into_numbered_args()
             .into_inner();

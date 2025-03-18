@@ -16,8 +16,15 @@ pub trait Params {
 /// Serialize a statement to a SQL string
 pub struct Serializer<'a> {
     schema: &'a db::Schema,
+
+    /// True if table names should be quoted
     quoted_table_names: bool,
+
+    /// True if column names should be quotes
     quoted_column_names: bool,
+
+    /// True if update statements can be used in CTE expressions.
+    update_in_cte: bool,
 }
 
 struct MaybeQuote<'a> {
@@ -47,14 +54,11 @@ struct Formatter<'a, T> {
     /// The schema that the query references
     schema: &'a db::Schema,
 
+    /// Serializer (which has configuration)
+    serializer: &'a Serializer<'a>,
+
     /// Query paramaters (referenced by placeholders) are stored here.
     params: &'a mut T,
-
-    /// Config option for quoting table names
-    quoted_table_names: bool,
-
-    /// Config option for quoting column names
-    quoted_column_names: bool,
 }
 
 impl Params for Vec<stmt::Value> {
@@ -120,6 +124,7 @@ impl<'a> Serializer<'a> {
             schema,
             quoted_table_names: true,
             quoted_column_names: true,
+            update_in_cte: false,
         }
     }
     pub fn with_quoted_table_names(mut self, enabled: bool) -> Self {
@@ -128,6 +133,11 @@ impl<'a> Serializer<'a> {
     }
     pub fn with_quoted_column_names(mut self, enabled: bool) -> Self {
         self.quoted_column_names = enabled;
+        self
+    }
+
+    pub fn with_update_in_cte(mut self, enabled: bool) -> Self {
+        self.update_in_cte = enabled;
         self
     }
 
@@ -142,8 +152,7 @@ impl<'a> Serializer<'a> {
             dst: &mut ret,
             schema: self.schema,
             params,
-            quoted_table_names: self.quoted_table_names,
-            quoted_column_names: self.quoted_column_names,
+            serializer: self,
         };
 
         fmt.statement(stmt).unwrap();
@@ -161,8 +170,7 @@ impl<'a> Serializer<'a> {
             dst: &mut ret,
             schema: self.schema,
             params,
-            quoted_table_names: self.quoted_table_names,
-            quoted_column_names: self.quoted_column_names,
+            serializer: self,
         };
 
         fmt.sql_statement(stmt).unwrap();
@@ -211,7 +219,7 @@ impl<T: Params> Formatter<'_, T> {
         write!(self.dst, " ON ")?;
 
         let table = self.schema.table(stmt.on);
-        self.ident_str(&table.name, self.quoted_table_names)?;
+        self.ident_str(&table.name, self.serializer.quoted_table_names)?;
 
         write!(self.dst, " (")?;
 
@@ -272,7 +280,7 @@ impl<T: Params> Formatter<'_, T> {
     }
 
     fn column_def(&mut self, stmt: &ColumnDef) -> fmt::Result {
-        self.ident(&stmt.name, self.quoted_column_names)?;
+        self.ident(&stmt.name, self.serializer.quoted_column_names)?;
         write!(self.dst, " ")?;
         self.ty(&stmt.ty)?;
         Ok(())
@@ -296,7 +304,7 @@ impl<T: Params> Formatter<'_, T> {
             write!(
                 self.dst,
                 "{}",
-                MaybeQuote::new(&table.name, self.quoted_table_names)
+                MaybeQuote::new(&table.name, self.serializer.quoted_table_names)
             )?;
         }
 
@@ -317,7 +325,7 @@ impl<T: Params> Formatter<'_, T> {
             "INSERT INTO {} (",
             MaybeQuote::new(
                 &self.schema.table(insert_target).name,
-                self.quoted_table_names
+                self.serializer.quoted_table_names
             )
         )?;
 
@@ -329,7 +337,7 @@ impl<T: Params> Formatter<'_, T> {
                 s,
                 MaybeQuote::new(
                     &self.schema.column(*column_id).name,
-                    self.quoted_column_names
+                    self.serializer.quoted_column_names
                 )
             )?;
             s = ", ";
@@ -353,10 +361,32 @@ impl<T: Params> Formatter<'_, T> {
     fn update(&mut self, update: &Update) -> fmt::Result {
         let table = self.schema.table(update.target.as_table().table);
 
+        // If there is an update condition, serialize the statement as a CTE
+        if let Some(condition) = &update.condition {
+            if !self.serializer.update_in_cte {
+                panic!("Update conditions are not supported");
+            }
+
+            let table_name = MaybeQuote::new(&table.name, self.serializer.quoted_table_names);
+            write!(
+                self.dst,
+                "WITH found AS (SELECT count(*) as total, count(*) FILTER (WHERE "
+            )?;
+            self.expr(condition)?;
+            write!(self.dst, ") AS condition_matched FROM {}", table_name)?;
+
+            if let Some(filter) = &update.filter {
+                write!(self.dst, " WHERE ")?;
+                self.expr(filter)?;
+            }
+
+            write!(self.dst, "), updated AS (")?;
+        }
+
         write!(
             self.dst,
             "UPDATE {} SET",
-            MaybeQuote::new(&table.name, self.quoted_table_names)
+            MaybeQuote::new(&table.name, self.serializer.quoted_table_names)
         )?;
 
         for (index, assignment) in update.assignments.iter() {
@@ -364,20 +394,26 @@ impl<T: Params> Formatter<'_, T> {
             write!(
                 self.dst,
                 " {} = ",
-                MaybeQuote::new(&column.name, self.quoted_column_names)
+                MaybeQuote::new(&column.name, self.serializer.quoted_column_names)
             )?;
 
             self.expr(&assignment.expr)?;
         }
 
-        assert!(
-            update.condition.is_none(),
-            "SQL doesn't support update conditions yo"
-        );
+        if update.filter.is_some() || update.condition.is_some() {
+            write!(self.dst, " WHERE ")?;
+        }
 
         if let Some(filter) = &update.filter {
-            write!(self.dst, " WHERE ")?;
             self.expr(filter)?;
+
+            if update.condition.is_some() {
+                write!(self.dst, " AND ")?;
+            }
+        }
+
+        if update.condition.is_some() {
+            write!(self.dst, "(SELECT total = condition_matched FROM found)")?;
         }
 
         if let Some(returning) = &update.returning {
@@ -386,6 +422,20 @@ impl<T: Params> Formatter<'_, T> {
             };
             write!(self.dst, " RETURNING ")?;
             self.expr_as_list(returning)?;
+        }
+
+        if update.condition.is_some() {
+            write!(self.dst, ") SELECT found.total, found.condition_matched")?;
+
+            if update.returning.is_some() {
+                write!(self.dst, ", updated.*")?;
+            }
+
+            write!(self.dst, " FROM found")?;
+
+            if update.returning.is_some() {
+                write!(self.dst, " LEFT JOIN updated ON TRUE")?;
+            }
         }
 
         Ok(())
@@ -406,7 +456,7 @@ impl<T: Params> Formatter<'_, T> {
             write!(
                 self.dst,
                 "{}",
-                MaybeQuote::new(&table.name, self.quoted_table_names)
+                MaybeQuote::new(&table.name, self.serializer.quoted_table_names)
             )?;
         }
 
@@ -476,7 +526,7 @@ impl<T: Params> Formatter<'_, T> {
                 // TODO: at some point we need to conditionally scope the column
                 // name.
                 let column = self.schema.column(expr.column);
-                self.ident_str(&column.name, self.quoted_column_names)?;
+                self.ident_str(&column.name, self.serializer.quoted_column_names)?;
             }
             Expr::InList(ExprInList { expr, list }) => {
                 self.expr(expr)?;
@@ -600,7 +650,7 @@ impl<T: Params> Formatter<'_, T> {
     fn name(&mut self, name: &Name) -> fmt::Result {
         let mut s = "";
         for ident in &name.0 {
-            self.ident(ident, self.quoted_table_names)?;
+            self.ident(ident, self.serializer.quoted_table_names)?;
             write!(self.dst, "{s}")?;
             s = ".";
         }
