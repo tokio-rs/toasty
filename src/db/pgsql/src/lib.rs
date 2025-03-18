@@ -166,10 +166,8 @@ impl Driver for PostgreSQL {
             op => todo!("op={:#?}", op),
         };
 
-        let conditional_update = match &sql {
-            stmt::Statement::Update(stmt) if stmt.condition.is_some() => true,
-            _ => false,
-        };
+        let conditional_update =
+            matches!(&sql, stmt::Statement::Update(stmt) if stmt.condition.is_some());
 
         let width = sql.returning_len();
 
