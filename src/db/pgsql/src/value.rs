@@ -21,7 +21,8 @@ impl ToSql for Value {
     {
         match &self.0 {
             stmt::Value::Bool(value) => value.to_sql(ty, out),
-            stmt::Value::I64(value) => value.to_sql(ty, out),
+            // TODO: we need to do better type management
+            stmt::Value::I64(value) => (*value as i32).to_sql(ty, out),
             stmt::Value::Id(value) => value.to_string().to_sql(ty, out),
             stmt::Value::Null => Ok(IsNull::Yes),
             stmt::Value::String(value) => value.to_sql(ty, out),

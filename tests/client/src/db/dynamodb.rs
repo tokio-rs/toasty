@@ -12,7 +12,11 @@ impl Setup for SetupDynamoDb {
 
         static CNT: AtomicUsize = AtomicUsize::new(0);
 
-        let prefix = format!("test_{}_", CNT.fetch_add(1, Relaxed));
+        thread_local! {
+            pub static PREFIX: String = format!("test_{}_", CNT.fetch_add(1, Relaxed));
+        }
+
+        let prefix = PREFIX.with(|k| k.clone());
 
         let db = builder
             .table_name_prefix(&prefix)
