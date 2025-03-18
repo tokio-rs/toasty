@@ -9,6 +9,7 @@ on:
 env:
     CARGO_TERM_COLOR: always
     RUSTFLAGS: -D warnings
+    TOASTY_TEST_POSTGRES_URL: "postgres://toasty:toasty@localhost/toasty"
     AWS_REGION: "foo"
     AWS_ENDPOINT_URL: http://localhost:8000
 
@@ -43,20 +44,18 @@ jobs:
         - name: cargo clippy
           run: cargo clippy --workspace --all-features
 
-    test-all-databases:
-        needs: check
-        name: Run tests with all databases
-        runs-on: ubuntu-latest
-        steps:
-        - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
-        - uses: Swatinem/rust-cache@v2
-          with:
-            save-if: ${{ github.ref == 'refs/heads/main' }}
-        - name: Start dynamodb-local
-          run: sudo docker run --name dynamodb -d -p 8000:8000 amazon/dynamodb-local:latest -jar DynamoDBLocal.jar -port 8000
-        - name: cargo test
-          run: cargo test --workspace --all-features
+    test-sqlite:
+      needs: check
+      name: Run tests for Sqlite
+      runs-on: ubuntu-latest
+      steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: cargo test
+        run: cargo test --workspace --no-default-features --features sqlite
 
     test-postgresql:
         needs: check
@@ -81,7 +80,24 @@ jobs:
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
         - name: cargo test
+          run: cargo test --workspace --no-default-features --features postgresql
+        - name: cargo run --bin example-hello-toasty
           run: cargo run --bin example-hello-toasty --features postgresql
+
+    test-dynamodb:
+        needs: check
+        name: Run tests for DynamoDB
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+        - uses: Swatinem/rust-cache@v2
+          with:
+            save-if: ${{ github.ref == 'refs/heads/main' }}
+        - name: Start dynamodb-local
+          run: sudo docker run --name dynamodb -d -p 8000:8000 amazon/dynamodb-local:latest -jar DynamoDBLocal.jar -port 8000
+        - name: cargo test
+          run: cargo test --workspace --no-default-features --features dynamodb
 
     test-all-os:
         needs: check
