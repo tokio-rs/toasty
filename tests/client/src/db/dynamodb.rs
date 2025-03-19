@@ -18,9 +18,12 @@ impl Setup for SetupDynamoDb {
 
         let prefix = PREFIX.with(|k| k.clone());
 
+        let url =
+            std::env::var("TOASTY_TEST_DYNAMODB_URL").unwrap_or_else(|_| "dynamodb://".to_string());
+
         let db = builder
             .table_name_prefix(&prefix)
-            .connect("dynamodb://")
+            .connect(&url)
             .await
             .unwrap();
 
