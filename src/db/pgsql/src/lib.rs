@@ -62,6 +62,14 @@ impl PostgreSQL {
             config.port(port);
         }
 
+        if !url.username().is_empty() {
+            config.user(url.username());
+        }
+
+        if let Some(password) = url.password() {
+            config.password(password);
+        }
+
         Self::connect_with_config(config, tokio_postgres::NoTls).await
     }
 
