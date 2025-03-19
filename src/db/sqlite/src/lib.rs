@@ -3,6 +3,7 @@ use toasty_core::{
     schema::db::{Schema, Table},
     stmt, Result,
 };
+use toasty_sql as sql;
 
 use rusqlite::Connection;
 use std::{
@@ -65,15 +66,15 @@ impl Driver for Sqlite {
 
         let connection = self.connection.lock().unwrap();
 
-        let mut sql = match op {
-            QuerySql(op) => op.stmt,
-            Insert(op) => op,
+        let mut sql: sql::Statement = match op {
+            QuerySql(op) => op.stmt.into(),
+            Insert(op) => op.into(),
             _ => todo!(),
         };
 
         // SQL doesn't handle pre-condition. This should be moved into toasty's planner.
         let pre_condition = match &mut sql {
-            stmt::Statement::Update(update) => {
+            sql::Statement::Update(update) => {
                 if let Some(condition) = update.condition.take() {
                     update.filter = Some(match update.filter.take() {
                         Some(filter) => stmt::Expr::and(filter, condition),
@@ -93,29 +94,30 @@ impl Driver for Sqlite {
         };
 
         let mut params = vec![];
-        let sql_str = stmt::sql::Serializer::new(schema).serialize_stmt(&sql, &mut params);
+        let sql_str = sql::Serializer::new(schema).serialize_stmt(&sql, &mut params);
 
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
         let width = match &sql {
-            stmt::Statement::Query(stmt) => match &*stmt.body {
+            sql::Statement::Query(stmt) => match &*stmt.body {
                 stmt::ExprSet::Select(stmt) => Some(stmt.returning.as_expr().as_record().len()),
                 _ => todo!(),
             },
-            stmt::Statement::Insert(stmt) => stmt
+            sql::Statement::Insert(stmt) => stmt
                 .returning
                 .as_ref()
                 .map(|returning| returning.as_expr().as_record().len()),
-            stmt::Statement::Delete(stmt) => stmt
+            sql::Statement::Delete(stmt) => stmt
                 .returning
                 .as_ref()
                 .map(|returning| returning.as_expr().as_record().len()),
-            stmt::Statement::Update(stmt) => {
+            sql::Statement::Update(stmt) => {
                 assert!(stmt.condition.is_none(), "stmt={stmt:#?}");
                 stmt.returning
                     .as_ref()
                     .map(|returning| returning.as_expr().as_record().len())
             }
+            _ => None,
         };
 
         if width.is_none() {
@@ -184,7 +186,7 @@ impl Sqlite {
         let connection = self.connection.lock().unwrap();
 
         let mut params = vec![];
-        let stmt = stmt::sql::Statement::create_table(table).serialize(schema, &mut params);
+        let stmt = sql::Statement::create_table(table).serialize(schema, &mut params);
         assert!(params.is_empty());
 
         connection.execute(&stmt, [])?;
@@ -196,7 +198,7 @@ impl Sqlite {
                 continue;
             }
 
-            let stmt = stmt::sql::Statement::create_index(index).serialize(schema, &mut params);
+            let stmt = sql::Statement::create_index(index).serialize(schema, &mut params);
             assert!(params.is_empty());
 
             connection.execute(&stmt, [])?;

@@ -1,0 +1,10 @@
+[package]
+name = "toasty-sql"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+toasty-core.workspace = true
+
+anyhow.workspace = true

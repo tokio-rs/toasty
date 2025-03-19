@@ -1,4 +1,6 @@
-use super::*;
+use toasty_core::stmt;
+
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub enum Type {

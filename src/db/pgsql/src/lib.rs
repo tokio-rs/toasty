@@ -15,6 +15,7 @@ use toasty_core::{
     stmt::ValueRecord,
     Driver, Result,
 };
+use toasty_sql as sql;
 use tokio_postgres::{Client, Config};
 use url::Url;
 
@@ -95,7 +96,7 @@ impl PostgreSQL {
     /// Creates a table.
     pub async fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
         let mut params = Vec::new();
-        let sql = stmt::sql::Statement::create_table(table)
+        let sql = sql::Statement::create_table(table)
             .serialize(schema, &mut params)
             .into_inner();
 
@@ -113,7 +114,7 @@ impl PostgreSQL {
                 continue;
             }
 
-            let sql = stmt::sql::Statement::create_index(index)
+            let sql = sql::Statement::create_index(index)
                 .serialize(schema, &mut params)
                 .into_inner();
             assert!(
@@ -132,11 +133,11 @@ impl PostgreSQL {
         let mut params = Vec::new();
 
         let sql = if if_exists {
-            stmt::sql::Statement::drop_table_if_exists(table)
+            sql::Statement::drop_table_if_exists(table)
                 .serialize(schema, &mut params)
                 .into_inner()
         } else {
-            stmt::sql::Statement::drop_table(table)
+            sql::Statement::drop_table(table)
                 .serialize(schema, &mut params)
                 .into_inner()
         };
@@ -168,19 +169,19 @@ impl Driver for PostgreSQL {
     }
 
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        let sql = match op {
-            Operation::Insert(stmt) => stmt,
-            Operation::QuerySql(query) => query.stmt,
+        let sql: sql::Statement = match op {
+            Operation::Insert(stmt) => stmt.into(),
+            Operation::QuerySql(query) => query.stmt.into(),
             op => todo!("op={:#?}", op),
         };
 
         let conditional_update =
-            matches!(&sql, stmt::Statement::Update(stmt) if stmt.condition.is_some());
+            matches!(&sql, sql::Statement::Update(stmt) if stmt.condition.is_some());
 
         let width = sql.returning_len();
 
         let mut params = Vec::new();
-        let sql_as_str = stmt::sql::Serializer::new(schema)
+        let sql_as_str = sql::Serializer::new(schema)
             .with_update_in_cte(true)
             .serialize_stmt(&sql, &mut params)
             .into_numbered_args()
