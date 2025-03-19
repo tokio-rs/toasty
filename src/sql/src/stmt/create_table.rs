@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::schema::db::Table;
+use toasty_core::{schema::db::Table, stmt};
 
 #[derive(Debug, Clone)]
 pub struct CreateTable {
@@ -11,7 +11,7 @@ pub struct CreateTable {
     pub columns: Vec<ColumnDef>,
 
     /// Primary key clause
-    pub primary_key: Option<Box<Expr>>,
+    pub primary_key: Option<Box<stmt::Expr>>,
 }
 
 impl Statement {
@@ -19,12 +19,12 @@ impl Statement {
         CreateTable {
             name: Name::from(&table.name[..]),
             columns: table.columns.iter().map(ColumnDef::from_schema).collect(),
-            primary_key: Some(Box::new(Expr::record(
+            primary_key: Some(Box::new(stmt::Expr::record(
                 table
                     .primary_key
                     .columns
                     .iter()
-                    .map(|col| Expr::column(*col)),
+                    .map(|col| stmt::Expr::column(*col)),
             ))),
         }
         .into()

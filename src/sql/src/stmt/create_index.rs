@@ -1,6 +1,9 @@
 use super::*;
 
-use crate::schema::db::{Index, IndexOp, TableId};
+use toasty_core::{
+    schema::db::{Index, IndexOp, TableId},
+    stmt,
+};
 
 #[derive(Debug, Clone)]
 pub struct CreateIndex {
@@ -11,7 +14,7 @@ pub struct CreateIndex {
     pub on: TableId,
 
     /// The columns to index
-    pub columns: Vec<ExprOrderBy>,
+    pub columns: Vec<stmt::ExprOrderBy>,
 
     /// When true, the index is unique
     pub unique: bool,
@@ -25,8 +28,8 @@ impl Statement {
             columns: index
                 .columns
                 .iter()
-                .map(|index_column| ExprOrderBy {
-                    expr: Expr::column(index_column.column),
+                .map(|index_column| stmt::ExprOrderBy {
+                    expr: stmt::Expr::column(index_column.column),
                     order: match index_column.op {
                         IndexOp::Eq => None,
                         IndexOp::Sort(direction) => Some(direction),

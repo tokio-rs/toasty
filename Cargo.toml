@@ -6,6 +6,7 @@ members = [
     "src/codegen2",
     "src/core",
     "src/macros",
+    "src/sql",
     "src/toasty",
 
     # Driver implementations
@@ -34,6 +35,7 @@ toasty-codegen2 = { path = "src/codegen2" }
 toasty-core = { path = "src/core" }
 toasty-driver = { path = "src/driver" }
 toasty-macros = { path = "src/macros" }
+toasty-sql = { path = "src/sql" }
 
 # Driver implementations
 toasty-sqlite = { path = "src/db/sqlite" }

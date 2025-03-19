@@ -1,4 +1,4 @@
-use super::*;
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct Ident(pub String);

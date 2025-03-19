@@ -145,8 +145,6 @@ pub use source::{Source, SourceModel};
 mod sparse_record;
 pub use sparse_record::SparseRecord;
 
-pub mod sql;
-
 pub mod substitute;
 
 mod table_with_joins;
@@ -212,28 +210,6 @@ impl Statement {
         match self {
             Statement::Query(stmt) => stmt.substitute_ref(&mut input),
             _ => todo!("stmt={self:#?}"),
-        }
-    }
-
-    /// Returns the number of returned elements within the statement (if one exists).
-    pub fn returning_len(&self) -> Option<usize> {
-        match self {
-            Statement::Delete(delete) => delete
-                .returning
-                .as_ref()
-                .map(|ret| ret.as_expr().as_record().len()),
-            Statement::Insert(insert) => insert
-                .returning
-                .as_ref()
-                .map(|ret| ret.as_expr().as_record().len()),
-            Statement::Query(query) => match &*query.body {
-                ExprSet::Select(select) => Some(select.returning.as_expr().as_record().len()),
-                stmt => todo!("returning_len, stmt={stmt:#?}"),
-            },
-            Statement::Update(update) => update
-                .returning
-                .as_ref()
-                .map(|ret| ret.as_expr().as_record().len()),
         }
     }
 

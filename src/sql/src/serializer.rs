@@ -1,8 +1,9 @@
-use super::*;
+use crate::stmt::{ColumnDef, CreateIndex, CreateTable, DropTable, Ident, Name, Statement, Type};
 
-use crate::schema::db;
-
-use crate::stmt::Statement as DataStatement;
+use toasty_core::{
+    schema::db,
+    stmt::{self, Direction},
+};
 
 use std::{
     fmt::{self, Display, Write},
@@ -141,11 +142,7 @@ impl<'a> Serializer<'a> {
         self
     }
 
-    pub fn serialize_stmt(
-        &self,
-        stmt: &DataStatement,
-        params: &mut impl Params,
-    ) -> SerializeResult {
+    pub fn serialize_stmt(&self, stmt: &Statement, params: &mut impl Params) -> SerializeResult {
         let mut ret = String::new();
 
         let mut fmt = Formatter {
@@ -158,41 +155,10 @@ impl<'a> Serializer<'a> {
         fmt.statement(stmt).unwrap();
         SerializeResult::new(ret)
     }
-
-    pub fn serialize_sql_stmt(
-        &self,
-        stmt: &Statement,
-        params: &mut impl Params,
-    ) -> SerializeResult {
-        let mut ret = String::new();
-
-        let mut fmt = Formatter {
-            dst: &mut ret,
-            schema: self.schema,
-            params,
-            serializer: self,
-        };
-
-        fmt.sql_statement(stmt).unwrap();
-        SerializeResult::new(ret)
-    }
 }
 
 impl<T: Params> Formatter<'_, T> {
-    fn statement(&mut self, statement: &DataStatement) -> fmt::Result {
-        match statement {
-            DataStatement::Delete(stmt) => self.delete(stmt)?,
-            DataStatement::Insert(stmt) => self.insert(stmt)?,
-            DataStatement::Query(stmt) => self.query(stmt)?,
-            DataStatement::Update(stmt) => self.update(stmt)?,
-        }
-
-        write!(self.dst, ";")?;
-
-        Ok(())
-    }
-
-    fn sql_statement(&mut self, statement: &Statement) -> fmt::Result {
+    fn statement(&mut self, statement: &Statement) -> fmt::Result {
         match statement {
             Statement::CreateIndex(stmt) => self.create_index(stmt)?,
             Statement::CreateTable(stmt) => self.create_table(stmt)?,
@@ -286,15 +252,15 @@ impl<T: Params> Formatter<'_, T> {
         Ok(())
     }
 
-    fn query(&mut self, query: &Query) -> fmt::Result {
+    fn query(&mut self, query: &stmt::Query) -> fmt::Result {
         match &*query.body {
-            ExprSet::Select(select) => self.select(select),
-            ExprSet::Values(values) => self.values(values),
+            stmt::ExprSet::Select(select) => self.select(select),
+            stmt::ExprSet::Values(values) => self.values(values),
             _ => todo!("query={query:#?}"),
         }
     }
 
-    fn delete(&mut self, delete: &Delete) -> fmt::Result {
+    fn delete(&mut self, delete: &stmt::Delete) -> fmt::Result {
         write!(self.dst, "DELETE FROM ")?;
 
         assert!(delete.returning.is_none());
@@ -315,8 +281,8 @@ impl<T: Params> Formatter<'_, T> {
         Ok(())
     }
 
-    fn insert(&mut self, stmt: &Insert) -> fmt::Result {
-        let InsertTarget::Table(insert_target) = &stmt.target else {
+    fn insert(&mut self, stmt: &stmt::Insert) -> fmt::Result {
+        let stmt::InsertTarget::Table(insert_target) = &stmt.target else {
             todo!()
         };
 
@@ -348,7 +314,7 @@ impl<T: Params> Formatter<'_, T> {
         self.query(&stmt.source)?;
 
         if let Some(returning) = &stmt.returning {
-            let Returning::Expr(returning) = returning else {
+            let stmt::Returning::Expr(returning) = returning else {
                 todo!("returning={returning:#?}")
             };
             write!(self.dst, " RETURNING ")?;
@@ -358,7 +324,7 @@ impl<T: Params> Formatter<'_, T> {
         Ok(())
     }
 
-    fn update(&mut self, update: &Update) -> fmt::Result {
+    fn update(&mut self, update: &stmt::Update) -> fmt::Result {
         let table = self.schema.table(update.target.as_table().table);
 
         // If there is an update condition, serialize the statement as a CTE
@@ -417,7 +383,7 @@ impl<T: Params> Formatter<'_, T> {
         }
 
         if let Some(returning) = &update.returning {
-            let Returning::Expr(returning) = returning else {
+            let stmt::Returning::Expr(returning) = returning else {
                 todo!("update={update:#?}")
             };
             write!(self.dst, " RETURNING ")?;
@@ -441,11 +407,11 @@ impl<T: Params> Formatter<'_, T> {
         Ok(())
     }
 
-    fn select(&mut self, select: &Select) -> fmt::Result {
+    fn select(&mut self, select: &stmt::Select) -> fmt::Result {
         write!(self.dst, "SELECT ")?;
 
         match &select.returning {
-            Returning::Expr(returning) => self.expr_as_list(returning)?,
+            stmt::Returning::Expr(returning) => self.expr_as_list(returning)?,
             _ => todo!("select={select:#?}"),
         }
 
@@ -467,7 +433,7 @@ impl<T: Params> Formatter<'_, T> {
         Ok(())
     }
 
-    fn values(&mut self, values: &Values) -> fmt::Result {
+    fn values(&mut self, values: &stmt::Values) -> fmt::Result {
         let mut s = "VALUES";
         for record in &values.rows {
             write!(self.dst, "{s} (")?;
@@ -479,7 +445,7 @@ impl<T: Params> Formatter<'_, T> {
         Ok(())
     }
 
-    fn expr_list(&mut self, exprs: &[Expr]) -> fmt::Result {
+    fn expr_list(&mut self, exprs: &[stmt::Expr]) -> fmt::Result {
         let mut s = "";
 
         for expr in exprs {
@@ -491,19 +457,19 @@ impl<T: Params> Formatter<'_, T> {
         Ok(())
     }
 
-    fn expr_as_list(&mut self, expr: &Expr) -> fmt::Result {
+    fn expr_as_list(&mut self, expr: &stmt::Expr) -> fmt::Result {
         match expr {
-            Expr::Record(expr) => self.expr_list(expr),
-            Expr::List(expr) => self.expr_list(&expr.items),
-            Expr::Value(Value::Record(expr)) => self.value_list(expr),
-            Expr::Value(Value::List(expr)) => self.value_list(expr),
+            stmt::Expr::Record(expr) => self.expr_list(expr),
+            stmt::Expr::List(expr) => self.expr_list(&expr.items),
+            stmt::Expr::Value(stmt::Value::Record(expr)) => self.value_list(expr),
+            stmt::Expr::Value(stmt::Value::List(expr)) => self.value_list(expr),
             _ => self.expr(expr),
         }
     }
 
-    fn expr(&mut self, expr: &Expr) -> fmt::Result {
+    fn expr(&mut self, expr: &stmt::Expr) -> fmt::Result {
         match expr {
-            Expr::And(ExprAnd { operands }) => {
+            stmt::Expr::And(stmt::ExprAnd { operands }) => {
                 let mut s = "";
 
                 for expr in operands {
@@ -512,7 +478,7 @@ impl<T: Params> Formatter<'_, T> {
                     s = " AND ";
                 }
             }
-            Expr::BinaryOp(ExprBinaryOp { lhs, op, rhs }) => {
+            stmt::Expr::BinaryOp(stmt::ExprBinaryOp { lhs, op, rhs }) => {
                 assert!(!lhs.is_value_null());
                 assert!(!rhs.is_value_null());
 
@@ -522,32 +488,32 @@ impl<T: Params> Formatter<'_, T> {
                 write!(self.dst, " ")?;
                 self.expr(rhs)?;
             }
-            Expr::Column(expr) => {
+            stmt::Expr::Column(expr) => {
                 // TODO: at some point we need to conditionally scope the column
                 // name.
                 let column = self.schema.column(expr.column);
                 self.ident_str(&column.name, self.serializer.quoted_column_names)?;
             }
-            Expr::InList(ExprInList { expr, list }) => {
+            stmt::Expr::InList(stmt::ExprInList { expr, list }) => {
                 self.expr(expr)?;
                 write!(self.dst, " IN (")?;
                 self.expr_as_list(list)?;
                 write!(self.dst, ")")?;
             }
-            Expr::InSubquery(ExprInSubquery { expr, query }) => {
+            stmt::Expr::InSubquery(stmt::ExprInSubquery { expr, query }) => {
                 self.expr(expr)?;
                 write!(self.dst, " IN (")?;
 
                 self.query(query)?;
                 write!(self.dst, ")")?;
             }
-            Expr::IsNull(ExprIsNull { negate, expr }) => {
+            stmt::Expr::IsNull(stmt::ExprIsNull { negate, expr }) => {
                 let not = if *negate { "NOT " } else { "" };
 
                 self.expr(expr)?;
                 write!(self.dst, "IS {}NULL", not)?;
             }
-            Expr::Or(ExprOr { operands }) => {
+            stmt::Expr::Or(stmt::ExprOr { operands }) => {
                 let mut s = "";
 
                 for expr in operands {
@@ -556,7 +522,7 @@ impl<T: Params> Formatter<'_, T> {
                     s = " OR ";
                 }
             }
-            Expr::Record(expr_record) => {
+            stmt::Expr::Record(expr_record) => {
                 write!(self.dst, "(")?;
 
                 let mut s = "";
@@ -568,18 +534,18 @@ impl<T: Params> Formatter<'_, T> {
 
                 write!(self.dst, ")")?;
             }
-            Expr::Value(value) => self.value(value)?,
-            Expr::Pattern(ExprPattern::BeginsWith(expr)) => {
-                let Expr::Value(pattern) = &*expr.pattern else {
+            stmt::Expr::Value(value) => self.value(value)?,
+            stmt::Expr::Pattern(stmt::ExprPattern::BeginsWith(expr)) => {
+                let stmt::Expr::Value(pattern) = &*expr.pattern else {
                     todo!()
                 };
                 let pattern = pattern.expect_string();
                 let pattern = format!("{pattern}%");
                 self.expr(&expr.expr)?;
                 write!(self.dst, " LIKE ")?;
-                self.expr(&Expr::Value(pattern.into()))?;
+                self.expr(&stmt::Expr::Value(pattern.into()))?;
             }
-            Expr::ConcatStr(ExprConcatStr { exprs }) => {
+            stmt::Expr::ConcatStr(stmt::ExprConcatStr { exprs }) => {
                 write!(self.dst, "concat(")?;
                 self.expr_list(exprs)?;
                 write!(self.dst, ")")?;
@@ -590,23 +556,23 @@ impl<T: Params> Formatter<'_, T> {
         Ok(())
     }
 
-    fn binary_op(&mut self, binary_op: &BinaryOp) -> fmt::Result {
+    fn binary_op(&mut self, binary_op: &stmt::BinaryOp) -> fmt::Result {
         write!(
             self.dst,
             "{}",
             match binary_op {
-                BinaryOp::Eq => "=",
-                BinaryOp::Gt => ">",
-                BinaryOp::Ge => ">=",
-                BinaryOp::Lt => "<",
-                BinaryOp::Le => "<=",
-                BinaryOp::Ne => "<>",
+                stmt::BinaryOp::Eq => "=",
+                stmt::BinaryOp::Gt => ">",
+                stmt::BinaryOp::Ge => ">=",
+                stmt::BinaryOp::Lt => "<",
+                stmt::BinaryOp::Le => "<=",
+                stmt::BinaryOp::Ne => "<>",
                 _ => todo!(),
             }
         )
     }
 
-    fn value(&mut self, value: &Value) -> fmt::Result {
+    fn value(&mut self, value: &stmt::Value) -> fmt::Result {
         match value {
             stmt::Value::Id(_) => todo!(),
             stmt::Value::Record(record) => {
@@ -623,7 +589,7 @@ impl<T: Params> Formatter<'_, T> {
         Ok(())
     }
 
-    fn value_list(&mut self, values: &[Value]) -> fmt::Result {
+    fn value_list(&mut self, values: &[stmt::Value]) -> fmt::Result {
         let mut s = "";
 
         for value in values {

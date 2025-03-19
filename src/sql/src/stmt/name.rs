@@ -1,4 +1,6 @@
-use super::*;
+use super::Ident;
+
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct Name(pub Vec<Ident>);

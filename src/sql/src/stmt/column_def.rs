@@ -1,5 +1,9 @@
 use super::*;
 
+use toasty_core::schema::db::Column;
+
+use std::fmt;
+
 #[derive(Debug, Clone)]
 pub struct ColumnDef {
     pub name: Ident,

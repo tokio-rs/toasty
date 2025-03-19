@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::schema::db::Table;
+use toasty_core::schema::db::Table;
 
 /// A statement to drop a SQL table.
 #[derive(Debug, Clone)]
