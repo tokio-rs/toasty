@@ -7,6 +7,7 @@ publish = false
 [features]
 default = ["sqlite"]
 sqlite = ["toasty/sqlite"]
+libsql = ["toasty/libsql"]
 dynamodb = ["toasty/dynamodb"]
 
 [dependencies]
@@ -14,6 +15,9 @@ async-trait.workspace = true
 toasty.workspace = true
 toasty-core.workspace = true
 toasty-macros.workspace = true
+
+# LibSQL driver
+toasty-libsql = { path = "../../src/db/libsql", optional = true }
 
 # DyanmoDB driver
 toasty-dynamodb = { path = "../../src/db/ddb", optional = true }

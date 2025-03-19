@@ -9,6 +9,7 @@ default = [ "sqlite" ]
 dynamodb = [ "toasty/dynamodb" ]
 postgresql = [ "toasty/postgresql" ]
 sqlite = [ "toasty/sqlite" ]
+libsql = [ "toasty/libsql" ]
 
 [dependencies]
 toasty.workspace = true
