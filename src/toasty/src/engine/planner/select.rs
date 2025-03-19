@@ -26,10 +26,29 @@ impl Planner<'_> {
 
         self.lower_stmt_query(model, &mut stmt);
 
+        // Compute the return type
+        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
+
+        // Register a variable for the output
+        let output = self
+            .var_table
+            .register_var(stmt::Type::list(project.ret.clone()));
+
+        // If the filter expression is false, then the result will be empty.
+        if let stmt::ExprSet::Select(select) = &*stmt.body {
+            if select.filter.is_false() {
+                self.push_action(plan::SetVar {
+                    var: output,
+                    value: vec![],
+                });
+                return output;
+            }
+        }
+
         let ret = if self.capability.is_sql() {
-            self.plan_select_sql(cx, stmt)
+            self.plan_select_sql(cx, output, project, stmt)
         } else {
-            self.plan_select_kv(cx, model, stmt)
+            self.plan_select_kv(cx, model, output, project, stmt)
         };
 
         for include in &source_model.include {
@@ -39,17 +58,18 @@ impl Planner<'_> {
         ret
     }
 
-    fn plan_select_sql(&mut self, cx: &Context, mut stmt: stmt::Query) -> plan::VarId {
+    fn plan_select_sql(
+        &mut self,
+        cx: &Context,
+        output: plan::VarId,
+        project: eval::Func,
+        mut stmt: stmt::Query,
+    ) -> plan::VarId {
         let input = if cx.input.is_empty() {
             None
         } else {
             self.partition_stmt_query_input(&mut stmt, &cx.input)
         };
-
-        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
-        let output = self
-            .var_table
-            .register_var(stmt::Type::list(project.ret.clone()));
 
         if let Some(input) = &input {
             assert!(input.project.args[0].is_list(), "{input:#?}");
@@ -71,6 +91,8 @@ impl Planner<'_> {
         &mut self,
         cx: &Context,
         model: &Model,
+        output: plan::VarId,
+        project: eval::Func,
         mut stmt: stmt::Query,
     ) -> plan::VarId {
         let table = self.schema.table_for(model);
@@ -92,11 +114,6 @@ impl Planner<'_> {
         } else {
             None
         };
-
-        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
-        let output = self
-            .var_table
-            .register_var(stmt::Type::list(project.ret.clone()));
 
         if keys.is_some() {
             // Because we are querying by key, the result filter must be

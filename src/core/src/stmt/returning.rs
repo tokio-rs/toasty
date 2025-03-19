@@ -28,7 +28,7 @@ impl Returning {
     pub fn as_expr(&self) -> &Expr {
         match self {
             Returning::Expr(expr) => expr,
-            _ => todo!(),
+            _ => todo!("self={self:#?}"),
         }
     }
 

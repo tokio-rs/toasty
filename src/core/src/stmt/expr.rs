@@ -89,6 +89,11 @@ impl Expr {
         matches!(self, Expr::Value(Value::Bool(true)))
     }
 
+    /// Returns `true` if the expression is the `false` boolean expression
+    pub fn is_false(&self) -> bool {
+        matches!(self, Expr::Value(Value::Bool(false)))
+    }
+
     /// Returns true if the expression is a constant value.
     pub fn is_value(&self) -> bool {
         matches!(self, Expr::Value(..))

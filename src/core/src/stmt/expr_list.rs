@@ -19,6 +19,18 @@ impl Expr {
     pub fn list_from_vec(items: Vec<Expr>) -> Expr {
         ExprList { items }.into()
     }
+
+    pub fn is_list(&self) -> bool {
+        matches!(self, Expr::List(_) | Expr::Value(Value::List(_)))
+    }
+
+    pub fn is_list_empty(&self) -> bool {
+        match self {
+            Expr::List(list) => list.items.is_empty(),
+            Expr::Value(Value::List(list)) => list.is_empty(),
+            _ => false,
+        }
+    }
 }
 
 impl From<ExprList> for Expr {

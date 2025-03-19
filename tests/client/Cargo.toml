@@ -8,6 +8,7 @@ publish = false
 default = ["sqlite"]
 sqlite = ["toasty/sqlite"]
 dynamodb = ["toasty/dynamodb"]
+postgresql = ["toasty/postgresql"]
 
 [dependencies]
 async-trait.workspace = true

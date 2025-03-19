@@ -62,6 +62,14 @@ impl PostgreSQL {
             config.port(port);
         }
 
+        if !url.username().is_empty() {
+            config.user(url.username());
+        }
+
+        if let Some(password) = url.password() {
+            config.password(password);
+        }
+
         Self::connect_with_config(config, tokio_postgres::NoTls).await
     }
 
@@ -166,15 +174,18 @@ impl Driver for PostgreSQL {
             op => todo!("op={:#?}", op),
         };
 
+        let conditional_update =
+            matches!(&sql, stmt::Statement::Update(stmt) if stmt.condition.is_some());
+
         let width = sql.returning_len();
 
         let mut params = Vec::new();
         let sql_as_str = stmt::sql::Serializer::new(schema)
+            .with_update_in_cte(true)
             .serialize_stmt(&sql, &mut params)
             .into_numbered_args()
             .into_inner();
 
-        let stmt = self.client.prepare(&sql_as_str).await?;
         let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
 
         let args = params
@@ -183,20 +194,31 @@ impl Driver for PostgreSQL {
             .collect::<Vec<_>>()
             .into_boxed_slice();
 
-        if width.is_none() {
-            let count = self.client.execute(&stmt, &args).await? as usize;
+        if width.is_none() && !conditional_update {
+            let count = self.client.execute(&sql_as_str, &args).await? as usize;
             return Ok(Response::from_count(count));
         }
 
-        let results = self
-            .client
-            .query(&stmt, &args)
-            .await?
-            .into_iter()
-            .map(|row| {
-                let mut results = Vec::new();
+        let rows = self.client.query(&sql_as_str, &args).await?;
 
-                for i in 0..row.len() {
+        if width.is_none() {
+            let [row] = &rows[..] else { todo!() };
+            let total = row.get::<usize, i64>(0);
+            let condition_matched = row.get::<usize, i64>(1);
+
+            if total == condition_matched {
+                Ok(Response::from_count(total as _))
+            } else {
+                anyhow::bail!("update condition did not match");
+            }
+        } else {
+            let results = rows.into_iter().map(move |row| {
+                let mut results = Vec::new();
+                for mut i in 0..row.len() {
+                    if conditional_update {
+                        i += 2;
+                    }
+
                     let column = &row.columns()[i];
                     results.push(postgres_to_toasty(i, &row, column));
                 }
@@ -204,9 +226,10 @@ impl Driver for PostgreSQL {
                 Ok(ValueRecord::from_vec(results))
             });
 
-        Ok(Response::from_value_stream(stmt::ValueStream::from_iter(
-            results,
-        )))
+            Ok(Response::from_value_stream(stmt::ValueStream::from_iter(
+                results,
+            )))
+        }
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
@@ -232,7 +255,8 @@ fn postgres_to_toasty(index: usize, row: &Row, column: &Column) -> stmt::Value {
             .map(stmt::Value::Bool)
             .unwrap_or(stmt::Value::Null)
     } else if column.type_() == &Type::INT4 {
-        row.get::<usize, Option<i64>>(index)
+        row.get::<usize, Option<i32>>(index)
+            .map(|i| i as i64)
             .map(stmt::Value::I64)
             .unwrap_or(stmt::Value::Null)
     } else {

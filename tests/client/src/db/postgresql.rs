@@ -3,10 +3,10 @@ use toasty::{db, Db};
 
 use crate::Setup;
 
-pub struct SetupDynamoDb;
+pub struct SetupPostgreSQL;
 
 #[async_trait::async_trait]
-impl Setup for SetupDynamoDb {
+impl Setup for SetupPostgreSQL {
     async fn setup(&self, mut builder: db::Builder) -> Db {
         use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
@@ -18,8 +18,8 @@ impl Setup for SetupDynamoDb {
 
         let prefix = PREFIX.with(|k| k.clone());
 
-        let url =
-            std::env::var("TOASTY_TEST_DYNAMODB_URL").unwrap_or_else(|_| "dynamodb://".to_string());
+        let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
+            .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
 
         let db = builder
             .table_name_prefix(&prefix)
@@ -32,10 +32,6 @@ impl Setup for SetupDynamoDb {
     }
 
     fn capability(&self) -> &Capability {
-        use toasty_core::driver::capability::KeyValue;
-
-        &Capability::KeyValue(KeyValue {
-            primary_key_ne_predicate: false,
-        })
+        &Capability::Sql
     }
 }

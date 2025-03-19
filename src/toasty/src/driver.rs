@@ -32,7 +32,9 @@ impl Connection {
             "dynamodb" => Self::connect_dynamodb(&url).await,
             "postgresql" => Self::connect_postgresql(&url).await,
             "sqlite" => Self::connect_sqlite(&url),
-            _ => Err(anyhow::anyhow!("unsupported database; url={url}")),
+            scheme => Err(anyhow::anyhow!(
+                "unsupported database; schema={scheme}; url={url}"
+            )),
         }
     }
 

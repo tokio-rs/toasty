@@ -4,6 +4,11 @@ use stmt::{Expr, Value};
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_in_list(&self, expr: &mut stmt::ExprInList) -> Option<Expr> {
+        // First, if the list is empty, then simplify to false
+        if expr.list.is_list_empty() {
+            return Some(Expr::Value(Value::Bool(false)));
+        }
+
         self.rewrite_expr_in_list_when_model(expr);
 
         // Rewrite single-item lists into equalities
