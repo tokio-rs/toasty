@@ -35,7 +35,7 @@ impl DynamoDb {
                 let res = self
                     .client
                     .delete_item()
-                    .table_name(self.table_name(table))
+                    .table_name(&table.name)
                     .set_key(Some(ddb_key(table, key)))
                     .set_expression_attribute_names(if filter_expression.is_some() {
                         Some(expr_attrs.attr_names)
@@ -70,7 +70,7 @@ impl DynamoDb {
                         TransactWriteItem::builder()
                             .delete(
                                 Delete::builder()
-                                    .table_name(self.table_name(table))
+                                    .table_name(&table.name)
                                     .set_key(Some(ddb_key(table, key)))
                                     .set_expression_attribute_names(
                                         if filter_expression.is_some() {
@@ -132,7 +132,7 @@ impl DynamoDb {
         let res = self
             .client
             .get_item()
-            .table_name(self.table_name(table))
+            .table_name(&table.name)
             .set_key(Some(ddb_key(table, key)))
             .set_attributes_to_get(Some(attributes_to_get))
             .send()
@@ -162,7 +162,7 @@ impl DynamoDb {
             TransactWriteItem::builder()
                 .delete(
                     Delete::builder()
-                        .table_name(self.table_name(table))
+                        .table_name(&table.name)
                         .set_key(Some(ddb_key(table, key)))
                         .condition_expression(condition_expression)
                         .set_expression_attribute_names(Some(expression_names))
@@ -178,7 +178,7 @@ impl DynamoDb {
                 TransactWriteItem::builder()
                     .delete(
                         Delete::builder()
-                            .table_name(self.index_table_name(index))
+                            .table_name(&index.name)
                             .key(name, value)
                             .build()
                             .unwrap(),

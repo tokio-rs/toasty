@@ -11,7 +11,7 @@ impl DynamoDb {
             let _ = self
                 .client
                 .delete_table()
-                .table_name(self.table_name(table))
+                .table_name(&table.name)
                 .send()
                 .await;
 
@@ -20,7 +20,7 @@ impl DynamoDb {
                     let _ = self
                         .client
                         .delete_table()
-                        .table_name(self.index_table_name(index))
+                        .table_name(&index.name)
                         .send()
                         .await;
                 }
@@ -66,7 +66,7 @@ impl DynamoDb {
 
             gsis.push(
                 GlobalSecondaryIndex::builder()
-                    .index_name(self.index_table_name(index))
+                    .index_name(&index.name)
                     .set_key_schema(Some(ddb_key_schema(field, None)))
                     .projection(
                         Projection::builder()
@@ -95,7 +95,7 @@ impl DynamoDb {
 
         self.client
             .create_table()
-            .table_name(self.table_name(table))
+            .table_name(&table.name)
             .set_attribute_definitions(Some(attribute_definitions))
             .set_key_schema(Some(ddb_key_schema(partition_column, range_column)))
             .set_global_secondary_indexes(if gsis.is_empty() { None } else { Some(gsis) })
@@ -112,7 +112,7 @@ impl DynamoDb {
 
             self.client
                 .create_table()
-                .table_name(self.index_table_name(index))
+                .table_name(&index.name)
                 .set_key_schema(Some(ddb_key_schema(pk, None)))
                 .attribute_definitions(
                     AttributeDefinition::builder()
