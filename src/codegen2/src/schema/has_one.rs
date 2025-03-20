@@ -8,6 +8,9 @@ pub(crate) struct HasOne {
 
 impl HasOne {
     pub(super) fn from_ast(ty: &syn::Type, span: proc_macro2::Span) -> syn::Result<HasOne> {
-        Ok(HasOne { ty: ty.clone(), span })
+        Ok(HasOne {
+            ty: ty.clone(),
+            span,
+        })
     }
 }

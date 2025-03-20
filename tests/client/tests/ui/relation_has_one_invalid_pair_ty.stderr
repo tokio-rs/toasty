@@ -1,0 +1,13 @@
+error[E0277]: HasOne requires the Profile::user field to be of type `BelongsTo<Self>`, but it was `std::string::String` instead
+ --> tests/ui/relation_has_one_invalid_pair_ty.rs:9:5
+  |
+9 |     #[has_one]
+  |     ^ Has one associations require the target to include a back-reference
+  |
+  = help: the trait `Verify<Profile>` is not implemented for `std::string::String`
+  = note: Note 1
+note: required by a bound in `verify`
+ --> tests/ui/relation_has_one_invalid_pair_ty.rs:9:5
+  |
+9 |     #[has_one]
+  |     ^ required by this bound in `verify`

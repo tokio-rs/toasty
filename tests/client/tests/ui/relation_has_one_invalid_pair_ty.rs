@@ -16,14 +16,7 @@ struct Profile {
     #[auto]
     id: Id<Self>,
 
-    #[index]
-    user_id: Id<User>,
-
-    #[belongs_to(key = user_id, references = id)]
-    user: User,
+    user: String,
 }
 
-#[tokio::main]
-async fn main() -> toasty::Result<()> {
-    Ok(())
-}
+fn main() {}
