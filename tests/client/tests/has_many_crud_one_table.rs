@@ -300,36 +300,6 @@ async fn has_many_when_pk_is_composite(_s: impl Setup) {}
 // When both the FK and PK are composite, things should still work
 async fn has_many_when_fk_and_pk_are_composite(_s: impl Setup) {}
 
-// If the schema has no way to query all TODOs owned by a user, then abort
-//
-// This should panic
-async fn require_index_to_find_todos_by_user(_s: impl Setup) {
-    toasty_core::schema::from_str(
-        "
-        #[table(user_and_todos)]
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
-
-            todos: [Todo],
-        }
-
-        #[table(user_and_todos)]
-        model Todo {
-            #[key]
-            user: User,
-
-            #[key]
-            #[auto]
-            id: Id,
-
-            title: String,
-        }",
-    )
-    .unwrap();
-}
-
 tests!(
     crud_user_todos,
     scoped_find_by_id,
@@ -338,7 +308,4 @@ tests!(
     has_many_when_fk_is_composite,
     has_many_when_pk_is_composite,
     has_many_when_fk_and_pk_are_composite,
-    // Check invalid schemas
-    #[should_panic(expected = "missing relation attribute")]
-    require_index_to_find_todos_by_user,
 );

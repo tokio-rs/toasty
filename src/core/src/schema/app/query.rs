@@ -310,9 +310,3 @@ impl FindByArgType {
         matches!(self, FindByArgType::ForeignKey)
     }
 }
-
-impl QueryId {
-    pub(crate) const fn placeholder() -> QueryId {
-        QueryId(usize::MAX)
-    }
-}

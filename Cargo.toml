@@ -1,8 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "src/cli",
-    "src/codegen",
     "src/codegen2",
     "src/core",
     "src/macros",
@@ -22,11 +20,11 @@ members = [
     "examples/hello-toasty",
     "examples/cratehub",
     "examples/user-has-one-profile",
+    "examples/scratch",
 
     # Tests
     "tests/client",
 ]
-
 
 [workspace.dependencies]
 toasty = { path = "src/toasty" }

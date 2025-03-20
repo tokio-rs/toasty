@@ -1,8 +1,6 @@
 #[macro_use]
 mod macros;
 
-mod ast;
-
 pub mod driver;
 pub use driver::Driver;
 

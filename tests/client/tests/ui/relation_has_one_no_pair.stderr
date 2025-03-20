@@ -1,0 +1,7 @@
+error[E0609]: no field `user` on type `Profile`
+ --> tests/ui/relation_has_one_no_pair.rs:9:5
+  |
+9 |     #[has_one]
+  |     ^ unknown field
+  |
+  = note: available field is: `id`

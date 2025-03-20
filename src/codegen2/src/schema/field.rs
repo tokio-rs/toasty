@@ -1,6 +1,6 @@
-use syn::parse_quote;
-
 use super::{BelongsTo, ErrorSet, HasMany, HasOne, Name};
+
+use syn::{parse_quote, spanned::Spanned};
 
 #[derive(Debug)]
 pub(crate) struct Field {
@@ -101,16 +101,34 @@ impl Field {
                     attrs.index = true;
                 }
             } else if attr.path().is_ident("belongs_to") {
-                assert!(ty.is_none());
-                ty = Some(FieldTy::BelongsTo(BelongsTo::from_ast(
-                    attr, &field.ty, names,
-                )?));
+                if ty.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "field has more than one relation attribute",
+                    ));
+                } else {
+                    ty = Some(FieldTy::BelongsTo(BelongsTo::from_ast(
+                        attr, &field.ty, names,
+                    )?));
+                }
             } else if attr.path().is_ident("has_many") {
-                assert!(ty.is_none());
-                ty = Some(FieldTy::HasMany(HasMany::from_ast(ident, &field.ty)?));
+                if ty.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "field has more than one relation attribute",
+                    ));
+                } else {
+                    ty = Some(FieldTy::HasMany(HasMany::from_ast(ident, &field.ty)?));
+                }
             } else if attr.path().is_ident("has_one") {
-                assert!(ty.is_none());
-                ty = Some(FieldTy::HasOne(HasOne::from_ast(&field.ty)?));
+                if ty.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "field has more than one relation attribute",
+                    ));
+                } else {
+                    ty = Some(FieldTy::HasOne(HasOne::from_ast(&field.ty, field.span())?));
+                }
             } else {
                 i += 1;
                 continue;

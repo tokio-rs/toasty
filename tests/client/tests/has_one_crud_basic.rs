@@ -345,29 +345,8 @@ async fn crud_has_one_optional_belongs_to_required(s: impl Setup) {
     assert_err!(Profile::get_by_id(&db, &profile.id).await);
 }
 
-async fn has_one_must_specify_relation_on_one_side(_s: impl Setup) {
-    toasty_core::schema::from_str(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
-
-            profile: Option<Profile>,
-        }
-
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
-
-            user: User,
-        }
-        ",
-    )
-    .unwrap();
-}
-
+// TODO: implement this for proc macros
+/*
 async fn has_one_must_specify_be_uniquely_indexed(_s: impl Setup) {
     toasty_core::schema::from_str(
         "
@@ -394,6 +373,7 @@ async fn has_one_must_specify_be_uniquely_indexed(_s: impl Setup) {
     )
     .unwrap();
 }
+*/
 
 async fn set_has_one_by_value_in_update_query(s: impl Setup) {
     #[derive(Debug)]
@@ -476,6 +456,8 @@ async fn unset_has_one_with_required_pair_in_pk_query_update(s: impl Setup) {
         .unwrap();
     let profile = user.profile().get(&db).await.unwrap().unwrap();
 
+    assert_eq!(user.id, profile.user_id);
+
     User::filter_by_id(&user.id)
         .update()
         .profile(None)
@@ -525,6 +507,7 @@ async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) 
         .await
         .unwrap();
     let profile = user.profile().get(&db).await.unwrap().unwrap();
+    assert_eq!(profile.user_id, user.id);
 
     User::filter_by_email(&user.email)
         .update()
@@ -584,7 +567,10 @@ async fn associate_has_one_by_val_on_insert(s: impl Setup) {
         .await
         .unwrap();
 
-    assert_eq!(profile.id, u1.profile().get(&db).await.unwrap().id);
+    let profile_reloaded = u1.profile().get(&db).await.unwrap();
+    assert_eq!(profile.id, profile_reloaded.id);
+    assert_eq!(Some(&u1.id), profile_reloaded.user_id.as_ref());
+    assert_eq!(profile.bio, profile_reloaded.bio);
 }
 
 async fn associate_has_one_by_val_on_update_query_with_filter(s: impl Setup) {
@@ -634,10 +620,10 @@ async fn associate_has_one_by_val_on_update_query_with_filter(s: impl Setup) {
         .unwrap();
 
     let u1_reloaded = User::get_by_id(&db, &u1.id).await.unwrap();
-    assert_eq!(
-        p1.id,
-        u1_reloaded.profile().get(&db).await.unwrap().unwrap().id
-    );
+    let p1_reloaded = u1_reloaded.profile().get(&db).await.unwrap().unwrap();
+    assert_eq!(p1.id, p1_reloaded.id);
+    assert_eq!(p1.bio, p1_reloaded.bio);
+    assert_eq!(p1_reloaded.user_id.as_ref(), Some(&u1.id));
 
     // Unset
     User::filter_by_id(&u1.id)
@@ -664,11 +650,6 @@ tests!(
     crud_has_one_required_belongs_to_optional,
     update_belongs_to_with_required_has_one_pair,
     crud_has_one_optional_belongs_to_required,
-    #[should_panic(expected = "no relation pair for User::profile")]
-    has_one_must_specify_relation_on_one_side,
-    #[ignore]
-    #[should_panic(expected = "lol")]
-    has_one_must_specify_be_uniquely_indexed,
     set_has_one_by_value_in_update_query,
     #[ignore]
     unset_has_one_in_batch_update,

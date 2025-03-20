@@ -15,10 +15,6 @@ pub struct ForeignKeyField {
 }
 
 impl ForeignKey {
-    pub(crate) fn placeholder() -> ForeignKey {
-        ForeignKey { fields: vec![] }
-    }
-
     pub(crate) fn is_placeholder(&self) -> bool {
         self.fields.is_empty()
     }
