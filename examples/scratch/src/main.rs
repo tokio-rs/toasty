@@ -1,5 +1,6 @@
 use toasty::stmt::Id;
 
+#[derive(Debug)]
 #[toasty::model]
 struct User {
     #[key]
@@ -10,13 +11,14 @@ struct User {
     profile: Option<Profile>,
 }
 
+#[derive(Debug)]
 #[toasty::model]
 struct Profile {
     #[key]
     #[auto]
     id: Id<Self>,
 
-    #[index]
+    #[unique]
     user_id: Id<User>,
 
     #[belongs_to(key = user_id, references = id)]

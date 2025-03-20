@@ -456,6 +456,8 @@ async fn unset_has_one_with_required_pair_in_pk_query_update(s: impl Setup) {
         .unwrap();
     let profile = user.profile().get(&db).await.unwrap().unwrap();
 
+    assert_eq!(user.id, profile.user_id);
+
     User::filter_by_id(&user.id)
         .update()
         .profile(None)
@@ -505,6 +507,7 @@ async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) 
         .await
         .unwrap();
     let profile = user.profile().get(&db).await.unwrap().unwrap();
+    assert_eq!(profile.user_id, user.id);
 
     User::filter_by_email(&user.email)
         .update()
@@ -564,7 +567,10 @@ async fn associate_has_one_by_val_on_insert(s: impl Setup) {
         .await
         .unwrap();
 
-    assert_eq!(profile.id, u1.profile().get(&db).await.unwrap().id);
+    let profile_reloaded = u1.profile().get(&db).await.unwrap();
+    assert_eq!(profile.id, profile_reloaded.id);
+    assert_eq!(Some(&u1.id), profile_reloaded.user_id.as_ref());
+    assert_eq!(profile.bio, profile_reloaded.bio);
 }
 
 async fn associate_has_one_by_val_on_update_query_with_filter(s: impl Setup) {
@@ -614,10 +620,10 @@ async fn associate_has_one_by_val_on_update_query_with_filter(s: impl Setup) {
         .unwrap();
 
     let u1_reloaded = User::get_by_id(&db, &u1.id).await.unwrap();
-    assert_eq!(
-        p1.id,
-        u1_reloaded.profile().get(&db).await.unwrap().unwrap().id
-    );
+    let p1_reloaded = u1_reloaded.profile().get(&db).await.unwrap().unwrap();
+    assert_eq!(p1.id, p1_reloaded.id);
+    assert_eq!(p1.bio, p1_reloaded.bio);
+    assert_eq!(p1_reloaded.user_id.as_ref(), Some(&u1.id));
 
     // Unset
     User::filter_by_id(&u1.id)
