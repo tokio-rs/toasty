@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "src/codegen2",
+    "src/codegen",
     "src/core",
     "src/macros",
     "src/sql",
@@ -29,7 +29,6 @@ members = [
 [workspace.dependencies]
 toasty = { path = "src/toasty" }
 toasty-codegen = { path = "src/codegen" }
-toasty-codegen2 = { path = "src/codegen2" }
 toasty-core = { path = "src/core" }
 toasty-driver = { path = "src/driver" }
 toasty-macros = { path = "src/macros" }
