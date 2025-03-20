@@ -345,29 +345,8 @@ async fn crud_has_one_optional_belongs_to_required(s: impl Setup) {
     assert_err!(Profile::get_by_id(&db, &profile.id).await);
 }
 
-async fn has_one_must_specify_relation_on_one_side(_s: impl Setup) {
-    toasty_core::schema::from_str(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
-
-            profile: Option<Profile>,
-        }
-
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
-
-            user: User,
-        }
-        ",
-    )
-    .unwrap();
-}
-
+// TODO: implement this for proc macros
+/*
 async fn has_one_must_specify_be_uniquely_indexed(_s: impl Setup) {
     toasty_core::schema::from_str(
         "
@@ -394,6 +373,7 @@ async fn has_one_must_specify_be_uniquely_indexed(_s: impl Setup) {
     )
     .unwrap();
 }
+*/
 
 async fn set_has_one_by_value_in_update_query(s: impl Setup) {
     #[derive(Debug)]
@@ -664,11 +644,6 @@ tests!(
     crud_has_one_required_belongs_to_optional,
     update_belongs_to_with_required_has_one_pair,
     crud_has_one_optional_belongs_to_required,
-    #[should_panic(expected = "no relation pair for User::profile")]
-    has_one_must_specify_relation_on_one_side,
-    #[ignore]
-    #[should_panic(expected = "lol")]
-    has_one_must_specify_be_uniquely_indexed,
     set_has_one_by_value_in_update_query,
     #[ignore]
     unset_has_one_in_batch_update,

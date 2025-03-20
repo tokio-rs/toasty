@@ -11,18 +11,11 @@ pub struct Schema {
 
 #[derive(Default)]
 struct Builder {
-    /// True when building from the proc macro
-    is_macro: bool,
     models: IndexMap<ModelId, Model>,
     queries: Vec<Query>,
-    cx: Context,
 }
 
 impl Schema {
-    pub(crate) fn from_ast(ast: &ast::Schema) -> Result<Schema> {
-        Builder::from_ast(ast)
-    }
-
     pub fn from_macro(models: &[Model]) -> Result<Schema> {
         Builder::from_macro(models)
     }
@@ -51,32 +44,8 @@ impl Schema {
 }
 
 impl Builder {
-    #[allow(clippy::wrong_self_convention)]
-    fn from_ast(ast: &ast::Schema) -> Result<Schema> {
-        let mut builder = Builder::default();
-
-        // First, register all defined types with the resolver.
-        for node in ast.models() {
-            builder.cx.register_model(&node.ident);
-        }
-
-        for item in &ast.items {
-            match item {
-                ast::SchemaItem::Model(node) => {
-                    let model = Model::from_ast(&mut builder.cx, node)?;
-                    assert_eq!(builder.models.len(), model.id.0);
-                    builder.models.insert(model.id, model);
-                }
-            }
-        }
-
-        builder.process_models()?;
-        builder.into_schema()
-    }
-
     pub(crate) fn from_macro(models: &[Model]) -> Result<Schema> {
         let mut builder = Builder {
-            is_macro: true,
             ..Builder::default()
         };
 
@@ -158,19 +127,8 @@ impl Builder {
                         self.models[curr].fields[index].ty.expect_has_one_mut().pair = pair;
                     }
                     FieldTy::BelongsTo(belongs_to) => {
-                        if self.is_macro {
-                            assert!(!belongs_to.foreign_key.is_placeholder());
-                            continue;
-                        }
-                        assert!(belongs_to.foreign_key.is_placeholder());
-
-                        // Compute foreign key fields.
-                        let foreign_key = self.foreign_key_for(model, field, belongs_to.target);
-
-                        self.models[curr].fields[index]
-                            .ty
-                            .expect_belongs_to_mut()
-                            .foreign_key = foreign_key;
+                        assert!(!belongs_to.foreign_key.is_placeholder());
+                        continue;
                     }
                     _ => {}
                 }
@@ -373,32 +331,5 @@ impl Builder {
             src,
             self.models.get(&target)
         );
-    }
-
-    fn foreign_key_for(&self, source: &Model, source_field: &Field, target: ModelId) -> ForeignKey {
-        let attr = self.cx.get_relation_attr(source_field.id);
-
-        assert_eq!(
-            attr.key.len(),
-            attr.references.len(),
-            "unbalanced relation attribute {attr:#?}"
-        );
-
-        let target = &self.models[target.0];
-        let mut fields = vec![];
-
-        for (key, references) in attr.key.iter().zip(attr.references.iter()) {
-            let field_source = source.field_by_name(key.as_str()).expect("missing field");
-            let field_target = target
-                .field_by_name(references.as_str())
-                .expect("missing filed");
-
-            fields.push(ForeignKeyField {
-                source: field_source.id,
-                target: field_target.id,
-            });
-        }
-
-        ForeignKey { fields }
     }
 }

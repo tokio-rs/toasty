@@ -6,7 +6,6 @@ struct User {
     #[auto]
     id: Id<Self>,
 
-    #[has_one]
     profile: Option<Profile>,
 }
 
@@ -16,7 +15,7 @@ struct Profile {
     #[auto]
     id: Id<Self>,
 
-    #[index]
+    #[unique]
     user_id: Id<User>,
 
     #[belongs_to(key = user_id, references = id)]

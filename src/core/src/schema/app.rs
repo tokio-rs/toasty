@@ -6,9 +6,6 @@ pub use arg::Arg;
 mod auto;
 pub use auto::Auto;
 
-mod context;
-use context::Context;
-
 mod field;
 pub use field::{Field, FieldId, FieldPrimitive, FieldTy};
 
@@ -40,4 +37,4 @@ use super::{
     db::{IndexOp, IndexScope},
     Name,
 };
-use crate::{ast, stmt};
+use crate::stmt;
