@@ -1,27 +1,16 @@
-#[macro_use]
-mod util;
+mod expand;
+mod schema;
 
-mod model;
+use proc_macro2::TokenStream;
+use quote::quote;
 
-mod names;
-use names::Names;
+pub fn generate(args: TokenStream, input: TokenStream) -> syn::Result<TokenStream> {
+    let mut item: syn::ItemStruct = syn::parse2(input)?;
+    let model = schema::Model::from_ast(&mut item, args)?;
+    let gen = expand::model(&model);
 
-mod out;
-pub use out::{ModelOutput, Output};
-
-use toasty_core::schema::*;
-
-use std::rc::Rc;
-
-/// Generate client code for a schema
-pub fn generate(schema: &app::Schema, in_macro: bool) -> Output<'_> {
-    // Compute names of structs, mods, etc...
-    let names = Rc::new(Names::from_schema(schema));
-
-    let models = schema
-        .models()
-        .map(|model| model::generate(model, names.clone(), in_macro))
-        .collect();
-
-    Output { models }
+    Ok(quote! {
+        #item
+        #gen
+    })
 }
