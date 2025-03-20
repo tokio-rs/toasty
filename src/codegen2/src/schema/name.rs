@@ -3,7 +3,10 @@ use std_util::str;
 
 #[derive(Debug)]
 pub(crate) struct Name {
+    /// Name parts
     pub(crate) parts: Vec<String>,
+
+    /// field/var identifier
     pub(crate) ident: syn::Ident,
 }
 

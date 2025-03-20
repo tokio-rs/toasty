@@ -32,26 +32,6 @@ pub struct Schema {
     pub mapping: Mapping,
 }
 
-pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<app::Schema> {
-    use anyhow::Context;
-    use std::{fs, str};
-
-    let path = path.as_ref();
-    let contents = fs::read(path).with_context(|| {
-        let path = path.canonicalize().unwrap_or(path.into());
-        format!("Failed to read schema file from path {}", path.display())
-    })?;
-    let contents = str::from_utf8(&contents).unwrap();
-
-    from_str(contents)
-}
-
-pub fn from_str(source: &str) -> Result<app::Schema> {
-    let schema = crate::ast::from_str(source)?;
-    let schema = app::Schema::from_ast(&schema)?;
-    Ok(schema)
-}
-
 impl Schema {
     pub fn builder() -> Builder {
         Builder::default()

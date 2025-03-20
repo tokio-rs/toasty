@@ -12,5 +12,4 @@ proc-macro2.workspace = true
 quote.workspace = true
 syn.workspace = true
 toasty-core.workspace = true
-toasty-codegen.workspace = true
 toasty-codegen2.workspace = true
