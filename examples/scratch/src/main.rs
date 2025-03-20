@@ -19,7 +19,5 @@ struct Profile {
 
 #[tokio::main]
 async fn main() -> toasty::Result<()> {
-    let _ = <Option<Profile> as toasty::relation::Relation2>::Model::FIELDS.user;
-
     Ok(())
 }

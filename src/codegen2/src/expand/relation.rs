@@ -2,8 +2,7 @@ use super::Expand;
 use crate::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
-use quote::{quote, quote_spanned};
-use syn::spanned::Spanned;
+use quote::quote;
 
 impl Expand<'_> {
     pub(super) fn expand_relation_structs(&self) -> TokenStream {
@@ -255,21 +254,23 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
-        let pair_ident = &self.model.name.ident;
         let ty = &rel.ty;
-        println!("rel.ty={:#?}", rel.ty);
-
-        let span = rel.span;
-        println!("SPAN={:#?}", span);
-        let check_pair_exists = quote_spanned! {span=>
-            #pair_ident
-        };
+        let pair_ident = syn::Ident::new(&self.model.name.ident.to_string(), rel.span);
 
         quote! {
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::One {
                 use #toasty::IntoSelect;
 
-                let _ = <#ty as #toasty::Relation>::Model::FIELDS.#check_pair_exists;
+                // Reference the field to generate a compiler error if it is missing.
+                #[allow(unreachable_code)]
+                if false {
+                    fn load<T: #toasty::Model>() -> T {
+                        T::load(todo!()).unwrap()
+                    }
+
+                    let instance = load::<<#ty as #toasty::Relation>::Model>();
+                    let _ = &instance.#pair_ident;
+                }
 
                 <#ty as #toasty::Relation>::One::from_stmt(
                     #toasty::stmt::Association::one(self.into_select(), Self::FIELDS.#field_ident.into()).into_select()

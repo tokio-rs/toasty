@@ -1,6 +1,6 @@
-use syn::{parse_quote, spanned::Spanned};
-
 use super::{BelongsTo, ErrorSet, HasMany, HasOne, Name};
+
+use syn::{parse_quote, spanned::Spanned};
 
 #[derive(Debug)]
 pub(crate) struct Field {
@@ -127,7 +127,7 @@ impl Field {
                         "field has more than one relation attribute",
                     ));
                 } else {
-                    ty = Some(FieldTy::HasOne(HasOne::from_ast(&field.ty, attr.span())?));
+                    ty = Some(FieldTy::HasOne(HasOne::from_ast(&field.ty, field.span())?));
                 }
             } else {
                 i += 1;
