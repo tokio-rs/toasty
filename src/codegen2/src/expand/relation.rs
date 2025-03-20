@@ -260,7 +260,7 @@ impl Expand<'_> {
 
         let my_msg = format!("HasOne requires the {{A}}::{} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead", pair_ident);
         let my_label =
-            format!("Has one associations require the target to include a back-reference");
+            "Has one associations require the target to include a back-reference".to_string();
 
         let pair_check = quote::quote_spanned! {rel.span=>
             // Reference the field to generate a compiler error if it is missing.
