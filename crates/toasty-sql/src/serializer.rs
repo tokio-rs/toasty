@@ -16,10 +16,9 @@ pub use params::{Params, Placeholder};
 
 // Fragment serializers
 mod column_def;
-mod create_index;
-mod create_table;
 mod expr;
 mod name;
+mod stmt;
 mod ty;
 mod value;
 
