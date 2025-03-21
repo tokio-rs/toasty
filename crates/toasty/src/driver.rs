@@ -15,13 +15,13 @@ use url::Url;
 #[derive(Debug)]
 pub(crate) enum Connection {
     #[cfg(feature = "dynamodb")]
-    DynamoDb(toasty_dynamodb::DynamoDb),
+    DynamoDb(toasty_driver_dynamodb::DynamoDb),
 
     #[cfg(feature = "postgresql")]
-    PostgreSQL(toasty_pgsql::PostgreSQL),
+    PostgreSQL(toasty_driver_postgresql::PostgreSQL),
 
     #[cfg(feature = "sqlite")]
-    Sqlite(toasty_sqlite::Sqlite),
+    Sqlite(toasty_driver_sqlite::Sqlite),
 }
 
 impl Connection {
@@ -40,7 +40,7 @@ impl Connection {
 
     #[cfg(feature = "dynamodb")]
     async fn connect_dynamodb(url: &Url) -> Result<Connection> {
-        let driver = toasty_dynamodb::DynamoDb::connect(url.as_str()).await?;
+        let driver = toasty_driver_dynamodb::DynamoDb::connect(url.as_str()).await?;
         Ok(Connection::DynamoDb(driver))
     }
 
@@ -51,7 +51,7 @@ impl Connection {
 
     #[cfg(feature = "postgresql")]
     async fn connect_postgresql(url: &Url) -> Result<Connection> {
-        let driver = toasty_pgsql::PostgreSQL::connect(url.as_str()).await?;
+        let driver = toasty_driver_postgresql::PostgreSQL::connect(url.as_str()).await?;
         Ok(Connection::PostgreSQL(driver))
     }
 
@@ -62,7 +62,7 @@ impl Connection {
 
     #[cfg(feature = "sqlite")]
     fn connect_sqlite(url: &Url) -> Result<Connection> {
-        let driver = toasty_sqlite::Sqlite::connect(url.as_str())?;
+        let driver = toasty_driver_sqlite::Sqlite::connect(url.as_str())?;
         Ok(Connection::Sqlite(driver))
     }
 

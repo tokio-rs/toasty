@@ -1,5 +1,5 @@
 [package]
-name = "toasty-pgsql"
+name = "toasty-driver-postgresql"
 version = "0.1.0"
 edition = "2021"
 

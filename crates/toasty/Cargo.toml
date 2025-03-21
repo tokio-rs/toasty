@@ -5,9 +5,9 @@ edition = "2021"
 
 [features]
 default = []
-dynamodb = ["dep:toasty-dynamodb"]
-postgresql = ["dep:toasty-pgsql"]
-sqlite = ["dep:toasty-sqlite"]
+dynamodb = ["dep:toasty-driver-dynamodb"]
+postgresql = ["dep:toasty-driver-postgresql"]
+sqlite = ["dep:toasty-driver-sqlite"]
 
 
 [dependencies]
@@ -15,9 +15,9 @@ toasty-macros.workspace = true
 toasty-core.workspace = true
 
 # Built-in database drivers
-toasty-dynamodb = { workspace = true, optional = true }
-toasty-pgsql = { workspace = true, optional = true }
-toasty-sqlite = { workspace = true, optional = true }
+toasty-driver-dynamodb = { workspace = true, optional = true }
+toasty-driver-postgresql = { workspace = true, optional = true }
+toasty-driver-sqlite = { workspace = true, optional = true }
 
 anyhow.workspace = true
 async-stream.workspace = true
