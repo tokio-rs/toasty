@@ -94,7 +94,7 @@ impl Driver for Sqlite {
         };
 
         let mut params = vec![];
-        let sql_str = sql::Serializer::new(schema).serialize_stmt(&sql, &mut params);
+        let sql_str = sql::Serializer::sqlite(schema).serialize(&sql, &mut params);
 
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
@@ -183,10 +183,12 @@ impl Driver for Sqlite {
 
 impl Sqlite {
     fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
+        let serializer = sql::Serializer::sqlite(schema);
+
         let connection = self.connection.lock().unwrap();
 
         let mut params = vec![];
-        let stmt = sql::Statement::create_table(table).serialize(schema, &mut params);
+        let stmt = serializer.serialize(&sql::Statement::create_table(table), &mut params);
         assert!(params.is_empty());
 
         connection.execute(&stmt, [])?;
@@ -198,7 +200,7 @@ impl Sqlite {
                 continue;
             }
 
-            let stmt = sql::Statement::create_index(index).serialize(schema, &mut params);
+            let stmt = serializer.serialize(&sql::Statement::create_index(index), &mut params);
             assert!(params.is_empty());
 
             connection.execute(&stmt, [])?;

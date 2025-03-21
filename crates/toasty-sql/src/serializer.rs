@@ -2,8 +2,8 @@
 mod fmt;
 use fmt::ToSql;
 
-mod comma;
-use comma::Comma;
+mod delim;
+use delim::{Comma, Period};
 
 mod flavor;
 pub use flavor::Flavor;
@@ -12,13 +12,18 @@ mod ident;
 use ident::Ident;
 
 mod params;
-pub use params::Params;
+pub use params::{Params, Placeholder};
 
 // Fragment serializers
+mod column_def;
 mod create_index;
+mod create_table;
+mod expr;
 mod name;
+mod ty;
+mod value;
 
-use crate::stmt::{self, Statement};
+use crate::stmt::Statement;
 
 use toasty_core::schema::db;
 
@@ -94,17 +99,19 @@ impl<'a> Serializer<'a> {
         };
 
         match stmt {
-            Statement::CreateIndex(stmt) => stmt.fmt(&mut fmt),
+            Statement::CreateIndex(stmt) => stmt.to_sql(&mut fmt),
+            Statement::CreateTable(stmt) => stmt.to_sql(&mut fmt),
             /*
-            Statement::CreateTable(stmt) => stmt.fmt(&mut fmt),
             Statement::DropTable(stmt) => stmt.fmt(&mut fmt),
             Statement::Delete(stmt) => stmt.fmt(&mut fmt),
             Statement::Insert(stmt) => stmt.fmt(&mut fmt),
             Statement::Query(stmt) => stmt.fmt(&mut fmt),
             Statement::Update(stmt) => stmt.fmt(&mut fmt),
             */
-            _ => todo!(),
+            _ => todo!("stmt={stmt:#?}"),
         }
+
+        println!("SERIALIZED: {}", ret);
 
         ret
     }
@@ -112,6 +119,11 @@ impl<'a> Serializer<'a> {
     fn table_name(&self, id: impl Into<db::TableId>) -> Ident<&str> {
         let table = self.schema.table(id.into());
         Ident(&table.name)
+    }
+
+    fn column_name(&self, id: impl Into<db::ColumnId>) -> Ident<&str> {
+        let column = self.schema.column(id.into());
+        Ident(&column.name)
     }
 }
 

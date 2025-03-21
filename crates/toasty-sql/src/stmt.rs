@@ -16,7 +16,7 @@ pub use name::Name;
 mod ty;
 pub use ty::Type;
 
-use toasty_core::stmt::{Delete, ExprSet, Insert, Query, Update};
+pub use toasty_core::stmt::*;
 
 #[derive(Debug, Clone)]
 pub enum Statement {
