@@ -56,8 +56,8 @@ impl<'a> Serializer<'a> {
         match stmt {
             Statement::CreateIndex(stmt) => stmt.to_sql(&mut fmt),
             Statement::CreateTable(stmt) => stmt.to_sql(&mut fmt),
+            Statement::DropTable(stmt) => stmt.to_sql(&mut fmt),
             /*
-            Statement::DropTable(stmt) => stmt.fmt(&mut fmt),
             Statement::Delete(stmt) => stmt.fmt(&mut fmt),
             */
             Statement::Insert(stmt) => stmt.to_sql(&mut fmt),

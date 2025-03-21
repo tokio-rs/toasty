@@ -37,6 +37,13 @@ impl ToSql for &stmt::CreateTable {
     }
 }
 
+impl ToSql for &stmt::DropTable {
+    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
+        fmt!(f, "DROP TABLE " if_exists self.name ";");
+    }
+}
+
 impl ToSql for &stmt::Insert {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         let returning = self
