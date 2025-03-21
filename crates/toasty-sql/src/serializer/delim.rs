@@ -11,7 +11,7 @@ where
     L: IntoIterator,
     L::Item: ToSql,
 {
-    fn to_sql<T: Params>(self, f: &mut Formatter<'_, T>) {
+    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
         let mut s = "";
         for i in self.0 {
             fmt!(f, s i);
@@ -25,7 +25,7 @@ where
     L: IntoIterator<Item = I>,
     I: ToSql,
 {
-    fn to_sql<T: Params>(self, f: &mut Formatter<'_, T>) {
+    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
         let mut s = "";
         for i in self.0.into_iter() {
             fmt!(f, s i);

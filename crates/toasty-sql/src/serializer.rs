@@ -61,8 +61,8 @@ impl<'a> Serializer<'a> {
             Statement::Delete(stmt) => stmt.fmt(&mut fmt),
             */
             Statement::Insert(stmt) => stmt.to_sql(&mut fmt),
+            Statement::Query(stmt) => stmt.to_sql(&mut fmt),
             /*
-            Statement::Query(stmt) => stmt.fmt(&mut fmt),
             Statement::Update(stmt) => stmt.fmt(&mut fmt),
             */
             _ => todo!("stmt={stmt:#?}"),

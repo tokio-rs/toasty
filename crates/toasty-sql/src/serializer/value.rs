@@ -1,11 +1,9 @@
-use std::fmt::Debug;
-
 use super::{Comma, Params, ToSql};
 
 use crate::stmt;
 
 impl ToSql for &stmt::Value {
-    fn to_sql<T: Params>(self, f: &mut super::Formatter<'_, T>) {
+    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         use stmt::Value::*;
 
         match self {

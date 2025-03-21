@@ -3,7 +3,7 @@ use super::{Flavor, Formatter, Params, ToSql};
 pub(super) struct Ident<S>(pub(super) S);
 
 impl<S: AsRef<str>> ToSql for Ident<S> {
-    fn to_sql<T: Params>(self, f: &mut Formatter<'_, T>) {
+    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
         match f.serializer.flavor {
             Flavor::Mysql => {
                 f.dst.push('`');

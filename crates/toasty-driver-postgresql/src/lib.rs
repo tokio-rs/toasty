@@ -95,10 +95,10 @@ impl PostgreSQL {
 
     /// Creates a table.
     pub async fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
+        let serializer = sql::Serializer::postgresql(schema);
+
         let mut params = Vec::new();
-        let sql = sql::Statement::create_table(table)
-            .serialize(schema, &mut params)
-            .into_inner();
+        let sql = serializer.serialize(&sql::Statement::create_table(table), &mut params);
 
         assert!(
             params.is_empty(),
@@ -114,9 +114,8 @@ impl PostgreSQL {
                 continue;
             }
 
-            let sql = sql::Statement::create_index(index)
-                .serialize(schema, &mut params)
-                .into_inner();
+            let sql = serializer.serialize(&sql::Statement::create_index(index), &mut params);
+
             assert!(
                 params.is_empty(),
                 "creating an index shouldn't involve any parameters"
@@ -130,16 +129,13 @@ impl PostgreSQL {
 
     /// Drops a table.
     pub async fn drop_table(&self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
+        let serializer = sql::Serializer::postgresql(schema);
         let mut params = Vec::new();
 
         let sql = if if_exists {
-            sql::Statement::drop_table_if_exists(table)
-                .serialize(schema, &mut params)
-                .into_inner()
+            serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
         } else {
-            sql::Statement::drop_table(table)
-                .serialize(schema, &mut params)
-                .into_inner()
+            serializer.serialize(&sql::Statement::drop_table(table), &mut params)
         };
 
         assert!(
@@ -181,11 +177,7 @@ impl Driver for PostgreSQL {
         let width = sql.returning_len();
 
         let mut params = Vec::new();
-        let sql_as_str = sql::Serializer::new(schema)
-            .with_update_in_cte(true)
-            .serialize_stmt(&sql, &mut params)
-            .into_numbered_args()
-            .into_inner();
+        let sql_as_str = sql::Serializer::postgresql(schema).serialize(&sql, &mut params);
 
         let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
 
