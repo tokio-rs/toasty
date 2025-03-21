@@ -9,6 +9,7 @@ impl ToSql for &stmt::Value {
         match self {
             Id(_) => todo!(),
             Record(value) => fmt!(f, "(" Comma(&value.fields) ")"),
+            List(values) => fmt!(f, "(" Comma(values) ")"),
             value => {
                 let placeholder = f.params.push(value);
                 fmt!(f, placeholder)

@@ -17,6 +17,9 @@ impl ToSql for &stmt::Expr {
                 let column = f.serializer.column_name(expr.column);
                 fmt!(f, column);
             }
+            InList(expr) => {
+                fmt!(f, expr.expr " IN " expr.list);
+            }
             Record(expr) => {
                 let exprs = Comma(&expr.fields);
                 fmt!(f, "(" exprs ")");

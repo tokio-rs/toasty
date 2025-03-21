@@ -111,7 +111,13 @@ impl ToSql for &stmt::Returning {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         match self {
             stmt::Returning::Star => fmt!(f, "*"),
-            stmt::Returning::Expr(expr) => fmt!(f, expr),
+            stmt::Returning::Expr(expr) => {
+                let stmt::Expr::Record(expr_record) = expr else {
+                    todo!("expr={:?}", expr);
+                };
+
+                fmt!(f, Comma(&expr_record.fields));
+            }
             _ => todo!(),
         }
     }
