@@ -36,3 +36,57 @@ impl ToSql for &stmt::CreateTable {
         );
     }
 }
+
+impl ToSql for &stmt::Insert {
+    fn to_sql<T: Params>(self, f: &mut super::Formatter<'_, T>) {
+        fmt!(
+            f, "INSERT INTO " self.target " " self.source self.returning ";"
+        );
+    }
+}
+
+impl ToSql for &stmt::InsertTarget {
+    fn to_sql<T: Params>(self, f: &mut super::Formatter<'_, T>) {
+        match self {
+            stmt::InsertTarget::Table(insert_table) => {
+                let table_name = f.serializer.table_name(insert_table);
+                let columns = Comma(
+                    insert_table
+                        .columns
+                        .iter()
+                        .map(|column_id| f.serializer.column_name(*column_id)),
+                );
+
+                fmt!(f, table_name " (" columns ")");
+            }
+            _ => todo!("self={self:?}"),
+        }
+    }
+}
+
+impl ToSql for &stmt::Query {
+    fn to_sql<T: Params>(self, f: &mut super::Formatter<'_, T>) {
+        match &*self.body {
+            stmt::ExprSet::Select(_) => todo!(),
+            stmt::ExprSet::Values(values) => values.to_sql(f),
+            _ => todo!("self={self:?}"),
+        }
+    }
+}
+
+impl ToSql for &Option<stmt::Returning> {
+    fn to_sql<T: Params>(self, f: &mut super::Formatter<'_, T>) {
+        if let Some(returning) = self {
+            // fmt!(f, "RETURNING " returning);
+            todo!()
+        }
+    }
+}
+
+impl ToSql for &stmt::Values {
+    fn to_sql<T: Params>(self, f: &mut super::Formatter<'_, T>) {
+        let rows = Comma(self.rows.iter());
+
+        fmt!(f, "VALUES " rows)
+    }
+}

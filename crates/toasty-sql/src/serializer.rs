@@ -43,50 +43,6 @@ struct Formatter<'a, T> {
     serializer: &'a Serializer<'a>,
 }
 
-/*
-struct MaybeQuote<'a> {
-    value: &'a str,
-    quote: bool,
-}
-
-impl<'a> MaybeQuote<'a> {
-    fn new(value: &'a str, quote: bool) -> Self {
-        Self { value, quote }
-    }
-}
-impl Display for MaybeQuote<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.quote {
-            write!(f, "\"{}\"", self.value)
-        } else {
-            write!(f, "{}", self.value)
-        }
-    }
-}
-
-// TODO: rename formatter
-struct Formatter<'a, T> {
-    dst: &'a mut String,
-    params: &'a mut T,
-}
-    */
-
-/*
-struct Formatter<'a, T> {
-    /// Where to write the SQL string
-    dst: &'a mut String,
-
-    /// The schema that the query references
-    schema: &'a db::Schema,
-
-    /// Serializer (which has configuration)
-    serializer: &'a Serializer<'a>,
-
-    /// Query paramaters (referenced by placeholders) are stored here.
-    params: &'a mut T,
-}
-    */
-
 impl<'a> Serializer<'a> {
     pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
         let mut ret = String::new();
@@ -103,7 +59,9 @@ impl<'a> Serializer<'a> {
             /*
             Statement::DropTable(stmt) => stmt.fmt(&mut fmt),
             Statement::Delete(stmt) => stmt.fmt(&mut fmt),
-            Statement::Insert(stmt) => stmt.fmt(&mut fmt),
+            */
+            Statement::Insert(stmt) => stmt.to_sql(&mut fmt),
+            /*
             Statement::Query(stmt) => stmt.fmt(&mut fmt),
             Statement::Update(stmt) => stmt.fmt(&mut fmt),
             */

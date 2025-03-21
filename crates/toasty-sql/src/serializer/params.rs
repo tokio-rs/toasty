@@ -1,4 +1,4 @@
-use super::{Formatter, ToSql};
+use super::{Flavor, Formatter, ToSql};
 
 use toasty_core::stmt;
 
@@ -17,7 +17,11 @@ impl Params for Vec<stmt::Value> {
 
 impl ToSql for Placeholder {
     fn to_sql<T: Params>(self, f: &mut Formatter<'_, T>) {
+        use std::fmt::Write;
+
         match f.serializer.flavor {
+            Flavor::Sqlite => write!(&mut f.dst, "?{}", self.0).unwrap(),
+            Flavor::Postgresql => write!(&mut f.dst, "${}", self.0).unwrap(),
             _ => todo!(),
         }
     }
