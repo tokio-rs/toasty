@@ -1,4 +1,4 @@
-use tests_client::*;
+use tests::*;
 use toasty::stmt::Id;
 
 async fn crud_has_one_bi_direction_optional(s: impl Setup) {

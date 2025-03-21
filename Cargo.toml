@@ -23,7 +23,7 @@ members = [
     "examples/scratch",
 
     # Tests
-    "tests/client",
+    "tests",
 ]
 
 [workspace.dependencies]

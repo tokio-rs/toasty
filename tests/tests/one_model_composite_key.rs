@@ -1,4 +1,4 @@
-use tests_client::*;
+use tests::*;
 
 async fn batch_get_by_key(s: impl Setup) {
     #[derive(Debug)]

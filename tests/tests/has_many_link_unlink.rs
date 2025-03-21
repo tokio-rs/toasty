@@ -1,4 +1,4 @@
-use tests_client::*;
+use tests::*;
 use toasty::stmt::Id;
 
 async fn remove_add_single_relation_option_belongs_to(s: impl Setup) {

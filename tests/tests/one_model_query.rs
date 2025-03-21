@@ -1,4 +1,4 @@
-use tests_client::*;
+use tests::*;
 
 async fn query_index_eq(s: impl Setup) {
     #[derive(Debug)]

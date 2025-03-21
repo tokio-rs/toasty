@@ -1,4 +1,4 @@
-use tests_client::*;
+use tests::*;
 use toasty::stmt::Id;
 
 async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
