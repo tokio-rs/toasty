@@ -1,33 +1,45 @@
-use crate::stmt::{ColumnDef, CreateIndex, CreateTable, DropTable, Ident, Name, Statement, Type};
+#[macro_use]
+mod fmt;
+use fmt::ToSql;
 
-use toasty_core::{
-    schema::db,
-    stmt::{self, Direction},
-};
+mod comma;
+use comma::Comma;
 
-use std::{
-    fmt::{self, Display, Write},
-    ops::Deref,
-};
+mod flavor;
+pub use flavor::Flavor;
 
-pub trait Params {
-    fn push(&mut self, param: &stmt::Value);
-}
+mod ident;
+use ident::Ident;
+
+mod params;
+pub use params::Params;
+
+// Fragment serializers
+mod create_index;
+mod name;
+
+use crate::stmt::{self, Statement};
+
+use toasty_core::schema::db;
 
 /// Serialize a statement to a SQL string
+#[derive(Debug)]
 pub struct Serializer<'a> {
+    /// Schema against which the statement is to be serialized
     schema: &'a db::Schema,
 
-    /// True if table names should be quoted
-    quoted_table_names: bool,
-
-    /// True if column names should be quotes
-    quoted_column_names: bool,
-
-    /// True if update statements can be used in CTE expressions.
-    update_in_cte: bool,
+    /// The database flavor handles the differences between SQL dialects and
+    /// supported features.
+    flavor: Flavor,
 }
 
+struct Formatter<'a, T> {
+    dst: &'a mut String,
+    params: &'a mut T,
+    serializer: &'a Serializer<'a>,
+}
+
+/*
 struct MaybeQuote<'a> {
     value: &'a str,
     quote: bool,
@@ -48,6 +60,14 @@ impl Display for MaybeQuote<'_> {
     }
 }
 
+// TODO: rename formatter
+struct Formatter<'a, T> {
+    dst: &'a mut String,
+    params: &'a mut T,
+}
+    */
+
+/*
 struct Formatter<'a, T> {
     /// Where to write the SQL string
     dst: &'a mut String,
@@ -61,102 +81,41 @@ struct Formatter<'a, T> {
     /// Query paramaters (referenced by placeholders) are stored here.
     params: &'a mut T,
 }
-
-impl Params for Vec<stmt::Value> {
-    fn push(&mut self, value: &stmt::Value) {
-        self.push(value.clone());
-    }
-}
-
-/// A serialization result.
-pub struct SerializeResult(String);
-
-impl SerializeResult {
-    /// Creates a new serialization result.
-    pub fn new(value: impl Into<String>) -> SerializeResult {
-        Self(value.into())
-    }
-
-    /// Returns a reference to the inner string.
-    pub fn inner(&self) -> &str {
-        self.0.as_str()
-    }
-
-    /// Consumes `self` and returns the inner string.
-    pub fn into_inner(self) -> String {
-        self.0
-    }
-
-    /// Converts all question mark args (i.e., `?`) to numbered args (e.g., `$1`).
-    pub fn into_numbered_args(self) -> Self {
-        let mut result = String::with_capacity(self.0.len());
-        let mut n = 1;
-
-        for c in self.0.chars() {
-            if c == '?' {
-                result.push_str(&format!("${n}"));
-                n += 1;
-            } else {
-                result.push(c);
-            }
-        }
-
-        Self(result)
-    }
-}
-
-impl Deref for SerializeResult {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl AsRef<str> for SerializeResult {
-    fn as_ref(&self) -> &str {
-        self.0.as_str()
-    }
-}
+    */
 
 impl<'a> Serializer<'a> {
-    pub fn new(schema: &'a db::Schema) -> Serializer<'a> {
-        Serializer {
-            schema,
-            quoted_table_names: true,
-            quoted_column_names: true,
-            update_in_cte: false,
-        }
-    }
-    pub fn with_quoted_table_names(mut self, enabled: bool) -> Self {
-        self.quoted_table_names = enabled;
-        self
-    }
-    pub fn with_quoted_column_names(mut self, enabled: bool) -> Self {
-        self.quoted_column_names = enabled;
-        self
-    }
-
-    pub fn with_update_in_cte(mut self, enabled: bool) -> Self {
-        self.update_in_cte = enabled;
-        self
-    }
-
-    pub fn serialize_stmt(&self, stmt: &Statement, params: &mut impl Params) -> SerializeResult {
+    pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
         let mut ret = String::new();
 
         let mut fmt = Formatter {
             dst: &mut ret,
-            schema: self.schema,
             params,
             serializer: self,
         };
 
-        fmt.statement(stmt).unwrap();
-        SerializeResult::new(ret)
+        match stmt {
+            Statement::CreateIndex(stmt) => stmt.fmt(&mut fmt),
+            /*
+            Statement::CreateTable(stmt) => stmt.fmt(&mut fmt),
+            Statement::DropTable(stmt) => stmt.fmt(&mut fmt),
+            Statement::Delete(stmt) => stmt.fmt(&mut fmt),
+            Statement::Insert(stmt) => stmt.fmt(&mut fmt),
+            Statement::Query(stmt) => stmt.fmt(&mut fmt),
+            Statement::Update(stmt) => stmt.fmt(&mut fmt),
+            */
+            _ => todo!(),
+        }
+
+        ret
+    }
+
+    fn table_name(&self, id: impl Into<db::TableId>) -> Ident<&str> {
+        let table = self.schema.table(id.into());
+        Ident(&table.name)
     }
 }
 
+/*
 impl<T: Params> Formatter<'_, T> {
     fn statement(&mut self, statement: &Statement) -> fmt::Result {
         match statement {
@@ -175,6 +134,12 @@ impl<T: Params> Formatter<'_, T> {
     }
 
     fn create_index(&mut self, stmt: &CreateIndex) -> fmt::Result {
+        fmt!(
+            "CREATE" unique "INDEX"
+            self.name(&stmt.name) "ON" self.ident(&table.name)
+            "(" self.columns(&stmt.columns) ")"
+        );
+
         write!(
             self.dst,
             "CREATE {}INDEX ",
@@ -633,17 +598,4 @@ impl<T: Params> Formatter<'_, T> {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn to_numbered_args() {
-        let result = SerializeResult::new("INSERT INTO table (a, b, c) VALUES (?, ?, ?)");
-        assert_eq!(
-            result.into_numbered_args().inner(),
-            "INSERT INTO table (a, b, c) VALUES ($1, $2, $3)"
-        );
-    }
-}
+*/

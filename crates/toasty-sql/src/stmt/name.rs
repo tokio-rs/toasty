@@ -1,9 +1,7 @@
-use super::Ident;
-
 use std::fmt;
 
 #[derive(Debug, Clone)]
-pub struct Name(pub Vec<Ident>);
+pub struct Name(pub Vec<String>);
 
 impl From<&str> for Name {
     fn from(value: &str) -> Self {

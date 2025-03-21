@@ -1,7 +1,7 @@
 use std::fmt;
 
 #[derive(Debug, Clone)]
-pub struct Ident(pub String);
+pub struct Ident<T = String>(pub T);
 
 impl From<&str> for Ident {
     fn from(value: &str) -> Self {
