@@ -1,7 +1,7 @@
 //! Test basic has_many associations without any preloading of associations
 //! during query time. All associations are accessed via queries on demand.
 
-use tests_client::*;
+use tests::*;
 
 use toasty::stmt::Id;
 

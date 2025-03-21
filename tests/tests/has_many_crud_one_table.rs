@@ -1,4 +1,4 @@
-use tests_client::*;
+use tests::*;
 use toasty::stmt::Id;
 
 use std::collections::HashMap;

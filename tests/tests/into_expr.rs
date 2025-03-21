@@ -1,4 +1,4 @@
-use tests_client::*;
+use tests::*;
 use toasty::stmt::Id;
 
 async fn string_to_id_expr(s: impl Setup) {

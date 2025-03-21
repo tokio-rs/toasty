@@ -1,4 +1,4 @@
-use tests_client::*;
+use tests::*;
 use toasty::stmt::Id;
 
 fn assert_sync_send<T: Send>(val: T) -> T {

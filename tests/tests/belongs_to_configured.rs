@@ -1,4 +1,4 @@
-use tests_client::*;
+use tests::*;
 
 async fn different_field_name(s: impl Setup) {
     #[derive(Debug)]

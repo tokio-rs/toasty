@@ -1,4 +1,4 @@
-use tests_client::*;
+use tests::*;
 
 use std_util::prelude::*;
 use toasty::stmt::Id;
