@@ -17,8 +17,8 @@ toasty-core.workspace = true
 toasty-macros.workspace = true
 
 # Utilities
-std-util = { path = "../../src/std-util" }
-trybuild = { version = "1.0.89", features = ["diff"] }
+std-util.workspace = true
+trybuild.workspace = true
 
 [dev-dependencies]
 
