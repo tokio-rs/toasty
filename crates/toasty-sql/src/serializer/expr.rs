@@ -2,10 +2,6 @@ use super::{Comma, Delimited, Params, ToSql};
 
 use crate::stmt;
 
-pub(super) struct ExprAsList<'a>(&'a stmt::Expr);
-
-pub(super) struct ValueAsList<'a>(&'a stmt::Value);
-
 impl ToSql for &stmt::Expr {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         use stmt::Expr::*;
@@ -58,21 +54,6 @@ impl ToSql for &stmt::Expr {
             Value(expr) => expr.to_sql(f),
             _ => todo!("expr={:?}", self),
         }
-    }
-}
-
-impl ToSql for ExprAsList<'_> {
-    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        /*
-        match self.0 {
-            stmt::Expr::Record(expr) => Comma(&expr.fields).to_sql(f),
-            stmt::Expr::List(expr) => Comma(&expr.items).to_sql(f),
-            stmt::Expr::Value(stmt::Value::Record(expr)) => self.value_list(expr),
-            stmt::Expr::Value(stmt::Value::List(expr)) => self.value_list(expr),
-            _ => self.expr(expr),
-        }
-        */
-        todo!()
     }
 }
 

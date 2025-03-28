@@ -1,7 +1,5 @@
 use super::{Formatter, Params, ToSql};
 
-use crate::stmt;
-
 /// Comma delimited
 pub(super) struct Comma<L>(pub(super) L);
 

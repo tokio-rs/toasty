@@ -21,9 +21,10 @@ impl ToSql for &stmt::CreateIndex {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         let table_name = f.serializer.table_name(self.on);
         let columns = Comma(&self.columns);
+        let unique = if self.unique { "UNIQUE " } else { "" };
 
         fmt!(
-            f, "CREATE INDEX " self.name " ON " table_name " (" columns ");"
+            f, "CREATE " unique "INDEX " self.name " ON " table_name " (" columns ");"
         );
     }
 }

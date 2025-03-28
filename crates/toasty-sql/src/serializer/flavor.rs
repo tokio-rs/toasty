@@ -31,9 +31,3 @@ impl<'a> Serializer<'a> {
         }
     }
 }
-
-impl Flavor {
-    pub(super) fn is_sqlite(&self) -> bool {
-        matches!(self, Flavor::Sqlite)
-    }
-}
