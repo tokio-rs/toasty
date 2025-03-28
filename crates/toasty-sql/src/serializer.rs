@@ -3,10 +3,10 @@ mod fmt;
 use fmt::ToSql;
 
 mod delim;
-use delim::{Comma, Period};
+use delim::{Comma, Delimited, Period};
 
 mod flavor;
-pub use flavor::Flavor;
+use flavor::Flavor;
 
 mod ident;
 use ident::Ident;
@@ -21,6 +21,8 @@ mod name;
 mod stmt;
 mod ty;
 mod value;
+
+use expr::ExprAsList;
 
 use crate::stmt::Statement;
 
@@ -57,15 +59,10 @@ impl<'a> Serializer<'a> {
             Statement::CreateIndex(stmt) => stmt.to_sql(&mut fmt),
             Statement::CreateTable(stmt) => stmt.to_sql(&mut fmt),
             Statement::DropTable(stmt) => stmt.to_sql(&mut fmt),
-            /*
-            Statement::Delete(stmt) => stmt.fmt(&mut fmt),
-            */
+            Statement::Delete(stmt) => stmt.to_sql(&mut fmt),
             Statement::Insert(stmt) => stmt.to_sql(&mut fmt),
             Statement::Query(stmt) => stmt.to_sql(&mut fmt),
-            /*
-            Statement::Update(stmt) => stmt.fmt(&mut fmt),
-            */
-            _ => todo!("stmt={stmt:#?}"),
+            Statement::Update(stmt) => stmt.to_sql(&mut fmt),
         }
 
         println!("SERIALIZED: {}", ret);

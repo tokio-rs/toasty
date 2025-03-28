@@ -3,7 +3,7 @@ use super::Serializer;
 use toasty_core::schema::db;
 
 #[derive(Debug)]
-pub enum Flavor {
+pub(super) enum Flavor {
     Postgresql,
     Sqlite,
     Mysql,
@@ -29,5 +29,11 @@ impl<'a> Serializer<'a> {
             schema,
             flavor: Flavor::Mysql,
         }
+    }
+}
+
+impl Flavor {
+    pub(super) fn is_sqlite(&self) -> bool {
+        matches!(self, Flavor::Sqlite)
     }
 }

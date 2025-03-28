@@ -35,3 +35,14 @@ where
         fmt!(f, self.0 self.1);
     }
 }
+
+impl<T1, T2, T3> ToSql for (T1, T2, T3)
+where
+    T1: ToSql,
+    T2: ToSql,
+    T3: ToSql,
+{
+    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
+        fmt!(f, self.0 self.1 self.2);
+    }
+}
