@@ -4,6 +4,9 @@ pub use assignments::{Assignment, AssignmentOp, Assignments};
 mod association;
 pub use association::Association;
 
+mod cte;
+pub use cte::Cte;
+
 mod delete;
 pub use delete::Delete;
 
@@ -87,6 +90,8 @@ pub use expr_project::ExprProject;
 
 mod expr_record;
 pub use expr_record::ExprRecord;
+
+mod expr_reference;
 
 mod expr_set;
 pub use expr_set::ExprSet;
@@ -179,6 +184,9 @@ pub use value_stream::ValueStream;
 
 pub mod visit;
 pub use visit::Visit;
+
+mod with;
+pub use with::With;
 
 use crate::{
     schema::{

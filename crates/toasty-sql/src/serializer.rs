@@ -43,7 +43,7 @@ struct Formatter<'a, T> {
     serializer: &'a Serializer<'a>,
 }
 
-impl<'a> Serializer<'a> {
+impl Serializer<'_> {
     pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
         let mut ret = String::new();
 

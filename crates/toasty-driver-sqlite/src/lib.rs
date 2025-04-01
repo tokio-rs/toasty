@@ -1,5 +1,5 @@
 use toasty_core::{
-    driver::{operation::Operation, Capability, Driver, Response},
+    driver::{operation::Operation, Capability, CapabilitySql, Driver, Response},
     schema::db::{Schema, Table},
     stmt, Result,
 };
@@ -54,7 +54,9 @@ impl Sqlite {
 #[toasty_core::async_trait]
 impl Driver for Sqlite {
     fn capability(&self) -> &Capability {
-        &Capability::Sql
+        &Capability::Sql(CapabilitySql {
+            cte_with_update: false,
+        })
     }
 
     async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {

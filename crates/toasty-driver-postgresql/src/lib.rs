@@ -9,7 +9,7 @@ use postgres::{
     Column, Row, Socket,
 };
 use toasty_core::{
-    driver::{Capability, Operation, Response},
+    driver::{self, Capability, Operation, Response},
     schema::db::{Schema, Table},
     stmt,
     stmt::ValueRecord,
@@ -157,7 +157,9 @@ impl From<Client> for PostgreSQL {
 #[toasty_core::async_trait]
 impl Driver for PostgreSQL {
     fn capability(&self) -> &Capability {
-        &Capability::Sql
+        &Capability::Sql(driver::CapabilitySql {
+            cte_with_update: true,
+        })
     }
 
     async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {

@@ -8,6 +8,9 @@ pub enum ExprSet {
     /// A set operation (union, intersection, ...) on two queries
     SetOp(ExprSetOp),
 
+    /// An update expression
+    Update(Update),
+
     /// Explicitly listed values (as expressions)
     Values(Values),
 }
@@ -61,6 +64,7 @@ impl ExprSet {
         match self {
             ExprSet::Select(expr) => expr.substitute_ref(input),
             ExprSet::SetOp(expr) => expr.substitute_ref(input),
+            ExprSet::Update(_) => todo!(),
             ExprSet::Values(expr) => expr.substitute_ref(input),
         }
     }

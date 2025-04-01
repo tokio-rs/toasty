@@ -99,11 +99,24 @@ impl Planner<'_> {
 
         let output_var = output.as_ref().map(|o| o.var);
 
-        self.push_action(plan::ExecStatement {
-            output,
-            input: None,
-            stmt: stmt.into(),
-        });
+        if stmt.condition.is_some() && self.capability.cte_with_update() {
+            let stmt = self.rewrite_conditional_update_as_query_with_cte(stmt);
+
+            self.push_action(plan::ExecStatement {
+                output,
+                input: None,
+                stmt: stmt.into(),
+            });
+        } else {
+            // SQLite does not support CTE with update. We should transform the
+            // conditional update into a transaction with checks between.
+            // However, for now, the SQLite driver handles it by hand (kind of).
+            self.push_action(plan::ExecStatement {
+                output,
+                input: None,
+                stmt: stmt.into(),
+            });
+        }
 
         output_var
     }
@@ -169,5 +182,9 @@ impl Planner<'_> {
 
             output_var
         }
+    }
+
+    fn rewrite_conditional_update_as_query_with_cte(&self, stmt: stmt::Update) -> stmt::Query {
+        todo!()
     }
 }
