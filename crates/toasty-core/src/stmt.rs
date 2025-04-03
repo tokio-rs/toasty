@@ -55,6 +55,9 @@ pub use expr_enum::ExprEnum;
 mod expr_field;
 pub use expr_field::ExprField;
 
+mod expr_func;
+pub use expr_func::ExprFunc;
+
 mod expr_in_list;
 pub use expr_in_list::ExprInList;
 
@@ -104,6 +107,9 @@ pub use expr_stmt::ExprStmt;
 
 mod expr_ty;
 pub use expr_ty::ExprTy;
+
+mod func_count;
+pub use func_count::FuncCount;
 
 mod id;
 pub use id::Id;

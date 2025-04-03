@@ -185,6 +185,60 @@ impl Planner<'_> {
     }
 
     fn rewrite_conditional_update_as_query_with_cte(&self, stmt: stmt::Update) -> stmt::Query {
-        todo!()
+        let Some(condition) = stmt.condition else {
+            panic!("conditional update without condition");
+        };
+
+        let Some(filter) = stmt.filter else {
+            panic!("conditional update without filter");
+        };
+
+        let mut ctes = vec![];
+
+        // Select from update table without the update condition.
+        ctes.push(stmt::Cte {
+            query: stmt::Query {
+                with: None,
+                body: Box::new(stmt::ExprSet::Select(stmt::Select {
+                    source: stmt.target.as_model_id().into(),
+                    filter: filter.clone(),
+                    returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                        stmt::Expr::count_star(),
+                        stmt::FuncCount {
+                            arg: None,
+                            filter: Some(Box::new(condition)),
+                        }
+                        .into(),
+                    ])),
+                })),
+            },
+        });
+
+        // The update statement. The update condition is expressed using the select above
+        ctes.push(stmt::Cte {
+            query: stmt::Query {
+                with: None,
+                body: Box::new(stmt::ExprSet::Update(stmt::Update {
+                    target: stmt.target,
+                    assignments: stmt.assignments,
+                    // filter: Some(stmt::Expr::and(
+                    //     filter,
+                    //     stmt::Expr::stmt(todo!()),
+                    // )),
+                    filter: todo!(),
+                    condition: None,
+                    returning: stmt.returning,
+                })),
+            },
+        });
+
+        stmt::Query {
+            with: Some(stmt::With { ctes }),
+            body: Box::new(stmt::ExprSet::Select(stmt::Select {
+                source: todo!(),
+                filter: todo!(),
+                returning: todo!(),
+            })),
+        }
     }
 }

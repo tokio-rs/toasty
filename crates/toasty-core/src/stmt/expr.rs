@@ -30,6 +30,9 @@ pub enum Expr {
     /// References a field in the statement
     Field(ExprField),
 
+    /// Function call
+    Func(ExprFunc),
+
     /// In list
     InList(ExprInList),
 
@@ -306,6 +309,7 @@ impl fmt::Debug for Expr {
             Expr::ConcatStr(e) => e.fmt(f),
             Expr::Enum(e) => e.fmt(f),
             Expr::Field(e) => e.fmt(f),
+            Expr::Func(e) => e.fmt(f),
             Expr::InList(e) => e.fmt(f),
             Expr::InSubquery(e) => e.fmt(f),
             Expr::IsNull(e) => e.fmt(f),

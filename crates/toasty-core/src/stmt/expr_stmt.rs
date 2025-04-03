@@ -5,14 +5,11 @@ pub struct ExprStmt {
     pub stmt: Box<Statement>,
 }
 
-impl ExprStmt {
-    pub fn new<T>(stmt: T) -> ExprStmt
-    where
-        T: Into<Statement>,
-    {
-        ExprStmt {
+impl Expr {
+    pub fn stmt(stmt: impl Into<Statement>) -> Expr {
+        Expr::Stmt(ExprStmt {
             stmt: Box::new(stmt.into()),
-        }
+        })
     }
 }
 

@@ -31,6 +31,7 @@ impl From<Values> for ExprSet {
 impl From<Values> for Query {
     fn from(value: Values) -> Self {
         Query {
+            with: None,
             body: Box::new(value.into()),
         }
     }

@@ -258,7 +258,7 @@ impl Planner<'_> {
             .update();
 
             stmt.assignments
-                .set(has_many.pair, stmt::ExprStmt::new(scope.clone()));
+                .set(has_many.pair, stmt::Expr::stmt(scope.clone()));
             self.plan_stmt(&Context::default(), stmt.into());
         }
     }
@@ -361,7 +361,7 @@ impl Planner<'_> {
         .update();
 
         stmt.assignments
-            .set(has_one.pair, stmt::ExprStmt::new(scope.clone()));
+            .set(has_one.pair, stmt::Expr::stmt(scope.clone()));
 
         self.plan_stmt(&Context::default(), stmt.into());
     }

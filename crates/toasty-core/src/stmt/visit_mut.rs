@@ -62,6 +62,14 @@ pub trait VisitMut {
         visit_expr_field_mut(self, i);
     }
 
+    fn visit_expr_func_mut(&mut self, i: &mut ExprFunc) {
+        visit_expr_func_mut(self, i);
+    }
+
+    fn visit_expr_func_count_mut(&mut self, i: &mut FuncCount) {
+        visit_expr_func_count_mut(self, i);
+    }
+
     fn visit_expr_in_list_mut(&mut self, i: &mut ExprInList) {
         visit_expr_in_list_mut(self, i);
     }
@@ -289,6 +297,7 @@ where
         Expr::Concat(expr) => v.visit_expr_concat_mut(expr),
         Expr::Enum(expr) => v.visit_expr_enum_mut(expr),
         Expr::Field(expr) => v.visit_expr_field_mut(expr),
+        Expr::Func(expr) => v.visit_expr_func_mut(expr),
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),
@@ -377,6 +386,28 @@ pub fn visit_expr_field_mut<V>(_v: &mut V, _node: &mut ExprField)
 where
     V: VisitMut + ?Sized,
 {
+}
+
+pub fn visit_expr_func_mut<V>(v: &mut V, node: &mut ExprFunc)
+where
+    V: VisitMut + ?Sized,
+{
+    match node {
+        ExprFunc::Count(func) => v.visit_expr_func_count_mut(func),
+    }
+}
+
+pub fn visit_expr_func_count_mut<V>(v: &mut V, node: &mut FuncCount)
+where
+    V: VisitMut + ?Sized,
+{
+    if let Some(expr) = &mut node.arg {
+        v.visit_expr_mut(expr);
+    }
+
+    if let Some(expr) = &mut node.filter {
+        v.visit_expr_mut(expr);
+    }
 }
 
 pub fn visit_expr_in_list_mut<V>(v: &mut V, node: &mut ExprInList)

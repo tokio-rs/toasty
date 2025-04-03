@@ -18,6 +18,7 @@ impl<M: Model> Insert<M> {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::ID),
                 source: stmt::Query {
+                    with: None,
                     body: Box::new(stmt::ExprSet::Values(stmt::Values::new(vec![
                         stmt::ExprRecord::from_vec(vec![]).into(),
                     ]))),
@@ -99,13 +100,13 @@ impl<M> Clone for Insert<M> {
 
 impl<M> From<Insert<M>> for stmt::Expr {
     fn from(value: Insert<M>) -> Self {
-        stmt::ExprStmt::new(value.untyped).into()
+        stmt::Expr::stmt(value.untyped)
     }
 }
 
 impl<M> From<Insert<[M]>> for stmt::Expr {
     fn from(value: Insert<[M]>) -> Self {
-        stmt::ExprStmt::new(value.untyped).into()
+        stmt::Expr::stmt(value.untyped)
     }
 }
 
