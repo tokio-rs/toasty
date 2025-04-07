@@ -1,12 +1,21 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprColumn {
-    /// Table being referenced
-    pub table: TableRef,
+pub enum ExprColumn {
+    /// Directly reference a column
+    Column(ColumnId),
 
-    /// Index of column being referenced
-    pub index: usize,
+    /// Reference a column aliased in `FROM` or equivalent clause
+    Alias {
+        /// Which query the alias is listed in
+        nesting: usize,
+
+        /// The index of the alias in the `FROM` (or equivalent) clause
+        table: usize,
+
+        /// The index of the column in the table
+        column: usize,
+    },
 }
 
 impl Expr {
@@ -21,17 +30,16 @@ impl Expr {
 
 impl ExprColumn {
     pub fn references(&self, column_id: ColumnId) -> bool {
-        self.table.references(column_id.table) && self.index == column_id.index
+        match self {
+            ExprColumn::Column(id) => id == &column_id,
+            ExprColumn::Alias { .. } => todo!(),
+        }
     }
 
     pub fn try_to_column_id(&self) -> Option<ColumnId> {
-        if let TableRef::Table(table_id) = self.table {
-            Some(ColumnId {
-                table: table_id,
-                index: self.index,
-            })
-        } else {
-            None
+        match self {
+            ExprColumn::Column(id) => Some(*id),
+            ExprColumn::Alias { .. } => None,
         }
     }
 }
@@ -56,10 +64,7 @@ impl From<&Column> for Expr {
 
 impl From<ColumnId> for ExprColumn {
     fn from(value: ColumnId) -> Self {
-        ExprColumn {
-            table: value.table.into(),
-            index: value.index,
-        }
+        ExprColumn::Column(value)
     }
 }
 

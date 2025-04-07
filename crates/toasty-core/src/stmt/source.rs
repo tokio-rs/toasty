@@ -6,7 +6,7 @@ pub enum Source {
     Model(SourceModel),
 
     /// Source is a database table (lowered)
-    Table(Vec<TableWitAhJoins>),
+    Table(Vec<TableWithJoins>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

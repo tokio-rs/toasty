@@ -227,19 +227,28 @@ impl Planner<'_> {
                     assignments: stmt.assignments,
                     filter: Some(stmt::Expr::and(
                         filter,
+                        // SELECT found.count(*) = found.count(CONDITION) FROM found
                         stmt::Expr::stmt(stmt::Select {
                             source: stmt::TableRef::Cte {
-                                nesting: 1,
-                                index: 1,
+                                nesting: 2,
+                                index: 0,
                             }
                             .into(),
                             filter: true.into(),
-                            returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
-                                todo!(),
-                            ])),
+                            returning: stmt::Returning::Expr(stmt::Expr::eq(
+                                stmt::ExprColumn::Alias {
+                                    nesting: 0,
+                                    table: 0,
+                                    column: 0,
+                                },
+                                stmt::ExprColumn::Alias {
+                                    nesting: 0,
+                                    table: 0,
+                                    column: 1,
+                                },
+                            )),
                         }),
                     )),
-                    // filter: todo!(),
                     condition: None,
                     returning: stmt.returning,
                 })),
@@ -248,6 +257,10 @@ impl Planner<'_> {
 
         stmt::Query {
             with: Some(stmt::With { ctes }),
+            // SELECT
+            //   found.total, found.condition_matched, {stmt.returning}
+            // FROM found
+            //   LEFT JOIN {updated} ON TRUE
             body: Box::new(stmt::ExprSet::Select(stmt::Select {
                 source: todo!(),
                 filter: todo!(),

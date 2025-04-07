@@ -2,7 +2,7 @@ use super::TableId;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableRef {
-    /// A CTE table
+    /// An aliased table (in a `FROM` statement or equivalent).
     Cte {
         /// What level of nesting the reference is compared to the CTE being
         /// referenced.
