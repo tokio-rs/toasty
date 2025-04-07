@@ -176,7 +176,7 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
 impl ToSql for &stmt::UpdateTarget {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         match self {
-            stmt::UpdateTarget::Table(table_with_joins) => table_with_joins.to_sql(f),
+            // stmt::UpdateTarget::Table(table_with_joins) => table_with_joins.to_sql(f),
             _ => todo!(),
         }
     }
