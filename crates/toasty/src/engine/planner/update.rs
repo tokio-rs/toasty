@@ -193,6 +193,10 @@ impl Planner<'_> {
             panic!("conditional update without filter");
         };
 
+        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
+            panic!("conditional update without table");
+        };
+
         let mut ctes = vec![];
 
         // Select from update table without the update condition.
@@ -200,7 +204,7 @@ impl Planner<'_> {
             query: stmt::Query {
                 with: None,
                 body: Box::new(stmt::ExprSet::Select(stmt::Select {
-                    source: stmt.target.as_model_id().into(),
+                    source: target.into(),
                     filter: filter.clone(),
                     returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
                         stmt::Expr::count_star(),
@@ -221,11 +225,21 @@ impl Planner<'_> {
                 body: Box::new(stmt::ExprSet::Update(stmt::Update {
                     target: stmt.target,
                     assignments: stmt.assignments,
-                    // filter: Some(stmt::Expr::and(
-                    //     filter,
-                    //     stmt::Expr::stmt(todo!()),
-                    // )),
-                    filter: todo!(),
+                    filter: Some(stmt::Expr::and(
+                        filter,
+                        stmt::Expr::stmt(stmt::Select {
+                            source: stmt::TableRef::Cte {
+                                nesting: 1,
+                                index: 1,
+                            }
+                            .into(),
+                            filter: true.into(),
+                            returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                                todo!(),
+                            ])),
+                        }),
+                    )),
+                    // filter: todo!(),
                     condition: None,
                     returning: stmt.returning,
                 })),

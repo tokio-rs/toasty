@@ -158,6 +158,9 @@ pub use sparse_record::SparseRecord;
 
 pub mod substitute;
 
+mod table_ref;
+pub use table_ref::TableRef;
+
 mod table_with_joins;
 pub use table_with_joins::TableWithJoins;
 

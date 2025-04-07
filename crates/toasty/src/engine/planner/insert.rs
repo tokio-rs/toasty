@@ -310,7 +310,7 @@ impl Planner<'_> {
                 let index = self
                     .columns
                     .iter()
-                    .position(|column| *column == stmt.column)
+                    .position(|column| stmt.references(*column))
                     .unwrap();
 
                 Some(stmt::Expr::arg_project(0, [index]))

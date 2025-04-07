@@ -134,14 +134,18 @@ impl ToSql for &stmt::Source {
 
 impl ToSql for &stmt::TableWithJoins {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        /*
         let table_name = f.serializer.table_name(self.table);
         fmt!(f, table_name);
+        */
+        todo!()
     }
 }
 
 impl ToSql for &stmt::Update {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        let table = f.serializer.schema.table(self.target.as_table().table);
+        // let table = f.serializer.schema.table(self.target.as_table().table);
+        let table = todo!();
         let assignments = (table, &self.assignments);
         let filter = self.filter.as_ref().map(|expr| (" WHERE ", expr));
         let returning = self

@@ -10,7 +10,10 @@ struct NoopResolve;
 
 impl Resolve for Schema {
     fn resolve_column(&self, stmt: &stmt::ExprColumn) -> &stmt::Type {
-        &self.db.column(stmt.column).ty
+        &self
+            .db
+            .column(stmt.try_to_column_id().expect("not referencing column"))
+            .ty
     }
 
     fn resolve_field(&self, stmt: &stmt::ExprField) -> &stmt::Type {

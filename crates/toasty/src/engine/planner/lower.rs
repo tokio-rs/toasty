@@ -67,13 +67,13 @@ fn is_eq_constrained(expr: &stmt::Expr, column: &Column) -> bool {
             }
 
             match (&*expr.lhs, &*expr.rhs) {
-                (Column(lhs), _) => lhs.column == column.id,
-                (_, Column(rhs)) => rhs.column == column.id,
+                (Column(lhs), _) => lhs.references(column.id),
+                (_, Column(rhs)) => rhs.references(column.id),
                 _ => false,
             }
         }
         InList(expr) => match &*expr.expr {
-            Column(lhs) => lhs.column == column.id,
+            Column(lhs) => lhs.references(column.id),
             _ => todo!("expr={:#?}", expr),
         },
         _ => todo!("expr={:#?}", expr),

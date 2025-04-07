@@ -290,8 +290,11 @@ fn ddb_expression(
             }
         }
         stmt::Expr::Column(expr_column) => {
+            /*
             let column = schema.column(expr_column.column);
             attrs.column(column).to_string()
+            */
+            todo!()
         }
         stmt::Expr::Value(val) => attrs.value(val),
         stmt::Expr::And(expr_and) => {

@@ -61,6 +61,7 @@ pub enum Expr {
     /// Evaluates to a tuple value
     Record(ExprRecord),
 
+    // TODO: delete this
     /// Reference a value from within the statement itself.
     Reference(ExprReference),
 

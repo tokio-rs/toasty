@@ -338,7 +338,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
         for (i, index_column) in self.index.columns.iter().enumerate() {
             // Check that the path matches an index column
-            if expr_column.column != index_column.column {
+            if !expr_column.references(index_column.column) {
                 continue;
             }
 

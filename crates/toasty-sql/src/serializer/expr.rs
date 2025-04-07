@@ -17,8 +17,9 @@ impl ToSql for &stmt::Expr {
                 fmt!(f, expr.lhs " " expr.op " " expr.rhs);
             }
             Column(expr) => {
-                let column = f.serializer.column_name(expr.column);
-                fmt!(f, column);
+                // let column = f.serializer.column_name(expr.column);
+                // fmt!(f, column);
+                todo!()
             }
             InList(expr) => {
                 fmt!(f, expr.expr " IN " expr.list);
