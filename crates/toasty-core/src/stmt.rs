@@ -123,6 +123,9 @@ pub use insert_table::InsertTable;
 mod insert_target;
 pub use insert_target::InsertTarget;
 
+mod join;
+pub use join::{Join, JoinOp};
+
 mod node;
 pub use node::Node;
 

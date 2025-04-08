@@ -218,6 +218,18 @@ impl Planner<'_> {
             },
         });
 
+        let returning_len = match &stmt.returning {
+            Some(stmt::Returning::Expr(expr)) => {
+                let stmt::Expr::Record(expr_record) = expr else {
+                    panic!("returning must be a record");
+                };
+
+                expr_record.fields.len()
+            }
+            Some(_) => todo!(),
+            None => 0,
+        };
+
         // The update statement. The update condition is expressed using the select above
         ctes.push(stmt::Cte {
             query: stmt::Query {
@@ -255,6 +267,32 @@ impl Planner<'_> {
             },
         });
 
+        let mut columns = vec![
+            stmt::ExprColumn::Alias {
+                nesting: 0,
+                table: 0,
+                column: 0,
+            }
+            .into(),
+            stmt::ExprColumn::Alias {
+                nesting: 0,
+                table: 0,
+                column: 1,
+            }
+            .into(),
+        ];
+
+        for i in 0..returning_len {
+            columns.push(
+                stmt::ExprColumn::Alias {
+                    nesting: 0,
+                    table: 1,
+                    column: i,
+                }
+                .into(),
+            );
+        }
+
         stmt::Query {
             with: Some(stmt::With { ctes }),
             // SELECT
@@ -262,9 +300,21 @@ impl Planner<'_> {
             // FROM found
             //   LEFT JOIN {updated} ON TRUE
             body: Box::new(stmt::ExprSet::Select(stmt::Select {
-                source: todo!(),
-                filter: todo!(),
-                returning: todo!(),
+                source: stmt::Source::Table(vec![stmt::TableWithJoins {
+                    table: stmt::TableRef::Cte {
+                        nesting: 0,
+                        index: 0,
+                    },
+                    joins: vec![stmt::Join {
+                        table: stmt::TableRef::Cte {
+                            nesting: 0,
+                            index: 1,
+                        },
+                        constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
+                    }],
+                }]),
+                filter: stmt::Expr::from(true),
+                returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
             })),
         }
     }

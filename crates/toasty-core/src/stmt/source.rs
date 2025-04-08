@@ -45,6 +45,7 @@ impl Source {
     pub fn table(table: impl Into<TableRef>) -> Source {
         Source::Table(vec![TableWithJoins {
             table: table.into(),
+            joins: vec![],
         }])
     }
 

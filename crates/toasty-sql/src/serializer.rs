@@ -2,6 +2,8 @@
 mod fmt;
 use fmt::ToSql;
 
+mod cte;
+
 mod delim;
 use delim::{Comma, Delimited, Period};
 
@@ -45,6 +47,7 @@ struct Formatter<'a, T> {
 
 impl Serializer<'_> {
     pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
+        println!("SERIALIZING: {stmt:#?}");
         let mut ret = String::new();
 
         let mut fmt = Formatter {

@@ -88,7 +88,13 @@ impl ToSql for &stmt::InsertTarget {
 
 impl ToSql for &stmt::Query {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        match &*self.body {
+        fmt!(f, self.with self.body)
+    }
+}
+
+impl ToSql for &stmt::ExprSet {
+    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        match self {
             stmt::ExprSet::Select(stmt) => stmt.to_sql(f),
             stmt::ExprSet::Values(values) => values.to_sql(f),
             _ => todo!("self={self:?}"),
@@ -134,11 +140,20 @@ impl ToSql for &stmt::Source {
 
 impl ToSql for &stmt::TableWithJoins {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        /*
-        let table_name = f.serializer.table_name(self.table);
-        fmt!(f, table_name);
-        */
-        todo!()
+        assert!(self.joins.is_empty(), "table_with_joins={self:#?}");
+        fmt!(f, &self.table);
+    }
+}
+
+impl ToSql for &stmt::TableRef {
+    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        match self {
+            stmt::TableRef::Table(table_id) => {
+                let table_name = f.serializer.table_name(*table_id);
+                fmt!(f, table_name);
+            }
+            _ => todo!("self={self:#?}"),
+        }
     }
 }
 

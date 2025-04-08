@@ -16,10 +16,17 @@ impl ToSql for &stmt::Expr {
 
                 fmt!(f, expr.lhs " " expr.op " " expr.rhs);
             }
-            Column(expr) => {
-                // let column = f.serializer.column_name(expr.column);
-                // fmt!(f, column);
-                todo!()
+            Column(stmt::ExprColumn::Column(column_id)) => {
+                let column = f.serializer.column_name(*column_id);
+                fmt!(f, column);
+            }
+            Column(stmt::ExprColumn::Alias {
+                nesting,
+                table,
+                column,
+            }) => {
+                // This is not correct, but lets see what happens
+                fmt!(f, "tbl_" nesting "_" table ".col_" column)
             }
             InList(expr) => {
                 fmt!(f, expr.expr " IN " expr.list);

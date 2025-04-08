@@ -18,7 +18,25 @@ impl ToSql for &str {
     }
 }
 
+impl ToSql for &usize {
+    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
+        use std::fmt::Write;
+        write!(f.dst, "{self}").unwrap();
+    }
+}
+
 impl<T: ToSql> ToSql for Option<T> {
+    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
+        if let Some(inner) = self {
+            inner.to_sql(f);
+        }
+    }
+}
+
+impl<T> ToSql for &Option<T>
+where
+    for<'a> &'a T: ToSql,
+{
     fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
         if let Some(inner) = self {
             inner.to_sql(f);
