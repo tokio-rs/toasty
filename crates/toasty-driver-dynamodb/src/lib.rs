@@ -289,12 +289,9 @@ fn ddb_expression(
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
-        stmt::Expr::Column(expr_column) => {
-            /*
-            let column = schema.column(expr_column.column);
+        stmt::Expr::Column(stmt::ExprColumn::Column(column_id)) => {
+            let column = schema.column(*column_id);
             attrs.column(column).to_string()
-            */
-            todo!()
         }
         stmt::Expr::Value(val) => attrs.value(val),
         stmt::Expr::And(expr_and) => {
