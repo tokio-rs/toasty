@@ -10,21 +10,13 @@ pub use create_table::CreateTable;
 mod drop_table;
 pub use drop_table::DropTable;
 
-mod ident;
-pub use ident::Ident;
-
 mod name;
 pub use name::Name;
 
 mod ty;
 pub use ty::Type;
 
-use crate::{Params, SerializeResult, Serializer};
-
-use toasty_core::{
-    schema::db::Schema,
-    stmt::{Delete, ExprSet, Insert, Query, Update},
-};
+pub use toasty_core::stmt::*;
 
 #[derive(Debug, Clone)]
 pub enum Statement {
@@ -40,10 +32,6 @@ pub enum Statement {
 impl Statement {
     pub fn is_update(&self) -> bool {
         matches!(self, Statement::Update(_))
-    }
-
-    pub fn serialize(&self, schema: &Schema, params: &mut impl Params) -> SerializeResult {
-        Serializer::new(schema).serialize_stmt(self, params)
     }
 
     /// Returns the number of returned elements within the statement (if one exists).

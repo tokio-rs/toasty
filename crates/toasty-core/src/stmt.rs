@@ -4,6 +4,9 @@ pub use assignments::{Assignment, AssignmentOp, Assignments};
 mod association;
 pub use association::Association;
 
+mod cte;
+pub use cte::Cte;
+
 mod delete;
 pub use delete::Delete;
 
@@ -52,6 +55,9 @@ pub use expr_enum::ExprEnum;
 mod expr_field;
 pub use expr_field::ExprField;
 
+mod expr_func;
+pub use expr_func::ExprFunc;
+
 mod expr_in_list;
 pub use expr_in_list::ExprInList;
 
@@ -88,6 +94,8 @@ pub use expr_project::ExprProject;
 mod expr_record;
 pub use expr_record::ExprRecord;
 
+mod expr_reference;
+
 mod expr_set;
 pub use expr_set::ExprSet;
 
@@ -100,6 +108,9 @@ pub use expr_stmt::ExprStmt;
 mod expr_ty;
 pub use expr_ty::ExprTy;
 
+mod func_count;
+pub use func_count::FuncCount;
+
 mod id;
 pub use id::Id;
 
@@ -111,6 +122,9 @@ pub use insert_table::InsertTable;
 
 mod insert_target;
 pub use insert_target::InsertTarget;
+
+mod join;
+pub use join::{Join, JoinOp};
 
 mod node;
 pub use node::Node;
@@ -147,6 +161,9 @@ pub use sparse_record::SparseRecord;
 
 pub mod substitute;
 
+mod table_ref;
+pub use table_ref::TableRef;
+
 mod table_with_joins;
 pub use table_with_joins::TableWithJoins;
 
@@ -179,6 +196,9 @@ pub use value_stream::ValueStream;
 
 pub mod visit;
 pub use visit::Visit;
+
+mod with;
+pub use with::With;
 
 use crate::{
     schema::{

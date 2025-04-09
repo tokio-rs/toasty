@@ -26,9 +26,9 @@ impl<'a> Planner<'a> {
 
         let index_path = index_planner.plan_index_path();
         let capability = match self.capability {
-            capability::Capability::KeyValue(capability) => capability,
+            Capability::KeyValue(capability) => capability,
             // Just make it work for now
-            _ => &capability::KeyValue {
+            _ => &CapabilityKeyValue {
                 primary_key_ne_predicate: true,
             },
         };
@@ -115,7 +115,7 @@ struct IndexPath {
 type ExprPair = (stmt::Expr, stmt::Expr);
 
 struct PartitionCtx<'a> {
-    capability: &'a capability::KeyValue,
+    capability: &'a CapabilityKeyValue,
     apply_result_filter_on_results: bool,
 }
 
@@ -338,7 +338,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
         for (i, index_column) in self.index.columns.iter().enumerate() {
             // Check that the path matches an index column
-            if expr_column.column != index_column.column {
+            if !expr_column.references(index_column.column) {
                 continue;
             }
 

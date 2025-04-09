@@ -88,6 +88,7 @@ impl<T: Model> IntoSelect for Association<[T]> {
 
     fn into_select(self) -> Select<T> {
         Select::from_untyped(stmt::Query {
+            with: None,
             body: Box::new(stmt::ExprSet::Select(stmt::Select {
                 source: stmt::Source::Model(stmt::SourceModel {
                     model: T::ID,
@@ -106,6 +107,7 @@ impl<T: Model> IntoSelect for Association<T> {
 
     fn into_select(self) -> Select<T> {
         Select::from_untyped(stmt::Query {
+            with: None,
             body: Box::new(stmt::ExprSet::Select(stmt::Select {
                 source: stmt::Source::Model(stmt::SourceModel {
                     model: T::ID,

@@ -8,7 +8,6 @@ impl DynamoDb {
     ) -> Result<Response> {
         use aws_sdk_dynamodb::operation::delete_item::DeleteItemError;
 
-        println!("op={op:#?}");
         let table = schema.table(op.table);
 
         let mut expr_attrs = ExprAttrs::default();

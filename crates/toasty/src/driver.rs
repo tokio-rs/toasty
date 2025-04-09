@@ -2,9 +2,8 @@ use crate::Result;
 
 pub use toasty_core::{
     driver::{
-        capability,
         operation::{self, Operation},
-        Capability, Driver, Response, Rows,
+        Capability, CapabilityKeyValue, CapabilitySql, Driver, Response, Rows,
     },
     schema::db::Schema,
 };

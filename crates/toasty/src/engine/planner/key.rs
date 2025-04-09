@@ -102,7 +102,7 @@ impl TryConvert<'_> {
                         .columns
                         .iter()
                         .enumerate()
-                        .find(|(_, c)| expr_column.column == c.column)?;
+                        .find(|(_, c)| expr_column.references(c.column))?;
 
                     assert!(fields[index].is_value_null());
 

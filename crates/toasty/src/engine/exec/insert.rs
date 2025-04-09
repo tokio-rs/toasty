@@ -9,6 +9,7 @@ impl Exec<'_> {
             action.stmt.clone().into(),
             action.input.as_ref(),
             action.output.as_ref(),
+            false,
         )
         .await
     }

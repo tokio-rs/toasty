@@ -1,4 +1,4 @@
-use super::*;
+use super::{expr_reference::ExprReference, *};
 
 #[derive(Clone, PartialEq)]
 pub enum Expr {
@@ -30,6 +30,9 @@ pub enum Expr {
     /// References a field in the statement
     Field(ExprField),
 
+    /// Function call
+    Func(ExprFunc),
+
     /// In list
     InList(ExprInList),
 
@@ -57,6 +60,10 @@ pub enum Expr {
 
     /// Evaluates to a tuple value
     Record(ExprRecord),
+
+    // TODO: delete this
+    /// Reference a value from within the statement itself.
+    Reference(ExprReference),
 
     /// A list of expressions of the same type
     List(ExprList),
@@ -303,6 +310,7 @@ impl fmt::Debug for Expr {
             Expr::ConcatStr(e) => e.fmt(f),
             Expr::Enum(e) => e.fmt(f),
             Expr::Field(e) => e.fmt(f),
+            Expr::Func(e) => e.fmt(f),
             Expr::InList(e) => e.fmt(f),
             Expr::InSubquery(e) => e.fmt(f),
             Expr::IsNull(e) => e.fmt(f),
@@ -312,6 +320,7 @@ impl fmt::Debug for Expr {
             Expr::Pattern(e) => e.fmt(f),
             Expr::Project(e) => e.fmt(f),
             Expr::Record(e) => e.fmt(f),
+            Expr::Reference(e) => e.fmt(f),
             Expr::List(e) => e.fmt(f),
             Expr::Stmt(e) => e.fmt(f),
             Expr::Type(e) => e.fmt(f),

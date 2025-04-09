@@ -33,7 +33,7 @@ pub enum UpdateTarget {
     Model(ModelId),
 
     /// Update a table
-    Table(TableWithJoins),
+    Table(TableId),
 }
 
 impl Update {
@@ -51,20 +51,18 @@ impl UpdateTarget {
         match self {
             UpdateTarget::Model(model_id) => *model_id,
             UpdateTarget::Query(query) => query.body.as_select().source.as_model_id(),
-            _ => todo!(),
+            _ => todo!("not a model"),
         }
     }
 
     pub fn table(table: impl Into<TableId>) -> UpdateTarget {
-        UpdateTarget::Table(TableWithJoins {
-            table: table.into(),
-        })
+        UpdateTarget::Table(table.into())
     }
 
     #[track_caller]
-    pub fn as_table(&self) -> &TableWithJoins {
+    pub fn as_table(&self) -> TableId {
         match self {
-            UpdateTarget::Table(table) => table,
+            UpdateTarget::Table(table) => *table,
             _ => todo!(),
         }
     }

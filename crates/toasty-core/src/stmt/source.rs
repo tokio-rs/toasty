@@ -42,9 +42,10 @@ impl Source {
         matches!(self, Source::Table(_))
     }
 
-    pub fn table(table: impl Into<TableId>) -> Source {
+    pub fn table(table: impl Into<TableRef>) -> Source {
         Source::Table(vec![TableWithJoins {
             table: table.into(),
+            joins: vec![],
         }])
     }
 
@@ -69,5 +70,23 @@ impl From<ModelId> for Source {
             via: None,
             include: vec![],
         })
+    }
+}
+
+impl From<TableId> for Source {
+    fn from(value: TableId) -> Self {
+        Source::table(value)
+    }
+}
+
+impl From<TableRef> for Source {
+    fn from(value: TableRef) -> Self {
+        Source::table(value)
+    }
+}
+
+impl From<TableWithJoins> for Source {
+    fn from(value: TableWithJoins) -> Self {
+        Source::Table(vec![value])
     }
 }

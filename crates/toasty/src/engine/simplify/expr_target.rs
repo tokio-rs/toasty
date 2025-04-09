@@ -33,7 +33,11 @@ impl<'a> ExprTarget<'a> {
                     todo!("source={source:#?}")
                 };
 
-                let table = schema.db.table(table_with_joins.table);
+                let stmt::TableRef::Table(table_id) = table_with_joins.table else {
+                    todo!("source={source:#?}")
+                };
+
+                let table = schema.db.table(table_id);
                 ExprTarget::from(table)
             }
         }

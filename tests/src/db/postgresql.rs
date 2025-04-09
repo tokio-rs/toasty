@@ -1,4 +1,4 @@
-use toasty::driver::Capability;
+use toasty::driver::{Capability, CapabilitySql};
 use toasty::{db, Db};
 
 use crate::Setup;
@@ -32,6 +32,8 @@ impl Setup for SetupPostgreSQL {
     }
 
     fn capability(&self) -> &Capability {
-        &Capability::Sql
+        &Capability::Sql(CapabilitySql {
+            cte_with_update: true,
+        })
     }
 }

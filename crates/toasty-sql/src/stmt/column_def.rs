@@ -6,14 +6,14 @@ use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct ColumnDef {
-    pub name: Ident,
+    pub name: String,
     pub ty: Type,
 }
 
 impl ColumnDef {
     pub(crate) fn from_schema(column: &Column) -> ColumnDef {
         ColumnDef {
-            name: Ident::from(&column.name[..]),
+            name: column.name.clone(),
             ty: Type::from_schema(&column.ty),
         }
     }

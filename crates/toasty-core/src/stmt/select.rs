@@ -51,6 +51,21 @@ impl Select {
     }
 }
 
+impl From<Select> for Statement {
+    fn from(value: Select) -> Self {
+        Statement::Query(value.into())
+    }
+}
+
+impl From<Select> for Query {
+    fn from(value: Select) -> Self {
+        Query {
+            with: None,
+            body: Box::new(ExprSet::Select(value)),
+        }
+    }
+}
+
 impl Node for Select {
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_select(self);

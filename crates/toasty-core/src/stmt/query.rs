@@ -2,24 +2,32 @@ use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Query {
+    /// Any CTEs
+    pub with: Option<With>,
+
+    /// The body of the query. Either `SELECT`, `UNION`, `VALUES`, or possibly
+    /// other types of queries depending on database support.
     pub body: Box<ExprSet>,
 }
 
 impl Query {
     pub fn unit() -> Query {
         Query {
+            with: None,
             body: Box::new(ExprSet::Values(Values::default())),
         }
     }
 
     pub fn filter(source: impl Into<Source>, filter: impl Into<Expr>) -> Query {
         Query {
+            with: None,
             body: Box::new(ExprSet::Select(Select::new(source, filter))),
         }
     }
 
     pub fn values(values: impl Into<Values>) -> Query {
         Query {
+            with: None,
             body: Box::new(ExprSet::Values(values.into())),
         }
     }

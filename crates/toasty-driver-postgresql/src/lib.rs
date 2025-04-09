@@ -9,7 +9,7 @@ use postgres::{
     Column, Row, Socket,
 };
 use toasty_core::{
-    driver::{Capability, Operation, Response},
+    driver::{self, Capability, Operation, Response},
     schema::db::{Schema, Table},
     stmt,
     stmt::ValueRecord,
@@ -95,10 +95,10 @@ impl PostgreSQL {
 
     /// Creates a table.
     pub async fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
+        let serializer = sql::Serializer::postgresql(schema);
+
         let mut params = Vec::new();
-        let sql = sql::Statement::create_table(table)
-            .serialize(schema, &mut params)
-            .into_inner();
+        let sql = serializer.serialize(&sql::Statement::create_table(table), &mut params);
 
         assert!(
             params.is_empty(),
@@ -114,9 +114,8 @@ impl PostgreSQL {
                 continue;
             }
 
-            let sql = sql::Statement::create_index(index)
-                .serialize(schema, &mut params)
-                .into_inner();
+            let sql = serializer.serialize(&sql::Statement::create_index(index), &mut params);
+
             assert!(
                 params.is_empty(),
                 "creating an index shouldn't involve any parameters"
@@ -130,16 +129,13 @@ impl PostgreSQL {
 
     /// Drops a table.
     pub async fn drop_table(&self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
+        let serializer = sql::Serializer::postgresql(schema);
         let mut params = Vec::new();
 
         let sql = if if_exists {
-            sql::Statement::drop_table_if_exists(table)
-                .serialize(schema, &mut params)
-                .into_inner()
+            serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
         } else {
-            sql::Statement::drop_table(table)
-                .serialize(schema, &mut params)
-                .into_inner()
+            serializer.serialize(&sql::Statement::drop_table(table), &mut params)
         };
 
         assert!(
@@ -161,7 +157,9 @@ impl From<Client> for PostgreSQL {
 #[toasty_core::async_trait]
 impl Driver for PostgreSQL {
     fn capability(&self) -> &Capability {
-        &Capability::Sql
+        &Capability::Sql(driver::CapabilitySql {
+            cte_with_update: true,
+        })
     }
 
     async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
@@ -181,11 +179,7 @@ impl Driver for PostgreSQL {
         let width = sql.returning_len();
 
         let mut params = Vec::new();
-        let sql_as_str = sql::Serializer::new(schema)
-            .with_update_in_cte(true)
-            .serialize_stmt(&sql, &mut params)
-            .into_numbered_args()
-            .into_inner();
+        let sql_as_str = sql::Serializer::postgresql(schema).serialize(&sql, &mut params);
 
         let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
 
@@ -259,6 +253,10 @@ fn postgres_to_toasty(index: usize, row: &Row, column: &Column) -> stmt::Value {
         row.get::<usize, Option<i32>>(index)
             .map(|i| i as i64)
             .map(stmt::Value::I64)
+            .unwrap_or(stmt::Value::Null)
+    } else if column.type_() == &Type::INT8 {
+        row.get::<usize, Option<i64>>(index)
+            .map(stmt::Value::from)
             .unwrap_or(stmt::Value::Null)
     } else {
         todo!(

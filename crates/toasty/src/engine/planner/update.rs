@@ -99,11 +99,28 @@ impl Planner<'_> {
 
         let output_var = output.as_ref().map(|o| o.var);
 
-        self.push_action(plan::ExecStatement {
-            output,
-            input: None,
-            stmt: stmt.into(),
-        });
+        if stmt.condition.is_some() && self.capability.cte_with_update() {
+            let stmt = self.rewrite_conditional_update_as_query_with_cte(stmt);
+
+            assert!(output.is_none());
+
+            self.push_action(plan::ExecStatement {
+                output,
+                input: None,
+                stmt: stmt.into(),
+                conditional_update_with_no_returning: true,
+            });
+        } else {
+            // SQLite does not support CTE with update. We should transform the
+            // conditional update into a transaction with checks between.
+            // However, for now, the SQLite driver handles it by hand (kind of).
+            self.push_action(plan::ExecStatement {
+                output,
+                input: None,
+                stmt: stmt.into(),
+                conditional_update_with_no_returning: false,
+            });
+        }
 
         output_var
     }
@@ -168,6 +185,145 @@ impl Planner<'_> {
             });
 
             output_var
+        }
+    }
+
+    fn rewrite_conditional_update_as_query_with_cte(&self, stmt: stmt::Update) -> stmt::Query {
+        let Some(condition) = stmt.condition else {
+            panic!("conditional update without condition");
+        };
+
+        let Some(filter) = stmt.filter else {
+            panic!("conditional update without filter");
+        };
+
+        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
+            panic!("conditional update without table");
+        };
+
+        let mut ctes = vec![];
+
+        // Select from update table without the update condition.
+        ctes.push(stmt::Cte {
+            query: stmt::Query {
+                with: None,
+                body: Box::new(stmt::ExprSet::Select(stmt::Select {
+                    source: target.into(),
+                    filter: filter.clone(),
+                    returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                        stmt::Expr::count_star(),
+                        stmt::FuncCount {
+                            arg: None,
+                            filter: Some(Box::new(condition)),
+                        }
+                        .into(),
+                    ])),
+                })),
+            },
+        });
+
+        let returning_len = match &stmt.returning {
+            Some(stmt::Returning::Expr(expr)) => {
+                let stmt::Expr::Record(expr_record) = expr else {
+                    panic!("returning must be a record");
+                };
+
+                expr_record.fields.len()
+            }
+            Some(_) => todo!(),
+            None => 0,
+        };
+
+        // The update statement. The update condition is expressed using the select above
+        ctes.push(stmt::Cte {
+            query: stmt::Query {
+                with: None,
+                body: Box::new(stmt::ExprSet::Update(stmt::Update {
+                    target: stmt.target,
+                    assignments: stmt.assignments,
+                    filter: Some(stmt::Expr::and(
+                        filter,
+                        // SELECT found.count(*) = found.count(CONDITION) FROM found
+                        stmt::Expr::stmt(stmt::Select {
+                            source: stmt::TableRef::Cte {
+                                nesting: 2,
+                                index: 0,
+                            }
+                            .into(),
+                            filter: true.into(),
+                            returning: stmt::Returning::Expr(stmt::Expr::eq(
+                                stmt::ExprColumn::Alias {
+                                    nesting: 0,
+                                    table: 0,
+                                    column: 0,
+                                },
+                                stmt::ExprColumn::Alias {
+                                    nesting: 0,
+                                    table: 0,
+                                    column: 1,
+                                },
+                            )),
+                        }),
+                    )),
+                    condition: None,
+                    returning: Some(
+                        stmt.returning
+                            // TODO: hax
+                            .unwrap_or_else(|| stmt::Returning::Expr(stmt::Expr::from("hello"))),
+                    ),
+                })),
+            },
+        });
+
+        let mut columns = vec![
+            stmt::ExprColumn::Alias {
+                nesting: 0,
+                table: 0,
+                column: 0,
+            }
+            .into(),
+            stmt::ExprColumn::Alias {
+                nesting: 0,
+                table: 0,
+                column: 1,
+            }
+            .into(),
+        ];
+
+        for i in 0..returning_len {
+            columns.push(
+                stmt::ExprColumn::Alias {
+                    nesting: 0,
+                    table: 1,
+                    column: i,
+                }
+                .into(),
+            );
+        }
+
+        stmt::Query {
+            with: Some(stmt::With { ctes }),
+            // SELECT
+            //   found.total, found.condition_matched, {stmt.returning}
+            // FROM found
+            //   LEFT JOIN {updated} ON TRUE
+            body: Box::new(stmt::ExprSet::Select(stmt::Select {
+                source: stmt::Source::Table(vec![stmt::TableWithJoins {
+                    table: stmt::TableRef::Cte {
+                        nesting: 0,
+                        index: 0,
+                    },
+                    joins: vec![stmt::Join {
+                        table: stmt::TableRef::Cte {
+                            nesting: 0,
+                            index: 1,
+                        },
+                        constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
+                    }],
+                }]),
+                filter: stmt::Expr::from(true),
+                returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
+            })),
         }
     }
 }

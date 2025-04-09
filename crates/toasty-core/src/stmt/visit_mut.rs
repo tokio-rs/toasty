@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use super::*;
+use super::{expr_reference::ExprReference, *};
 
 pub trait VisitMut {
     fn visit_mut<N: Node>(&mut self, i: &mut N)
@@ -62,6 +62,14 @@ pub trait VisitMut {
         visit_expr_field_mut(self, i);
     }
 
+    fn visit_expr_func_mut(&mut self, i: &mut ExprFunc) {
+        visit_expr_func_mut(self, i);
+    }
+
+    fn visit_expr_func_count_mut(&mut self, i: &mut FuncCount) {
+        visit_expr_func_count_mut(self, i);
+    }
+
     fn visit_expr_in_list_mut(&mut self, i: &mut ExprInList) {
         visit_expr_in_list_mut(self, i);
     }
@@ -96,6 +104,10 @@ pub trait VisitMut {
 
     fn visit_expr_record_mut(&mut self, i: &mut ExprRecord) {
         visit_expr_record_mut(self, i);
+    }
+
+    fn visit_expr_reference_mut(&mut self, i: &mut ExprReference) {
+        visit_expr_reference_mut(self, i);
     }
 
     fn visit_expr_set_mut(&mut self, i: &mut ExprSet) {
@@ -285,6 +297,7 @@ where
         Expr::Concat(expr) => v.visit_expr_concat_mut(expr),
         Expr::Enum(expr) => v.visit_expr_enum_mut(expr),
         Expr::Field(expr) => v.visit_expr_field_mut(expr),
+        Expr::Func(expr) => v.visit_expr_func_mut(expr),
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),
@@ -294,6 +307,7 @@ where
         Expr::Pattern(expr) => v.visit_expr_pattern_mut(expr),
         Expr::Project(expr) => v.visit_expr_project_mut(expr),
         Expr::Record(expr) => v.visit_expr_record_mut(expr),
+        Expr::Reference(expr) => v.visit_expr_reference_mut(expr),
         Expr::List(expr) => v.visit_expr_list_mut(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt_mut(expr),
         Expr::Type(expr) => v.visit_expr_ty_mut(expr),
@@ -374,6 +388,28 @@ where
 {
 }
 
+pub fn visit_expr_func_mut<V>(v: &mut V, node: &mut ExprFunc)
+where
+    V: VisitMut + ?Sized,
+{
+    match node {
+        ExprFunc::Count(func) => v.visit_expr_func_count_mut(func),
+    }
+}
+
+pub fn visit_expr_func_count_mut<V>(v: &mut V, node: &mut FuncCount)
+where
+    V: VisitMut + ?Sized,
+{
+    if let Some(expr) = &mut node.arg {
+        v.visit_expr_mut(expr);
+    }
+
+    if let Some(expr) = &mut node.filter {
+        v.visit_expr_mut(expr);
+    }
+}
+
 pub fn visit_expr_in_list_mut<V>(v: &mut V, node: &mut ExprInList)
 where
     V: VisitMut + ?Sized,
@@ -446,6 +482,12 @@ where
     }
 }
 
+pub fn visit_expr_reference_mut<V>(v: &mut V, node: &mut ExprReference)
+where
+    V: VisitMut + ?Sized,
+{
+}
+
 pub fn visit_expr_set_mut<V>(v: &mut V, node: &mut ExprSet)
 where
     V: VisitMut + ?Sized,
@@ -453,6 +495,7 @@ where
     match node {
         ExprSet::Select(expr) => v.visit_stmt_select_mut(expr),
         ExprSet::SetOp(expr) => v.visit_expr_set_op_mut(expr),
+        ExprSet::Update(expr) => v.visit_stmt_update_mut(expr),
         ExprSet::Values(expr) => v.visit_values_mut(expr),
     }
 }

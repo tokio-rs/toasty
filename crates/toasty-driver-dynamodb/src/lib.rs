@@ -2,9 +2,8 @@ mod op;
 
 use toasty_core::{
     driver::{
-        capability,
         operation::{self, Operation},
-        Capability, Driver, Response,
+        Capability, CapabilityKeyValue, Driver, Response,
     },
     schema::{
         app,
@@ -83,7 +82,7 @@ impl DynamoDb {
 #[toasty_core::async_trait]
 impl Driver for DynamoDb {
     fn capability(&self) -> &Capability {
-        &Capability::KeyValue(capability::KeyValue {
+        &Capability::KeyValue(CapabilityKeyValue {
             primary_key_ne_predicate: false,
         })
     }
@@ -290,8 +289,8 @@ fn ddb_expression(
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
-        stmt::Expr::Column(expr_column) => {
-            let column = schema.column(expr_column.column);
+        stmt::Expr::Column(stmt::ExprColumn::Column(column_id)) => {
+            let column = schema.column(*column_id);
             attrs.column(column).to_string()
         }
         stmt::Expr::Value(val) => attrs.value(val),

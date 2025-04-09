@@ -82,6 +82,7 @@ impl Planner<'_> {
                 project,
             }),
             stmt: stmt.into(),
+            conditional_update_with_no_returning: false,
         });
 
         output
@@ -130,7 +131,7 @@ impl Planner<'_> {
                 stmt::visit::for_each_expr(filter, |filter_expr| {
                     if let stmt::Expr::Column(filter_expr) = filter_expr {
                         let contains = returning.fields.iter().any(|e| match e {
-                            stmt::Expr::Column(e) => e.column == filter_expr.column,
+                            stmt::Expr::Column(e) => e == filter_expr,
                             _ => false,
                         });
 
@@ -152,7 +153,9 @@ impl Planner<'_> {
                 .fields
                 .iter()
                 .map(|expr| match expr {
-                    stmt::Expr::Column(expr) => expr.column,
+                    stmt::Expr::Column(expr) => {
+                        expr.try_to_column_id().expect("not referencing column")
+                    }
                     _ => todo!("stmt={stmt:#?}"),
                 })
                 .collect(),
@@ -173,7 +176,7 @@ impl Planner<'_> {
                             .0
                             .iter()
                             .position(|expr| match expr {
-                                stmt::Expr::Column(expr) => expr.column == stmt.column,
+                                stmt::Expr::Column(expr) => expr == stmt,
                                 _ => false,
                             })
                             .unwrap();
@@ -231,7 +234,7 @@ impl Planner<'_> {
                                 .0
                                 .iter()
                                 .position(|expr| match expr {
-                                    stmt::Expr::Column(expr) => expr.column == stmt.column,
+                                    stmt::Expr::Column(expr) => expr == stmt,
                                     _ => false,
                                 })
                                 .unwrap();
