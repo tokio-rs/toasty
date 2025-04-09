@@ -40,34 +40,34 @@ pub struct Serializer<'a> {
 }
 
 struct Formatter<'a, T> {
-    dst: &'a mut String,
-    params: &'a mut T,
+    /// Handle to the serializer
     serializer: &'a Serializer<'a>,
+
+    /// Where to write the serialized SQL
+    dst: &'a mut String,
+
+    /// Where to store parameters
+    params: &'a mut T,
+
+    /// Current query depth. This is used to determine the nesting level when
+    /// generating names
+    depth: usize,
 }
 
 impl Serializer<'_> {
     pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
-        println!("SERIALIZING: {stmt:#?}");
         let mut ret = String::new();
 
         let mut fmt = Formatter {
+            serializer: self,
             dst: &mut ret,
             params,
-            serializer: self,
+            depth: 0,
         };
 
-        match stmt {
-            Statement::CreateIndex(stmt) => stmt.to_sql(&mut fmt),
-            Statement::CreateTable(stmt) => stmt.to_sql(&mut fmt),
-            Statement::DropTable(stmt) => stmt.to_sql(&mut fmt),
-            Statement::Delete(stmt) => stmt.to_sql(&mut fmt),
-            Statement::Insert(stmt) => stmt.to_sql(&mut fmt),
-            Statement::Query(stmt) => stmt.to_sql(&mut fmt),
-            Statement::Update(stmt) => stmt.to_sql(&mut fmt),
-        }
+        stmt.to_sql(&mut fmt);
 
-        println!("SERIALIZED: {}", ret);
-
+        ret.push(';');
         ret
     }
 

@@ -23,6 +23,10 @@ impl TableRef {
             TableRef::Table(id) => id == &table_id,
         }
     }
+
+    pub fn is_cte(&self) -> bool {
+        matches!(self, TableRef::Cte { .. })
+    }
 }
 
 impl From<TableId> for TableRef {

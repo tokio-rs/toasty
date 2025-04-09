@@ -183,6 +183,8 @@ impl Driver for PostgreSQL {
 
         let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
 
+        println!("SQL={sql_as_str}; params={params:#?}");
+
         let args = params
             .iter()
             .map(|param| param as &(dyn ToSql + Sync))

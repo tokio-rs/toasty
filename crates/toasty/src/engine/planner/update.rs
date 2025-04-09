@@ -262,7 +262,11 @@ impl Planner<'_> {
                         }),
                     )),
                     condition: None,
-                    returning: stmt.returning,
+                    returning: Some(
+                        stmt.returning
+                            // TODO: hax
+                            .unwrap_or_else(|| stmt::Returning::Expr(stmt::Expr::from("hello"))),
+                    ),
                 })),
             },
         });

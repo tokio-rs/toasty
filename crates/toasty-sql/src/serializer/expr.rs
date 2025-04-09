@@ -21,13 +21,16 @@ impl ToSql for &stmt::Expr {
                 fmt!(f, column);
             }
             Column(stmt::ExprColumn::Alias {
-                nesting,
-                table,
-                column,
+                nesting, column, ..
             }) => {
-                // This is not correct, but lets see what happens
-                fmt!(f, "tbl_" nesting "_" table ".col_" column)
+                let depth = f.depth - *nesting;
+                fmt!(f, "tbl_" depth ".col_" column)
             }
+            Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
+                (None, None) => fmt!(f, "COUNT(*)"),
+                (None, Some(expr)) => fmt!(f, "COUNT(*) FILTER (WHERE " expr ")"),
+                _ => todo!("func={func:#?}"),
+            },
             InList(expr) => {
                 fmt!(f, expr.expr " IN " expr.list);
             }
@@ -58,6 +61,10 @@ impl ToSql for &stmt::Expr {
             Record(expr) => {
                 let exprs = Comma(&expr.fields);
                 fmt!(f, "(" exprs ")");
+            }
+            Stmt(expr) => {
+                let stmt = &*expr.stmt;
+                fmt!(f, "(" stmt ")");
             }
             Value(expr) => expr.to_sql(f),
             _ => todo!("expr={:?}", self),

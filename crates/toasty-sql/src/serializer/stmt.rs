@@ -24,7 +24,7 @@ impl ToSql for &stmt::CreateIndex {
         let unique = if self.unique { "UNIQUE " } else { "" };
 
         fmt!(
-            f, "CREATE " unique "INDEX " self.name " ON " table_name " (" columns ");"
+            f, "CREATE " unique "INDEX " self.name " ON " table_name " (" columns ")"
         );
     }
 }
@@ -34,7 +34,7 @@ impl ToSql for &stmt::CreateTable {
         let columns = ColumnsWithConstraints(self);
 
         fmt!(
-            f, "CREATE TABLE " self.name " (" columns ");"
+            f, "CREATE TABLE " self.name " (" columns ")"
         );
     }
 }
@@ -43,14 +43,14 @@ impl ToSql for &stmt::Delete {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         assert!(self.returning.is_none());
 
-        fmt!(f, "DELETE FROM " self.from " WHERE " self.filter ";");
+        fmt!(f, "DELETE FROM " self.from " WHERE " self.filter);
     }
 }
 
 impl ToSql for &stmt::DropTable {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
-        fmt!(f, "DROP TABLE " if_exists self.name ";");
+        fmt!(f, "DROP TABLE " if_exists self.name);
     }
 }
 
@@ -62,7 +62,7 @@ impl ToSql for &stmt::Insert {
             .map(|returning| ("RETURNING ", returning));
 
         fmt!(
-            f, "INSERT INTO " self.target " " self.source returning ";"
+            f, "INSERT INTO " self.target " " self.source returning
         );
     }
 }
@@ -95,8 +95,9 @@ impl ToSql for &stmt::Query {
 impl ToSql for &stmt::ExprSet {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         match self {
-            stmt::ExprSet::Select(stmt) => stmt.to_sql(f),
-            stmt::ExprSet::Values(values) => values.to_sql(f),
+            stmt::ExprSet::Select(expr) => expr.to_sql(f),
+            stmt::ExprSet::Values(expr) => expr.to_sql(f),
+            stmt::ExprSet::Update(expr) => expr.to_sql(f),
             _ => todo!("self={self:?}"),
         }
     }
@@ -107,7 +108,16 @@ impl ToSql for &stmt::Returning {
         match self {
             stmt::Returning::Star => fmt!(f, "*"),
             stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => {
-                fmt!(f, Comma(&expr_record.fields));
+                let fields = expr_record
+                    .fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, expr)| match expr {
+                        stmt::Expr::Column(stmt::ExprColumn::Column(_)) => (expr, None, None),
+                        _ => (expr, Some(" AS col_"), Some(i)),
+                    });
+
+                fmt!(f, Comma(fields));
             }
             stmt::Returning::Expr(expr) => {
                 fmt!(f, expr);
@@ -138,30 +148,78 @@ impl ToSql for &stmt::Source {
     }
 }
 
+impl ToSql for &toasty_core::stmt::Statement {
+    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        use toasty_core::stmt::Statement::*;
+
+        f.depth += 1;
+
+        match self {
+            Delete(stmt) => stmt.to_sql(f),
+            Insert(stmt) => stmt.to_sql(f),
+            Query(stmt) => stmt.to_sql(f),
+            Update(stmt) => stmt.to_sql(f),
+        }
+
+        f.depth -= 1;
+    }
+}
+
+impl ToSql for &stmt::Statement {
+    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        match self {
+            stmt::Statement::CreateIndex(stmt) => stmt.to_sql(f),
+            stmt::Statement::CreateTable(stmt) => stmt.to_sql(f),
+            stmt::Statement::DropTable(stmt) => stmt.to_sql(f),
+            stmt::Statement::Delete(stmt) => stmt.to_sql(f),
+            stmt::Statement::Insert(stmt) => stmt.to_sql(f),
+            stmt::Statement::Query(stmt) => stmt.to_sql(f),
+            stmt::Statement::Update(stmt) => stmt.to_sql(f),
+        }
+    }
+}
+
 impl ToSql for &stmt::TableWithJoins {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        assert!(self.joins.is_empty(), "table_with_joins={self:#?}");
         fmt!(f, &self.table);
+
+        if self.table.is_cte() {
+            let depth = f.depth;
+            fmt!(f, " AS tbl_" depth);
+        }
+
+        for join in &self.joins {
+            match &join.constraint {
+                stmt::JoinOp::Left(expr) => {
+                    fmt!(f, " LEFT JOIN " join.table " ON " expr);
+                }
+            }
+        }
     }
 }
 
 impl ToSql for &stmt::TableRef {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        match self {
+        match *self {
             stmt::TableRef::Table(table_id) => {
-                let table_name = f.serializer.table_name(*table_id);
+                let table_name = f.serializer.table_name(table_id);
                 fmt!(f, table_name);
             }
-            _ => todo!("self={self:#?}"),
+            stmt::TableRef::Cte { nesting, index } => {
+                assert!(f.depth >= nesting, "nesting={nesting} depth={}", f.depth);
+
+                let depth = f.depth - nesting;
+                fmt!(f, "cte_" depth "_" index);
+            }
         }
     }
 }
 
 impl ToSql for &stmt::Update {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        // let table = f.serializer.schema.table(self.target.as_table().table);
-        let table = todo!();
+        let table = f.serializer.schema.table(self.target.as_table());
         let assignments = (table, &self.assignments);
+
         let filter = self.filter.as_ref().map(|expr| (" WHERE ", expr));
         let returning = self
             .returning
@@ -173,7 +231,7 @@ impl ToSql for &stmt::Update {
             "SQL does not support update conditions"
         );
 
-        fmt!(f, "UPDATE " self.target " SET " assignments filter returning ";");
+        fmt!(f, "UPDATE " self.target " SET " assignments filter returning);
     }
 }
 
@@ -191,7 +249,10 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
 impl ToSql for &stmt::UpdateTarget {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         match self {
-            // stmt::UpdateTarget::Table(table_with_joins) => table_with_joins.to_sql(f),
+            stmt::UpdateTarget::Table(table_id) => {
+                let table_name = f.serializer.table_name(*table_id);
+                fmt!(f, table_name);
+            }
             _ => todo!(),
         }
     }
