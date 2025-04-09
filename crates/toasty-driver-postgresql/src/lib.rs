@@ -183,8 +183,6 @@ impl Driver for PostgreSQL {
 
         let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
 
-        println!("SQL={sql_as_str}; params={params:#?}");
-
         let args = params
             .iter()
             .map(|param| param as &(dyn ToSql + Sync))
@@ -255,6 +253,10 @@ fn postgres_to_toasty(index: usize, row: &Row, column: &Column) -> stmt::Value {
         row.get::<usize, Option<i32>>(index)
             .map(|i| i as i64)
             .map(stmt::Value::I64)
+            .unwrap_or(stmt::Value::Null)
+    } else if column.type_() == &Type::INT8 {
+        row.get::<usize, Option<i64>>(index)
+            .map(stmt::Value::from)
             .unwrap_or(stmt::Value::Null)
     } else {
         todo!(

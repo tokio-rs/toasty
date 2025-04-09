@@ -82,6 +82,7 @@ impl Planner<'_> {
                 project,
             }),
             stmt: stmt.into(),
+            conditional_update_with_no_returning: false,
         });
 
         output

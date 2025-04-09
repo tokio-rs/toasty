@@ -102,10 +102,13 @@ impl Planner<'_> {
         if stmt.condition.is_some() && self.capability.cte_with_update() {
             let stmt = self.rewrite_conditional_update_as_query_with_cte(stmt);
 
+            assert!(output.is_none());
+
             self.push_action(plan::ExecStatement {
                 output,
                 input: None,
                 stmt: stmt.into(),
+                conditional_update_with_no_returning: true,
             });
         } else {
             // SQLite does not support CTE with update. We should transform the
@@ -115,6 +118,7 @@ impl Planner<'_> {
                 output,
                 input: None,
                 stmt: stmt.into(),
+                conditional_update_with_no_returning: false,
             });
         }
 

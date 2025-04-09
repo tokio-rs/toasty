@@ -11,6 +11,7 @@ impl Exec<'_> {
             action.stmt.clone(),
             action.input.as_ref(),
             action.output.as_ref(),
+            action.conditional_update_with_no_returning,
         )
         .await
     }
@@ -20,6 +21,7 @@ impl Exec<'_> {
         stmt: stmt::Statement,
         input: Option<&plan::Input>,
         output: Option<&plan::Output>,
+        conditional_update_with_no_returning: bool,
     ) -> Result<()> {
         let mut stmt = stmt.clone();
 
@@ -42,8 +44,32 @@ impl Exec<'_> {
             .await?;
 
         let Some(out) = output else {
-            assert!(res.rows.is_count());
-            return Ok(());
+            if conditional_update_with_no_returning {
+                let Rows::Values(rows) = res.rows else {
+                    return Err(anyhow::anyhow!(
+                        "conditional_update_with_no_returning: expected values, got {res:#?}"
+                    ));
+                };
+
+                let rows = rows.collect().await?;
+                assert_eq!(rows.len(), 1);
+
+                let stmt::Value::Record(record) = &rows[0] else {
+                    return Err(anyhow::anyhow!(
+                        "conditional_update_with_no_returning: expected record, got {rows:#?}"
+                    ));
+                };
+                assert_eq!(record.len(), 2);
+
+                if record[0] == record[1] {
+                    return Ok(());
+                } else {
+                    anyhow::bail!("update condition did not match");
+                }
+            } else {
+                assert!(res.rows.is_count());
+                return Ok(());
+            }
         };
 
         // TODO: don't clone

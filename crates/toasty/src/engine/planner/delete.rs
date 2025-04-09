@@ -48,6 +48,7 @@ impl Planner<'_> {
             output: None,
             input: None,
             stmt: stmt.into(),
+            conditional_update_with_no_returning: false,
         });
     }
 

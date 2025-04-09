@@ -10,6 +10,10 @@ pub(crate) struct ExecStatement {
 
     /// The query to execute. This may require input to generate the query.
     pub stmt: stmt::Statement,
+
+    /// HAX: this should be handled more generically, but for now, lets just get
+    /// it working.
+    pub conditional_update_with_no_returning: bool,
 }
 
 impl From<ExecStatement> for Action {
