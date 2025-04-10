@@ -107,7 +107,6 @@ impl MySQL {
         let mut conn = self.pool.get_conn().await?;
 
         conn.exec_drop(&sql, ()).await?;
-        println!("se dropeo");
         Ok(())
     }
 }
@@ -198,9 +197,7 @@ impl Driver for MySQL {
         }
     }
 
-    // TODO: Check the boolean from postgress impl
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
-        println!("vamooo");
         for table in &schema.tables {
             self.drop_table(schema, table, true).await?;
             self.create_table(schema, table).await?;
