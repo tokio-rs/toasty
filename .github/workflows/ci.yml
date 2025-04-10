@@ -65,7 +65,7 @@ jobs:
         runs-on: ubuntu-latest
         services:
           mysql:
-            image: mysql:8.0
+            image: mysql:9
             env:
               MYSQL_ROOT_PASSWORD: toasty
               MYSQL_USER: toasty
