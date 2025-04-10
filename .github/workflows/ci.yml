@@ -67,14 +67,15 @@ jobs:
           mysql:
             image: mysql:8.0
             env:
+              MYSQL_ROOT_PASSWORD: toasty
               MYSQL_USER: toasty
               MYSQL_PASSWORD: toasty
               MYSQL_DATABASE: toasty
             ports:
               - 3306:3306
-            options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+            options: --health-cmd "mysqladmin ping -h localhost" --health-interval 10s --health-timeout 5s --health-retries 5
         env:
-            TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost/toasty
+            TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost:3306/toasty
         steps:
         - uses: actions/checkout@v4
         - uses: dtolnay/rust-toolchain@stable
