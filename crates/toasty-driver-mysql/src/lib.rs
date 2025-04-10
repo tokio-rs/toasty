@@ -12,7 +12,7 @@ use mysql_async::{
     Pool,
 };
 use toasty_core::{
-    driver::{Capability, Operation, Response},
+    driver::{self, Capability, Operation, Response},
     schema::db::{Schema, Table},
     stmt::{self, ValueRecord},
     Driver, Result,
@@ -56,10 +56,11 @@ impl MySQL {
     }
 
     pub async fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
+        let serializer = sql::Serializer::mysql(schema);
+
         let mut params = Vec::new();
-        let sql = sql::Statement::create_table(table)
-            .serialize_no_quotes(schema, &mut params)
-            .into_inner();
+
+        let sql = serializer.serialize(&sql::Statement::create_table(table), &mut params);
 
         assert!(
             params.is_empty(),
@@ -73,9 +74,9 @@ impl MySQL {
             if index.primary_key {
                 continue;
             }
-            let sql = sql::Statement::create_index(index)
-                .serialize(schema, &mut params)
-                .into_inner();
+
+            let sql = serializer.serialize(&sql::Statement::create_index(index), &mut params);
+
             assert!(
                 params.is_empty(),
                 "creating an index shouldn't involve any parameters"
@@ -86,14 +87,17 @@ impl MySQL {
 
         Ok(())
     }
-    pub async fn drop_table(&self, schema: &Schema, table: &Table) -> Result<()> {
-        let mut params = Vec::new();
-        let sql = sql::Statement::drop_table_if_exists(table)
-            .serialize_no_quotes(schema, &mut params)
-            .into_numbered_args()
-            .into_inner();
 
-        println!("\n{sql}\n");
+    /// Drops a table.
+    pub async fn drop_table(&self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
+        let serializer = sql::Serializer::mysql(schema);
+        let mut params = Vec::new();
+
+        let sql = if if_exists {
+            serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
+        } else {
+            serializer.serialize(&sql::Statement::drop_table(table), &mut params)
+        };
 
         assert!(
             params.is_empty(),
@@ -116,7 +120,9 @@ impl From<Pool> for MySQL {
 #[toasty_core::async_trait]
 impl Driver for MySQL {
     fn capability(&self) -> &Capability {
-        &Capability::Sql
+        &Capability::Sql(driver::CapabilitySql {
+            cte_with_update: true,
+        })
     }
 
     async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
@@ -138,11 +144,8 @@ impl Driver for MySQL {
         let width = sql.returning_len();
 
         let mut params = Vec::new();
-        let sql_as_str = sql::Serializer::new(schema)
-            .with_update_in_cte(true)
-            .serialize_stmt(&sql, &mut params)
-            .into_numbered_args()
-            .into_inner();
+
+        let sql_as_str = sql::Serializer::mysql(schema).serialize(&sql, &mut params);
 
         let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
         let args = params
@@ -199,8 +202,8 @@ impl Driver for MySQL {
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
         println!("vamooo");
         for table in &schema.tables {
-            self.drop_table(schema, table).await?;
-            // self.create_table(schema, table).await?;
+            self.drop_table(schema, table, true).await?;
+            self.create_table(schema, table).await?;
         }
 
         Ok(())
