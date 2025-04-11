@@ -9,6 +9,7 @@ members = [
 
     # Driver implementations
     "crates/toasty-driver-dynamodb",
+    "crates/toasty-driver-mysql",
     "crates/toasty-driver-postgresql",
     "crates/toasty-driver-sqlite",
 
@@ -37,6 +38,7 @@ std-util = { path = "crates/std-util" }
 
 # Driver implementations
 toasty-driver-dynamodb = { path = "crates/toasty-driver-dynamodb" }
+toasty-driver-mysql = { path = "crates/toasty-driver-mysql" }
 toasty-driver-postgresql = { path = "crates/toasty-driver-postgresql" }
 toasty-driver-sqlite = { path = "crates/toasty-driver-sqlite" }
 
@@ -50,6 +52,10 @@ cfg-if = "1.0.0"
 clap = { version = "4.5.20", features = ["derive"] }
 heck = "0.5.0"
 indexmap = "2.6.0"
+mysql_async = { version = "0.35.1", default-features = false, features = [
+    "minimal",
+    "native-tls-tls",
+] }
 pluralizer = "0.4.0"
 postgres = "0.19.10"
 postgres-types = "0.2.9"

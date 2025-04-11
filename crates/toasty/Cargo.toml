@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 default = []
 dynamodb = ["dep:toasty-driver-dynamodb"]
+mysql = ["dep:toasty-driver-mysql"]
 postgresql = ["dep:toasty-driver-postgresql"]
 sqlite = ["dep:toasty-driver-sqlite"]
 
@@ -16,6 +17,7 @@ toasty-core.workspace = true
 
 # Built-in database drivers
 toasty-driver-dynamodb = { workspace = true, optional = true }
+toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-sqlite = { workspace = true, optional = true }
 

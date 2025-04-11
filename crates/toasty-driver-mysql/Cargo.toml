@@ -1,0 +1,13 @@
+[package]
+name = "toasty-driver-mysql"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+toasty-core.workspace = true
+toasty-sql.workspace = true
+
+anyhow.workspace = true
+mysql_async.workspace = true
+tokio.workspace = true
+url.workspace = true

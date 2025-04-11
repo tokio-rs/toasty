@@ -11,6 +11,7 @@ env:
     RUSTFLAGS: -D warnings
     RUST_BACKTRACE: 1
     TOASTY_TEST_POSTGRES_URL: "postgresql://toasty:toasty@localhost/toasty"
+    TOASTY_TEST_MYSQL_URL: "mysql://toasty:toasty@localhost/toasty"
     AWS_REGION: "foo"
     AWS_ENDPOINT_URL: http://localhost:8000
 
@@ -57,6 +58,34 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: cargo test
         run: cargo test --workspace --no-default-features --features sqlite
+
+    test-mysql:
+        needs: check
+        name: Run tests for MySQL
+        runs-on: ubuntu-latest
+        services:
+          mysql:
+            image: mysql:9
+            env:
+              MYSQL_ROOT_PASSWORD: toasty
+              MYSQL_USER: toasty
+              MYSQL_PASSWORD: toasty
+              MYSQL_DATABASE: toasty
+            ports:
+              - 3306:3306
+            options: --health-cmd "mysqladmin ping -h localhost" --health-interval 10s --health-timeout 5s --health-retries 5
+        env:
+            TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost:3306/toasty
+        steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+        - uses: Swatinem/rust-cache@v2
+          with:
+            save-if: ${{ github.ref == 'refs/heads/main' }}
+#        - name: cargo test
+#          run: cargo test --workspace --no-default-features --features mysql
+#        - name: cargo run --bin example-hello-toasty
+#          run: cargo run --bin example-hello-toasty --features mysql
 
     test-postgresql:
         needs: check

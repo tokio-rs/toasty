@@ -56,6 +56,17 @@ macro_rules! tests {
             )*
         }
 
+        #[cfg(feature = "mysql")]
+        mod mysql {
+            $(
+                #[tokio::test]
+                $( #[$attrs] )*
+                async fn $f() {
+                    super::$f($crate::db::mysql::SetupMySQL).await;
+                }
+            )*
+        }
+
         #[cfg(feature = "postgresql")]
         mod postgresql {
             $(
