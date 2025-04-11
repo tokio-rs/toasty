@@ -37,11 +37,31 @@ impl Exec<'_> {
             stmt::Statement::Update(stmt) => stmt.returning.is_some(),
         };
 
+        let ty = if conditional_update_with_no_returning {
+            // Bit of a hack
+            Some(vec![stmt::Type::I64, stmt::Type::I64])
+        } else {
+            output.map(|out| {
+                let stmt::Type::Record(fields) = &out.project.args[0] else {
+                    todo!();
+                };
+
+                fields.clone()
+            })
+        };
+
+        println!("exec_statement: {stmt:#?}; ret={ty:#?}; expect_rows={expect_rows}");
+
         let res = self
             .db
             .driver
-            .exec(&self.db.schema.db, operation::QuerySql { stmt }.into())
+            .exec(
+                &self.db.schema.db,
+                operation::QuerySql { stmt, ret: ty }.into(),
+            )
             .await?;
+
+        println!("RESULT: {res:#?}");
 
         let Some(out) = output else {
             if conditional_update_with_no_returning {

@@ -70,7 +70,7 @@ impl Driver for Sqlite {
 
         let mut sql: sql::Statement = match op {
             QuerySql(op) => op.stmt.into(),
-            Insert(op) => op.into(),
+            Insert(op) => op.stmt.into(),
             _ => todo!(),
         };
 

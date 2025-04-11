@@ -7,6 +7,9 @@ pub use find_pk_by_index::FindPkByIndex;
 mod get_by_key;
 pub use get_by_key::GetByKey;
 
+mod insert;
+pub use insert::Insert;
+
 mod query_pk;
 pub use query_pk::QueryPk;
 
@@ -21,7 +24,7 @@ use super::*;
 #[derive(Debug)]
 pub enum Operation {
     /// Create a new record. This will always be a lowered `stmt::Insert`
-    Insert(stmt::Statement),
+    Insert(Insert),
 
     /// Delete records identified by the given keys.
     DeleteByKey(DeleteByKey),

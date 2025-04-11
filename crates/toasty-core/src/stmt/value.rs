@@ -261,3 +261,15 @@ impl From<ValueRecord> for Value {
         Value::Record(value)
     }
 }
+
+impl<T> From<Option<T>> for Value
+where
+    Value: From<T>,
+{
+    fn from(value: Option<T>) -> Self {
+        match value {
+            Some(value) => Value::from(value),
+            None => Value::Null,
+        }
+    }
+}

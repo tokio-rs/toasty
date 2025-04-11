@@ -7,6 +7,7 @@ publish = false
 [features]
 default = [ "sqlite" ]
 dynamodb = [ "toasty/dynamodb" ]
+mysql = [ "toasty/mysql" ]
 postgresql = [ "toasty/postgresql" ]
 sqlite = [ "toasty/sqlite" ]
 

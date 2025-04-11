@@ -20,9 +20,9 @@ impl ToSql for Placeholder {
         use std::fmt::Write;
 
         match f.serializer.flavor {
-            Flavor::Sqlite => write!(&mut f.dst, "?{}", self.0).unwrap(),
+            Flavor::Mysql => write!(&mut f.dst, "?").unwrap(),
             Flavor::Postgresql => write!(&mut f.dst, "${}", self.0).unwrap(),
-            _ => todo!(),
+            Flavor::Sqlite => write!(&mut f.dst, "?{}", self.0).unwrap(),
         }
     }
 }

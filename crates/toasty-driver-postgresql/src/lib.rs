@@ -168,7 +168,7 @@ impl Driver for PostgreSQL {
 
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let sql: sql::Statement = match op {
-            Operation::Insert(stmt) => stmt.into(),
+            Operation::Insert(op) => op.stmt.into(),
             Operation::QuerySql(query) => query.stmt.into(),
             op => todo!("op={:#?}", op),
         };

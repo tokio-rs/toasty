@@ -7,14 +7,14 @@ use std::fmt;
 #[derive(Debug, Clone)]
 pub struct ColumnDef {
     pub name: String,
-    pub ty: Type,
+    pub ty: ColumnType,
 }
 
 impl ColumnDef {
-    pub(crate) fn from_schema(column: &Column) -> ColumnDef {
+    pub(crate) fn from_schema(column: &Column, indexed: bool) -> ColumnDef {
         ColumnDef {
             name: column.name.clone(),
-            ty: Type::from_schema(&column.ty),
+            ty: ColumnType::from_schema(&column.ty, indexed),
         }
     }
 }

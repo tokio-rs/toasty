@@ -56,6 +56,10 @@ impl Type {
         matches!(self, Self::List(_))
     }
 
+    pub fn is_string(&self) -> bool {
+        matches!(self, Self::String)
+    }
+
     pub fn cast(&self, value: Value) -> Result<Value> {
         use stmt::Value;
 

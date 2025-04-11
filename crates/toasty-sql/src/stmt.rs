@@ -14,7 +14,7 @@ mod name;
 pub use name::Name;
 
 mod ty;
-pub use ty::Type;
+pub use ty::ColumnType;
 
 pub use toasty_core::stmt::*;
 

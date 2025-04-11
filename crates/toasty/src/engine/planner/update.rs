@@ -1,5 +1,8 @@
 use super::*;
+
 use app::{FieldTy, Model};
+
+use toasty_core::schema::db::ColumnId;
 
 // Strategy:
 // * Create a batch of queries to operate atomically.
@@ -80,14 +83,10 @@ impl Planner<'_> {
 
         self.lower_stmt_update(model, &mut stmt);
 
-        if self.capability.is_sql() {
-            self.plan_update_sql(stmt)
-        } else {
-            self.plan_update_kv(model, stmt)
-        }
-    }
+        // If the statement `Returning` is constant (i.e. does not depend on the
+        // database evaluating the statement), then extract it here.
+        self.constantize_update_returning(&mut stmt);
 
-    fn plan_update_sql(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
         let output = self
             .partition_maybe_returning(&mut stmt.returning)
             .map(|project| plan::Output {
@@ -97,6 +96,18 @@ impl Planner<'_> {
                 project,
             });
 
+        if self.capability.is_sql() {
+            self.plan_update_sql(stmt, output)
+        } else {
+            self.plan_update_kv(model, stmt, output)
+        }
+    }
+
+    fn plan_update_sql(
+        &mut self,
+        stmt: stmt::Update,
+        output: Option<plan::Output>,
+    ) -> Option<plan::VarId> {
         let output_var = output.as_ref().map(|o| o.var);
 
         if stmt.condition.is_some() && self.capability.cte_with_update() {
@@ -125,7 +136,12 @@ impl Planner<'_> {
         output_var
     }
 
-    fn plan_update_kv(&mut self, model: &Model, mut stmt: stmt::Update) -> Option<plan::VarId> {
+    fn plan_update_kv(
+        &mut self,
+        model: &Model,
+        stmt: stmt::Update,
+        output: Option<plan::Output>,
+    ) -> Option<plan::VarId> {
         let table = self.schema.table_for(model);
 
         // Figure out which index to use for the query
@@ -135,15 +151,6 @@ impl Planner<'_> {
             self.plan_index_path2(table, stmt.filter.as_ref().expect("no filter specified"));
 
         assert!(!stmt.assignments.is_empty());
-
-        let output = self
-            .partition_maybe_returning(&mut stmt.returning)
-            .map(|project| plan::Output {
-                var: self
-                    .var_table
-                    .register_var(stmt::Type::list(project.ret.clone())),
-                project,
-            });
 
         let output_var = output.as_ref().map(|o| o.var);
 
@@ -186,6 +193,70 @@ impl Planner<'_> {
 
             output_var
         }
+    }
+
+    // Constantizing the returning clause of an update statement is a bit tricky as there could be many rows that are impacted.
+    fn constantize_update_returning(&self, stmt: &mut stmt::Update) {
+        let Some(stmt::Returning::Expr(returning)) = &mut stmt.returning else {
+            return;
+        };
+
+        struct ConstReturning<'a> {
+            assignments: &'a stmt::Assignments,
+        }
+
+        impl stmt::visit_mut::VisitMut for ConstReturning<'_> {
+            fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+                stmt::visit_mut::visit_expr_mut(self, expr);
+
+                if let stmt::Expr::Column(stmt::ExprColumn::Column(column_id)) = expr {
+                    if let Some(assignment) = self.assignments.get(&column_id.index) {
+                        assert!(assignment.op.is_set());
+                        assert!(assignment.expr.is_const());
+
+                        *expr = assignment.expr.clone();
+                    }
+                }
+            }
+        }
+
+        ConstReturning {
+            assignments: &stmt.assignments,
+        }
+        .visit_expr_mut(returning);
+
+        // todo!("stmt={stmt:#?}");
+
+        /*
+
+        impl eval::Convert for ConstReturning<'_> {
+            fn convert_expr_column(&mut self, stmt: &stmt::ExprColumn) -> Option<stmt::Expr> {
+                let stmt::ExprColumn::Column(column_id) = stmt else {
+                    return None;
+                };
+
+                let assignment = self.assignments.get(&column_id.index).unwrap();
+
+                assert!(assignment.op.is_set());
+                assert!(assignment.expr.is_const());
+
+                Some(assignment.expr.clone())
+            }
+        }
+
+        let expr = eval::Func::try_convert_from_stmt(
+            returning.clone(),
+            vec![],
+            ConstReturning {
+                assignments: &stmt.assignments,
+            },
+        )
+        .unwrap();
+
+        stmt.returning = None;
+
+        Some((expr.eval_const(), expr.ret))
+        */
     }
 
     fn rewrite_conditional_update_as_query_with_cte(&self, stmt: stmt::Update) -> stmt::Query {
