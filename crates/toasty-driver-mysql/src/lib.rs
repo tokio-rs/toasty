@@ -159,7 +159,7 @@ impl Driver for MySQL {
         let rows: Vec<mysql_async::Row> = conn.exec(&sql_as_str, &args).await?;
 
         if let Some(returning) = ret {
-            let results = rows.into_iter().map(move |row| {
+            let results = rows.into_iter().map(move |mut row| {
                 assert_eq!(
                     row.len(),
                     returning.len(),
@@ -173,7 +173,7 @@ impl Driver for MySQL {
                     }
 
                     let column = &row.columns()[i];
-                    results.push(mysql_to_toasty(i, &row, column, &returning[i]));
+                    results.push(mysql_to_toasty(i, &mut row, column, &returning[i]));
                 }
 
                 Ok(ValueRecord::from_vec(results))
@@ -207,7 +207,7 @@ impl Driver for MySQL {
 
 fn mysql_to_toasty(
     i: usize,
-    row: &mysql_async::Row,
+    row: &mut mysql_async::Row,
     column: &mysql_async::Column,
     ty: &stmt::Type,
 ) -> stmt::Value {
@@ -217,32 +217,52 @@ fn mysql_to_toasty(
         MYSQL_TYPE_NULL => stmt::Value::Null,
         MYSQL_TYPE_VARCHAR | MYSQL_TYPE_VAR_STRING => {
             assert!(ty.is_string());
-            row.get(i)
-                .map(stmt::Value::String)
-                .unwrap_or(stmt::Value::Null)
+
+            match row.take_opt(i).expect("value missing") {
+                Ok(v) => stmt::Value::String(v),
+                Err(e) => {
+                    assert!(matches!(e.0, mysql_async::Value::NULL));
+                    stmt::Value::Null
+                }
+            }
         }
         MYSQL_TYPE_TINY => {
-            if column.column_length() == 1 {
-                row.get(i)
-                    .map(stmt::Value::Bool)
-                    .unwrap_or(stmt::Value::Null)
+            if ty.is_bool() {
+                match row.take_opt(i).expect("value missing") {
+                    Ok(v) => stmt::Value::Bool(v),
+                    Err(e) => {
+                        assert!(matches!(e.0, mysql_async::Value::NULL));
+                        stmt::Value::Null
+                    }
+                }
             } else {
-                row.get(i)
-                    .map(stmt::Value::I64)
-                    .unwrap_or(stmt::Value::Null)
+                match row.take_opt(i).expect("value missing") {
+                    Ok(v) => stmt::Value::I64(v),
+                    Err(e) => {
+                        assert!(matches!(e.0, mysql_async::Value::NULL));
+                        stmt::Value::Null
+                    }
+                }
             }
         }
         MYSQL_TYPE_SHORT | MYSQL_TYPE_INT24 | MYSQL_TYPE_LONG | MYSQL_TYPE_LONGLONG => {
-            row.get::<i64, usize>(i)
-                .map(stmt::Value::I64)
-                .unwrap_or(stmt::Value::Null);
-            todo!()
+            match row.take_opt(i).expect("value missing") {
+                Ok(v) => stmt::Value::I64(v),
+                Err(e) => {
+                    assert!(matches!(e.0, mysql_async::Value::NULL));
+                    stmt::Value::Null
+                }
+            }
         }
         MYSQL_TYPE_BLOB => {
             assert!(ty.is_string());
-            row.get::<Option<String>, _>(i)
-                .map(stmt::Value::from)
-                .unwrap_or(stmt::Value::Null)
+            match row.take_opt(i).expect("value missing") {
+                Ok(v) => stmt::Value::String(v),
+                Err(e) => {
+                    assert!(matches!(e.0, mysql_async::Value::NULL));
+                    stmt::Value::Null
+                }
+            }
         }
         _ => todo!(
             "implement MySQL to toasty conversion for `{:#?}`; {:#?}; ty={:#?}",
