@@ -140,7 +140,6 @@ impl Driver for MySQL {
         let mut params = Vec::new();
 
         let sql_as_str = sql::Serializer::mysql(schema).serialize(&sql, &mut params);
-        println!("{sql_as_str}");
 
         let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
         let args = params
@@ -150,18 +149,14 @@ impl Driver for MySQL {
 
         if ret.is_none() && !conditional_update {
             let count = conn
-                .exec::<mysql_async::Row, &String, mysql_async::Params>(
-                    &sql_as_str,
-                    mysql_async::Params::Positional(args),
-                )
+                .exec_iter(&sql_as_str, mysql_async::Params::Positional(args))
                 .await?
-                .len();
+                .affected_rows();
 
-            return Ok(Response::from_count(count));
+            return Ok(Response::from_count(count as usize));
         }
 
         let rows: Vec<mysql_async::Row> = conn.exec(&sql_as_str, &args).await?;
-        println!("{:?}", rows);
 
         if let Some(returning) = ret {
             let results = rows.into_iter().map(move |row| {

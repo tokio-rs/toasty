@@ -33,6 +33,11 @@ impl<T: AsExpr> Func<T> {
         Func { args, ret, expr }
     }
 
+    /// Returns true if the function has no inputs
+    pub(crate) fn is_const(&self) -> bool {
+        self.args.is_empty()
+    }
+
     pub(crate) fn is_identity(&self) -> bool {
         matches!(self.expr.as_expr(), stmt::Expr::Arg(expr_arg) if expr_arg.position == 0)
     }
@@ -45,7 +50,7 @@ impl<T: AsExpr> Func<T> {
     }
 
     pub(crate) fn eval_const(&self) -> stmt::Value {
-        assert!(self.args.is_empty());
+        assert!(self.is_const());
         eval(self.expr.as_expr(), &mut input::const_input()).unwrap()
     }
 

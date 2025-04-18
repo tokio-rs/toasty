@@ -57,7 +57,14 @@ impl Planner<'_> {
             ConstStmt => todo!(),
             Eval(expr) => {
                 *stmt = stmt::Expr::record_from_vec(partitioner.stmt);
-                eval::Func::from_stmt_unchecked(expr, vec![stmt::Type::Record(partitioner.ty)], ret)
+
+                let args = if partitioner.ty.is_empty() {
+                    vec![]
+                } else {
+                    vec![stmt::Type::Record(partitioner.ty)]
+                };
+
+                eval::Func::from_stmt_unchecked(expr, args, ret)
             }
         }
     }
