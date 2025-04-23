@@ -30,4 +30,8 @@ impl<'a> Serializer<'a> {
             flavor: Flavor::Mysql,
         }
     }
+
+    pub(super) fn is_mysql(&self) -> bool {
+        matches!(self.flavor, Flavor::Mysql)
+    }
 }

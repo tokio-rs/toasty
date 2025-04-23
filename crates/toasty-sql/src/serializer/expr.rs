@@ -28,6 +28,10 @@ impl ToSql for &stmt::Expr {
             }
             Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
                 (None, None) => fmt!(f, "COUNT(*)"),
+                // Mysql does not support filters, so translate it to an expression
+                (None, Some(expr)) if f.serializer.is_mysql() => {
+                    fmt!(f, "COUNT(CASE WHEN " expr " THEN 1 END)")
+                }
                 (None, Some(expr)) => fmt!(f, "COUNT(*) FILTER (WHERE " expr ")"),
                 _ => todo!("func={func:#?}"),
             },

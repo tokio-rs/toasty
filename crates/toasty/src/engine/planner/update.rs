@@ -2,8 +2,6 @@ use super::*;
 
 use app::{FieldTy, Model};
 
-use toasty_core::schema::db::ColumnId;
-
 // Strategy:
 // * Create a batch of queries to operate atomically.
 // * Queries might mix `insert`, `update`, and `delete`
@@ -110,17 +108,24 @@ impl Planner<'_> {
     ) -> Option<plan::VarId> {
         let output_var = output.as_ref().map(|o| o.var);
 
-        if stmt.condition.is_some() && self.capability.cte_with_update() {
-            let stmt = self.rewrite_conditional_update_as_query_with_cte(stmt);
+        // SQL does not support update conditions, so we need to rewrite the
+        // statement. This is a bit tricky because the best strategy for
+        // rewriting the statement will depend on the target database.
+        if stmt.condition.is_some() {
+            if true || self.capability.cte_with_update() {
+                let stmt = self.rewrite_conditional_update_as_query_with_cte(stmt);
 
-            assert!(output.is_none());
+                assert!(output.is_none());
 
-            self.push_action(plan::ExecStatement {
-                output,
-                input: None,
-                stmt: stmt.into(),
-                conditional_update_with_no_returning: true,
-            });
+                self.push_action(plan::ExecStatement {
+                    output,
+                    input: None,
+                    stmt: stmt.into(),
+                    conditional_update_with_no_returning: true,
+                });
+            } else {
+                self.plan_conditional_update_as_transaction(stmt, output);
+            }
         } else {
             // SQLite does not support CTE with update. We should transform the
             // conditional update into a transaction with checks between.
@@ -143,9 +148,6 @@ impl Planner<'_> {
         output: Option<plan::Output>,
     ) -> Option<plan::VarId> {
         let table = self.schema.table_for(model);
-
-        // Figure out which index to use for the query
-        // let input = self.extract_input(&mut filter, &[], true);
 
         let mut index_plan =
             self.plan_index_path2(table, stmt.filter.as_ref().expect("no filter specified"));
@@ -224,39 +226,6 @@ impl Planner<'_> {
             assignments: &stmt.assignments,
         }
         .visit_expr_mut(returning);
-
-        // todo!("stmt={stmt:#?}");
-
-        /*
-
-        impl eval::Convert for ConstReturning<'_> {
-            fn convert_expr_column(&mut self, stmt: &stmt::ExprColumn) -> Option<stmt::Expr> {
-                let stmt::ExprColumn::Column(column_id) = stmt else {
-                    return None;
-                };
-
-                let assignment = self.assignments.get(&column_id.index).unwrap();
-
-                assert!(assignment.op.is_set());
-                assert!(assignment.expr.is_const());
-
-                Some(assignment.expr.clone())
-            }
-        }
-
-        let expr = eval::Func::try_convert_from_stmt(
-            returning.clone(),
-            vec![],
-            ConstReturning {
-                assignments: &stmt.assignments,
-            },
-        )
-        .unwrap();
-
-        stmt.returning = None;
-
-        Some((expr.eval_const(), expr.ret))
-        */
     }
 
     fn rewrite_conditional_update_as_query_with_cte(&self, stmt: stmt::Update) -> stmt::Query {
@@ -278,6 +247,7 @@ impl Planner<'_> {
         ctes.push(stmt::Cte {
             query: stmt::Query {
                 with: None,
+                locks: vec![],
                 body: Box::new(stmt::ExprSet::Select(stmt::Select {
                     source: target.into(),
                     filter: filter.clone(),
@@ -309,6 +279,7 @@ impl Planner<'_> {
         ctes.push(stmt::Cte {
             query: stmt::Query {
                 with: None,
+                locks: vec![],
                 body: Box::new(stmt::ExprSet::Update(stmt::Update {
                     target: stmt.target,
                     assignments: stmt.assignments,
@@ -395,6 +366,73 @@ impl Planner<'_> {
                 filter: stmt::Expr::from(true),
                 returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
             })),
+            locks: vec![],
         }
+    }
+
+    fn plan_conditional_update_as_transaction(
+        &self,
+        stmt: stmt::Update,
+        output: Option<plan::Output>,
+    ) {
+        // For now, no returning supported
+        assert!(stmt.returning.is_none(), "TODO: support returning");
+
+        let Some(condition) = stmt.condition else {
+            panic!("conditional update without condition");
+        };
+
+        let Some(filter) = stmt.filter else {
+            panic!("conditional update without filter");
+        };
+
+        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
+            panic!("conditional update without table");
+        };
+
+        let read = stmt::Query {
+            with: None,
+            locks: vec![],
+            body: Box::new(stmt::ExprSet::Select(stmt::Select {
+                source: target.into(),
+                filter: filter.clone(),
+                returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                    stmt::Expr::count_star(),
+                    stmt::FuncCount {
+                        arg: None,
+                        filter: Some(Box::new(condition)),
+                    }
+                    .into(),
+                ])),
+            })),
+        };
+
+        let write = stmt::Update {
+            target: stmt.target,
+            assignments: stmt.assignments,
+            filter: Some(stmt::Expr::and(
+                filter,
+                stmt::Expr::eq(stmt::Expr::arg(0), stmt::Expr::arg(1)),
+            )),
+            condition: None,
+            returning: None,
+        };
+
+        /*
+         * BEGIN;
+         *
+         * SELECT FOR UPDATE count(*), count({condition}) FROM {table} WHERE {filter};
+         *
+         * UPDATE {table} SET {assignments} WHERE {filter} AND @col_0 = @col_1;
+         *
+         * SELECT @col_0, @col_1;
+         *
+         * COMMIT;
+         */
+
+        // SQLite does not support CTE with update. We should transform the
+        // conditional update into a transaction with checks between.
+        // However, for now, the SQLite driver handles it by hand (kind of).
+        todo!()
     }
 }

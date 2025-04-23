@@ -19,6 +19,7 @@ impl<M: Model> Insert<M> {
                 target: stmt::InsertTarget::Model(M::ID),
                 source: stmt::Query {
                     with: None,
+                    locks: vec![],
                     body: Box::new(stmt::ExprSet::Values(stmt::Values::new(vec![
                         stmt::ExprRecord::from_vec(vec![]).into(),
                     ]))),

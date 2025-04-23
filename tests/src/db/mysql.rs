@@ -33,7 +33,7 @@ impl Setup for SetupMySQL {
 
     fn capability(&self) -> &Capability {
         &Capability::Sql(CapabilitySql {
-            cte_with_update: true,
+            cte_with_update: false,
         })
     }
 }
