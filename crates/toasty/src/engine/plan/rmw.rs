@@ -11,7 +11,7 @@ pub(crate) struct ReadModifyWrite {
     pub output: Option<Output>,
 
     /// Read statement
-    pub read: stmt::Statement,
+    pub read: stmt::Query,
 
     /// Write statement
     pub write: stmt::Statement,

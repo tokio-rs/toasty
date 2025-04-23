@@ -1,9 +1,6 @@
 use super::*;
 
-use crate::{
-    schema::db::{ColumnId, TableId},
-    stmt,
-};
+use crate::stmt;
 
 #[derive(Debug)]
 pub struct Insert {

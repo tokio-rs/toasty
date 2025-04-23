@@ -88,7 +88,15 @@ impl ToSql for &stmt::InsertTarget {
 
 impl ToSql for &stmt::Query {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        fmt!(f, self.with self.body)
+        let locks = if self.locks.is_empty() {
+            None
+        } else {
+            Some((" ", Delimited(&self.locks, " ")))
+        };
+
+        let body = &*self.body;
+
+        fmt!(f, self.with body locks)
     }
 }
 
@@ -134,6 +142,15 @@ impl ToSql for &stmt::Select {
             "SELECT " self.returning " FROM " self.source
             " WHERE " self.filter
         );
+    }
+}
+
+impl ToSql for &stmt::Lock {
+    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        match self {
+            stmt::Lock::Update => fmt!(f, "FOR UPDATE"),
+            stmt::Lock::Share => fmt!(f, "FOR SHARE"),
+        }
     }
 }
 

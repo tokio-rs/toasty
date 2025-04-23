@@ -112,7 +112,7 @@ impl Planner<'_> {
         // statement. This is a bit tricky because the best strategy for
         // rewriting the statement will depend on the target database.
         if stmt.condition.is_some() {
-            if true || self.capability.cte_with_update() {
+            if self.capability.cte_with_update() {
                 let stmt = self.rewrite_conditional_update_as_query_with_cte(stmt);
 
                 assert!(output.is_none());
@@ -371,7 +371,7 @@ impl Planner<'_> {
     }
 
     fn plan_conditional_update_as_transaction(
-        &self,
+        &mut self,
         stmt: stmt::Update,
         output: Option<plan::Output>,
     ) {
@@ -390,9 +390,12 @@ impl Planner<'_> {
             panic!("conditional update without table");
         };
 
+        // Neither SQLite nor MySQL support CTE with update. We should transform
+        // the conditional update into a transaction with checks between.
+
         let read = stmt::Query {
             with: None,
-            locks: vec![],
+            locks: vec![stmt::Lock::Update],
             body: Box::new(stmt::ExprSet::Select(stmt::Select {
                 source: target.into(),
                 filter: filter.clone(),
@@ -410,13 +413,17 @@ impl Planner<'_> {
         let write = stmt::Update {
             target: stmt.target,
             assignments: stmt.assignments,
-            filter: Some(stmt::Expr::and(
-                filter,
-                stmt::Expr::eq(stmt::Expr::arg(0), stmt::Expr::arg(1)),
-            )),
+            filter: Some(filter),
             condition: None,
             returning: None,
         };
+
+        self.push_action(plan::ReadModifyWrite {
+            input: None,
+            output,
+            read,
+            write: write.into(),
+        });
 
         /*
          * BEGIN;
@@ -429,10 +436,5 @@ impl Planner<'_> {
          *
          * COMMIT;
          */
-
-        // SQLite does not support CTE with update. We should transform the
-        // conditional update into a transaction with checks between.
-        // However, for now, the SQLite driver handles it by hand (kind of).
-        todo!()
     }
 }
