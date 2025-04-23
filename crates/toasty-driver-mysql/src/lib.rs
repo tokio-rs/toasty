@@ -9,7 +9,7 @@ use mysql_async::{
     Pool,
 };
 use toasty_core::{
-    driver::{self, Capability, Operation, Response},
+    driver::{self, operation::Transaction, Capability, Operation, Response},
     schema::db::{Schema, Table},
     stmt::{self, ValueRecord},
     Driver, Result,
@@ -131,6 +131,18 @@ impl Driver for MySQL {
         let (sql, ret): (sql::Statement, _) = match op {
             // Operation::Insert(stmt) => stmt.into(),
             Operation::QuerySql(op) => (op.stmt.into(), op.ret),
+            Operation::Transaction(Transaction::Start) => {
+                conn.query_drop("START TRANSACTION").await?;
+                return Ok(Response::from_count(0));
+            }
+            Operation::Transaction(Transaction::Commit) => {
+                conn.query_drop("COMMIT").await?;
+                return Ok(Response::from_count(0));
+            }
+            Operation::Transaction(Transaction::Rollback) => {
+                conn.query_drop("ROLLBACK").await?;
+                return Ok(Response::from_count(0));
+            }
             op => todo!("op={:#?}", op),
         };
 

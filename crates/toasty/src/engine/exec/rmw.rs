@@ -1,5 +1,8 @@
 use toasty_core::{
-    driver::{operation, Rows},
+    driver::{
+        operation::{self, Transaction},
+        Rows,
+    },
     stmt,
 };
 
@@ -14,6 +17,13 @@ impl Exec<'_> {
     ) -> Result<()> {
         assert!(action.input.is_none(), "TODO");
         assert!(action.output.is_none(), "TODO");
+
+        let res = self
+            .db
+            .driver
+            .exec(&self.db.schema.db, Transaction::Start.into())
+            .await?;
+        assert!(matches!(res.rows, Rows::Count(0)));
 
         let ty = Some(vec![stmt::Type::I64, stmt::Type::I64]);
 
@@ -68,6 +78,14 @@ impl Exec<'_> {
         };
 
         assert_eq!(actual, count as usize);
+
+        let res = self
+            .db
+            .driver
+            .exec(&self.db.schema.db, Transaction::Commit.into())
+            .await?;
+        assert!(matches!(res.rows, Rows::Count(0)));
+
         Ok(())
     }
 }

@@ -16,6 +16,9 @@ pub use query_pk::QueryPk;
 mod query_sql;
 pub use query_sql::QuerySql;
 
+mod transaction;
+pub use transaction::Transaction;
+
 mod update_by_key;
 pub use update_by_key::UpdateByKey;
 
@@ -40,6 +43,9 @@ pub enum Operation {
 
     /// Execute a SQL query
     QuerySql(QuerySql),
+
+    /// Execute a transaction lifecycle op
+    Transaction(Transaction),
 
     /// Update a record by the primary key
     UpdateByKey(UpdateByKey),
