@@ -393,9 +393,25 @@ impl Planner<'_> {
         // Neither SQLite nor MySQL support CTE with update. We should transform
         // the conditional update into a transaction with checks between.
 
+        /*
+         * BEGIN;
+         *
+         * SELECT FOR UPDATE count(*), count({condition}) FROM {table} WHERE {filter};
+         *
+         * UPDATE {table} SET {assignments} WHERE {filter} AND @col_0 = @col_1;
+         *
+         * SELECT @col_0, @col_1;
+         *
+         * COMMIT;
+         */
+
         let read = stmt::Query {
             with: None,
-            locks: vec![stmt::Lock::Update],
+            locks: if self.capability.select_for_update() {
+                vec![stmt::Lock::Update]
+            } else {
+                vec![]
+            },
             body: Box::new(stmt::ExprSet::Select(stmt::Select {
                 source: target.into(),
                 filter: filter.clone(),
@@ -424,17 +440,5 @@ impl Planner<'_> {
             read,
             write: write.into(),
         });
-
-        /*
-         * BEGIN;
-         *
-         * SELECT FOR UPDATE count(*), count({condition}) FROM {table} WHERE {filter};
-         *
-         * UPDATE {table} SET {assignments} WHERE {filter} AND @col_0 = @col_1;
-         *
-         * SELECT @col_0, @col_1;
-         *
-         * COMMIT;
-         */
     }
 }

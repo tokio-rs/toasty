@@ -159,6 +159,7 @@ impl Driver for PostgreSQL {
     fn capability(&self) -> &Capability {
         &Capability::Sql(driver::CapabilitySql {
             cte_with_update: true,
+            select_for_update: true,
         })
     }
 

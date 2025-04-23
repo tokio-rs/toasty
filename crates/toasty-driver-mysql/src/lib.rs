@@ -118,6 +118,7 @@ impl Driver for MySQL {
     fn capability(&self) -> &Capability {
         &Capability::Sql(driver::CapabilitySql {
             cte_with_update: false,
+            select_for_update: true,
         })
     }
 

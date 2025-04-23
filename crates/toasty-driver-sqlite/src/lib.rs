@@ -1,5 +1,8 @@
 use toasty_core::{
-    driver::{operation::Operation, Capability, CapabilitySql, Driver, Response},
+    driver::{
+        operation::{Operation, Transaction},
+        Capability, CapabilitySql, Driver, Response,
+    },
     schema::db::{Schema, Table},
     stmt, Result,
 };
@@ -56,6 +59,7 @@ impl Driver for Sqlite {
     fn capability(&self) -> &Capability {
         &Capability::Sql(CapabilitySql {
             cte_with_update: false,
+            select_for_update: false,
         })
     }
 
@@ -64,13 +68,23 @@ impl Driver for Sqlite {
     }
 
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        use Operation::*;
-
         let connection = self.connection.lock().unwrap();
 
         let mut sql: sql::Statement = match op {
-            QuerySql(op) => op.stmt.into(),
-            Insert(op) => op.stmt.into(),
+            Operation::QuerySql(op) => op.stmt.into(),
+            Operation::Insert(op) => op.stmt.into(),
+            Operation::Transaction(Transaction::Start) => {
+                connection.execute("BEGIN", [])?;
+                return Ok(Response::from_count(0));
+            }
+            Operation::Transaction(Transaction::Commit) => {
+                connection.execute("COMMIT", [])?;
+                return Ok(Response::from_count(0));
+            }
+            Operation::Transaction(Transaction::Rollback) => {
+                connection.execute("ROLLBACK", [])?;
+                return Ok(Response::from_count(0));
+            }
             _ => todo!(),
         };
 

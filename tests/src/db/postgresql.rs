@@ -34,6 +34,7 @@ impl Setup for SetupPostgreSQL {
     fn capability(&self) -> &Capability {
         &Capability::Sql(CapabilitySql {
             cte_with_update: true,
+            select_for_update: true,
         })
     }
 }
