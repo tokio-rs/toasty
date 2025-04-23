@@ -82,10 +82,10 @@ jobs:
         - uses: Swatinem/rust-cache@v2
           with:
             save-if: ${{ github.ref == 'refs/heads/main' }}
-#        - name: cargo test
-#          run: cargo test --workspace --no-default-features --features mysql
-#        - name: cargo run --bin example-hello-toasty
-#          run: cargo run --bin example-hello-toasty --features mysql
+        - name: cargo test
+          run: cargo test --workspace --no-default-features --features mysql
+        - name: cargo run --bin example-hello-toasty
+          run: cargo run --bin example-hello-toasty --features mysql
 
     test-postgresql:
         needs: check
