@@ -168,7 +168,7 @@ impl Driver for MySQL {
                 .await?
                 .affected_rows();
 
-            return Ok(Response::from_count(count as usize));
+            return Ok(Response::from_count(count));
         }
 
         let rows: Vec<mysql_async::Row> = conn.exec(&sql_as_str, &args).await?;

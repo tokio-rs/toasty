@@ -104,7 +104,7 @@ impl DynamoDb {
                     todo!("err={:#?}", e);
                 }
 
-                return Ok(Response::from_count(op.keys.len()));
+                return Ok(Response::from_count(op.keys.len() as _));
             }
         }
 
