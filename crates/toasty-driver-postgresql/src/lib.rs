@@ -242,7 +242,7 @@ impl Driver for PostgreSQL {
 fn postgres_to_toasty(index: usize, row: &Row, column: &Column) -> stmt::Value {
     // NOTE: unfortunately, the inner representation of the PostgreSQL type enum is not
     // accessible, so we must manually match each type like so.
-    if column.type_() == &Type::TEXT {
+    if column.type_() == &Type::TEXT || column.type_() == &Type::VARCHAR {
         row.get::<usize, Option<String>>(index)
             .map(stmt::Value::String)
             .unwrap_or(stmt::Value::Null)

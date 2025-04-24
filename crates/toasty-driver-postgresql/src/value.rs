@@ -30,6 +30,6 @@ impl ToSql for Value {
         }
     }
 
-    accepts!(BOOL, INT4, TEXT);
+    accepts!(BOOL, INT4, TEXT, VARCHAR);
     to_sql_checked!();
 }
