@@ -141,7 +141,7 @@ impl Driver for Sqlite {
                 params.iter().map(value_from_param),
             ))?;
 
-            return Ok(Response::from_count(count));
+            return Ok(Response::from_count(count as _));
         }
 
         let mut rows = stmt
@@ -179,7 +179,7 @@ impl Driver for Sqlite {
                 // need to make this transactional later.
                 anyhow::bail!("pre condition failed");
             } else {
-                return Ok(Response::from_count(ret.len()));
+                return Ok(Response::from_count(ret.len() as _));
             }
         }
 

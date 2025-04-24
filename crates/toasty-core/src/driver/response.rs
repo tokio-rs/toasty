@@ -8,14 +8,14 @@ pub struct Response {
 #[derive(Debug)]
 pub enum Rows {
     /// Number of rows impacted by the operation
-    Count(usize),
+    Count(u64),
 
     /// Operation result, as a stream of rows
     Values(ValueStream),
 }
 
 impl Response {
-    pub fn from_count(count: usize) -> Response {
+    pub fn from_count(count: u64) -> Response {
         Response {
             rows: Rows::Count(count),
         }

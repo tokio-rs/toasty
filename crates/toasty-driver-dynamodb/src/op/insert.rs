@@ -160,6 +160,6 @@ impl DynamoDb {
             _ => todo!(),
         }
 
-        Ok(Response::from_count(count))
+        Ok(Response::from_count(count as _))
     }
 }

@@ -191,7 +191,7 @@ impl Driver for PostgreSQL {
             .into_boxed_slice();
 
         if width.is_none() && !conditional_update {
-            let count = self.client.execute(&sql_as_str, &args).await? as usize;
+            let count = self.client.execute(&sql_as_str, &args).await?;
             return Ok(Response::from_count(count));
         }
 

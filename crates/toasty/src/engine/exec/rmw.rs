@@ -77,7 +77,7 @@ impl Exec<'_> {
             anyhow::bail!("expected count");
         };
 
-        assert_eq!(actual, count as usize);
+        assert_eq!(actual, count as u64);
 
         let res = self
             .db
