@@ -159,6 +159,7 @@ impl Driver for PostgreSQL {
     fn capability(&self) -> &Capability {
         &Capability::Sql(driver::CapabilitySql {
             cte_with_update: true,
+            select_for_update: true,
         })
     }
 
@@ -168,7 +169,7 @@ impl Driver for PostgreSQL {
 
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let sql: sql::Statement = match op {
-            Operation::Insert(stmt) => stmt.into(),
+            Operation::Insert(op) => op.stmt.into(),
             Operation::QuerySql(query) => query.stmt.into(),
             op => todo!("op={:#?}", op),
         };
@@ -241,7 +242,7 @@ impl Driver for PostgreSQL {
 fn postgres_to_toasty(index: usize, row: &Row, column: &Column) -> stmt::Value {
     // NOTE: unfortunately, the inner representation of the PostgreSQL type enum is not
     // accessible, so we must manually match each type like so.
-    if column.type_() == &Type::TEXT {
+    if column.type_() == &Type::TEXT || column.type_() == &Type::VARCHAR {
         row.get::<usize, Option<String>>(index)
             .map(stmt::Value::String)
             .unwrap_or(stmt::Value::Null)

@@ -36,6 +36,13 @@ impl Expr {
             _ => panic!(),
         }
     }
+
+    pub fn into_record(self) -> ExprRecord {
+        match self {
+            Expr::Record(expr_record) => expr_record,
+            _ => panic!(),
+        }
+    }
 }
 
 impl ExprRecord {

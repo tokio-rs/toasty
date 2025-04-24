@@ -1,4 +1,5 @@
 use super::*;
+
 use app::{FieldTy, Model};
 
 // Strategy:
@@ -80,14 +81,10 @@ impl Planner<'_> {
 
         self.lower_stmt_update(model, &mut stmt);
 
-        if self.capability.is_sql() {
-            self.plan_update_sql(stmt)
-        } else {
-            self.plan_update_kv(model, stmt)
-        }
-    }
+        // If the statement `Returning` is constant (i.e. does not depend on the
+        // database evaluating the statement), then extract it here.
+        self.constantize_update_returning(&mut stmt);
 
-    fn plan_update_sql(&mut self, mut stmt: stmt::Update) -> Option<plan::VarId> {
         let output = self
             .partition_maybe_returning(&mut stmt.returning)
             .map(|project| plan::Output {
@@ -97,19 +94,38 @@ impl Planner<'_> {
                 project,
             });
 
+        if self.capability.is_sql() {
+            self.plan_update_sql(stmt, output)
+        } else {
+            self.plan_update_kv(model, stmt, output)
+        }
+    }
+
+    fn plan_update_sql(
+        &mut self,
+        stmt: stmt::Update,
+        output: Option<plan::Output>,
+    ) -> Option<plan::VarId> {
         let output_var = output.as_ref().map(|o| o.var);
 
-        if stmt.condition.is_some() && self.capability.cte_with_update() {
-            let stmt = self.rewrite_conditional_update_as_query_with_cte(stmt);
+        // SQL does not support update conditions, so we need to rewrite the
+        // statement. This is a bit tricky because the best strategy for
+        // rewriting the statement will depend on the target database.
+        if stmt.condition.is_some() {
+            if self.capability.cte_with_update() {
+                let stmt = self.rewrite_conditional_update_as_query_with_cte(stmt);
 
-            assert!(output.is_none());
+                assert!(output.is_none());
 
-            self.push_action(plan::ExecStatement {
-                output,
-                input: None,
-                stmt: stmt.into(),
-                conditional_update_with_no_returning: true,
-            });
+                self.push_action(plan::ExecStatement {
+                    output,
+                    input: None,
+                    stmt: stmt.into(),
+                    conditional_update_with_no_returning: true,
+                });
+            } else {
+                self.plan_conditional_update_as_transaction(stmt, output);
+            }
         } else {
             // SQLite does not support CTE with update. We should transform the
             // conditional update into a transaction with checks between.
@@ -125,25 +141,18 @@ impl Planner<'_> {
         output_var
     }
 
-    fn plan_update_kv(&mut self, model: &Model, mut stmt: stmt::Update) -> Option<plan::VarId> {
+    fn plan_update_kv(
+        &mut self,
+        model: &Model,
+        stmt: stmt::Update,
+        output: Option<plan::Output>,
+    ) -> Option<plan::VarId> {
         let table = self.schema.table_for(model);
-
-        // Figure out which index to use for the query
-        // let input = self.extract_input(&mut filter, &[], true);
 
         let mut index_plan =
             self.plan_index_path2(table, stmt.filter.as_ref().expect("no filter specified"));
 
         assert!(!stmt.assignments.is_empty());
-
-        let output = self
-            .partition_maybe_returning(&mut stmt.returning)
-            .map(|project| plan::Output {
-                var: self
-                    .var_table
-                    .register_var(stmt::Type::list(project.ret.clone())),
-                project,
-            });
 
         let output_var = output.as_ref().map(|o| o.var);
 
@@ -188,6 +197,37 @@ impl Planner<'_> {
         }
     }
 
+    // Constantizing the returning clause of an update statement is a bit tricky as there could be many rows that are impacted.
+    fn constantize_update_returning(&self, stmt: &mut stmt::Update) {
+        let Some(stmt::Returning::Expr(returning)) = &mut stmt.returning else {
+            return;
+        };
+
+        struct ConstReturning<'a> {
+            assignments: &'a stmt::Assignments,
+        }
+
+        impl stmt::visit_mut::VisitMut for ConstReturning<'_> {
+            fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+                stmt::visit_mut::visit_expr_mut(self, expr);
+
+                if let stmt::Expr::Column(stmt::ExprColumn::Column(column_id)) = expr {
+                    if let Some(assignment) = self.assignments.get(&column_id.index) {
+                        assert!(assignment.op.is_set());
+                        assert!(assignment.expr.is_const());
+
+                        *expr = assignment.expr.clone();
+                    }
+                }
+            }
+        }
+
+        ConstReturning {
+            assignments: &stmt.assignments,
+        }
+        .visit_expr_mut(returning);
+    }
+
     fn rewrite_conditional_update_as_query_with_cte(&self, stmt: stmt::Update) -> stmt::Query {
         let Some(condition) = stmt.condition else {
             panic!("conditional update without condition");
@@ -207,6 +247,7 @@ impl Planner<'_> {
         ctes.push(stmt::Cte {
             query: stmt::Query {
                 with: None,
+                locks: vec![],
                 body: Box::new(stmt::ExprSet::Select(stmt::Select {
                     source: target.into(),
                     filter: filter.clone(),
@@ -238,6 +279,7 @@ impl Planner<'_> {
         ctes.push(stmt::Cte {
             query: stmt::Query {
                 with: None,
+                locks: vec![],
                 body: Box::new(stmt::ExprSet::Update(stmt::Update {
                     target: stmt.target,
                     assignments: stmt.assignments,
@@ -324,6 +366,79 @@ impl Planner<'_> {
                 filter: stmt::Expr::from(true),
                 returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
             })),
+            locks: vec![],
         }
+    }
+
+    fn plan_conditional_update_as_transaction(
+        &mut self,
+        stmt: stmt::Update,
+        output: Option<plan::Output>,
+    ) {
+        // For now, no returning supported
+        assert!(stmt.returning.is_none(), "TODO: support returning");
+
+        let Some(condition) = stmt.condition else {
+            panic!("conditional update without condition");
+        };
+
+        let Some(filter) = stmt.filter else {
+            panic!("conditional update without filter");
+        };
+
+        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
+            panic!("conditional update without table");
+        };
+
+        // Neither SQLite nor MySQL support CTE with update. We should transform
+        // the conditional update into a transaction with checks between.
+
+        /*
+         * BEGIN;
+         *
+         * SELECT FOR UPDATE count(*), count({condition}) FROM {table} WHERE {filter};
+         *
+         * UPDATE {table} SET {assignments} WHERE {filter} AND @col_0 = @col_1;
+         *
+         * SELECT @col_0, @col_1;
+         *
+         * COMMIT;
+         */
+
+        let read = stmt::Query {
+            with: None,
+            locks: if self.capability.select_for_update() {
+                vec![stmt::Lock::Update]
+            } else {
+                vec![]
+            },
+            body: Box::new(stmt::ExprSet::Select(stmt::Select {
+                source: target.into(),
+                filter: filter.clone(),
+                returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                    stmt::Expr::count_star(),
+                    stmt::FuncCount {
+                        arg: None,
+                        filter: Some(Box::new(condition)),
+                    }
+                    .into(),
+                ])),
+            })),
+        };
+
+        let write = stmt::Update {
+            target: stmt.target,
+            assignments: stmt.assignments,
+            filter: Some(filter),
+            condition: None,
+            returning: None,
+        };
+
+        self.push_action(plan::ReadModifyWrite {
+            input: None,
+            output,
+            read,
+            write: write.into(),
+        });
     }
 }

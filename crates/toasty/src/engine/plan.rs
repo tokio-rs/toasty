@@ -34,6 +34,9 @@ pub(crate) use pipeline::Pipeline;
 mod query_pk;
 pub(crate) use query_pk::QueryPk;
 
+mod rmw;
+pub(crate) use rmw::ReadModifyWrite;
+
 mod set_var;
 pub(crate) use set_var::{SetVar, VarId};
 

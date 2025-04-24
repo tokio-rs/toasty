@@ -38,6 +38,13 @@ impl Returning {
             _ => todo!(),
         }
     }
+
+    pub fn into_expr(self) -> Expr {
+        match self {
+            Returning::Expr(expr) => expr,
+            _ => todo!("self={self:#?}"),
+        }
+    }
 }
 
 impl From<Expr> for Returning {

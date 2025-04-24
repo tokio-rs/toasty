@@ -6,6 +6,9 @@ use crate::stmt;
 pub struct QuerySql {
     /// The SQL query to execute
     pub stmt: stmt::Statement,
+
+    /// The return type
+    pub ret: Option<Vec<stmt::Type>>,
 }
 
 impl From<QuerySql> for Operation {

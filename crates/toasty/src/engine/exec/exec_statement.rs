@@ -18,13 +18,11 @@ impl Exec<'_> {
 
     pub(super) async fn exec_statement(
         &mut self,
-        stmt: stmt::Statement,
+        mut stmt: stmt::Statement,
         input: Option<&plan::Input>,
         output: Option<&plan::Output>,
         conditional_update_with_no_returning: bool,
     ) -> Result<()> {
-        let mut stmt = stmt.clone();
-
         if let Some(input) = input {
             let input = self.collect_input(input).await?;
             stmt.substitute(&[input]);
@@ -37,10 +35,26 @@ impl Exec<'_> {
             stmt::Statement::Update(stmt) => stmt.returning.is_some(),
         };
 
+        let ty = if conditional_update_with_no_returning {
+            // Bit of a hack
+            Some(vec![stmt::Type::I64, stmt::Type::I64])
+        } else {
+            output.and_then(|out| match &out.project.args[..] {
+                [stmt::Type::Record(fields), ..] => Some(fields.clone()),
+                [] => None,
+                _ => todo!(),
+            })
+        };
+
+        assert_eq!(expect_rows, ty.is_some());
+
         let res = self
             .db
             .driver
-            .exec(&self.db.schema.db, operation::QuerySql { stmt }.into())
+            .exec(
+                &self.db.schema.db,
+                operation::QuerySql { stmt, ret: ty }.into(),
+            )
             .await?;
 
         let Some(out) = output else {

@@ -44,6 +44,10 @@ impl Type {
         Type::List(Box::new(ty.into()))
     }
 
+    pub fn is_bool(&self) -> bool {
+        matches!(self, Self::Bool)
+    }
+
     pub fn is_id(&self) -> bool {
         matches!(self, Self::Id(_))
     }
@@ -54,6 +58,10 @@ impl Type {
 
     pub fn is_list(&self) -> bool {
         matches!(self, Self::List(_))
+    }
+
+    pub fn is_string(&self) -> bool {
+        matches!(self, Self::String)
     }
 
     pub fn cast(&self, value: Value) -> Result<Value> {

@@ -2,15 +2,13 @@ use super::{Params, ToSql};
 
 use crate::stmt;
 
-impl ToSql for &stmt::Type {
+impl ToSql for &stmt::ColumnType {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        fmt!(
-            f,
-            match self {
-                stmt::Type::Boolean => "BOOLEAN",
-                stmt::Type::Integer => "INTEGER",
-                stmt::Type::Text => "TEXT",
-            }
-        );
+        match self {
+            stmt::ColumnType::Boolean => fmt!(f, "BOOLEAN"),
+            stmt::ColumnType::Integer => fmt!(f, "INTEGER"),
+            stmt::ColumnType::Text => fmt!(f, "TEXT"),
+            stmt::ColumnType::VarChar(size) => fmt!(f, "VARCHAR(" size ")"),
+        }
     }
 }

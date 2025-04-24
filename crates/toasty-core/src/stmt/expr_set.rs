@@ -75,3 +75,9 @@ impl Default for ExprSet {
         ExprSet::Values(Values::default())
     }
 }
+
+impl From<Select> for ExprSet {
+    fn from(value: Select) -> Self {
+        ExprSet::Select(value)
+    }
+}

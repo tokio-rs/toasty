@@ -2,6 +2,9 @@ use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Select {
+    /// The projection part of a SQL query.
+    pub returning: Returning,
+
     /// The `FROM` part of a SQL query. For model-level, this is the model being
     /// selected with any "includes". For table-level, this is the table with
     /// joins.
@@ -9,17 +12,14 @@ pub struct Select {
 
     /// Query filter
     pub filter: Expr,
-
-    /// The projection part of a SQL query.
-    pub returning: Returning,
 }
 
 impl Select {
     pub fn new(source: impl Into<Source>, filter: impl Into<Expr>) -> Select {
         Select {
+            returning: Returning::Star,
             source: source.into(),
             filter: filter.into(),
-            returning: Returning::Star,
         }
     }
 
@@ -59,10 +59,7 @@ impl From<Select> for Statement {
 
 impl From<Select> for Query {
     fn from(value: Select) -> Self {
-        Query {
-            with: None,
-            body: Box::new(ExprSet::Select(value)),
-        }
+        Query::builder(value).build()
     }
 }
 

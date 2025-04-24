@@ -1,18 +1,17 @@
+#![allow(clippy::needless_range_loop)]
+
 mod value;
 pub(crate) use value::Value;
 
 use std::sync::Arc;
 
 use mysql_async::{
-    consts::ColumnType::{
-        MYSQL_TYPE_INT24, MYSQL_TYPE_LONG, MYSQL_TYPE_LONGLONG, MYSQL_TYPE_NULL, MYSQL_TYPE_SHORT,
-        MYSQL_TYPE_TINY, MYSQL_TYPE_VARCHAR,
-    },
+    consts::ColumnType,
     prelude::{Queryable, ToValue},
     Pool,
 };
 use toasty_core::{
-    driver::{self, Capability, Operation, Response},
+    driver::{self, operation::Transaction, Capability, Operation, Response},
     schema::db::{Schema, Table},
     stmt::{self, ValueRecord},
     Driver, Result,
@@ -120,7 +119,8 @@ impl From<Pool> for MySQL {
 impl Driver for MySQL {
     fn capability(&self) -> &Capability {
         &Capability::Sql(driver::CapabilitySql {
-            cte_with_update: true,
+            cte_with_update: false,
+            select_for_update: true,
         })
     }
 
@@ -131,16 +131,26 @@ impl Driver for MySQL {
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let mut conn = self.pool.get_conn().await?;
 
-        let sql: sql::Statement = match op {
-            Operation::Insert(stmt) => stmt.into(),
-            Operation::QuerySql(query) => query.stmt.into(),
+        let (sql, ret): (sql::Statement, _) = match op {
+            // Operation::Insert(stmt) => stmt.into(),
+            Operation::QuerySql(op) => (op.stmt.into(), op.ret),
+            Operation::Transaction(Transaction::Start) => {
+                conn.query_drop("START TRANSACTION").await?;
+                return Ok(Response::from_count(0));
+            }
+            Operation::Transaction(Transaction::Commit) => {
+                conn.query_drop("COMMIT").await?;
+                return Ok(Response::from_count(0));
+            }
+            Operation::Transaction(Transaction::Rollback) => {
+                conn.query_drop("ROLLBACK").await?;
+                return Ok(Response::from_count(0));
+            }
             op => todo!("op={:#?}", op),
         };
 
         let conditional_update =
             matches!(&sql, sql::Statement::Update(stmt) if stmt.condition.is_some());
-
-        let width = sql.returning_len();
 
         let mut params = Vec::new();
 
@@ -152,21 +162,42 @@ impl Driver for MySQL {
             .map(|param| param.to_value())
             .collect::<Vec<_>>();
 
-        if width.is_none() && !conditional_update {
+        if ret.is_none() && !conditional_update {
             let count = conn
-                .exec::<mysql_async::Row, &String, mysql_async::Params>(
-                    &sql_as_str,
-                    mysql_async::Params::Positional(args),
-                )
+                .exec_iter(&sql_as_str, mysql_async::Params::Positional(args))
                 .await?
-                .len();
+                .affected_rows();
 
-            return Ok(Response::from_count(count));
+            return Ok(Response::from_count(count as usize));
         }
 
         let rows: Vec<mysql_async::Row> = conn.exec(&sql_as_str, &args).await?;
 
-        if width.is_none() {
+        if let Some(returning) = ret {
+            let results = rows.into_iter().map(move |mut row| {
+                assert_eq!(
+                    row.len(),
+                    returning.len(),
+                    "row={row:#?}; returning={returning:#?}"
+                );
+
+                let mut results = Vec::new();
+                for mut i in 0..row.len() {
+                    if conditional_update {
+                        i += 2;
+                    }
+
+                    let column = &row.columns()[i];
+                    results.push(mysql_to_toasty(i, &mut row, column, &returning[i]));
+                }
+
+                Ok(ValueRecord::from_vec(results))
+            });
+
+            Ok(Response::from_value_stream(stmt::ValueStream::from_iter(
+                results,
+            )))
+        } else {
             let [row] = &rows[..] else { todo!() };
             let total = row.get::<i64, usize>(0).unwrap();
             let condition_matched = row.get::<i64, usize>(1).unwrap();
@@ -176,24 +207,6 @@ impl Driver for MySQL {
             } else {
                 anyhow::bail!("update condition did not match");
             }
-        } else {
-            let results = rows.into_iter().map(move |row| {
-                let mut results = Vec::new();
-                for mut i in 0..row.len() {
-                    if conditional_update {
-                        i += 2;
-                    }
-
-                    let column = &row.columns()[i];
-                    results.push(mysql_to_toasty(i, &row, column));
-                }
-
-                Ok(ValueRecord::from_vec(results))
-            });
-
-            Ok(Response::from_value_stream(stmt::ValueStream::from_iter(
-                results,
-            )))
         }
     }
 
@@ -207,33 +220,70 @@ impl Driver for MySQL {
     }
 }
 
-fn mysql_to_toasty(i: usize, row: &mysql_async::Row, column: &mysql_async::Column) -> stmt::Value {
+fn mysql_to_toasty(
+    i: usize,
+    row: &mut mysql_async::Row,
+    column: &mysql_async::Column,
+    ty: &stmt::Type,
+) -> stmt::Value {
+    use ColumnType::*;
+
     match column.column_type() {
         MYSQL_TYPE_NULL => stmt::Value::Null,
-        MYSQL_TYPE_VARCHAR => row
-            .get(i)
-            .map(stmt::Value::String)
-            .unwrap_or(stmt::Value::Null),
+        MYSQL_TYPE_VARCHAR | MYSQL_TYPE_VAR_STRING => {
+            assert!(ty.is_string());
+
+            match row.take_opt(i).expect("value missing") {
+                Ok(v) => stmt::Value::String(v),
+                Err(e) => {
+                    assert!(matches!(e.0, mysql_async::Value::NULL));
+                    stmt::Value::Null
+                }
+            }
+        }
         MYSQL_TYPE_TINY => {
-            if column.column_length() == 1 {
-                row.get(i)
-                    .map(stmt::Value::Bool)
-                    .unwrap_or(stmt::Value::Null)
+            if ty.is_bool() {
+                match row.take_opt(i).expect("value missing") {
+                    Ok(v) => stmt::Value::Bool(v),
+                    Err(e) => {
+                        assert!(matches!(e.0, mysql_async::Value::NULL));
+                        stmt::Value::Null
+                    }
+                }
             } else {
-                row.get(i)
-                    .map(stmt::Value::I64)
-                    .unwrap_or(stmt::Value::Null)
+                match row.take_opt(i).expect("value missing") {
+                    Ok(v) => stmt::Value::I64(v),
+                    Err(e) => {
+                        assert!(matches!(e.0, mysql_async::Value::NULL));
+                        stmt::Value::Null
+                    }
+                }
             }
         }
         MYSQL_TYPE_SHORT | MYSQL_TYPE_INT24 | MYSQL_TYPE_LONG | MYSQL_TYPE_LONGLONG => {
-            row.get::<i64, usize>(i)
-                .map(stmt::Value::I64)
-                .unwrap_or(stmt::Value::Null);
-            todo!()
+            match row.take_opt(i).expect("value missing") {
+                Ok(v) => stmt::Value::I64(v),
+                Err(e) => {
+                    assert!(matches!(e.0, mysql_async::Value::NULL));
+                    stmt::Value::Null
+                }
+            }
+        }
+        MYSQL_TYPE_BLOB => {
+            assert!(ty.is_string());
+            match row.take_opt(i).expect("value missing") {
+                Ok(v) => stmt::Value::String(v),
+                Err(e) => {
+                    assert!(matches!(e.0, mysql_async::Value::NULL));
+                    stmt::Value::Null
+                }
+            }
         }
         _ => todo!(
-            "implement PostgreSQL to toasty conversion for `{:#?}`",
-            column.column_type()
+            "implement MySQL to toasty conversion for `{:#?}`; {:#?}; ty={:#?}",
+            column.column_type(),
+            row.get::<mysql_async::Value, _>(i),
+            ty
         ),
     }
 }

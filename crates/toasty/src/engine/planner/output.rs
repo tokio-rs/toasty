@@ -13,9 +13,14 @@ struct Partitioner<'a> {
 
 #[derive(Debug)]
 enum Partition {
-    /// The expr can evaluate on the databases as a statement.
-    Stmt,
+    /// The expr *must* be evaluated by Toasty
     Eval(stmt::Expr),
+
+    /// The expr *must* be evaluated by the database
+    Stmt,
+
+    /// The expr *can* be evaluated by either Toasty or the database
+    ConstStmt,
 }
 
 impl Planner<'_> {
@@ -49,9 +54,17 @@ impl Planner<'_> {
             Stmt => {
                 todo!()
             }
+            ConstStmt => todo!(),
             Eval(expr) => {
                 *stmt = stmt::Expr::record_from_vec(partitioner.stmt);
-                eval::Func::from_stmt_unchecked(expr, vec![stmt::Type::Record(partitioner.ty)], ret)
+
+                let args = if partitioner.ty.is_empty() {
+                    vec![]
+                } else {
+                    vec![stmt::Type::Record(partitioner.ty)]
+                };
+
+                eval::Func::from_stmt_unchecked(expr, args, ret)
             }
         }
     }
@@ -83,6 +96,7 @@ impl Planner<'_> {
                         let arg = partitioner.push_stmt_field(field, ty);
                         eval_fields.push(arg);
                     }
+                    ConstStmt => todo!(),
                     Eval(eval) => {
                         identity = false;
                         eval_fields.push(eval);
@@ -127,6 +141,7 @@ impl Partitioner<'_> {
                     let arg = self.push_stmt_field((*expr.expr).clone(), ty);
                     Eval(stmt::Expr::cast(arg, expr.ty.clone()))
                 }
+                ConstStmt => Eval(stmt::Expr::cast((*expr.expr).clone(), expr.ty.clone())),
                 Eval(eval) => Eval(stmt::Expr::cast(eval, expr.ty.clone())),
             },
             stmt::Expr::Column(_) => Stmt,
@@ -136,6 +151,7 @@ impl Partitioner<'_> {
                     let arg = self.push_stmt_field((*expr.base).clone(), ty);
                     Eval(stmt::Expr::project(arg, expr.projection.clone()))
                 }
+                ConstStmt => todo!(),
                 Eval(eval) => Eval(stmt::Expr::project(eval, expr.projection.clone())),
             },
             stmt::Expr::Record(expr) => {
@@ -147,30 +163,31 @@ impl Partitioner<'_> {
 
                 if field_partition_res.iter().all(|res| res.is_stmt()) {
                     Stmt
+                } else if field_partition_res.iter().all(|res| res.is_const_stmt()) {
+                    ConstStmt
                 } else {
                     let mut fields = vec![];
 
                     for res in field_partition_res.into_iter() {
                         match res {
-                            Stmt => {
-                                todo!()
-                            }
                             Eval(eval) => {
                                 fields.push(eval);
                             }
+                            _ => todo!("res={res:#?}"),
                         }
                     }
 
                     Eval(stmt::Expr::record_from_vec(fields))
                 }
             }
-            stmt::Expr::Value(_) => Stmt,
+            stmt::Expr::Value(_) => ConstStmt,
             stmt::Expr::DecodeEnum(expr, ty, variant) => match self.partition_expr(expr) {
                 Stmt => {
                     let base_ty = self.planner.infer_expr_ty(expr, &[]);
                     let base = self.push_stmt_field((**expr).clone(), base_ty);
                     Eval(stmt::Expr::DecodeEnum(Box::new(base), ty.clone(), *variant))
                 }
+                ConstStmt => todo!(),
                 Eval(eval) => Eval(stmt::Expr::DecodeEnum(Box::new(eval), ty.clone(), *variant)),
             },
             _ => todo!("stmt={stmt:#?}"),
@@ -205,5 +222,9 @@ impl Partitioner<'_> {
 impl Partition {
     fn is_stmt(&self) -> bool {
         matches!(self, Partition::Stmt)
+    }
+
+    fn is_const_stmt(&self) -> bool {
+        matches!(self, Partition::ConstStmt)
     }
 }

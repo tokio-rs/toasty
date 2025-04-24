@@ -18,7 +18,20 @@ impl Statement {
     pub fn create_table(table: &Table) -> Statement {
         CreateTable {
             name: Name::from(&table.name[..]),
-            columns: table.columns.iter().map(ColumnDef::from_schema).collect(),
+            columns: table
+                .columns
+                .iter()
+                .map(|column| {
+                    let indexed = table.indices.iter().any(|index| {
+                        index
+                            .columns
+                            .iter()
+                            .any(|index_column| index_column.column == column.id)
+                    });
+
+                    ColumnDef::from_schema(column, indexed)
+                })
+                .collect(),
             primary_key: Some(Box::new(stmt::Expr::record(
                 table
                     .primary_key

@@ -145,7 +145,7 @@ mod projection;
 pub use projection::Projection;
 
 mod query;
-pub use query::Query;
+pub use query::{Lock, Query};
 
 mod returning;
 pub use returning::Returning;

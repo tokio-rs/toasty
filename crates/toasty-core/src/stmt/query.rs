@@ -8,27 +8,46 @@ pub struct Query {
     /// The body of the query. Either `SELECT`, `UNION`, `VALUES`, or possibly
     /// other types of queries depending on database support.
     pub body: Box<ExprSet>,
+
+    /// FOR { UPDATE | SHARE }
+    pub locks: Vec<Lock>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Lock {
+    Update,
+    Share,
+}
+
+#[derive(Debug)]
+pub struct QueryBuilder {
+    query: Query,
 }
 
 impl Query {
-    pub fn unit() -> Query {
-        Query {
-            with: None,
-            body: Box::new(ExprSet::Values(Values::default())),
+    pub fn builder(body: impl Into<ExprSet>) -> QueryBuilder {
+        QueryBuilder {
+            query: Query {
+                with: None,
+                body: Box::new(body.into()),
+                locks: vec![],
+            },
         }
     }
 
+    pub fn unit() -> Query {
+        Query::builder(Values::default()).build()
+    }
+
     pub fn filter(source: impl Into<Source>, filter: impl Into<Expr>) -> Query {
-        Query {
-            with: None,
-            body: Box::new(ExprSet::Select(Select::new(source, filter))),
-        }
+        Query::builder(Select::new(source, filter)).build()
     }
 
     pub fn values(values: impl Into<Values>) -> Query {
         Query {
             with: None,
             body: Box::new(ExprSet::Values(values.into())),
+            locks: vec![],
         }
     }
 
@@ -107,5 +126,24 @@ impl Node for Query {
 
     fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
         visit.visit_stmt_query_mut(self);
+    }
+}
+
+impl QueryBuilder {
+    pub fn filter(mut self, filter: impl Into<Expr>) -> Self {
+        let filter = filter.into();
+
+        match &mut *self.query.body {
+            ExprSet::Select(select) => {
+                select.filter = filter;
+            }
+            _ => todo!(),
+        }
+
+        self
+    }
+
+    pub fn build(self) -> Query {
+        self.query
     }
 }

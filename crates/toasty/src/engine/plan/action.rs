@@ -7,6 +7,7 @@ pub(crate) enum Action {
     /// Perform a batch write
     BatchWrite(BatchWrite),
 
+    /// Delete a record by the primary key
     DeleteByKey(DeleteByKey),
 
     /// Execute a statement
@@ -17,15 +18,20 @@ pub(crate) enum Action {
     /// Execute `Operation::GetByKey` using key input
     GetByKey(GetByKey),
 
+    /// Insert a record
     Insert(Insert),
 
+    /// Query records by primary key
     QueryPk(QueryPk),
 
-    /// Update a record by the primary key
-    UpdateByKey(UpdateByKey),
+    /// Perform an atomic operation in multiple steps
+    ReadModifyWrite(ReadModifyWrite),
 
     /// Set a variable to a const
     SetVar(SetVar),
+
+    /// Update a record by the primary key
+    UpdateByKey(UpdateByKey),
 }
 
 impl fmt::Debug for Action {
@@ -39,8 +45,9 @@ impl fmt::Debug for Action {
             Action::GetByKey(a) => a.fmt(f),
             Action::Insert(a) => a.fmt(f),
             Action::QueryPk(a) => a.fmt(f),
-            Action::UpdateByKey(a) => a.fmt(f),
+            Action::ReadModifyWrite(a) => a.fmt(f),
             Action::SetVar(a) => a.fmt(f),
+            Action::UpdateByKey(a) => a.fmt(f),
         }
     }
 }
