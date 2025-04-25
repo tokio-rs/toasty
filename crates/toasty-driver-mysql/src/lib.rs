@@ -149,9 +149,6 @@ impl Driver for MySQL {
             op => todo!("op={:#?}", op),
         };
 
-        let conditional_update =
-            matches!(&sql, sql::Statement::Update(stmt) if stmt.condition.is_some());
-
         let mut params = Vec::new();
 
         let sql_as_str = sql::Serializer::mysql(schema).serialize(&sql, &mut params);
@@ -162,7 +159,7 @@ impl Driver for MySQL {
             .map(|param| param.to_value())
             .collect::<Vec<_>>();
 
-        if ret.is_none() && !conditional_update {
+        if ret.is_none() {
             let count = conn
                 .exec_iter(&sql_as_str, mysql_async::Params::Positional(args))
                 .await?
@@ -182,11 +179,7 @@ impl Driver for MySQL {
                 );
 
                 let mut results = Vec::new();
-                for mut i in 0..row.len() {
-                    if conditional_update {
-                        i += 2;
-                    }
-
+                for i in 0..row.len() {
                     let column = &row.columns()[i];
                     results.push(mysql_to_toasty(i, &mut row, column, &returning[i]));
                 }

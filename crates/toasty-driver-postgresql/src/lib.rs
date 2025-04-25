@@ -174,9 +174,6 @@ impl Driver for PostgreSQL {
             op => todo!("op={:#?}", op),
         };
 
-        let conditional_update =
-            matches!(&sql, sql::Statement::Update(stmt) if stmt.condition.is_some());
-
         let width = sql.returning_len();
 
         let mut params = Vec::new();
@@ -190,7 +187,7 @@ impl Driver for PostgreSQL {
             .collect::<Vec<_>>()
             .into_boxed_slice();
 
-        if width.is_none() && !conditional_update {
+        if width.is_none() {
             let count = self.client.execute(&sql_as_str, &args).await?;
             return Ok(Response::from_count(count));
         }
@@ -210,11 +207,7 @@ impl Driver for PostgreSQL {
         } else {
             let results = rows.into_iter().map(move |row| {
                 let mut results = Vec::new();
-                for mut i in 0..row.len() {
-                    if conditional_update {
-                        i += 2;
-                    }
-
+                for i in 0..row.len() {
                     let column = &row.columns()[i];
                     results.push(postgres_to_toasty(i, &row, column));
                 }
