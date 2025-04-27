@@ -25,16 +25,9 @@ impl<'a> Planner<'a> {
         };
 
         let index_path = index_planner.plan_index_path();
-        let capability = match self.capability {
-            Capability::KeyValue(capability) => capability,
-            // Just make it work for now
-            _ => &CapabilityKeyValue {
-                primary_key_ne_predicate: true,
-            },
-        };
 
         let mut cx = PartitionCtx {
-            capability,
+            capability: self.capability,
             apply_result_filter_on_results: false,
         };
 
@@ -115,7 +108,7 @@ struct IndexPath {
 type ExprPair = (stmt::Expr, stmt::Expr);
 
 struct PartitionCtx<'a> {
-    capability: &'a CapabilityKeyValue,
+    capability: &'a Capability,
     apply_result_filter_on_results: bool,
 }
 

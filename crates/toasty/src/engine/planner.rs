@@ -18,7 +18,7 @@ mod var;
 use var::VarTable;
 
 use crate::{
-    driver::{Capability, CapabilityKeyValue},
+    driver::Capability,
     engine::{eval, plan, simplify, Plan},
 };
 use toasty_core::{

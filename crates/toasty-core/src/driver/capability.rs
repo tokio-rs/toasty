@@ -1,43 +1,58 @@
 #[derive(Debug)]
-pub enum Capability {
-    KeyValue(CapabilityKeyValue),
-    Sql(CapabilitySql),
-}
+pub struct Capability {
+    /// When true, the database uses a SQL-based query language.
+    pub sql: bool,
 
-#[derive(Debug)]
-pub struct CapabilityKeyValue {
+    /// SQL: supports update statements in CTE queries.
+    pub cte_with_update: bool,
+
+    /// SQL: Supports row-level locking. If false, then the driver is expected
+    /// to serializable transaction-level isolation.
+    pub select_for_update: bool,
+
     /// DynamoDB does not support != predicates on the primary key.
     pub primary_key_ne_predicate: bool,
 }
 
-#[derive(Debug)]
-pub struct CapabilitySql {
-    /// Supports update statements in CTE queries.
-    pub cte_with_update: bool,
+impl Capability {
+    /// SQLite capabilities.
+    pub const SQLITE: Capability = Capability {
+        sql: true,
+        cte_with_update: false,
+        select_for_update: false,
+        primary_key_ne_predicate: true,
+    };
 
-    /// Supports row-level locking. If false, then the driver is expected to
-    /// serializable transaction-level isolation.
-    pub select_for_update: bool,
+    /// PostgreSQL capabilities
+    pub const POSTGRESQL: Capability = Capability {
+        cte_with_update: true,
+        select_for_update: true,
+        ..Capability::SQLITE
+    };
+
+    /// MySQL capabilities
+    pub const MYSQL: Capability = Capability {
+        cte_with_update: false,
+        select_for_update: true,
+        ..Capability::SQLITE
+    };
+
+    /// DynamoDB capabilities
+    pub const DYNAMODB: Capability = Capability {
+        sql: false,
+        cte_with_update: false,
+        select_for_update: false,
+        primary_key_ne_predicate: false,
+    };
 }
 
-impl Capability {
-    pub fn is_sql(&self) -> bool {
-        matches!(self, Capability::Sql(..))
-    }
-
-    pub fn cte_with_update(&self) -> bool {
-        if let Capability::Sql(cap) = self {
-            cap.cte_with_update
-        } else {
-            false
-        }
-    }
-
-    pub fn select_for_update(&self) -> bool {
-        if let Capability::Sql(cap) = self {
-            cap.select_for_update
-        } else {
-            false
+impl Default for Capability {
+    fn default() -> Self {
+        Self {
+            sql: Default::default(),
+            cte_with_update: Default::default(),
+            select_for_update: Default::default(),
+            primary_key_ne_predicate: Default::default(),
         }
     }
 }

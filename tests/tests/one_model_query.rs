@@ -301,7 +301,7 @@ async fn query_local_key_cmp(s: impl Setup) {
 
 async fn query_arbitrary_constraint(s: impl Setup) {
     // Only supported by SQL
-    if !s.capability().is_sql() {
+    if !s.capability().sql {
         return;
     }
 

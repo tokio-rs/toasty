@@ -1,4 +1,4 @@
-use toasty::driver::{Capability, CapabilitySql};
+use toasty::driver::Capability;
 use toasty::{db, Db};
 
 use crate::Setup;
@@ -14,9 +14,6 @@ impl Setup for SetupSqlite {
     }
 
     fn capability(&self) -> &Capability {
-        &Capability::Sql(CapabilitySql {
-            cte_with_update: false,
-            select_for_update: false,
-        })
+        &Capability::SQLITE
     }
 }

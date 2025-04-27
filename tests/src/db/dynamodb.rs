@@ -32,10 +32,6 @@ impl Setup for SetupDynamoDb {
     }
 
     fn capability(&self) -> &Capability {
-        use toasty_core::driver::CapabilityKeyValue;
-
-        &Capability::KeyValue(CapabilityKeyValue {
-            primary_key_ne_predicate: false,
-        })
+        &Capability::DYNAMODB
     }
 }
