@@ -18,7 +18,7 @@ impl ColumnType {
             stmt::Type::I64 => ColumnType::Integer,
             stmt::Type::String => {
                 if indexed {
-                    ColumnType::VarChar(255)
+                    ColumnType::VarChar(600)
                 } else {
                     ColumnType::Text
                 }

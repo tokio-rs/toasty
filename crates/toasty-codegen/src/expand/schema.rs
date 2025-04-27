@@ -55,6 +55,8 @@ impl Expand<'_> {
             let field_ty;
             let nullable;
 
+            assert!(field.attrs.db.is_none(), "db type is not supported in schema");
+
             match &field.ty {
                 FieldTy::Primitive(ty) => {
                     nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);

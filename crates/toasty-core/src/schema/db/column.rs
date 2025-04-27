@@ -10,7 +10,7 @@ pub struct Column {
     /// The name of the column
     pub name: String,
 
-    /// The column type
+    /// The column type, from Toasty's point of view.
     pub ty: stmt::Type,
 
     /// Whether or not the column is nullable

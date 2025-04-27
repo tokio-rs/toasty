@@ -1,4 +1,4 @@
-use super::{BelongsTo, ErrorSet, HasMany, HasOne, Name};
+use super::{BelongsTo, ColumnType, ErrorSet, HasMany, HasOne, Name};
 
 use syn::{parse_quote, spanned::Spanned};
 
@@ -33,6 +33,9 @@ pub(crate) struct FieldAttr {
 
     /// True if the field is indexed
     pub(crate) index: bool,
+
+    /// Optional database column type
+    pub(crate) db: Option<ColumnType>,
 }
 
 #[derive(Debug)]
@@ -63,7 +66,9 @@ impl Field {
             unique: false,
             auto: false,
             index: false,
+            db: None,
         };
+
         let mut ty = None;
 
         let mut i = 0;
@@ -129,12 +134,29 @@ impl Field {
                 } else {
                     ty = Some(FieldTy::HasOne(HasOne::from_ast(&field.ty, field.span())?));
                 }
+            } else if attr.path().is_ident("db") {
+                if attrs.db.is_some() {
+                    errs.push(syn::Error::new_spanned(attr, "duplicate #[db] attribute"));
+                } else {
+                    attrs.db = Some(ColumnType::from_ast(attr)?);
+                }
+            } else if attr.path().is_ident("toasty") {
+                // todo
             } else {
                 i += 1;
                 continue;
             }
 
             field.attrs.remove(i);
+        }
+
+        if ty.is_some() {
+            if attrs.db.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    &field,
+                    "relation fields cannot have a database type",
+                ));
+            }
         }
 
         if let Some(err) = errs.collect() {
