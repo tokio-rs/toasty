@@ -259,7 +259,7 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
             (column_name, " = ", &assignment.expr)
         });
 
-        fmt!(f, Delimited(frags, " "));
+        fmt!(f, Delimited(frags, ", "));
     }
 }
 
