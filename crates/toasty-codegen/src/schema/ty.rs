@@ -1,8 +1,5 @@
 #[derive(Debug)]
 pub(crate) enum ColumnType {
-    Boolean,
-    Integer,
-    Text,
     VarChar(usize),
 }
 

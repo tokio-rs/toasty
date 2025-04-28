@@ -13,9 +13,6 @@ pub use drop_table::DropTable;
 mod name;
 pub use name::Name;
 
-mod ty;
-pub use ty::ColumnType;
-
 pub use toasty_core::stmt::*;
 
 #[derive(Debug, Clone)]

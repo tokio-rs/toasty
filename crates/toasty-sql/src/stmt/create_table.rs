@@ -21,16 +21,7 @@ impl Statement {
             columns: table
                 .columns
                 .iter()
-                .map(|column| {
-                    let indexed = table.indices.iter().any(|index| {
-                        index
-                            .columns
-                            .iter()
-                            .any(|index_column| index_column.column == column.id)
-                    });
-
-                    ColumnDef::from_schema(column, indexed)
-                })
+                .map(|column| ColumnDef::from_schema(column))
                 .collect(),
             primary_key: Some(Box::new(stmt::Expr::record(
                 table
