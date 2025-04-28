@@ -45,7 +45,7 @@ impl Planner<'_> {
             }
         }
 
-        let ret = if self.capability.is_sql() {
+        let ret = if self.capability.sql {
             self.plan_select_sql(cx, output, project, stmt)
         } else {
             self.plan_select_kv(cx, model, output, project, stmt)

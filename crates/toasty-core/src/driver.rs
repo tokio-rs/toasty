@@ -1,5 +1,5 @@
 mod capability;
-pub use capability::{Capability, CapabilityKeyValue, CapabilitySql};
+pub use capability::Capability;
 
 mod response;
 pub use response::{Response, Rows};

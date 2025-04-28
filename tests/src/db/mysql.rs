@@ -1,4 +1,4 @@
-use toasty::driver::{Capability, CapabilitySql};
+use toasty::driver::Capability;
 use toasty::{db, Db};
 
 use crate::Setup;
@@ -32,9 +32,6 @@ impl Setup for SetupMySQL {
     }
 
     fn capability(&self) -> &Capability {
-        &Capability::Sql(CapabilitySql {
-            cte_with_update: false,
-            select_for_update: true,
-        })
+        &Capability::MYSQL
     }
 }
