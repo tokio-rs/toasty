@@ -45,14 +45,3 @@ impl Capability {
         primary_key_ne_predicate: false,
     };
 }
-
-impl Default for Capability {
-    fn default() -> Self {
-        Self {
-            sql: Default::default(),
-            cte_with_update: Default::default(),
-            select_for_update: Default::default(),
-            primary_key_ne_predicate: Default::default(),
-        }
-    }
-}
