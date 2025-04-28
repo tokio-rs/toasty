@@ -74,7 +74,7 @@ impl Planner<'_> {
             ));
         }
 
-        if !self.capability.is_sql() {
+        if !self.capability.sql {
             // Subqueries are planned before lowering
             self.plan_subqueries(&mut stmt);
         }
@@ -94,7 +94,7 @@ impl Planner<'_> {
                 project,
             });
 
-        if self.capability.is_sql() {
+        if self.capability.sql {
             self.plan_update_sql(stmt, output)
         } else {
             self.plan_update_kv(model, stmt, output)
@@ -112,7 +112,7 @@ impl Planner<'_> {
         // statement. This is a bit tricky because the best strategy for
         // rewriting the statement will depend on the target database.
         if stmt.condition.is_some() {
-            if self.capability.cte_with_update() {
+            if self.capability.cte_with_update {
                 let stmt = self.rewrite_conditional_update_as_query_with_cte(stmt);
 
                 assert!(output.is_none());
@@ -407,7 +407,7 @@ impl Planner<'_> {
 
         let read = stmt::Query {
             with: None,
-            locks: if self.capability.select_for_update() {
+            locks: if self.capability.select_for_update {
                 vec![stmt::Lock::Update]
             } else {
                 vec![]

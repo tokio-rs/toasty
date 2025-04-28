@@ -3,7 +3,7 @@ mod op;
 use toasty_core::{
     driver::{
         operation::{self, Operation},
-        Capability, CapabilityKeyValue, Driver, Response,
+        Capability, Driver, Response,
     },
     schema::{
         app,
@@ -82,9 +82,7 @@ impl DynamoDb {
 #[toasty_core::async_trait]
 impl Driver for DynamoDb {
     fn capability(&self) -> &Capability {
-        &Capability::KeyValue(CapabilityKeyValue {
-            primary_key_ne_predicate: false,
-        })
+        &Capability::DYNAMODB
     }
 
     async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {

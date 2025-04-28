@@ -34,7 +34,7 @@ impl Planner<'_> {
             }
         }
 
-        if self.capability.is_sql() {
+        if self.capability.sql {
             self.plan_delete_sql(model, stmt);
         } else {
             self.plan_delete_kv(model, stmt);
