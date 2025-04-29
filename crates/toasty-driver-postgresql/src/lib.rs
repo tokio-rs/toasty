@@ -98,7 +98,10 @@ impl PostgreSQL {
         let serializer = sql::Serializer::postgresql(schema);
 
         let mut params = Vec::new();
-        let sql = serializer.serialize(&sql::Statement::create_table(table), &mut params);
+        let sql = serializer.serialize(
+            &sql::Statement::create_table(table, &Capability::POSTGRESQL),
+            &mut params,
+        );
 
         assert!(
             params.is_empty(),

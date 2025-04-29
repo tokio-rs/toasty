@@ -1,3 +1,5 @@
+use crate::schema::db;
+
 #[derive(Debug)]
 pub struct Capability {
     /// When true, the database uses a SQL-based query language.
@@ -19,6 +21,9 @@ pub struct Capability {
 
 #[derive(Debug)]
 pub struct StorageTypes {
+    /// The default storage type for a string.
+    pub default_string_type: db::Type,
+
     /// When `Some` the database supports varchar types with the specified upper
     /// limit.
     pub varchar: Option<usize>,
@@ -63,6 +68,8 @@ impl Capability {
 impl StorageTypes {
     /// SQLite storage types
     pub const SQLITE: StorageTypes = StorageTypes {
+        default_string_type: db::Type::Text,
+
         // SQLite doesn’t really enforce the “N” in VARCHAR(N) at all – it
         // treats any type containing “CHAR”, “CLOB”, or “TEXT” as having TEXT
         // affinity, and simply ignores the length specifier. In other words,
@@ -75,6 +82,8 @@ impl StorageTypes {
     };
 
     pub const POSTGRESQL: StorageTypes = StorageTypes {
+        default_string_type: db::Type::Text,
+
         // The maximum n you can specify is 10 485 760 characters. Attempts to
         // declare varchar with a larger typmod will be rejected at
         // table‐creation time.
@@ -82,6 +91,8 @@ impl StorageTypes {
     };
 
     pub const MYSQL: StorageTypes = StorageTypes {
+        default_string_type: db::Type::VarChar(191),
+
         // Values in VARCHAR columns are variable-length strings. The length can
         // be specified as a value from 0 to 65,535. The effective maximum
         // length of a VARCHAR is subject to the maximum row size (65,535 bytes,
@@ -90,6 +101,8 @@ impl StorageTypes {
     };
 
     pub const DYNAMODB: StorageTypes = StorageTypes {
+        default_string_type: db::Type::Text,
+
         // DynamoDB does not support varchar types
         varchar: None,
     };

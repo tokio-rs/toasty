@@ -1,4 +1,4 @@
-use crate::{driver, stmt, Result};
+use crate::{driver, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -9,15 +9,6 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn from_app(ty: &stmt::Type) -> Type {
-        match ty {
-            stmt::Type::Bool => Type::Boolean,
-            stmt::Type::I64 => Type::Integer,
-            stmt::Type::String => Type::Text,
-            _ => todo!("ty={:#?}", ty),
-        }
-    }
-
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
         match *self {
             Type::VarChar(size) => match db.storage_types.varchar {
