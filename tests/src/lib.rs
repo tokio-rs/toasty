@@ -9,8 +9,14 @@ use toasty_core::driver::Capability;
 pub use std_util::*;
 
 #[async_trait::async_trait]
-pub trait Setup {
-    async fn setup(&self, db: toasty::db::Builder) -> Db;
+pub trait Setup: Send + Sync + 'static {
+    async fn setup(&self, db: toasty::db::Builder) -> Db {
+        let db = self.connect(db).await.unwrap();
+        db.reset_db().await.unwrap();
+        db
+    }
+
+    async fn connect(&self, mut builder: toasty::db::Builder) -> toasty::Result<Db>;
 
     fn capability(&self) -> &Capability;
 }

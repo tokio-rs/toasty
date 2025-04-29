@@ -1,3 +1,5 @@
+use crate::{driver, Result};
+
 use super::*;
 
 use std::fmt;
@@ -69,6 +71,14 @@ impl Model {
     pub(crate) fn primary_key_primitives(&self) -> impl Iterator<Item = &'_ FieldPrimitive> {
         self.primary_key_fields()
             .map(|field| field.ty.expect_primitive())
+    }
+
+    pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        for field in &self.fields {
+            field.verify(db)?;
+        }
+
+        Ok(())
     }
 }
 

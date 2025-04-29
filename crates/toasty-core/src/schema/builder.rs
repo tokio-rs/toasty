@@ -48,6 +48,12 @@ impl Builder {
             },
         };
 
+        // Initial verification pass to ensure all models are valid based on the
+        // specified driver capability.
+        for model in app.models() {
+            model.verify(db)?;
+        }
+
         // Find all models that specified a table name, ensure a table is
         // created for that model, and link the model with the table.
         for model in app.models() {

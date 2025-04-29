@@ -1,6 +1,8 @@
 mod primitive;
 pub use primitive::FieldPrimitive;
 
+use crate::{driver, Result};
+
 use super::*;
 
 use std::fmt;
@@ -112,6 +114,16 @@ impl Field {
             FieldTy::HasMany(has_many) => Some(has_many.pair),
             FieldTy::HasOne(has_one) => Some(has_one.pair),
         }
+    }
+
+    pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        if let FieldTy::Primitive(primitive) = &self.ty {
+            if let Some(storage_ty) = &primitive.storage_ty {
+                storage_ty.verify(db)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
