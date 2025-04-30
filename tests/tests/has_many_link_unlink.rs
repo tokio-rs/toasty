@@ -71,9 +71,7 @@ async fn remove_add_single_relation_option_belongs_to(s: impl Setup) {
 
     // The TODO is in the association again
     let todos_reloaded: Vec<_> = user.todos().collect(&db).await.unwrap();
-    assert!(todos_reloaded
-        .iter()
-        .any(|t| t.id == todos[0].id));
+    assert!(todos_reloaded.iter().any(|t| t.id == todos[0].id));
     assert_ok!(user.todos().get_by_id(&db, &todos[0].id).await);
 }
 

@@ -37,9 +37,7 @@ impl ValueStream {
         }
     }
 
-    pub fn from_stream<T: Stream<Item = crate::Result<Value>> + Send + 'static>(
-        stream: T,
-    ) -> Self {
+    pub fn from_stream<T: Stream<Item = crate::Result<Value>> + Send + 'static>(stream: T) -> Self {
         Self {
             buffer: Buffer::Empty,
             stream: Some(Box::pin(stream)),
@@ -255,8 +253,7 @@ impl Buffer {
                 *self = Self::One(value);
             }
             Self::One(_) => {
-                let Self::One(first) =
-                    mem::replace(self, Self::Many(VecDeque::with_capacity(2)))
+                let Self::One(first) = mem::replace(self, Self::Many(VecDeque::with_capacity(2)))
                 else {
                     panic!()
                 };

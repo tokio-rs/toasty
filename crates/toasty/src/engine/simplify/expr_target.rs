@@ -43,10 +43,7 @@ impl<'a> ExprTarget<'a> {
         }
     }
 
-    pub(crate) fn from_insert_target(
-        schema: &'a Schema,
-        target: &stmt::InsertTarget,
-    ) -> Self {
+    pub(crate) fn from_insert_target(schema: &'a Schema, target: &stmt::InsertTarget) -> Self {
         match target {
             stmt::InsertTarget::Scope(query) => {
                 let model_id = query.body.as_select().source.as_model_id();
@@ -63,10 +60,7 @@ impl<'a> ExprTarget<'a> {
         }
     }
 
-    pub(crate) fn from_update_target(
-        schema: &'a Schema,
-        target: &stmt::UpdateTarget,
-    ) -> Self {
+    pub(crate) fn from_update_target(schema: &'a Schema, target: &stmt::UpdateTarget) -> Self {
         match target {
             stmt::UpdateTarget::Query(query) => {
                 let model_id = query.body.as_select().source.as_model_id();
