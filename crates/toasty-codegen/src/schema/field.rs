@@ -150,13 +150,11 @@ impl Field {
             field.attrs.remove(i);
         }
 
-        if ty.is_some() {
-            if attrs.db.is_some() {
-                errs.push(syn::Error::new_spanned(
-                    &field,
-                    "relation fields cannot have a database type",
-                ));
-            }
+        if ty.is_some() && attrs.db.is_some() {
+            errs.push(syn::Error::new_spanned(
+                &field,
+                "relation fields cannot have a database type",
+            ));
         }
 
         if let Some(err) = errs.collect() {

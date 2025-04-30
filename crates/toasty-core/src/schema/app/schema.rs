@@ -79,7 +79,7 @@ impl Builder {
     }
 
     /// Go through all relations and link them to their pairs
-    pub(crate) fn link_relations(&mut self) -> crate::Result<()> {
+    fn link_relations(&mut self) -> crate::Result<()> {
         // Because arbitrary models will be mutated throughout the linking
         // process, models cannot be iterated as that would hold a reference to
         // `self`. Instead, we use index based iteration.

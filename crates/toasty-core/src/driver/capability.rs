@@ -26,7 +26,7 @@ pub struct StorageTypes {
 
     /// When `Some` the database supports varchar types with the specified upper
     /// limit.
-    pub varchar: Option<usize>,
+    pub varchar: Option<u64>,
 }
 
 impl Capability {

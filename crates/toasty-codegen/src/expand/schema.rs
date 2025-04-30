@@ -151,6 +151,7 @@ impl Expand<'_> {
                     nullable: #nullable,
                     primary_key: #primary_key,
                     auto: #auto,
+                    constraints: vec![],
                 }
             }
         });

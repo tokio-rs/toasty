@@ -26,6 +26,9 @@ pub struct Field {
 
     /// True if toasty is responsible for populating the value of the field
     pub auto: Option<Auto>,
+
+    /// Any additional field constraints
+    pub constraints: Vec<Constraint>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]

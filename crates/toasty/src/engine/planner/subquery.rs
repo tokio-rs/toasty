@@ -8,8 +8,9 @@ impl Planner<'_> {
     pub(super) fn plan_subqueries<T: stmt::Node>(
         &mut self,
         stmt: &mut T,
-    ) -> Vec<plan::InputSource> {
+    ) -> Result<Vec<plan::InputSource>> {
         let mut sources = vec![];
+        let mut err = None;
 
         stmt::visit_mut::for_each_expr_mut(stmt, |expr| {
             if expr.is_in_subquery() {
@@ -24,11 +25,19 @@ impl Planner<'_> {
                 let arg = stmt::Expr::arg(sources.len());
                 *expr = stmt::Expr::in_list(base, arg);
 
-                let output = self.plan_stmt_select(&Context::default(), query);
-                sources.push(plan::InputSource::Value(output));
+                match self.plan_stmt_select(&Context::default(), query) {
+                    Ok(output) => {
+                        sources.push(plan::InputSource::Value(output));
+                    }
+                    Err(e) => err = Some(e),
+                }
             }
         });
 
-        sources
+        if let Some(err) = err {
+            Err(err)
+        } else {
+            Ok(sources)
+        }
     }
 }

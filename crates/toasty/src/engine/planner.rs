@@ -20,6 +20,7 @@ use var::VarTable;
 use crate::{
     driver::Capability,
     engine::{eval, plan, simplify, Plan},
+    Result,
 };
 use toasty_core::{
     schema::*,
@@ -73,7 +74,11 @@ struct Insertion {
     action: usize,
 }
 
-pub(crate) fn apply(capability: &Capability, schema: &Schema, stmt: stmt::Statement) -> Plan {
+pub(crate) fn apply(
+    capability: &Capability,
+    schema: &Schema,
+    stmt: stmt::Statement,
+) -> Result<Plan> {
     let mut planner = Planner {
         capability,
         schema,
@@ -85,39 +90,45 @@ pub(crate) fn apply(capability: &Capability, schema: &Schema, stmt: stmt::Statem
         relations: Vec::new(),
     };
 
-    planner.plan_stmt_root(stmt);
+    planner.plan_stmt_root(stmt)?;
     planner.build()
 }
 
 impl<'a> Planner<'a> {
     /// Entry point to plan the root statement.
-    fn plan_stmt_root(&mut self, stmt: stmt::Statement) {
+    fn plan_stmt_root(&mut self, stmt: stmt::Statement) -> Result<()> {
         if let stmt::Statement::Insert(stmt) = &stmt {
             // TODO: this isn't always true. The assert is there to help
             // debug old code.
             assert_eq!(stmt.returning, Some(stmt::Returning::Star));
         }
 
-        if let Some(output) = self.plan_stmt(&Context::default(), stmt) {
+        if let Some(output) = self.plan_stmt(&Context::default(), stmt)? {
             self.returning = Some(output);
         }
+
+        Ok(())
     }
 
-    fn plan_stmt(&mut self, cx: &Context, mut stmt: stmt::Statement) -> Option<plan::VarId> {
+    fn plan_stmt(
+        &mut self,
+        cx: &Context,
+        mut stmt: stmt::Statement,
+    ) -> Result<Option<plan::VarId>> {
         self.simplify_stmt(&mut stmt);
 
-        match stmt {
+        Ok(match stmt {
             stmt::Statement::Delete(stmt) => {
-                self.plan_stmt_delete(stmt);
+                self.plan_stmt_delete(stmt)?;
                 None
             }
-            stmt::Statement::Insert(stmt) => self.plan_stmt_insert(stmt),
-            stmt::Statement::Query(stmt) => Some(self.plan_stmt_select(cx, stmt)),
-            stmt::Statement::Update(stmt) => self.plan_stmt_update(stmt),
-        }
+            stmt::Statement::Insert(stmt) => self.plan_stmt_insert(stmt)?,
+            stmt::Statement::Query(stmt) => Some(self.plan_stmt_select(cx, stmt)?),
+            stmt::Statement::Update(stmt) => self.plan_stmt_update(stmt)?,
+        })
     }
 
-    fn build(mut self) -> Plan {
+    fn build(mut self) -> Result<Plan> {
         let vars = exec::VarStore::new();
 
         match self.write_actions.len() {
@@ -136,13 +147,13 @@ impl<'a> Planner<'a> {
             }
         }
 
-        Plan {
+        Ok(Plan {
             vars,
             pipeline: plan::Pipeline {
                 actions: self.actions,
                 returning: self.returning,
             },
-        }
+        })
     }
 
     fn set_var(&mut self, value: Vec<stmt::Value>, ty: stmt::Type) -> plan::VarId {

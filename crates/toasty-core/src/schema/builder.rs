@@ -15,6 +15,8 @@ struct BuildSchema<'a> {
     /// Build options
     builder: &'a Builder,
 
+    db: &'a driver::Capability,
+
     /// Maps table names to identifiers. The identifiers are reserved before the
     /// table objects are actually created.
     table_lookup: IndexMap<String, TableId>,
@@ -38,9 +40,10 @@ impl Builder {
         self
     }
 
-    pub fn build(&self, app: app::Schema, db: &driver::Capability) -> Result<Schema> {
+    pub fn build(&self, mut app: app::Schema, db: &driver::Capability) -> Result<Schema> {
         let mut builder = BuildSchema {
             builder: self,
+            db,
             table_lookup: IndexMap::new(),
             tables: vec![],
             mapping: Mapping {
@@ -48,10 +51,14 @@ impl Builder {
             },
         };
 
-        // Initial verification pass to ensure all models are valid based on the
-        // specified driver capability.
-        for model in app.models() {
+        for model in app.models.values_mut() {
+            // Initial verification pass to ensure all models are valid based on the
+            // specified driver capability.
             model.verify(db)?;
+
+            // Generate any additional field-level constraints to satisfy the
+            // target database.
+            builder.build_model_constraints(model)?;
         }
 
         // Find all models that specified a table name, ensure a table is
@@ -105,5 +112,27 @@ impl Builder {
 impl Default for Builder {
     fn default() -> Builder {
         Builder::new()
+    }
+}
+
+impl BuildSchema<'_> {
+    fn build_model_constraints(&self, model: &mut app::Model) -> Result<()> {
+        for field in model.fields.iter_mut() {
+            if let app::FieldTy::Primitive(primitive) = &mut field.ty {
+                let storage_ty = db::Type::from_app(
+                    &primitive.ty,
+                    &primitive.storage_ty,
+                    &self.db.storage_types,
+                )?;
+
+                if let db::Type::VarChar(size) = storage_ty {
+                    field
+                        .constraints
+                        .push(app::Constraint::length_less_than(size));
+                }
+            }
+        }
+
+        Ok(())
     }
 }
