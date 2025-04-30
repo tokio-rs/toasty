@@ -23,14 +23,14 @@ pub struct SourceModel {
 
 impl Source {
     pub fn is_model(&self) -> bool {
-        matches!(self, Source::Model(_))
+        matches!(self, Self::Model(_))
     }
 
     #[track_caller]
     pub fn as_model(&self) -> &SourceModel {
         match self {
-            Source::Model(source) => source,
-            Source::Table(_) => todo!(),
+            Self::Model(source) => source,
+            Self::Table(_) => todo!(),
         }
     }
 
@@ -39,11 +39,11 @@ impl Source {
     }
 
     pub fn is_table(&self) -> bool {
-        matches!(self, Source::Table(_))
+        matches!(self, Self::Table(_))
     }
 
-    pub fn table(table: impl Into<TableRef>) -> Source {
-        Source::Table(vec![TableWithJoins {
+    pub fn table(table: impl Into<TableRef>) -> Self {
+        Self::Table(vec![TableWithJoins {
             table: table.into(),
             joins: vec![],
         }])
@@ -51,7 +51,7 @@ impl Source {
 
     pub fn as_table_with_joins(&self) -> &[TableWithJoins] {
         match self {
-            Source::Table(source) => source,
+            Self::Table(source) => source,
             _ => todo!(),
         }
     }
@@ -59,13 +59,13 @@ impl Source {
 
 impl From<&Model> for Source {
     fn from(value: &Model) -> Self {
-        Source::from(value.id)
+        Self::from(value.id)
     }
 }
 
 impl From<ModelId> for Source {
     fn from(value: ModelId) -> Self {
-        Source::Model(SourceModel {
+        Self::Model(SourceModel {
             model: value,
             via: None,
             include: vec![],
@@ -75,18 +75,18 @@ impl From<ModelId> for Source {
 
 impl From<TableId> for Source {
     fn from(value: TableId) -> Self {
-        Source::table(value)
+        Self::table(value)
     }
 }
 
 impl From<TableRef> for Source {
     fn from(value: TableRef) -> Self {
-        Source::table(value)
+        Self::table(value)
     }
 }
 
 impl From<TableWithJoins> for Source {
     fn from(value: TableWithJoins) -> Self {
-        Source::Table(vec![value])
+        Self::Table(vec![value])
     }
 }

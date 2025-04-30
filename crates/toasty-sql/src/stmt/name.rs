@@ -5,13 +5,13 @@ pub struct Name(pub Vec<String>);
 
 impl From<&str> for Name {
     fn from(value: &str) -> Self {
-        Name(vec![value.into()])
+        Self(vec![value.into()])
     }
 }
 
 impl From<&String> for Name {
     fn from(value: &String) -> Self {
-        Name::from(&value[..])
+        Self::from(&value[..])
     }
 }
 

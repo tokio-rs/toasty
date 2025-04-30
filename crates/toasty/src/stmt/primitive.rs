@@ -34,7 +34,7 @@ impl<T: Model> Primitive for Id<T> {
     const TYPE: stmt::Type = stmt::Type::Id(T::ID);
 
     fn load(value: stmt::Value) -> Result<Self> {
-        Ok(Id::from_untyped(value.to_id()?))
+        Ok(Self::from_untyped(value.to_id()?))
     }
 }
 

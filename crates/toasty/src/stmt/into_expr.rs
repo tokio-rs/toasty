@@ -28,11 +28,11 @@ impl_into_expr_for_copy! {
 }
 
 impl<T: ?Sized> IntoExpr<T> for Expr<T> {
-    fn into_expr(self) -> Expr<T> {
+    fn into_expr(self) -> Self {
         self
     }
 
-    fn by_ref(&self) -> Expr<T> {
+    fn by_ref(&self) -> Self {
         self.clone()
     }
 }
@@ -57,15 +57,15 @@ impl<T: IntoExpr<T>> IntoExpr<[T]> for &T {
     }
 }
 
-impl<T: IntoExpr<T>> IntoExpr<Option<T>> for Option<T> {
-    fn into_expr(self) -> Expr<Option<T>> {
+impl<T: IntoExpr<T>> IntoExpr<Self> for Option<T> {
+    fn into_expr(self) -> Expr<Self> {
         match self {
             Some(value) => value.into_expr().cast(),
             None => Expr::from_value(Value::Null),
         }
     }
 
-    fn by_ref(&self) -> Expr<Option<T>> {
+    fn by_ref(&self) -> Expr<Self> {
         match self {
             Some(value) => value.by_ref().cast(),
             None => Expr::from_value(Value::Null),
@@ -129,12 +129,12 @@ impl IntoExpr<Option<String>> for &str {
     }
 }
 
-impl IntoExpr<String> for String {
-    fn into_expr(self) -> Expr<String> {
+impl IntoExpr<Self> for String {
+    fn into_expr(self) -> Expr<Self> {
         Expr::from_value(self.into())
     }
 
-    fn by_ref(&self) -> Expr<String> {
+    fn by_ref(&self) -> Expr<Self> {
         Expr::from_value(self.into())
     }
 }

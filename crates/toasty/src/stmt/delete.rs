@@ -6,8 +6,8 @@ pub struct Delete<M: ?Sized> {
 }
 
 impl<M: Model> Delete<M> {
-    pub const fn from_untyped(untyped: stmt::Delete) -> Delete<M> {
-        Delete {
+    pub const fn from_untyped(untyped: stmt::Delete) -> Self {
+        Self {
             untyped,
             _p: PhantomData,
         }
@@ -16,7 +16,7 @@ impl<M: Model> Delete<M> {
 
 impl<M> From<Delete<M>> for Statement<M> {
     fn from(value: Delete<M>) -> Self {
-        Statement {
+        Self {
             untyped: value.untyped.into(),
             _p: PhantomData,
         }

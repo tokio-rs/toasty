@@ -19,27 +19,27 @@ enum Repr {
 
 impl Value {
     pub const fn is_id(&self) -> bool {
-        matches!(self, Value::Id(_))
+        matches!(self, Self::Id(_))
     }
 
     pub fn into_id(self) -> Id {
         match self {
-            Value::Id(id) => id,
+            Self::Id(id) => id,
             _ => todo!(),
         }
     }
 }
 
 impl Id {
-    pub fn from_int(model: ModelId, id: u64) -> Id {
-        Id {
+    pub fn from_int(model: ModelId, id: u64) -> Self {
+        Self {
             model,
             repr: Repr::Int(id),
         }
     }
 
-    pub fn from_string(model: ModelId, string: String) -> Id {
-        Id {
+    pub fn from_string(model: ModelId, string: String) -> Self {
+        Self {
             model,
             repr: Repr::String(string),
         }
@@ -91,26 +91,26 @@ impl std::fmt::Display for Id {
 
 impl From<Id> for Expr {
     fn from(value: Id) -> Self {
-        Expr::Value(value.into())
+        Self::Value(value.into())
     }
 }
 
 impl From<&Id> for Expr {
-    fn from(value: &Id) -> Expr {
-        Expr::Value(value.into())
+    fn from(value: &Id) -> Self {
+        Self::Value(value.into())
     }
 }
 
 impl From<&Id> for stmt::Value {
-    fn from(src: &Id) -> stmt::Value {
+    fn from(src: &Id) -> Self {
         // TODO: probably can avoid cloning if needed
-        stmt::Value::Id(src.to_owned())
+        Self::Id(src.to_owned())
     }
 }
 
 impl From<Id> for stmt::Value {
-    fn from(src: Id) -> stmt::Value {
-        stmt::Value::Id(src)
+    fn from(src: Id) -> Self {
+        Self::Id(src)
     }
 }
 

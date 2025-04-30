@@ -18,6 +18,6 @@ pub(crate) struct ExecStatement {
 
 impl From<ExecStatement> for Action {
     fn from(value: ExecStatement) -> Self {
-        Action::ExecStatement(value)
+        Self::ExecStatement(value)
     }
 }

@@ -8,46 +8,46 @@ pub struct ExprRecord {
 }
 
 impl Expr {
-    pub fn record<T>(items: impl IntoIterator<Item = T>) -> Expr
+    pub fn record<T>(items: impl IntoIterator<Item = T>) -> Self
     where
-        T: Into<Expr>,
+        T: Into<Self>,
     {
-        Expr::Record(ExprRecord::from_iter(items))
+        Self::Record(ExprRecord::from_iter(items))
     }
 
-    pub fn record_from_vec(fields: Vec<Expr>) -> Expr {
-        Expr::Record(ExprRecord::from_vec(fields))
+    pub fn record_from_vec(fields: Vec<Self>) -> Self {
+        Self::Record(ExprRecord::from_vec(fields))
     }
 
     pub fn is_record(&self) -> bool {
-        matches!(self, Expr::Record(_))
+        matches!(self, Self::Record(_))
     }
 
     pub fn as_record(&self) -> &ExprRecord {
         match self {
-            Expr::Record(expr_record) => expr_record,
+            Self::Record(expr_record) => expr_record,
             _ => panic!(),
         }
     }
 
     pub fn as_record_mut(&mut self) -> &mut ExprRecord {
         match self {
-            Expr::Record(expr_record) => expr_record,
+            Self::Record(expr_record) => expr_record,
             _ => panic!(),
         }
     }
 
     pub fn into_record(self) -> ExprRecord {
         match self {
-            Expr::Record(expr_record) => expr_record,
+            Self::Record(expr_record) => expr_record,
             _ => panic!(),
         }
     }
 }
 
 impl ExprRecord {
-    pub fn from_vec(fields: Vec<Expr>) -> ExprRecord {
-        ExprRecord { fields }
+    pub fn from_vec(fields: Vec<Expr>) -> Self {
+        Self { fields }
     }
 
     pub fn push(&mut self, expr: Expr) {
@@ -64,7 +64,7 @@ where
     A: Into<Expr>,
 {
     fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
-        ExprRecord::from_vec(iter.into_iter().map(Into::into).collect())
+        Self::from_vec(iter.into_iter().map(Into::into).collect())
     }
 }
 
@@ -130,8 +130,8 @@ impl AsRef<[Expr]> for ExprRecord {
 }
 
 impl From<ExprRecord> for Expr {
-    fn from(value: ExprRecord) -> Expr {
-        Expr::Record(value)
+    fn from(value: ExprRecord) -> Self {
+        Self::Record(value)
     }
 }
 
@@ -140,8 +140,8 @@ where
     E1: Into<Expr>,
     E2: Into<Expr>,
 {
-    fn from(src: (E1, E2)) -> ExprRecord {
-        ExprRecord {
+    fn from(src: (E1, E2)) -> Self {
+        Self {
             fields: vec![src.0.into(), src.1.into()],
         }
     }

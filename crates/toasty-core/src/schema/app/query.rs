@@ -307,6 +307,6 @@ impl FindByBuilder<'_> {
 
 impl FindByArgType {
     fn is_foreign_key(self) -> bool {
-        matches!(self, FindByArgType::ForeignKey)
+        matches!(self, Self::ForeignKey)
     }
 }

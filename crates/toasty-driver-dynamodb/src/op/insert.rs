@@ -20,9 +20,7 @@ impl DynamoDb {
                     index.columns.iter().all(|index_column| {
                         let column = schema.column(index_column.column);
                         insert_table
-                            .columns
-                            .iter()
-                            .any(|column_id| *column_id == column.id)
+                            .columns.contains(&column.id)
                     })
                 } else {
                     false

@@ -226,7 +226,7 @@ impl VisitMut for Simplify<'_> {
 }
 
 impl<'a> Simplify<'a> {
-    pub(crate) fn new(schema: &'a Schema) -> Simplify<'a> {
+    pub(crate) fn new(schema: &'a Schema) -> Self {
         Simplify {
             schema,
             target: ExprTarget::Const,

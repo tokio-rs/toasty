@@ -228,7 +228,7 @@ pub enum Statement {
 impl Statement {
     pub fn substitute(&mut self, mut input: impl substitute::Input) {
         match self {
-            Statement::Query(stmt) => stmt.substitute_ref(&mut input),
+            Self::Query(stmt) => stmt.substitute_ref(&mut input),
             _ => todo!("stmt={self:#?}"),
         }
     }
@@ -240,7 +240,7 @@ impl Statement {
     /// * Else, [`None`] is returned.
     pub fn as_delete(&self) -> Option<&Delete> {
         match self {
-            Statement::Delete(delete) => Some(delete),
+            Self::Delete(delete) => Some(delete),
             _ => None,
         }
     }
@@ -252,7 +252,7 @@ impl Statement {
     /// * Else, [`None`] is returned.
     pub fn into_delete(self) -> Option<Delete> {
         match self {
-            Statement::Delete(delete) => Some(delete),
+            Self::Delete(delete) => Some(delete),
             _ => None,
         }
     }
@@ -264,7 +264,7 @@ impl Statement {
     /// If `self` is not a [`Statement::Delete`].
     pub fn unwrap_delete(self) -> Delete {
         match self {
-            Statement::Delete(delete) => delete,
+            Self::Delete(delete) => delete,
             v => panic!("expected `Delete`, found {:#?}", v),
         }
     }
@@ -276,7 +276,7 @@ impl Statement {
     /// * Else, [`None`] is returned.
     pub fn as_insert(&self) -> Option<&Insert> {
         match self {
-            Statement::Insert(insert) => Some(insert),
+            Self::Insert(insert) => Some(insert),
             _ => None,
         }
     }
@@ -288,7 +288,7 @@ impl Statement {
     /// * Else, [`None`] is returned.
     pub fn into_insert(self) -> Option<Insert> {
         match self {
-            Statement::Insert(insert) => Some(insert),
+            Self::Insert(insert) => Some(insert),
             _ => None,
         }
     }
@@ -300,7 +300,7 @@ impl Statement {
     /// If `self` is not a [`Statement::Insert`].
     pub fn unwrap_insert(self) -> Insert {
         match self {
-            Statement::Insert(insert) => insert,
+            Self::Insert(insert) => insert,
             v => panic!("expected `Insert`, found {:#?}", v),
         }
     }
@@ -312,7 +312,7 @@ impl Statement {
     /// * Else, [`None`] is returned.
     pub fn as_query(&self) -> Option<&Query> {
         match self {
-            Statement::Query(query) => Some(query),
+            Self::Query(query) => Some(query),
             _ => None,
         }
     }
@@ -324,7 +324,7 @@ impl Statement {
     /// * Else, [`None`] is returned.
     pub fn into_query(self) -> Option<Query> {
         match self {
-            Statement::Query(query) => Some(query),
+            Self::Query(query) => Some(query),
             _ => None,
         }
     }
@@ -336,7 +336,7 @@ impl Statement {
     /// If `self` is not a [`Statement::Query`].
     pub fn unwrap_query(self) -> Query {
         match self {
-            Statement::Query(query) => query,
+            Self::Query(query) => query,
             v => panic!("expected `Query`, found {:#?}", v),
         }
     }
@@ -348,7 +348,7 @@ impl Statement {
     /// * Else, [`None`] is returned.
     pub fn as_update(&self) -> Option<&Update> {
         match self {
-            Statement::Update(update) => Some(update),
+            Self::Update(update) => Some(update),
             _ => None,
         }
     }
@@ -360,7 +360,7 @@ impl Statement {
     /// * Else, [`None`] is returned.
     pub fn into_update(self) -> Option<Update> {
         match self {
-            Statement::Update(update) => Some(update),
+            Self::Update(update) => Some(update),
             _ => None,
         }
     }
@@ -372,7 +372,7 @@ impl Statement {
     /// If `self` is not a [`Statement::Update`].
     pub fn unwrap_update(self) -> Update {
         match self {
-            Statement::Update(update) => update,
+            Self::Update(update) => update,
             v => panic!("expected `Update`, found {:#?}", v),
         }
     }
@@ -391,10 +391,10 @@ impl Node for Statement {
 impl fmt::Debug for Statement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Statement::Delete(v) => v.fmt(f),
-            Statement::Insert(v) => v.fmt(f),
-            Statement::Query(v) => v.fmt(f),
-            Statement::Update(v) => v.fmt(f),
+            Self::Delete(v) => v.fmt(f),
+            Self::Insert(v) => v.fmt(f),
+            Self::Query(v) => v.fmt(f),
+            Self::Update(v) => v.fmt(f),
         }
     }
 }

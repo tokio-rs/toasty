@@ -64,17 +64,17 @@ impl IndexColumn {
 
 impl IndexScope {
     pub fn is_partition(self) -> bool {
-        matches!(self, IndexScope::Partition)
+        matches!(self, Self::Partition)
     }
 
     pub fn is_local(self) -> bool {
-        matches!(self, IndexScope::Local)
+        matches!(self, Self::Local)
     }
 }
 
 impl IndexId {
-    pub(crate) fn placeholder() -> IndexId {
-        IndexId {
+    pub(crate) fn placeholder() -> Self {
+        Self {
             table: TableId::placeholder(),
             index: usize::MAX,
         }

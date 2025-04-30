@@ -8,6 +8,6 @@ pub struct ValueEnum {
 
 impl From<ValueEnum> for Value {
     fn from(value: ValueEnum) -> Self {
-        Value::Enum(value)
+        Self::Enum(value)
     }
 }

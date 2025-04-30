@@ -15,7 +15,7 @@ pub struct FindPkByIndex {
 }
 
 impl From<FindPkByIndex> for Operation {
-    fn from(value: FindPkByIndex) -> Operation {
-        Operation::FindPkByIndex(value)
+    fn from(value: FindPkByIndex) -> Self {
+        Self::FindPkByIndex(value)
     }
 }

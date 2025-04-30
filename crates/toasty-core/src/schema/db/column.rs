@@ -29,8 +29,8 @@ pub struct ColumnId {
 impl Column {}
 
 impl ColumnId {
-    pub(crate) fn placeholder() -> ColumnId {
-        ColumnId {
+    pub(crate) fn placeholder() -> Self {
+        Self {
             table: table::TableId::placeholder(),
             index: usize::MAX,
         }

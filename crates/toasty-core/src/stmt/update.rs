@@ -20,7 +20,7 @@ pub struct Update {
 
 impl Statement {
     pub fn is_update(&self) -> bool {
-        matches!(self, Statement::Update(_))
+        matches!(self, Self::Update(_))
     }
 }
 
@@ -49,28 +49,28 @@ impl UpdateTarget {
     #[track_caller]
     pub fn as_model_id(&self) -> ModelId {
         match self {
-            UpdateTarget::Model(model_id) => *model_id,
-            UpdateTarget::Query(query) => query.body.as_select().source.as_model_id(),
+            Self::Model(model_id) => *model_id,
+            Self::Query(query) => query.body.as_select().source.as_model_id(),
             _ => todo!("not a model"),
         }
     }
 
-    pub fn table(table: impl Into<TableId>) -> UpdateTarget {
-        UpdateTarget::Table(table.into())
+    pub fn table(table: impl Into<TableId>) -> Self {
+        Self::Table(table.into())
     }
 
     #[track_caller]
     pub fn as_table(&self) -> TableId {
         match self {
-            UpdateTarget::Table(table) => *table,
+            Self::Table(table) => *table,
             _ => todo!(),
         }
     }
 }
 
 impl From<Update> for Statement {
-    fn from(src: Update) -> Statement {
-        Statement::Update(src)
+    fn from(src: Update) -> Self {
+        Self::Update(src)
     }
 }
 

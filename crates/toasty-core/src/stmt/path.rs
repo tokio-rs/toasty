@@ -15,22 +15,22 @@ pub struct Path {
 }
 
 impl Path {
-    pub fn model(root: impl Into<ModelId>) -> Path {
-        Path {
+    pub fn model(root: impl Into<ModelId>) -> Self {
+        Self {
             root: root.into(),
             projection: Projection::identity(),
         }
     }
 
-    pub fn field(root: impl Into<ModelId>, field: usize) -> Path {
-        Path {
+    pub fn field(root: impl Into<ModelId>, field: usize) -> Self {
+        Self {
             root: root.into(),
             projection: Projection::single(field),
         }
     }
 
-    pub const fn from_index(root: ModelId, index: usize) -> Path {
-        Path {
+    pub const fn from_index(root: ModelId, index: usize) -> Self {
+        Self {
             root,
             projection: Projection::from_index(index),
         }
@@ -49,7 +49,7 @@ impl Path {
         self.projection.resolve_field(schema, expr_self)
     }
 
-    pub fn chain(&mut self, other: &Path) {
+    pub fn chain(&mut self, other: &Self) {
         for field in &other.projection[..] {
             self.projection.push(*field);
         }

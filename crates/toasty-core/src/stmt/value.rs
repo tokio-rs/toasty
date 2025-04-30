@@ -36,33 +36,33 @@ pub enum Value {
 
 impl Value {
     /// Returns a `ValueCow` representing null
-    pub const fn null() -> Value {
-        Value::Null
+    pub const fn null() -> Self {
+        Self::Null
     }
 
     pub const fn is_null(&self) -> bool {
-        matches!(self, Value::Null)
+        matches!(self, Self::Null)
     }
 
     pub const fn is_record(&self) -> bool {
-        matches!(self, Value::Record(_))
+        matches!(self, Self::Record(_))
     }
 
-    pub fn record_from_vec(fields: Vec<Value>) -> Value {
+    pub fn record_from_vec(fields: Vec<Self>) -> Self {
         ValueRecord::from_vec(fields).into()
     }
 
-    pub fn list_from_vec(items: Vec<Value>) -> Value {
-        Value::List(items)
+    pub fn list_from_vec(items: Vec<Self>) -> Self {
+        Self::List(items)
     }
 
     pub fn is_list(&self) -> bool {
-        matches!(self, Value::List(_))
+        matches!(self, Self::List(_))
     }
 
     /// Create a `ValueCow` representing the given boolean value
-    pub const fn from_bool(src: bool) -> Value {
-        Value::Bool(src)
+    pub const fn from_bool(src: bool) -> Self {
+        Self::Bool(src)
     }
 
     // TODO: switch these to `Option`
@@ -140,43 +140,43 @@ impl Value {
 
     pub fn expect_record(&self) -> &ValueRecord {
         match self {
-            Value::Record(record) => record,
+            Self::Record(record) => record,
             _ => panic!("{self:#?}"),
         }
     }
 
     pub fn expect_record_mut(&mut self) -> &mut ValueRecord {
         match self {
-            Value::Record(record) => record,
+            Self::Record(record) => record,
             _ => panic!(),
         }
     }
 
     pub fn into_record(self) -> ValueRecord {
         match self {
-            Value::Record(record) => record,
+            Self::Record(record) => record,
             _ => panic!(),
         }
     }
 
     pub fn is_a(&self, ty: &Type) -> bool {
         match (self, ty) {
-            (Value::Null, _) => true,
-            (Value::Bool(_), Type::Bool) => true,
-            (Value::Bool(_), _) => false,
-            (Value::I64(_), Type::I64) => true,
-            (Value::I64(_), _) => false,
-            (Value::Id(value), Type::Id(ty)) => value.model_id() == *ty,
-            (Value::Id(_), _) => false,
-            (Value::List(value), Type::List(ty)) => {
+            (Self::Null, _) => true,
+            (Self::Bool(_), Type::Bool) => true,
+            (Self::Bool(_), _) => false,
+            (Self::I64(_), Type::I64) => true,
+            (Self::I64(_), _) => false,
+            (Self::Id(value), Type::Id(ty)) => value.model_id() == *ty,
+            (Self::Id(_), _) => false,
+            (Self::List(value), Type::List(ty)) => {
                 if value.is_empty() {
                     true
                 } else {
                     value[0].is_a(ty)
                 }
             }
-            (Value::List(_), _) => false,
-            (Value::Record(value), Type::Record(fields)) => {
+            (Self::List(_), _) => false,
+            (Self::Record(value), Type::Record(fields)) => {
                 if value.len() == fields.len() {
                     value
                         .fields
@@ -187,10 +187,10 @@ impl Value {
                     false
                 }
             }
-            (Value::Record(_), _) => false,
-            (Value::SparseRecord(value), Type::SparseRecord(fields)) => value.fields == *fields,
-            (Value::String(_), Type::String) => true,
-            (Value::String(_), _) => false,
+            (Self::Record(_), _) => false,
+            (Self::SparseRecord(value), Type::SparseRecord(fields)) => value.fields == *fields,
+            (Self::String(_), Type::String) => true,
+            (Self::String(_), _) => false,
             _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
     }
@@ -201,7 +201,7 @@ impl Value {
 
         for step in path.step_iter() {
             ret = match ret {
-                Entry::Value(Value::Record(record)) => Entry::Value(&record[step]),
+                Entry::Value(Self::Record(record)) => Entry::Value(&record[step]),
                 _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
             }
         }
@@ -209,67 +209,67 @@ impl Value {
         ret
     }
 
-    pub fn take(&mut self) -> Value {
+    pub fn take(&mut self) -> Self {
         std::mem::take(self)
     }
 }
 
-impl AsRef<Value> for Value {
-    fn as_ref(&self) -> &Value {
+impl AsRef<Self> for Value {
+    fn as_ref(&self) -> &Self {
         self
     }
 }
 
 impl From<bool> for Value {
-    fn from(src: bool) -> Value {
-        Value::Bool(src)
+    fn from(src: bool) -> Self {
+        Self::Bool(src)
     }
 }
 
 impl From<String> for Value {
-    fn from(src: String) -> Value {
-        Value::String(src)
+    fn from(src: String) -> Self {
+        Self::String(src)
     }
 }
 
 impl From<&String> for Value {
-    fn from(src: &String) -> Value {
-        Value::String(src.clone())
+    fn from(src: &String) -> Self {
+        Self::String(src.clone())
     }
 }
 
 impl From<&str> for Value {
-    fn from(src: &str) -> Value {
-        Value::String(src.to_string())
+    fn from(src: &str) -> Self {
+        Self::String(src.to_string())
     }
 }
 
 impl From<i64> for Value {
     fn from(value: i64) -> Self {
-        Value::I64(value)
+        Self::I64(value)
     }
 }
 
 impl From<&i64> for Value {
     fn from(value: &i64) -> Self {
-        Value::I64(*value)
+        Self::I64(*value)
     }
 }
 
 impl From<ValueRecord> for Value {
     fn from(value: ValueRecord) -> Self {
-        Value::Record(value)
+        Self::Record(value)
     }
 }
 
 impl<T> From<Option<T>> for Value
 where
-    Value: From<T>,
+    Self: From<T>,
 {
     fn from(value: Option<T>) -> Self {
         match value {
-            Some(value) => Value::from(value),
-            None => Value::Null,
+            Some(value) => Self::from(value),
+            None => Self::Null,
         }
     }
 }

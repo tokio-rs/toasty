@@ -12,7 +12,7 @@ pub struct QuerySql {
 }
 
 impl From<QuerySql> for Operation {
-    fn from(value: QuerySql) -> Operation {
-        Operation::QuerySql(value)
+    fn from(value: QuerySql) -> Self {
+        Self::QuerySql(value)
     }
 }

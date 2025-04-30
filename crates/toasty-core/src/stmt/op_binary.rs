@@ -13,20 +13,20 @@ pub enum BinaryOp {
 
 impl BinaryOp {
     pub fn is_eq(self) -> bool {
-        matches!(self, BinaryOp::Eq)
+        matches!(self, Self::Eq)
     }
 
     pub fn is_ne(self) -> bool {
-        matches!(self, BinaryOp::Ne)
+        matches!(self, Self::Ne)
     }
 
     pub fn is_a(self) -> bool {
-        matches!(self, BinaryOp::IsA)
+        matches!(self, Self::IsA)
     }
 
     pub fn reverse(&mut self) {
         match *self {
-            BinaryOp::Eq => {}
+            Self::Eq => {}
             _ => todo!(),
         }
     }

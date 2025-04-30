@@ -11,19 +11,19 @@ pub enum ColumnType {
 }
 
 impl ColumnType {
-    pub(crate) fn from_schema(ty: &stmt::Type, indexed: bool) -> ColumnType {
+    pub(crate) fn from_schema(ty: &stmt::Type, indexed: bool) -> Self {
         match ty {
-            stmt::Type::Bool => ColumnType::Boolean,
-            stmt::Type::Id(_) => ColumnType::Text,
-            stmt::Type::I64 => ColumnType::Integer,
+            stmt::Type::Bool => Self::Boolean,
+            stmt::Type::Id(_) => Self::Text,
+            stmt::Type::I64 => Self::Integer,
             stmt::Type::String => {
                 if indexed {
-                    ColumnType::VarChar(255)
+                    Self::VarChar(255)
                 } else {
-                    ColumnType::Text
+                    Self::Text
                 }
             }
-            stmt::Type::Enum(_) => ColumnType::Text,
+            stmt::Type::Enum(_) => Self::Text,
             _ => todo!("ty={:#?}", ty),
         }
     }
@@ -32,10 +32,10 @@ impl ColumnType {
 impl fmt::Display for ColumnType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ColumnType::Boolean => write!(f, "BOOLEAN"),
-            ColumnType::Integer => write!(f, "INTEGER"),
-            ColumnType::Text => write!(f, "TEXT"),
-            ColumnType::VarChar(size) => write!(f, "VARCHAR({})", size),
+            Self::Boolean => write!(f, "BOOLEAN"),
+            Self::Integer => write!(f, "INTEGER"),
+            Self::Text => write!(f, "TEXT"),
+            Self::VarChar(size) => write!(f, "VARCHAR({})", size),
         }
     }
 }

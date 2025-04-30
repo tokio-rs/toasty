@@ -22,7 +22,7 @@ pub(crate) enum ExprTarget<'a> {
 }
 
 impl<'a> ExprTarget<'a> {
-    pub(crate) fn from_source(schema: &'a Schema, source: &stmt::Source) -> ExprTarget<'a> {
+    pub(crate) fn from_source(schema: &'a Schema, source: &stmt::Source) -> Self {
         match source {
             stmt::Source::Model(source_model) => {
                 let model = schema.app.model(source_model.model);
@@ -46,7 +46,7 @@ impl<'a> ExprTarget<'a> {
     pub(crate) fn from_insert_target(
         schema: &'a Schema,
         target: &stmt::InsertTarget,
-    ) -> ExprTarget<'a> {
+    ) -> Self {
         match target {
             stmt::InsertTarget::Scope(query) => {
                 let model_id = query.body.as_select().source.as_model_id();
@@ -66,7 +66,7 @@ impl<'a> ExprTarget<'a> {
     pub(crate) fn from_update_target(
         schema: &'a Schema,
         target: &stmt::UpdateTarget,
-    ) -> ExprTarget<'a> {
+    ) -> Self {
         match target {
             stmt::UpdateTarget::Query(query) => {
                 let model_id = query.body.as_select().source.as_model_id();

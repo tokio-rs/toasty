@@ -21,7 +21,7 @@ pub struct CreateIndex {
 }
 
 impl Statement {
-    pub fn create_index(index: &Index) -> Statement {
+    pub fn create_index(index: &Index) -> Self {
         CreateIndex {
             name: Name::from(&index.name[..]),
             on: index.on,
@@ -44,6 +44,6 @@ impl Statement {
 
 impl From<CreateIndex> for Statement {
     fn from(value: CreateIndex) -> Self {
-        Statement::CreateIndex(value)
+        Self::CreateIndex(value)
     }
 }
