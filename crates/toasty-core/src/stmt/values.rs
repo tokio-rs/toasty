@@ -7,8 +7,8 @@ pub struct Values {
 }
 
 impl Values {
-    pub fn new(rows: Vec<Expr>) -> Values {
-        Values { rows }
+    pub fn new(rows: Vec<Expr>) -> Self {
+        Self { rows }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -24,18 +24,18 @@ impl Values {
 
 impl From<Values> for ExprSet {
     fn from(value: Values) -> Self {
-        ExprSet::Values(value)
+        Self::Values(value)
     }
 }
 
 impl From<Values> for Query {
     fn from(value: Values) -> Self {
-        Query::builder(value).build()
+        Self::builder(value).build()
     }
 }
 
 impl From<Expr> for Values {
     fn from(value: Expr) -> Self {
-        Values { rows: vec![value] }
+        Self { rows: vec![value] }
     }
 }

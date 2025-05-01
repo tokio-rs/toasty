@@ -13,4 +13,7 @@ pub use schema::Schema;
 mod table;
 pub use table::{Table, TableId};
 
+mod ty;
+pub use ty::Type;
+
 use crate::stmt;

@@ -18,7 +18,7 @@ enum Partition {
 
 impl Partition {
     fn is_stmt(&self) -> bool {
-        matches!(self, Partition::Stmt)
+        matches!(self, Self::Stmt)
     }
 }
 

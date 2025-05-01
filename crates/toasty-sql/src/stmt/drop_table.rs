@@ -16,7 +16,7 @@ impl Statement {
     /// Drops a table.
     ///
     /// This function _does not_ add an `IF EXISTS` clause.
-    pub fn drop_table(table: &Table) -> Statement {
+    pub fn drop_table(table: &Table) -> Self {
         DropTable {
             name: Name::from(&table.name[..]),
             if_exists: false,
@@ -27,7 +27,7 @@ impl Statement {
     /// Drops a table if it exists.
     ///
     /// This function _does_ add an `IF EXISTS` clause.
-    pub fn drop_table_if_exists(table: &Table) -> Statement {
+    pub fn drop_table_if_exists(table: &Table) -> Self {
         DropTable {
             name: Name::from(&table.name[..]),
             if_exists: true,
@@ -38,6 +38,6 @@ impl Statement {
 
 impl From<DropTable> for Statement {
     fn from(value: DropTable) -> Self {
-        Statement::DropTable(value)
+        Self::DropTable(value)
     }
 }

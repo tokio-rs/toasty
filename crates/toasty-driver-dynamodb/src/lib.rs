@@ -3,7 +3,7 @@ mod op;
 use toasty_core::{
     driver::{
         operation::{self, Operation},
-        Capability, CapabilityKeyValue, Driver, Response,
+        Capability, Driver, Response,
     },
     schema::{
         app,
@@ -26,11 +26,11 @@ pub struct DynamoDb {
 }
 
 impl DynamoDb {
-    pub fn new(client: Client) -> DynamoDb {
-        DynamoDb { client }
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 
-    pub async fn connect(url: &str) -> Result<DynamoDb> {
+    pub async fn connect(url: &str) -> Result<Self> {
         let url = Url::parse(url)?;
 
         if url.scheme() != "dynamodb" {
@@ -59,10 +59,10 @@ impl DynamoDb {
 
         let client = Client::new(&sdk_config);
 
-        Ok(DynamoDb { client })
+        Ok(Self { client })
     }
 
-    pub async fn from_env() -> Result<DynamoDb> {
+    pub async fn from_env() -> Result<Self> {
         use aws_config::BehaviorVersion;
         use aws_sdk_dynamodb::config::Credentials;
 
@@ -75,16 +75,14 @@ impl DynamoDb {
 
         let client = Client::new(&sdk_config);
 
-        Ok(DynamoDb { client })
+        Ok(Self { client })
     }
 }
 
 #[toasty_core::async_trait]
 impl Driver for DynamoDb {
     fn capability(&self) -> &Capability {
-        &Capability::KeyValue(CapabilityKeyValue {
-            primary_key_ne_predicate: false,
-        })
+        &Capability::DYNAMODB
     }
 
     async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {

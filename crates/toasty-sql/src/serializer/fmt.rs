@@ -18,20 +18,6 @@ impl ToSql for &str {
     }
 }
 
-impl ToSql for &usize {
-    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
-        use std::fmt::Write;
-        write!(f.dst, "{self}").unwrap();
-    }
-}
-
-impl ToSql for usize {
-    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
-        use std::fmt::Write;
-        write!(f.dst, "{self}").unwrap();
-    }
-}
-
 impl<T: ToSql> ToSql for Option<T> {
     fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
         if let Some(inner) = self {
@@ -71,3 +57,25 @@ where
         fmt!(f, self.0 self.1 self.2);
     }
 }
+
+macro_rules! fmt_numeric {
+    ( $( $ty:ident ),* ) => {
+        $(
+            impl ToSql for $ty {
+                fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
+                    use std::fmt::Write;
+                    write!(f.dst, "{self}").unwrap();
+                }
+            }
+
+            impl ToSql for &$ty {
+                fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
+                    use std::fmt::Write;
+                    write!(f.dst, "{self}").unwrap();
+                }
+            }
+        )*
+    };
+}
+
+fmt_numeric!(usize, u64);

@@ -8,8 +8,8 @@ pub struct ValueRecord {
 }
 
 impl ValueRecord {
-    pub fn from_vec(fields: Vec<Value>) -> ValueRecord {
-        ValueRecord { fields }
+    pub fn from_vec(fields: Vec<Value>) -> Self {
+        Self { fields }
     }
 }
 

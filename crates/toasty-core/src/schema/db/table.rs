@@ -49,8 +49,8 @@ impl Table {
         &self.columns[*first]
     }
 
-    pub(crate) fn new(id: TableId, name: String) -> Table {
-        Table {
+    pub(crate) fn new(id: TableId, name: String) -> Self {
+        Self {
             id,
             name,
             columns: vec![],
@@ -77,8 +77,8 @@ impl Table {
 }
 
 impl TableId {
-    pub(crate) fn placeholder() -> TableId {
-        TableId(usize::MAX)
+    pub(crate) fn placeholder() -> Self {
+        Self(usize::MAX)
     }
 }
 

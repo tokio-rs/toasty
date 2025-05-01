@@ -8,20 +8,20 @@ pub struct ExprOr {
 }
 
 impl Expr {
-    pub fn or(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
+    pub fn or(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         let mut lhs = lhs.into();
         let rhs = rhs.into();
 
         match (&mut lhs, rhs) {
-            (Expr::Or(lhs_or), Expr::Or(rhs_or)) => {
+            (Self::Or(lhs_or), Self::Or(rhs_or)) => {
                 lhs_or.operands.extend(rhs_or.operands);
                 lhs
             }
-            (Expr::Or(lhs_or), rhs) => {
+            (Self::Or(lhs_or), rhs) => {
                 lhs_or.operands.push(rhs);
                 lhs
             }
-            (_, Expr::Or(mut lhs_or)) => {
+            (_, Self::Or(mut lhs_or)) => {
                 lhs_or.operands.push(lhs);
                 lhs_or.into()
             }
@@ -61,6 +61,6 @@ impl<'a> IntoIterator for &'a mut ExprOr {
 
 impl From<ExprOr> for Expr {
     fn from(value: ExprOr) -> Self {
-        Expr::Or(value)
+        Self::Or(value)
     }
 }

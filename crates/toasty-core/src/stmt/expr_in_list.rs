@@ -7,7 +7,7 @@ pub struct ExprInList {
 }
 
 impl Expr {
-    pub fn in_list(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
+    pub fn in_list(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         ExprInList {
             expr: Box::new(lhs.into()),
             list: Box::new(rhs.into()),
@@ -18,6 +18,6 @@ impl Expr {
 
 impl From<ExprInList> for Expr {
     fn from(value: ExprInList) -> Self {
-        Expr::InList(value)
+        Self::InList(value)
     }
 }

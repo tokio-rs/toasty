@@ -23,7 +23,7 @@ trait Input {
 }
 
 impl<'a> LowerStatement<'a> {
-    fn from_model(schema: &'a Schema, model: &'a app::Model) -> LowerStatement<'a> {
+    fn from_model(schema: &'a Schema, model: &'a app::Model) -> Self {
         LowerStatement {
             schema,
             model,

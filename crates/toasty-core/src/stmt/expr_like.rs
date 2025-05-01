@@ -8,7 +8,7 @@ pub struct ExprLike {
 }
 
 impl Expr {
-    pub fn like(expr: impl Into<Expr>, pattern: impl Into<Expr>) -> Expr {
+    pub fn like(expr: impl Into<Self>, pattern: impl Into<Self>) -> Self {
         ExprLike {
             expr: Box::new(expr.into()),
             pattern: Box::new(pattern.into()),
@@ -19,12 +19,12 @@ impl Expr {
 
 impl From<ExprLike> for Expr {
     fn from(value: ExprLike) -> Self {
-        Expr::Pattern(value.into())
+        Self::Pattern(value.into())
     }
 }
 
 impl From<ExprLike> for ExprPattern {
     fn from(value: ExprLike) -> Self {
-        ExprPattern::Like(value)
+        Self::Like(value)
     }
 }

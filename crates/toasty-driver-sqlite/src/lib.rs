@@ -1,7 +1,7 @@
 use toasty_core::{
     driver::{
         operation::{Operation, Transaction},
-        Capability, CapabilitySql, Driver, Response,
+        Capability, Driver, Response,
     },
     schema::db::{Schema, Table},
     stmt, Result,
@@ -21,7 +21,7 @@ pub struct Sqlite {
 }
 
 impl Sqlite {
-    pub fn connect(url: &str) -> Result<Sqlite> {
+    pub fn connect(url: &str) -> Result<Self> {
         let url = Url::parse(url)?;
 
         if url.scheme() != "sqlite" {
@@ -31,23 +31,23 @@ impl Sqlite {
         }
 
         if url.path() == ":memory:" {
-            Ok(Sqlite::in_memory())
+            Ok(Self::in_memory())
         } else {
-            Sqlite::open(url.path())
+            Self::open(url.path())
         }
     }
 
-    pub fn in_memory() -> Sqlite {
+    pub fn in_memory() -> Self {
         let connection = Connection::open_in_memory().unwrap();
 
-        Sqlite {
+        Self {
             connection: Mutex::new(connection),
         }
     }
 
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Sqlite> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let connection = Connection::open(path)?;
-        let sqlite = Sqlite {
+        let sqlite = Self {
             connection: Mutex::new(connection),
         };
         Ok(sqlite)
@@ -57,10 +57,7 @@ impl Sqlite {
 #[toasty_core::async_trait]
 impl Driver for Sqlite {
     fn capability(&self) -> &Capability {
-        &Capability::Sql(CapabilitySql {
-            cte_with_update: false,
-            select_for_update: false,
-        })
+        &Capability::SQLITE
     }
 
     async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
@@ -204,7 +201,10 @@ impl Sqlite {
         let connection = self.connection.lock().unwrap();
 
         let mut params = vec![];
-        let stmt = serializer.serialize(&sql::Statement::create_table(table), &mut params);
+        let stmt = serializer.serialize(
+            &sql::Statement::create_table(table, &Capability::SQLITE),
+            &mut params,
+        );
         assert!(params.is_empty());
 
         connection.execute(&stmt, [])?;

@@ -23,8 +23,8 @@ enum Steps {
 pub struct Iter<'a>(std::slice::Iter<'a, usize>);
 
 impl Projection {
-    pub const fn identity() -> Projection {
-        Projection {
+    pub const fn identity() -> Self {
+        Self {
             steps: Steps::Identity,
         }
     }
@@ -34,15 +34,15 @@ impl Projection {
         matches!(self.steps, Steps::Identity)
     }
 
-    pub fn single(step: usize) -> Projection {
-        Projection {
+    pub fn single(step: usize) -> Self {
+        Self {
             steps: Steps::Single([step]),
         }
     }
 
     /// Mostly here for `const`
-    pub const fn from_index(index: usize) -> Projection {
-        Projection {
+    pub const fn from_index(index: usize) -> Self {
+        Self {
             steps: Steps::Single([index]),
         }
     }
@@ -69,7 +69,7 @@ impl Projection {
         self.steps.resolve_field(schema, expr_self)
     }
 
-    pub fn resolves_to(&self, other: impl Into<Projection>) -> bool {
+    pub fn resolves_to(&self, other: impl Into<Self>) -> bool {
         let other = other.into();
         *self == other
     }
@@ -104,34 +104,34 @@ impl<'a> IntoIterator for &'a Projection {
 
 impl From<&Field> for Projection {
     fn from(value: &Field) -> Self {
-        Projection::single(value.id.index)
+        Self::single(value.id.index)
     }
 }
 
 impl From<FieldId> for Projection {
     fn from(value: FieldId) -> Self {
-        Projection::single(value.index)
+        Self::single(value.index)
     }
 }
 
 impl From<ColumnId> for Projection {
     fn from(value: ColumnId) -> Self {
-        Projection::single(value.index)
+        Self::single(value.index)
     }
 }
 
 impl From<usize> for Projection {
     fn from(value: usize) -> Self {
-        Projection::single(value)
+        Self::single(value)
     }
 }
 
 impl From<&[usize]> for Projection {
     fn from(value: &[usize]) -> Self {
         match value {
-            [] => Projection::identity(),
-            [value] => Projection::single(*value),
-            value => Projection {
+            [] => Self::identity(),
+            [value] => Self::single(*value),
+            value => Self {
                 steps: Steps::Multi(value.into()),
             },
         }
@@ -140,7 +140,7 @@ impl From<&[usize]> for Projection {
 
 impl<const N: usize> From<[usize; N]> for Projection {
     fn from(value: [usize; N]) -> Self {
-        Projection::from(&value[..])
+        Self::from(&value[..])
     }
 }
 
@@ -163,9 +163,9 @@ impl fmt::Debug for Projection {
 impl Steps {
     fn as_slice(&self) -> &[usize] {
         match self {
-            Steps::Identity => &[],
-            Steps::Single(step) => &step[..],
-            Steps::Multi(steps) => &steps[..],
+            Self::Identity => &[],
+            Self::Single(step) => &step[..],
+            Self::Multi(steps) => &steps[..],
         }
     }
 

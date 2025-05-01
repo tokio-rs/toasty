@@ -29,6 +29,13 @@ impl Entry<'_> {
         )
     }
 
+    pub fn try_as_value(&self) -> Option<&Value> {
+        match *self {
+            Entry::Expr(Expr::Value(value)) | Entry::Value(value) => Some(value),
+            _ => None,
+        }
+    }
+
     pub fn as_value(&self) -> &Value {
         match *self {
             Entry::Expr(Expr::Value(value)) | Entry::Value(value) => value,

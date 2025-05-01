@@ -17,24 +17,24 @@ pub enum InsertTarget {
 impl InsertTarget {
     pub fn as_model(&self) -> ModelId {
         match self {
-            InsertTarget::Scope(query) => query.body.as_select().source.as_model_id(),
-            InsertTarget::Model(model_id) => *model_id,
+            Self::Scope(query) => query.body.as_select().source.as_model_id(),
+            Self::Model(model_id) => *model_id,
             _ => todo!(),
         }
     }
 
     pub fn as_table(&self) -> &InsertTable {
         match self {
-            InsertTarget::Table(table) => table,
+            Self::Table(table) => table,
             _ => todo!(),
         }
     }
 
     pub fn constrain(&mut self, expr: impl Into<Expr>) {
         match self {
-            InsertTarget::Scope(query) => query.and(expr),
-            InsertTarget::Model(model_id) => {
-                *self = InsertTarget::Scope(Query::filter(*model_id, expr));
+            Self::Scope(query) => query.and(expr),
+            Self::Model(model_id) => {
+                *self = Self::Scope(Query::filter(*model_id, expr));
             }
             _ => todo!("{self:#?}"),
         }
@@ -43,6 +43,6 @@ impl InsertTarget {
 
 impl From<Query> for InsertTarget {
     fn from(value: Query) -> Self {
-        InsertTarget::Scope(value)
+        Self::Scope(value)
     }
 }

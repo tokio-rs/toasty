@@ -13,7 +13,7 @@ pub enum Transaction {
 }
 
 impl From<Transaction> for Operation {
-    fn from(value: Transaction) -> Operation {
-        Operation::Transaction(value)
+    fn from(value: Transaction) -> Self {
+        Self::Transaction(value)
     }
 }

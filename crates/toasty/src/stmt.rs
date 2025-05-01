@@ -51,8 +51,8 @@ pub struct Statement<M> {
 }
 
 impl<M: Model> Statement<M> {
-    pub fn from_untyped(query: impl IntoSelect<Model = M>) -> Statement<M> {
-        Statement {
+    pub fn from_untyped(query: impl IntoSelect<Model = M>) -> Self {
+        Self {
             untyped: query.into_select().untyped.into(),
             _p: PhantomData,
         }
@@ -61,7 +61,7 @@ impl<M: Model> Statement<M> {
 
 impl<M> From<Select<M>> for Statement<M> {
     fn from(value: Select<M>) -> Self {
-        Statement {
+        Self {
             untyped: value.untyped.into(),
             _p: PhantomData,
         }
@@ -70,7 +70,7 @@ impl<M> From<Select<M>> for Statement<M> {
 
 impl<M> From<Insert<M>> for Statement<M> {
     fn from(value: Insert<M>) -> Self {
-        Statement {
+        Self {
             untyped: value.untyped.into(),
             _p: PhantomData,
         }
@@ -79,7 +79,7 @@ impl<M> From<Insert<M>> for Statement<M> {
 
 impl<M> From<Update<M>> for Statement<M> {
     fn from(value: Update<M>) -> Self {
-        Statement {
+        Self {
             untyped: value.untyped.into(),
             _p: PhantomData,
         }

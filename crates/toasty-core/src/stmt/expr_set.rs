@@ -19,7 +19,7 @@ impl ExprSet {
     #[track_caller]
     pub fn as_select(&self) -> &Select {
         match self {
-            ExprSet::Select(expr) => expr,
+            Self::Select(expr) => expr,
             _ => todo!("expected Select, but was not; expr_set={:#?}", self),
         }
     }
@@ -27,7 +27,7 @@ impl ExprSet {
     #[track_caller]
     pub fn as_select_mut(&mut self) -> &mut Select {
         match self {
-            ExprSet::Select(expr) => expr,
+            Self::Select(expr) => expr,
             _ => todo!("expected Select, but was not"),
         }
     }
@@ -35,19 +35,19 @@ impl ExprSet {
     #[track_caller]
     pub fn into_select(self) -> Select {
         match self {
-            ExprSet::Select(expr) => expr,
+            Self::Select(expr) => expr,
             _ => todo!(),
         }
     }
 
     pub fn is_select(&self) -> bool {
-        matches!(self, ExprSet::Select(_))
+        matches!(self, Self::Select(_))
     }
 
     #[track_caller]
     pub fn as_values_mut(&mut self) -> &mut Values {
         match self {
-            ExprSet::Values(expr) => expr,
+            Self::Values(expr) => expr,
             _ => todo!(),
         }
     }
@@ -55,29 +55,29 @@ impl ExprSet {
     #[track_caller]
     pub fn into_values(self) -> Values {
         match self {
-            ExprSet::Values(expr) => expr,
+            Self::Values(expr) => expr,
             _ => todo!(),
         }
     }
 
     pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
         match self {
-            ExprSet::Select(expr) => expr.substitute_ref(input),
-            ExprSet::SetOp(expr) => expr.substitute_ref(input),
-            ExprSet::Update(_) => todo!(),
-            ExprSet::Values(expr) => expr.substitute_ref(input),
+            Self::Select(expr) => expr.substitute_ref(input),
+            Self::SetOp(expr) => expr.substitute_ref(input),
+            Self::Update(_) => todo!(),
+            Self::Values(expr) => expr.substitute_ref(input),
         }
     }
 }
 
 impl Default for ExprSet {
     fn default() -> Self {
-        ExprSet::Values(Values::default())
+        Self::Values(Values::default())
     }
 }
 
 impl From<Select> for ExprSet {
     fn from(value: Select) -> Self {
-        ExprSet::Select(value)
+        Self::Select(value)
     }
 }

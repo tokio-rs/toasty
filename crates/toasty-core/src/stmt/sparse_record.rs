@@ -12,7 +12,7 @@ pub struct SparseRecord {
 }
 
 impl Value {
-    pub fn empty_sparse_record() -> Value {
+    pub fn empty_sparse_record() -> Self {
         SparseRecord {
             fields: PathFieldSet::new(),
             values: vec![],
@@ -20,7 +20,7 @@ impl Value {
         .into()
     }
 
-    pub fn sparse_record(fields: PathFieldSet, record: ValueRecord) -> Value {
+    pub fn sparse_record(fields: PathFieldSet, record: ValueRecord) -> Self {
         let mut values = vec![];
 
         for (index, value) in fields.iter().zip(record.fields.into_iter()) {
@@ -36,19 +36,19 @@ impl Value {
 
     pub fn into_sparse_record(self) -> SparseRecord {
         match self {
-            Value::SparseRecord(value) => value,
+            Self::SparseRecord(value) => value,
             _ => todo!(),
         }
     }
 }
 
 impl Type {
-    pub fn sparse_record(fields: impl Into<PathFieldSet>) -> Type {
-        Type::SparseRecord(fields.into())
+    pub fn sparse_record(fields: impl Into<PathFieldSet>) -> Self {
+        Self::SparseRecord(fields.into())
     }
 
-    pub fn empty_sparse_record() -> Type {
-        Type::SparseRecord(PathFieldSet::default())
+    pub fn empty_sparse_record() -> Self {
+        Self::SparseRecord(PathFieldSet::default())
     }
 }
 
@@ -75,6 +75,6 @@ impl IntoIterator for SparseRecord {
 
 impl From<SparseRecord> for Value {
     fn from(value: SparseRecord) -> Self {
-        Value::SparseRecord(value)
+        Self::SparseRecord(value)
     }
 }

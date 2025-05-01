@@ -3,7 +3,7 @@ use crate::Result;
 pub use toasty_core::{
     driver::{
         operation::{self, Operation},
-        Capability, CapabilityKeyValue, CapabilitySql, Driver, Response, Rows,
+        Capability, Driver, Response, Rows,
     },
     schema::db::Schema,
 };
@@ -27,7 +27,7 @@ pub(crate) enum Connection {
 }
 
 impl Connection {
-    pub(crate) async fn connect(url: &str) -> Result<Connection> {
+    pub(crate) async fn connect(url: &str) -> Result<Self> {
         let url = Url::parse(url)?;
 
         match url.scheme() {
@@ -48,7 +48,7 @@ impl Connection {
     }
 
     #[cfg(not(feature = "dynamodb"))]
-    async fn connect_dynamodb(_url: &Url) -> Result<Connection> {
+    async fn connect_dynamodb(_url: &Url) -> Result<Self> {
         Err(anyhow::anyhow!("`dynamodb` feature not enabled"))
     }
 
@@ -59,7 +59,7 @@ impl Connection {
     }
 
     #[cfg(not(feature = "mysql"))]
-    async fn connect_mysql(_url: &Url) -> Result<Connection> {
+    async fn connect_mysql(_url: &Url) -> Result<Self> {
         Err(anyhow::anyhow!("`mysql` feature not enabled"))
     }
 
@@ -70,14 +70,14 @@ impl Connection {
     }
 
     #[cfg(not(feature = "postgresql"))]
-    async fn connect_postgresql(_url: &Url) -> Result<Connection> {
+    async fn connect_postgresql(_url: &Url) -> Result<Self> {
         Err(anyhow::anyhow!("`postgresql` feature not enabled"))
     }
 
     #[cfg(feature = "sqlite")]
-    fn connect_sqlite(url: &Url) -> Result<Connection> {
+    fn connect_sqlite(url: &Url) -> Result<Self> {
         let driver = toasty_driver_sqlite::Sqlite::connect(url.as_str())?;
-        Ok(Connection::Sqlite(driver))
+        Ok(Self::Sqlite(driver))
     }
 
     #[cfg(not(feature = "sqlite"))]

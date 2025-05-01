@@ -1,7 +1,7 @@
 use super::*;
 
 impl Planner<'_> {
-    pub(super) fn plan_stmt_delete(&mut self, stmt: stmt::Delete) {
+    pub(super) fn plan_stmt_delete(&mut self, stmt: stmt::Delete) -> Result<()> {
         let model = self.model(stmt.from.as_model_id());
         let selection = stmt.selection();
 
@@ -11,7 +11,7 @@ impl Planner<'_> {
                 // HAX: unify w/ relation planner
                 if self.relations.last().copied() != Some(rel.pair) {
                     self.relations.push(field.id);
-                    self.plan_mut_has_one_nullify(rel, &selection);
+                    self.plan_mut_has_one_nullify(rel, &selection)?;
                     self.relations.pop();
                 }
             } else if let Some(rel) = field.ty.as_has_many() {
@@ -27,18 +27,20 @@ impl Planner<'_> {
                     let mut update = query.update();
                     update.assignments.set(pair.id, stmt::Value::Null);
 
-                    self.plan_stmt(&Context::default(), update.into());
+                    self.plan_stmt(&Context::default(), update.into())?;
                 } else {
-                    self.plan_stmt(&Context::default(), query.delete().into());
+                    self.plan_stmt(&Context::default(), query.delete().into())?;
                 }
             }
         }
 
-        if self.capability.is_sql() {
+        if self.capability.sql {
             self.plan_delete_sql(model, stmt);
         } else {
-            self.plan_delete_kv(model, stmt);
+            self.plan_delete_kv(model, stmt)?;
         }
+
+        Ok(())
     }
 
     fn plan_delete_sql(&mut self, model: &app::Model, mut stmt: stmt::Delete) {
@@ -52,11 +54,11 @@ impl Planner<'_> {
         });
     }
 
-    fn plan_delete_kv(&mut self, model: &app::Model, mut stmt: stmt::Delete) {
+    fn plan_delete_kv(&mut self, model: &app::Model, mut stmt: stmt::Delete) -> Result<()> {
         let table = self.schema.table_for(model);
 
         // Subqueries are planned before lowering
-        let input_sources = self.plan_subqueries(&mut stmt);
+        let input_sources = self.plan_subqueries(&mut stmt)?;
 
         self.lower_stmt_delete(model, &mut stmt);
 
@@ -101,5 +103,7 @@ impl Planner<'_> {
                 filter: index_plan.result_filter,
             });
         }
+
+        Ok(())
     }
 }

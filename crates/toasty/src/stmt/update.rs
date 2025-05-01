@@ -8,7 +8,7 @@ pub struct Update<M> {
 }
 
 impl<M: Model> Update<M> {
-    pub fn new(mut selection: Select<M>) -> Update<M> {
+    pub fn new(mut selection: Select<M>) -> Self {
         if let stmt::ExprSet::Values(values) = &mut *selection.untyped.body {
             let rows = std::mem::take(&mut values.rows);
             let filter = stmt::Expr::in_list(stmt::Expr::key(M::ID), rows);
@@ -18,14 +18,14 @@ impl<M: Model> Update<M> {
         let mut stmt = selection.untyped.update();
         stmt.returning = Some(stmt::Returning::Changed);
 
-        Update {
+        Self {
             untyped: stmt,
             _p: PhantomData,
         }
     }
 
-    pub const fn from_untyped(untyped: stmt::Update) -> Update<M> {
-        Update {
+    pub const fn from_untyped(untyped: stmt::Update) -> Self {
+        Self {
             untyped,
             _p: PhantomData,
         }
@@ -51,7 +51,7 @@ impl<M: Model> Update<M> {
 
 impl<M> Clone for Update<M> {
     fn clone(&self) -> Self {
-        Update {
+        Self {
             untyped: self.untyped.clone(),
             _p: PhantomData,
         }
@@ -60,7 +60,7 @@ impl<M> Clone for Update<M> {
 
 impl<M: Model> Default for Update<M> {
     fn default() -> Self {
-        Update {
+        Self {
             untyped: stmt::Update {
                 target: stmt::UpdateTarget::Model(M::ID),
                 assignments: stmt::Assignments::default(),

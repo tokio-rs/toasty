@@ -11,7 +11,7 @@ use mysql_async::{
     Pool,
 };
 use toasty_core::{
-    driver::{self, operation::Transaction, Capability, Operation, Response},
+    driver::{operation::Transaction, Capability, Operation, Response},
     schema::db::{Schema, Table},
     stmt::{self, ValueRecord},
     Driver, Result,
@@ -59,7 +59,10 @@ impl MySQL {
 
         let mut params = Vec::new();
 
-        let sql = serializer.serialize(&sql::Statement::create_table(table), &mut params);
+        let sql = serializer.serialize(
+            &sql::Statement::create_table(table, &Capability::MYSQL),
+            &mut params,
+        );
 
         assert!(
             params.is_empty(),
@@ -118,10 +121,7 @@ impl From<Pool> for MySQL {
 #[toasty_core::async_trait]
 impl Driver for MySQL {
     fn capability(&self) -> &Capability {
-        &Capability::Sql(driver::CapabilitySql {
-            cte_with_update: false,
-            select_for_update: true,
-        })
+        &Capability::MYSQL
     }
 
     async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {

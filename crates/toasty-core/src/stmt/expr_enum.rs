@@ -8,6 +8,6 @@ pub struct ExprEnum {
 
 impl From<ExprEnum> for Expr {
     fn from(value: ExprEnum) -> Self {
-        Expr::Enum(value)
+        Self::Enum(value)
     }
 }

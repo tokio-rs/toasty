@@ -42,7 +42,7 @@ impl Input for &[stmt::Value] {
 }
 
 impl<'a, I> TypedInput<'a, I> {
-    pub(super) fn new(input: &'a mut I, tys: &'a [stmt::Type]) -> TypedInput<'a, I> {
+    pub(super) fn new(input: &'a mut I, tys: &'a [stmt::Type]) -> Self {
         TypedInput { input, tys }
     }
 }

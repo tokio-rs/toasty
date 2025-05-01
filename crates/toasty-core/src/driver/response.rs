@@ -15,20 +15,20 @@ pub enum Rows {
 }
 
 impl Response {
-    pub fn from_count(count: u64) -> Response {
-        Response {
+    pub fn from_count(count: u64) -> Self {
+        Self {
             rows: Rows::Count(count),
         }
     }
 
-    pub fn from_value_stream(values: ValueStream) -> Response {
-        Response {
+    pub fn from_value_stream(values: ValueStream) -> Self {
+        Self {
             rows: Rows::Values(values),
         }
     }
 
-    pub fn empty_value_stream() -> Response {
-        Response {
+    pub fn empty_value_stream() -> Self {
+        Self {
             rows: Rows::Values(ValueStream::default()),
         }
     }
@@ -36,12 +36,12 @@ impl Response {
 
 impl Rows {
     pub fn is_count(&self) -> bool {
-        matches!(self, Rows::Count(_))
+        matches!(self, Self::Count(_))
     }
 
     pub fn into_values(self) -> ValueStream {
         match self {
-            Rows::Values(values) => values,
+            Self::Values(values) => values,
             _ => todo!(),
         }
     }

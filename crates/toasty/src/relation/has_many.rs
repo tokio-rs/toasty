@@ -9,7 +9,7 @@ pub struct HasMany<T> {
 }
 
 impl<T: Model> HasMany<T> {
-    pub fn load(input: Value) -> crate::Result<HasMany<T>> {
+    pub fn load(input: Value) -> crate::Result<Self> {
         match input {
             Value::Record(record) => {
                 let mut values = vec![];
@@ -22,11 +22,11 @@ impl<T: Model> HasMany<T> {
                     values.push(T::load(record)?);
                 }
 
-                Ok(HasMany {
+                Ok(Self {
                     values: Some(values),
                 })
             }
-            Value::Null => Ok(HasMany::default()),
+            Value::Null => Ok(Self::default()),
             _ => todo!("unexpected input: input={:#?}", input),
         }
     }
@@ -42,7 +42,7 @@ impl<T: Model> HasMany<T> {
 
 impl<T> Default for HasMany<T> {
     fn default() -> Self {
-        HasMany { values: None }
+        Self { values: None }
     }
 }
 

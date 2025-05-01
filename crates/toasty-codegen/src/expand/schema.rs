@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::{FieldTy, Name};
+use crate::schema::{ColumnType, FieldTy, Name};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -19,7 +19,7 @@ impl Expand<'_> {
                 use #toasty::{
                     schema::{
                         app::*,
-                        db::{IndexOp, IndexScope},
+                        db::{self, IndexOp, IndexScope},
                         Name
                     },
                     Model,
@@ -57,9 +57,18 @@ impl Expand<'_> {
 
             match &field.ty {
                 FieldTy::Primitive(ty) => {
+                    let storage_ty = match &field.attrs.db {
+                        Some(ColumnType::VarChar(size)) => {
+                            let size = util::int(*size);
+                            quote!(Some(db::Type::VarChar(#size)))
+                        }
+                        None => quote!(None),
+                    };
+
                     nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
                     field_ty = quote!(FieldTy::Primitive(FieldPrimitive {
                         ty: <#ty as #toasty::stmt::Primitive>::TYPE,
+                        storage_ty: #storage_ty,
                     }));
                 }
                 FieldTy::BelongsTo(rel) => {
@@ -142,6 +151,7 @@ impl Expand<'_> {
                     nullable: #nullable,
                     primary_key: #primary_key,
                     auto: #auto,
+                    constraints: vec![],
                 }
             }
         });

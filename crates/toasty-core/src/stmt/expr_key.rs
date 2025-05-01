@@ -6,7 +6,7 @@ pub struct ExprKey {
 }
 
 impl Expr {
-    pub fn key(model: impl Into<ModelId>) -> Expr {
+    pub fn key(model: impl Into<ModelId>) -> Self {
         ExprKey {
             model: model.into(),
         }
@@ -16,12 +16,12 @@ impl Expr {
 
 impl From<ExprKey> for Expr {
     fn from(value: ExprKey) -> Self {
-        Expr::Key(value)
+        Self::Key(value)
     }
 }
 
 impl From<ModelId> for ExprKey {
     fn from(value: ModelId) -> Self {
-        ExprKey { model: value }
+        Self { model: value }
     }
 }

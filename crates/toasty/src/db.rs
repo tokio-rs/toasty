@@ -93,4 +93,8 @@ impl Db {
     pub async fn reset_db(&self) -> Result<()> {
         self.driver.reset_db(&self.schema.db).await
     }
+
+    pub fn schema(&self) -> &Schema {
+        &self.schema
+    }
 }

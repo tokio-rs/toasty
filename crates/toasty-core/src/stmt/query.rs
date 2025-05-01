@@ -27,7 +27,7 @@ pub struct QueryBuilder {
 impl Query {
     pub fn builder(body: impl Into<ExprSet>) -> QueryBuilder {
         QueryBuilder {
-            query: Query {
+            query: Self {
                 with: None,
                 body: Box::new(body.into()),
                 locks: vec![],
@@ -35,16 +35,16 @@ impl Query {
         }
     }
 
-    pub fn unit() -> Query {
-        Query::builder(Values::default()).build()
+    pub fn unit() -> Self {
+        Self::builder(Values::default()).build()
     }
 
-    pub fn filter(source: impl Into<Source>, filter: impl Into<Expr>) -> Query {
-        Query::builder(Select::new(source, filter)).build()
+    pub fn filter(source: impl Into<Source>, filter: impl Into<Expr>) -> Self {
+        Self::builder(Select::new(source, filter)).build()
     }
 
-    pub fn values(values: impl Into<Values>) -> Query {
-        Query {
+    pub fn values(values: impl Into<Values>) -> Self {
+        Self {
             with: None,
             body: Box::new(ExprSet::Values(values.into())),
             locks: vec![],
@@ -82,7 +82,7 @@ impl Query {
         self.body.as_select_mut().and(expr);
     }
 
-    pub fn union(&mut self, query: impl Into<Query>) {
+    pub fn union(&mut self, query: impl Into<Self>) {
         let rhs = query.into();
 
         match (&mut *self.body, *rhs.body) {
@@ -115,7 +115,7 @@ impl Query {
 
 impl From<Query> for Statement {
     fn from(value: Query) -> Self {
-        Statement::Query(value)
+        Self::Query(value)
     }
 }
 

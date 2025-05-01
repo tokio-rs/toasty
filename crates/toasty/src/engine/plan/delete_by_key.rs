@@ -19,7 +19,7 @@ pub(crate) struct DeleteByKey {
 }
 
 impl From<DeleteByKey> for Action {
-    fn from(src: DeleteByKey) -> Action {
-        Action::DeleteByKey(src)
+    fn from(src: DeleteByKey) -> Self {
+        Self::DeleteByKey(src)
     }
 }

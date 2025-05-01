@@ -10,42 +10,42 @@ pub struct Select<M> {
 }
 
 impl<M: Model> Select<M> {
-    pub fn unit() -> Select<M> {
-        Select {
+    pub fn unit() -> Self {
+        Self {
             untyped: stmt::Query::unit(),
             _p: PhantomData,
         }
     }
 
-    pub(crate) const fn from_untyped(untyped: stmt::Query) -> Select<M> {
-        Select {
+    pub(crate) const fn from_untyped(untyped: stmt::Query) -> Self {
+        Self {
             untyped,
             _p: PhantomData,
         }
     }
 
     /// Convert a model expression to a query
-    pub fn from_expr(expr: Expr<M>) -> Select<M> {
+    pub fn from_expr(expr: Expr<M>) -> Self {
         match expr.untyped {
             stmt::Expr::Stmt(expr) => match *expr.stmt {
-                stmt::Statement::Query(stmt) => Select::from_untyped(stmt),
+                stmt::Statement::Query(stmt) => Self::from_untyped(stmt),
                 stmt => todo!("stmt={stmt:#?}"),
             },
-            expr => Select::from_untyped(stmt::Query::values(expr)),
+            expr => Self::from_untyped(stmt::Query::values(expr)),
         }
     }
 
-    pub fn filter(expr: Expr<bool>) -> Select<M> {
-        Select::from_untyped(stmt::Query::filter(M::ID, expr.untyped))
+    pub fn filter(expr: Expr<bool>) -> Self {
+        Self::from_untyped(stmt::Query::filter(M::ID, expr.untyped))
     }
 
     // TODO: why are these by value?
-    pub fn and(mut self, filter: Expr<bool>) -> Select<M> {
+    pub fn and(mut self, filter: Expr<bool>) -> Self {
         self.untyped.and(filter.untyped);
         self
     }
 
-    pub fn union(mut self, other: Select<M>) -> Select<M> {
+    pub fn union(mut self, other: Self) -> Self {
         self.untyped.union(other.untyped);
         self
     }
@@ -62,9 +62,9 @@ impl<M: Model> Select<M> {
 }
 
 impl<M: Model> Select<M> {
-    pub fn all() -> Select<M> {
+    pub fn all() -> Self {
         let filter = stmt::Expr::Value(Value::from_bool(true));
-        Select::from_untyped(stmt::Query::filter(M::ID, filter))
+        Self::from_untyped(stmt::Query::filter(M::ID, filter))
     }
 }
 
@@ -78,7 +78,7 @@ impl<M: Model> IntoSelect for &Select<M> {
 
 impl<M> Clone for Select<M> {
     fn clone(&self) -> Self {
-        Select {
+        Self {
             untyped: self.untyped.clone(),
             _p: PhantomData,
         }

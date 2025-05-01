@@ -27,7 +27,7 @@ pub(crate) struct UpdateByKey {
 }
 
 impl From<UpdateByKey> for Action {
-    fn from(src: UpdateByKey) -> Action {
-        Action::UpdateByKey(src)
+    fn from(src: UpdateByKey) -> Self {
+        Self::UpdateByKey(src)
     }
 }

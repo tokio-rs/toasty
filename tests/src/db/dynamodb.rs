@@ -7,7 +7,8 @@ pub struct SetupDynamoDb;
 
 #[async_trait::async_trait]
 impl Setup for SetupDynamoDb {
-    async fn setup(&self, mut builder: db::Builder) -> Db {
+    /// Try building the full schema and connecting to the database.
+    async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
         use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
         static CNT: AtomicUsize = AtomicUsize::new(0);
@@ -21,21 +22,10 @@ impl Setup for SetupDynamoDb {
         let url =
             std::env::var("TOASTY_TEST_DYNAMODB_URL").unwrap_or_else(|_| "dynamodb://".to_string());
 
-        let db = builder
-            .table_name_prefix(&prefix)
-            .connect(&url)
-            .await
-            .unwrap();
-
-        db.reset_db().await.unwrap();
-        db
+        builder.table_name_prefix(&prefix).connect(&url).await
     }
 
     fn capability(&self) -> &Capability {
-        use toasty_core::driver::CapabilityKeyValue;
-
-        &Capability::KeyValue(CapabilityKeyValue {
-            primary_key_ne_predicate: false,
-        })
+        &Capability::DYNAMODB
     }
 }

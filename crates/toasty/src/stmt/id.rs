@@ -16,8 +16,8 @@ pub struct Id<M> {
 }
 
 impl<M> Id<M> {
-    pub fn from_untyped(id: stmt::Id) -> Id<M> {
-        Id {
+    pub fn from_untyped(id: stmt::Id) -> Self {
+        Self {
             inner: id,
             _p: PhantomData,
         }
@@ -30,12 +30,12 @@ impl<M> std::fmt::Display for Id<M> {
     }
 }
 
-impl<M: Model> IntoExpr<Id<M>> for Id<M> {
-    fn into_expr(self) -> Expr<Id<M>> {
+impl<M: Model> IntoExpr<Self> for Id<M> {
+    fn into_expr(self) -> Expr<Self> {
         Expr::from_value(self.inner.into())
     }
 
-    fn by_ref(&self) -> Expr<Id<M>> {
+    fn by_ref(&self) -> Expr<Self> {
         Expr::from_value((&self.inner).into())
     }
 }
@@ -46,7 +46,7 @@ impl<M: Model> IntoExpr<Id<M>> for String {
     }
 
     fn by_ref(&self) -> Expr<Id<M>> {
-        String::into_expr(self.clone())
+        Self::into_expr(self.clone())
     }
 }
 
@@ -72,13 +72,13 @@ impl<M: Model> IntoExpr<Id<M>> for &String {
 
 impl<M: Model> From<Id<M>> for stmt::Expr {
     fn from(value: Id<M>) -> Self {
-        stmt::Expr::Value(value.inner.into())
+        Self::Value(value.inner.into())
     }
 }
 
 impl<M> Clone for Id<M> {
-    fn clone(&self) -> Id<M> {
-        Id {
+    fn clone(&self) -> Self {
+        Self {
             inner: self.inner.clone(),
             _p: PhantomData,
         }
@@ -86,7 +86,7 @@ impl<M> Clone for Id<M> {
 }
 
 impl<M> PartialEq for Id<M> {
-    fn eq(&self, rhs: &Id<M>) -> bool {
+    fn eq(&self, rhs: &Self) -> bool {
         self.inner.eq(&rhs.inner)
     }
 }
@@ -99,25 +99,25 @@ impl<M> fmt::Debug for Id<M> {
 
 impl<M> From<Id<M>> for Value {
     fn from(value: Id<M>) -> Self {
-        Value::from(value.inner)
+        Self::from(value.inner)
     }
 }
 
 impl<M> From<&Id<M>> for Value {
-    fn from(src: &Id<M>) -> Value {
-        Value::from(&src.inner)
+    fn from(src: &Id<M>) -> Self {
+        Self::from(&src.inner)
     }
 }
 
-impl<M> From<&Id<M>> for Id<M> {
-    fn from(src: &Id<M>) -> Id<M> {
+impl<M> From<&Self> for Id<M> {
+    fn from(src: &Self) -> Self {
         src.clone()
     }
 }
 
 impl<M> From<&Id<M>> for stmt::Expr {
     fn from(value: &Id<M>) -> Self {
-        stmt::Expr::from(&value.inner)
+        Self::from(&value.inner)
     }
 }
 

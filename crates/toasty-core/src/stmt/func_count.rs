@@ -11,8 +11,8 @@ pub struct FuncCount {
 }
 
 impl Expr {
-    pub fn count_star() -> Expr {
-        Expr::Func(ExprFunc::Count(FuncCount {
+    pub fn count_star() -> Self {
+        Self::Func(ExprFunc::Count(FuncCount {
             arg: None,
             filter: None,
         }))
@@ -21,12 +21,12 @@ impl Expr {
 
 impl From<FuncCount> for ExprFunc {
     fn from(value: FuncCount) -> Self {
-        ExprFunc::Count(value)
+        Self::Count(value)
     }
 }
 
 impl From<FuncCount> for Expr {
     fn from(value: FuncCount) -> Self {
-        Expr::Func(value.into())
+        Self::Func(value.into())
     }
 }

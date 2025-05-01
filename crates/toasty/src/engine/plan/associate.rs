@@ -16,6 +16,6 @@ pub(crate) struct Associate {
 
 impl From<Associate> for Action {
     fn from(value: Associate) -> Self {
-        Action::Associate(value)
+        Self::Associate(value)
     }
 }

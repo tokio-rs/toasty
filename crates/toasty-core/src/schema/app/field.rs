@@ -1,6 +1,8 @@
 mod primitive;
 pub use primitive::FieldPrimitive;
 
+use crate::{driver, Result};
+
 use super::*;
 
 use std::fmt;
@@ -24,6 +26,9 @@ pub struct Field {
 
     /// True if toasty is responsible for populating the value of the field
     pub auto: Option<Auto>,
+
+    /// Any additional field constraints
+    pub constraints: Vec<Constraint>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
@@ -112,6 +117,16 @@ impl Field {
             FieldTy::HasMany(has_many) => Some(has_many.pair),
             FieldTy::HasOne(has_one) => Some(has_one.pair),
         }
+    }
+
+    pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        if let FieldTy::Primitive(primitive) = &self.ty {
+            if let Some(storage_ty) = &primitive.storage_ty {
+                storage_ty.verify(db)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -238,22 +253,22 @@ impl fmt::Debug for FieldTy {
             Self::Primitive(ty) => ty.fmt(fmt),
             Self::BelongsTo(ty) => ty.fmt(fmt),
             Self::HasMany(ty) => ty.fmt(fmt),
-            FieldTy::HasOne(ty) => ty.fmt(fmt),
+            Self::HasOne(ty) => ty.fmt(fmt),
         }
     }
 }
 
 impl FieldId {
-    pub(crate) fn placeholder() -> FieldId {
-        FieldId {
+    pub(crate) fn placeholder() -> Self {
+        Self {
             model: ModelId::placeholder(),
             index: usize::MAX,
         }
     }
 }
 
-impl From<&FieldId> for FieldId {
-    fn from(val: &FieldId) -> Self {
+impl From<&Self> for FieldId {
+    fn from(val: &Self) -> Self {
         *val
     }
 }

@@ -6,6 +6,9 @@ pub use arg::Arg;
 mod auto;
 pub use auto::Auto;
 
+mod constraint;
+pub use constraint::{Constraint, ConstraintLength};
+
 mod field;
 pub use field::{Field, FieldId, FieldPrimitive, FieldTy};
 

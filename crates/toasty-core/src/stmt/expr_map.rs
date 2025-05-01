@@ -10,7 +10,7 @@ pub struct ExprMap {
 }
 
 impl Expr {
-    pub fn map(base: impl Into<Expr>, map: impl Into<Expr>) -> Expr {
+    pub fn map(base: impl Into<Self>, map: impl Into<Self>) -> Self {
         ExprMap {
             base: Box::new(base.into()),
             map: Box::new(map.into()),
@@ -20,7 +20,7 @@ impl Expr {
 
     pub fn as_map(&self) -> &ExprMap {
         match self {
-            Expr::Map(expr) => expr,
+            Self::Map(expr) => expr,
             _ => todo!(),
         }
     }
@@ -28,6 +28,6 @@ impl Expr {
 
 impl From<ExprMap> for Expr {
     fn from(value: ExprMap) -> Self {
-        Expr::Map(value)
+        Self::Map(value)
     }
 }

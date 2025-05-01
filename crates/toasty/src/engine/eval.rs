@@ -23,14 +23,14 @@ pub(crate) struct Func<T = stmt::Expr> {
 }
 
 impl<T: AsExpr> Func<T> {
-    pub(crate) fn from_stmt(expr: T, args: Vec<stmt::Type>) -> Func<T> {
+    pub(crate) fn from_stmt(expr: T, args: Vec<stmt::Type>) -> Self {
         assert!(verify_expr(expr.as_expr()));
         let ret = ty::infer_eval_expr_ty(expr.as_expr(), &args);
-        Func { args, ret, expr }
+        Self { args, ret, expr }
     }
 
-    pub(crate) fn from_stmt_unchecked(expr: T, args: Vec<stmt::Type>, ret: stmt::Type) -> Func<T> {
-        Func { args, ret, expr }
+    pub(crate) fn from_stmt_unchecked(expr: T, args: Vec<stmt::Type>, ret: stmt::Type) -> Self {
+        Self { args, ret, expr }
     }
 
     /// Returns true if the function has no inputs
@@ -64,8 +64,8 @@ impl<T: AsExpr> Func<T> {
 
 impl Func<stmt::Expr> {
     /// Returns the identity function for the given type
-    pub(crate) fn identity(ty: stmt::Type) -> Func {
-        Func {
+    pub(crate) fn identity(ty: stmt::Type) -> Self {
+        Self {
             args: vec![ty.clone()],
             ret: ty,
             expr: stmt::Expr::arg(0),
@@ -76,13 +76,13 @@ impl Func<stmt::Expr> {
         mut expr: stmt::Expr,
         args: Vec<stmt::Type>,
         mut convert: impl Convert,
-    ) -> Option<Func> {
+    ) -> Option<Self> {
         if !convert_and_verify_expr(&mut expr, &mut convert) {
             return None;
         }
 
         let ret = ty::infer_eval_expr_ty(&expr, &args);
-        Some(Func::from_stmt_unchecked(expr, args, ret))
+        Some(Self::from_stmt_unchecked(expr, args, ret))
     }
 }
 

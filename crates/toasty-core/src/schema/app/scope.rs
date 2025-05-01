@@ -16,8 +16,8 @@ pub struct ScopedQuery {
 }
 
 impl ScopedQuery {
-    pub(crate) fn new(query: &Query) -> ScopedQuery {
-        ScopedQuery {
+    pub(crate) fn new(query: &Query) -> Self {
+        Self {
             id: query.id,
             name: scoped_query_name(&query.args[1..]),
             scope_args: query.args[..1].iter().map(Clone::clone).collect(),

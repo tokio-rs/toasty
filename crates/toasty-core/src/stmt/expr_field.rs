@@ -6,7 +6,7 @@ pub struct ExprField {
 }
 
 impl Expr {
-    pub fn field(field: impl Into<FieldId>) -> Expr {
+    pub fn field(field: impl Into<FieldId>) -> Self {
         ExprField {
             field: field.into(),
         }
@@ -14,12 +14,12 @@ impl Expr {
     }
 
     pub fn is_field(&self) -> bool {
-        matches!(self, Expr::Field(_))
+        matches!(self, Self::Field(_))
     }
 
     pub fn as_field(&self) -> &ExprField {
         match self {
-            Expr::Field(field) => field,
+            Self::Field(field) => field,
             _ => todo!(),
         }
     }
@@ -27,30 +27,30 @@ impl Expr {
 
 impl From<ExprField> for Expr {
     fn from(value: ExprField) -> Self {
-        Expr::Field(value)
+        Self::Field(value)
     }
 }
 
 impl From<&Field> for ExprField {
     fn from(value: &Field) -> Self {
-        ExprField { field: value.id }
+        Self { field: value.id }
     }
 }
 
 impl From<&Field> for Expr {
     fn from(value: &Field) -> Self {
-        Expr::field(value.id())
+        Self::field(value.id())
     }
 }
 
 impl From<FieldId> for ExprField {
     fn from(value: FieldId) -> Self {
-        ExprField { field: value }
+        Self { field: value }
     }
 }
 
 impl From<FieldId> for Expr {
     fn from(value: FieldId) -> Self {
-        Expr::field(value)
+        Self::field(value)
     }
 }

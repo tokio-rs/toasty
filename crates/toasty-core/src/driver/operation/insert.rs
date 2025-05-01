@@ -11,7 +11,7 @@ pub struct Insert {
 }
 
 impl From<Insert> for Operation {
-    fn from(value: Insert) -> Operation {
-        Operation::Insert(value)
+    fn from(value: Insert) -> Self {
+        Self::Insert(value)
     }
 }

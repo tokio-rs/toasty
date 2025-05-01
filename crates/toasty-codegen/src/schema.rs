@@ -33,3 +33,6 @@ pub(crate) use name::Name;
 
 mod pk;
 pub(crate) use pk::PrimaryKey;
+
+mod ty;
+pub(crate) use ty::ColumnType;

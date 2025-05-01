@@ -16,7 +16,7 @@ struct Builder {
 }
 
 impl Schema {
-    pub fn from_macro(models: &[Model]) -> Result<Schema> {
+    pub fn from_macro(models: &[Model]) -> Result<Self> {
         Builder::from_macro(models)
     }
 
@@ -45,9 +45,7 @@ impl Schema {
 
 impl Builder {
     pub(crate) fn from_macro(models: &[Model]) -> Result<Schema> {
-        let mut builder = Builder {
-            ..Builder::default()
-        };
+        let mut builder = Self { ..Self::default() };
 
         for model in models {
             builder.models.insert(model.id, model.clone());
@@ -79,7 +77,7 @@ impl Builder {
     }
 
     /// Go through all relations and link them to their pairs
-    pub(crate) fn link_relations(&mut self) -> crate::Result<()> {
+    fn link_relations(&mut self) -> crate::Result<()> {
         // Because arbitrary models will be mutated throughout the linking
         // process, models cannot be iterated as that would hold a reference to
         // `self`. Instead, we use index based iteration.

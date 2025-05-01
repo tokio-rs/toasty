@@ -5,7 +5,7 @@ pub(crate) struct ErrorSet {
 
 impl ErrorSet {
     pub(crate) fn new() -> Self {
-        ErrorSet { errors: vec![] }
+        Self { errors: vec![] }
     }
 
     pub(crate) fn push(&mut self, err: syn::Error) {

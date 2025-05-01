@@ -9,7 +9,7 @@ use postgres::{
     Column, Row, Socket,
 };
 use toasty_core::{
-    driver::{self, Capability, Operation, Response},
+    driver::{Capability, Operation, Response},
     schema::db::{Schema, Table},
     stmt,
     stmt::ValueRecord,
@@ -98,7 +98,10 @@ impl PostgreSQL {
         let serializer = sql::Serializer::postgresql(schema);
 
         let mut params = Vec::new();
-        let sql = serializer.serialize(&sql::Statement::create_table(table), &mut params);
+        let sql = serializer.serialize(
+            &sql::Statement::create_table(table, &Capability::POSTGRESQL),
+            &mut params,
+        );
 
         assert!(
             params.is_empty(),
@@ -157,10 +160,7 @@ impl From<Client> for PostgreSQL {
 #[toasty_core::async_trait]
 impl Driver for PostgreSQL {
     fn capability(&self) -> &Capability {
-        &Capability::Sql(driver::CapabilitySql {
-            cte_with_update: true,
-            select_for_update: true,
-        })
+        &Capability::POSTGRESQL
     }
 
     async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
