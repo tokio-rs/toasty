@@ -8,18 +8,18 @@ pub struct Path<T: ?Sized> {
 }
 
 impl<T: ?Sized> Path<T> {
-    pub const fn new(raw: stmt::Path) -> Path<T> {
-        Path {
+    pub const fn new(raw: stmt::Path) -> Self {
+        Self {
             untyped: raw,
             _p: PhantomData,
         }
     }
 
-    pub const fn root() -> Path<T>
+    pub const fn root() -> Self
     where
         T: Model,
     {
-        Path {
+        Self {
             untyped: stmt::Path {
                 root: T::ID,
                 projection: stmt::Projection::identity(),
@@ -28,8 +28,8 @@ impl<T: ?Sized> Path<T> {
         }
     }
 
-    pub const fn from_field_index<M: Model>(index: usize) -> Path<T> {
-        Path {
+    pub const fn from_field_index<M: Model>(index: usize) -> Self {
+        Self {
             untyped: stmt::Path::from_index(M::ID, index),
             _p: PhantomData,
         }
@@ -111,8 +111,8 @@ impl<T: ?Sized> Path<T> {
 impl<M> Path<M> {}
 
 impl<T> Clone for Path<T> {
-    fn clone(&self) -> Path<T> {
-        Path {
+    fn clone(&self) -> Self {
+        Self {
             untyped: self.untyped.clone(),
             _p: PhantomData,
         }
@@ -128,7 +128,7 @@ impl<T> IntoExpr<T> for Path<T> {
     }
 
     fn by_ref(&self) -> Expr<T> {
-        Path::into_expr(self.clone())
+        Self::into_expr(self.clone())
     }
 }
 

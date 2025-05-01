@@ -7,15 +7,15 @@ pub struct PathFieldSet {
 }
 
 impl PathFieldSet {
-    pub fn new() -> PathFieldSet {
-        PathFieldSet::default()
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub fn from_slice<T>(fields: &[T]) -> PathFieldSet
+    pub fn from_slice<T>(fields: &[T]) -> Self
     where
         for<'a> &'a T: Into<usize>,
     {
-        PathFieldSet {
+        Self {
             container: fields.iter().map(Into::into).collect(),
         }
     }
@@ -47,7 +47,7 @@ impl PathFieldSet {
 
 impl FromIterator<usize> for PathFieldSet {
     fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
-        let mut ret = PathFieldSet::new();
+        let mut ret = Self::new();
 
         for key in iter {
             ret.insert(key);

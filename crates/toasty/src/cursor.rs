@@ -14,8 +14,8 @@ pub trait FromCursor<A>: Extend<A> + Default {}
 impl<A, T: Extend<A> + Default> FromCursor<A> for T {}
 
 impl<M: Model> Cursor<M> {
-    pub(crate) fn new(schema: Arc<Schema>, values: stmt::ValueStream) -> Cursor<M> {
-        Cursor {
+    pub(crate) fn new(schema: Arc<Schema>, values: stmt::ValueStream) -> Self {
+        Self {
             schema,
             values,
             _p: std::marker::PhantomData,

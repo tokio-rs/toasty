@@ -14,7 +14,7 @@ impl BelongsTo {
         attr: &syn::Attribute,
         ty: &syn::Type,
         names: &[syn::Ident],
-    ) -> syn::Result<BelongsTo> {
+    ) -> syn::Result<Self> {
         let mut fk_sources: Vec<syn::Ident> = vec![];
         let mut fk_targets: Vec<syn::Ident> = vec![];
         let mut foreign_key = vec![];
@@ -73,7 +73,7 @@ impl BelongsTo {
         //     ));
         // };
 
-        Ok(BelongsTo {
+        Ok(Self {
             ty: ty.clone(),
             foreign_key,
         })

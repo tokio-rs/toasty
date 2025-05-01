@@ -13,14 +13,14 @@ pub(crate) struct VarId(pub(crate) usize);
 impl Action {
     pub(crate) fn into_set_var(self) -> SetVar {
         match self {
-            Action::SetVar(action) => action,
+            Self::SetVar(action) => action,
             _ => panic!(),
         }
     }
 }
 
 impl From<SetVar> for Action {
-    fn from(src: SetVar) -> Action {
-        Action::SetVar(src)
+    fn from(src: SetVar) -> Self {
+        Self::SetVar(src)
     }
 }

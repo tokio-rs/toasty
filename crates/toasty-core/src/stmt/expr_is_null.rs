@@ -10,7 +10,7 @@ pub struct ExprIsNull {
 }
 
 impl Expr {
-    pub fn is_null(expr: impl Into<Expr>) -> Expr {
+    pub fn is_null(expr: impl Into<Self>) -> Self {
         ExprIsNull {
             negate: false,
             expr: Box::new(expr.into()),
@@ -18,7 +18,7 @@ impl Expr {
         .into()
     }
 
-    pub fn is_not_null(expr: impl Into<Expr>) -> Expr {
+    pub fn is_not_null(expr: impl Into<Self>) -> Self {
         ExprIsNull {
             negate: true,
             expr: Box::new(expr.into()),
@@ -29,6 +29,6 @@ impl Expr {
 
 impl From<ExprIsNull> for Expr {
     fn from(value: ExprIsNull) -> Self {
-        Expr::IsNull(value)
+        Self::IsNull(value)
     }
 }

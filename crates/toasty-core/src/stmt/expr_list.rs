@@ -6,9 +6,9 @@ pub struct ExprList {
 }
 
 impl Expr {
-    pub fn list<T>(items: impl IntoIterator<Item = T>) -> Expr
+    pub fn list<T>(items: impl IntoIterator<Item = T>) -> Self
     where
-        T: Into<Expr>,
+        T: Into<Self>,
     {
         ExprList {
             items: items.into_iter().map(Into::into).collect(),
@@ -16,18 +16,18 @@ impl Expr {
         .into()
     }
 
-    pub fn list_from_vec(items: Vec<Expr>) -> Expr {
+    pub fn list_from_vec(items: Vec<Self>) -> Self {
         ExprList { items }.into()
     }
 
     pub fn is_list(&self) -> bool {
-        matches!(self, Expr::List(_) | Expr::Value(Value::List(_)))
+        matches!(self, Self::List(_) | Self::Value(Value::List(_)))
     }
 
     pub fn is_list_empty(&self) -> bool {
         match self {
-            Expr::List(list) => list.items.is_empty(),
-            Expr::Value(Value::List(list)) => list.is_empty(),
+            Self::List(list) => list.items.is_empty(),
+            Self::Value(Value::List(list)) => list.is_empty(),
             _ => false,
         }
     }
@@ -35,12 +35,12 @@ impl Expr {
 
 impl From<ExprList> for Expr {
     fn from(value: ExprList) -> Self {
-        Expr::List(value)
+        Self::List(value)
     }
 }
 
-impl From<Vec<Expr>> for Expr {
-    fn from(value: Vec<Expr>) -> Self {
-        Expr::list_from_vec(value)
+impl From<Vec<Self>> for Expr {
+    fn from(value: Vec<Self>) -> Self {
+        Self::list_from_vec(value)
     }
 }

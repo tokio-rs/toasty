@@ -253,22 +253,22 @@ impl fmt::Debug for FieldTy {
             Self::Primitive(ty) => ty.fmt(fmt),
             Self::BelongsTo(ty) => ty.fmt(fmt),
             Self::HasMany(ty) => ty.fmt(fmt),
-            FieldTy::HasOne(ty) => ty.fmt(fmt),
+            Self::HasOne(ty) => ty.fmt(fmt),
         }
     }
 }
 
 impl FieldId {
-    pub(crate) fn placeholder() -> FieldId {
-        FieldId {
+    pub(crate) fn placeholder() -> Self {
+        Self {
             model: ModelId::placeholder(),
             index: usize::MAX,
         }
     }
 }
 
-impl From<&FieldId> for FieldId {
-    fn from(val: &FieldId) -> Self {
+impl From<&Self> for FieldId {
+    fn from(val: &Self) -> Self {
         *val
     }
 }

@@ -19,6 +19,6 @@ pub(crate) struct ReadModifyWrite {
 
 impl From<ReadModifyWrite> for Action {
     fn from(value: ReadModifyWrite) -> Self {
-        Action::ReadModifyWrite(value)
+        Self::ReadModifyWrite(value)
     }
 }

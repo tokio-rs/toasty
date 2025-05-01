@@ -25,6 +25,6 @@ pub(crate) struct QueryPk {
 
 impl From<QueryPk> for Action {
     fn from(value: QueryPk) -> Self {
-        Action::QueryPk(value)
+        Self::QueryPk(value)
     }
 }

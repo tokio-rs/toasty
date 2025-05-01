@@ -20,8 +20,8 @@ pub(crate) enum InputSource {
 }
 
 impl Input {
-    pub(crate) fn from_var(var: VarId, ty: stmt::Type) -> Input {
-        Input {
+    pub(crate) fn from_var(var: VarId, ty: stmt::Type) -> Self {
+        Self {
             source: InputSource::Value(var),
             project: eval::Func::identity(ty),
         }

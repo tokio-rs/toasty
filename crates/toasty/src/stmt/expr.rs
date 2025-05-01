@@ -13,15 +13,15 @@ pub struct Expr<T: ?Sized> {
 
 impl<T: ?Sized> Expr<T> {
     /// Create an expression from the given value.
-    pub(crate) fn from_value(value: stmt::Value) -> Expr<T> {
-        Expr {
+    pub(crate) fn from_value(value: stmt::Value) -> Self {
+        Self {
             untyped: stmt::Expr::Value(value),
             _p: PhantomData,
         }
     }
 
-    pub fn from_untyped(untyped: impl Into<stmt::Expr>) -> Expr<T> {
-        Expr {
+    pub fn from_untyped(untyped: impl Into<stmt::Expr>) -> Self {
+        Self {
             untyped: untyped.into(),
             _p: PhantomData,
         }
@@ -36,22 +36,22 @@ impl<T: ?Sized> Expr<T> {
 }
 
 impl<T> Expr<[T]> {
-    pub fn list<I>(items: impl IntoIterator<Item = I>) -> Expr<[T]>
+    pub fn list<I>(items: impl IntoIterator<Item = I>) -> Self
     where
         I: IntoExpr<T>,
     {
-        Expr::from_untyped(stmt::Expr::list(
+        Self::from_untyped(stmt::Expr::list(
             items.into_iter().map(|item| item.into_expr().untyped),
         ))
     }
 }
 
 impl Expr<bool> {
-    pub fn and(self, rhs: impl IntoExpr<bool>) -> Expr<bool> {
-        Expr::from_untyped(stmt::Expr::and(self.untyped, rhs.into_expr().untyped))
+    pub fn and(self, rhs: impl IntoExpr<bool>) -> Self {
+        Self::from_untyped(stmt::Expr::and(self.untyped, rhs.into_expr().untyped))
     }
 
-    pub fn and_all<E>(exprs: impl IntoIterator<Item = E>) -> Expr<bool>
+    pub fn and_all<E>(exprs: impl IntoIterator<Item = E>) -> Self
     where
         E: IntoExpr<bool>,
     {
@@ -59,16 +59,16 @@ impl Expr<bool> {
             .into_iter()
             .map(|expr| expr.into_expr().untyped)
             .reduce(stmt::Expr::and)
-            .map(Expr::from_untyped)
-            .unwrap_or_else(|| Expr::from_untyped(true))
+            .map(Self::from_untyped)
+            .unwrap_or_else(|| Self::from_untyped(true))
     }
 
-    pub fn in_list<L, R, T>(lhs: L, rhs: R) -> Expr<bool>
+    pub fn in_list<L, R, T>(lhs: L, rhs: R) -> Self
     where
         L: IntoExpr<T>,
         R: IntoExpr<[T]>,
     {
-        Expr::from_untyped(stmt::Expr::in_list(
+        Self::from_untyped(stmt::Expr::in_list(
             lhs.into_expr().untyped,
             rhs.into_expr().untyped,
         ))
@@ -76,8 +76,8 @@ impl Expr<bool> {
 }
 
 impl<T: ?Sized> Clone for Expr<T> {
-    fn clone(&self) -> Expr<T> {
-        Expr {
+    fn clone(&self) -> Self {
+        Self {
             untyped: self.untyped.clone(),
             _p: PhantomData,
         }
@@ -92,12 +92,12 @@ impl<T: ?Sized> From<Expr<T>> for stmt::Expr {
 
 impl<T: ?Sized> From<Insert<T>> for Expr<T> {
     fn from(value: Insert<T>) -> Self {
-        Expr::from_untyped(stmt::Expr::Stmt(value.untyped.into()))
+        Self::from_untyped(stmt::Expr::Stmt(value.untyped.into()))
     }
 }
 
 impl<T> From<Insert<T>> for Expr<Option<T>> {
     fn from(value: Insert<T>) -> Self {
-        Expr::from_untyped(stmt::Expr::Stmt(value.untyped.into()))
+        Self::from_untyped(stmt::Expr::Stmt(value.untyped.into()))
     }
 }

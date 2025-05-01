@@ -16,14 +16,14 @@ pub(crate) enum WriteAction {
 impl WriteAction {
     pub(crate) fn as_insert(&self) -> &Insert {
         match self {
-            WriteAction::Insert(action) => action,
+            Self::Insert(action) => action,
             _ => panic!(),
         }
     }
 
     pub(crate) fn as_insert_mut(&mut self) -> &mut Insert {
         match self {
-            WriteAction::Insert(action) => action,
+            Self::Insert(action) => action,
             _ => panic!(),
         }
     }
@@ -32,33 +32,33 @@ impl WriteAction {
 impl From<WriteAction> for Action {
     fn from(value: WriteAction) -> Self {
         match value {
-            WriteAction::DeleteByKey(stage) => Action::DeleteByKey(stage),
-            WriteAction::Insert(stage) => Action::Insert(stage),
-            WriteAction::UpdateByKey(stage) => Action::UpdateByKey(stage),
+            WriteAction::DeleteByKey(stage) => Self::DeleteByKey(stage),
+            WriteAction::Insert(stage) => Self::Insert(stage),
+            WriteAction::UpdateByKey(stage) => Self::UpdateByKey(stage),
         }
     }
 }
 
 impl From<BatchWrite> for Action {
     fn from(value: BatchWrite) -> Self {
-        Action::BatchWrite(value)
+        Self::BatchWrite(value)
     }
 }
 
 impl From<DeleteByKey> for WriteAction {
     fn from(value: DeleteByKey) -> Self {
-        WriteAction::DeleteByKey(value)
+        Self::DeleteByKey(value)
     }
 }
 
 impl From<Insert> for WriteAction {
     fn from(value: Insert) -> Self {
-        WriteAction::Insert(value)
+        Self::Insert(value)
     }
 }
 
 impl From<UpdateByKey> for WriteAction {
     fn from(value: UpdateByKey) -> Self {
-        WriteAction::UpdateByKey(value)
+        Self::UpdateByKey(value)
     }
 }

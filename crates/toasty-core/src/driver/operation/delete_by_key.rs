@@ -14,7 +14,7 @@ pub struct DeleteByKey {
 }
 
 impl From<DeleteByKey> for Operation {
-    fn from(value: DeleteByKey) -> Operation {
-        Operation::DeleteByKey(value)
+    fn from(value: DeleteByKey) -> Self {
+        Self::DeleteByKey(value)
     }
 }

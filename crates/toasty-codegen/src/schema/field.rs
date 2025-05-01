@@ -52,7 +52,7 @@ impl Field {
         model_ident: &syn::Ident,
         id: usize,
         names: &[syn::Ident],
-    ) -> syn::Result<Field> {
+    ) -> syn::Result<Self> {
         let Some(ident) = &field.ident else {
             return Err(syn::Error::new_spanned(field, "model fields must be named"));
         };
@@ -184,7 +184,7 @@ impl Field {
             }
         }
 
-        Ok(Field {
+        Ok(Self {
             id,
             attrs,
             name,

@@ -353,7 +353,7 @@ impl Expand<'_> {
 }
 
 impl Filter {
-    pub(super) fn build_model_filters(model: &Model) -> Vec<Filter> {
+    pub(super) fn build_model_filters(model: &Model) -> Vec<Self> {
         BuildModelFilters {
             model,
             filters: HashMap::new(),

@@ -8,7 +8,7 @@ pub struct ExprBinaryOp {
 }
 
 impl Expr {
-    pub fn eq(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
+    pub fn eq(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         ExprBinaryOp {
             op: BinaryOp::Eq,
             lhs: Box::new(lhs.into()),
@@ -21,14 +21,14 @@ impl Expr {
     pub fn is_eq(&self) -> bool {
         matches!(
             self,
-            Expr::BinaryOp(ExprBinaryOp {
+            Self::BinaryOp(ExprBinaryOp {
                 op: BinaryOp::Eq,
                 ..
             })
         )
     }
 
-    pub fn ge(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
+    pub fn ge(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         ExprBinaryOp {
             op: BinaryOp::Ge,
             lhs: Box::new(lhs.into()),
@@ -37,7 +37,7 @@ impl Expr {
         .into()
     }
 
-    pub fn gt(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
+    pub fn gt(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         ExprBinaryOp {
             op: BinaryOp::Gt,
             lhs: Box::new(lhs.into()),
@@ -46,7 +46,7 @@ impl Expr {
         .into()
     }
 
-    pub fn le(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
+    pub fn le(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         ExprBinaryOp {
             op: BinaryOp::Le,
             lhs: Box::new(lhs.into()),
@@ -55,7 +55,7 @@ impl Expr {
         .into()
     }
 
-    pub fn lt(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
+    pub fn lt(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         ExprBinaryOp {
             op: BinaryOp::Lt,
             lhs: Box::new(lhs.into()),
@@ -64,7 +64,7 @@ impl Expr {
         .into()
     }
 
-    pub fn ne(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
+    pub fn ne(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         ExprBinaryOp {
             op: BinaryOp::Ne,
             lhs: Box::new(lhs.into()),
@@ -73,7 +73,7 @@ impl Expr {
         .into()
     }
 
-    pub fn is_a(lhs: impl Into<Expr>, rhs: impl Into<Expr>) -> Expr {
+    pub fn is_a(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         ExprBinaryOp {
             op: BinaryOp::IsA,
             lhs: Box::new(lhs.into()),
@@ -85,6 +85,6 @@ impl Expr {
 
 impl From<ExprBinaryOp> for Expr {
     fn from(value: ExprBinaryOp) -> Self {
-        Expr::BinaryOp(value)
+        Self::BinaryOp(value)
     }
 }

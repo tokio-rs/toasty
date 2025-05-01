@@ -82,53 +82,53 @@ pub enum Expr {
 }
 
 impl Expr {
-    pub fn null() -> Expr {
-        Expr::Value(Value::Null)
+    pub fn null() -> Self {
+        Self::Value(Value::Null)
     }
 
     /// Is a value that evaluates to null
     pub fn is_value_null(&self) -> bool {
-        matches!(self, Expr::Value(Value::Null))
+        matches!(self, Self::Value(Value::Null))
     }
 
     /// Returns true if the expression is the `true` boolean expression
     pub fn is_true(&self) -> bool {
-        matches!(self, Expr::Value(Value::Bool(true)))
+        matches!(self, Self::Value(Value::Bool(true)))
     }
 
     /// Returns `true` if the expression is the `false` boolean expression
     pub fn is_false(&self) -> bool {
-        matches!(self, Expr::Value(Value::Bool(false)))
+        matches!(self, Self::Value(Value::Bool(false)))
     }
 
     /// Returns true if the expression is a constant value.
     pub fn is_value(&self) -> bool {
-        matches!(self, Expr::Value(..))
+        matches!(self, Self::Value(..))
     }
 
     pub fn is_stmt(&self) -> bool {
-        matches!(self, Expr::Stmt(..))
+        matches!(self, Self::Stmt(..))
     }
 
     /// Returns true if the expression is a binary operation
     pub fn is_binary_op(&self) -> bool {
-        matches!(self, Expr::BinaryOp(..))
+        matches!(self, Self::BinaryOp(..))
     }
 
     pub fn is_arg(&self) -> bool {
-        matches!(self, Expr::Arg(_))
+        matches!(self, Self::Arg(_))
     }
 
     pub fn into_value(self) -> Value {
         match self {
-            Expr::Value(value) => value,
+            Self::Value(value) => value,
             _ => todo!(),
         }
     }
 
     pub fn into_stmt(self) -> ExprStmt {
         match self {
-            Expr::Stmt(stmt) => stmt,
+            Self::Stmt(stmt) => stmt,
             _ => todo!(),
         }
     }
@@ -136,13 +136,13 @@ impl Expr {
     /// Returns `true` if the expression is a constant expression.
     pub fn is_const(&self) -> bool {
         match self {
-            Expr::Value(_) => true,
-            Expr::Record(expr_record) => expr_record.iter().all(|expr| expr.is_const()),
+            Self::Value(_) => true,
+            Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_const()),
             _ => false,
         }
     }
 
-    pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Expr {
+    pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Self {
         struct MapProjections<T>(T);
 
         impl<T: FnMut(&Projection) -> Projection> VisitMut for MapProjections<T> {
@@ -162,9 +162,9 @@ impl Expr {
 
         for step in path.step_iter() {
             ret = match ret {
-                Entry::Expr(Expr::Record(expr)) => Entry::Expr(&expr[step]),
+                Entry::Expr(Self::Record(expr)) => Entry::Expr(&expr[step]),
                 Entry::Value(Value::Record(record))
-                | Entry::Expr(Expr::Value(Value::Record(record))) => Entry::Value(&record[step]),
+                | Entry::Expr(Self::Value(Value::Record(record))) => Entry::Value(&record[step]),
                 _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
             }
         }
@@ -178,9 +178,9 @@ impl Expr {
 
         for step in path.step_iter() {
             ret = match ret {
-                EntryMut::Expr(Expr::Record(expr)) => EntryMut::Expr(&mut expr[step]),
+                EntryMut::Expr(Self::Record(expr)) => EntryMut::Expr(&mut expr[step]),
                 EntryMut::Value(Value::Record(record))
-                | EntryMut::Expr(Expr::Value(Value::Record(record))) => {
+                | EntryMut::Expr(Self::Value(Value::Record(record))) => {
                     EntryMut::Value(&mut record[step])
                 }
                 _ => todo!("ret={ret:#?}; step={step:#?}"),
@@ -190,8 +190,8 @@ impl Expr {
         ret
     }
 
-    pub fn take(&mut self) -> Expr {
-        std::mem::replace(self, Expr::Value(Value::Null))
+    pub fn take(&mut self) -> Self {
+        std::mem::replace(self, Self::Value(Value::Null))
     }
 
     pub fn substitute(&mut self, mut input: impl substitute::Input) {
@@ -230,7 +230,7 @@ impl Expr {
 
 impl Default for Expr {
     fn default() -> Self {
-        Expr::Value(Value::default())
+        Self::Value(Value::default())
     }
 }
 
@@ -247,85 +247,85 @@ impl Node for Expr {
 // === Conversions ===
 
 impl From<bool> for Expr {
-    fn from(value: bool) -> Expr {
-        Expr::Value(Value::from(value))
+    fn from(value: bool) -> Self {
+        Self::Value(Value::from(value))
     }
 }
 
 impl From<i64> for Expr {
     fn from(value: i64) -> Self {
-        Expr::Value(value.into())
+        Self::Value(value.into())
     }
 }
 
 impl From<&i64> for Expr {
     fn from(value: &i64) -> Self {
-        Expr::Value(value.into())
+        Self::Value(value.into())
     }
 }
 
 impl From<String> for Expr {
     fn from(value: String) -> Self {
-        Expr::Value(value.into())
+        Self::Value(value.into())
     }
 }
 
 impl From<&String> for Expr {
     fn from(value: &String) -> Self {
-        Expr::Value(value.into())
+        Self::Value(value.into())
     }
 }
 
 impl From<&str> for Expr {
     fn from(value: &str) -> Self {
-        Expr::Value(value.into())
+        Self::Value(value.into())
     }
 }
 
 impl From<Value> for Expr {
-    fn from(value: Value) -> Expr {
-        Expr::Value(value)
+    fn from(value: Value) -> Self {
+        Self::Value(value)
     }
 }
 
 impl<E1, E2> From<(E1, E2)> for Expr
 where
-    E1: Into<Expr>,
-    E2: Into<Expr>,
+    E1: Into<Self>,
+    E2: Into<Self>,
 {
-    fn from(value: (E1, E2)) -> Expr {
-        Expr::Record(value.into())
+    fn from(value: (E1, E2)) -> Self {
+        Self::Record(value.into())
     }
 }
 
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Expr::And(e) => e.fmt(f),
-            Expr::Arg(e) => e.fmt(f),
-            Expr::BinaryOp(e) => e.fmt(f),
-            Expr::Cast(e) => e.fmt(f),
-            Expr::Column(e) => e.fmt(f),
-            Expr::Concat(e) => e.fmt(f),
-            Expr::ConcatStr(e) => e.fmt(f),
-            Expr::Enum(e) => e.fmt(f),
-            Expr::Field(e) => e.fmt(f),
-            Expr::Func(e) => e.fmt(f),
-            Expr::InList(e) => e.fmt(f),
-            Expr::InSubquery(e) => e.fmt(f),
-            Expr::IsNull(e) => e.fmt(f),
-            Expr::Key(e) => e.fmt(f),
-            Expr::Map(e) => e.fmt(f),
-            Expr::Or(e) => e.fmt(f),
-            Expr::Pattern(e) => e.fmt(f),
-            Expr::Project(e) => e.fmt(f),
-            Expr::Record(e) => e.fmt(f),
-            Expr::Reference(e) => e.fmt(f),
-            Expr::List(e) => e.fmt(f),
-            Expr::Stmt(e) => e.fmt(f),
-            Expr::Type(e) => e.fmt(f),
-            Expr::Value(e) => e.fmt(f),
-            Expr::DecodeEnum(expr, ty, variant) => f
+            Self::And(e) => e.fmt(f),
+            Self::Arg(e) => e.fmt(f),
+            Self::BinaryOp(e) => e.fmt(f),
+            Self::Cast(e) => e.fmt(f),
+            Self::Column(e) => e.fmt(f),
+            Self::Concat(e) => e.fmt(f),
+            Self::ConcatStr(e) => e.fmt(f),
+            Self::Enum(e) => e.fmt(f),
+            Self::Field(e) => e.fmt(f),
+            Self::Func(e) => e.fmt(f),
+            Self::InList(e) => e.fmt(f),
+            Self::InSubquery(e) => e.fmt(f),
+            Self::IsNull(e) => e.fmt(f),
+            Self::Key(e) => e.fmt(f),
+            Self::Map(e) => e.fmt(f),
+            Self::Or(e) => e.fmt(f),
+            Self::Pattern(e) => e.fmt(f),
+            Self::Project(e) => e.fmt(f),
+            Self::Record(e) => e.fmt(f),
+            Self::Reference(e) => e.fmt(f),
+            Self::List(e) => e.fmt(f),
+            Self::Stmt(e) => e.fmt(f),
+            Self::Type(e) => e.fmt(f),
+            Self::Value(e) => e.fmt(f),
+            Self::DecodeEnum(expr, ty, variant) => f
                 .debug_tuple("DecodeEnum")
                 .field(expr)
                 .field(ty)

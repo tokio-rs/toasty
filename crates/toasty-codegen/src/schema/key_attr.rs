@@ -5,7 +5,7 @@ pub(crate) struct KeyAttr {
 }
 
 impl KeyAttr {
-    pub(super) fn from_ast(attr: &syn::Attribute, names: &[syn::Ident]) -> syn::Result<KeyAttr> {
+    pub(super) fn from_ast(attr: &syn::Attribute, names: &[syn::Ident]) -> syn::Result<Self> {
         let mut partition = vec![];
         let mut local = vec![];
 
@@ -58,6 +58,6 @@ impl KeyAttr {
             ));
         }
 
-        Ok(KeyAttr { partition, local })
+        Ok(Self { partition, local })
     }
 }

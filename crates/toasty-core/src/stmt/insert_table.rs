@@ -11,7 +11,7 @@ pub struct InsertTable {
 
 impl From<InsertTable> for InsertTarget {
     fn from(value: InsertTable) -> Self {
-        InsertTarget::Table(value)
+        Self::Table(value)
     }
 }
 

@@ -7,8 +7,8 @@ pub struct CreateMany<M: Model> {
 }
 
 impl<M: Model> CreateMany<M> {
-    pub fn new() -> CreateMany<M> {
-        CreateMany::default()
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn item(mut self, item: impl stmt::IntoInsert<Model = M>) -> Self {
@@ -38,6 +38,6 @@ impl<M: Model> CreateMany<M> {
 
 impl<M: Model> Default for CreateMany<M> {
     fn default() -> Self {
-        CreateMany { stmts: vec![] }
+        Self { stmts: vec![] }
     }
 }

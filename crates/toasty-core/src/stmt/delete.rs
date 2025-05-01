@@ -19,8 +19,8 @@ impl Delete {
 }
 
 impl From<Delete> for Statement {
-    fn from(src: Delete) -> Statement {
-        Statement::Delete(src)
+    fn from(src: Delete) -> Self {
+        Self::Delete(src)
     }
 }
 

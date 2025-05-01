@@ -10,7 +10,7 @@ pub struct ExprCast {
 }
 
 impl Expr {
-    pub fn cast(expr: impl Into<Expr>, ty: impl Into<Type>) -> Expr {
+    pub fn cast(expr: impl Into<Self>, ty: impl Into<Type>) -> Self {
         ExprCast {
             expr: Box::new(expr.into()),
             ty: ty.into(),
@@ -19,12 +19,12 @@ impl Expr {
     }
 
     pub fn is_cast(&self) -> bool {
-        matches!(self, Expr::Cast(_))
+        matches!(self, Self::Cast(_))
     }
 }
 
 impl From<ExprCast> for Expr {
     fn from(value: ExprCast) -> Self {
-        Expr::Cast(value)
+        Self::Cast(value)
     }
 }

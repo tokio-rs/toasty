@@ -8,6 +8,6 @@ pub enum ExprFunc {
 
 impl From<ExprFunc> for Expr {
     fn from(value: ExprFunc) -> Self {
-        Expr::Func(value)
+        Self::Func(value)
     }
 }

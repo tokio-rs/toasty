@@ -19,34 +19,34 @@ pub enum ExprColumn {
 }
 
 impl Expr {
-    pub fn column(column: impl Into<ExprColumn>) -> Expr {
+    pub fn column(column: impl Into<ExprColumn>) -> Self {
         column.into().into()
     }
 
     pub fn is_column(&self) -> bool {
-        matches!(self, Expr::Column(_))
+        matches!(self, Self::Column(_))
     }
 }
 
 impl ExprColumn {
     pub fn references(&self, column_id: ColumnId) -> bool {
         match self {
-            ExprColumn::Column(id) => id == &column_id,
-            ExprColumn::Alias { .. } => todo!(),
+            Self::Column(id) => id == &column_id,
+            Self::Alias { .. } => todo!(),
         }
     }
 
     pub fn try_to_column_id(&self) -> Option<ColumnId> {
         match self {
-            ExprColumn::Column(id) => Some(*id),
-            ExprColumn::Alias { .. } => None,
+            Self::Column(id) => Some(*id),
+            Self::Alias { .. } => None,
         }
     }
 }
 
 impl From<ExprColumn> for Expr {
     fn from(value: ExprColumn) -> Self {
-        Expr::Column(value)
+        Self::Column(value)
     }
 }
 
@@ -64,12 +64,12 @@ impl From<&Column> for Expr {
 
 impl From<ColumnId> for ExprColumn {
     fn from(value: ColumnId) -> Self {
-        ExprColumn::Column(value)
+        Self::Column(value)
     }
 }
 
 impl From<ColumnId> for Expr {
     fn from(value: ColumnId) -> Self {
-        Expr::column(value)
+        Self::column(value)
     }
 }

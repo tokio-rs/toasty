@@ -45,7 +45,7 @@ pub(crate) struct Model {
 }
 
 impl Model {
-    pub(crate) fn from_ast(ast: &mut syn::ItemStruct, args: TokenStream) -> syn::Result<Model> {
+    pub(crate) fn from_ast(ast: &mut syn::ItemStruct, args: TokenStream) -> syn::Result<Self> {
         let syn::Fields::Named(node) = &mut ast.fields else {
             return Err(syn::Error::new_spanned(
                 &ast.fields,
@@ -198,7 +198,7 @@ impl Model {
 
         let id = gen_model_id();
 
-        Ok(Model {
+        Ok(Self {
             id,
             vis: ast.vis.clone(),
             name: Name::from_ident(&ast.ident),

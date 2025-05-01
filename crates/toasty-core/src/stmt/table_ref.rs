@@ -19,18 +19,18 @@ pub enum TableRef {
 impl TableRef {
     pub fn references(&self, table_id: TableId) -> bool {
         match self {
-            TableRef::Cte { .. } => false,
-            TableRef::Table(id) => id == &table_id,
+            Self::Cte { .. } => false,
+            Self::Table(id) => id == &table_id,
         }
     }
 
     pub fn is_cte(&self) -> bool {
-        matches!(self, TableRef::Cte { .. })
+        matches!(self, Self::Cte { .. })
     }
 }
 
 impl From<TableId> for TableRef {
     fn from(value: TableId) -> Self {
-        TableRef::Table(value)
+        Self::Table(value)
     }
 }

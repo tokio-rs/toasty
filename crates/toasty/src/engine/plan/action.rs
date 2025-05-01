@@ -37,17 +37,17 @@ pub(crate) enum Action {
 impl fmt::Debug for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Action::Associate(a) => a.fmt(f),
-            Action::BatchWrite(a) => a.fmt(f),
-            Action::DeleteByKey(a) => a.fmt(f),
-            Action::ExecStatement(a) => a.fmt(f),
-            Action::FindPkByIndex(a) => a.fmt(f),
-            Action::GetByKey(a) => a.fmt(f),
-            Action::Insert(a) => a.fmt(f),
-            Action::QueryPk(a) => a.fmt(f),
-            Action::ReadModifyWrite(a) => a.fmt(f),
-            Action::SetVar(a) => a.fmt(f),
-            Action::UpdateByKey(a) => a.fmt(f),
+            Self::Associate(a) => a.fmt(f),
+            Self::BatchWrite(a) => a.fmt(f),
+            Self::DeleteByKey(a) => a.fmt(f),
+            Self::ExecStatement(a) => a.fmt(f),
+            Self::FindPkByIndex(a) => a.fmt(f),
+            Self::GetByKey(a) => a.fmt(f),
+            Self::Insert(a) => a.fmt(f),
+            Self::QueryPk(a) => a.fmt(f),
+            Self::ReadModifyWrite(a) => a.fmt(f),
+            Self::SetVar(a) => a.fmt(f),
+            Self::UpdateByKey(a) => a.fmt(f),
         }
     }
 }

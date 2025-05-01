@@ -15,7 +15,7 @@ pub struct CreateTable {
 }
 
 impl Statement {
-    pub fn create_table(table: &Table, capability: &Capability) -> Statement {
+    pub fn create_table(table: &Table, capability: &Capability) -> Self {
         CreateTable {
             name: Name::from(&table.name[..]),
             columns: table
@@ -37,6 +37,6 @@ impl Statement {
 
 impl From<CreateTable> for Statement {
     fn from(value: CreateTable) -> Self {
-        Statement::CreateTable(value)
+        Self::CreateTable(value)
     }
 }

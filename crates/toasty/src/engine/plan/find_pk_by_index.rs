@@ -22,7 +22,7 @@ pub(crate) struct FindPkByIndex {
 }
 
 impl From<FindPkByIndex> for Action {
-    fn from(src: FindPkByIndex) -> Action {
-        Action::FindPkByIndex(src)
+    fn from(src: FindPkByIndex) -> Self {
+        Self::FindPkByIndex(src)
     }
 }

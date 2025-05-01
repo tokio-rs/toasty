@@ -7,7 +7,7 @@ pub trait EntryPath {
 }
 
 impl EntryPath for usize {
-    type Iter = std::option::IntoIter<usize>;
+    type Iter = std::option::IntoIter<Self>;
 
     fn step_iter(self) -> Self::Iter {
         Some(self).into_iter()

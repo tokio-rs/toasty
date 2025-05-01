@@ -25,6 +25,6 @@ impl HasOne {
 
 impl From<HasOne> for FieldTy {
     fn from(value: HasOne) -> Self {
-        FieldTy::HasOne(value)
+        Self::HasOne(value)
     }
 }

@@ -31,7 +31,7 @@ pub struct StorageTypes {
 
 impl Capability {
     /// SQLite capabilities.
-    pub const SQLITE: Capability = Capability {
+    pub const SQLITE: Self = Self {
         sql: true,
         storage_types: StorageTypes::SQLITE,
         cte_with_update: false,
@@ -40,23 +40,23 @@ impl Capability {
     };
 
     /// PostgreSQL capabilities
-    pub const POSTGRESQL: Capability = Capability {
+    pub const POSTGRESQL: Self = Self {
         cte_with_update: true,
         storage_types: StorageTypes::POSTGRESQL,
         select_for_update: true,
-        ..Capability::SQLITE
+        ..Self::SQLITE
     };
 
     /// MySQL capabilities
-    pub const MYSQL: Capability = Capability {
+    pub const MYSQL: Self = Self {
         cte_with_update: false,
         storage_types: StorageTypes::MYSQL,
         select_for_update: true,
-        ..Capability::SQLITE
+        ..Self::SQLITE
     };
 
     /// DynamoDB capabilities
-    pub const DYNAMODB: Capability = Capability {
+    pub const DYNAMODB: Self = Self {
         sql: false,
         storage_types: StorageTypes::DYNAMODB,
         cte_with_update: false,

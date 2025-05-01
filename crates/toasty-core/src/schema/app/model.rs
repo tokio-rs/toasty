@@ -89,19 +89,19 @@ impl ModelId {
         FieldId { model: self, index }
     }
 
-    pub(crate) const fn placeholder() -> ModelId {
-        ModelId(usize::MAX)
+    pub(crate) const fn placeholder() -> Self {
+        Self(usize::MAX)
     }
 }
 
-impl From<&ModelId> for ModelId {
-    fn from(src: &ModelId) -> ModelId {
+impl From<&Self> for ModelId {
+    fn from(src: &Self) -> Self {
         *src
     }
 }
 
-impl From<&mut ModelId> for ModelId {
-    fn from(src: &mut ModelId) -> ModelId {
+impl From<&mut Self> for ModelId {
+    fn from(src: &mut Self) -> Self {
         *src
     }
 }

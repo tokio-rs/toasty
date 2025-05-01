@@ -9,10 +9,10 @@ pub struct HasOne<T> {
 }
 
 impl<T: Model> HasOne<T> {
-    pub fn load(input: Value) -> crate::Result<HasOne<T>> {
+    pub fn load(input: Value) -> crate::Result<Self> {
         Ok(match input {
-            Value::Null => HasOne::default(),
-            Value::Record(record) => HasOne {
+            Value::Null => Self::default(),
+            Value::Record(record) => Self {
                 value: Some(Box::new(T::load(record)?)),
             },
             _ => todo!(),
@@ -27,7 +27,7 @@ impl<T: Model> HasOne<T> {
 
 impl<T> Default for HasOne<T> {
     fn default() -> Self {
-        HasOne { value: None }
+        Self { value: None }
     }
 }
 

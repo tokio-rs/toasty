@@ -25,6 +25,6 @@ impl BelongsTo {
 
 impl From<BelongsTo> for FieldTy {
     fn from(value: BelongsTo) -> Self {
-        FieldTy::BelongsTo(value)
+        Self::BelongsTo(value)
     }
 }
