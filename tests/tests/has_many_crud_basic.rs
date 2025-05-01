@@ -9,19 +9,17 @@ use std::collections::HashMap;
 use std_util::prelude::*;
 
 async fn crud_user_todos(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -31,7 +29,7 @@ async fn crud_user_todos(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -241,21 +239,19 @@ async fn crud_user_todos(s: impl Setup) {
 }
 
 async fn has_many_insert_on_update(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
 
         name: String,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -265,7 +261,7 @@ async fn has_many_insert_on_update(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -296,19 +292,17 @@ async fn has_many_insert_on_update(s: impl Setup) {
 }
 
 async fn scoped_find_by_id(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -318,7 +312,7 @@ async fn scoped_find_by_id(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -381,19 +375,17 @@ async fn has_many_when_target_indexes_fk_and_pk(_s: impl Setup) {}
 
 // When the FK is composite, things should still work
 async fn has_many_when_fk_is_composite(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     #[key(partition = user_id, local = id)]
     struct Todo {
         #[auto]
@@ -402,7 +394,7 @@ async fn has_many_when_fk_is_composite(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -609,19 +601,17 @@ async fn has_many_when_pk_is_composite(_s: impl Setup) {}
 async fn has_many_when_fk_and_pk_are_composite(_s: impl Setup) {}
 
 async fn belongs_to_required(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -631,7 +621,7 @@ async fn belongs_to_required(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -646,19 +636,17 @@ async fn belongs_to_required(s: impl Setup) {
 }
 
 async fn delete_when_belongs_to_optional(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -668,7 +656,7 @@ async fn delete_when_belongs_to_optional(s: impl Setup) {
         user_id: Option<Id<User>>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: Option<User>,
+        user: toasty::BelongsTo<Option<User>>,
 
         title: String,
     }
@@ -702,19 +690,17 @@ async fn delete_when_belongs_to_optional(s: impl Setup) {
 }
 
 async fn associate_new_user_with_todo_on_update_via_creation(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -724,7 +710,7 @@ async fn associate_new_user_with_todo_on_update_via_creation(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -747,19 +733,17 @@ async fn associate_new_user_with_todo_on_update_via_creation(s: impl Setup) {
 }
 
 async fn associate_new_user_with_todo_on_update_query_via_creation(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -769,7 +753,7 @@ async fn associate_new_user_with_todo_on_update_query_via_creation(s: impl Setup
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -797,19 +781,17 @@ async fn associate_new_user_with_todo_on_update_query_via_creation(s: impl Setup
 }
 
 async fn update_user_with_null_todo_is_err(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -819,7 +801,7 @@ async fn update_user_with_null_todo_is_err(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -852,19 +834,17 @@ async fn update_user_with_null_todo_is_err(s: impl Setup) {
 }
 
 async fn assign_todo_that_already_has_user_on_create(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -874,7 +854,7 @@ async fn assign_todo_that_already_has_user_on_create(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -907,19 +887,17 @@ async fn assign_todo_that_already_has_user_on_create(s: impl Setup) {
 }
 
 async fn assign_todo_that_already_has_user_on_update(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -929,7 +907,7 @@ async fn assign_todo_that_already_has_user_on_update(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -965,19 +943,17 @@ async fn assign_todo_that_already_has_user_on_update(s: impl Setup) {
 }
 
 async fn assign_existing_user_to_todo(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -987,7 +963,7 @@ async fn assign_existing_user_to_todo(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -1023,19 +999,17 @@ async fn assign_existing_user_to_todo(s: impl Setup) {
 }
 
 async fn assign_todo_to_user_on_update_query(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -1045,7 +1019,7 @@ async fn assign_todo_to_user_on_update_query(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
