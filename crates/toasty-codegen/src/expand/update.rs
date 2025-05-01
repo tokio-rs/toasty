@@ -98,12 +98,12 @@ impl Expand<'_> {
                     let ty = &rel.ty;
 
                     quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
+                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> Self {
                             self.query.#set_field_ident(#field_ident);
                             self
                         }
 
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
+                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> &mut Self {
                             self.query.#set_field_ident(#field_ident);
                             self
                         }
@@ -115,12 +115,12 @@ impl Expand<'_> {
                     let insert_ident = &rel.insert_ident;
 
                     quote! {
-                        #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<#ty>) -> Self {
+                        #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> Self {
                             self.query.#insert_ident(#singular);
                             self
                         }
 
-                        #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<#ty>) -> &mut Self {
+                        #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> &mut Self {
                             self.query.#insert_ident(#singular);
                             self
                         }
@@ -130,12 +130,12 @@ impl Expand<'_> {
                     let ty = &rel.ty;
 
                     quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
+                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> Self {
                             self.query.#set_field_ident(#field_ident);
                             self
                         }
 
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
+                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> &mut Self {
                             self.query.#set_field_ident(#field_ident);
                             self
                         }
@@ -172,12 +172,12 @@ impl Expand<'_> {
                     let ty = &rel.ty;
 
                     quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
+                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> Self {
                             self.#set_field_ident(#field_ident);
                             self
                         }
 
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
+                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> &mut Self {
                             self.stmt.set(#index, #field_ident.into_expr());
                             self
                         }
@@ -189,12 +189,12 @@ impl Expand<'_> {
                     let insert_ident = &rel.insert_ident;
 
                     quote! {
-                        #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<#ty>) -> Self {
+                        #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> Self {
                             self.#insert_ident(#singular);
                             self
                         }
 
-                        #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<#ty>) -> &mut Self {
+                        #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> &mut Self {
                             self.stmt.insert(#index, #singular.into_expr());
                             self
                         }
@@ -204,12 +204,12 @@ impl Expand<'_> {
                     let ty = &rel.ty;
 
                     quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
+                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> Self {
                             self.#set_field_ident(#field_ident);
                             self
                         }
 
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
+                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> &mut Self {
                             self.stmt.set(#index, #field_ident.into_expr());
                             self
                         }

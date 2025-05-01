@@ -45,8 +45,8 @@ pub(crate) struct Model {
 }
 
 impl Model {
-    pub(crate) fn from_ast(ast: &mut syn::ItemStruct, args: TokenStream) -> syn::Result<Self> {
-        let syn::Fields::Named(node) = &mut ast.fields else {
+    pub(crate) fn from_ast(ast: &syn::ItemStruct) -> syn::Result<Self> {
+        let syn::Fields::Named(node) = &ast.fields else {
             return Err(syn::Error::new_spanned(
                 &ast.fields,
                 "model fields must be named",
@@ -78,33 +78,11 @@ impl Model {
         let mut pk_index_fields = vec![];
         let mut errs = ErrorSet::new();
 
-        // If macro arguments are provided, parse them
-        let arg_parser = syn::meta::parser(|meta| {
-            if meta.path.is_ident("table") {
-                if model_attr.table.is_some() {
-                    return Err(syn::Error::new_spanned(
-                        meta.path,
-                        "duplicate `table` attribute",
-                    ));
-                }
-
-                let value = meta.value()?;
-                model_attr.table = Some(value.parse()?);
-            } else {
-                return Err(syn::Error::new_spanned(meta.path, "unknown attribute"));
-            }
-
-            Ok(())
-        });
-        if let Err(err) = syn::parse::Parser::parse2(arg_parser, args) {
+        if let Err(err) = model_attr.populate_from_ast(&ast.attrs, &names) {
             errs.push(err);
         }
 
-        if let Err(err) = model_attr.populate_from_ast(&mut ast.attrs, &names) {
-            errs.push(err);
-        }
-
-        for (index, node) in node.named.iter_mut().enumerate() {
+        for (index, node) in node.named.iter().enumerate() {
             match Field::from_ast(node, &ast.ident, index, &names) {
                 Ok(field) => {
                     if model_attr.key.is_some() {

@@ -16,14 +16,14 @@ mod model;
 pub use model::Model;
 
 pub mod relation;
-pub use relation::Relation;
+pub use relation::{BelongsTo, HasMany};
 
 pub mod schema;
 
 pub mod stmt;
 pub use stmt::Statement;
 
-pub use toasty_macros::{create, model, query};
+pub use toasty_macros::{create, query, Model};
 
 pub use anyhow::{Error, Result};
 
@@ -34,7 +34,7 @@ pub mod codegen_support {
         cursor::{Cursor, FromCursor},
         relation::{BelongsTo, HasMany},
         stmt::{self, Id, IntoExpr, IntoInsert, IntoSelect, Path},
-        Db, Error, Model, Relation, Result, Statement,
+        Db, Error, Model, Result, Statement,
     };
     pub use std::{convert::Into, default::Default, option::Option};
     pub use toasty_core::{

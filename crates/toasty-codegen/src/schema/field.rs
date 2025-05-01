@@ -48,7 +48,7 @@ pub(crate) enum FieldTy {
 
 impl Field {
     pub(super) fn from_ast(
-        field: &mut syn::Field,
+        field: &syn::Field,
         model_ident: &syn::Ident,
         id: usize,
         names: &[syn::Ident],
@@ -71,10 +71,7 @@ impl Field {
 
         let mut ty = None;
 
-        let mut i = 0;
-        while i < field.attrs.len() {
-            let attr = &field.attrs[i];
-
+        for attr in &field.attrs {
             if attr.path().is_ident("key") {
                 if attrs.key.is_some() {
                     errs.push(syn::Error::new_spanned(attr, "duplicate #[key] attribute"));
@@ -142,12 +139,7 @@ impl Field {
                 }
             } else if attr.path().is_ident("toasty") {
                 // todo
-            } else {
-                i += 1;
-                continue;
             }
-
-            field.attrs.remove(i);
         }
 
         if ty.is_some() && attrs.db.is_some() {
@@ -165,18 +157,12 @@ impl Field {
 
         match &mut ty {
             FieldTy::BelongsTo(rel) => {
-                let ty = &rel.ty;
-                field.ty = parse_quote!(toasty::codegen_support2::BelongsTo<#ty>);
                 rewrite_self(&mut rel.ty, model_ident);
             }
             FieldTy::HasMany(rel) => {
-                let ty = &rel.ty;
-                field.ty = parse_quote!(toasty::codegen_support2::HasMany<#ty>);
                 rewrite_self(&mut rel.ty, model_ident);
             }
             FieldTy::HasOne(rel) => {
-                let ty = &rel.ty;
-                field.ty = parse_quote!(toasty::codegen_support2::HasOne<#ty>);
                 rewrite_self(&mut rel.ty, model_ident);
             }
             FieldTy::Primitive(ty) => {
@@ -204,6 +190,7 @@ fn rewrite_self(ty: &mut syn::Type, model: &syn::Ident) {
             syn::visit_mut::visit_path_mut(self, path);
 
             if path.is_ident("Self") {
+                // print!("SELF; ident={:#?}", self.0);
                 path.segments[0].ident = self.0.clone();
             }
         }
