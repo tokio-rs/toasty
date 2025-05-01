@@ -4,8 +4,7 @@ use toasty::stmt::Id;
 use std::collections::HashSet;
 
 async fn crud_person_self_referential(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Person {
         #[key]
         #[auto]
@@ -17,10 +16,10 @@ async fn crud_person_self_referential(s: impl Setup) {
         parent_id: Option<Id<Person>>,
 
         #[belongs_to(key = parent_id, references = id)]
-        parent: Option<Person>,
+        parent: toasty::BelongsTo<Option<Person>>,
 
         #[has_many]
-        children: [Person],
+        children: toasty::HasMany<Person>,
     }
 
     let db = s.setup(models!(Person)).await;

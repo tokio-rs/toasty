@@ -3,7 +3,7 @@ use tests::*;
 use toasty::stmt::Id;
 
 async fn specify_constrained_string_field(s: impl Setup) {
-    #[toasty::model]
+    #[derive(toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -28,8 +28,7 @@ async fn specify_constrained_string_field(s: impl Setup) {
 }
 
 async fn specify_invalid_varchar_size(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
         #[key]
@@ -56,8 +55,7 @@ async fn specify_invalid_varchar_size(s: impl Setup) {
 }
 
 async fn specify_varchar_ty_when_not_supported(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
         #[key]
