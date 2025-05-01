@@ -26,11 +26,11 @@ pub struct DynamoDb {
 }
 
 impl DynamoDb {
-    pub fn new(client: Client) -> DynamoDb {
-        DynamoDb { client }
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 
-    pub async fn connect(url: &str) -> Result<DynamoDb> {
+    pub async fn connect(url: &str) -> Result<Self> {
         let url = Url::parse(url)?;
 
         if url.scheme() != "dynamodb" {
@@ -59,10 +59,10 @@ impl DynamoDb {
 
         let client = Client::new(&sdk_config);
 
-        Ok(DynamoDb { client })
+        Ok(Self { client })
     }
 
-    pub async fn from_env() -> Result<DynamoDb> {
+    pub async fn from_env() -> Result<Self> {
         use aws_config::BehaviorVersion;
         use aws_sdk_dynamodb::config::Credentials;
 
@@ -75,7 +75,7 @@ impl DynamoDb {
 
         let client = Client::new(&sdk_config);
 
-        Ok(DynamoDb { client })
+        Ok(Self { client })
     }
 }
 

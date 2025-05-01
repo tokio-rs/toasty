@@ -20,6 +20,6 @@ pub struct QueryPk {
 
 impl From<QueryPk> for Operation {
     fn from(value: QueryPk) -> Self {
-        Operation::QueryPk(value)
+        Self::QueryPk(value)
     }
 }

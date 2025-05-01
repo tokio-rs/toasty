@@ -16,7 +16,7 @@ struct Builder {
 }
 
 impl Schema {
-    pub fn from_macro(models: &[Model]) -> Result<Schema> {
+    pub fn from_macro(models: &[Model]) -> Result<Self> {
         Builder::from_macro(models)
     }
 
@@ -45,9 +45,7 @@ impl Schema {
 
 impl Builder {
     pub(crate) fn from_macro(models: &[Model]) -> Result<Schema> {
-        let mut builder = Builder {
-            ..Builder::default()
-        };
+        let mut builder = Self { ..Self::default() };
 
         for model in models {
             builder.models.insert(model.id, model.clone());

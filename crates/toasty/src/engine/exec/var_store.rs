@@ -8,8 +8,8 @@ pub(crate) struct VarStore {
 }
 
 impl VarStore {
-    pub(crate) fn new() -> VarStore {
-        VarStore { slots: vec![] }
+    pub(crate) fn new() -> Self {
+        Self { slots: vec![] }
     }
 
     pub(crate) fn load(&mut self, var: plan::VarId) -> ValueStream {

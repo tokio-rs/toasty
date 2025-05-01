@@ -15,8 +15,8 @@ pub struct Select {
 }
 
 impl Select {
-    pub fn new(source: impl Into<Source>, filter: impl Into<Expr>) -> Select {
-        Select {
+    pub fn new(source: impl Into<Source>, filter: impl Into<Expr>) -> Self {
+        Self {
             returning: Returning::Star,
             source: source.into(),
             filter: filter.into(),
@@ -53,13 +53,13 @@ impl Select {
 
 impl From<Select> for Statement {
     fn from(value: Select) -> Self {
-        Statement::Query(value.into())
+        Self::Query(value.into())
     }
 }
 
 impl From<Select> for Query {
     fn from(value: Select) -> Self {
-        Query::builder(value).build()
+        Self::builder(value).build()
     }
 }
 

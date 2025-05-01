@@ -30,36 +30,34 @@ enum Buffer {
 type DynStream = Pin<Box<dyn Stream<Item = crate::Result<Value>> + Send + 'static>>;
 
 impl ValueStream {
-    pub fn from_value(value: impl Into<Value>) -> ValueStream {
-        ValueStream {
+    pub fn from_value(value: impl Into<Value>) -> Self {
+        Self {
             buffer: Buffer::One(value.into()),
             stream: None,
         }
     }
 
-    pub fn from_stream<T: Stream<Item = crate::Result<Value>> + Send + 'static>(
-        stream: T,
-    ) -> ValueStream {
-        ValueStream {
+    pub fn from_stream<T: Stream<Item = crate::Result<Value>> + Send + 'static>(stream: T) -> Self {
+        Self {
             buffer: Buffer::Empty,
             stream: Some(Box::pin(stream)),
         }
     }
 
-    pub fn from_vec(records: Vec<Value>) -> ValueStream {
-        ValueStream {
+    pub fn from_vec(records: Vec<Value>) -> Self {
+        Self {
             buffer: Buffer::Many(records.into()),
             stream: None,
         }
     }
 
     #[allow(clippy::should_implement_trait)]
-    pub fn from_iter<T, I>(iter: I) -> ValueStream
+    pub fn from_iter<T, I>(iter: I) -> Self
     where
         T: Into<Value>,
         I: Iterator<Item = crate::Result<T>> + Send + 'static,
     {
-        ValueStream::from_stream(Iter { iter })
+        Self::from_stream(Iter { iter })
     }
 
     /// Returns the next record in the stream
@@ -106,10 +104,10 @@ impl ValueStream {
         Ok(ret)
     }
 
-    pub async fn dup(&mut self) -> crate::Result<ValueStream> {
+    pub async fn dup(&mut self) -> crate::Result<Self> {
         self.buffer().await?;
 
-        Ok(ValueStream {
+        Ok(Self {
             buffer: self.buffer.clone(),
             stream: None,
         })
@@ -177,8 +175,8 @@ impl Stream for ValueStream {
 }
 
 impl From<Value> for ValueStream {
-    fn from(src: Value) -> ValueStream {
-        ValueStream {
+    fn from(src: Value) -> Self {
+        Self {
             buffer: Buffer::One(src),
             stream: None,
         }
@@ -187,7 +185,7 @@ impl From<Value> for ValueStream {
 
 impl From<Vec<Value>> for ValueStream {
     fn from(value: Vec<Value>) -> Self {
-        ValueStream::from_vec(value)
+        Self::from_vec(value)
     }
 }
 
@@ -222,51 +220,50 @@ impl Buffer {
 
     fn len(&self) -> usize {
         match self {
-            Buffer::Empty => 0,
-            Buffer::One(_) => 1,
-            Buffer::Many(v) => v.len(),
+            Self::Empty => 0,
+            Self::One(_) => 1,
+            Self::Many(v) => v.len(),
         }
     }
 
     fn first(&self) -> Option<&Value> {
         match self {
-            Buffer::Empty => None,
-            Buffer::One(value) => Some(value),
-            Buffer::Many(values) => values.front(),
+            Self::Empty => None,
+            Self::One(value) => Some(value),
+            Self::Many(values) => values.front(),
         }
     }
 
     fn next(&mut self) -> Option<Value> {
         match self {
-            Buffer::Empty => None,
-            Buffer::One(_) => {
-                let Buffer::One(value) = mem::take(self) else {
+            Self::Empty => None,
+            Self::One(_) => {
+                let Self::One(value) = mem::take(self) else {
                     panic!()
                 };
                 Some(value)
             }
-            Buffer::Many(values) => values.pop_front(),
+            Self::Many(values) => values.pop_front(),
         }
     }
 
     fn push(&mut self, value: Value) {
         match self {
-            Buffer::Empty => {
-                *self = Buffer::One(value);
+            Self::Empty => {
+                *self = Self::One(value);
             }
-            Buffer::One(_) => {
-                let Buffer::One(first) =
-                    mem::replace(self, Buffer::Many(VecDeque::with_capacity(2)))
+            Self::One(_) => {
+                let Self::One(first) = mem::replace(self, Self::Many(VecDeque::with_capacity(2)))
                 else {
                     panic!()
                 };
 
-                let Buffer::Many(values) = self else { panic!() };
+                let Self::Many(values) = self else { panic!() };
 
                 values.push_back(first);
                 values.push_back(value);
             }
-            Buffer::Many(values) => {
+            Self::Many(values) => {
                 values.push_back(value);
             }
         }

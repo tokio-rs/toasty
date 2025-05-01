@@ -7,7 +7,7 @@ pub struct ExprProject {
 }
 
 impl Expr {
-    pub fn project(base: impl Into<Expr>, projection: impl Into<Projection>) -> Expr {
+    pub fn project(base: impl Into<Self>, projection: impl Into<Projection>) -> Self {
         ExprProject {
             base: Box::new(base.into()),
             projection: projection.into(),
@@ -16,12 +16,12 @@ impl Expr {
     }
 
     pub fn is_project(&self) -> bool {
-        matches!(self, Expr::Project(..))
+        matches!(self, Self::Project(..))
     }
 
     pub fn as_project(&self) -> &ExprProject {
         match self {
-            Expr::Project(expr_project) => expr_project,
+            Self::Project(expr_project) => expr_project,
             _ => panic!(),
         }
     }
@@ -31,6 +31,6 @@ impl ExprProject {}
 
 impl From<ExprProject> for Expr {
     fn from(value: ExprProject) -> Self {
-        Expr::Project(value)
+        Self::Project(value)
     }
 }

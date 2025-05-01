@@ -7,7 +7,7 @@ pub struct ExprInSubquery {
 }
 
 impl Expr {
-    pub fn in_subquery(lhs: impl Into<Expr>, rhs: impl Into<Query>) -> Expr {
+    pub fn in_subquery(lhs: impl Into<Self>, rhs: impl Into<Query>) -> Self {
         ExprInSubquery {
             expr: Box::new(lhs.into()),
             query: Box::new(rhs.into()),
@@ -16,12 +16,12 @@ impl Expr {
     }
 
     pub fn is_in_subquery(&self) -> bool {
-        matches!(self, Expr::InSubquery(_))
+        matches!(self, Self::InSubquery(_))
     }
 }
 
 impl From<ExprInSubquery> for Expr {
     fn from(value: ExprInSubquery) -> Self {
-        Expr::InSubquery(value)
+        Self::InSubquery(value)
     }
 }

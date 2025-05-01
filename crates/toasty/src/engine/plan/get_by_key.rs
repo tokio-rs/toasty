@@ -26,7 +26,7 @@ pub(crate) struct GetByKey {
 }
 
 impl From<GetByKey> for Action {
-    fn from(src: GetByKey) -> Action {
-        Action::GetByKey(src)
+    fn from(src: GetByKey) -> Self {
+        Self::GetByKey(src)
     }
 }

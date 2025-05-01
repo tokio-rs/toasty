@@ -6,20 +6,20 @@ pub struct ExprConcatStr {
 }
 
 impl Expr {
-    pub fn concat_str(exprs: impl Into<ExprConcatStr>) -> Expr {
+    pub fn concat_str(exprs: impl Into<ExprConcatStr>) -> Self {
         exprs.into().into()
     }
 }
 
 impl From<ExprConcatStr> for Expr {
     fn from(value: ExprConcatStr) -> Self {
-        Expr::ConcatStr(value)
+        Self::ConcatStr(value)
     }
 }
 
 impl<T1: Into<Expr>> From<(T1,)> for ExprConcatStr {
     fn from(value: (T1,)) -> Self {
-        ExprConcatStr {
+        Self {
             exprs: vec![value.0.into()],
         }
     }
@@ -31,7 +31,7 @@ where
     T2: Into<Expr>,
 {
     fn from(value: (T1, T2)) -> Self {
-        ExprConcatStr {
+        Self {
             exprs: vec![value.0.into(), value.1.into()],
         }
     }
@@ -44,7 +44,7 @@ where
     T3: Into<Expr>,
 {
     fn from(value: (T1, T2, T3)) -> Self {
-        ExprConcatStr {
+        Self {
             exprs: vec![value.0.into(), value.1.into(), value.2.into()],
         }
     }

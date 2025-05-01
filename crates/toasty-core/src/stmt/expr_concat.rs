@@ -8,11 +8,11 @@ pub struct ExprConcat {
 }
 
 impl ExprConcat {
-    pub fn new(exprs: Vec<Expr>) -> ExprConcat {
-        ExprConcat { exprs }
+    pub fn new(exprs: Vec<Expr>) -> Self {
+        Self { exprs }
     }
 
-    pub fn extend(&mut self, rhs: ExprConcat) {
+    pub fn extend(&mut self, rhs: Self) {
         self.exprs.extend(rhs.exprs);
     }
 
@@ -58,6 +58,6 @@ impl<'a> IntoIterator for &'a mut ExprConcat {
 
 impl From<ExprConcat> for Expr {
     fn from(value: ExprConcat) -> Self {
-        Expr::Concat(value)
+        Self::Concat(value)
     }
 }

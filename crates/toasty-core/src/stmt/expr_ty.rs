@@ -10,13 +10,13 @@ pub struct ExprTy {
 }
 
 impl ExprTy {
-    pub fn new(ty: Type, variant: Option<usize>) -> ExprTy {
-        ExprTy { ty, variant }
+    pub fn new(ty: Type, variant: Option<usize>) -> Self {
+        Self { ty, variant }
     }
 }
 
 impl From<ExprTy> for Expr {
     fn from(value: ExprTy) -> Self {
-        Expr::Type(value)
+        Self::Type(value)
     }
 }

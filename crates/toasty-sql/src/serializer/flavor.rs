@@ -10,21 +10,21 @@ pub(super) enum Flavor {
 }
 
 impl<'a> Serializer<'a> {
-    pub fn sqlite(schema: &'a db::Schema) -> Serializer<'a> {
+    pub fn sqlite(schema: &'a db::Schema) -> Self {
         Serializer {
             schema,
             flavor: Flavor::Sqlite,
         }
     }
 
-    pub fn postgresql(schema: &'a db::Schema) -> Serializer<'a> {
+    pub fn postgresql(schema: &'a db::Schema) -> Self {
         Serializer {
             schema,
             flavor: Flavor::Postgresql,
         }
     }
 
-    pub fn mysql(schema: &'a db::Schema) -> Serializer<'a> {
+    pub fn mysql(schema: &'a db::Schema) -> Self {
         Serializer {
             schema,
             flavor: Flavor::Mysql,

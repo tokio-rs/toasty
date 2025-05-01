@@ -97,7 +97,7 @@ impl Builder {
 }
 
 impl Default for Builder {
-    fn default() -> Builder {
-        Builder::new()
+    fn default() -> Self {
+        Self::new()
     }
 }

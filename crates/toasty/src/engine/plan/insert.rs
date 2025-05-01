@@ -13,7 +13,7 @@ pub(crate) struct Insert {
 }
 
 impl From<Insert> for Action {
-    fn from(src: Insert) -> Action {
-        Action::Insert(src)
+    fn from(src: Insert) -> Self {
+        Self::Insert(src)
     }
 }

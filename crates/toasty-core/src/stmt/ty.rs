@@ -40,8 +40,8 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn list(ty: impl Into<Type>) -> Type {
-        Type::List(Box::new(ty.into()))
+    pub fn list(ty: impl Into<Self>) -> Self {
+        Self::List(Box::new(ty.into()))
     }
 
     pub fn is_bool(&self) -> bool {
@@ -73,36 +73,36 @@ impl Type {
         }
 
         Ok(match (value, self) {
-            (value @ Value::String(_), Type::String) => value,
+            (value @ Value::String(_), Self::String) => value,
             (Value::Id(value), _) => value.cast(self)?,
-            (Value::String(value), Type::Id(ty)) => Value::Id(Id::from_string(*ty, value)),
-            (Value::Record(record), Type::SparseRecord(fields)) => {
+            (Value::String(value), Self::Id(ty)) => Value::Id(Id::from_string(*ty, value)),
+            (Value::Record(record), Self::SparseRecord(fields)) => {
                 Value::sparse_record(fields.clone(), record)
             }
             (value, _) => todo!("value={value:#?}; ty={self:#?}"),
         })
     }
 
-    pub fn casts_to(&self, other: &Type) -> bool {
+    pub fn casts_to(&self, other: &Self) -> bool {
         match self {
-            Type::Null => true,
-            Type::List(item) => match other {
-                Type::List(other_item) => item.casts_to(other_item),
+            Self::Null => true,
+            Self::List(item) => match other {
+                Self::List(other_item) => item.casts_to(other_item),
                 // A list of 1 item can be flattened when cast. Right now, we
                 // can't statically know if a list will only have 1 item, so we
                 // just say it can cast.
                 _ => item.casts_to(other),
             },
-            Type::Record(items) => match other {
-                Type::Record(other_items) => items
+            Self::Record(items) => match other {
+                Self::Record(other_items) => items
                     .iter()
                     .zip(other_items.iter())
                     .all(|(item, other_item)| item.casts_to(other_item)),
                 _ => false,
             },
-            Type::Id(model) | Type::Model(model) => match other {
-                Type::Id(other_model) => model == other_model,
-                Type::Model(other_model) => model == other_model,
+            Self::Id(model) | Self::Model(model) => match other {
+                Self::Id(other_model) => model == other_model,
+                Self::Model(other_model) => model == other_model,
                 _ => false,
             },
             _ => self == other,
@@ -131,14 +131,14 @@ impl Type {
     }
 }
 
-impl From<&Type> for Type {
-    fn from(value: &Type) -> Self {
+impl From<&Self> for Type {
+    fn from(value: &Self) -> Self {
         value.clone()
     }
 }
 
 impl From<ModelId> for Type {
     fn from(value: ModelId) -> Self {
-        Type::Model(value)
+        Self::Model(value)
     }
 }

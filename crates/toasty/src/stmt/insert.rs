@@ -13,8 +13,8 @@ impl<M: Model> Insert<M> {
     /// This insertion statement is not guaranteed to be valid.
     ///
     /// TODO: rename `new`?
-    pub fn blank() -> Insert<M> {
-        Insert {
+    pub fn blank() -> Self {
+        Self {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::ID),
                 source: stmt::Query {
@@ -30,8 +30,8 @@ impl<M: Model> Insert<M> {
         }
     }
 
-    pub const fn from_untyped(untyped: stmt::Insert) -> Insert<M> {
-        Insert {
+    pub const fn from_untyped(untyped: stmt::Insert) -> Self {
+        Self {
             untyped,
             _p: PhantomData,
         }
@@ -65,7 +65,7 @@ impl<M: Model> Insert<M> {
         }
     }
 
-    pub(crate) fn merge(&mut self, stmt: Insert<M>) {
+    pub(crate) fn merge(&mut self, stmt: Self) {
         self.untyped.merge(stmt.untyped);
     }
 
@@ -92,7 +92,7 @@ impl<M: Model> Insert<M> {
 
 impl<M> Clone for Insert<M> {
     fn clone(&self) -> Self {
-        Insert {
+        Self {
             untyped: self.untyped.clone(),
             _p: PhantomData,
         }
@@ -101,13 +101,13 @@ impl<M> Clone for Insert<M> {
 
 impl<M> From<Insert<M>> for stmt::Expr {
     fn from(value: Insert<M>) -> Self {
-        stmt::Expr::stmt(value.untyped)
+        Self::stmt(value.untyped)
     }
 }
 
 impl<M> From<Insert<[M]>> for stmt::Expr {
     fn from(value: Insert<[M]>) -> Self {
-        stmt::Expr::stmt(value.untyped)
+        Self::stmt(value.untyped)
     }
 }
 

@@ -33,8 +33,8 @@ pub enum AssignmentOp {
 }
 
 impl Assignments {
-    pub fn with_capacity(capacity: usize) -> Assignments {
-        Assignments {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
             assignments: IndexMap::with_capacity(capacity),
         }
     }
@@ -151,7 +151,7 @@ impl IntoIterator for Assignments {
 
 impl Default for Assignments {
     fn default() -> Self {
-        Assignments {
+        Self {
             assignments: IndexMap::new(),
         }
     }
@@ -173,10 +173,10 @@ impl ops::IndexMut<usize> for Assignments {
 
 impl AssignmentOp {
     pub fn is_set(self) -> bool {
-        matches!(self, AssignmentOp::Set)
+        matches!(self, Self::Set)
     }
 
     pub fn is_remove(self) -> bool {
-        matches!(self, AssignmentOp::Remove)
+        matches!(self, Self::Remove)
     }
 }

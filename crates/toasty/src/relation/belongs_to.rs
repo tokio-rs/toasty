@@ -9,10 +9,10 @@ pub struct BelongsTo<T> {
 }
 
 impl<T: Model> BelongsTo<T> {
-    pub fn load(input: Value) -> crate::Result<BelongsTo<T>> {
+    pub fn load(input: Value) -> crate::Result<Self> {
         Ok(match input {
-            Value::Null => BelongsTo::default(),
-            Value::Record(record) => BelongsTo {
+            Value::Null => Self::default(),
+            Value::Record(record) => Self {
                 value: Some(Box::new(T::load(record)?)),
             },
             _ => todo!(),
@@ -27,7 +27,7 @@ impl<T: Model> BelongsTo<T> {
 
 impl<T> Default for BelongsTo<T> {
     fn default() -> Self {
-        BelongsTo { value: None }
+        Self { value: None }
     }
 }
 

@@ -18,7 +18,7 @@ pub struct GetByKey {
 }
 
 impl From<GetByKey> for Operation {
-    fn from(value: GetByKey) -> Operation {
-        Operation::GetByKey(value)
+    fn from(value: GetByKey) -> Self {
+        Self::GetByKey(value)
     }
 }

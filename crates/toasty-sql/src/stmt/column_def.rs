@@ -11,8 +11,8 @@ pub struct ColumnDef {
 }
 
 impl ColumnDef {
-    pub(crate) fn from_schema(column: &Column, indexed: bool) -> ColumnDef {
-        ColumnDef {
+    pub(crate) fn from_schema(column: &Column, indexed: bool) -> Self {
+        Self {
             name: column.name.clone(),
             ty: ColumnType::from_schema(&column.ty, indexed),
         }

@@ -16,7 +16,7 @@ pub struct Capability {
 
 impl Capability {
     /// SQLite capabilities.
-    pub const SQLITE: Capability = Capability {
+    pub const SQLITE: Self = Self {
         sql: true,
         cte_with_update: false,
         select_for_update: false,
@@ -24,21 +24,21 @@ impl Capability {
     };
 
     /// PostgreSQL capabilities
-    pub const POSTGRESQL: Capability = Capability {
+    pub const POSTGRESQL: Self = Self {
         cte_with_update: true,
         select_for_update: true,
-        ..Capability::SQLITE
+        ..Self::SQLITE
     };
 
     /// MySQL capabilities
-    pub const MYSQL: Capability = Capability {
+    pub const MYSQL: Self = Self {
         cte_with_update: false,
         select_for_update: true,
-        ..Capability::SQLITE
+        ..Self::SQLITE
     };
 
     /// DynamoDB capabilities
-    pub const DYNAMODB: Capability = Capability {
+    pub const DYNAMODB: Self = Self {
         sql: false,
         cte_with_update: false,
         select_for_update: false,

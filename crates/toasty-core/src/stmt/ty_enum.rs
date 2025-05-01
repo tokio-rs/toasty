@@ -28,6 +28,6 @@ impl TypeEnum {
 
 impl From<TypeEnum> for Type {
     fn from(value: TypeEnum) -> Self {
-        Type::Enum(value)
+        Self::Enum(value)
     }
 }

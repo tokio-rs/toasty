@@ -433,7 +433,7 @@ async fn batch_get_by_id(s: impl Setup) {
         keys.push(foo.id);
     }
 
-    let foos: Vec<_> = Foo::filter_by_id_batch(&[&keys[0], &keys[1], &keys[2]])
+    let foos: Vec<_> = Foo::filter_by_id_batch([&keys[0], &keys[1], &keys[2]])
         .collect(&db)
         .await
         .unwrap();
@@ -441,7 +441,7 @@ async fn batch_get_by_id(s: impl Setup) {
     assert_eq!(3, foos.len());
 
     for foo in foos {
-        assert!(keys.iter().any(|key| foo.id == *key));
+        assert!(keys.contains(&foo.id));
     }
 }
 

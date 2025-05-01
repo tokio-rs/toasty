@@ -13,7 +13,7 @@ pub struct Insert {
 }
 
 impl Insert {
-    pub fn merge(&mut self, other: Insert) {
+    pub fn merge(&mut self, other: Self) {
         if self.target != other.target {
             todo!("handle this case");
         }
@@ -30,8 +30,8 @@ impl Insert {
 }
 
 impl From<Insert> for Statement {
-    fn from(src: Insert) -> Statement {
-        Statement::Insert(src)
+    fn from(src: Insert) -> Self {
+        Self::Insert(src)
     }
 }
 

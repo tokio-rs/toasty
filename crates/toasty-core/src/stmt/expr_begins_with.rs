@@ -7,7 +7,7 @@ pub struct ExprBeginsWith {
 }
 
 impl Expr {
-    pub fn begins_with(expr: impl Into<Expr>, pattern: impl Into<Expr>) -> Expr {
+    pub fn begins_with(expr: impl Into<Self>, pattern: impl Into<Self>) -> Self {
         ExprBeginsWith {
             expr: Box::new(expr.into()),
             pattern: Box::new(pattern.into()),
@@ -18,12 +18,12 @@ impl Expr {
 
 impl From<ExprBeginsWith> for Expr {
     fn from(value: ExprBeginsWith) -> Self {
-        Expr::Pattern(value.into())
+        Self::Pattern(value.into())
     }
 }
 
 impl From<ExprBeginsWith> for ExprPattern {
     fn from(value: ExprBeginsWith) -> Self {
-        ExprPattern::BeginsWith(value)
+        Self::BeginsWith(value)
     }
 }

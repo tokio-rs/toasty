@@ -6,11 +6,11 @@ pub struct Name {
 }
 
 impl Name {
-    pub fn new(src: &str) -> Name {
+    pub fn new(src: &str) -> Self {
         // TODO: make better
         let snake = str::snake_case(src);
         let parts = snake.split("_").map(String::from).collect();
-        Name { parts }
+        Self { parts }
     }
 
     pub fn camel_case(&self) -> String {

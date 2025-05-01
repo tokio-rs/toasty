@@ -9,10 +9,10 @@ pub struct Association<T: ?Sized> {
 
 impl<M: Model> Association<[M]> {
     /// A basic has_many association
-    pub fn many<T: Model>(source: Select<T>, path: Path<[M]>) -> Association<[M]> {
+    pub fn many<T: Model>(source: Select<T>, path: Path<[M]>) -> Self {
         assert_eq!(path.untyped.root, T::ID);
 
-        Association {
+        Self {
             untyped: stmt::Association {
                 source: Box::new(source.untyped),
                 path: path.untyped,
@@ -23,10 +23,10 @@ impl<M: Model> Association<[M]> {
 
     /// A has_one or belongs_to association via a query, which implies there
     /// could be more than one result.
-    pub fn many_via_one<T: Model>(source: Select<T>, path: Path<M>) -> Association<[M]> {
+    pub fn many_via_one<T: Model>(source: Select<T>, path: Path<M>) -> Self {
         assert_eq!(path.untyped.root, T::ID);
 
-        Association {
+        Self {
             untyped: stmt::Association {
                 source: Box::new(source.untyped),
                 path: path.untyped,
@@ -64,10 +64,10 @@ impl<M: Model> Association<[M]> {
 }
 
 impl<M: Model> Association<M> {
-    pub fn one<T: Model>(source: Select<T>, path: Path<M>) -> Association<M> {
+    pub fn one<T: Model>(source: Select<T>, path: Path<M>) -> Self {
         assert_eq!(path.untyped.root, T::ID);
 
-        Association {
+        Self {
             untyped: stmt::Association {
                 source: Box::new(source.untyped),
                 path: path.untyped,

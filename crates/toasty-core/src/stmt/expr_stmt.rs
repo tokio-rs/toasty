@@ -6,8 +6,8 @@ pub struct ExprStmt {
 }
 
 impl Expr {
-    pub fn stmt(stmt: impl Into<Statement>) -> Expr {
-        Expr::Stmt(ExprStmt {
+    pub fn stmt(stmt: impl Into<Statement>) -> Self {
+        Self::Stmt(ExprStmt {
             stmt: Box::new(stmt.into()),
         })
     }
@@ -15,19 +15,19 @@ impl Expr {
 
 impl From<ExprStmt> for Expr {
     fn from(value: ExprStmt) -> Self {
-        Expr::Stmt(value)
+        Self::Stmt(value)
     }
 }
 
 impl From<Statement> for ExprStmt {
     fn from(value: Statement) -> Self {
-        ExprStmt { stmt: value.into() }
+        Self { stmt: value.into() }
     }
 }
 
 impl From<Insert> for ExprStmt {
     fn from(value: Insert) -> Self {
-        ExprStmt {
+        Self {
             stmt: Box::new(Statement::from(value)),
         }
     }

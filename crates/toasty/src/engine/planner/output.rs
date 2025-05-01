@@ -221,10 +221,10 @@ impl Partitioner<'_> {
 
 impl Partition {
     fn is_stmt(&self) -> bool {
-        matches!(self, Partition::Stmt)
+        matches!(self, Self::Stmt)
     }
 
     fn is_const_stmt(&self) -> bool {
-        matches!(self, Partition::ConstStmt)
+        matches!(self, Self::ConstStmt)
     }
 }

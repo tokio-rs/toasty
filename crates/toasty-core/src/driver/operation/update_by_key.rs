@@ -25,7 +25,7 @@ pub struct UpdateByKey {
 }
 
 impl From<UpdateByKey> for Operation {
-    fn from(value: UpdateByKey) -> Operation {
-        Operation::UpdateByKey(value)
+    fn from(value: UpdateByKey) -> Self {
+        Self::UpdateByKey(value)
     }
 }
