@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+use indexmap::IndexSet;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PathFieldSet {
     // TODO: rewrite as a bitfield set
-    container: HashSet<usize>,
+    container: IndexSet<usize>,
 }
 
 impl PathFieldSet {
@@ -18,14 +18,6 @@ impl PathFieldSet {
         PathFieldSet {
             container: fields.iter().map(Into::into).collect(),
         }
-    }
-
-    pub fn insert(&mut self, val: impl Into<usize>) {
-        self.container.insert(val.into());
-    }
-
-    pub fn unset(&mut self, field: impl Into<usize>) {
-        self.container.remove(&field.into());
     }
 
     pub fn contains(&self, val: impl Into<usize>) -> bool {
@@ -50,7 +42,7 @@ impl FromIterator<usize> for PathFieldSet {
         let mut ret = PathFieldSet::new();
 
         for key in iter {
-            ret.insert(key);
+            ret.container.insert(key);
         }
 
         ret
