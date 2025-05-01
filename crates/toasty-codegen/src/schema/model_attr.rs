@@ -6,7 +6,7 @@ pub(crate) struct ModelAttr {
     pub(crate) key: Option<KeyAttr>,
 
     /// Optional database table name to map the model to
-    pub(crate) table: Option<syn::Ident>,
+    pub(crate) table: Option<syn::LitStr>,
 }
 
 impl ModelAttr {
@@ -24,6 +24,33 @@ impl ModelAttr {
                 } else {
                     self.key = Some(KeyAttr::from_ast(attr, names)?);
                 }
+            } else if attr.path().is_ident("table") {
+                if self.table.is_some() {
+                    return Err(syn::Error::new_spanned(attr, "duplicate `table` attribute"));
+                }
+
+                let syn::Meta::NameValue(meta) = &attr.meta else {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "expected `table = \"table_name\"`",
+                    ));
+                };
+
+                let syn::Expr::Lit(lit) = &meta.value else {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "expected `table = \"table_name\"`",
+                    ));
+                };
+
+                let syn::Lit::Str(lit) = &lit.lit else {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "expected `table = \"table_name\"`",
+                    ));
+                };
+
+                self.table = Some(lit.clone());
             }
         }
 

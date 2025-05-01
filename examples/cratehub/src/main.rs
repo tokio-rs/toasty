@@ -1,7 +1,7 @@
 use toasty::stmt::Id;
 
-#[derive(Debug)]
-#[toasty::model(table = user_and_packages)]
+#[derive(Debug, toasty::Model)]
+#[table = "user_and_packages"]
 struct User {
     #[key]
     #[auto]
@@ -13,15 +13,15 @@ struct User {
     email: String,
 
     #[has_many]
-    packages: [Package],
+    packages: toasty::HasMany<Package>,
 }
 
-#[derive(Debug)]
-#[toasty::model(table = user_and_packages)]
+#[derive(Debug, toasty::Model)]
+#[table = "user_and_packages"]
 #[key(partition = user_id, local = id)]
 struct Package {
     #[belongs_to(key = user_id, references = id)]
-    user: User,
+    user: toasty::BelongsTo<User>,
 
     user_id: Id<User>,
 

@@ -1,7 +1,6 @@
 use toasty::stmt::Id;
 
-#[derive(Debug)]
-#[toasty::model]
+#[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
@@ -13,11 +12,10 @@ struct User {
     email: String,
 
     #[has_many]
-    todos: [Todo],
+    todos: toasty::HasMany<Todo>,
 }
 
-#[derive(Debug)]
-#[toasty::model]
+#[derive(Debug, toasty::Model)]
 #[key(partition = user_id, local = id)]
 struct Todo {
     #[auto]
@@ -28,7 +26,7 @@ struct Todo {
     order: i64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: User,
+    user: toasty::BelongsTo<User>,
 
     user_id: Id<User>,
 }

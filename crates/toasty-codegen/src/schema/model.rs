@@ -41,7 +41,7 @@ pub(crate) struct Model {
     pub(crate) update_query_struct_ident: syn::Ident,
 
     /// Optional table to map the model to
-    pub(crate) table: Option<syn::Ident>,
+    pub(crate) table: Option<syn::LitStr>,
 }
 
 impl Model {

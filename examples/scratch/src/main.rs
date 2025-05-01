@@ -1,18 +1,16 @@
 use toasty::stmt::Id;
 
-#[derive(Debug)]
-#[toasty::model]
+#[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
     id: Id<Self>,
 
     #[has_one]
-    profile: Option<Profile>,
+    profile: toasty::HasOne<Option<Profile>>,
 }
 
-#[derive(Debug)]
-#[toasty::model]
+#[derive(Debug, toasty::Model)]
 struct Profile {
     #[key]
     #[auto]
@@ -22,7 +20,7 @@ struct Profile {
     user_id: Id<User>,
 
     #[belongs_to(key = user_id, references = id)]
-    user: User,
+    user: toasty::BelongsTo<User>,
 }
 
 #[tokio::main]

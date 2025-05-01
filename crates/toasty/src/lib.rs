@@ -16,7 +16,7 @@ mod model;
 pub use model::Model;
 
 pub mod relation;
-pub use relation::{BelongsTo, HasMany};
+pub use relation::{BelongsTo, HasMany, HasOne};
 
 pub mod schema;
 

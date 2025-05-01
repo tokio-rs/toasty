@@ -3,7 +3,10 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
 
-#[proc_macro_derive(Model, attributes(key, auto, index, unique, has_many, belongs_to))]
+#[proc_macro_derive(
+    Model,
+    attributes(key, auto, index, unique, table, has_many, has_one, belongs_to)
+)]
 pub fn derive_model(input: TokenStream) -> TokenStream {
     match toasty_codegen::generate(input.into()) {
         Ok(output) => output.into(),
