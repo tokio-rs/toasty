@@ -24,13 +24,11 @@ impl Value {
         let mut values = vec![];
 
         for (index, value) in fields.iter().zip(record.fields.into_iter()) {
-            assert!(index >= values.len());
-
-            while index > values.len() {
-                values.push(Self::Null);
+            while index >= values.len() {
+                values.push(Value::Null);
             }
 
-            values.push(value);
+            values[index] = value;
         }
 
         SparseRecord { fields, values }.into()

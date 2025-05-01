@@ -470,6 +470,56 @@ async fn empty_batch_get_by_id(s: impl Setup) {
     assert_eq!(0, foos.len());
 }
 
+async fn update_multiple_fields(s: impl Setup) {
+    #[derive(Debug)]
+    #[toasty::model]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        name: String,
+        email: String,
+    }
+
+    let db = s.setup(models!(User)).await;
+
+    let mut user = User::create()
+        .name("John Doe")
+        .email("john@example.com")
+        .exec(&db)
+        .await
+        .unwrap();
+
+    // Update by object
+    user.update()
+        .name("Jane Doe")
+        .email("jane@example.com")
+        .exec(&db)
+        .await
+        .unwrap();
+
+    assert_eq!("Jane Doe", user.name);
+    assert_eq!("jane@example.com", user.email);
+
+    let user = User::get_by_id(&db, &user.id).await.unwrap();
+    assert_eq!("Jane Doe", user.name);
+    assert_eq!("jane@example.com", user.email);
+
+    // Update by query
+    User::filter_by_id(&user.id)
+        .update()
+        .name("John2 Doe")
+        .email("john2@example.com")
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let user = User::get_by_id(&db, &user.id).await.unwrap();
+    assert_eq!("John2 Doe", user.name);
+    assert_eq!("john2@example.com", user.email);
+}
+
 tests!(
     crud_no_fields,
     crud_one_string,
@@ -481,4 +531,5 @@ tests!(
     // TODO: this should be an error, but right now it panics
     #[should_panic]
     required_field_create_without_setting,
+    update_multiple_fields,
 );
