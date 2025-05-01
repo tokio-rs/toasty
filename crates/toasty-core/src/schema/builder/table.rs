@@ -246,6 +246,7 @@ impl BuildTableFromModels<'_> {
                     id: column_id,
                     name,
                     ty,
+                    storage_ty: None,
                     nullable: false,
                     primary_key: true,
                 });
@@ -370,6 +371,7 @@ impl BuildTableFromModels<'_> {
             },
             name,
             ty: stmt_ty_to_table(primitive.ty.clone()),
+            storage_ty: primitive.storage_ty.clone(),
             nullable,
             primary_key: false,
         };

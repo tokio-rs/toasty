@@ -22,7 +22,7 @@ pub(crate) async fn exec(db: &Db, stmt: Statement) -> Result<ValueStream> {
     }
 
     // Translate the optimized statement into a series of driver operations.
-    let plan = planner::apply(db.driver.capability(), &db.schema, stmt);
+    let plan = planner::apply(db.driver.capability(), &db.schema, stmt)?;
 
     // The plan is called once (single entry record stream) with no arguments
     // (empty record).

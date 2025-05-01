@@ -201,7 +201,10 @@ impl Sqlite {
         let connection = self.connection.lock().unwrap();
 
         let mut params = vec![];
-        let stmt = serializer.serialize(&sql::Statement::create_table(table), &mut params);
+        let stmt = serializer.serialize(
+            &sql::Statement::create_table(table, &Capability::SQLITE),
+            &mut params,
+        );
         assert!(params.is_empty());
 
         connection.execute(&stmt, [])?;

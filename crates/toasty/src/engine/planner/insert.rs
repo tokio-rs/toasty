@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::Result;
 use db::ColumnId;
 
 use std::collections::hash_map::Entry;
@@ -10,7 +11,10 @@ struct ApplyInsertScope<'a> {
 }
 
 impl Planner<'_> {
-    pub(super) fn plan_stmt_insert(&mut self, mut stmt: stmt::Insert) -> Option<plan::VarId> {
+    pub(super) fn plan_stmt_insert(
+        &mut self,
+        mut stmt: stmt::Insert,
+    ) -> Result<Option<plan::VarId>> {
         let model = self.model(stmt.target.as_model());
 
         if let stmt::ExprSet::Values(values) = &*stmt.source.body {
@@ -19,7 +23,7 @@ impl Planner<'_> {
 
         // Do initial pre-processing of insertion values (apply defaults, apply
         // scope, check constraints, ...)
-        self.preprocess_insert_values(model, &mut stmt);
+        self.preprocess_insert_values(model, &mut stmt)?;
 
         self.lower_stmt_insert(model, &mut stmt);
 
@@ -97,10 +101,14 @@ impl Planner<'_> {
             output_var = Some(self.set_var(values, ty));
         }
 
-        output_var
+        Ok(output_var)
     }
 
-    fn preprocess_insert_values(&mut self, model: &app::Model, stmt: &mut stmt::Insert) {
+    fn preprocess_insert_values(
+        &mut self,
+        model: &app::Model,
+        stmt: &mut stmt::Insert,
+    ) -> Result<()> {
         let stmt::ExprSet::Values(values) = &mut *stmt.source.body else {
             todo!()
         };
@@ -116,9 +124,11 @@ impl Planner<'_> {
             }
 
             self.apply_insertion_defaults(model, row);
-            self.plan_insert_relation_stmts(model, row);
-            self.verify_non_nullable_fields_have_values(model, row);
+            self.plan_insert_relation_stmts(model, row)?;
+            self.verify_field_constraints(model, row)?;
         }
+
+        Ok(())
     }
 
     // Checks all fields of a record and handles nulls
@@ -171,19 +181,19 @@ impl Planner<'_> {
         }
     }
 
-    fn verify_non_nullable_fields_have_values(
+    fn verify_field_constraints(
         &mut self,
         model: &app::Model,
         expr: &mut stmt::Expr,
-    ) {
+    ) -> Result<()> {
         for field in &model.fields {
-            if field.nullable {
+            if field.nullable && field.constraints.is_empty() {
                 continue;
             }
 
             let field_expr = expr.entry(field.id.index);
 
-            if field_expr.is_value_null() {
+            if !field.nullable && field_expr.is_value_null() {
                 // Relations are handled differently
                 if !field.ty.is_relation() {
                     panic!(
@@ -195,10 +205,20 @@ impl Planner<'_> {
                     );
                 }
             }
+
+            for constraint in &field.constraints {
+                constraint.check(&field_expr)?;
+            }
         }
+
+        Ok(())
     }
 
-    fn plan_insert_relation_stmts(&mut self, model: &app::Model, expr: &mut stmt::Expr) {
+    fn plan_insert_relation_stmts(
+        &mut self,
+        model: &app::Model,
+        expr: &mut stmt::Expr,
+    ) -> Result<()> {
         for (i, field) in model.fields.iter().enumerate() {
             if expr.entry(i).is_value_null() {
                 if !field.nullable && field.ty.is_has_one() {
@@ -224,13 +244,13 @@ impl Planner<'_> {
                     stmt::AssignmentOp::Insert,
                     expr.entry_mut(i).take(),
                     &scope,
-                );
+                )?;
             } else if let Some(has_one) = field.ty.as_has_one() {
                 // For now, we need to keep this separate
                 assert!(!self.insertions.contains_key(&has_one.target));
 
                 let scope = self.inserted_query_stmt(model, expr);
-                self.plan_mut_has_one_expr(has_one, expr.entry_mut(i).take(), &scope, true);
+                self.plan_mut_has_one_expr(has_one, expr.entry_mut(i).take(), &scope, true)?;
             } else if let Some(belongs_to) = field.ty.as_belongs_to() {
                 let mut entry = expr.entry_mut(i);
 
@@ -247,7 +267,7 @@ impl Planner<'_> {
                         entry.as_expr_mut(),
                         &scope,
                         true,
-                    );
+                    )?;
 
                     match entry.take() {
                         stmt::Expr::Value(value) => match value {
@@ -265,6 +285,8 @@ impl Planner<'_> {
                 }
             }
         }
+
+        Ok(())
     }
 
     /// Returns a select statement that will select the newly inserted record

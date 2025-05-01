@@ -7,10 +7,8 @@ pub struct SetupSqlite;
 
 #[async_trait::async_trait]
 impl Setup for SetupSqlite {
-    async fn setup(&self, mut builder: db::Builder) -> Db {
-        let db = builder.connect("sqlite::memory:").await.unwrap();
-        db.reset_db().await.unwrap();
-        db
+    async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
+        builder.connect("sqlite::memory:").await
     }
 
     fn capability(&self) -> &Capability {

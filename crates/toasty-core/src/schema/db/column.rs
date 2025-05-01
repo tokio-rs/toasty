@@ -10,8 +10,13 @@ pub struct Column {
     /// The name of the column
     pub name: String,
 
-    /// The column type
+    /// The column type, from Toasty's point of view.
     pub ty: stmt::Type,
+
+    /// The database storae type of the column.
+    ///
+    /// When `None`, no specific storage type has been requested.
+    pub storage_ty: Option<Type>,
 
     /// Whether or not the column is nullable
     pub nullable: bool,

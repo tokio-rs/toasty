@@ -1,6 +1,6 @@
 use super::*;
 
-use toasty_core::{schema::db::Table, stmt};
+use toasty_core::{driver::Capability, schema::db::Table, stmt};
 
 #[derive(Debug, Clone)]
 pub struct CreateTable {
@@ -15,22 +15,13 @@ pub struct CreateTable {
 }
 
 impl Statement {
-    pub fn create_table(table: &Table) -> Self {
+    pub fn create_table(table: &Table, capability: &Capability) -> Self {
         CreateTable {
             name: Name::from(&table.name[..]),
             columns: table
                 .columns
                 .iter()
-                .map(|column| {
-                    let indexed = table.indices.iter().any(|index| {
-                        index
-                            .columns
-                            .iter()
-                            .any(|index_column| index_column.column == column.id)
-                    });
-
-                    ColumnDef::from_schema(column, indexed)
-                })
+                .map(|column| ColumnDef::from_schema(column, &capability.storage_types))
                 .collect(),
             primary_key: Some(Box::new(stmt::Expr::record(
                 table

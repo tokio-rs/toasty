@@ -1,5 +1,5 @@
 mod capability;
-pub use capability::Capability;
+pub use capability::{Capability, StorageTypes};
 
 mod response;
 pub use response::{Response, Rows};

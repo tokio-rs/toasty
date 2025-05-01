@@ -7,7 +7,7 @@ pub struct SetupMySQL;
 
 #[async_trait::async_trait]
 impl Setup for SetupMySQL {
-    async fn setup(&self, mut builder: db::Builder) -> Db {
+    async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
         use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
         static CNT: AtomicUsize = AtomicUsize::new(0);
@@ -21,14 +21,7 @@ impl Setup for SetupMySQL {
         let url = std::env::var("TOASTY_TEST_MYSQL_URL")
             .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
 
-        let db = builder
-            .table_name_prefix(&prefix)
-            .connect(&url)
-            .await
-            .unwrap();
-
-        db.reset_db().await.unwrap();
-        db
+        builder.table_name_prefix(&prefix).connect(&url).await
     }
 
     fn capability(&self) -> &Capability {

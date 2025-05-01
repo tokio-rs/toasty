@@ -2,7 +2,11 @@ use super::*;
 use app::{FieldTy, Model, ModelId};
 
 impl Planner<'_> {
-    pub(super) fn plan_stmt_select(&mut self, cx: &Context, mut stmt: stmt::Query) -> plan::VarId {
+    pub(super) fn plan_stmt_select(
+        &mut self,
+        cx: &Context,
+        mut stmt: stmt::Query,
+    ) -> Result<plan::VarId> {
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.app.model(source_model.model);
@@ -41,7 +45,7 @@ impl Planner<'_> {
                     var: output,
                     value: vec![],
                 });
-                return output;
+                return Ok(output);
             }
         }
 
@@ -52,10 +56,10 @@ impl Planner<'_> {
         };
 
         for include in &source_model.include {
-            self.plan_select_include(source_model.model, include, ret);
+            self.plan_select_include(source_model.model, include, ret)?;
         }
 
-        ret
+        Ok(ret)
     }
 
     fn plan_select_sql(
@@ -292,7 +296,12 @@ impl Planner<'_> {
         }
     }
 
-    fn plan_select_include(&mut self, base: ModelId, path: &stmt::Path, input: plan::VarId) {
+    fn plan_select_include(
+        &mut self,
+        base: ModelId,
+        path: &stmt::Path,
+        input: plan::VarId,
+    ) -> Result<()> {
         // TODO: move this into verifier
         assert_eq!(base, path.root);
 
@@ -323,7 +332,8 @@ impl Planner<'_> {
                     ),
                 );
 
-                let Some(out) = self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())
+                let Some(out) =
+                    self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())?
                 else {
                     todo!()
                 };
@@ -351,7 +361,8 @@ impl Planner<'_> {
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.source),
                     ),
                 );
-                let Some(out) = self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())
+                let Some(out) =
+                    self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())?
                 else {
                     todo!()
                 };
@@ -365,5 +376,7 @@ impl Planner<'_> {
             }
             _ => todo!("field.ty={:#?}", field.ty),
         }
+
+        Ok(())
     }
 }
