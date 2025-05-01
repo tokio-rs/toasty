@@ -6,8 +6,7 @@ use toasty::stmt::Id;
 const MORE: i32 = 10;
 
 async fn crud_no_fields(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
         #[auto]
@@ -83,8 +82,7 @@ async fn crud_no_fields(s: impl Setup) {
 }
 
 async fn crud_one_string(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
         #[auto]
@@ -172,8 +170,7 @@ async fn crud_one_string(s: impl Setup) {
 }
 
 async fn required_field_create_without_setting(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -187,8 +184,7 @@ async fn required_field_create_without_setting(s: impl Setup) {
 }
 
 async fn unique_index_required_field_update(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -288,8 +284,7 @@ async fn unique_index_required_field_update(s: impl Setup) {
 }
 
 async fn unique_index_nullable_field_update(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -378,8 +373,7 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
 }
 
 async fn unique_index_no_update(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -417,8 +411,7 @@ async fn unique_index_no_update(s: impl Setup) {
 }
 
 async fn batch_get_by_id(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
         #[auto]
@@ -446,8 +439,7 @@ async fn batch_get_by_id(s: impl Setup) {
 }
 
 async fn empty_batch_get_by_id(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
         #[auto]
@@ -471,8 +463,7 @@ async fn empty_batch_get_by_id(s: impl Setup) {
 }
 
 async fn update_multiple_fields(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
