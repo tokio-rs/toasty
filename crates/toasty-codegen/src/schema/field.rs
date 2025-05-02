@@ -1,6 +1,6 @@
 use super::{BelongsTo, ColumnType, ErrorSet, HasMany, HasOne, Name};
 
-use syn::{parse_quote, spanned::Spanned};
+use syn::spanned::Spanned;
 
 #[derive(Debug)]
 pub(crate) struct Field {
@@ -144,7 +144,7 @@ impl Field {
 
         if ty.is_some() && attrs.db.is_some() {
             errs.push(syn::Error::new_spanned(
-                &field,
+                field,
                 "relation fields cannot have a database type",
             ));
         }

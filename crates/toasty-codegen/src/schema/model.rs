@@ -1,7 +1,5 @@
 use super::{ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey};
 
-use proc_macro2::TokenStream;
-
 #[derive(Debug)]
 pub(crate) struct Model {
     /// Generated model identifier
@@ -134,7 +132,7 @@ impl Model {
         // Return an error if no primary key fields were found
         if pk_index_fields.is_empty() {
             return Err(syn::Error::new_spanned(
-                &ast,
+                ast,
                 "model must either have a struct-level `#[key]` attribute or at least one field-level `#[key]` attribute",
             ));
         }
