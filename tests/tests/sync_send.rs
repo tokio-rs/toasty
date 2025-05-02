@@ -6,8 +6,7 @@ fn assert_sync_send<T: Send>(val: T) -> T {
 }
 
 async fn ensure_types_sync_send(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]

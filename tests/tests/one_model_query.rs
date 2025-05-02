@@ -1,8 +1,7 @@
 use tests::*;
 
 async fn query_index_eq(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -66,8 +65,7 @@ async fn query_index_eq(s: impl Setup) {
 }
 
 async fn query_partition_key_string_eq(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     #[key(partition = league, local = name)]
     struct Team {
         league: String,
@@ -201,8 +199,7 @@ async fn query_partition_key_string_eq(s: impl Setup) {
 }
 
 async fn query_local_key_cmp(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     #[key(partition = kind, local = timestamp)]
     struct Event {
         kind: String,
@@ -305,8 +302,7 @@ async fn query_arbitrary_constraint(s: impl Setup) {
         return;
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Event {
         #[key]
         #[auto]

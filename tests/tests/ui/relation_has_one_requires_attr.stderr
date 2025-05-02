@@ -1,12 +1,11 @@
-error[E0277]: the trait bound `Profile: toasty::stmt::Primitive` is not satisfied
+error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Primitive` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:9:14
   |
-9 |     profile: Option<Profile>,
-  |              ^^^^^^^^^^^^^^^ the trait `toasty::stmt::Primitive` is not implemented for `Profile`
+9 |     profile: toasty::HasOne<Option<Profile>>,
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `toasty::stmt::Primitive` is not implemented for `toasty::HasOne<Option<Profile>>`
   |
   = help: the following other types implement trait `toasty::stmt::Primitive`:
             Option<T>
             i64
             std::string::String
             toasty::stmt::Id<T>
-  = note: required for `Option<Profile>` to implement `toasty::stmt::Primitive`

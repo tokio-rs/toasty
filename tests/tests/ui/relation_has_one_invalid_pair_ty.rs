@@ -1,16 +1,16 @@
 use toasty::stmt::Id;
 
-#[toasty::model]
+#[derive(toasty::Model)]
 struct User {
     #[key]
     #[auto]
     id: Id<Self>,
 
     #[has_one]
-    profile: Option<Profile>,
+    profile: toasty::HasOne<Option<Profile>>,
 }
 
-#[toasty::model]
+#[derive(toasty::Model)]
 struct Profile {
     #[key]
     #[auto]
