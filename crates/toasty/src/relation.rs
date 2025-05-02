@@ -34,6 +34,9 @@ pub trait Relation2 {
     /// The target model
     type Model: Model;
 
+    /// The target expression (e.g. `Option<Model>`)
+    type Expr;
+
     type Query;
 
     /// HasMany relation type

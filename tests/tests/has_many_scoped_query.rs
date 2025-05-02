@@ -4,19 +4,17 @@ use toasty::stmt::Id;
 use std::collections::HashSet;
 
 async fn scoped_query_eq(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     #[key(partition = user_id, local = id)]
     struct Todo {
         #[auto]
@@ -25,7 +23,7 @@ async fn scoped_query_eq(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
 
@@ -141,19 +139,17 @@ async fn scoped_query_eq(s: impl Setup) {
 }
 
 async fn scoped_query_gt(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     #[key(partition = user_id, local = id)]
     struct Todo {
         #[auto]
@@ -162,7 +158,7 @@ async fn scoped_query_gt(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
 

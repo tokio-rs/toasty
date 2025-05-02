@@ -27,6 +27,7 @@ impl<T: Model> BelongsTo<T> {
 
 impl<T: Relation2> Relation2 for BelongsTo<T> {
     type Model = T::Model;
+    type Expr = T::Expr;
     type Query = T::Query;
     type Many = T::Many;
     type ManyField = T::ManyField;

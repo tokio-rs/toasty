@@ -27,6 +27,7 @@ impl<T: Model> HasOne<T> {
 
 impl<T: Relation2> Relation2 for HasOne<T> {
     type Model = T::Model;
+    type Expr = T::Expr;
     type Query = T::Query;
     type Many = T::Many;
     type ManyField = T::ManyField;

@@ -2,8 +2,7 @@ use tests::*;
 use toasty::stmt::Id;
 
 async fn crud_has_one_bi_direction_optional(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -12,11 +11,10 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
         name: String,
 
         #[has_one]
-        profile: Option<Profile>,
+        profile: toasty::HasOne<Option<Profile>>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
@@ -26,7 +24,7 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
         user_id: Option<Id<User>>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: Option<User>,
+        user: toasty::BelongsTo<Option<User>>,
 
         bio: String,
     }
@@ -126,8 +124,7 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
 }
 
 async fn crud_has_one_required_belongs_to_optional(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -136,11 +133,10 @@ async fn crud_has_one_required_belongs_to_optional(s: impl Setup) {
         name: String,
 
         #[has_one]
-        profile: Profile,
+        profile: toasty::HasOne<Profile>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
@@ -150,7 +146,7 @@ async fn crud_has_one_required_belongs_to_optional(s: impl Setup) {
         user_id: Option<Id<User>>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: Option<User>,
+        user: toasty::BelongsTo<Option<User>>,
 
         bio: String,
     }
@@ -181,8 +177,7 @@ async fn crud_has_one_required_belongs_to_optional(s: impl Setup) {
 }
 
 async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -191,11 +186,10 @@ async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
         name: String,
 
         #[has_one]
-        profile: Profile,
+        profile: toasty::HasOne<Profile>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
@@ -205,7 +199,7 @@ async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
         user_id: Option<Id<User>>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: Option<User>,
+        user: toasty::BelongsTo<Option<User>>,
 
         bio: String,
     }
@@ -295,8 +289,7 @@ async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
 }
 
 async fn crud_has_one_optional_belongs_to_required(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -305,11 +298,10 @@ async fn crud_has_one_optional_belongs_to_required(s: impl Setup) {
         name: String,
 
         #[has_one]
-        profile: Option<Profile>,
+        profile: toasty::HasOne<Option<Profile>>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
@@ -319,7 +311,7 @@ async fn crud_has_one_optional_belongs_to_required(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         bio: String,
     }
@@ -376,19 +368,17 @@ async fn has_one_must_specify_be_uniquely_indexed(_s: impl Setup) {
 */
 
 async fn set_has_one_by_value_in_update_query(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_one]
-        profile: Option<Profile>,
+        profile: toasty::HasOne<Option<Profile>>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
@@ -398,7 +388,7 @@ async fn set_has_one_by_value_in_update_query(s: impl Setup) {
         user_id: Option<Id<User>>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: Option<User>,
+        user: toasty::BelongsTo<Option<User>>,
     }
 
     let db = s.setup(models!(User, Profile)).await;
@@ -422,19 +412,17 @@ async fn set_has_one_by_value_in_update_query(s: impl Setup) {
 async fn unset_has_one_in_batch_update(_s: impl Setup) {}
 
 async fn unset_has_one_with_required_pair_in_pk_query_update(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_one]
-        profile: Option<Profile>,
+        profile: toasty::HasOne<Option<Profile>>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
@@ -444,7 +432,7 @@ async fn unset_has_one_with_required_pair_in_pk_query_update(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
     }
 
     let db = s.setup(models!(User, Profile)).await;
@@ -470,8 +458,7 @@ async fn unset_has_one_with_required_pair_in_pk_query_update(s: impl Setup) {
 }
 
 async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -481,11 +468,10 @@ async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) 
         email: String,
 
         #[has_one]
-        profile: Option<Profile>,
+        profile: toasty::HasOne<Option<Profile>>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
@@ -495,7 +481,7 @@ async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) 
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
     }
 
     let db = s.setup(models!(User, Profile)).await;
@@ -521,8 +507,7 @@ async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) 
 }
 
 async fn associate_has_one_by_val_on_insert(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -531,11 +516,10 @@ async fn associate_has_one_by_val_on_insert(s: impl Setup) {
         name: String,
 
         #[has_one]
-        profile: Profile,
+        profile: toasty::HasOne<Profile>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
@@ -545,7 +529,7 @@ async fn associate_has_one_by_val_on_insert(s: impl Setup) {
         user_id: Option<Id<User>>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: Option<User>,
+        user: toasty::BelongsTo<Option<User>>,
 
         bio: String,
     }
@@ -574,8 +558,7 @@ async fn associate_has_one_by_val_on_insert(s: impl Setup) {
 }
 
 async fn associate_has_one_by_val_on_update_query_with_filter(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -584,11 +567,10 @@ async fn associate_has_one_by_val_on_update_query_with_filter(s: impl Setup) {
         name: String,
 
         #[has_one]
-        profile: Option<Profile>,
+        profile: toasty::HasOne<Option<Profile>>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
@@ -598,7 +580,7 @@ async fn associate_has_one_by_val_on_update_query_with_filter(s: impl Setup) {
         user_id: Option<Id<User>>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: Option<User>,
+        user: toasty::BelongsTo<Option<User>>,
 
         bio: String,
     }

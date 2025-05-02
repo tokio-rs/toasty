@@ -89,7 +89,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
 
                         quote! {
-                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> Self {
+                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }
@@ -100,7 +100,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
 
                         quote! {
-                            pub fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> Self {
+                            pub fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 self.stmt.insert(#index, #singular.into_expr());
                                 self
                             }
@@ -110,7 +110,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
 
                         quote! {
-                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Model>) -> Self {
+                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }
