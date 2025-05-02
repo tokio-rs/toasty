@@ -2,19 +2,17 @@ use tests::*;
 use toasty::stmt::Id;
 
 async fn hello_world(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -24,26 +22,25 @@ async fn hello_world(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         #[index]
         category_id: Id<Category>,
 
         #[belongs_to(key = category_id, references = id)]
-        category: Category,
+        category: toasty::BelongsTo<Category>,
 
         title: String,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Category {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
 
         name: String,
     }

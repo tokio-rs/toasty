@@ -4,8 +4,7 @@ use std::collections::HashMap;
 use toasty::stmt::Id;
 
 async fn crud_user_todos_categories(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -14,11 +13,10 @@ async fn crud_user_todos_categories(s: impl Setup) {
         name: String,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -28,19 +26,18 @@ async fn crud_user_todos_categories(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         #[index]
         category_id: Id<Category>,
 
         #[belongs_to(key = category_id, references = id)]
-        category: Category,
+        category: toasty::BelongsTo<Category>,
 
         title: String,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Category {
         #[key]
         #[auto]
@@ -49,7 +46,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         name: String,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
     let db = s.setup(models!(User, Todo, Category)).await;

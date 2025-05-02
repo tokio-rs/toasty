@@ -2,19 +2,17 @@ use tests::*;
 use toasty::stmt::Id;
 
 async fn remove_add_single_relation_option_belongs_to(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -24,7 +22,7 @@ async fn remove_add_single_relation_option_belongs_to(s: impl Setup) {
         user_id: Option<Id<User>>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: Option<User>,
+        user: toasty::BelongsTo<Option<User>>,
     }
 
     let db = s.setup(models!(User, Todo)).await;
@@ -76,19 +74,17 @@ async fn remove_add_single_relation_option_belongs_to(s: impl Setup) {
 }
 
 async fn add_remove_single_relation_required_belongs_to(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -98,7 +94,7 @@ async fn add_remove_single_relation_required_belongs_to(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
     }
 
     let db = s.setup(models!(User, Todo)).await;
@@ -132,19 +128,17 @@ async fn add_remove_single_relation_required_belongs_to(s: impl Setup) {
 }
 
 async fn reassign_relation_required_belongs_to(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -154,7 +148,7 @@ async fn reassign_relation_required_belongs_to(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
     }
 
     let db = s.setup(models!(User, Todo)).await;
@@ -179,19 +173,17 @@ async fn reassign_relation_required_belongs_to(s: impl Setup) {
 }
 
 async fn add_remove_multiple_relation_option_belongs_to(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -201,7 +193,7 @@ async fn add_remove_multiple_relation_option_belongs_to(s: impl Setup) {
         user_id: Option<Id<User>>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: Option<User>,
+        user: toasty::BelongsTo<Option<User>>,
     }
 
     let db = s.setup(models!(User, Todo)).await;

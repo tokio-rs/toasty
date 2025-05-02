@@ -5,25 +5,25 @@ use std::collections::HashMap;
 use std_util::prelude::*;
 
 async fn crud_user_todos(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model(table = user_and_todos)]
+    #[derive(Debug, toasty::Model)]
+    #[table = "user_and_todos"]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model(table = user_and_todos)]
+    #[derive(Debug, toasty::Model)]
+    #[table = "user_and_todos"]
     #[key(partition = user_id, local = id)]
     struct Todo {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         #[auto]
         id: Id<Self>,
@@ -208,19 +208,19 @@ async fn crud_user_todos(s: impl Setup) {
 }
 
 async fn scoped_find_by_id(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model(table = user_and_todos)]
+    #[derive(Debug, toasty::Model)]
+    #[table = "user_and_todos"]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model(table = user_and_todos)]
+    #[derive(Debug, toasty::Model)]
+    #[table = "user_and_todos"]
     #[key(partition = user_id, local = id)]
     struct Todo {
         #[auto]
@@ -230,7 +230,7 @@ async fn scoped_find_by_id(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
