@@ -96,7 +96,7 @@ async fn main() -> toasty::Result<()> {
 
     while let Some(todo) = todos.next().await {
         let todo = todo?;
-        println!("TODO = {todo:#?}");
+        println!("TODO; title={:?}", todo.title);
         println!("-> user {:?}", todo.user().get(&db).await?);
     }
 

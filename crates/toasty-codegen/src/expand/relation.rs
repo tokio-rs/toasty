@@ -226,6 +226,12 @@ impl Expand<'_> {
         quote! {
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::One {
                 use #toasty::IntoSelect;
+
+                // Suppress the unused field warning
+                if false {
+                    let _ = &self.#field_ident;
+                }
+
                 <#ty as #toasty::Relation>::One::from_stmt(
                     <#ty as #toasty::Relation>::Model::filter(#filter).into_select()
                 )
@@ -238,10 +244,56 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
+        let model_ident = &self.model.ident;
+        let pair_ident = syn::Ident::new(&self.model.name.ident.to_string(), rel.span);
+
+        let my_msg = format!("HasMany requires the {{A}}::{} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead", pair_ident);
+        let my_label =
+            "Has many associations require the target to include a back-reference".to_string();
+
+        let pair_check = quote::quote_spanned! {rel.span=>
+            // Reference the field to generate a compiler error if it is missing.
+            #[allow(unreachable_code)]
+            if false {
+                fn load<T: #toasty::Model>() -> T {
+                    T::load(todo!()).unwrap()
+                }
+
+                #[diagnostic::on_unimplemented(
+                    message = #my_msg,
+                    label = #my_label,
+                    note = "Note 1",
+                    // note = "Note 2"
+                )]
+                trait Verify<A> {
+                }
+
+                #[diagnostic::do_not_recommend]
+                impl<A> Verify<A> for #toasty::BelongsTo<#model_ident> {
+                }
+
+                #[diagnostic::do_not_recommend]
+                impl<A> Verify<A> for #toasty::BelongsTo<Option<#model_ident>> {
+                }
+
+                fn verify<T: Verify<A>, A>(_: T) {
+                }
+
+                let instance = load::<<#ty as #toasty::Relation>::Model>();
+                verify::<_, <#ty as #toasty::Relation>::Model>(instance.#pair_ident);
+            }
+        };
 
         quote! {
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::Many {
                 use #toasty::IntoSelect;
+
+                // Suppress the unused field warning
+                if false {
+                    let _ = &self.#field_ident;
+                }
+
+                #pair_check
 
                 <#ty as #toasty::Relation>::Many::from_stmt(
                     #toasty::stmt::Association::many(self.into_select(), Self::FIELDS.#field_ident.into())
@@ -299,16 +351,11 @@ impl Expand<'_> {
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::One {
                 use #toasty::IntoSelect;
 
-                // // Reference the field to generate a compiler error if it is missing.
-                // #[allow(unreachable_code)]
-                // if false {
-                //     fn load<T: #toasty::Model>() -> T {
-                //         T::load(todo!()).unwrap()
-                //     }
+                // Suppress the unused field warning
+                if false {
+                    let _ = &self.#field_ident;
+                }
 
-                //     let instance = load::<<#ty as #toasty::Relation>::Model>();
-                //     let _: #toasty::BelongsTo<#model_ident> = instance.#pair_ident;
-                // }
                 #pair_check
 
                 <#ty as #toasty::Relation>::One::from_stmt(

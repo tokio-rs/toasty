@@ -46,14 +46,13 @@ async fn main() -> toasty::Result<()> {
     // For now, reset!s
     db.reset_db().await?;
 
-    println!("==> let user = User::create()");
     let user = User::create()
         .name("John Doe")
         .email("john@example.com")
         .exec(&db)
         .await?;
 
-    println!(" ~~~~~~~~~~~ CREATE TODOs ~~~~~~~~~~~~");
+    println!("created user; name={:?}; email={:?}", user.name, user.email);
 
     for (i, title) in ["finish toasty", "retire", "play golf"].iter().enumerate() {
         let todo = user
@@ -64,7 +63,10 @@ async fn main() -> toasty::Result<()> {
             .exec(&db)
             .await?;
 
-        println!("CREATED = {todo:#?}");
+        println!(
+            "created todo; title={:?}; order={:?}",
+            todo.title, todo.order
+        );
     }
 
     // Query a user's todos
@@ -82,8 +84,6 @@ async fn main() -> toasty::Result<()> {
         let todo = todo?;
         println!("TODO = {todo:#?}");
     }
-
-    println!(">>> DONE <<<");
 
     Ok(())
 }

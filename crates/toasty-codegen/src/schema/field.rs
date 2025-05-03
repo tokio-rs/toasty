@@ -120,7 +120,11 @@ impl Field {
                         "field has more than one relation attribute",
                     ));
                 } else {
-                    ty = Some(FieldTy::HasMany(HasMany::from_ast(ident, &field.ty)?));
+                    ty = Some(FieldTy::HasMany(HasMany::from_ast(
+                        ident,
+                        &field.ty,
+                        field.span(),
+                    )?));
                 }
             } else if attr.path().is_ident("has_one") {
                 if ty.is_some() {
