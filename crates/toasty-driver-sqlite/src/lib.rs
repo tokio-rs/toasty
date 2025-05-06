@@ -67,7 +67,7 @@ impl Driver for Sqlite {
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let connection = self.connection.lock().unwrap();
 
-        let mut sql: sql::Statement = match op {
+        let sql: sql::Statement = match op {
             Operation::QuerySql(op) => op.stmt.into(),
             Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(Transaction::Start) => {
@@ -83,27 +83,6 @@ impl Driver for Sqlite {
                 return Ok(Response::from_count(0));
             }
             _ => todo!(),
-        };
-
-        // SQL doesn't handle pre-condition. This should be moved into toasty's planner.
-        let pre_condition = match &mut sql {
-            sql::Statement::Update(update) => {
-                if let Some(condition) = update.condition.take() {
-                    update.filter = Some(match update.filter.take() {
-                        Some(filter) => stmt::Expr::and(filter, condition),
-                        None => condition,
-                    });
-
-                    assert!(update.returning.is_none());
-
-                    update.returning = Some(stmt::Returning::Expr(stmt::Expr::record([true])));
-
-                    true
-                } else {
-                    false
-                }
-            }
-            _ => false,
         };
 
         let mut params = vec![];
@@ -166,17 +145,6 @@ impl Driver for Sqlite {
                 Err(err) => {
                     return Err(err.into());
                 }
-            }
-        }
-
-        // Some special handling
-        if sql.is_update() && pre_condition {
-            if ret.is_empty() {
-                // Just assume the precondition failed here... we will
-                // need to make this transactional later.
-                anyhow::bail!("pre condition failed");
-            } else {
-                return Ok(Response::from_count(ret.len() as _));
             }
         }
 
