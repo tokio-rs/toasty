@@ -33,6 +33,18 @@ impl Expr {
             .into(),
         }
     }
+
+    pub fn and_from_vec(operands: Vec<Self>) -> Self {
+        if operands.is_empty() {
+            return true.into();
+        }
+
+        if operands.len() == 1 {
+            return operands.into_iter().next().unwrap();
+        }
+
+        ExprAnd { operands }.into()
+    }
 }
 
 impl ops::Deref for ExprAnd {

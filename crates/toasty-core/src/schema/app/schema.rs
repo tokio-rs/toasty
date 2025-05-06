@@ -6,13 +6,11 @@ use indexmap::IndexMap;
 #[derive(Debug, Default)]
 pub struct Schema {
     pub models: IndexMap<ModelId, Model>,
-    pub queries: Vec<Query>,
 }
 
 #[derive(Default)]
 struct Builder {
     models: IndexMap<ModelId, Model>,
-    queries: Vec<Query>,
 }
 
 impl Schema {
@@ -36,11 +34,6 @@ impl Schema {
     pub fn model(&self, id: impl Into<ModelId>) -> &Model {
         self.models.get(&id.into()).expect("invalid model ID")
     }
-
-    pub fn query(&self, id: impl Into<QueryId>) -> &Query {
-        let id = id.into();
-        &self.queries[id.0]
-    }
 }
 
 impl Builder {
@@ -58,7 +51,6 @@ impl Builder {
     fn into_schema(self) -> Result<Schema> {
         Ok(Schema {
             models: self.models,
-            queries: self.queries,
         })
     }
 
@@ -66,12 +58,6 @@ impl Builder {
         // All models have been discovered and initialized at some level, now do
         // the relation linking.
         self.link_relations()?;
-
-        // Build default queries (e.g. find_by_[index])
-        self.build_queries()?;
-
-        // Build queries on relationships
-        self.build_relation_queries()?;
 
         Ok(())
     }
@@ -171,125 +157,6 @@ impl Builder {
                     .ty
                     .expect_belongs_to_mut()
                     .pair = pair;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn build_queries(&mut self) -> Result<()> {
-        for model in self.models.values_mut() {
-            for index in &model.indices {
-                let mut fields = index.partition_fields().to_vec();
-                let mut local_fields = index.local_fields().to_vec();
-
-                loop {
-                    if index.primary_key && local_fields.is_empty() {
-                        model.primary_key.query = QueryId(self.queries.len());
-                    }
-
-                    let by_fk = vec![false];
-
-                    // Generate a query that takes BelongsTo arguments by reference
-                    // and one by foreign key.
-                    for by_fk in by_fk {
-                        let id = QueryId(self.queries.len());
-                        let mut builder = Query::find_by(id, model, by_fk);
-
-                        for index_field in &fields {
-                            builder.field(model.field(index_field.field).id());
-                        }
-
-                        /*
-                        assert!(self
-                            .find_by_queries
-                            .insert(builder.args.clone(), id)
-                            .is_none());
-                        */
-
-                        self.queries.push(builder.build());
-                        model.queries.push(id);
-
-                        // If this is a unique index, create a query that takes
-                        // a batch of keys.
-                        if index.unique && local_fields.is_empty() {
-                            let id = QueryId(self.queries.len());
-                            // TODO: do we need to generate multiple versions `by_fk`
-                            // like above.
-                            let mut builder = Query::find_by(id, model, by_fk);
-                            builder.many();
-
-                            for index_field in &index.fields {
-                                builder.field(model.field(index_field.field).id());
-                            }
-
-                            self.queries.push(builder.build());
-                            model.queries.push(id);
-                        }
-                    }
-
-                    if local_fields.is_empty() {
-                        break;
-                    }
-
-                    fields.push(local_fields.remove(0));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn build_relation_queries(&mut self) -> Result<()> {
-        for curr in 0..self.models.len() {
-            for field_id in 0..self.models[curr].fields.len() {
-                let model = &self.models[curr];
-
-                // If this is a `HasMany`, get the target & field pair
-                let Some(rel) = model.fields[field_id].ty.as_has_many() else {
-                    continue;
-                };
-                let pair = self.models[&rel.pair.model].fields[rel.pair.index]
-                    .ty
-                    .expect_belongs_to();
-
-                let target = &self.models[&rel.target];
-                let query_id = QueryId(self.queries.len());
-
-                let mut builder = Query::find_by(query_id, target, false);
-                builder.scope(rel.pair);
-
-                let mut fields: Vec<_> = target.primary_key_fields().collect();
-                assert!(!fields.is_empty());
-
-                for fk_field in &pair.foreign_key.fields[..] {
-                    if fields[0].id != fk_field.source {
-                        break;
-                    }
-
-                    fields.remove(0);
-                }
-
-                if fields.is_empty() {
-                    todo!()
-                }
-
-                // Add all the target's primary key fields
-                for field in fields {
-                    // Assert the field is not part of the scope
-                    builder.field(field.id());
-                }
-
-                let query = builder.build();
-                let scoped_query = ScopedQuery::new(&query);
-
-                self.models[curr].fields[field_id]
-                    .ty
-                    .expect_has_many_mut()
-                    .queries
-                    .push(scoped_query);
-
-                self.queries.push(query);
             }
         }
 
