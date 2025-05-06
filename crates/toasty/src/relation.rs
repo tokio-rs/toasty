@@ -14,23 +14,6 @@ use super::Model;
 use toasty_core::schema::app::FieldId;
 
 pub trait Relation {
-    /// Query type
-    type Query;
-
-    /// HasMany relation type
-    type Many;
-
-    type ManyField;
-
-    type One;
-
-    type OneField;
-
-    /// Option fields
-    type OptionOne;
-}
-
-pub trait Relation2 {
     /// The target model
     type Model: Model;
 

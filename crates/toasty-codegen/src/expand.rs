@@ -50,7 +50,7 @@ impl Expand<'_> {
 }
 
 pub(super) fn model(model: &Model) -> TokenStream {
-    let toasty = quote!(_toasty::codegen_support2);
+    let toasty = quote!(_toasty::codegen_support);
     let tokenized_id = util::int(model.id);
 
     Expand {
