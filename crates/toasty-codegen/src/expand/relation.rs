@@ -217,11 +217,25 @@ impl Expand<'_> {
             }
         });
 
+        let suppress_unused_field_warnings = rel.foreign_key.iter().map(|fk_field| {
+            let source = &self.model.fields[fk_field.source];
+            let source_field_ident = &source.name.ident;
+
+            quote! {
+                let _ = &self.#source_field_ident;
+            }
+        });
+
         let filter = if rel.foreign_key.len() == 1 {
             quote!( #( #operands )* )
         } else {
             quote!( stmt::Expr::and_all([ #(#operands),* ]) )
         };
+
+        let verify_pair_belongs_to_exists = syn::Ident::new(
+            &format!("verify_pair_belongs_to_exists_for_{}", field_ident),
+            field_ident.span(),
+        );
 
         quote! {
             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::One {
@@ -236,6 +250,13 @@ impl Expand<'_> {
                     <#ty as #toasty::Relation>::Model::filter(#filter).into_select()
                 )
             }
+
+            #[doc(hidden)]
+            #vis fn #verify_pair_belongs_to_exists(&self) {
+                #(
+                    #suppress_unused_field_warnings
+                )*
+            }
         }
     }
 
@@ -249,6 +270,11 @@ impl Expand<'_> {
             &self.model.name.ident.to_string(),
             rel.span,
         ));
+
+        let verify_pair_belongs_to_exists_for_field = syn::Ident::new(
+            &format!("verify_pair_belongs_to_exists_for_{}", pair_ident),
+            field_ident.span(),
+        );
 
         let my_msg = format!("HasMany requires the {{A}}::{} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead", pair_ident);
         let my_label =
@@ -279,11 +305,12 @@ impl Expand<'_> {
                 impl<A> Verify<A> for #toasty::BelongsTo<Option<#model_ident>> {
                 }
 
-                fn verify<T: Verify<A>, A>(_: T) {
+                fn verify<T: Verify<A>, A>(_: &T) {
                 }
 
                 let instance = load::<<#ty as #toasty::Relation>::Model>();
-                verify::<_, <#ty as #toasty::Relation>::Model>(instance.#pair_ident);
+                verify::<_, <#ty as #toasty::Relation>::Model>(&instance.#pair_ident);
+                instance.#verify_pair_belongs_to_exists_for_field();
             }
         };
 
