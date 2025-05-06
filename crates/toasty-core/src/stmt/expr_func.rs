@@ -1,6 +1,6 @@
 use super::{Expr, FuncCount};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum ExprFunc {
     /// count(*)
     Count(FuncCount),

@@ -1,11 +1,11 @@
 use super::{Field, FieldId, Schema};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct ForeignKey {
     pub fields: Vec<ForeignKeyField>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct ForeignKeyField {
     /// The field on the source model that is acting as the foreign key
     pub source: FieldId,

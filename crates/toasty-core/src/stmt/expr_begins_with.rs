@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ExprBeginsWith {
     pub expr: Box<Expr>,
     pub pattern: Box<Expr>,

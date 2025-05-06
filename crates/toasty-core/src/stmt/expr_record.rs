@@ -2,7 +2,7 @@ use super::*;
 
 use std::{fmt, ops};
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Default)]
 pub struct ExprRecord {
     pub fields: Vec<Expr>,
 }

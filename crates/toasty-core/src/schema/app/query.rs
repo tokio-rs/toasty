@@ -3,7 +3,7 @@ use super::*;
 /// Prepared query
 ///
 /// For paths, `self` is 0, arguments come after that.
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Query {
     /// Uniquely identifies a query
     pub id: QueryId,

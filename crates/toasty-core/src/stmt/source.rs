@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Source {
     /// Source is a model
     Model(SourceModel),
@@ -9,7 +9,7 @@ pub enum Source {
     Table(Vec<TableWithJoins>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct SourceModel {
     /// The source model
     pub model: ModelId,

@@ -3,7 +3,7 @@ pub use length::ConstraintLength;
 
 use crate::{stmt, Result};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Constraint {
     Length(ConstraintLength),
 }

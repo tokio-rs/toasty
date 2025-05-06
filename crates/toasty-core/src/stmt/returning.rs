@@ -1,7 +1,7 @@
 use super::*;
 
 /// TODO: rename since this is also used in `Select`?
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Returning {
     // TODO: rename this `Model` as it returns the full model?
     Star,

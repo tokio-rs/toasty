@@ -2,7 +2,7 @@ use super::*;
 
 use std::ops;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ExprConcat {
     pub exprs: Vec<Expr>,
 }
