@@ -7,7 +7,7 @@ async fn different_field_name(s: impl Setup) {
         #[auto]
         id: toasty::stmt::Id<Self>,
 
-        #[has_many]
+        #[has_many(pair = owner)]
         todos: toasty::HasMany<Todo>,
     }
 
@@ -39,6 +39,8 @@ async fn different_field_name(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
+
+    assert_eq!(todo.title, "hello world");
 
     // Load the user
     let user_reloaded = todo.owner().get(&db).await.unwrap();

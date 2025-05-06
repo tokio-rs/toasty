@@ -245,7 +245,10 @@ impl Expand<'_> {
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
         let model_ident = &self.model.ident;
-        let pair_ident = syn::Ident::new(&self.model.name.ident.to_string(), rel.span);
+        let pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
+            &self.model.name.ident.to_string(),
+            rel.span,
+        ));
 
         let my_msg = format!("HasMany requires the {{A}}::{} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead", pair_ident);
         let my_label =

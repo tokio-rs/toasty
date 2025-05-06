@@ -121,6 +121,7 @@ impl Field {
                     ));
                 } else {
                     ty = Some(FieldTy::HasMany(HasMany::from_ast(
+                        attr,
                         ident,
                         &field.ty,
                         field.span(),
