@@ -1,4 +1,4 @@
-use crate::Model;
+use crate::{relation::Relation2, Model};
 
 use toasty_core::stmt::Value;
 
@@ -37,6 +37,25 @@ impl<T: Model> HasMany<T> {
             .as_ref()
             .expect("association not loaded")
             .as_slice()
+    }
+}
+
+impl<T: Relation2> Relation2 for HasMany<T> {
+    type Model = T::Model;
+    type Expr = T::Expr;
+    type Query = T::Query;
+    type Many = T::Many;
+    type ManyField = T::ManyField;
+    type One = T::One;
+    type OneField = T::OneField;
+    type OptionOne = T::OptionOne;
+
+    fn field_name_to_id(name: &str) -> toasty_core::schema::app::FieldId {
+        T::field_name_to_id(name)
+    }
+
+    fn nullable() -> bool {
+        T::nullable()
     }
 }
 

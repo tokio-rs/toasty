@@ -6,33 +6,52 @@ pub(crate) struct ModelAttr {
     pub(crate) key: Option<KeyAttr>,
 
     /// Optional database table name to map the model to
-    pub(crate) table: Option<syn::Ident>,
+    pub(crate) table: Option<syn::LitStr>,
 }
 
 impl ModelAttr {
     pub(super) fn populate_from_ast(
         &mut self,
-        attrs: &mut Vec<syn::Attribute>,
+        attrs: &Vec<syn::Attribute>,
         names: &[syn::Ident],
     ) -> syn::Result<()> {
         let mut errs = ErrorSet::new();
 
-        let mut i = 0;
-        while i < attrs.len() {
-            let attr = &attrs[i];
-
+        for attr in attrs {
             if attr.path().is_ident("key") {
                 if self.key.is_some() {
                     errs.push(syn::Error::new_spanned(attr, "duplicate #[key] attribute"));
                 } else {
                     self.key = Some(KeyAttr::from_ast(attr, names)?);
                 }
-            } else {
-                i += 1;
-                continue;
-            }
+            } else if attr.path().is_ident("table") {
+                if self.table.is_some() {
+                    return Err(syn::Error::new_spanned(attr, "duplicate `table` attribute"));
+                }
 
-            attrs.remove(i);
+                let syn::Meta::NameValue(meta) = &attr.meta else {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "expected `table = \"table_name\"`",
+                    ));
+                };
+
+                let syn::Expr::Lit(lit) = &meta.value else {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "expected `table = \"table_name\"`",
+                    ));
+                };
+
+                let syn::Lit::Str(lit) = &lit.lit else {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "expected `table = \"table_name\"`",
+                    ));
+                };
+
+                self.table = Some(lit.clone());
+            }
         }
 
         Ok(())

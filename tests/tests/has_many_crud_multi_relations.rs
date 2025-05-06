@@ -4,8 +4,7 @@ use std::collections::HashMap;
 use toasty::stmt::Id;
 
 async fn crud_user_todos_categories(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -14,11 +13,10 @@ async fn crud_user_todos_categories(s: impl Setup) {
         name: String,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -28,19 +26,18 @@ async fn crud_user_todos_categories(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         #[index]
         category_id: Id<Category>,
 
         #[belongs_to(key = category_id, references = id)]
-        category: Category,
+        category: toasty::BelongsTo<Category>,
 
         title: String,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Category {
         #[key]
         #[auto]
@@ -49,7 +46,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         name: String,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
     let db = s.setup(models!(User, Todo, Category)).await;
@@ -129,6 +126,9 @@ async fn crud_user_todos_categories(s: impl Setup) {
 
         for (id, actual) in actual {
             assert_eq!(expect[&id].title, actual.title);
+
+            let user = actual.user().get(&db).await.unwrap();
+            assert_eq!(user.name, "Ann Chovey");
         }
     }
 
@@ -152,7 +152,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         .await
         .unwrap();
 
-    fn check_todo_list(expect: &HashMap<Id<Todo>, Todo>, list: Vec<Todo>) {
+    async fn check_todo_list(db: &toasty::Db, expect: &HashMap<Id<Todo>, Todo>, list: Vec<Todo>) {
         assert_eq!(3, list.len(), "list={list:#?}");
 
         let actual: HashMap<_, _> = list
@@ -164,10 +164,13 @@ async fn crud_user_todos_categories(s: impl Setup) {
 
         for (id, actual) in actual {
             assert_eq!(expect[&id].title, actual.title);
+            let category = actual.category().get(&db).await.unwrap();
+            assert_eq!(category.name, "Food");
         }
     }
 
     check_todo_list(
+        &db,
         &expect,
         category
             .todos()
@@ -175,25 +178,30 @@ async fn crud_user_todos_categories(s: impl Setup) {
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
-    );
+    )
+    .await;
 
     check_todo_list(
+        &db,
         &expect,
         user.todos()
             .query(Todo::FIELDS.category.eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
-    );
+    )
+    .await;
 
     check_todo_list(
+        &db,
         &expect,
         Todo::filter_by_user_id(&user.id)
             .filter(Todo::FIELDS.category.eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
-    );
+    )
+    .await;
 }
 
 tests!(crud_user_todos_categories,);

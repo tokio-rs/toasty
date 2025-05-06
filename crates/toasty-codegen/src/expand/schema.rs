@@ -237,7 +237,7 @@ impl Expand<'_> {
 
     fn expand_table_name(&self) -> TokenStream {
         if let Some(table_name) = &self.model.table {
-            let table_name = table_name.to_string();
+            let table_name = table_name.value();
             quote! { Some(#table_name.to_string()) }
         } else {
             quote! { None }

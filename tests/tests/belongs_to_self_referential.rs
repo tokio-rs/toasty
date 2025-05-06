@@ -1,11 +1,10 @@
 use tests::*;
 use toasty::stmt::Id;
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 async fn crud_person_self_referential(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Person {
         #[key]
         #[auto]
@@ -17,10 +16,10 @@ async fn crud_person_self_referential(s: impl Setup) {
         parent_id: Option<Id<Person>>,
 
         #[belongs_to(key = parent_id, references = id)]
-        parent: Option<Person>,
+        parent: toasty::BelongsTo<Option<Person>>,
 
-        #[has_many]
-        children: [Person],
+        #[has_many(pair = parent)]
+        children: toasty::HasMany<Person>,
     }
 
     let db = s.setup(models!(Person)).await;
@@ -52,11 +51,17 @@ async fn crud_person_self_referential(s: impl Setup) {
     let assert = |children: &[Person]| {
         assert_eq!(children.len(), 2);
 
-        let ids: HashSet<_> = children.iter().map(|p| p.id.clone()).collect();
-        assert_eq!(ids.len(), 2);
+        let children: HashMap<_, _> = children.iter().map(|p| (p.id.clone(), p)).collect();
+        assert_eq!(children.len(), 2);
 
-        for id in &ids {
-            assert!(id == &p2.id || id == &p3.id);
+        for (id, child) in &children {
+            if id == &p2.id {
+                assert_eq!(child.name, "person 2");
+            } else if id == &p3.id {
+                assert_eq!(child.name, "person 3");
+            } else {
+                panic!("Unexpected child ID: {}", id);
+            }
         }
     };
 

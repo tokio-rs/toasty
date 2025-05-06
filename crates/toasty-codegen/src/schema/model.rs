@@ -1,7 +1,5 @@
 use super::{ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey};
 
-use proc_macro2::TokenStream;
-
 #[derive(Debug)]
 pub(crate) struct Model {
     /// Generated model identifier
@@ -41,12 +39,12 @@ pub(crate) struct Model {
     pub(crate) update_query_struct_ident: syn::Ident,
 
     /// Optional table to map the model to
-    pub(crate) table: Option<syn::Ident>,
+    pub(crate) table: Option<syn::LitStr>,
 }
 
 impl Model {
-    pub(crate) fn from_ast(ast: &mut syn::ItemStruct, args: TokenStream) -> syn::Result<Self> {
-        let syn::Fields::Named(node) = &mut ast.fields else {
+    pub(crate) fn from_ast(ast: &syn::ItemStruct) -> syn::Result<Self> {
+        let syn::Fields::Named(node) = &ast.fields else {
             return Err(syn::Error::new_spanned(
                 &ast.fields,
                 "model fields must be named",
@@ -78,33 +76,11 @@ impl Model {
         let mut pk_index_fields = vec![];
         let mut errs = ErrorSet::new();
 
-        // If macro arguments are provided, parse them
-        let arg_parser = syn::meta::parser(|meta| {
-            if meta.path.is_ident("table") {
-                if model_attr.table.is_some() {
-                    return Err(syn::Error::new_spanned(
-                        meta.path,
-                        "duplicate `table` attribute",
-                    ));
-                }
-
-                let value = meta.value()?;
-                model_attr.table = Some(value.parse()?);
-            } else {
-                return Err(syn::Error::new_spanned(meta.path, "unknown attribute"));
-            }
-
-            Ok(())
-        });
-        if let Err(err) = syn::parse::Parser::parse2(arg_parser, args) {
+        if let Err(err) = model_attr.populate_from_ast(&ast.attrs, &names) {
             errs.push(err);
         }
 
-        if let Err(err) = model_attr.populate_from_ast(&mut ast.attrs, &names) {
-            errs.push(err);
-        }
-
-        for (index, node) in node.named.iter_mut().enumerate() {
+        for (index, node) in node.named.iter().enumerate() {
             match Field::from_ast(node, &ast.ident, index, &names) {
                 Ok(field) => {
                     if model_attr.key.is_some() {
@@ -156,7 +132,7 @@ impl Model {
         // Return an error if no primary key fields were found
         if pk_index_fields.is_empty() {
             return Err(syn::Error::new_spanned(
-                &ast,
+                ast,
                 "model must either have a struct-level `#[key]` attribute or at least one field-level `#[key]` attribute",
             ));
         }

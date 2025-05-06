@@ -1,26 +1,24 @@
 use tests::*;
 
 async fn different_field_name(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: toasty::stmt::Id<Self>,
 
-        #[has_many]
-        todos: [Todo],
+        #[has_many(pair = owner)]
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
         id: toasty::stmt::Id<Self>,
 
         #[belongs_to(key = owner_id, references = id)]
-        owner: User,
+        owner: toasty::BelongsTo<User>,
 
         #[index]
         owner_id: toasty::stmt::Id<User>,
@@ -41,6 +39,8 @@ async fn different_field_name(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
+
+    assert_eq!(todo.title, "hello world");
 
     // Load the user
     let user_reloaded = todo.owner().get(&db).await.unwrap();

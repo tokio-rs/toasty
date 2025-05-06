@@ -21,7 +21,6 @@ members = [
     "examples/hello-toasty",
     "examples/cratehub",
     "examples/user-has-one-profile",
-    "examples/scratch",
 
     # Tests
     "tests",

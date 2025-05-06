@@ -2,8 +2,7 @@ use tests::*;
 use toasty::stmt::Id;
 
 async fn string_to_id_expr(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
         #[auto]

@@ -1,8 +1,7 @@
 use tests::*;
 
 async fn batch_get_by_key(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
         one: String,

@@ -3,8 +3,7 @@ use tests::*;
 use toasty::stmt::Id;
 
 async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -13,11 +12,10 @@ async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
         name: String,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -27,7 +25,7 @@ async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
     }
@@ -42,6 +40,8 @@ async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
         .await
         .unwrap();
 
+    assert_eq!(user.name, "Ann Chovey");
+
     // There are associated TODOs
     let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
     assert_eq!(1, todos.len());
@@ -53,8 +53,7 @@ async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
 }
 
 async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -63,11 +62,10 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
         name: String,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -77,19 +75,18 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         #[index]
         category_id: Id<Category>,
 
         #[belongs_to(key = category_id, references = id)]
-        category: Category,
+        category: toasty::BelongsTo<Category>,
 
         title: String,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Category {
         #[key]
         #[auto]
@@ -98,7 +95,7 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
         name: String,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
     let db = s.setup(models!(User, Todo, Category)).await;
@@ -114,6 +111,7 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
+    assert_eq!(user.name, "Ann Chovey");
 
     // There are associated TODOs
     let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
@@ -162,11 +160,13 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
         categories.iter().map(|category| &category.name[..]),
         ["things", "other things"]
     );
+
+    let todos: Vec<_> = category.todos().collect(&db).await.unwrap();
+    assert_eq!(1, todos.len());
 }
 
 async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -175,11 +175,10 @@ async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
         name: String,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -189,19 +188,18 @@ async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         #[index]
         category_id: Id<Category>,
 
         #[belongs_to(key = category_id, references = id)]
-        category: Category,
+        category: toasty::BelongsTo<Category>,
 
         title: String,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Category {
         #[key]
         #[auto]
@@ -210,12 +208,13 @@ async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
         name: String,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
     let db = s.setup(models!(User, Todo, Category)).await;
 
     let category = Category::create().name("Eating").exec(&db).await.unwrap();
+    assert_eq!(category.name, "Eating");
 
     let user = User::create()
         .name("John Doe")
@@ -224,6 +223,8 @@ async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
+
+    assert_eq!(user.name, "John Doe");
 
     // There are associated TODOs
     let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
@@ -235,6 +236,12 @@ async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
     for todo in &todos {
         assert_eq!(todo.category_id, category.id);
     }
+
+    let todos: Vec<_> = category.todos().collect(&db).await.unwrap();
+    assert_eq_unordered!(
+        todos.iter().map(|todo| &todo.title[..]),
+        ["Pizza", "Hamburger"]
+    );
 }
 
 async fn user_batch_create_todos_set_category_by_query(_s: impl Setup) {}

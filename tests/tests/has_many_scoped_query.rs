@@ -4,19 +4,17 @@ use toasty::stmt::Id;
 use std::collections::HashSet;
 
 async fn scoped_query_eq(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     #[key(partition = user_id, local = id)]
     struct Todo {
         #[auto]
@@ -25,7 +23,7 @@ async fn scoped_query_eq(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
 
@@ -81,6 +79,8 @@ async fn scoped_query_eq(s: impl Setup) {
 
     assert_eq!(1, todos.len());
     assert_eq!(todos[0].id, u1_todo_ids[0]);
+    assert_eq!(todos[0].order, 0);
+    assert_eq!(todos[0].title, "write more tests");
 
     // Querying todos scoped by user 2
     let todos = u2
@@ -141,19 +141,17 @@ async fn scoped_query_eq(s: impl Setup) {
 }
 
 async fn scoped_query_gt(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     #[key(partition = user_id, local = id)]
     struct Todo {
         #[auto]
@@ -162,7 +160,7 @@ async fn scoped_query_gt(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
 
         title: String,
 
@@ -197,6 +195,10 @@ async fn scoped_query_gt(s: impl Setup) {
         todos.iter().map(|todo| &todo.title[..]),
         ["First", "Second", "Fourth", "Fifth"]
     );
+
+    for todo in &todos {
+        assert_ne!(todo.order, 2);
+    }
 
     // Find all greater than 2
     let todos: Vec<_> = user

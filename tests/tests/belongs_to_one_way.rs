@@ -3,8 +3,7 @@ use tests::*;
 use toasty::stmt::Id;
 
 async fn crud_user_optional_profile_one_direction(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -14,11 +13,10 @@ async fn crud_user_optional_profile_one_direction(s: impl Setup) {
         profile_id: Option<Id<Profile>>,
 
         #[belongs_to(key = profile_id, references = id)]
-        profile: Option<Profile>,
+        profile: toasty::BelongsTo<Option<Profile>>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]

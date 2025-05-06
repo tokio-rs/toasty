@@ -75,6 +75,7 @@ impl Expand<'_> {
 
     fn expand_create_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
 
         self.model
             .fields
@@ -89,7 +90,13 @@ impl Expand<'_> {
                         let ty = &rel.ty;
 
                         quote! {
-                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {
+                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
+                                // Silences unused field warning when the field is set on creation.
+                                if false {
+                                    let m = <#model_ident as #toasty::Model>::load(Default::default()).unwrap();
+                                    let _ = &m.#name;
+                                }
+
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }
@@ -100,7 +107,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
 
                         quote! {
-                            pub fn #singular(mut self, #singular: impl #toasty::IntoExpr<#ty>) -> Self {
+                            pub fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 self.stmt.insert(#index, #singular.into_expr());
                                 self
                             }
@@ -110,7 +117,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
 
                         quote! {
-                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {
+                            pub fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }

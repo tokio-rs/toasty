@@ -2,19 +2,17 @@ use tests::*;
 use toasty::stmt::Id;
 
 async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
         id: Id<Self>,
 
         #[has_many]
-        todos: [Todo],
+        todos: toasty::HasMany<Todo>,
     }
 
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
         #[auto]
@@ -24,7 +22,7 @@ async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: User,
+        user: toasty::BelongsTo<User>,
     }
 
     let db = s.setup(models!(User, Todo)).await;

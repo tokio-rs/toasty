@@ -1,7 +1,6 @@
 use toasty::stmt::Id;
 
-#[derive(Debug)]
-#[toasty::model]
+#[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
@@ -13,11 +12,10 @@ struct User {
     email: String,
 
     #[has_many]
-    todos: [Todo],
+    todos: toasty::HasMany<Todo>,
 }
 
-#[derive(Debug)]
-#[toasty::model]
+#[derive(Debug, toasty::Model)]
 #[key(partition = user_id, local = id)]
 struct Todo {
     #[auto]
@@ -28,7 +26,7 @@ struct Todo {
     order: i64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: User,
+    user: toasty::BelongsTo<User>,
 
     user_id: Id<User>,
 }
@@ -48,14 +46,13 @@ async fn main() -> toasty::Result<()> {
     // For now, reset!s
     db.reset_db().await?;
 
-    println!("==> let user = User::create()");
     let user = User::create()
         .name("John Doe")
         .email("john@example.com")
         .exec(&db)
         .await?;
 
-    println!(" ~~~~~~~~~~~ CREATE TODOs ~~~~~~~~~~~~");
+    println!("created user; name={:?}; email={:?}", user.name, user.email);
 
     for (i, title) in ["finish toasty", "retire", "play golf"].iter().enumerate() {
         let todo = user
@@ -66,7 +63,10 @@ async fn main() -> toasty::Result<()> {
             .exec(&db)
             .await?;
 
-        println!("CREATED = {todo:#?}");
+        println!(
+            "created todo; title={:?}; order={:?}",
+            todo.title, todo.order
+        );
     }
 
     // Query a user's todos
@@ -84,8 +84,6 @@ async fn main() -> toasty::Result<()> {
         let todo = todo?;
         println!("TODO = {todo:#?}");
     }
-
-    println!(">>> DONE <<<");
 
     Ok(())
 }

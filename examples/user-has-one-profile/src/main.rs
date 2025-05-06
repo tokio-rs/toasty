@@ -1,7 +1,6 @@
 use toasty::stmt::Id;
 
-#[derive(Debug)]
-#[toasty::model]
+#[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
@@ -10,18 +9,17 @@ struct User {
     name: String,
 
     #[has_one]
-    profile: Option<Profile>,
+    profile: toasty::HasOne<Option<Profile>>,
 }
 
-#[derive(Debug)]
-#[toasty::model]
+#[derive(Debug, toasty::Model)]
 struct Profile {
     #[key]
     #[auto]
     id: Id<Self>,
 
     #[belongs_to(key = user_id, references = id)]
-    user: Option<User>,
+    user: toasty::BelongsTo<Option<User>>,
 
     #[unique]
     user_id: Option<Id<User>>,
@@ -45,7 +43,7 @@ async fn main() -> toasty::Result<()> {
     // Create a user without a profile
     let user = User::create().name("John Doe").exec(&db).await?;
 
-    println!("user = {user:#?}");
+    println!("created user; name={:?}", user.name);
 
     if let Some(profile) = user.profile().get(&db).await? {
         println!("profile: {:#?}", profile);

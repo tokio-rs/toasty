@@ -1,8 +1,7 @@
 use tests::*;
 use toasty::stmt::Id;
 
-#[derive(Debug)]
-#[toasty::model]
+#[derive(Debug, toasty::Model)]
 struct Todo {
     #[key]
     #[auto]
@@ -60,8 +59,7 @@ async fn batch_create_many(s: impl Setup) {
 
 // TODO: is a batch supposed to be atomic? Probably not.
 async fn batch_create_fails_if_any_record_missing_fields(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         email: String,
@@ -90,8 +88,7 @@ async fn batch_create_fails_if_any_record_missing_fields(s: impl Setup) {
 }
 
 async fn batch_create_model_with_unique_field_index_all_unique(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
@@ -130,8 +127,7 @@ async fn batch_create_model_with_unique_field_index_all_unique(s: impl Setup) {
 }
 
 async fn batch_create_model_with_unique_field_index_all_dups(s: impl Setup) {
-    #[derive(Debug)]
-    #[toasty::model]
+    #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
