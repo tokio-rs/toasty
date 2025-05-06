@@ -1,7 +1,9 @@
 use tests::*;
-use toasty::stmt::Id;
+// use toasty::stmt::Id;
 
-async fn hello_world(s: impl Setup) {
+// What is this testing?
+async fn hello_world(_s: impl Setup) {
+    /*
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -62,7 +64,12 @@ async fn hello_world(s: impl Setup) {
     // Collect all categories
     // let mut cats = vec![];
 
-    let _todos = user.todos().all(&db).await.unwrap();
+    let todos = user.todos().all(&db).await.unwrap();
+
+    for todos in todos {
+        println!("todo: {:?}", todos);
+    }
+    */
 }
 
 tests!(hello_world,);

@@ -79,6 +79,8 @@ async fn scoped_query_eq(s: impl Setup) {
 
     assert_eq!(1, todos.len());
     assert_eq!(todos[0].id, u1_todo_ids[0]);
+    assert_eq!(todos[0].order, 0);
+    assert_eq!(todos[0].title, "write more tests");
 
     // Querying todos scoped by user 2
     let todos = u2
@@ -193,6 +195,10 @@ async fn scoped_query_gt(s: impl Setup) {
         todos.iter().map(|todo| &todo.title[..]),
         ["First", "Second", "Fourth", "Fifth"]
     );
+
+    for todo in &todos {
+        assert_ne!(todo.order, 2);
+    }
 
     // Find all greater than 2
     let todos: Vec<_> = user
