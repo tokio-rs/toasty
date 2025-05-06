@@ -608,6 +608,7 @@ async fn belongs_to_required(s: impl Setup) {
         id: Id<Self>,
 
         #[has_many]
+        #[allow(dead_code)]
         todos: toasty::HasMany<Todo>,
     }
 
@@ -618,21 +619,17 @@ async fn belongs_to_required(s: impl Setup) {
         id: Id<Self>,
 
         #[index]
+        #[allow(dead_code)]
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
+        #[allow(dead_code)]
         user: toasty::BelongsTo<User>,
-
-        title: String,
     }
 
     let db = s.setup(models!(User, Todo)).await;
 
-    Todo::create()
-        .title("missing user")
-        .exec(&db)
-        .await
-        .unwrap();
+    Todo::create().exec(&db).await.unwrap();
 }
 
 async fn delete_when_belongs_to_optional(s: impl Setup) {
@@ -657,8 +654,6 @@ async fn delete_when_belongs_to_optional(s: impl Setup) {
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
-
-        title: String,
     }
 
     let db = s.setup(models!(User, Todo)).await;
@@ -666,14 +661,8 @@ async fn delete_when_belongs_to_optional(s: impl Setup) {
     let user = User::create().exec(&db).await.unwrap();
     let mut ids = vec![];
 
-    for i in 0..3 {
-        let todo = user
-            .todos()
-            .create()
-            .title(format!("todo {i}"))
-            .exec(&db)
-            .await
-            .unwrap();
+    for _ in 0..3 {
+        let todo = user.todos().create().exec(&db).await.unwrap();
         ids.push(todo.id);
     }
 
@@ -754,18 +743,12 @@ async fn associate_new_user_with_todo_on_update_query_via_creation(s: impl Setup
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
-
-        title: String,
     }
 
     let db = s.setup(models!(User, Todo)).await;
 
     // Create a user with a todo
-    let u1 = User::create()
-        .todo(Todo::create().title("hello world"))
-        .exec(&db)
-        .await
-        .unwrap();
+    let u1 = User::create().todo(Todo::create()).exec(&db).await.unwrap();
 
     // Get the todo
     let todos: Vec<_> = u1.todos().collect(&db).await.unwrap();
@@ -802,8 +785,6 @@ async fn update_user_with_null_todo_is_err(s: impl Setup) {
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
-
-        title: String,
     }
 
     use toasty::stmt::{self, IntoExpr};
@@ -811,11 +792,7 @@ async fn update_user_with_null_todo_is_err(s: impl Setup) {
     let db = s.setup(models!(User, Todo)).await;
 
     // Create a user with a todo
-    let u1 = User::create()
-        .todo(Todo::create().title("hello world"))
-        .exec(&db)
-        .await
-        .unwrap();
+    let u1 = User::create().todo(Todo::create()).exec(&db).await.unwrap();
 
     // Get the todo
     let todos: Vec<_> = u1.todos().collect(&db).await.unwrap();
@@ -855,18 +832,11 @@ async fn assign_todo_that_already_has_user_on_create(s: impl Setup) {
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
-
-        title: String,
     }
 
     let db = s.setup(models!(User, Todo)).await;
 
-    let todo = Todo::create()
-        .title("hello")
-        .user(User::create())
-        .exec(&db)
-        .await
-        .unwrap();
+    let todo = Todo::create().user(User::create()).exec(&db).await.unwrap();
 
     let u1 = todo.user().get(&db).await.unwrap();
 
@@ -908,18 +878,11 @@ async fn assign_todo_that_already_has_user_on_update(s: impl Setup) {
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
-
-        title: String,
     }
 
     let db = s.setup(models!(User, Todo)).await;
 
-    let todo = Todo::create()
-        .title("hello")
-        .user(User::create())
-        .exec(&db)
-        .await
-        .unwrap();
+    let todo = Todo::create().user(User::create()).exec(&db).await.unwrap();
 
     let u1 = todo.user().get(&db).await.unwrap();
 

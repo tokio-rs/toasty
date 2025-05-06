@@ -126,6 +126,9 @@ async fn crud_user_todos_categories(s: impl Setup) {
 
         for (id, actual) in actual {
             assert_eq!(expect[&id].title, actual.title);
+
+            let user = actual.user().get(&db).await.unwrap();
+            assert_eq!(user.name, "Ann Chovey");
         }
     }
 
@@ -149,7 +152,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         .await
         .unwrap();
 
-    fn check_todo_list(expect: &HashMap<Id<Todo>, Todo>, list: Vec<Todo>) {
+    async fn check_todo_list(db: &toasty::Db, expect: &HashMap<Id<Todo>, Todo>, list: Vec<Todo>) {
         assert_eq!(3, list.len(), "list={list:#?}");
 
         let actual: HashMap<_, _> = list
@@ -161,10 +164,13 @@ async fn crud_user_todos_categories(s: impl Setup) {
 
         for (id, actual) in actual {
             assert_eq!(expect[&id].title, actual.title);
+            let category = actual.category().get(&db).await.unwrap();
+            assert_eq!(category.name, "Food");
         }
     }
 
     check_todo_list(
+        &db,
         &expect,
         category
             .todos()
@@ -172,25 +178,30 @@ async fn crud_user_todos_categories(s: impl Setup) {
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
-    );
+    )
+    .await;
 
     check_todo_list(
+        &db,
         &expect,
         user.todos()
             .query(Todo::FIELDS.category.eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
-    );
+    )
+    .await;
 
     check_todo_list(
+        &db,
         &expect,
         Todo::filter_by_user_id(&user.id)
             .filter(Todo::FIELDS.category.eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
-    );
+    )
+    .await;
 }
 
 tests!(crud_user_todos_categories,);
