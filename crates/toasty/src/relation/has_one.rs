@@ -1,4 +1,4 @@
-use crate::{relation::Relation2, Model};
+use crate::{relation::Relation, Model};
 
 use toasty_core::stmt::Value;
 
@@ -25,7 +25,7 @@ impl<T: Model> HasOne<T> {
     }
 }
 
-impl<T: Relation2> Relation2 for HasOne<T> {
+impl<T: Relation> Relation for HasOne<T> {
     type Model = T::Model;
     type Expr = T::Expr;
     type Query = T::Query;
