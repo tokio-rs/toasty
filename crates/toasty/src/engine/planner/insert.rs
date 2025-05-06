@@ -53,7 +53,7 @@ impl Planner<'_> {
                         assert!(matches!(existing, Some(stmt::Returning::Star)));
                     }
                     None => {
-                        assert!(matches!(existing, None));
+                        assert!(existing.is_none());
                     }
                     _ => todo!(),
                 }
