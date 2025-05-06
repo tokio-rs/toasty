@@ -1,7 +1,7 @@
 use super::*;
 
 /// Set of values to insert
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone)]
 pub struct Values {
     pub rows: Vec<Expr>,
 }

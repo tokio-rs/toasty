@@ -210,7 +210,7 @@ use crate::{
 
 use std::fmt;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub enum Statement {
     /// Delete one or more existing records
     Delete(Delete),

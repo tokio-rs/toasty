@@ -1,5 +1,5 @@
 /// How toasty should populate the field
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Auto {
     Id,
 }

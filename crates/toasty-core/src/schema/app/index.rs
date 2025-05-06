@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Index {
     /// Uniquely identifies the model index within the schema
     pub id: IndexId,
@@ -15,13 +15,13 @@ pub struct Index {
     pub primary_key: bool,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct IndexId {
     pub model: ModelId,
     pub index: usize,
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct IndexField {
     /// The field being indexed
     pub field: FieldId,

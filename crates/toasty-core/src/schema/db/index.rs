@@ -29,7 +29,7 @@ pub struct IndexId {
     pub index: usize,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct IndexColumn {
     /// The column being indexed
     pub column: ColumnId,
@@ -41,13 +41,13 @@ pub struct IndexColumn {
     pub scope: IndexScope,
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum IndexOp {
     Eq,
     Sort(stmt::Direction),
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum IndexScope {
     /// The index column is used to partition rows across nodes of a distributed database.
     Partition,

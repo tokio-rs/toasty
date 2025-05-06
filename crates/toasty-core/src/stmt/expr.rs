@@ -1,6 +1,6 @@
 use super::{expr_reference::ExprReference, *};
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub enum Expr {
     /// AND a set of binary expressions
     And(ExprAnd),

@@ -2,7 +2,7 @@ use super::Constraint;
 
 use crate::{stmt, Result};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ConstraintLength {
     /// The minimum length of the field.
     pub min: Option<u64>,

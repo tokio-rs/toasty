@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Insert {
     /// Where to insert the values
     pub target: InsertTarget,
@@ -14,8 +14,9 @@ pub struct Insert {
 
 impl Insert {
     pub fn merge(&mut self, other: Self) {
-        if self.target != other.target {
-            todo!("handle this case");
+        match (&self.target, &other.target) {
+            (InsertTarget::Model(a), InsertTarget::Model(b)) if a == b => {}
+            _ => todo!("handle this case"),
         }
 
         match (&mut *self.source.body, *other.source.body) {

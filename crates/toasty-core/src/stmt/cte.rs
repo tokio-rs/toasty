@@ -1,6 +1,6 @@
 use super::Query;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Cte {
     pub query: Query,
 }

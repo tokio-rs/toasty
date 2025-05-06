@@ -1,7 +1,7 @@
 use super::*;
 
 /// Tests if the string expression matches `pattern`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ExprLike {
     pub expr: Box<Expr>,
     pub pattern: Box<Expr>,

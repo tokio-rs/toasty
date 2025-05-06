@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum InsertTarget {
     /// Inserting into a scope implies that the inserted value should be
     /// included by the query after insertion. This could be a combination of

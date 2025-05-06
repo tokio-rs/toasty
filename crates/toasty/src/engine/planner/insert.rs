@@ -42,15 +42,22 @@ impl Planner<'_> {
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
+                let existing = &self.write_actions[e.get().action]
+                    .as_insert()
+                    .stmt
+                    .returning;
+
                 // TODO
-                assert!(!matches!(stmt.returning, Some(stmt::Returning::Expr(_))));
-                assert_eq!(
-                    self.write_actions[e.get().action]
-                        .as_insert()
-                        .stmt
-                        .returning,
-                    stmt.returning
-                );
+                match stmt.returning {
+                    Some(stmt::Returning::Star) => {
+                        assert!(matches!(existing, Some(stmt::Returning::Star)));
+                    }
+                    None => {
+                        assert!(existing.is_none());
+                    }
+                    _ => todo!(),
+                }
+
                 e.get().action
             }
             Entry::Vacant(e) => {

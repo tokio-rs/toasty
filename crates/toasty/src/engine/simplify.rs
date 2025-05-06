@@ -246,12 +246,15 @@ impl<'a> Simplify<'a> {
                 stmt::ExprSet::Values(values) if values.is_empty() => {}
                 stmt::ExprSet::Select(select) => {
                     if let Some(stmt::ExprSet::Select(tail)) = operands.last_mut() {
+                        todo!("merge select={:#?} tail={:#?}", select, tail);
+                        /*
                         if tail.source == select.source {
                             assert_eq!(select.returning, tail.returning);
 
                             tail.or(select.filter.take());
                             continue;
                         }
+                        */
                     }
 
                     operands.push(std::mem::take(expr_set));

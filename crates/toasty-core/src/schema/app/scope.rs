@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct ScopedQuery {
     /// Query used for this scope
     pub id: QueryId,

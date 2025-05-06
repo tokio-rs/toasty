@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct BelongsTo {
     /// Model that owns the relation
     pub target: ModelId,

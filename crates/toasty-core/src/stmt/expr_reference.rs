@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum ExprReference {
     /// Reference a column from a CTE table
     Cte {

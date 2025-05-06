@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Update {
     /// What to update
     pub target: UpdateTarget,
@@ -24,7 +24,7 @@ impl Statement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum UpdateTarget {
     /// The query must return a "model" for it to be updated.
     Query(Query),
