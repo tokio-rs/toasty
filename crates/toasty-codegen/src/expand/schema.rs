@@ -33,7 +33,6 @@ impl Expand<'_> {
                     name: #name,
                     fields: #fields,
                     primary_key: #primary_key,
-                    queries: vec![],
                     indices: #indices,
                     table_name: #table_name,
                 }
@@ -114,7 +113,6 @@ impl Expand<'_> {
                             model: ModelId(usize::MAX),
                             index: usize::MAX,
                         },
-                        queries: vec![],
                     }));
                 }
                 FieldTy::HasOne(rel) => {
@@ -176,7 +174,6 @@ impl Expand<'_> {
         quote! {
             PrimaryKey {
                 fields: vec![ #( #fields ),* ],
-                query: QueryId(usize::MAX),
                 index: IndexId {
                     model: id,
                     index: 0,

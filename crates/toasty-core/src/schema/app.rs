@@ -24,17 +24,11 @@ pub use model::{Model, ModelId};
 mod pk;
 pub use pk::PrimaryKey;
 
-mod query;
-pub use query::{Query, QueryId};
-
 mod relation;
 pub use relation::{BelongsTo, HasMany, HasOne};
 
 mod schema;
 pub use schema::Schema;
-
-mod scope;
-pub use scope::ScopedQuery;
 
 use super::{
     db::{IndexOp, IndexScope},

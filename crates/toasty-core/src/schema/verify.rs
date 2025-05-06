@@ -27,7 +27,6 @@ impl Verify<'_> {
         self.verify_model_indices_are_scoped_correctly();
         self.verify_indices_have_columns();
         self.verify_index_names_are_unique().unwrap();
-        self.verify_query_names_are_unique().unwrap();
         self.verify_table_indices_and_nullable();
     }
 
@@ -103,20 +102,6 @@ impl Verify<'_> {
             for index in &table.indices {
                 if !names.insert(&index.name) {
                     anyhow::bail!("duplicate index name `{}`", index.name);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn verify_query_names_are_unique(&self) -> Result<()> {
-        if false {
-            let mut names = HashSet::new();
-
-            for query in &self.schema.app.queries {
-                if !names.insert(&query.full_name) {
-                    anyhow::bail!("duplicate query name `{}`", query.full_name);
                 }
             }
         }

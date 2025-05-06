@@ -14,10 +14,6 @@ pub struct HasMany {
 
     /// The `BelongsTo` association that pairs with this
     pub pair: FieldId,
-
-    /// Queries on the association. These are queries scoped by the owner of the
-    /// association.
-    pub queries: Vec<ScopedQuery>,
 }
 
 impl HasMany {

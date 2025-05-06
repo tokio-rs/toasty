@@ -19,9 +19,6 @@ pub struct Model {
     /// be a unique index.
     pub primary_key: PrimaryKey,
 
-    /// Prepared queries that query this model
-    pub queries: Vec<QueryId>,
-
     pub indices: Vec<Index>,
 
     /// If the schema specifies a table to map the model to, this is set.
@@ -55,8 +52,21 @@ impl Model {
         self.fields.iter_mut().find(|field| field.name == name)
     }
 
-    pub fn find_by_id(&self, schema: &Schema, input: impl stmt::substitute::Input) -> stmt::Query {
-        schema.query(self.primary_key.query).apply(input)
+    pub fn find_by_id(&self, mut input: impl stmt::substitute::Input) -> stmt::Query {
+        let filter = match &self.primary_key.fields[..] {
+            [pk_field] => stmt::Expr::eq(stmt::Expr::field(pk_field), input.resolve_arg(&0.into())),
+            pk_fields => stmt::Expr::and_from_vec(
+                pk_fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, pk_field)| {
+                        stmt::Expr::eq(stmt::Expr::field(pk_field), input.resolve_arg(&i.into()))
+                    })
+                    .collect(),
+            ),
+        };
+
+        stmt::Query::filter(self.id, filter)
     }
 
     /// Iterate over the fields used for the model's primary key.
