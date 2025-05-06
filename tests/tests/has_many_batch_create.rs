@@ -40,6 +40,8 @@ async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
         .await
         .unwrap();
 
+    assert_eq!(user.name, "Ann Chovey");
+
     // There are associated TODOs
     let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
     assert_eq!(1, todos.len());
@@ -109,6 +111,7 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
+    assert_eq!(user.name, "Ann Chovey");
 
     // There are associated TODOs
     let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
@@ -157,6 +160,9 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
         categories.iter().map(|category| &category.name[..]),
         ["things", "other things"]
     );
+
+    let todos: Vec<_> = category.todos().collect(&db).await.unwrap();
+    assert_eq!(1, todos.len());
 }
 
 async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
@@ -208,6 +214,7 @@ async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
     let db = s.setup(models!(User, Todo, Category)).await;
 
     let category = Category::create().name("Eating").exec(&db).await.unwrap();
+    assert_eq!(category.name, "Eating");
 
     let user = User::create()
         .name("John Doe")
@@ -216,6 +223,8 @@ async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
         .exec(&db)
         .await
         .unwrap();
+
+    assert_eq!(user.name, "John Doe");
 
     // There are associated TODOs
     let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
@@ -227,6 +236,12 @@ async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
     for todo in &todos {
         assert_eq!(todo.category_id, category.id);
     }
+
+    let todos: Vec<_> = category.todos().collect(&db).await.unwrap();
+    assert_eq_unordered!(
+        todos.iter().map(|todo| &todo.title[..]),
+        ["Pizza", "Hamburger"]
+    );
 }
 
 async fn user_batch_create_todos_set_category_by_query(_s: impl Setup) {}
