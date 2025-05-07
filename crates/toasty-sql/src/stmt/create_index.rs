@@ -14,7 +14,7 @@ pub struct CreateIndex {
     pub on: TableId,
 
     /// The columns to index
-    pub columns: Vec<stmt::ExprOrderBy>,
+    pub columns: Vec<stmt::OrderByExpr>,
 
     /// When true, the index is unique
     pub unique: bool,
@@ -28,7 +28,7 @@ impl Statement {
             columns: index
                 .columns
                 .iter()
-                .map(|index_column| stmt::ExprOrderBy {
+                .map(|index_column| stmt::OrderByExpr {
                     expr: stmt::Expr::column(index_column.column),
                     order: match index_column.op {
                         IndexOp::Eq => None,

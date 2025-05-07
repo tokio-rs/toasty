@@ -1,5 +1,7 @@
 use super::*;
 
+use toasty_core::stmt::{Direction, OrderByExpr};
+
 use std::fmt;
 
 pub struct Path<T: ?Sized> {
@@ -104,6 +106,20 @@ impl<T: ?Sized> Path<T> {
         Expr {
             untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), rhs.into_select().untyped),
             _p: PhantomData,
+        }
+    }
+
+    pub fn asc(self) -> OrderByExpr {
+        OrderByExpr {
+            expr: self.untyped.into_stmt(),
+            order: Some(Direction::Asc),
+        }
+    }
+
+    pub fn desc(self) -> OrderByExpr {
+        OrderByExpr {
+            expr: self.untyped.into_stmt(),
+            order: Some(Direction::Desc),
         }
     }
 }

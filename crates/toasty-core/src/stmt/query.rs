@@ -9,6 +9,9 @@ pub struct Query {
     /// other types of queries depending on database support.
     pub body: Box<ExprSet>,
 
+    /// ORDER BY
+    pub order_by: Option<OrderBy>,
+
     /// FOR { UPDATE | SHARE }
     pub locks: Vec<Lock>,
 }
@@ -25,18 +28,23 @@ pub struct QueryBuilder {
 }
 
 impl Query {
+    pub fn new(body: impl Into<ExprSet>) -> Self {
+        Self {
+            with: None,
+            body: Box::new(body.into()),
+            order_by: None,
+            locks: vec![],
+        }
+    }
+
     pub fn builder(body: impl Into<ExprSet>) -> QueryBuilder {
         QueryBuilder {
-            query: Self {
-                with: None,
-                body: Box::new(body.into()),
-                locks: vec![],
-            },
+            query: Query::new(body),
         }
     }
 
     pub fn unit() -> Self {
-        Self::builder(Values::default()).build()
+        Query::new(Values::default())
     }
 
     pub fn filter(source: impl Into<Source>, filter: impl Into<Expr>) -> Self {
@@ -47,6 +55,7 @@ impl Query {
         Self {
             with: None,
             body: Box::new(ExprSet::Values(values.into())),
+            order_by: None,
             locks: vec![],
         }
     }
@@ -130,12 +139,35 @@ impl Node for Query {
 }
 
 impl QueryBuilder {
+    pub fn with(mut self, with: impl Into<With>) -> Self {
+        self.query.with = Some(with.into());
+        self
+    }
+
+    pub fn locks(mut self, locks: impl Into<Vec<Lock>>) -> Self {
+        self.query.locks = locks.into();
+        self
+    }
+
     pub fn filter(mut self, filter: impl Into<Expr>) -> Self {
         let filter = filter.into();
 
         match &mut *self.query.body {
             ExprSet::Select(select) => {
                 select.filter = filter;
+            }
+            _ => todo!(),
+        }
+
+        self
+    }
+
+    pub fn returning(mut self, returning: impl Into<Returning>) -> Self {
+        let returning = returning.into();
+
+        match &mut *self.query.body {
+            ExprSet::Select(select) => {
+                select.returning = returning;
             }
             _ => todo!(),
         }

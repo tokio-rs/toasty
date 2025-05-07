@@ -48,6 +48,10 @@ impl Expand<'_> {
                     }
                 }
 
+                #vis fn all() -> #query_struct_ident {
+                    #query_struct_ident::default()
+                }
+
                 #vis fn filter(expr: #toasty::stmt::Expr<bool>) -> #query_struct_ident {
                     #query_struct_ident::from_stmt(#toasty::stmt::Select::filter(expr))
                 }

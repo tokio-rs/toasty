@@ -63,6 +63,18 @@ impl From<Select> for Query {
     }
 }
 
+impl From<TableId> for Select {
+    fn from(value: TableId) -> Self {
+        Self::new(Source::table(value), true)
+    }
+}
+
+impl From<SourceModel> for Select {
+    fn from(value: SourceModel) -> Self {
+        Self::new(Source::Model(value), true)
+    }
+}
+
 impl Node for Select {
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_stmt_select(self);

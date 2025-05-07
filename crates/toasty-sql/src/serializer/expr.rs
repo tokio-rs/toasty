@@ -89,22 +89,3 @@ impl ToSql for &stmt::BinaryOp {
         })
     }
 }
-
-impl ToSql for &stmt::ExprOrderBy {
-    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        if let Some(order) = &self.order {
-            fmt!(f, self.expr " " order);
-        } else {
-            fmt!(f, self.expr);
-        }
-    }
-}
-
-impl ToSql for &stmt::Direction {
-    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        match self {
-            stmt::Direction::Asc => fmt!(f, "ASC"),
-            stmt::Direction::Desc => fmt!(f, "DESC"),
-        }
-    }
-}
