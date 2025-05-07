@@ -13,6 +13,10 @@ struct Foo {
 }
 
 async fn sort_asc(s: impl Setup) {
+    if !s.capability().sql {
+        return;
+    }
+
     let db = s.setup(models!(Foo)).await;
 
     for i in 0..100 {
