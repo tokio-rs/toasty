@@ -1,7 +1,7 @@
 use super::*;
 
 #[derive(Debug, Clone)]
-pub struct ExprOrderBy {
+pub struct OrderByExpr {
     /// The expression
     pub expr: Expr,
 

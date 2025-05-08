@@ -100,6 +100,8 @@ impl Planner<'_> {
         project: eval::Func,
         mut stmt: stmt::Query,
     ) -> plan::VarId {
+        assert!(stmt.order_by.is_none(), "TODO: implement ordering for KV");
+
         let table = self.schema.table_for(model);
 
         // Extract parts of the query that must be executed in-memory.

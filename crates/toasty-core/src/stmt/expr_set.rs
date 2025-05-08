@@ -81,3 +81,27 @@ impl From<Select> for ExprSet {
         Self::Select(value)
     }
 }
+
+impl From<Update> for ExprSet {
+    fn from(value: Update) -> Self {
+        Self::Update(value)
+    }
+}
+
+impl From<TableId> for ExprSet {
+    fn from(value: TableId) -> Self {
+        Self::Select(Select::from(value))
+    }
+}
+
+impl From<SourceModel> for ExprSet {
+    fn from(value: SourceModel) -> Self {
+        Self::Select(Select::from(value))
+    }
+}
+
+impl From<Vec<Expr>> for ExprSet {
+    fn from(value: Vec<Expr>) -> Self {
+        Self::Values(Values::new(value))
+    }
+}

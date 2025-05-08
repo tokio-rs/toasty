@@ -87,19 +87,14 @@ impl<T: Model> IntoSelect for Association<[T]> {
     type Model = T;
 
     fn into_select(self) -> Select<T> {
-        Select::from_untyped(stmt::Query {
-            with: None,
-            locks: vec![],
-            body: Box::new(stmt::ExprSet::Select(stmt::Select {
-                source: stmt::Source::Model(stmt::SourceModel {
-                    model: T::ID,
-                    via: Some(self.untyped),
-                    include: vec![],
-                }),
-                filter: true.into(),
-                returning: stmt::Returning::Star,
-            })),
-        })
+        Select::from_untyped(
+            stmt::Query::builder(stmt::SourceModel {
+                model: T::ID,
+                via: Some(self.untyped),
+                include: vec![],
+            })
+            .build(),
+        )
     }
 }
 
@@ -107,18 +102,13 @@ impl<T: Model> IntoSelect for Association<T> {
     type Model = T;
 
     fn into_select(self) -> Select<T> {
-        Select::from_untyped(stmt::Query {
-            with: None,
-            locks: vec![],
-            body: Box::new(stmt::ExprSet::Select(stmt::Select {
-                source: stmt::Source::Model(stmt::SourceModel {
-                    model: T::ID,
-                    via: Some(self.untyped),
-                    include: vec![],
-                }),
-                filter: true.into(),
-                returning: stmt::Returning::Star,
-            })),
-        })
+        Select::from_untyped(
+            stmt::Query::builder(stmt::SourceModel {
+                model: T::ID,
+                via: Some(self.untyped),
+                include: vec![],
+            })
+            .build(),
+        )
     }
 }

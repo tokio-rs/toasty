@@ -37,7 +37,7 @@ pub use to_statement::ToStatement;
 mod update;
 pub use update::Update;
 
-pub use toasty_core::stmt::Value;
+pub use toasty_core::stmt::{OrderBy, Value};
 
 use crate::Model;
 

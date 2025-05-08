@@ -256,22 +256,17 @@ impl Planner<'_> {
 
         // Select from update table without the update condition.
         ctes.push(stmt::Cte {
-            query: stmt::Query {
-                with: None,
-                locks: vec![],
-                body: Box::new(stmt::ExprSet::Select(stmt::Select {
-                    source: target.into(),
-                    filter: filter.clone(),
-                    returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
-                        stmt::Expr::count_star(),
-                        stmt::FuncCount {
-                            arg: None,
-                            filter: Some(Box::new(condition)),
-                        }
-                        .into(),
-                    ])),
-                })),
-            },
+            query: stmt::Query::builder(target)
+                .filter(filter.clone())
+                .returning(vec![
+                    stmt::Expr::count_star(),
+                    stmt::FuncCount {
+                        arg: None,
+                        filter: Some(Box::new(condition)),
+                    }
+                    .into(),
+                ])
+                .build(),
         });
 
         let returning_len = match &stmt.returning {
@@ -288,44 +283,40 @@ impl Planner<'_> {
 
         // The update statement. The update condition is expressed using the select above
         ctes.push(stmt::Cte {
-            query: stmt::Query {
-                with: None,
-                locks: vec![],
-                body: Box::new(stmt::ExprSet::Update(stmt::Update {
-                    target: stmt.target,
-                    assignments: stmt.assignments,
-                    filter: Some(stmt::Expr::and(
-                        filter,
-                        // SELECT found.count(*) = found.count(CONDITION) FROM found
-                        stmt::Expr::stmt(stmt::Select {
-                            source: stmt::TableRef::Cte {
-                                nesting: 2,
-                                index: 0,
-                            }
-                            .into(),
-                            filter: true.into(),
-                            returning: stmt::Returning::Expr(stmt::Expr::eq(
-                                stmt::ExprColumn::Alias {
-                                    nesting: 0,
-                                    table: 0,
-                                    column: 0,
-                                },
-                                stmt::ExprColumn::Alias {
-                                    nesting: 0,
-                                    table: 0,
-                                    column: 1,
-                                },
-                            )),
-                        }),
-                    )),
-                    condition: None,
-                    returning: Some(
-                        stmt.returning
-                            // TODO: hax
-                            .unwrap_or_else(|| stmt::Returning::Expr(stmt::Expr::from("hello"))),
-                    ),
-                })),
-            },
+            query: stmt::Query::new(stmt::Update {
+                target: stmt.target,
+                assignments: stmt.assignments,
+                filter: Some(stmt::Expr::and(
+                    filter,
+                    // SELECT found.count(*) = found.count(CONDITION) FROM found
+                    stmt::Expr::stmt(stmt::Select {
+                        source: stmt::TableRef::Cte {
+                            nesting: 2,
+                            index: 0,
+                        }
+                        .into(),
+                        filter: true.into(),
+                        returning: stmt::Returning::Expr(stmt::Expr::eq(
+                            stmt::ExprColumn::Alias {
+                                nesting: 0,
+                                table: 0,
+                                column: 0,
+                            },
+                            stmt::ExprColumn::Alias {
+                                nesting: 0,
+                                table: 0,
+                                column: 1,
+                            },
+                        )),
+                    }),
+                )),
+                condition: None,
+                returning: Some(
+                    stmt.returning
+                        // TODO: hax
+                        .unwrap_or_else(|| stmt::Returning::Expr(stmt::Expr::from("hello"))),
+                ),
+            }),
         });
 
         let mut columns = vec![
@@ -354,31 +345,25 @@ impl Planner<'_> {
             );
         }
 
-        stmt::Query {
-            with: Some(stmt::With { ctes }),
-            // SELECT
-            //   found.total, found.condition_matched, {stmt.returning}
-            // FROM found
-            //   LEFT JOIN {updated} ON TRUE
-            body: Box::new(stmt::ExprSet::Select(stmt::Select {
-                source: stmt::Source::Table(vec![stmt::TableWithJoins {
+        stmt::Query::builder(stmt::Select {
+            source: stmt::Source::Table(vec![stmt::TableWithJoins {
+                table: stmt::TableRef::Cte {
+                    nesting: 0,
+                    index: 0,
+                },
+                joins: vec![stmt::Join {
                     table: stmt::TableRef::Cte {
                         nesting: 0,
-                        index: 0,
+                        index: 1,
                     },
-                    joins: vec![stmt::Join {
-                        table: stmt::TableRef::Cte {
-                            nesting: 0,
-                            index: 1,
-                        },
-                        constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
-                    }],
-                }]),
-                filter: stmt::Expr::from(true),
-                returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
-            })),
-            locks: vec![],
-        }
+                    constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
+                }],
+            }]),
+            filter: stmt::Expr::from(true),
+            returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
+        })
+        .with(ctes)
+        .build()
     }
 
     fn plan_conditional_update_as_transaction(
@@ -416,26 +401,22 @@ impl Planner<'_> {
          * COMMIT;
          */
 
-        let read = stmt::Query {
-            with: None,
-            locks: if self.capability.select_for_update {
+        let read = stmt::Query::builder(target)
+            .filter(filter.clone())
+            .returning(vec![
+                stmt::Expr::count_star(),
+                stmt::FuncCount {
+                    arg: None,
+                    filter: Some(Box::new(condition)),
+                }
+                .into(),
+            ])
+            .locks(if self.capability.select_for_update {
                 vec![stmt::Lock::Update]
             } else {
                 vec![]
-            },
-            body: Box::new(stmt::ExprSet::Select(stmt::Select {
-                source: target.into(),
-                filter: filter.clone(),
-                returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
-                    stmt::Expr::count_star(),
-                    stmt::FuncCount {
-                        arg: None,
-                        filter: Some(Box::new(condition)),
-                    }
-                    .into(),
-                ])),
-            })),
-        };
+            })
+            .build();
 
         let write = stmt::Update {
             target: stmt.target,

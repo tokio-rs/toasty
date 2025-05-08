@@ -7,7 +7,7 @@ pub struct Expr<T: ?Sized> {
     /// The un-typed expression
     pub(crate) untyped: stmt::Expr,
 
-    /// `M` and `T` are just used to verify usage.
+    /// `T` is the type of the expression
     pub(crate) _p: PhantomData<T>,
 }
 

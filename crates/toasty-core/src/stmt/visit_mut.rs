@@ -138,6 +138,14 @@ pub trait VisitMut {
         visit_insert_target_mut(self, i);
     }
 
+    fn visit_order_by_mut(&mut self, i: &mut OrderBy) {
+        visit_order_by_mut(self, i);
+    }
+
+    fn visit_order_by_expr_mut(&mut self, i: &mut OrderByExpr) {
+        visit_order_by_expr_mut(self, i);
+    }
+
     fn visit_projection_mut(&mut self, i: &mut Projection) {
         visit_projection_mut(self, i);
     }
@@ -549,6 +557,22 @@ where
     }
 }
 
+pub fn visit_order_by_mut<V>(v: &mut V, node: &mut OrderBy)
+where
+    V: VisitMut + ?Sized,
+{
+    for expr in &mut node.exprs {
+        v.visit_order_by_expr_mut(expr);
+    }
+}
+
+pub fn visit_order_by_expr_mut<V>(v: &mut V, node: &mut OrderByExpr)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
+}
+
 pub fn visit_projection_mut<V>(v: &mut V, node: &mut Projection)
 where
     V: VisitMut + ?Sized,
@@ -609,6 +633,10 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_expr_set_mut(&mut node.body);
+
+    if let Some(order_by) = &mut node.order_by {
+        v.visit_order_by_mut(order_by);
+    }
 }
 
 pub fn visit_stmt_update_mut<V>(v: &mut V, node: &mut Update)

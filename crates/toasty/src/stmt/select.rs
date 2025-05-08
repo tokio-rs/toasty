@@ -55,6 +55,11 @@ impl<M: Model> Select<M> {
         self
     }
 
+    pub fn order_by(&mut self, order_by: impl Into<stmt::OrderBy>) -> &mut Self {
+        self.untyped.order_by = Some(order_by.into());
+        self
+    }
+
     // TODO: not quite right
     pub fn delete(self) -> Statement<M> {
         Delete::from_untyped(self.untyped.delete()).into()

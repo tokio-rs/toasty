@@ -17,13 +17,7 @@ impl<M: Model> Insert<M> {
         Self {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::ID),
-                source: stmt::Query {
-                    with: None,
-                    locks: vec![],
-                    body: Box::new(stmt::ExprSet::Values(stmt::Values::new(vec![
-                        stmt::ExprRecord::from_vec(vec![]).into(),
-                    ]))),
-                },
+                source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(vec![]).into()]),
                 returning: Some(stmt::Returning::Star),
             },
             _p: PhantomData,

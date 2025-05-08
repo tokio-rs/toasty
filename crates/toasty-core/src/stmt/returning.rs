@@ -52,3 +52,9 @@ impl From<Expr> for Returning {
         Self::Expr(value)
     }
 }
+
+impl From<Vec<Expr>> for Returning {
+    fn from(value: Vec<Expr>) -> Self {
+        stmt::Returning::Expr(stmt::Expr::record_from_vec(value))
+    }
+}

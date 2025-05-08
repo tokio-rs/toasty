@@ -82,9 +82,6 @@ pub use expr_map::ExprMap;
 mod expr_or;
 pub use expr_or::ExprOr;
 
-mod expr_order_by;
-pub use expr_order_by::ExprOrderBy;
-
 mod expr_pattern;
 pub use expr_pattern::ExprPattern;
 
@@ -131,6 +128,12 @@ pub use node::Node;
 
 mod op_binary;
 pub use op_binary::BinaryOp;
+
+mod order_by;
+pub use order_by::OrderBy;
+
+mod order_by_expr;
+pub use order_by_expr::OrderByExpr;
 
 mod op_set;
 pub use op_set::SetOp;

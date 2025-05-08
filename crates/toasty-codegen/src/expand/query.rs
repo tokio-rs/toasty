@@ -60,6 +60,11 @@ impl Expand<'_> {
                     }
                 }
 
+                #vis fn order_by(mut self, order_by: impl Into<#toasty::stmt::OrderBy>) -> #query_struct_ident {
+                    self.stmt.order_by(order_by);
+                    self
+                }
+
                 #vis fn include<T: ?Sized>(mut self, path: impl #toasty::Into<#toasty::Path<T>>) -> #query_struct_ident {
                     self.stmt.include(path.into());
                     self

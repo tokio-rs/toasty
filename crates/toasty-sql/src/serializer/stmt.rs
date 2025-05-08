@@ -47,6 +47,15 @@ impl ToSql for &stmt::Delete {
     }
 }
 
+impl ToSql for &stmt::Direction {
+    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        match self {
+            stmt::Direction::Asc => fmt!(f, "ASC"),
+            stmt::Direction::Desc => fmt!(f, "DESC"),
+        }
+    }
+}
+
 impl ToSql for &stmt::DropTable {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
@@ -95,8 +104,9 @@ impl ToSql for &stmt::Query {
         };
 
         let body = &*self.body;
+        let order_by = self.order_by.as_ref().map(|order_by| (" ", order_by));
 
-        fmt!(f, self.with body locks)
+        fmt!(f, self.with body order_by locks)
     }
 }
 
@@ -107,6 +117,24 @@ impl ToSql for &stmt::ExprSet {
             stmt::ExprSet::Values(expr) => expr.to_sql(f),
             stmt::ExprSet::Update(expr) => expr.to_sql(f),
             _ => todo!("self={self:?}"),
+        }
+    }
+}
+
+impl ToSql for &stmt::OrderBy {
+    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        let order_by = Comma(&self.exprs);
+
+        fmt!(f, "ORDER BY " order_by);
+    }
+}
+
+impl ToSql for &stmt::OrderByExpr {
+    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        if let Some(order) = &self.order {
+            fmt!(f, self.expr " " order);
+        } else {
+            fmt!(f, self.expr);
         }
     }
 }
