@@ -95,6 +95,14 @@ impl ToSql for &stmt::InsertTarget {
     }
 }
 
+impl ToSql for &stmt::Limit {
+    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        assert!(self.offset.is_none(), "TODO");
+
+        fmt!(f, "LIMIT " self.limit);
+    }
+}
+
 impl ToSql for &stmt::Query {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         let locks = if self.locks.is_empty() {
@@ -105,8 +113,9 @@ impl ToSql for &stmt::Query {
 
         let body = &*self.body;
         let order_by = self.order_by.as_ref().map(|order_by| (" ", order_by));
+        let limit = self.limit.as_ref().map(|limit| (" ", limit));
 
-        fmt!(f, self.with body order_by locks)
+        fmt!(f, self.with body order_by limit locks)
     }
 }
 

@@ -22,7 +22,17 @@ impl ToSql for Value {
         match &self.0 {
             stmt::Value::Bool(value) => value.to_sql(ty, out),
             // TODO: we need to do better type management
-            stmt::Value::I64(value) => (*value as i32).to_sql(ty, out),
+            stmt::Value::I64(value) => match *ty {
+                Type::INT4 => {
+                    let value = *value as i32;
+                    value.to_sql(ty, out)
+                }
+                Type::INT8 => {
+                    let value = *value as i64;
+                    value.to_sql(ty, out)
+                }
+                _ => todo!(),
+            },
             stmt::Value::Id(value) => value.to_string().to_sql(ty, out),
             stmt::Value::Null => Ok(IsNull::Yes),
             stmt::Value::String(value) => value.to_sql(ty, out),
@@ -30,6 +40,6 @@ impl ToSql for Value {
         }
     }
 
-    accepts!(BOOL, INT4, TEXT, VARCHAR);
+    accepts!(BOOL, INT4, INT8, TEXT, VARCHAR);
     to_sql_checked!();
 }

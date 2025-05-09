@@ -12,6 +12,9 @@ pub struct Query {
     /// ORDER BY
     pub order_by: Option<OrderBy>,
 
+    /// LIMIT and OFFSET (count or keyset)
+    pub limit: Option<Limit>,
+
     /// FOR { UPDATE | SHARE }
     pub locks: Vec<Lock>,
 }
@@ -33,6 +36,7 @@ impl Query {
             with: None,
             body: Box::new(body.into()),
             order_by: None,
+            limit: None,
             locks: vec![],
         }
     }
@@ -56,6 +60,7 @@ impl Query {
             with: None,
             body: Box::new(ExprSet::Values(values.into())),
             order_by: None,
+            limit: None,
             locks: vec![],
         }
     }
