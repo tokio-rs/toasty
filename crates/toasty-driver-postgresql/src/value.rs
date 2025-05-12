@@ -27,9 +27,7 @@ impl ToSql for Value {
                     let value = *value as i32;
                     value.to_sql(ty, out)
                 }
-                Type::INT8 => {
-                    value.to_sql(ty, out)
-                }
+                Type::INT8 => value.to_sql(ty, out),
                 _ => todo!(),
             },
             stmt::Value::Id(value) => value.to_string().to_sql(ty, out),
