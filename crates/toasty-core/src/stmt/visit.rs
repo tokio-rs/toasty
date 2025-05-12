@@ -18,6 +18,10 @@ pub trait Visit {
         visit_assignments(self, i);
     }
 
+    fn visit_association(&mut self, i: &Association) {
+        visit_association(self, i);
+    }
+
     fn visit_expr(&mut self, i: &Expr) {
         visit_expr(self, i);
     }
@@ -58,6 +62,14 @@ pub trait Visit {
         visit_expr_field(self, i);
     }
 
+    fn visit_expr_func(&mut self, i: &ExprFunc) {
+        visit_expr_func(self, i);
+    }
+
+    fn visit_expr_func_count(&mut self, i: &FuncCount) {
+        visit_expr_func_count(self, i);
+    }
+
     fn visit_expr_in_list(&mut self, i: &ExprInList) {
         visit_expr_in_list(self, i);
     }
@@ -78,6 +90,10 @@ pub trait Visit {
         visit_expr_key(self, i);
     }
 
+    fn visit_expr_map(&mut self, i: &ExprMap) {
+        visit_expr_map(self, i);
+    }
+
     fn visit_expr_or(&mut self, i: &ExprOr) {
         visit_expr_or(self, i);
     }
@@ -88,6 +104,10 @@ pub trait Visit {
 
     fn visit_expr_record(&mut self, i: &ExprRecord) {
         visit_expr_record(self, i);
+    }
+
+    fn visit_expr_reference(&mut self, i: &ExprReference) {
+        visit_expr_reference(self, i);
     }
 
     fn visit_expr_set(&mut self, i: &ExprSet) {
@@ -112,6 +132,26 @@ pub trait Visit {
 
     fn visit_expr_project(&mut self, i: &ExprProject) {
         visit_expr_project(self, i);
+    }
+
+    fn visit_insert_target(&mut self, i: &InsertTarget) {
+        visit_insert_target(self, i);
+    }
+
+    fn visit_limit(&mut self, i: &Limit) {
+        visit_limit(self, i);
+    }
+
+    fn visit_offset(&mut self, i: &Offset) {
+        visit_offset(self, i);
+    }
+
+    fn visit_order_by(&mut self, i: &OrderBy) {
+        visit_order_by(self, i);
+    }
+
+    fn visit_order_by_expr(&mut self, i: &OrderByExpr) {
+        visit_order_by_expr(self, i);
     }
 
     fn visit_projection(&mut self, i: &Projection) {
@@ -168,6 +208,18 @@ pub trait Visit {
 }
 
 impl<V: Visit> Visit for &mut V {
+    fn visit_assignment(&mut self, i: &Assignment) {
+        Visit::visit_assignment(&mut **self, i);
+    }
+
+    fn visit_assignments(&mut self, i: &Assignments) {
+        Visit::visit_assignments(&mut **self, i);
+    }
+
+    fn visit_association(&mut self, i: &Association) {
+        Visit::visit_association(&mut **self, i);
+    }
+
     fn visit_expr(&mut self, i: &Expr) {
         Visit::visit_expr(&mut **self, i);
     }
@@ -180,24 +232,80 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_arg(&mut **self, i);
     }
 
+    fn visit_expr_begins_with(&mut self, i: &ExprBeginsWith) {
+        Visit::visit_expr_begins_with(&mut **self, i);
+    }
+
     fn visit_expr_binary_op(&mut self, i: &ExprBinaryOp) {
         Visit::visit_expr_binary_op(&mut **self, i);
+    }
+
+    fn visit_expr_cast(&mut self, i: &ExprCast) {
+        Visit::visit_expr_cast(&mut **self, i);
+    }
+
+    fn visit_expr_column(&mut self, i: &ExprColumn) {
+        Visit::visit_expr_column(&mut **self, i);
     }
 
     fn visit_expr_concat(&mut self, i: &ExprConcat) {
         Visit::visit_expr_concat(&mut **self, i);
     }
 
+    fn visit_expr_enum(&mut self, i: &ExprEnum) {
+        Visit::visit_expr_enum(&mut **self, i);
+    }
+
+    fn visit_expr_field(&mut self, i: &ExprField) {
+        Visit::visit_expr_field(&mut **self, i);
+    }
+
+    fn visit_expr_func(&mut self, i: &ExprFunc) {
+        Visit::visit_expr_func(&mut **self, i);
+    }
+
+    fn visit_expr_func_count(&mut self, i: &FuncCount) {
+        Visit::visit_expr_func_count(&mut **self, i);
+    }
+
+    fn visit_expr_in_list(&mut self, i: &ExprInList) {
+        Visit::visit_expr_in_list(&mut **self, i);
+    }
+
     fn visit_expr_in_subquery(&mut self, i: &ExprInSubquery) {
         Visit::visit_expr_in_subquery(&mut **self, i);
+    }
+
+    fn visit_expr_is_null(&mut self, i: &ExprIsNull) {
+        Visit::visit_expr_is_null(&mut **self, i);
+    }
+
+    fn visit_expr_like(&mut self, i: &ExprLike) {
+        Visit::visit_expr_like(&mut **self, i);
+    }
+
+    fn visit_expr_key(&mut self, i: &ExprKey) {
+        Visit::visit_expr_key(&mut **self, i);
+    }
+
+    fn visit_expr_map(&mut self, i: &ExprMap) {
+        Visit::visit_expr_map(&mut **self, i);
     }
 
     fn visit_expr_or(&mut self, i: &ExprOr) {
         Visit::visit_expr_or(&mut **self, i);
     }
 
+    fn visit_expr_list(&mut self, i: &ExprList) {
+        Visit::visit_expr_list(&mut **self, i);
+    }
+
     fn visit_expr_record(&mut self, i: &ExprRecord) {
         Visit::visit_expr_record(&mut **self, i);
+    }
+
+    fn visit_expr_reference(&mut self, i: &ExprReference) {
+        Visit::visit_expr_reference(&mut **self, i);
     }
 
     fn visit_expr_set(&mut self, i: &ExprSet) {
@@ -216,28 +324,80 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_ty(&mut **self, i);
     }
 
+    fn visit_expr_pattern(&mut self, i: &ExprPattern) {
+        Visit::visit_expr_pattern(&mut **self, i);
+    }
+
+    fn visit_expr_project(&mut self, i: &ExprProject) {
+        Visit::visit_expr_project(&mut **self, i);
+    }
+
+    fn visit_insert_target(&mut self, i: &InsertTarget) {
+        Visit::visit_insert_target(&mut **self, i);
+    }
+
+    fn visit_limit(&mut self, i: &Limit) {
+        Visit::visit_limit(&mut **self, i);
+    }
+
+    fn visit_offset(&mut self, i: &Offset) {
+        Visit::visit_offset(&mut **self, i);
+    }
+
+    fn visit_order_by(&mut self, i: &OrderBy) {
+        Visit::visit_order_by(&mut **self, i);
+    }
+
+    fn visit_order_by_expr(&mut self, i: &OrderByExpr) {
+        Visit::visit_order_by_expr(&mut **self, i);
+    }
+
+    fn visit_projection(&mut self, i: &Projection) {
+        Visit::visit_projection(&mut **self, i);
+    }
+
+    fn visit_returning(&mut self, i: &Returning) {
+        Visit::visit_returning(&mut **self, i);
+    }
+
+    fn visit_source(&mut self, i: &Source) {
+        Visit::visit_source(&mut **self, i);
+    }
+
     fn visit_stmt(&mut self, i: &Statement) {
         Visit::visit_stmt(&mut **self, i);
-    }
-
-    fn visit_stmt_query(&mut self, i: &Query) {
-        Visit::visit_stmt_query(&mut **self, i);
-    }
-
-    fn visit_stmt_insert(&mut self, i: &Insert) {
-        Visit::visit_stmt_insert(&mut **self, i);
-    }
-
-    fn visit_stmt_update(&mut self, i: &Update) {
-        Visit::visit_stmt_update(&mut **self, i);
     }
 
     fn visit_stmt_delete(&mut self, i: &Delete) {
         Visit::visit_stmt_delete(&mut **self, i);
     }
 
+    fn visit_stmt_insert(&mut self, i: &Insert) {
+        Visit::visit_stmt_insert(&mut **self, i);
+    }
+
+    fn visit_stmt_query(&mut self, i: &Query) {
+        Visit::visit_stmt_query(&mut **self, i);
+    }
+
+    fn visit_stmt_select(&mut self, i: &Select) {
+        Visit::visit_stmt_select(&mut **self, i);
+    }
+
+    fn visit_stmt_update(&mut self, i: &Update) {
+        Visit::visit_stmt_update(&mut **self, i);
+    }
+
+    fn visit_update_target(&mut self, i: &UpdateTarget) {
+        Visit::visit_update_target(&mut **self, i);
+    }
+
     fn visit_value(&mut self, i: &Value) {
         Visit::visit_value(&mut **self, i);
+    }
+
+    fn visit_value_record(&mut self, i: &ValueRecord) {
+        Visit::visit_value_record(&mut **self, i);
     }
 
     fn visit_values(&mut self, i: &Values) {
@@ -259,6 +419,13 @@ where
     for (_, assignment) in node.iter() {
         v.visit_assignment(assignment);
     }
+}
+
+pub fn visit_association<V>(v: &mut V, node: &Association)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_stmt_query(&node.source);
 }
 
 pub fn visit_expr<V>(v: &mut V, node: &Expr)
@@ -363,6 +530,28 @@ where
 {
 }
 
+pub fn visit_expr_func<V>(v: &mut V, node: &ExprFunc)
+where
+    V: Visit + ?Sized,
+{
+    match node {
+        ExprFunc::Count(func) => v.visit_expr_func_count(func),
+    }
+}
+
+pub fn visit_expr_func_count<V>(v: &mut V, node: &FuncCount)
+where
+    V: Visit + ?Sized,
+{
+    if let Some(expr) = &node.arg {
+        v.visit_expr(expr);
+    }
+
+    if let Some(expr) = &node.filter {
+        v.visit_expr(expr);
+    }
+}
+
 pub fn visit_expr_in_list<V>(v: &mut V, node: &ExprInList)
 where
     V: Visit + ?Sized,
@@ -400,6 +589,14 @@ where
 {
 }
 
+pub fn visit_expr_map<V>(v: &mut V, node: &ExprMap)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.base);
+    v.visit_expr(&node.map);
+}
+
 pub fn visit_expr_or<V>(v: &mut V, node: &ExprOr)
 where
     V: Visit + ?Sized,
@@ -425,6 +622,12 @@ where
     for expr in &**node {
         v.visit_expr(expr);
     }
+}
+
+pub fn visit_expr_reference<V>(v: &mut V, node: &ExprReference)
+where
+    V: Visit + ?Sized,
+{
 }
 
 pub fn visit_expr_set<V>(v: &mut V, node: &ExprSet)
@@ -477,6 +680,52 @@ where
 {
     v.visit_expr(&node.base);
     v.visit_projection(&node.projection);
+}
+
+pub fn visit_insert_target<V>(v: &mut V, node: &InsertTarget)
+where
+    V: Visit + ?Sized,
+{
+    if let InsertTarget::Scope(stmt) = node {
+        v.visit_stmt_query(stmt);
+    }
+}
+
+pub fn visit_limit<V>(v: &mut V, node: &Limit)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.limit);
+
+    if let Some(offset) = &node.offset {
+        v.visit_offset(offset);
+    }
+}
+
+pub fn visit_offset<V>(v: &mut V, node: &Offset)
+where
+    V: Visit + ?Sized,
+{
+    match node {
+        Offset::After(expr) => v.visit_expr(expr),
+        Offset::Count(expr) => v.visit_expr(expr),
+    }
+}
+
+pub fn visit_order_by<V>(v: &mut V, node: &OrderBy)
+where
+    V: Visit + ?Sized,
+{
+    for expr in &node.exprs {
+        v.visit_order_by_expr(expr);
+    }
+}
+
+pub fn visit_order_by_expr<V>(v: &mut V, node: &OrderByExpr)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
 }
 
 pub fn visit_projection<V>(v: &mut V, node: &Projection)
@@ -589,21 +838,21 @@ where
     }
 }
 
-pub fn visit_values<V>(v: &mut V, node: &Values)
-where
-    V: Visit + ?Sized,
-{
-    for expr in &node.rows {
-        v.visit_expr(expr);
-    }
-}
-
 pub fn visit_value_record<V>(v: &mut V, node: &ValueRecord)
 where
     V: Visit + ?Sized,
 {
     for value in node.iter() {
         v.visit_value(value);
+    }
+}
+
+pub fn visit_values<V>(v: &mut V, node: &Values)
+where
+    V: Visit + ?Sized,
+{
+    for expr in &node.rows {
+        v.visit_expr(expr);
     }
 }
 

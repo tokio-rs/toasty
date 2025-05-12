@@ -22,6 +22,9 @@ pub use into_insert::IntoInsert;
 mod into_select;
 pub use into_select::IntoSelect;
 
+mod paginate;
+pub use paginate::Paginate;
+
 mod path;
 pub use path::Path;
 

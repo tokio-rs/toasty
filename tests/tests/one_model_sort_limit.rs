@@ -25,9 +25,6 @@ async fn sort_asc(s: impl Setup) {
 
     let foos_asc: Vec<_> = Foo::all()
         .order_by(Foo::FIELDS.order.asc())
-        // .paginate(&db, toasty::Paginate::limit(10))
-        // .collect()
-        // .paginate(&db, toasty::limit(10).sort(Foo::FIELDS.order.desc()))
         .collect(&db)
         .await
         .unwrap();
@@ -40,9 +37,6 @@ async fn sort_asc(s: impl Setup) {
 
     let foos_desc: Vec<_> = Foo::all()
         .order_by(Foo::FIELDS.order.desc())
-        // .paginate(&db, toasty::Paginate::limit(10))
-        // .collect()
-        // .paginate(&db, toasty::limit(10).sort(Foo::FIELDS.order.desc()))
         .collect(&db)
         .await
         .unwrap();
@@ -55,18 +49,40 @@ async fn sort_asc(s: impl Setup) {
 }
 
 async fn paginate(s: impl Setup) {
+    if !s.capability().sql {
+        return;
+    }
+
     let db = s.setup(models!(Foo)).await;
 
     for i in 0..100 {
         Foo::create().order(i).exec(&db).await.unwrap();
     }
 
-    /*
-    let foos_asc: Vec<_> = Foo::all()
-        .paginate(&db, toasty::Paginate::limit(10))
+    let foos: Vec<_> = Foo::all()
+        .order_by(Foo::FIELDS.order.desc())
+        .paginate(10)
+        .collect(&db)
         .await
         .unwrap();
-    */
+
+    assert_eq!(foos.len(), 10);
+    for (i, order) in (99..90).enumerate() {
+        assert_eq!(foos[i].order, order);
+    }
+
+    let foos: Vec<_> = Foo::all()
+        .order_by(Foo::FIELDS.order.desc())
+        .paginate(10)
+        .after(90)
+        .collect(&db)
+        .await
+        .unwrap();
+
+    assert_eq!(foos.len(), 10);
+    for (i, order) in (89..80).enumerate() {
+        assert_eq!(foos[i].order, order);
+    }
 }
 
 tests!(sort_asc, paginate,);

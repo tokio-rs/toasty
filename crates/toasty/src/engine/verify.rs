@@ -20,6 +20,8 @@ pub(crate) fn apply(schema: &Schema, stmt: &Statement) {
 
 impl stmt::Visit for Verify<'_> {
     fn visit_stmt_delete(&mut self, i: &stmt::Delete) {
+        stmt::visit::visit_stmt_delete(self, i);
+
         VerifyExpr {
             schema: self.schema,
             model: i.from.as_model_id(),
@@ -27,7 +29,15 @@ impl stmt::Visit for Verify<'_> {
         .verify_filter(&i.filter);
     }
 
+    fn visit_stmt_query(&mut self, i: &stmt::Query) {
+        stmt::visit::visit_stmt_query(self, i);
+
+        self.verify_offset_key_matches_order_by(i);
+    }
+
     fn visit_stmt_select(&mut self, i: &stmt::Select) {
+        stmt::visit::visit_stmt_select(self, i);
+
         VerifyExpr {
             schema: self.schema,
             model: i.source.as_model_id(),
@@ -36,6 +46,8 @@ impl stmt::Visit for Verify<'_> {
     }
 
     fn visit_stmt_update(&mut self, i: &stmt::Update) {
+        stmt::visit::visit_stmt_update(self, i);
+
         // Is not an empty update
         assert!(!i.assignments.is_empty(), "stmt = {i:#?}");
 
@@ -45,6 +57,35 @@ impl stmt::Visit for Verify<'_> {
         };
 
         verify_expr.visit_stmt_update(i);
+    }
+}
+
+impl Verify<'_> {
+    fn verify_offset_key_matches_order_by(&self, i: &stmt::Query) {
+        let Some(limit) = i.limit.as_ref() else {
+            return;
+        };
+
+        let Some(stmt::Offset::After(offset)) = limit.offset.as_ref() else {
+            return;
+        };
+
+        let Some(order_by) = i.order_by.as_ref() else {
+            todo!("specified offset but no order; stmt={i:#?}");
+        };
+
+        match offset {
+            stmt::Expr::Value(stmt::Value::Record(record)) => {
+                assert!(
+                    order_by.exprs.len() == record.fields.len(),
+                    "order_by = {order_by:#?}"
+                );
+            }
+            stmt::Expr::Value(_) => {
+                assert!(order_by.exprs.len() == 1, "order_by = {order_by:#?}");
+            }
+            _ => todo!("unsupported offset expression; stmt={i:#?}"),
+        }
     }
 }
 

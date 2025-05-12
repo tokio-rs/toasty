@@ -54,6 +54,10 @@ impl Expand<'_> {
                     self.all(db).await?.collect().await
                 }
 
+                #vis fn paginate(self, per_page: usize) -> #toasty::stmt::Paginate<#model_ident> {
+                    #toasty::stmt::Paginate::new(self.stmt, per_page)
+                }
+
                 #vis fn filter(self, expr: #toasty::stmt::Expr<bool>) -> #query_struct_ident {
                     #query_struct_ident {
                         stmt: self.stmt.and(expr),

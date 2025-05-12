@@ -92,6 +92,7 @@ mod expr_record;
 pub use expr_record::ExprRecord;
 
 mod expr_reference;
+pub use expr_reference::ExprReference;
 
 mod expr_set;
 pub use expr_set::ExprSet;
@@ -123,8 +124,14 @@ pub use insert_target::InsertTarget;
 mod join;
 pub use join::{Join, JoinOp};
 
+mod limit;
+pub use limit::Limit;
+
 mod node;
 pub use node::Node;
+
+mod offset;
+pub use offset::Offset;
 
 mod op_binary;
 pub use op_binary::BinaryOp;
