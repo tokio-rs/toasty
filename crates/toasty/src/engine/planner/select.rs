@@ -101,6 +101,7 @@ impl Planner<'_> {
         mut stmt: stmt::Query,
     ) -> plan::VarId {
         assert!(stmt.order_by.is_none(), "TODO: implement ordering for KV");
+        assert!(stmt.limit.is_none(), "TODO: implement limit for KV");
 
         let table = self.schema.table_for(model);
 

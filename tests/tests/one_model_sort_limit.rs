@@ -63,8 +63,6 @@ async fn paginate(s: impl Setup) {
         .order_by(Foo::FIELDS.order.desc())
         .paginate(10)
         // .after(Some(10))
-        // .paginate(&db, toasty::stmt::Paginate::keyset())
-        // toasty::Paginate::limit(10)
         .collect(&db)
         .await
         .unwrap();

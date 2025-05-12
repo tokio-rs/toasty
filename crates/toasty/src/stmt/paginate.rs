@@ -29,6 +29,17 @@ impl<M: Model> Paginate<M> {
         Self { query }
     }
 
+    /// Set the key-based offset for pagination.
+    pub fn after(mut self, key: impl Into<stmt::Expr>) -> Self {
+        let Some(limit) = self.query.untyped.limit.as_mut() else {
+            panic!("pagination requires a limit clause");
+        };
+
+        limit.offset = Some(stmt::Offset::After(key.into()));
+
+        self
+    }
+
     pub async fn collect<A>(self, db: &Db) -> Result<A>
     where
         A: FromCursor<M>,

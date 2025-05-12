@@ -20,6 +20,8 @@ pub(crate) fn apply(schema: &Schema, stmt: &Statement) {
 
 impl stmt::Visit for Verify<'_> {
     fn visit_stmt_delete(&mut self, i: &stmt::Delete) {
+        stmt::visit::visit_stmt_delete(self, i);
+
         VerifyExpr {
             schema: self.schema,
             model: i.from.as_model_id(),
@@ -27,7 +29,15 @@ impl stmt::Visit for Verify<'_> {
         .verify_filter(&i.filter);
     }
 
+    fn visit_stmt_query(&mut self, i: &stmt::Query) {
+        stmt::visit::visit_stmt_query(self, i);
+
+        assert!(i.limit.is_none());
+    }
+
     fn visit_stmt_select(&mut self, i: &stmt::Select) {
+        stmt::visit::visit_stmt_select(self, i);
+
         VerifyExpr {
             schema: self.schema,
             model: i.source.as_model_id(),
@@ -36,6 +46,8 @@ impl stmt::Visit for Verify<'_> {
     }
 
     fn visit_stmt_update(&mut self, i: &stmt::Update) {
+        stmt::visit::visit_stmt_update(self, i);
+
         // Is not an empty update
         assert!(!i.assignments.is_empty(), "stmt = {i:#?}");
 
