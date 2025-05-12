@@ -28,7 +28,6 @@ impl ToSql for Value {
                     value.to_sql(ty, out)
                 }
                 Type::INT8 => {
-                    let value = *value as i64;
                     value.to_sql(ty, out)
                 }
                 _ => todo!(),
