@@ -15,8 +15,7 @@ You will define your data model using Rust structs annotated with the
 [hello-toasty](examples/hello-toasty/src/main.rs) example.
 
 ```rust
-#[derive(Debug)]
-#[toasty::model]
+#[derive(Debug, Model)]
 struct User {
     #[key]
     #[auto]
@@ -28,13 +27,12 @@ struct User {
     email: String,
 
     #[has_many]
-    todos: [Todo],
+    todos: toasty::HasMany<Todo>,
 
     moto: Option<String>,
 }
 
-#[derive(Debug)]
-#[toasty::model]
+#[derive(Debug, Model)]
 struct Todo {
     #[key]
     #[auto]
@@ -44,7 +42,7 @@ struct Todo {
     user_id: Id<User>,
 
     #[belongs_to(key = user_id, references = id)]
-    user: User,
+    user: toasty::BelongsTo<User>,
 
     title: String,
 }
