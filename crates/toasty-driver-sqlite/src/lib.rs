@@ -67,9 +67,9 @@ impl Driver for Sqlite {
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let connection = self.connection.lock().unwrap();
 
-        let sql: sql::Statement = match op {
-            Operation::QuerySql(op) => op.stmt.into(),
-            Operation::Insert(op) => op.stmt.into(),
+        let (sql, ret_tys): (sql::Statement, _) = match op {
+            Operation::QuerySql(op) => (op.stmt.into(), op.ret),
+            // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(Transaction::Start) => {
                 connection.execute("BEGIN", [])?;
                 return Ok(Response::from_count(0));
@@ -82,7 +82,7 @@ impl Driver for Sqlite {
                 connection.execute("ROLLBACK", [])?;
                 return Ok(Response::from_count(0));
             }
-            _ => todo!(),
+            _ => todo!("op={:#?}", op),
         };
 
         let mut params = vec![];
@@ -128,6 +128,8 @@ impl Driver for Sqlite {
 
         let mut ret = vec![];
 
+        let ret_tys = &ret_tys.as_ref().unwrap();
+
         loop {
             match rows.next() {
                 Ok(Some(row)) => {
@@ -136,7 +138,7 @@ impl Driver for Sqlite {
                     let width = width.unwrap();
 
                     for index in 0..width {
-                        items.push(load(row, index));
+                        items.push(sqlite_to_toasty(row, index, &ret_tys[index]));
                     }
 
                     ret.push(stmt::ValueRecord::from_vec(items).into());
@@ -210,6 +212,7 @@ fn value_from_param(value: &stmt::Value) -> rusqlite::types::ToSqlOutput<'_> {
         Bool(true) => ToSqlOutput::Owned(Value::Integer(1)),
         Bool(false) => ToSqlOutput::Owned(Value::Integer(0)),
         Id(v) => ToSqlOutput::Owned(v.to_string().into()),
+        I32(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
         I64(v) => ToSqlOutput::Owned(Value::Integer(*v)),
         String(v) => ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes())),
         Null => ToSqlOutput::Owned(Value::Null),
@@ -236,14 +239,18 @@ fn value_from_param(value: &stmt::Value) -> rusqlite::types::ToSqlOutput<'_> {
     }
 }
 
-fn load(row: &rusqlite::Row, index: usize) -> stmt::Value {
+fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt::Value {
     use rusqlite::types::Value as SqlValue;
 
     let value: Option<SqlValue> = row.get(index).unwrap();
 
     match value {
         Some(SqlValue::Null) => stmt::Value::Null,
-        Some(SqlValue::Integer(value)) => stmt::Value::I64(value),
+        Some(SqlValue::Integer(value)) => match ty {
+            stmt::Type::I32 => stmt::Value::I32(value as i32),
+            stmt::Type::I64 => stmt::Value::I64(value),
+            _ => todo!("ty={ty:#?}"),
+        },
         Some(SqlValue::Text(value)) => stmt::Value::String(value),
         None => stmt::Value::Null,
         _ => todo!("value={value:#?}"),

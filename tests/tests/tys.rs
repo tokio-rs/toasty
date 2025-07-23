@@ -1,0 +1,57 @@
+use tests::*;
+
+use toasty::stmt::Id;
+
+macro_rules! def_num_ty_tests {
+    (
+        $( $t:ty => $required:ident; )*
+    ) => {
+        $(
+            async fn $required(s: impl Setup) {
+                #[derive(Debug, toasty::Model)]
+                struct Foo {
+                    #[key]
+                    #[auto]
+                    id: Id<Self>,
+
+                    val: $t,
+                }
+
+                let db = s.setup(models!(Foo)).await;
+
+                let mut created = Foo::create()
+                    .val(0)
+                    .exec(&db)
+                    .await
+                    .unwrap();
+
+                let read = Foo::get_by_id(&db, &created.id)
+                    .await
+                    .unwrap();
+
+                assert_eq!(read.val, 0);
+
+                created.update()
+                    .val(1)
+                    .exec(&db)
+                    .await
+                    .unwrap();
+
+                let read = Foo::get_by_id(&db, &created.id)
+                    .await
+                    .unwrap();
+
+                assert_eq!(read.val, 1);
+            }
+        )*
+
+        tests!(
+            $( $required, )*
+        );
+    };
+}
+
+def_num_ty_tests!(
+    i64 => required_i64;
+    i32 => required_i32;
+);

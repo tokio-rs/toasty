@@ -130,6 +130,8 @@ pub use limit::Limit;
 mod node;
 pub use node::Node;
 
+mod num;
+
 mod offset;
 pub use offset::Offset;
 

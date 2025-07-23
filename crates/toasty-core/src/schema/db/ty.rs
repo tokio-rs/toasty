@@ -2,9 +2,15 @@ use crate::{driver, stmt, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
+    /// A boolean value
     Boolean,
-    Integer,
+
+    /// A signed integer of `n` bytes
+    Integer(u8),
+
+    /// Unconstrained text type
     Text,
+
     VarChar(u64),
 }
 
@@ -19,7 +25,8 @@ impl Type {
             Some(ty) => Ok(ty),
             None => match ty {
                 stmt::Type::Bool => Ok(Type::Boolean),
-                stmt::Type::I64 => Ok(Type::Integer),
+                &stmt::Type::I32 => Ok(Type::Integer(4)),
+                stmt::Type::I64 => Ok(Type::Integer(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
                 // Gotta support some app-level types as well for now.
                 //
