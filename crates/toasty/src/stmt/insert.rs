@@ -36,7 +36,7 @@ impl<M: Model> Insert<M> {
     where
         S: IntoSelect<Model = M>,
     {
-        self.untyped.target = stmt::InsertTarget::Scope(scope.into_select().untyped);
+        self.untyped.target = stmt::InsertTarget::Scope(Box::new(scope.into_select().untyped));
     }
 
     pub fn set(&mut self, field: usize, expr: impl Into<stmt::Expr>) {

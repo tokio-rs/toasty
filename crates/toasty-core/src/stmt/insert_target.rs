@@ -5,7 +5,7 @@ pub enum InsertTarget {
     /// Inserting into a scope implies that the inserted value should be
     /// included by the query after insertion. This could be a combination of
     /// setting default field values or validating existing ones.
-    Scope(Query),
+    Scope(Box<Query>),
 
     /// Insert a model
     Model(ModelId),
@@ -34,7 +34,7 @@ impl InsertTarget {
         match self {
             Self::Scope(query) => query.and(expr),
             Self::Model(model_id) => {
-                *self = Self::Scope(Query::filter(*model_id, expr));
+                *self = Self::Scope(Box::new(Query::filter(*model_id, expr)));
             }
             _ => todo!("{self:#?}"),
         }
@@ -43,6 +43,6 @@ impl InsertTarget {
 
 impl From<Query> for InsertTarget {
     fn from(value: Query) -> Self {
-        Self::Scope(value)
+        Self::Scope(Box::new(value))
     }
 }

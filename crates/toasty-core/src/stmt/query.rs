@@ -73,7 +73,7 @@ impl Query {
         assert!(select.source.is_model());
 
         stmt::Update {
-            target: UpdateTarget::Query(self),
+            target: UpdateTarget::Query(Box::new(self)),
             assignments: stmt::Assignments::default(),
             filter: None,
             condition: None,
