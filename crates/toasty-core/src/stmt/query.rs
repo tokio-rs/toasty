@@ -7,7 +7,7 @@ pub struct Query {
 
     /// The body of the query. Either `SELECT`, `UNION`, `VALUES`, or possibly
     /// other types of queries depending on database support.
-    pub body: Box<ExprSet>,
+    pub body: ExprSet,
 
     /// ORDER BY
     pub order_by: Option<OrderBy>,
@@ -34,7 +34,7 @@ impl Query {
     pub fn new(body: impl Into<ExprSet>) -> Self {
         Self {
             with: None,
-            body: Box::new(body.into()),
+            body: body.into(),
             order_by: None,
             limit: None,
             locks: vec![],
@@ -58,7 +58,7 @@ impl Query {
     pub fn values(values: impl Into<Values>) -> Self {
         Self {
             with: None,
-            body: Box::new(ExprSet::Values(values.into())),
+            body: ExprSet::Values(values.into()),
             order_by: None,
             limit: None,
             locks: vec![],
@@ -66,7 +66,7 @@ impl Query {
     }
 
     pub fn update(self) -> Update {
-        let ExprSet::Select(select) = &*self.body else {
+        let ExprSet::Select(select) = &self.body else {
             todo!("stmt={self:#?}");
         };
 
@@ -82,7 +82,7 @@ impl Query {
     }
 
     pub fn delete(self) -> Delete {
-        match *self.body {
+        match self.body {
             ExprSet::Select(select) => Delete {
                 from: select.source,
                 filter: select.filter,
@@ -99,7 +99,7 @@ impl Query {
     pub fn union(&mut self, query: impl Into<Self>) {
         let rhs = query.into();
 
-        match (&mut *self.body, *rhs.body) {
+        match (&mut self.body, rhs.body) {
             (ExprSet::SetOp(_), ExprSet::SetOp(_)) => todo!(),
             (ExprSet::SetOp(lhs), rhs) if lhs.is_union() => {
                 lhs.operands.push(rhs);
@@ -116,7 +116,7 @@ impl Query {
     }
 
     pub fn include(&mut self, path: impl Into<Path>) {
-        match &mut *self.body {
+        match &mut self.body {
             ExprSet::Select(body) => body.include(path),
             _ => todo!(),
         }
@@ -157,7 +157,7 @@ impl QueryBuilder {
     pub fn filter(mut self, filter: impl Into<Expr>) -> Self {
         let filter = filter.into();
 
-        match &mut *self.query.body {
+        match &mut self.query.body {
             ExprSet::Select(select) => {
                 select.filter = filter;
             }
@@ -170,7 +170,7 @@ impl QueryBuilder {
     pub fn returning(mut self, returning: impl Into<Returning>) -> Self {
         let returning = returning.into();
 
-        match &mut *self.query.body {
+        match &mut self.query.body {
             ExprSet::Select(select) => {
                 select.returning = returning;
             }

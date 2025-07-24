@@ -11,7 +11,7 @@ impl Planner<'_> {
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.app.model(source_model.model);
 
-        let source_model = match &*stmt.body {
+        let source_model = match &stmt.body {
             stmt::ExprSet::Select(select) => {
                 match &select.source {
                     stmt::Source::Model(source_model) => {
@@ -39,7 +39,7 @@ impl Planner<'_> {
             .register_var(stmt::Type::list(project.ret.clone()));
 
         // If the filter expression is false, then the result will be empty.
-        if let stmt::ExprSet::Select(select) = &*stmt.body {
+        if let stmt::ExprSet::Select(select) = &stmt.body {
             if select.filter.is_false() {
                 self.push_action(plan::SetVar {
                     var: output,
@@ -114,7 +114,7 @@ impl Planner<'_> {
             self.partition_stmt_query_input(&mut stmt, &cx.input)
         };
 
-        let mut index_plan = match &*stmt.body {
+        let mut index_plan = match &stmt.body {
             stmt::ExprSet::Select(query) => self.plan_index_path2(table, &query.filter),
             _ => todo!("stmt={stmt:#?}"),
         };
@@ -398,7 +398,7 @@ impl Planner<'_> {
             return;
         };
 
-        let stmt::ExprSet::Select(body) = &mut *stmt.body else {
+        let stmt::ExprSet::Select(body) = &mut stmt.body else {
             todo!("stmt={stmt:#?}");
         };
 

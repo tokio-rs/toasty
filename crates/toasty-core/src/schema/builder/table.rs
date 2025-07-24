@@ -76,7 +76,7 @@ impl BuildSchema<'_> {
 
     fn prefix_table_name(&self, name: &str) -> String {
         if let Some(prefix) = &self.builder.table_name_prefix {
-            format!("{}{}", prefix, name)
+            format!("{prefix}{name}")
         } else {
             name.to_string()
         }
@@ -497,7 +497,7 @@ impl BuildMapping<'_> {
         self.mapping.table_to_model = stmt::ExprRecord::from_vec(self.table_to_model);
         self.mapping.model_pk_to_table = if self.model_pk_to_table.len() == 1 {
             let expr = self.model_pk_to_table.into_iter().next().unwrap();
-            debug_assert!(expr.is_field() || expr.is_cast(), "expr={:#?}", expr);
+            debug_assert!(expr.is_field() || expr.is_cast(), "expr={expr:#?}");
             expr
         } else {
             stmt::ExprRecord::from_vec(self.model_pk_to_table).into()

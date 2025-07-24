@@ -138,7 +138,7 @@ impl TryConvert<'_> {
     }
 
     fn key_expr_to_eval(&self, expr: &stmt::Expr) -> stmt::Expr {
-        assert!(expr.is_value(), "expr={:#?}", expr);
+        assert!(expr.is_value(), "expr={expr:#?}");
         expr.clone()
     }
 

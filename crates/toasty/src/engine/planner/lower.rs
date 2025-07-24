@@ -189,7 +189,7 @@ impl VisitMut for LowerStatement<'_> {
     }
 
     fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert) {
-        match &mut *i.source.body {
+        match &mut i.source.body {
             stmt::ExprSet::Values(values) => {
                 for row in &mut values.rows {
                     self.lower_insert_values(row);
@@ -267,7 +267,7 @@ impl LowerStatement<'_> {
                         todo!()
                     };
 
-                    format!("{}{}", a, b)
+                    format!("{a}{b}")
                 }
                 stmt::Expr::Value(_) => todo!(),
                 _ => continue,

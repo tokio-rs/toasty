@@ -17,7 +17,7 @@ impl KeyAttr {
                 if !names.contains(&ident) {
                     return Err(syn::Error::new_spanned(
                         &ident,
-                        format!("unknown field `{}`", ident),
+                        format!("unknown field `{ident}`"),
                     ));
                 }
 
@@ -29,7 +29,7 @@ impl KeyAttr {
                 if !names.contains(&ident) {
                     return Err(syn::Error::new_spanned(
                         &ident,
-                        format!("unknown field `{}`", ident),
+                        format!("unknown field `{ident}`"),
                     ));
                 }
 

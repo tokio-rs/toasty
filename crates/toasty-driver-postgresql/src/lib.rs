@@ -86,7 +86,7 @@ impl PostgreSQL {
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
+                eprintln!("connection error: {e}");
             }
         });
 
@@ -245,8 +245,7 @@ fn postgres_to_toasty(index: usize, row: &Row, column: &Column) -> stmt::Value {
             .unwrap_or(stmt::Value::Null)
     } else if column.type_() == &Type::INT4 {
         row.get::<usize, Option<i32>>(index)
-            .map(|i| i as i64)
-            .map(stmt::Value::I64)
+            .map(stmt::Value::I32)
             .unwrap_or(stmt::Value::Null)
     } else if column.type_() == &Type::INT8 {
         row.get::<usize, Option<i64>>(index)

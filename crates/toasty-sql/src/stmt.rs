@@ -42,7 +42,7 @@ impl Statement {
                 .returning
                 .as_ref()
                 .map(|ret| ret.as_expr().as_record().len()),
-            Self::Query(query) => match &*query.body {
+            Self::Query(query) => match &query.body {
                 ExprSet::Select(select) => Some(select.returning.as_expr().as_record().len()),
                 stmt => todo!("returning_len, stmt={stmt:#?}"),
             },

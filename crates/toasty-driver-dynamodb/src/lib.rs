@@ -49,7 +49,7 @@ impl DynamoDb {
             let mut endpoint_url = format!("http://{host}");
 
             if let Some(port) = url.port() {
-                endpoint_url.push_str(&format!(":{}", port));
+                endpoint_url.push_str(&format!(":{port}"));
             }
 
             aws_config = aws_config.endpoint_url(&endpoint_url);

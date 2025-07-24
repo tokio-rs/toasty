@@ -114,7 +114,7 @@ impl Simplify<'_> {
 
         let mut subquery = query.clone();
 
-        match &mut *subquery.body {
+        match &mut subquery.body {
             stmt::ExprSet::Select(subquery) => {
                 subquery.returning = stmt::Returning::Expr(match &pair.foreign_key.fields[..] {
                     [fk_field] => stmt::Expr::field(fk_field.source),

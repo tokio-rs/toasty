@@ -17,7 +17,7 @@ impl Planner<'_> {
     ) -> Result<Option<plan::VarId>> {
         let model = self.model(stmt.target.as_model());
 
-        if let stmt::ExprSet::Values(values) = &*stmt.source.body {
+        if let stmt::ExprSet::Values(values) = &stmt.source.body {
             assert!(!values.is_empty(), "stmt={stmt:#?}");
         }
 
@@ -87,7 +87,7 @@ impl Planner<'_> {
             }
         };
 
-        let rows = match *stmt.source.body {
+        let rows = match stmt.source.body {
             stmt::ExprSet::Values(values) => values.rows,
             _ => todo!("stmt={:#?}", stmt),
         };
@@ -116,7 +116,7 @@ impl Planner<'_> {
         model: &app::Model,
         stmt: &mut stmt::Insert,
     ) -> Result<()> {
-        let stmt::ExprSet::Values(values) = &mut *stmt.source.body else {
+        let stmt::ExprSet::Values(values) = &mut stmt.source.body else {
             todo!()
         };
 
@@ -322,7 +322,7 @@ impl Planner<'_> {
             return None;
         };
 
-        let stmt::ExprSet::Values(values) = &*stmt.source.body else {
+        let stmt::ExprSet::Values(values) = &stmt.source.body else {
             todo!("stmt={stmt:#?}");
         };
 

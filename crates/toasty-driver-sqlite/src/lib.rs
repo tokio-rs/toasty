@@ -91,7 +91,7 @@ impl Driver for Sqlite {
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
         let width = match &sql {
-            sql::Statement::Query(stmt) => match &*stmt.body {
+            sql::Statement::Query(stmt) => match &stmt.body {
                 stmt::ExprSet::Select(stmt) => Some(stmt.returning.as_expr().as_record().len()),
                 _ => todo!(),
             },

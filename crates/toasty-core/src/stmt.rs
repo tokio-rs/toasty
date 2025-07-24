@@ -277,7 +277,7 @@ impl Statement {
     pub fn unwrap_delete(self) -> Delete {
         match self {
             Self::Delete(delete) => delete,
-            v => panic!("expected `Delete`, found {:#?}", v),
+            v => panic!("expected `Delete`, found {v:#?}"),
         }
     }
 
@@ -313,7 +313,7 @@ impl Statement {
     pub fn unwrap_insert(self) -> Insert {
         match self {
             Self::Insert(insert) => insert,
-            v => panic!("expected `Insert`, found {:#?}", v),
+            v => panic!("expected `Insert`, found {v:#?}"),
         }
     }
 
@@ -349,7 +349,7 @@ impl Statement {
     pub fn unwrap_query(self) -> Query {
         match self {
             Self::Query(query) => query,
-            v => panic!("expected `Query`, found {:#?}", v),
+            v => panic!("expected `Query`, found {v:#?}"),
         }
     }
 
@@ -385,7 +385,7 @@ impl Statement {
     pub fn unwrap_update(self) -> Update {
         match self {
             Self::Update(update) => update,
-            v => panic!("expected `Update`, found {:#?}", v),
+            v => panic!("expected `Update`, found {v:#?}"),
         }
     }
 }
