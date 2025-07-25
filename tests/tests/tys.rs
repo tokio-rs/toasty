@@ -7,6 +7,10 @@ macro_rules! def_num_ty_tests {
         $( $t:ty => $required:ident; )*
     ) => {
         $(
+            // The `val` field is used in the test assertions below, but the compiler
+            // incorrectly flags it as dead code due to macro expansion.
+            // See: https://github.com/rust-lang/rust/issues/102217
+            #[allow(dead_code)]
             async fn $required(s: impl Setup) {
                 #[derive(Debug, toasty::Model)]
                 struct Foo {
