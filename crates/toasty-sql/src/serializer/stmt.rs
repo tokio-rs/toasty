@@ -111,7 +111,7 @@ impl ToSql for &stmt::Query {
             Some((" ", Delimited(&self.locks, " ")))
         };
 
-        let body = &*self.body;
+        let body = &self.body;
         let order_by = self.order_by.as_ref().map(|order_by| (" ", order_by));
         let limit = self.limit.as_ref().map(|limit| (" ", limit));
 

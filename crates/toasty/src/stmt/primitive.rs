@@ -14,11 +14,19 @@ pub trait Primitive: Sized {
     }
 }
 
+impl Primitive for i32 {
+    const TYPE: stmt::Type = stmt::Type::I32;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
 impl Primitive for i64 {
     const TYPE: stmt::Type = stmt::Type::I64;
 
     fn load(value: stmt::Value) -> Result<Self> {
-        value.to_i64()
+        value.try_into()
     }
 }
 

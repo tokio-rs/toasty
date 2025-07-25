@@ -223,60 +223,53 @@ fn mysql_to_toasty(
 
     match column.column_type() {
         MYSQL_TYPE_NULL => stmt::Value::Null,
-        MYSQL_TYPE_VARCHAR | MYSQL_TYPE_VAR_STRING => {
-            assert!(ty.is_string());
 
-            match row.take_opt(i).expect("value missing") {
-                Ok(v) => stmt::Value::String(v),
-                Err(e) => {
-                    assert!(matches!(e.0, mysql_async::Value::NULL));
-                    stmt::Value::Null
-                }
-            }
+        MYSQL_TYPE_VARCHAR | MYSQL_TYPE_VAR_STRING | MYSQL_TYPE_BLOB => {
+            assert!(ty.is_string());
+            extract_or_null(row, i, stmt::Value::String)
         }
+
         MYSQL_TYPE_TINY => {
             if ty.is_bool() {
-                match row.take_opt(i).expect("value missing") {
-                    Ok(v) => stmt::Value::Bool(v),
-                    Err(e) => {
-                        assert!(matches!(e.0, mysql_async::Value::NULL));
-                        stmt::Value::Null
-                    }
-                }
+                extract_or_null(row, i, stmt::Value::Bool)
+            } else if ty.is_i32() {
+                extract_or_null(row, i, stmt::Value::I32)
             } else {
-                match row.take_opt(i).expect("value missing") {
-                    Ok(v) => stmt::Value::I64(v),
-                    Err(e) => {
-                        assert!(matches!(e.0, mysql_async::Value::NULL));
-                        stmt::Value::Null
-                    }
-                }
+                extract_or_null(row, i, stmt::Value::I64)
             }
         }
+
         MYSQL_TYPE_SHORT | MYSQL_TYPE_INT24 | MYSQL_TYPE_LONG | MYSQL_TYPE_LONGLONG => {
-            match row.take_opt(i).expect("value missing") {
-                Ok(v) => stmt::Value::I64(v),
-                Err(e) => {
-                    assert!(matches!(e.0, mysql_async::Value::NULL));
-                    stmt::Value::Null
-                }
+            if ty.is_i32() {
+                extract_or_null(row, i, stmt::Value::I32)
+            } else {
+                extract_or_null(row, i, stmt::Value::I64)
             }
         }
-        MYSQL_TYPE_BLOB => {
-            assert!(ty.is_string());
-            match row.take_opt(i).expect("value missing") {
-                Ok(v) => stmt::Value::String(v),
-                Err(e) => {
-                    assert!(matches!(e.0, mysql_async::Value::NULL));
-                    stmt::Value::Null
-                }
-            }
-        }
+
         _ => todo!(
             "implement MySQL to toasty conversion for `{:#?}`; {:#?}; ty={:#?}",
             column.column_type(),
             row.get::<mysql_async::Value, _>(i),
             ty
         ),
+    }
+}
+
+/// Helper function to extract a value from a MySQL row or return Null if the value is NULL
+fn extract_or_null<T>(
+    row: &mut mysql_async::Row,
+    i: usize,
+    constructor: fn(T) -> stmt::Value,
+) -> stmt::Value
+where
+    T: mysql_async::prelude::FromValue,
+{
+    match row.take_opt(i).expect("value missing") {
+        Ok(v) => constructor(v),
+        Err(e) => {
+            assert!(matches!(e.0, mysql_async::Value::NULL));
+            stmt::Value::Null
+        }
     }
 }

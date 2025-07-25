@@ -25,7 +25,7 @@ pub(crate) enum Action {
     QueryPk(QueryPk),
 
     /// Perform an atomic operation in multiple steps
-    ReadModifyWrite(ReadModifyWrite),
+    ReadModifyWrite(Box<ReadModifyWrite>),
 
     /// Set a variable to a const
     SetVar(SetVar),

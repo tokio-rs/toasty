@@ -19,7 +19,7 @@ impl Insert {
             _ => todo!("handle this case"),
         }
 
-        match (&mut *self.source.body, *other.source.body) {
+        match (&mut self.source.body, other.source.body) {
             (stmt::ExprSet::Values(self_values), stmt::ExprSet::Values(other_values)) => {
                 for expr in other_values.rows {
                     self_values.rows.push(expr);

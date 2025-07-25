@@ -49,7 +49,7 @@ impl DynamoDb {
             let mut endpoint_url = format!("http://{host}");
 
             if let Some(port) = url.port() {
-                endpoint_url.push_str(&format!(":{}", port));
+                endpoint_url.push_str(&format!(":{port}"));
             }
 
             aws_config = aws_config.endpoint_url(&endpoint_url);
@@ -128,7 +128,7 @@ fn ddb_ty(ty: &stmt::Type) -> ScalarAttributeType {
     match ty {
         Bool => N,
         String | Enum(..) => S,
-        I64 => N,
+        I64 | I32 => N,
         Id(_) => S,
         _ => todo!("ddb_ty; ty={:#?}", ty),
     }
@@ -155,6 +155,7 @@ enum V {
     Null,
     String(String),
     I64(i64),
+    I32(i32),
     Id(usize, String),
 }
 
@@ -163,6 +164,7 @@ fn ddb_val(val: &stmt::Value) -> AttributeValue {
         stmt::Value::Bool(val) => AttributeValue::Bool(*val),
         stmt::Value::String(val) => AttributeValue::S(val.to_string()),
         stmt::Value::I64(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::I32(val) => AttributeValue::N(val.to_string()),
         stmt::Value::Id(val) => AttributeValue::S(val.to_string()),
         stmt::Value::Enum(val) => {
             let v = match &val.fields[..] {
@@ -170,6 +172,7 @@ fn ddb_val(val: &stmt::Value) -> AttributeValue {
                 [stmt::Value::Bool(v)] => V::Bool(*v),
                 [stmt::Value::String(v)] => V::String(v.to_string()),
                 [stmt::Value::I64(v)] => V::I64(*v),
+                [stmt::Value::I32(v)] => V::I32(*v),
                 [stmt::Value::Id(id)] => V::Id(id.model_id().0, id.to_string()),
                 _ => todo!("val={:#?}", val.fields),
             };
@@ -191,6 +194,7 @@ fn ddb_to_val(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
         (Type::Bool, Bool(val)) => stmt::Value::from(*val),
         (Type::String, S(val)) => stmt::Value::from(val.clone()),
         (Type::I64, N(val)) => stmt::Value::from(val.parse::<i64>().unwrap()),
+        (Type::I32, N(val)) => stmt::Value::from(val.parse::<i32>().unwrap()),
         (Type::Id(model), S(val)) => stmt::Value::from(stmt::Id::from_string(*model, val.clone())),
         (Type::Enum(..), S(val)) => {
             let (variant, rest) = val.split_once("#").unwrap();
@@ -202,6 +206,7 @@ fn ddb_to_val(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
                 V::String(v) => stmt::Value::String(v),
                 V::Id(model, v) => stmt::Value::Id(stmt::Id::from_string(app::ModelId(model), v)),
                 V::I64(v) => stmt::Value::I64(v),
+                V::I32(v) => stmt::Value::I32(v),
             };
 
             if value.is_null() {

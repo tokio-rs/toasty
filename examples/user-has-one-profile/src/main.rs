@@ -46,7 +46,7 @@ async fn main() -> toasty::Result<()> {
     println!("created user; name={:?}", user.name);
 
     if let Some(profile) = user.profile().get(&db).await? {
-        println!("profile: {:#?}", profile);
+        println!("profile: {profile:#?}");
         println!("profile.user_id: {:#?}", profile.user_id);
     } else {
         println!("user has no profile");

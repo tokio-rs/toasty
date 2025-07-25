@@ -233,7 +233,7 @@ impl Expand<'_> {
         };
 
         let verify_pair_belongs_to_exists = syn::Ident::new(
-            &format!("verify_pair_belongs_to_exists_for_{}", field_ident),
+            &format!("verify_pair_belongs_to_exists_for_{field_ident}"),
             field_ident.span(),
         );
 
@@ -272,11 +272,11 @@ impl Expand<'_> {
         ));
 
         let verify_pair_belongs_to_exists_for_field = syn::Ident::new(
-            &format!("verify_pair_belongs_to_exists_for_{}", pair_ident),
+            &format!("verify_pair_belongs_to_exists_for_{pair_ident}"),
             field_ident.span(),
         );
 
-        let my_msg = format!("HasMany requires the {{A}}::{} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead", pair_ident);
+        let my_msg = format!("HasMany requires the {{A}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
         let my_label =
             "Has many associations require the target to include a back-reference".to_string();
 
@@ -340,7 +340,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let pair_ident = syn::Ident::new(&self.model.name.ident.to_string(), rel.span);
 
-        let my_msg = format!("HasOne requires the {{A}}::{} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead", pair_ident);
+        let my_msg = format!("HasOne requires the {{A}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
         let my_label =
             "Has one associations require the target to include a back-reference".to_string();
 

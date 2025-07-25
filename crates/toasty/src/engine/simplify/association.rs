@@ -17,7 +17,7 @@ impl Simplify<'_> {
     }
 
     pub(super) fn simplify_via_association_for_query(&mut self, stmt: &mut stmt::Query) {
-        if let stmt::ExprSet::Select(select) = &mut *stmt.body {
+        if let stmt::ExprSet::Select(select) = &mut stmt.body {
             if let stmt::Source::Model(model) = &mut select.source {
                 if let Some(via) = model.via.take() {
                     let filter = self.rewrite_association_as_filter(via);

@@ -99,7 +99,7 @@ impl Planner<'_> {
             input: None,
         };
 
-        match &mut *stmt.body {
+        match &mut stmt.body {
             stmt::ExprSet::Select(select) => {
                 assert!(select.source.is_table());
                 let partition = partitioner.partition_expr(&mut select.filter);

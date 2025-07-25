@@ -216,7 +216,7 @@ impl<'a> Planner<'a> {
                 }
             }
             stmt::Statement::Query(stmt) => {
-                match &*stmt.body {
+                match &stmt.body {
                     stmt::ExprSet::Select(select) => match &select.source {
                         stmt::Source::Model(source) => source.via.is_none(),
                         stmt::Source::Table(_) => true,

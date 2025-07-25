@@ -9,7 +9,7 @@ pub(crate) fn lift_key_select(
     key: &[FieldId],
     stmt: &stmt::Query,
 ) -> Option<stmt::Expr> {
-    let stmt::ExprSet::Select(select) = &*stmt.body else {
+    let stmt::ExprSet::Select(select) = &stmt.body else {
         return None;
     };
 

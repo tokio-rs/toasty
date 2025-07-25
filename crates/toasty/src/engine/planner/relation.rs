@@ -126,7 +126,7 @@ impl Planner<'_> {
 
         match stmt {
             stmt::Statement::Insert(mut insert) => {
-                if let stmt::ExprSet::Values(values) = &*insert.source.body {
+                if let stmt::ExprSet::Values(values) = &insert.source.body {
                     assert_eq!(1, values.rows.len());
                 }
 

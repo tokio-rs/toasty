@@ -11,6 +11,9 @@ pub enum Value {
     /// Value of an enumerated type
     Enum(ValueEnum),
 
+    /// Signed 32-bit integer
+    I32(i32),
+
     /// Signed 64-bit integer
     I64(i64),
 
@@ -103,17 +106,10 @@ impl Value {
         }
     }
 
-    pub fn to_i64(self) -> Result<i64> {
-        match self {
-            Self::I64(v) => Ok(v),
-            _ => anyhow::bail!("cannot convert value to i64"),
-        }
-    }
-
     pub fn to_record(self) -> Result<ValueRecord> {
         match self {
             Self::Record(record) => Ok(record),
-            _ => anyhow::bail!("canot convert value to record"),
+            _ => anyhow::bail!("cannot convert value to record"),
         }
     }
 
@@ -160,37 +156,38 @@ impl Value {
     }
 
     pub fn is_a(&self, ty: &Type) -> bool {
-        match (self, ty) {
-            (Self::Null, _) => true,
-            (Self::Bool(_), Type::Bool) => true,
-            (Self::Bool(_), _) => false,
-            (Self::I64(_), Type::I64) => true,
-            (Self::I64(_), _) => false,
-            (Self::Id(value), Type::Id(ty)) => value.model_id() == *ty,
-            (Self::Id(_), _) => false,
-            (Self::List(value), Type::List(ty)) => {
-                if value.is_empty() {
-                    true
-                } else {
-                    value[0].is_a(ty)
+        match self {
+            Self::Null => true,
+            Self::Bool(_) => ty.is_bool(),
+            Self::I32(_) => ty.is_i32(),
+            Self::I64(_) => ty.is_i64(),
+            Self::Id(value) => match ty {
+                Type::Id(ty) => value.model_id() == *ty,
+                _ => false,
+            },
+            Self::List(value) => match ty {
+                Type::List(ty) => {
+                    if value.is_empty() {
+                        true
+                    } else {
+                        value[0].is_a(ty)
+                    }
                 }
-            }
-            (Self::List(_), _) => false,
-            (Self::Record(value), Type::Record(fields)) => {
-                if value.len() == fields.len() {
-                    value
-                        .fields
-                        .iter()
-                        .zip(fields.iter())
-                        .all(|(value, ty)| value.is_a(ty))
-                } else {
-                    false
-                }
-            }
-            (Self::Record(_), _) => false,
-            (Self::SparseRecord(value), Type::SparseRecord(fields)) => value.fields == *fields,
-            (Self::String(_), Type::String) => true,
-            (Self::String(_), _) => false,
+                _ => false,
+            },
+            Self::Record(value) => match ty {
+                Type::Record(fields) if value.len() == fields.len() => value
+                    .fields
+                    .iter()
+                    .zip(fields.iter())
+                    .all(|(value, ty)| value.is_a(ty)),
+                _ => false,
+            },
+            Self::SparseRecord(value) => match ty {
+                Type::SparseRecord(fields) => value.fields == *fields,
+                _ => false,
+            },
+            Self::String(_) => ty.is_string(),
             _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
     }
@@ -241,18 +238,6 @@ impl From<&String> for Value {
 impl From<&str> for Value {
     fn from(src: &str) -> Self {
         Self::String(src.to_string())
-    }
-}
-
-impl From<i64> for Value {
-    fn from(value: i64) -> Self {
-        Self::I64(value)
-    }
-}
-
-impl From<&i64> for Value {
-    fn from(value: &i64) -> Self {
-        Self::I64(*value)
     }
 }
 

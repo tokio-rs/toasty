@@ -21,6 +21,14 @@ impl ToSql for Value {
     {
         match &self.0 {
             stmt::Value::Bool(value) => value.to_sql(ty, out),
+            stmt::Value::I32(value) => match *ty {
+                Type::INT4 => value.to_sql(ty, out),
+                Type::INT8 => {
+                    let value = *value as i64;
+                    value.to_sql(ty, out)
+                }
+                _ => todo!(),
+            },
             // TODO: we need to do better type management
             stmt::Value::I64(value) => match *ty {
                 Type::INT4 => {
@@ -33,7 +41,7 @@ impl ToSql for Value {
             stmt::Value::Id(value) => value.to_string().to_sql(ty, out),
             stmt::Value::Null => Ok(IsNull::Yes),
             stmt::Value::String(value) => value.to_sql(ty, out),
-            value => todo!("{:#?}", value),
+            value => todo!("{value:#?}"),
         }
     }
 

@@ -186,7 +186,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                     Column(expr_column) => {
                         let m =
                             self.match_expr_binary_op_column(expr_column, expr, stmt::BinaryOp::Le);
-                        assert!(m, "TODO; expr={:#?}", expr);
+                        assert!(m, "TODO; expr={expr:#?}");
                         m
                     }
                     _ => todo!("expr={:#?}", expr),

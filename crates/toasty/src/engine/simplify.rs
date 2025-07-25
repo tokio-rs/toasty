@@ -165,7 +165,7 @@ impl VisitMut for Simplify<'_> {
         if let stmt::UpdateTarget::Query(query) = &mut stmt.target {
             self.visit_stmt_query_mut(query);
 
-            let stmt::ExprSet::Select(select) = &mut *query.body else {
+            let stmt::ExprSet::Select(select) = &mut query.body else {
                 todo!()
             };
 
