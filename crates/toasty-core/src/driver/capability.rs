@@ -30,6 +30,21 @@ pub struct StorageTypes {
 }
 
 impl Capability {
+    /// Returns the default string length limit for this database.
+    ///
+    /// This is useful for tests and applications that need to respect
+    /// database-specific string length constraints.
+    pub fn default_string_max_length(&self) -> Option<u64> {
+        match &self.storage_types.default_string_type {
+            db::Type::VarChar(len) => Some(*len),
+            db::Type::Text => None, // Text types typically have very large or unlimited length
+            db::Type::Boolean | db::Type::Integer(_) => {
+                // These types shouldn't be used as default string types, but handle them gracefully
+                None
+            }
+        }
+    }
+
     /// SQLite capabilities.
     pub const SQLITE: Self = Self {
         sql: true,

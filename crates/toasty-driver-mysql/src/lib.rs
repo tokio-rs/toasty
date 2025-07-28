@@ -50,7 +50,10 @@ impl MySQL {
             ));
         }
 
-        let pool = Pool::from_url(url.as_ref())?;
+        let opts = mysql_async::Opts::from_url(url.as_ref())?;
+        let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
+
+        let pool = Pool::new(opts);
         Ok(Self { pool })
     }
 
