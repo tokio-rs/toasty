@@ -243,6 +243,10 @@ fn postgres_to_toasty(index: usize, row: &Row, column: &Column) -> stmt::Value {
         row.get::<usize, Option<bool>>(index)
             .map(stmt::Value::Bool)
             .unwrap_or(stmt::Value::Null)
+    } else if column.type_() == &Type::INT2 {
+        row.get::<usize, Option<i16>>(index)
+            .map(|v| stmt::Value::I8(v as i8))
+            .unwrap_or(stmt::Value::Null)
     } else if column.type_() == &Type::INT4 {
         row.get::<usize, Option<i32>>(index)
             .map(stmt::Value::I32)

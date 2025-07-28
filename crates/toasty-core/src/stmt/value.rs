@@ -11,6 +11,9 @@ pub enum Value {
     /// Value of an enumerated type
     Enum(ValueEnum),
 
+    /// Signed 8-bit integer
+    I8(i8),
+
     /// Signed 32-bit integer
     I32(i32),
 
@@ -159,6 +162,7 @@ impl Value {
         match self {
             Self::Null => true,
             Self::Bool(_) => ty.is_bool(),
+            Self::I8(_) => ty.is_i8(),
             Self::I32(_) => ty.is_i32(),
             Self::I64(_) => ty.is_i64(),
             Self::Id(value) => match ty {

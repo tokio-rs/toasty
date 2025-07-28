@@ -14,6 +14,7 @@ impl ToValue for Value {
     fn to_value(&self) -> mysql_async::Value {
         match &self.0 {
             CoreValue::Bool(value) => value.to_value(),
+            CoreValue::I8(value) => value.to_value(),
             CoreValue::I32(value) => value.to_value(),
             CoreValue::I64(value) => value.to_value(),
             CoreValue::Id(id) => id.to_string().to_value(),

@@ -9,6 +9,9 @@ pub enum Type {
     /// String type
     String,
 
+    /// Signed 8-bit integer
+    I8,
+
     /// Signed 32-bit integer
     I32,
 
@@ -118,14 +121,14 @@ impl Type {
 
         match op {
             Eq | Ne => match self {
-                Bool | String | I32 | I64 | Id(_) | Key(_) | Model(_) | ForeignKey(_) => true,
+                Bool | String | I8 | I32 | I64 | Id(_) | Key(_) | Model(_) | ForeignKey(_) => true,
                 Null => false,
                 List(ty) => ty.applies_binary_op(op),
                 Record(tys) => tys.iter().all(|ty| ty.applies_binary_op(op)),
                 Enum(_) | SparseRecord(_) => todo!(),
             },
             Ge | Gt | Le | Lt => match self {
-                I32 | I64 => true,
+                I8 | I32 | I64 => true,
                 Bool | String | Id(_) | Key(_) | Model(_) | ForeignKey(_) | Null | List(_)
                 | Record(_) | Enum(_) | SparseRecord(_) => false,
             },
