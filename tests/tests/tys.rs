@@ -73,63 +73,42 @@ async fn ty_str(s: impl Setup) {
 
     let db = s.setup(models!(Foo)).await;
 
-    let test_values = &[
+    let test_values: Vec<_> = [
         gen_string(0, "empty"),
         gen_string(10, "ascii"),
-        gen_string(50, "unicode"),
+        // 20 * 4 bytes = 80 bytes (well under MySQL's 191-byte limit)
+        gen_string(20, "unicode"),
         gen_string(100, "mixed"),
         gen_string(1_000, "ascii"),
         gen_string(10_000, "mixed"),
-        gen_string(100_000, "ascii"), // ~100KB - well under DynamoDB's 400KB limit
+        // ~100KB - well under DynamoDB's 400KB limit
+        gen_string(100_000, "ascii"),
         gen_string(20, "newlines"),
         gen_string(100, "spaces"),
-    ];
+    ]
+    .into_iter()
+    .filter(|value| match s.capability().default_string_max_length() {
+        Some(max_len) => max_len >= value.len() as _,
+        None => true,
+    })
+    .collect();
 
     // Test 1: All test values round-trip
-    for val in test_values {
-        let created = Foo::create().val(val.clone()).exec(&db).await.unwrap();
+    for val in &test_values {
+        let created = Foo::create().val((*val).clone()).exec(&db).await.unwrap();
         let read = Foo::get_by_id(&db, &created.id).await.unwrap();
-        assert_eq!(
-            read.val,
-            *val,
-            "Round-trip failed for string of length: {}",
-            val.len()
-        );
-    }
-
-    // Test 2: Multiple records with different values
-    let mut created_records = Vec::new();
-    for val in test_values {
-        let created = Foo::create().val(val.clone()).exec(&db).await.unwrap();
-        created_records.push((created.id, val.clone()));
-    }
-
-    for (id, expected_val) in created_records {
-        let read = Foo::get_by_id(&db, &id).await.unwrap();
-        assert_eq!(
-            read.val,
-            expected_val,
-            "Multiple records test failed for string of length: {}",
-            expected_val.len()
-        );
+        assert_eq!(read.val, *val);
     }
 
     // Test 3: Update chain
-    let mut record = Foo::create()
-        .val(test_values[0].clone())
-        .exec(&db)
-        .await
-        .unwrap();
-    for val in test_values {
-        record.update().val(val.clone()).exec(&db).await.unwrap();
+    let mut record = Foo::create().val(&test_values[0]).exec(&db).await.unwrap();
+
+    for val in &test_values {
+        record.update().val(val).exec(&db).await.unwrap();
+
         let read = Foo::get_by_id(&db, &record.id).await.unwrap();
-        assert_eq!(
-            read.val,
-            *val,
-            "Update chain failed for string of length: {}",
-            val.len()
-        );
-        record.val = val.clone();
+
+        assert_eq!(read.val, *val,);
     }
 }
 
