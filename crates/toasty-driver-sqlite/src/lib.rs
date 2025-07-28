@@ -200,6 +200,7 @@ enum V {
     Bool(bool),
     Null,
     String(String),
+    I8(i8),
     I64(i64),
     Id(usize, String),
 }
@@ -212,6 +213,7 @@ fn value_from_param(value: &stmt::Value) -> rusqlite::types::ToSqlOutput<'_> {
         Bool(true) => ToSqlOutput::Owned(Value::Integer(1)),
         Bool(false) => ToSqlOutput::Owned(Value::Integer(0)),
         Id(v) => ToSqlOutput::Owned(v.to_string().into()),
+        I8(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
         I32(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
         I64(v) => ToSqlOutput::Owned(Value::Integer(*v)),
         String(v) => ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes())),
@@ -247,6 +249,7 @@ fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt:
     match value {
         Some(SqlValue::Null) => stmt::Value::Null,
         Some(SqlValue::Integer(value)) => match ty {
+            stmt::Type::I8 => stmt::Value::I8(value as i8),
             stmt::Type::I32 => stmt::Value::I32(value as i32),
             stmt::Type::I64 => stmt::Value::I64(value),
             _ => todo!("ty={ty:#?}"),

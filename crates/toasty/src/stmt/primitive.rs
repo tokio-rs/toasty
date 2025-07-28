@@ -14,6 +14,14 @@ pub trait Primitive: Sized {
     }
 }
 
+impl Primitive for i8 {
+    const TYPE: stmt::Type = stmt::Type::I8;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
 impl Primitive for i32 {
     const TYPE: stmt::Type = stmt::Type::I32;
 

@@ -44,6 +44,10 @@ macro_rules! impl_num {
 }
 
 impl_num! {
+    I8(i8) {
+        to_i8
+        is_i8
+    }
     I32(i32) {
         to_i32
         is_i32

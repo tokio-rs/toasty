@@ -154,6 +154,7 @@ enum V {
     Bool(bool),
     Null,
     String(String),
+    I8(i8),
     I64(i64),
     I32(i32),
     Id(usize, String),
@@ -163,6 +164,7 @@ fn ddb_val(val: &stmt::Value) -> AttributeValue {
     match val {
         stmt::Value::Bool(val) => AttributeValue::Bool(*val),
         stmt::Value::String(val) => AttributeValue::S(val.to_string()),
+        stmt::Value::I8(val) => AttributeValue::N(val.to_string()),
         stmt::Value::I64(val) => AttributeValue::N(val.to_string()),
         stmt::Value::I32(val) => AttributeValue::N(val.to_string()),
         stmt::Value::Id(val) => AttributeValue::S(val.to_string()),
@@ -193,6 +195,7 @@ fn ddb_to_val(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
     match (ty, val) {
         (Type::Bool, Bool(val)) => stmt::Value::from(*val),
         (Type::String, S(val)) => stmt::Value::from(val.clone()),
+        (Type::I8, N(val)) => stmt::Value::from(val.parse::<i8>().unwrap()),
         (Type::I64, N(val)) => stmt::Value::from(val.parse::<i64>().unwrap()),
         (Type::I32, N(val)) => stmt::Value::from(val.parse::<i32>().unwrap()),
         (Type::Id(model), S(val)) => stmt::Value::from(stmt::Id::from_string(*model, val.clone())),
@@ -205,6 +208,7 @@ fn ddb_to_val(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
                 V::Null => stmt::Value::Null,
                 V::String(v) => stmt::Value::String(v),
                 V::Id(model, v) => stmt::Value::Id(stmt::Id::from_string(app::ModelId(model), v)),
+                V::I8(v) => stmt::Value::I8(v),
                 V::I64(v) => stmt::Value::I64(v),
                 V::I32(v) => stmt::Value::I32(v),
             };

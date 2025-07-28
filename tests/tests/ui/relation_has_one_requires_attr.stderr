@@ -8,5 +8,6 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Pr
             Option<T>
             i32
             i64
+            i8
             std::string::String
             toasty::stmt::Id<T>

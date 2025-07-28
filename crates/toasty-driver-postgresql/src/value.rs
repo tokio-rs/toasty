@@ -21,6 +21,21 @@ impl ToSql for Value {
     {
         match &self.0 {
             stmt::Value::Bool(value) => value.to_sql(ty, out),
+            stmt::Value::I8(value) => match *ty {
+                Type::INT2 => {
+                    let value = *value as i16;
+                    value.to_sql(ty, out)
+                }
+                Type::INT4 => {
+                    let value = *value as i32;
+                    value.to_sql(ty, out)
+                }
+                Type::INT8 => {
+                    let value = *value as i64;
+                    value.to_sql(ty, out)
+                }
+                _ => todo!(),
+            },
             stmt::Value::I32(value) => match *ty {
                 Type::INT4 => value.to_sql(ty, out),
                 Type::INT8 => {
@@ -45,6 +60,6 @@ impl ToSql for Value {
         }
     }
 
-    accepts!(BOOL, INT4, INT8, TEXT, VARCHAR);
+    accepts!(BOOL, INT2, INT4, INT8, TEXT, VARCHAR);
     to_sql_checked!();
 }

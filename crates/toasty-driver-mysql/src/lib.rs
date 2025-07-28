@@ -232,24 +232,14 @@ fn mysql_to_toasty(
             extract_or_null(row, i, stmt::Value::String)
         }
 
-        MYSQL_TYPE_TINY => {
-            if ty.is_bool() {
-                extract_or_null(row, i, stmt::Value::Bool)
-            } else if ty.is_i32() {
-                extract_or_null(row, i, stmt::Value::I32)
-            } else {
-                extract_or_null(row, i, stmt::Value::I64)
-            }
-        }
-
-        MYSQL_TYPE_SHORT | MYSQL_TYPE_INT24 | MYSQL_TYPE_LONG | MYSQL_TYPE_LONGLONG => {
-            if ty.is_i32() {
-                extract_or_null(row, i, stmt::Value::I32)
-            } else {
-                extract_or_null(row, i, stmt::Value::I64)
-            }
-        }
-
+        MYSQL_TYPE_TINY | MYSQL_TYPE_SHORT | MYSQL_TYPE_INT24 | MYSQL_TYPE_LONG
+        | MYSQL_TYPE_LONGLONG => match ty {
+            stmt::Type::Bool => extract_or_null(row, i, stmt::Value::Bool),
+            stmt::Type::I8 => extract_or_null(row, i, stmt::Value::I8),
+            stmt::Type::I32 => extract_or_null(row, i, stmt::Value::I32),
+            stmt::Type::I64 => extract_or_null(row, i, stmt::Value::I64),
+            _ => todo!("ty={ty:#?}"),
+        },
         _ => todo!(
             "implement MySQL to toasty conversion for `{:#?}`; {:#?}; ty={:#?}",
             column.column_type(),
