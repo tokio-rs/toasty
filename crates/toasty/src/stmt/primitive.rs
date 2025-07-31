@@ -50,7 +50,10 @@ impl Primitive for String {
     const TYPE: stmt::Type = stmt::Type::String;
 
     fn load(value: stmt::Value) -> Result<Self> {
-        value.to_string()
+        match value {
+            stmt::Value::String(v) => Ok(v),
+            _ => anyhow::bail!("cannot convert value to String {value:#?}"),
+        }
     }
 }
 
@@ -58,7 +61,10 @@ impl<T: Model> Primitive for Id<T> {
     const TYPE: stmt::Type = stmt::Type::Id(T::ID);
 
     fn load(value: stmt::Value) -> Result<Self> {
-        Ok(Self::from_untyped(value.to_id()?))
+        match value {
+            stmt::Value::Id(v) => Ok(Self::from_untyped(v)),
+            _ => panic!("cannot convert value to Id; value={value:#?}"),
+        }
     }
 }
 

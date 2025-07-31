@@ -91,28 +91,6 @@ impl Type {
             (value, _) => todo!("value={value:#?}; ty={self:#?}"),
         })
     }
-
-    pub fn applies_binary_op(&self, op: BinaryOp) -> bool {
-        use BinaryOp::*;
-        use Type::*;
-
-        match op {
-            Eq | Ne => match self {
-                Bool | String | I8 | I16 | I32 | I64 | Id(_) | Key(_) | Model(_)
-                | ForeignKey(_) => true,
-                Null => false,
-                List(ty) => ty.applies_binary_op(op),
-                Record(tys) => tys.iter().all(|ty| ty.applies_binary_op(op)),
-                Enum(_) | SparseRecord(_) => todo!(),
-            },
-            Ge | Gt | Le | Lt => match self {
-                I8 | I16 | I32 | I64 => true,
-                Bool | String | Id(_) | Key(_) | Model(_) | ForeignKey(_) | Null | List(_)
-                | Record(_) | Enum(_) | SparseRecord(_) => false,
-            },
-            _ => todo!("op = {:#?}", op),
-        }
-    }
 }
 
 impl From<&Self> for Type {
