@@ -1,7 +1,6 @@
 use sparse_record::SparseRecord;
 
 use super::*;
-use crate::Result;
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum Value {
@@ -72,51 +71,6 @@ impl Value {
     /// Create a `ValueCow` representing the given boolean value
     pub const fn from_bool(src: bool) -> Self {
         Self::Bool(src)
-    }
-
-    // TODO: switch these to `Option`
-    pub fn to_bool(self) -> Result<bool> {
-        match self {
-            Self::Bool(v) => Ok(v),
-            _ => anyhow::bail!("cannot convert value to bool"),
-        }
-    }
-
-    pub fn to_id(self) -> Result<Id> {
-        match self {
-            Self::Id(v) => Ok(v),
-            _ => panic!("cannot convert value to Id; value={self:#?}"),
-        }
-    }
-
-    pub fn to_option_id(self) -> Result<Option<Id>> {
-        match self {
-            Self::Null => Ok(None),
-            Self::Id(v) => Ok(Some(v)),
-            _ => panic!("cannot convert value to Id; value={self:#?}"),
-        }
-    }
-
-    pub fn to_string(self) -> Result<String> {
-        match self {
-            Self::String(v) => Ok(v),
-            _ => anyhow::bail!("cannot convert value to String {self:#?}"),
-        }
-    }
-
-    pub fn to_option_string(self) -> Result<Option<String>> {
-        match self {
-            Self::Null => Ok(None),
-            Self::String(v) => Ok(Some(v)),
-            _ => anyhow::bail!("cannot convert value to String"),
-        }
-    }
-
-    pub fn to_record(self) -> Result<ValueRecord> {
-        match self {
-            Self::Record(record) => Ok(record),
-            _ => anyhow::bail!("cannot convert value to record"),
-        }
     }
 
     pub fn as_str(&self) -> Option<&str> {
