@@ -208,8 +208,7 @@ impl Driver for PostgreSQL {
             let ret_tys = ret_tys.as_ref().unwrap().clone();
             let results = rows.into_iter().map(move |row| {
                 let mut results = Vec::new();
-                for i in 0..row.len() {
-                    let column = &row.columns()[i];
+                for (i, column) in row.columns().iter().enumerate() {
                     results.push(postgres_to_toasty(i, &row, column, &ret_tys[i]));
                 }
 
