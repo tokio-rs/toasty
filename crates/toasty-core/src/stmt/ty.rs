@@ -91,32 +91,6 @@ impl Type {
             (value, _) => todo!("value={value:#?}; ty={self:#?}"),
         })
     }
-
-    pub fn casts_to(&self, other: &Self) -> bool {
-        match self {
-            Self::Null => true,
-            Self::List(item) => match other {
-                Self::List(other_item) => item.casts_to(other_item),
-                // A list of 1 item can be flattened when cast. Right now, we
-                // can't statically know if a list will only have 1 item, so we
-                // just say it can cast.
-                _ => item.casts_to(other),
-            },
-            Self::Record(items) => match other {
-                Self::Record(other_items) => items
-                    .iter()
-                    .zip(other_items.iter())
-                    .all(|(item, other_item)| item.casts_to(other_item)),
-                _ => false,
-            },
-            Self::Id(model) | Self::Model(model) => match other {
-                Self::Id(other_model) => model == other_model,
-                Self::Model(other_model) => model == other_model,
-                _ => false,
-            },
-            _ => self == other,
-        }
-    }
 }
 
 impl From<&Self> for Type {
