@@ -124,7 +124,8 @@ impl Type {
 
         match op {
             Eq | Ne => match self {
-                Bool | String | I8 | I16 | I32 | I64 | Id(_) | Key(_) | Model(_) | ForeignKey(_) => true,
+                Bool | String | I8 | I16 | I32 | I64 | Id(_) | Key(_) | Model(_)
+                | ForeignKey(_) => true,
                 Null => false,
                 List(ty) => ty.applies_binary_op(op),
                 Record(tys) => tys.iter().all(|ty| ty.applies_binary_op(op)),
