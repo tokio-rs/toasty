@@ -236,6 +236,7 @@ fn mysql_to_toasty(
         | MYSQL_TYPE_LONGLONG => match ty {
             stmt::Type::Bool => extract_or_null(row, i, stmt::Value::Bool),
             stmt::Type::I8 => extract_or_null(row, i, stmt::Value::I8),
+            stmt::Type::I16 => extract_or_null(row, i, stmt::Value::I16),
             stmt::Type::I32 => extract_or_null(row, i, stmt::Value::I32),
             stmt::Type::I64 => extract_or_null(row, i, stmt::Value::I64),
             _ => todo!("ty={ty:#?}"),

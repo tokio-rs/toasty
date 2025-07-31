@@ -22,6 +22,14 @@ impl Primitive for i8 {
     }
 }
 
+impl Primitive for i16 {
+    const TYPE: stmt::Type = stmt::Type::I16;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
 impl Primitive for i32 {
     const TYPE: stmt::Type = stmt::Type::I32;
 

@@ -48,6 +48,10 @@ impl_num! {
         to_i8
         is_i8
     }
+    I16(i16) {
+        to_i16
+        is_i16
+    }
     I32(i32) {
         to_i32
         is_i32

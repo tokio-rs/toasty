@@ -25,6 +25,7 @@ macro_rules! impl_into_expr_for_copy {
 impl_into_expr_for_copy! {
     Bool(bool);
     I8(i8);
+    I16(i16);
     I32(i32);
     I64(i64);
 }
