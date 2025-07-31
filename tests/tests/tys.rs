@@ -2,7 +2,7 @@ use tests::*;
 
 use toasty::stmt::Id;
 
-tests!(ty_i8, ty_i32, ty_i64, ty_str);
+tests!(ty_i8, ty_i16, ty_i32, ty_i64, ty_str);
 
 macro_rules! def_num_ty_tests {
     (
@@ -57,6 +57,7 @@ macro_rules! def_num_ty_tests {
 
 def_num_ty_tests!(
     i8 => &[i8::MIN, -100, -1, 0, 1, 100, i8::MAX] => ty_i8;
+    i16 => &[i16::MIN, -10000, -1, 0, 1, 10000, i16::MAX] => ty_i16;
     i32 => &[i32::MIN, -1000000, -1, 0, 1, 1000000, i32::MAX] => ty_i32;
     i64 => &[i64::MIN, -1000000000000, -1, 0, 1, 1000000000000, i64::MAX] => ty_i64;
 );

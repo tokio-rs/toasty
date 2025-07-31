@@ -26,6 +26,7 @@ impl Type {
             None => match ty {
                 stmt::Type::Bool => Ok(Type::Boolean),
                 &stmt::Type::I8 => Ok(Type::Integer(1)),
+                &stmt::Type::I16 => Ok(Type::Integer(2)),
                 &stmt::Type::I32 => Ok(Type::Integer(4)),
                 stmt::Type::I64 => Ok(Type::Integer(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),

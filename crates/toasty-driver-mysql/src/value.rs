@@ -15,6 +15,7 @@ impl ToValue for Value {
         match &self.0 {
             CoreValue::Bool(value) => value.to_value(),
             CoreValue::I8(value) => value.to_value(),
+            CoreValue::I16(value) => value.to_value(),
             CoreValue::I32(value) => value.to_value(),
             CoreValue::I64(value) => value.to_value(),
             CoreValue::Id(id) => id.to_string().to_value(),
