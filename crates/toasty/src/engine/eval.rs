@@ -9,7 +9,6 @@ pub(crate) use input::Input;
 
 use super::*;
 use crate::engine::ty;
-use toasty_core::schema::app::FieldId;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Func<T = stmt::Expr> {
@@ -238,12 +237,8 @@ fn convert_and_verify_expr(expr: &mut stmt::Expr, convert: &mut impl Convert) ->
             *expr = e;
             convert_and_verify_expr(expr, convert)
         }
-        Reference(stmt::ExprReference::Field { model, index }) => {
-            let field_id = FieldId {
-                model: *model,
-                index: *index,
-            };
-            let Some(e) = convert.convert_expr_field(field_id) else {
+        Reference(expr_ref) => {
+            let Some(e) = convert.convert_expr_reference(expr_ref) else {
                 return false;
             };
             *expr = e;

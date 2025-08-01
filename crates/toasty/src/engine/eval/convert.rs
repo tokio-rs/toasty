@@ -1,8 +1,7 @@
 use super::*;
-use toasty_core::schema::app::FieldId;
 
 pub trait Convert {
-    fn convert_expr_field(&mut self, _field_id: FieldId) -> Option<stmt::Expr> {
+    fn convert_expr_reference(&mut self, _expr_ref: &stmt::ExprReference) -> Option<stmt::Expr> {
         None
     }
 
