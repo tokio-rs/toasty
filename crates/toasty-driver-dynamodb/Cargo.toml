@@ -8,8 +8,8 @@ publish = false
 toasty-core.workspace = true
 
 anyhow.workspace = true
-aws-config = "1"
-aws-sdk-dynamodb = { version = "1.3.0", features = ["test-util"] }
+aws-config.workspace = true
+aws-sdk-dynamodb.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 url.workspace = true
