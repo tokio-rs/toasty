@@ -26,6 +26,11 @@ impl Schema {
             .expect("invalid field ID")
     }
 
+    /// Get a field by ExprReference (if it's a field reference)
+    pub fn field_from_expr(&self, expr_ref: &crate::stmt::ExprReference) -> Option<&Field> {
+        expr_ref.as_field_id().map(|field_id| self.field(field_id))
+    }
+
     pub fn models(&self) -> impl Iterator<Item = &Model> {
         self.models.values()
     }

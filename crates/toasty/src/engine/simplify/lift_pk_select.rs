@@ -1,5 +1,5 @@
 use super::*;
-use app::FieldId;
+use toasty_core::schema::app::FieldId;
 
 use toasty_core::schema::*;
 
@@ -25,7 +25,14 @@ pub(crate) fn lift_key_select(
                 return None;
             };
 
-            let lhs_field = schema.app.field(expr_binary_op.lhs.as_field().field);
+            let expr_reference = match &*expr_binary_op.lhs {
+                stmt::Expr::Reference(expr_ref) => expr_ref,
+                _ => return None,
+            };
+            let lhs_field = schema
+                .app
+                .field_from_expr(expr_reference)
+                .unwrap_or_else(|| todo!("handle None"));
 
             if *key_field == lhs_field.id {
                 if let stmt::Expr::Value(value) = &*expr_binary_op.rhs {

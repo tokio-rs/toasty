@@ -392,11 +392,17 @@ impl ApplyInsertScope<'_> {
                 }
             }
             stmt::Expr::BinaryOp(e) if e.op.is_eq() => match (&*e.lhs, &*e.rhs) {
-                (stmt::Expr::Field(lhs), stmt::Expr::Value(rhs)) => {
-                    self.apply_eq_const(lhs.field, rhs, set);
+                (
+                    stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }),
+                    stmt::Expr::Value(rhs),
+                ) => {
+                    self.apply_eq_const(expr_ref, rhs, set);
                 }
-                (stmt::Expr::Value(lhs), stmt::Expr::Field(rhs)) => {
-                    self.apply_eq_const(rhs.field, lhs, set);
+                (
+                    stmt::Expr::Value(lhs),
+                    stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }),
+                ) => {
+                    self.apply_eq_const(expr_ref, lhs, set);
                 }
                 _ => todo!(),
             },
@@ -406,8 +412,11 @@ impl ApplyInsertScope<'_> {
         }
     }
 
-    fn apply_eq_const(&mut self, field: app::FieldId, val: &stmt::Value, set: bool) {
-        let mut existing = self.expr.entry_mut(field.index);
+    fn apply_eq_const(&mut self, expr_ref: &stmt::ExprReference, val: &stmt::Value, set: bool) {
+        let field_id = expr_ref
+            .as_field_id()
+            .unwrap_or_else(|| todo!("handle non-field reference"));
+        let mut existing = self.expr.entry_mut(field_id.index);
 
         if !existing.is_value_null() {
             if let stmt::EntryMut::Value(existing) = existing {

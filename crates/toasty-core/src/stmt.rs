@@ -52,9 +52,6 @@ pub use expr_concat_str::ExprConcatStr;
 mod expr_enum;
 pub use expr_enum::ExprEnum;
 
-mod expr_field;
-pub use expr_field::ExprField;
-
 mod expr_func;
 pub use expr_func::ExprFunc;
 

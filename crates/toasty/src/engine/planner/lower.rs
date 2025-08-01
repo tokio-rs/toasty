@@ -1,4 +1,5 @@
 use super::*;
+use toasty_core::schema::app::FieldId;
 
 use db::{Column, Table};
 
@@ -19,7 +20,7 @@ struct LowerStatement<'a> {
 struct Substitute<I>(I);
 
 trait Input {
-    fn resolve_field(&mut self, expr_field: &stmt::ExprField) -> stmt::Expr;
+    fn resolve_field(&mut self, field_id: FieldId) -> stmt::Expr;
 }
 
 impl<'a> LowerStatement<'a> {
@@ -121,8 +122,8 @@ impl VisitMut for LowerStatement<'_> {
             stmt::Expr::BinaryOp(expr) => {
                 self.lower_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
-            stmt::Expr::Field(expr) => {
-                *i = self.mapping.table_to_model[expr.field.index].clone();
+            stmt::Expr::Reference(stmt::ExprReference::Field { model: _, index }) => {
+                *i = self.mapping.table_to_model[*index].clone();
 
                 self.visit_expr_mut(i);
                 return;
@@ -452,8 +453,12 @@ impl LowerStatement<'_> {
 impl<I: Input> VisitMut for Substitute<I> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         match i {
-            stmt::Expr::Field(expr_field) => {
-                *i = self.0.resolve_field(expr_field);
+            stmt::Expr::Reference(stmt::ExprReference::Field { model, index }) => {
+                let field_id = FieldId {
+                    model: *model,
+                    index: *index,
+                };
+                *i = self.0.resolve_field(field_id);
             }
             // Do not traverse these
             stmt::Expr::InSubquery(_) | stmt::Expr::Stmt(_) => {}
@@ -473,14 +478,14 @@ impl<I: Input> VisitMut for Substitute<I> {
 }
 
 impl Input for &mut stmt::Expr {
-    fn resolve_field(&mut self, expr_field: &stmt::ExprField) -> stmt::Expr {
-        self.entry(expr_field.field.index).to_expr()
+    fn resolve_field(&mut self, field_id: FieldId) -> stmt::Expr {
+        self.entry(field_id.index).to_expr()
     }
 }
 
 impl Input for &stmt::Assignments {
-    fn resolve_field(&mut self, expr_field: &stmt::ExprField) -> stmt::Expr {
-        let assignment = &self[expr_field.field.index];
+    fn resolve_field(&mut self, field_id: FieldId) -> stmt::Expr {
+        let assignment = &self[field_id.index];
         assert!(assignment.op.is_set());
         assignment.expr.clone()
     }

@@ -1,9 +1,10 @@
 use super::*;
+use toasty_core::schema::app::FieldId;
 
 pub(crate) trait Resolve {
     fn resolve_column(&self, stmt: &stmt::ExprColumn) -> &stmt::Type;
 
-    fn resolve_field(&self, stmt: &stmt::ExprField) -> &stmt::Type;
+    fn resolve_field(&self, field_id: FieldId) -> &stmt::Type;
 }
 
 struct NoopResolve;
@@ -16,8 +17,8 @@ impl Resolve for Schema {
             .ty
     }
 
-    fn resolve_field(&self, stmt: &stmt::ExprField) -> &stmt::Type {
-        self.app.field(stmt.field).expr_ty()
+    fn resolve_field(&self, field_id: FieldId) -> &stmt::Type {
+        self.app.field(field_id).expr_ty()
     }
 }
 
@@ -26,7 +27,7 @@ impl Resolve for NoopResolve {
         panic!("expression should not reference columns")
     }
 
-    fn resolve_field(&self, _stmt: &stmt::ExprField) -> &stmt::Type {
+    fn resolve_field(&self, _field_id: FieldId) -> &stmt::Type {
         panic!("expression should not reference fields")
     }
 }
@@ -50,7 +51,13 @@ pub(crate) fn infer_expr_ty(
         BinaryOp(_) => stmt::Type::Bool,
         Cast(e) => e.ty.clone(),
         Column(e) => resolve.resolve_column(e).clone(),
-        Field(e) => resolve.resolve_field(e).clone(),
+        Reference(stmt::ExprReference::Field { model, index }) => {
+            let field_id = FieldId {
+                model: *model,
+                index: *index,
+            };
+            resolve.resolve_field(field_id).clone()
+        }
         IsNull(_) => stmt::Type::Bool,
         Map(e) => {
             let base = infer_expr_ty(&e.base, args, resolve);

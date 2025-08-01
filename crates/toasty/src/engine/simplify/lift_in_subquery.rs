@@ -1,5 +1,6 @@
 use super::*;
-use app::{BelongsTo, FieldId, FieldTy, HasOne};
+use app::{BelongsTo, FieldTy, HasOne};
+use toasty_core::schema::app::FieldId;
 
 use stmt::Visit;
 
@@ -22,7 +23,11 @@ impl Simplify<'_> {
             stmt::Expr::Project(_) => {
                 todo!()
             }
-            stmt::Expr::Field(expr) => self.schema.app.field(expr.field),
+            stmt::Expr::Reference(expr_reference) => self
+                .schema
+                .app
+                .field_from_expr(expr_reference)
+                .unwrap_or_else(|| todo!("handle None")),
             _ => {
                 return None;
             }
@@ -137,9 +142,12 @@ impl Simplify<'_> {
 impl Visit for LiftBelongsTo<'_> {
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         match (&*i.lhs, &*i.rhs) {
-            (stmt::Expr::Field(expr_field), other) | (other, stmt::Expr::Field(expr_field)) => {
+            (stmt::Expr::Reference(expr_reference), other)
+            | (other, stmt::Expr::Reference(expr_reference)) => {
                 assert!(i.op.is_eq());
-                self.lift_fk_constraint(expr_field.field, other);
+                if let Some(field_id) = expr_reference.as_field_id() {
+                    self.lift_fk_constraint(field_id, other);
+                }
             }
             _ => {}
         }
