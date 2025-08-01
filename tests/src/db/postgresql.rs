@@ -39,7 +39,7 @@ impl Setup for SetupPostgreSQL {
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         cleanup_postgresql_tables(&self.isolation)
             .await
-            .map_err(|e| toasty::Error::message(format!("PostgreSQL cleanup failed: {}", e)))
+            .map_err(|e| toasty::Error::msg(format!("PostgreSQL cleanup failed: {}", e)))
     }
 }
 

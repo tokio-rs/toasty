@@ -39,7 +39,7 @@ impl Setup for SetupMySQL {
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         cleanup_mysql_tables(&self.isolation)
             .await
-            .map_err(|e| toasty::Error::message(format!("MySQL cleanup failed: {}", e)))
+            .map_err(|e| toasty::Error::msg(format!("MySQL cleanup failed: {}", e)))
     }
 }
 
@@ -49,7 +49,8 @@ async fn cleanup_mysql_tables(isolation: &TestIsolation) -> Result<(), Box<dyn s
     let url = std::env::var("TOASTY_TEST_MYSQL_URL")
         .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
 
-    let pool = mysql_async::Pool::new(url);
+    let opts = mysql_async::Opts::from_url(&url)?;
+    let pool = mysql_async::Pool::new(opts);
     let mut conn = pool.get_conn().await?;
 
     let my_prefix = isolation.table_prefix();

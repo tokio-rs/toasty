@@ -40,25 +40,70 @@ impl Setup for SetupDynamoDb {
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         cleanup_dynamodb_tables(&self.isolation)
             .await
-            .map_err(|e| toasty::Error::message(format!("DynamoDB cleanup failed: {}", e)))
+            .map_err(|e| toasty::Error::msg(format!("DynamoDB cleanup failed: {}", e)))
     }
 }
 
 async fn cleanup_dynamodb_tables(
     isolation: &TestIsolation,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // For now, we'll implement a basic cleanup that doesn't require additional AWS dependencies
-    // This can be enhanced later when we have access to the AWS SDK through workspace dependencies
+    use aws_config::BehaviorVersion;
+    use aws_sdk_dynamodb::Client;
 
-    // TODO: Implement DynamoDB table cleanup using the AWS SDK
-    // This would involve:
-    // 1. List all tables
-    // 2. Filter for tables with our prefix
-    // 3. Delete matching tables
+    // Create DynamoDB client
+    let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let client = Client::new(&config);
 
-    let _ = isolation; // Suppress unused variable warning
+    let my_prefix = isolation.table_prefix();
 
-    // For now, return Ok since DynamoDB tables are typically short-lived in test environments
-    // and the unique prefixes prevent conflicts which was the main goal
+    // List all tables and filter for ones we own
+    let mut table_names = Vec::new();
+    let mut exclusive_start_table_name = None;
+
+    loop {
+        let mut request = client.list_tables();
+        if let Some(start_name) = exclusive_start_table_name {
+            request = request.exclusive_start_table_name(start_name);
+        }
+
+        let response = request.send().await?;
+
+        if let Some(names) = response.table_names {
+            // Filter for tables that belong to this test
+            table_names.extend(
+                names
+                    .into_iter()
+                    .filter(|name| name.starts_with(&my_prefix)),
+            );
+        }
+
+        exclusive_start_table_name = response.last_evaluated_table_name;
+        if exclusive_start_table_name.is_none() {
+            break;
+        }
+    }
+
+    // Delete our tables
+    for table_name in table_names {
+        // First check if table exists and is not being deleted
+        match client.describe_table().table_name(&table_name).send().await {
+            Ok(response) => {
+                if let Some(table) = response.table {
+                    if let Some(status) = table.table_status {
+                        // Only try to delete if table is ACTIVE
+                        if status == aws_sdk_dynamodb::types::TableStatus::Active {
+                            let _ = client.delete_table().table_name(&table_name).send().await;
+                            // Ignore individual delete errors
+                        }
+                    }
+                }
+            }
+            Err(_) => {
+                // Table doesn't exist or we can't access it, skip
+                continue;
+            }
+        }
+    }
+
     Ok(())
 }
