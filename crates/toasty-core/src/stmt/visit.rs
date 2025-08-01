@@ -58,10 +58,6 @@ pub trait Visit {
         visit_expr_enum(self, i);
     }
 
-    fn visit_expr_field(&mut self, i: &ExprField) {
-        visit_expr_field(self, i);
-    }
-
     fn visit_expr_func(&mut self, i: &ExprFunc) {
         visit_expr_func(self, i);
     }
@@ -256,10 +252,6 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_enum(&mut **self, i);
     }
 
-    fn visit_expr_field(&mut self, i: &ExprField) {
-        Visit::visit_expr_field(&mut **self, i);
-    }
-
     fn visit_expr_func(&mut self, i: &ExprFunc) {
         Visit::visit_expr_func(&mut **self, i);
     }
@@ -440,7 +432,6 @@ where
         Expr::Column(expr) => v.visit_expr_column(expr),
         Expr::Concat(expr) => v.visit_expr_concat(expr),
         Expr::Enum(expr) => v.visit_expr_enum(expr),
-        Expr::Field(expr) => v.visit_expr_field(expr),
         Expr::InList(expr) => v.visit_expr_in_list(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
@@ -449,6 +440,7 @@ where
         Expr::Pattern(expr) => v.visit_expr_pattern(expr),
         Expr::Project(expr) => v.visit_expr_project(expr),
         Expr::Record(expr) => v.visit_expr_record(expr),
+        Expr::Reference(expr) => v.visit_expr_reference(expr),
         Expr::List(expr) => v.visit_expr_list(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt(expr),
         Expr::Type(expr) => v.visit_expr_ty(expr),
@@ -522,12 +514,6 @@ where
     V: Visit + ?Sized,
 {
     v.visit_expr_record(&node.fields);
-}
-
-pub fn visit_expr_field<V>(_v: &mut V, _node: &ExprField)
-where
-    V: Visit + ?Sized,
-{
 }
 
 pub fn visit_expr_func<V>(v: &mut V, node: &ExprFunc)

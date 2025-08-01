@@ -58,10 +58,6 @@ pub trait VisitMut {
         visit_expr_enum_mut(self, i);
     }
 
-    fn visit_expr_field_mut(&mut self, i: &mut ExprField) {
-        visit_expr_field_mut(self, i);
-    }
-
     fn visit_expr_func_mut(&mut self, i: &mut ExprFunc) {
         visit_expr_func_mut(self, i);
     }
@@ -256,10 +252,6 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_enum_mut(&mut **self, i);
     }
 
-    fn visit_expr_field_mut(&mut self, i: &mut ExprField) {
-        VisitMut::visit_expr_field_mut(&mut **self, i);
-    }
-
     fn visit_expr_func_mut(&mut self, i: &mut ExprFunc) {
         VisitMut::visit_expr_func_mut(&mut **self, i);
     }
@@ -440,7 +432,6 @@ where
         Expr::Column(expr) => v.visit_expr_column_mut(expr),
         Expr::Concat(expr) => v.visit_expr_concat_mut(expr),
         Expr::Enum(expr) => v.visit_expr_enum_mut(expr),
-        Expr::Field(expr) => v.visit_expr_field_mut(expr),
         Expr::Func(expr) => v.visit_expr_func_mut(expr),
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
@@ -524,12 +515,6 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_expr_record_mut(&mut node.fields);
-}
-
-pub fn visit_expr_field_mut<V>(_v: &mut V, _node: &mut ExprField)
-where
-    V: VisitMut + ?Sized,
-{
 }
 
 pub fn visit_expr_func_mut<V>(v: &mut V, node: &mut ExprFunc)

@@ -27,9 +27,6 @@ pub enum Expr {
     /// Return an enum value
     Enum(ExprEnum),
 
-    /// References a field in the statement
-    Field(ExprField),
-
     /// Function call
     Func(ExprFunc),
 
@@ -226,6 +223,21 @@ impl Expr {
 
         Substitute(input).visit_expr_mut(self);
     }
+
+    pub fn field(field: impl Into<FieldId>) -> Self {
+        ExprReference::from(field.into()).into()
+    }
+
+    pub fn is_field(&self) -> bool {
+        matches!(self, Self::Reference(ExprReference::Field { .. }))
+    }
+
+    pub fn as_field(&self) -> Option<(ModelId, usize)> {
+        match self {
+            Self::Reference(ExprReference::Field { model, index }) => Some((*model, *index)),
+            _ => None,
+        }
+    }
 }
 
 impl Default for Expr {
@@ -288,6 +300,24 @@ impl From<Value> for Expr {
     }
 }
 
+impl From<&Field> for Expr {
+    fn from(value: &Field) -> Self {
+        Self::field(value.id())
+    }
+}
+
+impl From<FieldId> for Expr {
+    fn from(value: FieldId) -> Self {
+        Self::field(value)
+    }
+}
+
+impl From<ExprReference> for Expr {
+    fn from(value: ExprReference) -> Self {
+        Self::Reference(value)
+    }
+}
+
 impl<E1, E2> From<(E1, E2)> for Expr
 where
     E1: Into<Self>,
@@ -309,7 +339,6 @@ impl fmt::Debug for Expr {
             Self::Concat(e) => e.fmt(f),
             Self::ConcatStr(e) => e.fmt(f),
             Self::Enum(e) => e.fmt(f),
-            Self::Field(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),

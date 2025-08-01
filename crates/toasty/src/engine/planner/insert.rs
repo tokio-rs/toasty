@@ -1,4 +1,5 @@
 use super::*;
+use toasty_core::schema::app::FieldId;
 
 use crate::Result;
 use db::ColumnId;
@@ -392,11 +393,25 @@ impl ApplyInsertScope<'_> {
                 }
             }
             stmt::Expr::BinaryOp(e) if e.op.is_eq() => match (&*e.lhs, &*e.rhs) {
-                (stmt::Expr::Field(lhs), stmt::Expr::Value(rhs)) => {
-                    self.apply_eq_const(lhs.field, rhs, set);
+                (
+                    stmt::Expr::Reference(stmt::ExprReference::Field { model, index }),
+                    stmt::Expr::Value(rhs),
+                ) => {
+                    let field_id = FieldId {
+                        model: *model,
+                        index: *index,
+                    };
+                    self.apply_eq_const(field_id, rhs, set);
                 }
-                (stmt::Expr::Value(lhs), stmt::Expr::Field(rhs)) => {
-                    self.apply_eq_const(rhs.field, lhs, set);
+                (
+                    stmt::Expr::Value(lhs),
+                    stmt::Expr::Reference(stmt::ExprReference::Field { model, index }),
+                ) => {
+                    let field_id = FieldId {
+                        model: *model,
+                        index: *index,
+                    };
+                    self.apply_eq_const(field_id, lhs, set);
                 }
                 _ => todo!(),
             },
