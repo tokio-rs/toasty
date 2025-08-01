@@ -29,7 +29,9 @@ pub(crate) fn lift_key_select(
                 stmt::Expr::Reference(expr_ref) => expr_ref,
                 _ => return None,
             };
-            let lhs_field = schema.app.field_from_expr(expr_reference)
+            let lhs_field = schema
+                .app
+                .field_from_expr(expr_reference)
                 .unwrap_or_else(|| todo!("handle None"));
 
             if *key_field == lhs_field.id {

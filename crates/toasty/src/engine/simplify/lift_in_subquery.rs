@@ -23,10 +23,11 @@ impl Simplify<'_> {
             stmt::Expr::Project(_) => {
                 todo!()
             }
-            stmt::Expr::Reference(expr_reference) => {
-                self.schema.app.field_from_expr(expr_reference)
-                    .unwrap_or_else(|| todo!("handle None"))
-            }
+            stmt::Expr::Reference(expr_reference) => self
+                .schema
+                .app
+                .field_from_expr(expr_reference)
+                .unwrap_or_else(|| todo!("handle None")),
             _ => {
                 return None;
             }

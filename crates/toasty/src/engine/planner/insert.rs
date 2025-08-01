@@ -413,7 +413,8 @@ impl ApplyInsertScope<'_> {
     }
 
     fn apply_eq_const(&mut self, expr_ref: &stmt::ExprReference, val: &stmt::Value, set: bool) {
-        let field_id = expr_ref.as_field_id()
+        let field_id = expr_ref
+            .as_field_id()
             .unwrap_or_else(|| todo!("handle non-field reference"));
         let mut existing = self.expr.entry_mut(field_id.index);
 
