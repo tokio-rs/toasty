@@ -35,7 +35,8 @@ impl Simplify<'_> {
             }
             (stmt::Expr::Reference(expr_reference), other)
             | (other, stmt::Expr::Reference(expr_reference)) => {
-                let field = self.schema.app.field_from_expr(expr_reference)?;
+                let field = self.schema.app.field_from_expr(expr_reference)
+                    .unwrap_or_else(|| todo!("handle None"));
 
                 match &field.ty {
                     FieldTy::Primitive(_) => None,
