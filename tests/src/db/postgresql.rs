@@ -39,7 +39,7 @@ impl Setup for SetupPostgreSQL {
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         cleanup_postgresql_tables(&self.isolation)
             .await
-            .map_err(|e| toasty::Error::msg(format!("PostgreSQL cleanup failed: {}", e)))
+            .map_err(|e| toasty::Error::msg(format!("PostgreSQL cleanup failed: {e}")))
     }
 }
 
@@ -56,7 +56,7 @@ async fn cleanup_postgresql_tables(
     // Spawn the connection task
     tokio::spawn(async move {
         if let Err(e) = connection.await {
-            eprintln!("PostgreSQL connection error during cleanup: {}", e);
+            eprintln!("PostgreSQL connection error during cleanup: {e}");
         }
     });
 
@@ -67,14 +67,14 @@ async fn cleanup_postgresql_tables(
         .query(
             "SELECT table_name FROM information_schema.tables
          WHERE table_schema = 'public' AND table_name LIKE $1",
-            &[&format!("{}%", my_prefix)],
+            &[&format!("{my_prefix}%")],
         )
         .await?;
 
     // Drop each table
     for row in rows {
         let table_name: String = row.get(0);
-        let query = format!("DROP TABLE IF EXISTS {} CASCADE", table_name);
+        let query = format!("DROP TABLE IF EXISTS {table_name} CASCADE");
         let _ = client.execute(&query, &[]).await; // Ignore individual table drop errors
     }
 

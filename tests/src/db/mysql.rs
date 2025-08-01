@@ -39,7 +39,7 @@ impl Setup for SetupMySQL {
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         cleanup_mysql_tables(&self.isolation)
             .await
-            .map_err(|e| toasty::Error::msg(format!("MySQL cleanup failed: {}", e)))
+            .map_err(|e| toasty::Error::msg(format!("MySQL cleanup failed: {e}")))
     }
 }
 
@@ -59,14 +59,13 @@ async fn cleanup_mysql_tables(isolation: &TestIsolation) -> Result<(), Box<dyn s
     let rows: Vec<String> = conn
         .query(format!(
             "SELECT table_name FROM information_schema.tables
-         WHERE table_schema = DATABASE() AND table_name LIKE '{}%'",
-            my_prefix
+         WHERE table_schema = DATABASE() AND table_name LIKE '{my_prefix}%'"
         ))
         .await?;
 
     // Drop each table
     for table_name in rows {
-        let query = format!("DROP TABLE IF EXISTS {}", table_name);
+        let query = format!("DROP TABLE IF EXISTS {table_name}");
         let _ = conn.query_drop(&query).await; // Ignore individual table drop errors
     }
 

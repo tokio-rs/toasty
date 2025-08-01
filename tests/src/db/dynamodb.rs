@@ -40,7 +40,7 @@ impl Setup for SetupDynamoDb {
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         cleanup_dynamodb_tables(&self.isolation)
             .await
-            .map_err(|e| toasty::Error::msg(format!("DynamoDB cleanup failed: {}", e)))
+            .map_err(|e| toasty::Error::msg(format!("DynamoDB cleanup failed: {e}")))
     }
 }
 
