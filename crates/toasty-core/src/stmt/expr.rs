@@ -231,13 +231,6 @@ impl Expr {
     pub fn is_field(&self) -> bool {
         matches!(self, Self::Reference(ExprReference::Field { .. }))
     }
-
-    pub fn as_field(&self) -> Option<(ModelId, usize)> {
-        match self {
-            Self::Reference(ExprReference::Field { model, index }) => Some((*model, *index)),
-            _ => None,
-        }
-    }
 }
 
 impl Default for Expr {
