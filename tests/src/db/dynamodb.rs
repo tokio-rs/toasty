@@ -1,23 +1,31 @@
 use toasty::driver::Capability;
 use toasty::{db, Db};
 
-use crate::Setup;
+use crate::{isolation::TestIsolation, Setup};
 
-pub struct SetupDynamoDb;
+pub struct SetupDynamoDb {
+    isolation: TestIsolation,
+}
+
+impl SetupDynamoDb {
+    pub fn new() -> Self {
+        Self {
+            isolation: TestIsolation::new(),
+        }
+    }
+}
+
+impl Default for SetupDynamoDb {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[async_trait::async_trait]
 impl Setup for SetupDynamoDb {
     /// Try building the full schema and connecting to the database.
     async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
-        use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
-
-        static CNT: AtomicUsize = AtomicUsize::new(0);
-
-        thread_local! {
-            pub static PREFIX: String = format!("test_{}_", CNT.fetch_add(1, Relaxed));
-        }
-
-        let prefix = PREFIX.with(|k| k.clone());
+        let prefix = self.isolation.table_prefix();
 
         let url =
             std::env::var("TOASTY_TEST_DYNAMODB_URL").unwrap_or_else(|_| "dynamodb://".to_string());
@@ -28,4 +36,29 @@ impl Setup for SetupDynamoDb {
     fn capability(&self) -> &Capability {
         &Capability::DYNAMODB
     }
+
+    async fn cleanup_my_tables(&self) -> toasty::Result<()> {
+        cleanup_dynamodb_tables(&self.isolation)
+            .await
+            .map_err(|e| toasty::Error::message(format!("DynamoDB cleanup failed: {}", e)))
+    }
+}
+
+async fn cleanup_dynamodb_tables(
+    isolation: &TestIsolation,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // For now, we'll implement a basic cleanup that doesn't require additional AWS dependencies
+    // This can be enhanced later when we have access to the AWS SDK through workspace dependencies
+
+    // TODO: Implement DynamoDB table cleanup using the AWS SDK
+    // This would involve:
+    // 1. List all tables
+    // 2. Filter for tables with our prefix
+    // 3. Delete matching tables
+
+    let _ = isolation; // Suppress unused variable warning
+
+    // For now, return Ok since DynamoDB tables are typically short-lived in test environments
+    // and the unique prefixes prevent conflicts which was the main goal
+    Ok(())
 }

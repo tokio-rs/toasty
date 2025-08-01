@@ -2,6 +2,11 @@
 mod macros;
 
 pub mod db;
+mod isolation;
+mod toasty_test;
+
+// Re-export for use in macros - needs to be public for macro expansion
+pub use toasty_test::ToastyTest;
 
 use toasty::Db;
 use toasty_core::driver::Capability;
@@ -19,6 +24,12 @@ pub trait Setup: Send + Sync + 'static {
     async fn connect(&self, mut builder: toasty::db::Builder) -> toasty::Result<Db>;
 
     fn capability(&self) -> &Capability;
+
+    /// Clean up tables created by this specific setup instance.
+    ///
+    /// This method should drop only the tables that belong to this test,
+    /// identified by the table prefix used during setup.
+    async fn cleanup_my_tables(&self) -> toasty::Result<()>;
 }
 
 #[macro_export]
@@ -43,10 +54,16 @@ macro_rules! tests {
         #[cfg(feature = "dynamodb")]
         mod dynamodb {
             $(
-                #[tokio::test]
+                #[test]
                 $( #[$attrs] )*
-                async fn $f() {
-                    super::$f($crate::db::dynamodb::SetupDynamoDb).await;
+                fn $f() {
+                    let mut test = $crate::ToastyTest::new(
+                        $crate::db::dynamodb::SetupDynamoDb::new()
+                    );
+
+                    test.run_test(|setup| async move {
+                        super::$f(setup).await;
+                    });
                 }
             )*
         }
@@ -54,10 +71,16 @@ macro_rules! tests {
         #[cfg(feature = "sqlite")]
         mod sqlite {
             $(
-                #[tokio::test]
+                #[test]
                 $( #[$attrs] )*
-                async fn $f() {
-                    super::$f($crate::db::sqlite::SetupSqlite).await;
+                fn $f() {
+                    let mut test = $crate::ToastyTest::new(
+                        $crate::db::sqlite::SetupSqlite::new()
+                    );
+
+                    test.run_test(|setup| async move {
+                        super::$f(setup).await;
+                    });
                 }
             )*
         }
@@ -65,10 +88,16 @@ macro_rules! tests {
         #[cfg(feature = "mysql")]
         mod mysql {
             $(
-                #[tokio::test]
+                #[test]
                 $( #[$attrs] )*
-                async fn $f() {
-                    super::$f($crate::db::mysql::SetupMySQL).await;
+                fn $f() {
+                    let mut test = $crate::ToastyTest::new(
+                        $crate::db::mysql::SetupMySQL::new()
+                    );
+
+                    test.run_test(|setup| async move {
+                        super::$f(setup).await;
+                    });
                 }
             )*
         }
@@ -76,10 +105,16 @@ macro_rules! tests {
         #[cfg(feature = "postgresql")]
         mod postgresql {
             $(
-                #[tokio::test]
+                #[test]
                 $( #[$attrs] )*
-                async fn $f() {
-                    super::$f($crate::db::postgresql::SetupPostgreSQL).await;
+                fn $f() {
+                    let mut test = $crate::ToastyTest::new(
+                        $crate::db::postgresql::SetupPostgreSQL::new()
+                    );
+
+                    test.run_test(|setup| async move {
+                        super::$f(setup).await;
+                    });
                 }
             )*
         }
