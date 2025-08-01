@@ -23,12 +23,8 @@ impl Simplify<'_> {
             stmt::Expr::Project(_) => {
                 todo!()
             }
-            stmt::Expr::Reference(stmt::ExprReference::Field { model, index }) => {
-                let field_id = FieldId {
-                    model: *model,
-                    index: *index,
-                };
-                self.schema.app.field(field_id)
+            stmt::Expr::Reference(expr_reference) => {
+                self.schema.app.field_from_expr(expr_reference)?
             }
             _ => {
                 return None;
@@ -144,14 +140,12 @@ impl Simplify<'_> {
 impl Visit for LiftBelongsTo<'_> {
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         match (&*i.lhs, &*i.rhs) {
-            (stmt::Expr::Reference(stmt::ExprReference::Field { model, index }), other)
-            | (other, stmt::Expr::Reference(stmt::ExprReference::Field { model, index })) => {
+            (stmt::Expr::Reference(expr_reference), other)
+            | (other, stmt::Expr::Reference(expr_reference)) => {
                 assert!(i.op.is_eq());
-                let field_id = FieldId {
-                    model: *model,
-                    index: *index,
-                };
-                self.lift_fk_constraint(field_id, other);
+                if let Some(field_id) = expr_reference.as_field_id() {
+                    self.lift_fk_constraint(field_id, other);
+                }
             }
             _ => {}
         }

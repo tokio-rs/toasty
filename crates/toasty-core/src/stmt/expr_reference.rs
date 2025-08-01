@@ -25,6 +25,25 @@ impl ExprReference {
     pub fn cte(nesting: usize, index: usize) -> Self {
         Self::Cte { nesting, index }
     }
+
+    /// Set this reference to point to a specific field
+    pub fn set_field(&mut self, field_id: FieldId) {
+        *self = Self::Field {
+            model: field_id.model,
+            index: field_id.index,
+        };
+    }
+
+    /// Get the FieldId if this is a field reference
+    pub fn as_field_id(&self) -> Option<FieldId> {
+        match self {
+            Self::Field { model, index } => Some(FieldId {
+                model: *model,
+                index: *index,
+            }),
+            Self::Cte { .. } => None,
+        }
+    }
 }
 
 impl From<FieldId> for ExprReference {

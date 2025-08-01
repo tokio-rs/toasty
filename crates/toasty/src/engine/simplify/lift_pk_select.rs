@@ -25,9 +25,11 @@ pub(crate) fn lift_key_select(
                 return None;
             };
 
-            let (model, index) = expr_binary_op.lhs.as_field()?;
-            let field_id = FieldId { model, index };
-            let lhs_field = schema.app.field(field_id);
+            let expr_reference = match &*expr_binary_op.lhs {
+                stmt::Expr::Reference(expr_ref) => expr_ref,
+                _ => return None,
+            };
+            let lhs_field = schema.app.field_from_expr(expr_reference)?;
 
             if *key_field == lhs_field.id {
                 if let stmt::Expr::Value(value) = &*expr_binary_op.rhs {

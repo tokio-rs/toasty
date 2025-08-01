@@ -1,6 +1,5 @@
 use super::*;
 use app::FieldTy;
-use toasty_core::schema::app::FieldId;
 
 use stmt::Expr;
 
@@ -34,13 +33,9 @@ impl Simplify<'_> {
                 };
                 Some(self.rewrite_root_path_expr(model, other.take()))
             }
-            (stmt::Expr::Reference(stmt::ExprReference::Field { model, index }), other)
-            | (other, stmt::Expr::Reference(stmt::ExprReference::Field { model, index })) => {
-                let field_id = FieldId {
-                    model: *model,
-                    index: *index,
-                };
-                let field = self.schema.app.field(field_id);
+            (stmt::Expr::Reference(expr_reference), other)
+            | (other, stmt::Expr::Reference(expr_reference)) => {
+                let field = self.schema.app.field_from_expr(expr_reference)?;
 
                 match &field.ty {
                     FieldTy::Primitive(_) => None,
@@ -55,8 +50,7 @@ impl Simplify<'_> {
                             assert!(other.is_value_null());
 
                             // Update the field reference to point to the foreign key field
-                            *model = fk_field.source.model;
-                            *index = fk_field.source.index;
+                            expr_reference.set_field(fk_field.source);
 
                             None
                         }
@@ -66,8 +60,7 @@ impl Simplify<'_> {
                             };
 
                             // Update the field reference to point to the foreign key field
-                            *model = fk_field.source.model;
-                            *index = fk_field.source.index;
+                            expr_reference.set_field(fk_field.source);
 
                             *other = match other.take() {
                                 stmt::Expr::Record(_) => todo!(),
