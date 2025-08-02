@@ -1,8 +1,19 @@
 use tests::*;
 
+use std::collections::HashMap;
 use toasty::stmt::Id;
 
-tests!(ty_i8, ty_i16, ty_i32, ty_i64, ty_u8, ty_u16, ty_u32, ty_u64, ty_str);
+tests!(
+    ty_i8,
+    ty_i16,
+    ty_i32,
+    ty_i64,
+    ty_u8,
+    ty_u16,
+    ty_u32,
+    ty_u64,
+    ty_str,
+);
 
 macro_rules! def_num_ty_tests {
     (

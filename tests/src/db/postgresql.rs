@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use toasty::driver::Capability;
 use toasty::{db, Db};
 
-use crate::{isolation::TestIsolation, Setup};
+use crate::{isolation::TestIsolation, RawValue, Setup};
 
 pub struct SetupPostgreSQL {
     isolation: TestIsolation,
@@ -41,6 +42,84 @@ impl Setup for SetupPostgreSQL {
             .await
             .map_err(|e| toasty::Error::msg(format!("PostgreSQL cleanup failed: {e}")))
     }
+
+    async fn get_raw_column_value<T>(
+        &self,
+        table: &str,
+        column: &str,
+        filter: HashMap<String, toasty_core::stmt::Value>,
+    ) -> toasty::Result<T>
+    where
+        T: RawValue,
+    {
+        use tokio_postgres::NoTls;
+
+        let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
+
+        // Build WHERE clause from filter
+        let mut where_conditions = Vec::new();
+        let mut param_index = 1;
+
+        // Convert stmt::Values to PostgreSQL parameters
+        let mut pg_params = Vec::new();
+        for (col_name, value) in filter {
+            where_conditions.push(format!("{} = ${}", col_name, param_index));
+
+            // Convert each value individually to avoid trait bound issues
+            match value {
+                toasty_core::stmt::Value::String(s) => pg_params.push(s),
+                toasty_core::stmt::Value::I64(i) => pg_params.push(i.to_string()),
+                toasty_core::stmt::Value::U64(u) => pg_params.push((u as i64).to_string()),
+                toasty_core::stmt::Value::Id(id) => {
+                    // Convert Id to string representation
+                    pg_params.push(id.to_string());
+                }
+                _ => {
+                    return Err(toasty::Error::msg(format!(
+                        "Unsupported filter value type: {:?}",
+                        value
+                    )))
+                }
+            }
+            param_index += 1;
+        }
+
+        let where_clause = if where_conditions.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", where_conditions.join(" AND "))
+        };
+
+        let query = format!("SELECT {} FROM {}{}", column, full_table_name, where_clause);
+
+        // Connect directly to PostgreSQL
+        let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
+            .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
+        let (client, connection) = tokio_postgres::connect(&url, NoTls)
+            .await
+            .map_err(|e| toasty::Error::msg(format!("PostgreSQL connection failed: {}", e)))?;
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+
+        // For simplicity, use string parameters for now
+        let string_params: Vec<&str> = pg_params.iter().map(|s| s.as_str()).collect();
+        let params_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = string_params
+            .iter()
+            .map(|s| s as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+        let row = client
+            .query_one(&query, &params_refs)
+            .await
+            .map_err(|e| toasty::Error::msg(format!("Query failed: {}", e)))?;
+
+        // Convert PostgreSQL result directly to stmt::Value
+        let stmt_value = self.pg_row_to_stmt_value(&row, 0)?;
+
+        // Let the type implementation validate and convert
+        T::from_raw_storage(stmt_value)
+            .map_err(|e| toasty::Error::msg(format!("Validation failed: {}", e)))
+    }
 }
 
 async fn cleanup_postgresql_tables(
@@ -79,4 +158,27 @@ async fn cleanup_postgresql_tables(
     }
 
     Ok(())
+}
+
+impl SetupPostgreSQL {
+    fn pg_row_to_stmt_value(
+        &self,
+        row: &tokio_postgres::Row,
+        col: usize,
+    ) -> toasty::Result<toasty_core::stmt::Value> {
+        use tokio_postgres::types::Type;
+
+        let column = &row.columns()[col];
+        match *column.type_() {
+            Type::INT2 => Ok(toasty_core::stmt::Value::I16(row.get(col))),
+            Type::INT4 => Ok(toasty_core::stmt::Value::I32(row.get(col))),
+            Type::INT8 => Ok(toasty_core::stmt::Value::I64(row.get(col))),
+            Type::TEXT | Type::VARCHAR => Ok(toasty_core::stmt::Value::String(row.get(col))),
+            Type::BOOL => Ok(toasty_core::stmt::Value::Bool(row.get(col))),
+            _ => Err(toasty::Error::msg(format!(
+                "Unsupported PostgreSQL type: {:?}",
+                column.type_()
+            ))),
+        }
+    }
 }
