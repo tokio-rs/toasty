@@ -46,6 +46,38 @@ impl Primitive for i64 {
     }
 }
 
+impl Primitive for u8 {
+    const TYPE: stmt::Type = stmt::Type::U8;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
+impl Primitive for u16 {
+    const TYPE: stmt::Type = stmt::Type::U16;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
+impl Primitive for u32 {
+    const TYPE: stmt::Type = stmt::Type::U32;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
+impl Primitive for u64 {
+    const TYPE: stmt::Type = stmt::Type::U64;
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
 impl Primitive for String {
     const TYPE: stmt::Type = stmt::Type::String;
 

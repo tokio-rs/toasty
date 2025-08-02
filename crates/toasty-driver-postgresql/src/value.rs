@@ -1,4 +1,5 @@
 use postgres::types::{accepts, private::BytesMut, to_sql_checked, IsNull, ToSql, Type};
+use rust_decimal::Decimal;
 use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
@@ -65,6 +66,62 @@ impl ToSql for Value {
                 Type::INT8 => value.to_sql(ty, out),
                 _ => todo!(),
             },
+            stmt::Value::U8(value) => match *ty {
+                Type::INT2 => {
+                    // u8 is now stored in i16 (SMALLINT)
+                    let value = *value as i16;
+                    value.to_sql(ty, out)
+                }
+                Type::INT4 => {
+                    let value = *value as i32;
+                    value.to_sql(ty, out)
+                }
+                Type::INT8 => {
+                    let value = *value as i64;
+                    value.to_sql(ty, out)
+                }
+                _ => todo!(),
+            },
+            stmt::Value::U16(value) => match *ty {
+                Type::INT4 => {
+                    // u16 is now stored in i32 (INTEGER)
+                    let value = *value as i32;
+                    value.to_sql(ty, out)
+                }
+                Type::INT8 => {
+                    let value = *value as i64;
+                    value.to_sql(ty, out)
+                }
+                _ => todo!("Unsupported PostgreSQL type for u16: {:?}", ty),
+            },
+            stmt::Value::U32(value) => match *ty {
+                Type::INT8 => {
+                    // u32 stored in BIGINT
+                    let value = *value as i64;
+                    value.to_sql(ty, out)
+                }
+                _ => todo!("Unsupported PostgreSQL type for u32: {:?}", ty),
+            },
+            stmt::Value::U64(value) => match *ty {
+                Type::NUMERIC => {
+                    // Convert u64 to Decimal for proper NUMERIC storage
+                    let decimal = Decimal::from(*value);
+                    decimal.to_sql(ty, out)
+                }
+                Type::INT8 => {
+                    // Fallback for existing schemas - validate range
+                    if *value > i64::MAX as u64 {
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT. Use NUMERIC column type for full u64 range.", 
+                                value, i64::MAX)
+                        )));
+                    }
+                    let value = *value as i64;
+                    value.to_sql(ty, out)
+                }
+                _ => todo!(),
+            },
             stmt::Value::Id(value) => value.to_string().to_sql(ty, out),
             stmt::Value::Null => Ok(IsNull::Yes),
             stmt::Value::String(value) => value.to_sql(ty, out),
@@ -72,6 +129,6 @@ impl ToSql for Value {
         }
     }
 
-    accepts!(BOOL, INT2, INT4, INT8, TEXT, VARCHAR);
+    accepts!(BOOL, INT2, INT4, INT8, NUMERIC, TEXT, VARCHAR);
     to_sql_checked!();
 }

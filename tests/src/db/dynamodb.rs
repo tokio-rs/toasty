@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use toasty::driver::Capability;
 use toasty::{db, Db};
 
-use crate::{isolation::TestIsolation, Setup};
+use crate::{isolation::TestIsolation, RawValue, Setup};
 
 pub struct SetupDynamoDb {
     isolation: TestIsolation,
@@ -41,6 +42,20 @@ impl Setup for SetupDynamoDb {
         cleanup_dynamodb_tables(&self.isolation)
             .await
             .map_err(|e| toasty::Error::msg(format!("DynamoDB cleanup failed: {e}")))
+    }
+
+    async fn get_raw_column_value<T>(
+        &self,
+        _table: &str,
+        _column: &str,
+        _filter: HashMap<String, toasty_core::stmt::Value>,
+    ) -> toasty::Result<T>
+    where
+        T: RawValue,
+    {
+        Err(toasty::Error::msg(
+            "DynamoDB raw value access not yet implemented",
+        ))
     }
 }
 

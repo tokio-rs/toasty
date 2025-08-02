@@ -22,6 +22,18 @@ pub enum Value {
     /// Signed 64-bit integer
     I64(i64),
 
+    /// Unsigned 8-bit integer
+    U8(u8),
+
+    /// Unsigned 16-bit integer
+    U16(u16),
+
+    /// Unsigned 32-bit integer
+    U32(u32),
+
+    /// Unsigned 64-bit integer
+    U64(u64),
+
     /// A unique model identifier
     Id(Id),
 
@@ -123,6 +135,10 @@ impl Value {
             Self::I16(_) => ty.is_i16(),
             Self::I32(_) => ty.is_i32(),
             Self::I64(_) => ty.is_i64(),
+            Self::U8(_) => ty.is_u8(),
+            Self::U16(_) => ty.is_u16(),
+            Self::U32(_) => ty.is_u32(),
+            Self::U64(_) => ty.is_u64(),
             Self::Id(value) => match ty {
                 Type::Id(ty) => value.model_id() == *ty,
                 _ => false,

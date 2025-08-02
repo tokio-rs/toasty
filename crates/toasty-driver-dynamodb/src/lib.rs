@@ -158,6 +158,10 @@ enum V {
     I16(i16),
     I32(i32),
     I64(i64),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
     Id(usize, String),
 }
 
@@ -169,6 +173,10 @@ fn ddb_val(val: &stmt::Value) -> AttributeValue {
         stmt::Value::I16(val) => AttributeValue::N(val.to_string()),
         stmt::Value::I32(val) => AttributeValue::N(val.to_string()),
         stmt::Value::I64(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::U8(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::U16(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::U32(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::U64(val) => AttributeValue::N(val.to_string()),
         stmt::Value::Id(val) => AttributeValue::S(val.to_string()),
         stmt::Value::Enum(val) => {
             let v = match &val.fields[..] {
@@ -179,6 +187,10 @@ fn ddb_val(val: &stmt::Value) -> AttributeValue {
                 [stmt::Value::I16(v)] => V::I16(*v),
                 [stmt::Value::I32(v)] => V::I32(*v),
                 [stmt::Value::I64(v)] => V::I64(*v),
+                [stmt::Value::U8(v)] => V::U8(*v),
+                [stmt::Value::U16(v)] => V::U16(*v),
+                [stmt::Value::U32(v)] => V::U32(*v),
+                [stmt::Value::U64(v)] => V::U64(*v),
                 [stmt::Value::Id(id)] => V::Id(id.model_id().0, id.to_string()),
                 _ => todo!("val={:#?}", val.fields),
             };
@@ -203,6 +215,10 @@ fn ddb_to_val(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
         (Type::I16, N(val)) => stmt::Value::from(val.parse::<i16>().unwrap()),
         (Type::I32, N(val)) => stmt::Value::from(val.parse::<i32>().unwrap()),
         (Type::I64, N(val)) => stmt::Value::from(val.parse::<i64>().unwrap()),
+        (Type::U8, N(val)) => stmt::Value::from(val.parse::<u8>().unwrap()),
+        (Type::U16, N(val)) => stmt::Value::from(val.parse::<u16>().unwrap()),
+        (Type::U32, N(val)) => stmt::Value::from(val.parse::<u32>().unwrap()),
+        (Type::U64, N(val)) => stmt::Value::from(val.parse::<u64>().unwrap()),
         (Type::Id(model), S(val)) => stmt::Value::from(stmt::Id::from_string(*model, val.clone())),
         (Type::Enum(..), S(val)) => {
             let (variant, rest) = val.split_once("#").unwrap();
@@ -217,6 +233,10 @@ fn ddb_to_val(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
                 V::I16(v) => stmt::Value::I16(v),
                 V::I32(v) => stmt::Value::I32(v),
                 V::I64(v) => stmt::Value::I64(v),
+                V::U8(v) => stmt::Value::U8(v),
+                V::U16(v) => stmt::Value::U16(v),
+                V::U32(v) => stmt::Value::U32(v),
+                V::U64(v) => stmt::Value::U64(v),
             };
 
             if value.is_null() {

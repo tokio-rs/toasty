@@ -15,7 +15,14 @@ impl ColumnType {
         match ty {
             stmt::Type::Bool => Self::Boolean,
             stmt::Type::Id(_) => Self::Text,
+            stmt::Type::I8 => Self::Integer,
+            stmt::Type::I16 => Self::Integer,
+            stmt::Type::I32 => Self::Integer,
             stmt::Type::I64 => Self::Integer,
+            stmt::Type::U8 => Self::Integer,
+            stmt::Type::U16 => Self::Integer,
+            stmt::Type::U32 => Self::Integer,
+            stmt::Type::U64 => Self::Integer,
             stmt::Type::String => {
                 if indexed {
                     Self::VarChar(255)

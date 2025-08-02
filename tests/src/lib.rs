@@ -8,10 +8,164 @@ mod toasty_test;
 // Re-export for use in macros - needs to be public for macro expansion
 pub use toasty_test::ToastyTest;
 
+use std::collections::HashMap;
 use toasty::Db;
 use toasty_core::driver::Capability;
 
 pub use std_util::*;
+
+/// Trait for types that can be extracted from raw database storage
+pub trait RawValue: Sized + Send + Sync + 'static {
+    /// Extract this type from raw database storage, validating that the stored
+    /// value actually represents this type correctly (no overflow, truncation, etc.)
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String>;
+}
+
+impl RawValue for u8 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::U8(val) => Ok(val),
+            toasty_core::stmt::Value::I8(val) => {
+                if val < 0 {
+                    return Err(format!("u8 value stored as negative i8: {val}"));
+                }
+                Ok(val as u8)
+            }
+            toasty_core::stmt::Value::I16(val) => {
+                if val < 0 || val > u8::MAX as i16 {
+                    return Err(format!("u8 value out of range when stored as i16: {val}"));
+                }
+                Ok(val as u8)
+            }
+            _ => Err(format!("Cannot convert {value:?} to u8")),
+        }
+    }
+}
+
+impl RawValue for u16 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::U16(val) => Ok(val),
+            toasty_core::stmt::Value::I16(val) => {
+                if val < 0 {
+                    return Err(format!("u16 value stored as negative i16: {val}"));
+                }
+                Ok(val as u16)
+            }
+            toasty_core::stmt::Value::I32(val) => {
+                if val < 0 || val > u16::MAX as i32 {
+                    return Err(format!("u16 value out of range when stored as i32: {val}"));
+                }
+                Ok(val as u16)
+            }
+            _ => Err(format!("Cannot convert {value:?} to u16")),
+        }
+    }
+}
+
+impl RawValue for u32 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::U32(val) => Ok(val),
+            toasty_core::stmt::Value::I32(val) => {
+                if val < 0 {
+                    return Err(format!("u32 value stored as negative i32: {val}"));
+                }
+                Ok(val as u32)
+            }
+            toasty_core::stmt::Value::I64(val) => {
+                if val < 0 || val > u32::MAX as i64 {
+                    return Err(format!("u32 value out of range when stored as i64: {val}"));
+                }
+                Ok(val as u32)
+            }
+            _ => Err(format!("Cannot convert {value:?} to u32")),
+        }
+    }
+}
+
+impl RawValue for u64 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::U64(val) => Ok(val), // Native u64 storage (SQLite, etc.)
+            toasty_core::stmt::Value::I64(val) => {
+                // PostgreSQL case: stored as i64, validate it's actually unsigned
+                if val < 0 {
+                    return Err(format!(
+                        "u64 value stored as negative i64: {val}. This indicates overflow/corruption!"
+                    ));
+                }
+                Ok(val as u64)
+            }
+            toasty_core::stmt::Value::String(s) => {
+                // DynamoDB case: numbers stored as strings
+                s.parse::<u64>()
+                    .map_err(|e| format!("Failed to parse u64 from string '{s}': {e}"))
+            }
+            _ => Err(format!("Cannot convert {value:?} to u64")),
+        }
+    }
+}
+
+// Add implementations for signed integer types
+impl RawValue for i8 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::I8(val) => Ok(val),
+            toasty_core::stmt::Value::I16(val) => {
+                if val < i8::MIN as i16 || val > i8::MAX as i16 {
+                    return Err(format!("i8 value out of range when stored as i16: {val}"));
+                }
+                Ok(val as i8)
+            }
+            _ => Err(format!("Cannot convert {value:?} to i8")),
+        }
+    }
+}
+
+impl RawValue for i16 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::I16(val) => Ok(val),
+            toasty_core::stmt::Value::I32(val) => {
+                if val < i16::MIN as i32 || val > i16::MAX as i32 {
+                    return Err(format!("i16 value out of range when stored as i32: {val}"));
+                }
+                Ok(val as i16)
+            }
+            _ => Err(format!("Cannot convert {value:?} to i16")),
+        }
+    }
+}
+
+impl RawValue for i32 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::I32(val) => Ok(val),
+            toasty_core::stmt::Value::I64(val) => {
+                if val < i32::MIN as i64 || val > i32::MAX as i64 {
+                    return Err(format!("i32 value out of range when stored as i64: {val}"));
+                }
+                Ok(val as i32)
+            }
+            _ => Err(format!("Cannot convert {value:?} to i32")),
+        }
+    }
+}
+
+impl RawValue for i64 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::I64(val) => Ok(val),
+            toasty_core::stmt::Value::String(s) => {
+                // DynamoDB case: numbers stored as strings
+                s.parse::<i64>()
+                    .map_err(|e| format!("Failed to parse i64 from string '{s}': {e}"))
+            }
+            _ => Err(format!("Cannot convert {value:?} to i64")),
+        }
+    }
+}
 
 #[async_trait::async_trait]
 pub trait Setup: Send + Sync + 'static {
@@ -30,6 +184,21 @@ pub trait Setup: Send + Sync + 'static {
     /// This method should drop only the tables that belong to this test,
     /// identified by the table prefix used during setup.
     async fn cleanup_my_tables(&self) -> toasty::Result<()>;
+
+    /// Get the raw value stored in the database for verification
+    ///
+    /// - `table`: Table name WITHOUT prefix (e.g., "foo", not "test_123_foo")
+    /// - `column`: Column name to retrieve (e.g., "val")  
+    /// - `filter`: WHERE clause conditions as column_name -> value pairs
+    /// - `T`: The expected application type - implementation validates the raw storage
+    async fn get_raw_column_value<T>(
+        &self,
+        table: &str,
+        column: &str,
+        filter: HashMap<String, toasty_core::stmt::Value>,
+    ) -> toasty::Result<T>
+    where
+        T: RawValue;
 }
 
 #[macro_export]

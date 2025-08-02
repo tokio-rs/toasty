@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use toasty::driver::Capability;
 use toasty::{db, Db};
 
-use crate::Setup;
+use crate::{RawValue, Setup};
 
 pub struct SetupSqlite;
 
@@ -31,5 +32,22 @@ impl Setup for SetupSqlite {
     // SQLite uses in-memory databases, so no cleanup needed
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         Ok(())
+    }
+
+    async fn get_raw_column_value<T>(
+        &self,
+        _table: &str,
+        _column: &str,
+        _filter: HashMap<String, toasty_core::stmt::Value>,
+    ) -> toasty::Result<T>
+    where
+        T: RawValue,
+    {
+        // For SQLite, we'll need to connect to the same in-memory database
+        // This is tricky since each connection gets its own in-memory database
+        // For now, return an error indicating this limitation
+        Err(toasty::Error::msg(
+            "SQLite in-memory database raw value access not yet implemented",
+        ))
     }
 }
