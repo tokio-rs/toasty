@@ -21,6 +21,18 @@ pub enum Type {
     /// Signed 64-bit integer
     I64,
 
+    /// Unsigned 8-bit integer
+    U8,
+
+    /// Unsigned 16-bit integer
+    U16,
+
+    /// Unsigned 32-bit integer
+    U32,
+
+    /// Unsigned 64-bit integer
+    U64,
+
     /// An opaque type that uniquely identifies an instance of a model.
     Id(ModelId),
 

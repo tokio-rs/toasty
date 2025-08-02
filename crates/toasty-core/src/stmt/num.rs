@@ -60,4 +60,20 @@ impl_num! {
         to_i64
         is_i64
     }
+    U8(u8) {
+        to_u8
+        is_u8
+    }
+    U16(u16) {
+        to_u16
+        is_u16
+    }
+    U32(u32) {
+        to_u32
+        is_u32
+    }
+    U64(u64) {
+        to_u64
+        is_u64
+    }
 }

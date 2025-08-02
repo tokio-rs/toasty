@@ -239,6 +239,10 @@ fn mysql_to_toasty(
             stmt::Type::I16 => extract_or_null(row, i, stmt::Value::I16),
             stmt::Type::I32 => extract_or_null(row, i, stmt::Value::I32),
             stmt::Type::I64 => extract_or_null(row, i, stmt::Value::I64),
+            stmt::Type::U8 => extract_or_null(row, i, stmt::Value::U8),
+            stmt::Type::U16 => extract_or_null(row, i, stmt::Value::U16),
+            stmt::Type::U32 => extract_or_null(row, i, stmt::Value::U32),
+            stmt::Type::U64 => extract_or_null(row, i, stmt::Value::U64),
             _ => todo!("ty={ty:#?}"),
         },
         _ => todo!(

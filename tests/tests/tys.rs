@@ -2,7 +2,7 @@ use tests::*;
 
 use toasty::stmt::Id;
 
-tests!(ty_i8, ty_i16, ty_i32, ty_i64, ty_str);
+tests!(ty_i8, ty_i16, ty_i32, ty_i64, ty_u8, ty_u16, ty_u32, ty_u64, ty_str);
 
 macro_rules! def_num_ty_tests {
     (
@@ -60,6 +60,10 @@ def_num_ty_tests!(
     i16 => &[i16::MIN, -10000, -1, 0, 1, 10000, i16::MAX] => ty_i16;
     i32 => &[i32::MIN, -1000000, -1, 0, 1, 1000000, i32::MAX] => ty_i32;
     i64 => &[i64::MIN, -1000000000000, -1, 0, 1, 1000000000000, i64::MAX] => ty_i64;
+    u8 => &[u8::MIN, 0, 1, 100, 200, u8::MAX] => ty_u8;
+    u16 => &[u16::MIN, 0, 1, 10000, 50000, u16::MAX] => ty_u16;
+    u32 => &[u32::MIN, 0, 1, 1000000, 2000000000, u32::MAX] => ty_u32;
+    u64 => &[u64::MIN, 0, 1, 1000000000000, 10000000000000000000, u64::MAX] => ty_u64;
 );
 
 #[allow(dead_code)]

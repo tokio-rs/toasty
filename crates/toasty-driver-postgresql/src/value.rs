@@ -65,6 +65,55 @@ impl ToSql for Value {
                 Type::INT8 => value.to_sql(ty, out),
                 _ => todo!(),
             },
+            stmt::Value::U8(value) => match *ty {
+                Type::INT2 => {
+                    let value = *value as i16;
+                    value.to_sql(ty, out)
+                }
+                Type::INT4 => {
+                    let value = *value as i32;
+                    value.to_sql(ty, out)
+                }
+                Type::INT8 => {
+                    let value = *value as i64;
+                    value.to_sql(ty, out)
+                }
+                _ => todo!(),
+            },
+            stmt::Value::U16(value) => match *ty {
+                Type::INT2 => {
+                    let value = *value as i16;
+                    value.to_sql(ty, out)
+                }
+                Type::INT4 => {
+                    let value = *value as i32;
+                    value.to_sql(ty, out)
+                }
+                Type::INT8 => {
+                    let value = *value as i64;
+                    value.to_sql(ty, out)
+                }
+                _ => todo!(),
+            },
+            stmt::Value::U32(value) => match *ty {
+                Type::INT4 => {
+                    let value = *value as i32;
+                    value.to_sql(ty, out)
+                }
+                Type::INT8 => {
+                    let value = *value as i64;
+                    value.to_sql(ty, out)
+                }
+                _ => todo!(),
+            },
+            stmt::Value::U64(value) => match *ty {
+                Type::INT8 => {
+                    // Note: This could overflow for values > i64::MAX
+                    let value = *value as i64;
+                    value.to_sql(ty, out)
+                }
+                _ => todo!(),
+            },
             stmt::Value::Id(value) => value.to_string().to_sql(ty, out),
             stmt::Value::Null => Ok(IsNull::Yes),
             stmt::Value::String(value) => value.to_sql(ty, out),

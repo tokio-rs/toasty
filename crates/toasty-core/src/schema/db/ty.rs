@@ -29,6 +29,10 @@ impl Type {
                 &stmt::Type::I16 => Ok(Type::Integer(2)),
                 &stmt::Type::I32 => Ok(Type::Integer(4)),
                 stmt::Type::I64 => Ok(Type::Integer(8)),
+                &stmt::Type::U8 => Ok(Type::Integer(1)),
+                &stmt::Type::U16 => Ok(Type::Integer(2)),
+                &stmt::Type::U32 => Ok(Type::Integer(4)),
+                stmt::Type::U64 => Ok(Type::Integer(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
                 // Gotta support some app-level types as well for now.
                 //
