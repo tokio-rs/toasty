@@ -114,6 +114,72 @@ impl RawValue for u64 {
     }
 }
 
+// Add implementations for signed integer types
+impl RawValue for i8 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::I8(val) => Ok(val),
+            toasty_core::stmt::Value::I16(val) => {
+                if val < i8::MIN as i16 || val > i8::MAX as i16 {
+                    return Err(format!("i8 value out of range when stored as i16: {}", val));
+                }
+                Ok(val as i8)
+            }
+            _ => Err(format!("Cannot convert {:?} to i8", value)),
+        }
+    }
+}
+
+impl RawValue for i16 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::I16(val) => Ok(val),
+            toasty_core::stmt::Value::I32(val) => {
+                if val < i16::MIN as i32 || val > i16::MAX as i32 {
+                    return Err(format!(
+                        "i16 value out of range when stored as i32: {}",
+                        val
+                    ));
+                }
+                Ok(val as i16)
+            }
+            _ => Err(format!("Cannot convert {:?} to i16", value)),
+        }
+    }
+}
+
+impl RawValue for i32 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::I32(val) => Ok(val),
+            toasty_core::stmt::Value::I64(val) => {
+                if val < i32::MIN as i64 || val > i32::MAX as i64 {
+                    return Err(format!(
+                        "i32 value out of range when stored as i64: {}",
+                        val
+                    ));
+                }
+                Ok(val as i32)
+            }
+            _ => Err(format!("Cannot convert {:?} to i32", value)),
+        }
+    }
+}
+
+impl RawValue for i64 {
+    fn from_raw_storage(value: toasty_core::stmt::Value) -> Result<Self, String> {
+        match value {
+            toasty_core::stmt::Value::I64(val) => Ok(val),
+            toasty_core::stmt::Value::String(s) => {
+                // DynamoDB case: numbers stored as strings
+                s.parse::<i64>()
+                    .map_err(|e| format!("Failed to parse i64 from string '{}': {}", s, e))
+            }
+            _ => Err(format!("Cannot convert {:?} to i64", value)),
+        }
+    }
+}
+
 #[async_trait::async_trait]
 pub trait Setup: Send + Sync + 'static {
     async fn setup(&self, db: toasty::db::Builder) -> Db {
