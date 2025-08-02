@@ -27,17 +27,17 @@ impl RawValue for u8 {
             toasty_core::stmt::Value::U8(val) => Ok(val),
             toasty_core::stmt::Value::I8(val) => {
                 if val < 0 {
-                    return Err(format!("u8 value stored as negative i8: {}", val));
+                    return Err(format!("u8 value stored as negative i8: {val}"));
                 }
                 Ok(val as u8)
             }
             toasty_core::stmt::Value::I16(val) => {
                 if val < 0 || val > u8::MAX as i16 {
-                    return Err(format!("u8 value out of range when stored as i16: {}", val));
+                    return Err(format!("u8 value out of range when stored as i16: {val}"));
                 }
                 Ok(val as u8)
             }
-            _ => Err(format!("Cannot convert {:?} to u8", value)),
+            _ => Err(format!("Cannot convert {value:?} to u8")),
         }
     }
 }
@@ -48,20 +48,17 @@ impl RawValue for u16 {
             toasty_core::stmt::Value::U16(val) => Ok(val),
             toasty_core::stmt::Value::I16(val) => {
                 if val < 0 {
-                    return Err(format!("u16 value stored as negative i16: {}", val));
+                    return Err(format!("u16 value stored as negative i16: {val}"));
                 }
                 Ok(val as u16)
             }
             toasty_core::stmt::Value::I32(val) => {
                 if val < 0 || val > u16::MAX as i32 {
-                    return Err(format!(
-                        "u16 value out of range when stored as i32: {}",
-                        val
-                    ));
+                    return Err(format!("u16 value out of range when stored as i32: {val}"));
                 }
                 Ok(val as u16)
             }
-            _ => Err(format!("Cannot convert {:?} to u16", value)),
+            _ => Err(format!("Cannot convert {value:?} to u16")),
         }
     }
 }
@@ -72,20 +69,17 @@ impl RawValue for u32 {
             toasty_core::stmt::Value::U32(val) => Ok(val),
             toasty_core::stmt::Value::I32(val) => {
                 if val < 0 {
-                    return Err(format!("u32 value stored as negative i32: {}", val));
+                    return Err(format!("u32 value stored as negative i32: {val}"));
                 }
                 Ok(val as u32)
             }
             toasty_core::stmt::Value::I64(val) => {
                 if val < 0 || val > u32::MAX as i64 {
-                    return Err(format!(
-                        "u32 value out of range when stored as i64: {}",
-                        val
-                    ));
+                    return Err(format!("u32 value out of range when stored as i64: {val}"));
                 }
                 Ok(val as u32)
             }
-            _ => Err(format!("Cannot convert {:?} to u32", value)),
+            _ => Err(format!("Cannot convert {value:?} to u32")),
         }
     }
 }
@@ -98,8 +92,7 @@ impl RawValue for u64 {
                 // PostgreSQL case: stored as i64, validate it's actually unsigned
                 if val < 0 {
                     return Err(format!(
-                        "u64 value stored as negative i64: {}. This indicates overflow/corruption!",
-                        val
+                        "u64 value stored as negative i64: {val}. This indicates overflow/corruption!"
                     ));
                 }
                 Ok(val as u64)
@@ -107,9 +100,9 @@ impl RawValue for u64 {
             toasty_core::stmt::Value::String(s) => {
                 // DynamoDB case: numbers stored as strings
                 s.parse::<u64>()
-                    .map_err(|e| format!("Failed to parse u64 from string '{}': {}", s, e))
+                    .map_err(|e| format!("Failed to parse u64 from string '{s}': {e}"))
             }
-            _ => Err(format!("Cannot convert {:?} to u64", value)),
+            _ => Err(format!("Cannot convert {value:?} to u64")),
         }
     }
 }
@@ -121,11 +114,11 @@ impl RawValue for i8 {
             toasty_core::stmt::Value::I8(val) => Ok(val),
             toasty_core::stmt::Value::I16(val) => {
                 if val < i8::MIN as i16 || val > i8::MAX as i16 {
-                    return Err(format!("i8 value out of range when stored as i16: {}", val));
+                    return Err(format!("i8 value out of range when stored as i16: {val}"));
                 }
                 Ok(val as i8)
             }
-            _ => Err(format!("Cannot convert {:?} to i8", value)),
+            _ => Err(format!("Cannot convert {value:?} to i8")),
         }
     }
 }
@@ -136,14 +129,11 @@ impl RawValue for i16 {
             toasty_core::stmt::Value::I16(val) => Ok(val),
             toasty_core::stmt::Value::I32(val) => {
                 if val < i16::MIN as i32 || val > i16::MAX as i32 {
-                    return Err(format!(
-                        "i16 value out of range when stored as i32: {}",
-                        val
-                    ));
+                    return Err(format!("i16 value out of range when stored as i32: {val}"));
                 }
                 Ok(val as i16)
             }
-            _ => Err(format!("Cannot convert {:?} to i16", value)),
+            _ => Err(format!("Cannot convert {value:?} to i16")),
         }
     }
 }
@@ -154,14 +144,11 @@ impl RawValue for i32 {
             toasty_core::stmt::Value::I32(val) => Ok(val),
             toasty_core::stmt::Value::I64(val) => {
                 if val < i32::MIN as i64 || val > i32::MAX as i64 {
-                    return Err(format!(
-                        "i32 value out of range when stored as i64: {}",
-                        val
-                    ));
+                    return Err(format!("i32 value out of range when stored as i64: {val}"));
                 }
                 Ok(val as i32)
             }
-            _ => Err(format!("Cannot convert {:?} to i32", value)),
+            _ => Err(format!("Cannot convert {value:?} to i32")),
         }
     }
 }
@@ -173,9 +160,9 @@ impl RawValue for i64 {
             toasty_core::stmt::Value::String(s) => {
                 // DynamoDB case: numbers stored as strings
                 s.parse::<i64>()
-                    .map_err(|e| format!("Failed to parse i64 from string '{}': {}", s, e))
+                    .map_err(|e| format!("Failed to parse i64 from string '{s}': {e}"))
             }
-            _ => Err(format!("Cannot convert {:?} to i64", value)),
+            _ => Err(format!("Cannot convert {value:?} to i64")),
         }
     }
 }

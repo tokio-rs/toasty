@@ -63,7 +63,7 @@ impl Setup for SetupPostgreSQL {
         // Convert stmt::Values to PostgreSQL parameters
         let mut pg_params = Vec::new();
         for (col_name, value) in filter {
-            where_conditions.push(format!("{} = ${}", col_name, param_index));
+            where_conditions.push(format!("{col_name} = ${param_index}"));
 
             // Convert each value individually to avoid trait bound issues
             match value {
@@ -76,8 +76,7 @@ impl Setup for SetupPostgreSQL {
                 }
                 _ => {
                     return Err(toasty::Error::msg(format!(
-                        "Unsupported filter value type: {:?}",
-                        value
+                        "Unsupported filter value type: {value:?}"
                     )))
                 }
             }
@@ -90,14 +89,14 @@ impl Setup for SetupPostgreSQL {
             format!(" WHERE {}", where_conditions.join(" AND "))
         };
 
-        let query = format!("SELECT {} FROM {}{}", column, full_table_name, where_clause);
+        let query = format!("SELECT {column} FROM {full_table_name}{where_clause}");
 
         // Connect directly to PostgreSQL
         let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
             .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
         let (client, connection) = tokio_postgres::connect(&url, NoTls)
             .await
-            .map_err(|e| toasty::Error::msg(format!("PostgreSQL connection failed: {}", e)))?;
+            .map_err(|e| toasty::Error::msg(format!("PostgreSQL connection failed: {e}")))?;
         tokio::spawn(async move {
             let _ = connection.await;
         });
@@ -111,14 +110,14 @@ impl Setup for SetupPostgreSQL {
         let row = client
             .query_one(&query, &params_refs)
             .await
-            .map_err(|e| toasty::Error::msg(format!("Query failed: {}", e)))?;
+            .map_err(|e| toasty::Error::msg(format!("Query failed: {e}")))?;
 
         // Convert PostgreSQL result directly to stmt::Value
         let stmt_value = self.pg_row_to_stmt_value(&row, 0)?;
 
         // Let the type implementation validate and convert
         T::from_raw_storage(stmt_value)
-            .map_err(|e| toasty::Error::msg(format!("Validation failed: {}", e)))
+            .map_err(|e| toasty::Error::msg(format!("Validation failed: {e}")))
     }
 }
 
