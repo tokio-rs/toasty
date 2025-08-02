@@ -71,28 +71,56 @@ impl_num! {
 // These provide comprehensive conversion support between all numeric Value variants
 // and use std's try_into() for safe bounds checking
 
+// Helper macros to reduce duplication in TryFrom implementations
+macro_rules! try_convert {
+    ($val:expr, $target_ty:ty) => {
+        $val.try_into().map_err(|_| {
+            anyhow::anyhow!(
+                "value {} cannot be converted to {}",
+                $val,
+                stringify!($target_ty)
+            )
+        })
+    };
+}
+
+macro_rules! try_convert_range {
+    ($val:expr, $target_ty:ty) => {
+        $val.try_into().map_err(|_| {
+            anyhow::anyhow!(
+                "value {} is out of range for {}",
+                $val,
+                stringify!($target_ty)
+            )
+        })
+    };
+}
+
+macro_rules! parse_string {
+    ($s:expr, $target_ty:ty) => {
+        $s.parse::<$target_ty>()
+            .map_err(|_| anyhow::anyhow!("cannot parse '{}' as {}", $s, stringify!($target_ty)))
+    };
+}
+
+macro_rules! conversion_fallback {
+    ($value:expr, $target_ty:ty) => {
+        anyhow::bail!("cannot convert {:?} to {}", $value, stringify!($target_ty))
+    };
+}
+
 impl TryFrom<Value> for u8 {
     type Error = crate::Error;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::U8(val) => Ok(val),
-            Value::I8(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} cannot be converted to u8")),
-            Value::I16(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for u8")),
-            Value::I32(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for u8")),
-            Value::I64(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for u8")),
-            Value::String(s) => s
-                .parse::<u8>()
-                .map_err(|_| anyhow::anyhow!("cannot parse '{s}' as u8")),
-            _ => anyhow::bail!("cannot convert {value:?} to u8"),
+            Value::I8(val) => try_convert!(val, u8),
+            Value::I16(val) => try_convert_range!(val, u8),
+            Value::I32(val) => try_convert_range!(val, u8),
+            Value::I64(val) => try_convert_range!(val, u8),
+            Value::String(s) => parse_string!(s, u8),
+            _ => conversion_fallback!(value, u8),
         }
     }
 }
@@ -104,22 +132,12 @@ impl TryFrom<Value> for u16 {
         match value {
             Value::U16(val) => Ok(val),
             Value::U8(val) => Ok(val.into()),
-            Value::I8(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} cannot be converted to u16")),
-            Value::I16(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} cannot be converted to u16")),
-            Value::I32(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for u16")),
-            Value::I64(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for u16")),
-            Value::String(s) => s
-                .parse::<u16>()
-                .map_err(|_| anyhow::anyhow!("cannot parse '{s}' as u16")),
-            _ => anyhow::bail!("cannot convert {value:?} to u16"),
+            Value::I8(val) => try_convert!(val, u16),
+            Value::I16(val) => try_convert!(val, u16),
+            Value::I32(val) => try_convert_range!(val, u16),
+            Value::I64(val) => try_convert_range!(val, u16),
+            Value::String(s) => parse_string!(s, u16),
+            _ => conversion_fallback!(value, u16),
         }
     }
 }
@@ -132,22 +150,12 @@ impl TryFrom<Value> for u32 {
             Value::U32(val) => Ok(val),
             Value::U8(val) => Ok(val.into()),
             Value::U16(val) => Ok(val.into()),
-            Value::I8(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} cannot be converted to u32")),
-            Value::I16(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} cannot be converted to u32")),
-            Value::I32(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} cannot be converted to u32")),
-            Value::I64(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for u32")),
-            Value::String(s) => s
-                .parse::<u32>()
-                .map_err(|_| anyhow::anyhow!("cannot parse '{s}' as u32")),
-            _ => anyhow::bail!("cannot convert {value:?} to u32"),
+            Value::I8(val) => try_convert!(val, u32),
+            Value::I16(val) => try_convert!(val, u32),
+            Value::I32(val) => try_convert!(val, u32),
+            Value::I64(val) => try_convert_range!(val, u32),
+            Value::String(s) => parse_string!(s, u32),
+            _ => conversion_fallback!(value, u32),
         }
     }
 }
@@ -161,22 +169,12 @@ impl TryFrom<Value> for u64 {
             Value::U8(val) => Ok(val.into()),
             Value::U16(val) => Ok(val.into()),
             Value::U32(val) => Ok(val.into()),
-            Value::I8(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} cannot be converted to u64")),
-            Value::I16(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} cannot be converted to u64")),
-            Value::I32(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} cannot be converted to u64")),
-            Value::I64(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} cannot be converted to u64")),
-            Value::String(s) => s
-                .parse::<u64>()
-                .map_err(|_| anyhow::anyhow!("cannot parse '{s}' as u64")),
-            _ => anyhow::bail!("cannot convert {value:?} to u64"),
+            Value::I8(val) => try_convert!(val, u64),
+            Value::I16(val) => try_convert!(val, u64),
+            Value::I32(val) => try_convert!(val, u64),
+            Value::I64(val) => try_convert!(val, u64),
+            Value::String(s) => parse_string!(s, u64),
+            _ => conversion_fallback!(value, u64),
         }
     }
 }
@@ -187,31 +185,15 @@ impl TryFrom<Value> for i8 {
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::I8(val) => Ok(val),
-            Value::I16(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i8")),
-            Value::I32(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i8")),
-            Value::I64(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i8")),
-            Value::U8(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i8")),
-            Value::U16(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i8")),
-            Value::U32(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i8")),
-            Value::U64(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i8")),
-            Value::String(s) => s
-                .parse::<i8>()
-                .map_err(|_| anyhow::anyhow!("cannot parse '{s}' as i8")),
-            _ => anyhow::bail!("cannot convert {value:?} to i8"),
+            Value::I16(val) => try_convert_range!(val, i8),
+            Value::I32(val) => try_convert_range!(val, i8),
+            Value::I64(val) => try_convert_range!(val, i8),
+            Value::U8(val) => try_convert_range!(val, i8),
+            Value::U16(val) => try_convert_range!(val, i8),
+            Value::U32(val) => try_convert_range!(val, i8),
+            Value::U64(val) => try_convert_range!(val, i8),
+            Value::String(s) => parse_string!(s, i8),
+            _ => conversion_fallback!(value, i8),
         }
     }
 }
@@ -224,25 +206,13 @@ impl TryFrom<Value> for i16 {
             Value::I16(val) => Ok(val),
             Value::I8(val) => Ok(val.into()),
             Value::U8(val) => Ok(val.into()),
-            Value::I32(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i16")),
-            Value::I64(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i16")),
-            Value::U16(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i16")),
-            Value::U32(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i16")),
-            Value::U64(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i16")),
-            Value::String(s) => s
-                .parse::<i16>()
-                .map_err(|_| anyhow::anyhow!("cannot parse '{s}' as i16")),
-            _ => anyhow::bail!("cannot convert {value:?} to i16"),
+            Value::I32(val) => try_convert_range!(val, i16),
+            Value::I64(val) => try_convert_range!(val, i16),
+            Value::U16(val) => try_convert_range!(val, i16),
+            Value::U32(val) => try_convert_range!(val, i16),
+            Value::U64(val) => try_convert_range!(val, i16),
+            Value::String(s) => parse_string!(s, i16),
+            _ => conversion_fallback!(value, i16),
         }
     }
 }
@@ -257,19 +227,11 @@ impl TryFrom<Value> for i32 {
             Value::I16(val) => Ok(val.into()),
             Value::U8(val) => Ok(val.into()),
             Value::U16(val) => Ok(val.into()),
-            Value::I64(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i32")),
-            Value::U32(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i32")),
-            Value::U64(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i32")),
-            Value::String(s) => s
-                .parse::<i32>()
-                .map_err(|_| anyhow::anyhow!("cannot parse '{s}' as i32")),
-            _ => anyhow::bail!("cannot convert {value:?} to i32"),
+            Value::I64(val) => try_convert_range!(val, i32),
+            Value::U32(val) => try_convert_range!(val, i32),
+            Value::U64(val) => try_convert_range!(val, i32),
+            Value::String(s) => parse_string!(s, i32),
+            _ => conversion_fallback!(value, i32),
         }
     }
 }
@@ -286,13 +248,9 @@ impl TryFrom<Value> for i64 {
             Value::U8(val) => Ok(val.into()),
             Value::U16(val) => Ok(val.into()),
             Value::U32(val) => Ok(val.into()),
-            Value::U64(val) => val
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("value {val} is out of range for i64")),
-            Value::String(s) => s
-                .parse::<i64>()
-                .map_err(|_| anyhow::anyhow!("cannot parse '{s}' as i64")),
-            _ => anyhow::bail!("cannot convert {value:?} to i64"),
+            Value::U64(val) => try_convert_range!(val, i64),
+            Value::String(s) => parse_string!(s, i64),
+            _ => conversion_fallback!(value, i64),
         }
     }
 }
