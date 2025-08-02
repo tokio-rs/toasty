@@ -92,15 +92,15 @@ impl ToSql for Value {
                     let value = *value as i64;
                     value.to_sql(ty, out)
                 }
-                _ => todo!("u16 should not be stored in INT2 anymore: {:?}", ty),
+                _ => todo!("Unsupported PostgreSQL type for u16: {:?}", ty),
             },
             stmt::Value::U32(value) => match *ty {
                 Type::INT8 => {
-                    // u32 is now stored in i64 (BIGINT)
+                    // u32 stored in BIGINT
                     let value = *value as i64;
                     value.to_sql(ty, out)
                 }
-                _ => todo!("u32 should not be stored in INT4 anymore: {:?}", ty),
+                _ => todo!("Unsupported PostgreSQL type for u32: {:?}", ty),
             },
             stmt::Value::U64(value) => match *ty {
                 Type::NUMERIC => {
