@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use toasty::driver::Capability;
 use toasty::{db, Db};
 
-use crate::{isolation::TestIsolation, RawValue, Setup};
+use crate::{isolation::TestIsolation, Setup};
 
 pub struct SetupMySQL {
     isolation: TestIsolation,
@@ -50,7 +50,7 @@ impl Setup for SetupMySQL {
         _filter: HashMap<String, toasty_core::stmt::Value>,
     ) -> toasty::Result<T>
     where
-        T: RawValue,
+        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
     {
         Err(toasty::Error::msg(
             "MySQL raw value access not yet implemented",

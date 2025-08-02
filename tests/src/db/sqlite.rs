@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use toasty::driver::Capability;
 use toasty::{db, Db};
 
-use crate::{RawValue, Setup};
+use crate::Setup;
 
 pub struct SetupSqlite;
 
@@ -41,7 +41,7 @@ impl Setup for SetupSqlite {
         _filter: HashMap<String, toasty_core::stmt::Value>,
     ) -> toasty::Result<T>
     where
-        T: RawValue,
+        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
     {
         // For SQLite, we'll need to connect to the same in-memory database
         // This is tricky since each connection gets its own in-memory database

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use toasty::driver::Capability;
 use toasty::{db, Db};
 
-use crate::{isolation::TestIsolation, RawValue, Setup};
+use crate::{isolation::TestIsolation, Setup};
 
 pub struct SetupPostgreSQL {
     isolation: TestIsolation,
@@ -50,7 +50,7 @@ impl Setup for SetupPostgreSQL {
         filter: HashMap<String, toasty_core::stmt::Value>,
     ) -> toasty::Result<T>
     where
-        T: RawValue,
+        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
     {
         use tokio_postgres::NoTls;
 
@@ -116,8 +116,9 @@ impl Setup for SetupPostgreSQL {
         let stmt_value = self.pg_row_to_stmt_value(&row, 0)?;
 
         // Let the type implementation validate and convert
-        T::from_raw_storage(stmt_value)
-            .map_err(|e| toasty::Error::msg(format!("Validation failed: {e}")))
+        stmt_value
+            .try_into()
+            .map_err(|e: toasty_core::Error| toasty::Error::msg(format!("Validation failed: {e}")))
     }
 }
 
