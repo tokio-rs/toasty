@@ -67,6 +67,7 @@ impl ToSql for Value {
             },
             stmt::Value::U8(value) => match *ty {
                 Type::INT2 => {
+                    // u8 is now stored in i16 (SMALLINT)
                     let value = *value as i16;
                     value.to_sql(ty, out)
                 }
@@ -81,11 +82,8 @@ impl ToSql for Value {
                 _ => todo!(),
             },
             stmt::Value::U16(value) => match *ty {
-                Type::INT2 => {
-                    let value = *value as i16;
-                    value.to_sql(ty, out)
-                }
                 Type::INT4 => {
+                    // u16 is now stored in i32 (INTEGER)
                     let value = *value as i32;
                     value.to_sql(ty, out)
                 }
@@ -93,22 +91,26 @@ impl ToSql for Value {
                     let value = *value as i64;
                     value.to_sql(ty, out)
                 }
-                _ => todo!(),
+                _ => todo!("u16 should not be stored in INT2 anymore: {:?}", ty),
             },
             stmt::Value::U32(value) => match *ty {
-                Type::INT4 => {
-                    let value = *value as i32;
-                    value.to_sql(ty, out)
-                }
                 Type::INT8 => {
+                    // u32 is now stored in i64 (BIGINT)
                     let value = *value as i64;
                     value.to_sql(ty, out)
                 }
-                _ => todo!(),
+                _ => todo!("u32 should not be stored in INT4 anymore: {:?}", ty),
             },
             stmt::Value::U64(value) => match *ty {
                 Type::INT8 => {
-                    // Note: This could overflow for values > i64::MAX
+                    // u64 stored in i64 - validate range and provide clear error
+                    if *value > i64::MAX as u64 {
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT. Consider using a smaller value or a different storage approach.", 
+                                value, i64::MAX)
+                        )));
+                    }
                     let value = *value as i64;
                     value.to_sql(ty, out)
                 }

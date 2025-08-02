@@ -159,22 +159,22 @@ async fn ty_u64_raw_storage_demo(s: impl Setup) {
 
     let db = s.setup(models!(Foo)).await;
 
-    // Test u64::MAX - this value will overflow in PostgreSQL's i64 storage
-    let problematic_value = u64::MAX;
+    // Test a large u64 value that fits within i64::MAX
+    let large_but_safe_value = i64::MAX as u64; // 9223372036854775807
     let created = Foo::create()
-        .val(problematic_value)
+        .val(large_but_safe_value)
         .exec(&db)
         .await
         .unwrap();
     let read_back = Foo::get_by_id(&db, &created.id).await.unwrap();
 
-    // This assertion will pass due to bit-pattern preservation during round-trip
+    // This assertion should pass - the value fits in i64
     assert_eq!(
-        read_back.val, problematic_value,
-        "u64::MAX round-trip failed"
+        read_back.val, large_but_safe_value,
+        "u64 round-trip failed for value within i64::MAX"
     );
 
-    // Now try to verify raw storage - this demonstrates the infrastructure
+    // Now verify raw storage - this should show the value is stored correctly
     let mut filter = std::collections::HashMap::new();
     filter.insert("id".to_string(), toasty_core::stmt::Value::from(created.id));
 
@@ -182,22 +182,22 @@ async fn ty_u64_raw_storage_demo(s: impl Setup) {
         Ok(raw_stored_value) => {
             // If this succeeds, it means raw storage verification is working
             assert_eq!(
-                raw_stored_value, problematic_value,
+                raw_stored_value, large_but_safe_value,
                 "Raw storage verification failed: expected {}, got {}",
-                problematic_value, raw_stored_value
+                large_but_safe_value, raw_stored_value
             );
-            println!("✅ Raw storage verification PASSED: u64::MAX stored correctly");
+            println!("✅ Raw storage verification PASSED: u64 value {} stored correctly as i64", large_but_safe_value);
         }
         Err(e) => {
             let error_msg = format!("{}", e);
             if error_msg.contains("negative i64") && error_msg.contains("overflow") {
-                // This is the error we want to catch - overflow detected!
+                // This would indicate the old bug is still present
                 panic!("🚨 OVERFLOW DETECTED: {}", error_msg);
             } else if error_msg.contains("relation") && error_msg.contains("does not exist") {
                 // Expected - different database connection
                 println!("⚠️  Raw storage verification skipped (different DB connection)");
                 println!("   Infrastructure is ready - when DB connection issue is resolved,");
-                println!("   this test will catch u64::MAX overflow in PostgreSQL");
+                println!("   this test will verify u64 values are stored correctly");
             } else {
                 // Other error
                 println!("⚠️  Raw storage verification failed: {}", error_msg);
@@ -205,5 +205,22 @@ async fn ty_u64_raw_storage_demo(s: impl Setup) {
         }
     }
 
-    println!("✓ Test completed - infrastructure ready for overflow detection");
+    // Now test that u64::MAX properly fails with a clear error message
+    println!("🧪 Testing u64::MAX overflow detection...");
+    let overflow_result = Foo::create().val(u64::MAX).exec(&db).await;
+    match overflow_result {
+        Ok(_) => {
+            panic!("❌ u64::MAX should have failed but didn't! The overflow protection is not working.");
+        }
+        Err(e) => {
+            let error_msg = format!("{}", e);
+            if error_msg.contains("exceeds i64::MAX") {
+                println!("✅ u64::MAX correctly rejected with clear error message");
+            } else {
+                println!("⚠️  u64::MAX failed but with unexpected error: {}", error_msg);
+            }
+        }
+    }
+
+    println!("✓ Test completed - u64 overflow protection working correctly");
 }

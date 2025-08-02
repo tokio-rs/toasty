@@ -29,10 +29,11 @@ impl Type {
                 &stmt::Type::I16 => Ok(Type::Integer(2)),
                 &stmt::Type::I32 => Ok(Type::Integer(4)),
                 stmt::Type::I64 => Ok(Type::Integer(8)),
-                &stmt::Type::U8 => Ok(Type::Integer(1)),
-                &stmt::Type::U16 => Ok(Type::Integer(2)),
-                &stmt::Type::U32 => Ok(Type::Integer(4)),
-                stmt::Type::U64 => Ok(Type::Integer(8)),
+                // Map unsigned types to larger signed types to prevent overflow
+                &stmt::Type::U8 => Ok(Type::Integer(2)),  // u8 -> SMALLINT (i16)
+                &stmt::Type::U16 => Ok(Type::Integer(4)), // u16 -> INTEGER (i32)
+                &stmt::Type::U32 => Ok(Type::Integer(8)), // u32 -> BIGINT (i64)
+                stmt::Type::U64 => Ok(Type::Integer(8)),  // u64 -> BIGINT (i64) with validation
                 stmt::Type::String => Ok(db.default_string_type.clone()),
                 // Gotta support some app-level types as well for now.
                 //

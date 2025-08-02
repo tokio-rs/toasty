@@ -253,7 +253,13 @@ fn postgres_to_toasty(
             .map(|v| match expected_ty {
                 stmt::Type::I8 => stmt::Value::I8(v as i8),
                 stmt::Type::I16 => stmt::Value::I16(v),
-                stmt::Type::U8 => stmt::Value::U8(v as u8),
+                stmt::Type::U8 => {
+                    // u8 is now stored in i16, validate range
+                    if v < 0 || v > u8::MAX as i16 {
+                        panic!("u8 value out of range: {}", v);
+                    }
+                    stmt::Value::U8(v as u8)
+                },
                 stmt::Type::U16 => stmt::Value::U16(v as u16),
                 _ => todo!("unexpected type for INT2: {expected_ty:#?}"),
             })
@@ -262,6 +268,13 @@ fn postgres_to_toasty(
         row.get::<usize, Option<i32>>(index)
             .map(|v| match expected_ty {
                 stmt::Type::I32 => stmt::Value::I32(v),
+                stmt::Type::U16 => {
+                    // u16 is now stored in i32, validate range
+                    if v < 0 || v > u16::MAX as i32 {
+                        panic!("u16 value out of range: {}", v);
+                    }
+                    stmt::Value::U16(v as u16)
+                },
                 stmt::Type::U32 => stmt::Value::U32(v as u32),
                 _ => stmt::Value::I32(v), // Default fallback
             })
@@ -270,7 +283,20 @@ fn postgres_to_toasty(
         row.get::<usize, Option<i64>>(index)
             .map(|v| match expected_ty {
                 stmt::Type::I64 => stmt::Value::I64(v),
-                stmt::Type::U64 => stmt::Value::U64(v as u64),
+                stmt::Type::U32 => {
+                    // u32 is now stored in i64, validate range
+                    if v < 0 || v > u32::MAX as i64 {
+                        panic!("u32 value out of range: {}", v);
+                    }
+                    stmt::Value::U32(v as u32)
+                },
+                stmt::Type::U64 => {
+                    // u64 stored in i64 - validate range during read
+                    if v < 0 {
+                        panic!("u64 value stored as negative i64: {}. This indicates data corruption or overflow during storage!", v);
+                    }
+                    stmt::Value::U64(v as u64)
+                },
                 _ => stmt::Value::I64(v), // Default fallback
             })
             .unwrap_or(stmt::Value::Null)
