@@ -10,6 +10,7 @@ impl ToSql for &db::Type {
             db::Type::Integer(3..=4) => fmt!(f, "INTEGER"),
             db::Type::Integer(5..=8) => fmt!(f, "bigint"),
             db::Type::Integer(_) => todo!(),
+            db::Type::Numeric => fmt!(f, "NUMERIC"),
             db::Type::Text => fmt!(f, "TEXT"),
             db::Type::VarChar(size) => fmt!(f, "VARCHAR(" size ")"),
         }

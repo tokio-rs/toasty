@@ -1,4 +1,5 @@
 use postgres::types::{accepts, private::BytesMut, to_sql_checked, IsNull, ToSql, Type};
+use rust_decimal::Decimal;
 use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
@@ -102,12 +103,17 @@ impl ToSql for Value {
                 _ => todo!("u32 should not be stored in INT4 anymore: {:?}", ty),
             },
             stmt::Value::U64(value) => match *ty {
+                Type::NUMERIC => {
+                    // Convert u64 to Decimal for proper NUMERIC storage
+                    let decimal = Decimal::from(*value);
+                    decimal.to_sql(ty, out)
+                }
                 Type::INT8 => {
-                    // u64 stored in i64 - validate range and provide clear error
+                    // Fallback for existing schemas - validate range
                     if *value > i64::MAX as u64 {
                         return Err(Box::new(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
-                            format!("u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT. Consider using a smaller value or a different storage approach.", 
+                            format!("u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT. Use NUMERIC column type for full u64 range.", 
                                 value, i64::MAX)
                         )));
                     }
@@ -123,6 +129,6 @@ impl ToSql for Value {
         }
     }
 
-    accepts!(BOOL, INT2, INT4, INT8, TEXT, VARCHAR);
+    accepts!(BOOL, INT2, INT4, INT8, NUMERIC, TEXT, VARCHAR);
     to_sql_checked!();
 }

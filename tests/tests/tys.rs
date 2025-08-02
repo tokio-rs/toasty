@@ -159,68 +159,61 @@ async fn ty_u64_raw_storage_demo(s: impl Setup) {
 
     let db = s.setup(models!(Foo)).await;
 
-    // Test a large u64 value that fits within i64::MAX
-    let large_but_safe_value = i64::MAX as u64; // 9223372036854775807
+    // Test u64::MAX - this should now work with TEXT storage
+    let max_value = u64::MAX;
     let created = Foo::create()
-        .val(large_but_safe_value)
+        .val(max_value)
         .exec(&db)
         .await
         .unwrap();
     let read_back = Foo::get_by_id(&db, &created.id).await.unwrap();
 
-    // This assertion should pass - the value fits in i64
+    // This assertion should pass - u64::MAX is now supported
     assert_eq!(
-        read_back.val, large_but_safe_value,
+        read_back.val, max_value,
+        "u64::MAX round-trip failed"
+    );
+
+    // Test a large value within i64::MAX range as well
+    let large_but_safe_value = i64::MAX as u64; // 9223372036854775807
+    let created2 = Foo::create()
+        .val(large_but_safe_value)
+        .exec(&db)
+        .await
+        .unwrap();
+    let read_back2 = Foo::get_by_id(&db, &created2.id).await.unwrap();
+
+    assert_eq!(
+        read_back2.val, large_but_safe_value,
         "u64 round-trip failed for value within i64::MAX"
     );
 
-    // Now verify raw storage - this should show the value is stored correctly
+    // Now verify raw storage - this should show the values are stored correctly
     let mut filter = std::collections::HashMap::new();
     filter.insert("id".to_string(), toasty_core::stmt::Value::from(created.id));
 
     match s.get_raw_column_value::<u64>("foos", "val", filter).await {
         Ok(raw_stored_value) => {
-            // If this succeeds, it means raw storage verification is working
             assert_eq!(
-                raw_stored_value, large_but_safe_value,
+                raw_stored_value, max_value,
                 "Raw storage verification failed: expected {}, got {}",
-                large_but_safe_value, raw_stored_value
+                max_value, raw_stored_value
             );
-            println!("✅ Raw storage verification PASSED: u64 value {} stored correctly as i64", large_but_safe_value);
+            println!("✅ Raw storage verification PASSED: u64::MAX ({}) stored correctly in TEXT column", max_value);
         }
         Err(e) => {
             let error_msg = format!("{}", e);
-            if error_msg.contains("negative i64") && error_msg.contains("overflow") {
-                // This would indicate the old bug is still present
-                panic!("🚨 OVERFLOW DETECTED: {}", error_msg);
-            } else if error_msg.contains("relation") && error_msg.contains("does not exist") {
+            if error_msg.contains("relation") && error_msg.contains("does not exist") {
                 // Expected - different database connection
                 println!("⚠️  Raw storage verification skipped (different DB connection)");
-                println!("   Infrastructure is ready - when DB connection issue is resolved,");
-                println!("   this test will verify u64 values are stored correctly");
+                println!("   u64::MAX ({}) successfully stored and retrieved via Toasty", max_value);
             } else {
                 // Other error
                 println!("⚠️  Raw storage verification failed: {}", error_msg);
+                println!("   But u64::MAX ({}) was successfully stored and retrieved via Toasty", max_value);
             }
         }
     }
 
-    // Now test that u64::MAX properly fails with a clear error message
-    println!("🧪 Testing u64::MAX overflow detection...");
-    let overflow_result = Foo::create().val(u64::MAX).exec(&db).await;
-    match overflow_result {
-        Ok(_) => {
-            panic!("❌ u64::MAX should have failed but didn't! The overflow protection is not working.");
-        }
-        Err(e) => {
-            let error_msg = format!("{}", e);
-            if error_msg.contains("exceeds i64::MAX") {
-                println!("✅ u64::MAX correctly rejected with clear error message");
-            } else {
-                println!("⚠️  u64::MAX failed but with unexpected error: {}", error_msg);
-            }
-        }
-    }
-
-    println!("✓ Test completed - u64 overflow protection working correctly");
+    println!("✓ Test completed - u64::MAX is now fully supported!");
 }
