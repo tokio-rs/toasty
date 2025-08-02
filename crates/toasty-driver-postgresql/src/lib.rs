@@ -257,7 +257,7 @@ fn postgres_to_toasty(
                 stmt::Type::I8 => stmt::Value::I8(v as i8),
                 stmt::Type::I16 => stmt::Value::I16(v),
                 stmt::Type::U8 => stmt::Value::U8(
-                    u8::try_from(v).unwrap_or_else(|_| panic!("u8 value out of range: {}", v))
+                    u8::try_from(v).unwrap_or_else(|_| panic!("u8 value out of range: {v}")),
                 ),
                 stmt::Type::U16 => stmt::Value::U16(v as u16),
                 _ => panic!("unexpected type for INT2: {expected_ty:#?}"),
@@ -268,7 +268,7 @@ fn postgres_to_toasty(
             .map(|v| match expected_ty {
                 stmt::Type::I32 => stmt::Value::I32(v),
                 stmt::Type::U16 => stmt::Value::U16(
-                    u16::try_from(v).unwrap_or_else(|_| panic!("u16 value out of range: {}", v))
+                    u16::try_from(v).unwrap_or_else(|_| panic!("u16 value out of range: {v}")),
                 ),
                 stmt::Type::U32 => stmt::Value::U32(v as u32),
                 _ => stmt::Value::I32(v), // Default fallback
@@ -279,10 +279,10 @@ fn postgres_to_toasty(
             .map(|v| match expected_ty {
                 stmt::Type::I64 => stmt::Value::I64(v),
                 stmt::Type::U32 => stmt::Value::U32(
-                    u32::try_from(v).unwrap_or_else(|_| panic!("u32 value out of range: {}", v))
+                    u32::try_from(v).unwrap_or_else(|_| panic!("u32 value out of range: {v}")),
                 ),
                 stmt::Type::U64 => stmt::Value::U64(
-                    u64::try_from(v).unwrap_or_else(|_| panic!("u64 value out of range: {}", v))
+                    u64::try_from(v).unwrap_or_else(|_| panic!("u64 value out of range: {v}")),
                 ),
                 _ => stmt::Value::I64(v), // Default fallback
             })
@@ -293,10 +293,12 @@ fn postgres_to_toasty(
             .map(|v| match expected_ty {
                 stmt::Type::U64 => {
                     // Convert Decimal to u64
-                    let as_u64 = v.to_string().parse::<u64>()
-                        .unwrap_or_else(|_| panic!("Failed to parse NUMERIC as u64: {}", v));
+                    let as_u64 = v
+                        .to_string()
+                        .parse::<u64>()
+                        .unwrap_or_else(|_| panic!("Failed to parse NUMERIC as u64: {v}"));
                     stmt::Value::U64(as_u64)
-                },
+                }
                 _ => panic!("unexpected type for NUMERIC: {expected_ty:#?}"),
             })
             .unwrap_or(stmt::Value::Null)

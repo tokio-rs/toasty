@@ -161,18 +161,11 @@ async fn ty_u64_raw_storage_demo(s: impl Setup) {
 
     // Test u64::MAX - this should now work with TEXT storage
     let max_value = u64::MAX;
-    let created = Foo::create()
-        .val(max_value)
-        .exec(&db)
-        .await
-        .unwrap();
+    let created = Foo::create().val(max_value).exec(&db).await.unwrap();
     let read_back = Foo::get_by_id(&db, &created.id).await.unwrap();
 
     // This assertion should pass - u64::MAX is now supported
-    assert_eq!(
-        read_back.val, max_value,
-        "u64::MAX round-trip failed"
-    );
+    assert_eq!(read_back.val, max_value, "u64::MAX round-trip failed");
 
     // Test a large value within i64::MAX range as well
     let large_but_safe_value = i64::MAX as u64; // 9223372036854775807
@@ -199,18 +192,27 @@ async fn ty_u64_raw_storage_demo(s: impl Setup) {
                 "Raw storage verification failed: expected {}, got {}",
                 max_value, raw_stored_value
             );
-            println!("✅ Raw storage verification PASSED: u64::MAX ({}) stored correctly in TEXT column", max_value);
+            println!(
+                "✅ Raw storage verification PASSED: u64::MAX ({}) stored correctly in TEXT column",
+                max_value
+            );
         }
         Err(e) => {
             let error_msg = format!("{}", e);
             if error_msg.contains("relation") && error_msg.contains("does not exist") {
                 // Expected - different database connection
                 println!("⚠️  Raw storage verification skipped (different DB connection)");
-                println!("   u64::MAX ({}) successfully stored and retrieved via Toasty", max_value);
+                println!(
+                    "   u64::MAX ({}) successfully stored and retrieved via Toasty",
+                    max_value
+                );
             } else {
                 // Other error
                 println!("⚠️  Raw storage verification failed: {}", error_msg);
-                println!("   But u64::MAX ({}) was successfully stored and retrieved via Toasty", max_value);
+                println!(
+                    "   But u64::MAX ({}) was successfully stored and retrieved via Toasty",
+                    max_value
+                );
             }
         }
     }
