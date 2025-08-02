@@ -18,7 +18,7 @@ use crate::*;
 use app::{Field, FieldId, Model, ModelId};
 use db::{ColumnId, IndexId, Table, TableId};
 
-use std::sync::Arc;
+use std::{any::TypeId, collections::HashMap, sync::Arc};
 
 #[derive(Debug)]
 pub struct Schema {
@@ -30,11 +30,22 @@ pub struct Schema {
 
     /// Maps the app-level schema to the db-level schema
     pub mapping: Mapping,
+
+    /// Maps TypeId to ModelId for type resolution
+    pub type_to_model: HashMap<TypeId, ModelId>,
 }
 
 impl Schema {
     pub fn builder() -> Builder {
         Builder::default()
+    }
+
+    /// Resolve a TypeId to a ModelId
+    pub fn type_to_model_id(&self, type_id: TypeId) -> Result<ModelId> {
+        self.type_to_model
+            .get(&type_id)
+            .copied()
+            .ok_or_else(|| Error::msg("Model type not registered in schema"))
     }
 
     pub fn mapping_for(&self, id: impl Into<ModelId>) -> &mapping::Model {

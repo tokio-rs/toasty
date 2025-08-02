@@ -100,6 +100,7 @@ impl Builder {
                 tables: builder.tables,
             }),
             mapping: builder.mapping,
+            type_to_model: std::collections::HashMap::new(), // TODO: Populate this mapping
         };
 
         // Verify the schema structure
