@@ -86,9 +86,9 @@ impl Setup for SetupDynamoDb {
         if let Some(item) = response.item {
             if let Some(attr_value) = item.get(column) {
                 let stmt_value = self.dynamodb_attr_to_stmt_value(attr_value)?;
-                stmt_value.try_into().map_err(|e: toasty_core::Error| {
-                    panic!("Validation failed: {e}")
-                })
+                stmt_value
+                    .try_into()
+                    .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
             } else {
                 panic!("Column '{column}' not found in DynamoDB item")
             }

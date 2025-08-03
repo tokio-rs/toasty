@@ -123,9 +123,9 @@ impl Setup for SetupMySQL {
 
         if let Ok(Some(row)) = result.next().await {
             let stmt_value = self.mysql_row_to_stmt_value(&row, 0)?;
-            stmt_value.try_into().map_err(|e: toasty_core::Error| {
-                panic!("Validation failed: {e}")
-            })
+            stmt_value
+                .try_into()
+                .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
         } else {
             panic!("No rows found")
         }
