@@ -58,8 +58,13 @@ impl Setup for SetupDynamoDb {
 
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
 
-        // Create DynamoDB client
-        let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+        // Create DynamoDB client with test credentials (matching the driver setup)
+        let config = aws_config::defaults(BehaviorVersion::latest())
+            .region("foo")
+            .credentials_provider(aws_sdk_dynamodb::config::Credentials::for_tests())
+            .endpoint_url("http://localhost:8000")
+            .load()
+            .await;
         let client = Client::new(&config);
 
         // Convert filter to DynamoDB key
