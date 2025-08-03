@@ -64,6 +64,7 @@ pretty_assertions = "1.4.1"
 proc-macro2 = "1.0.37"
 quote = "1.0.18"
 rand = "0.8.5"
+rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.132"
 syn = { version = "2.0.86", features = ["full", "extra-traits", "visit-mut"] }
