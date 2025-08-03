@@ -1,27 +1,27 @@
 use std::collections::HashMap;
 use toasty::driver::Capability;
 use toasty::{db, Db};
+use tokio::sync::OnceCell;
 
 use crate::{isolation::TestIsolation, Setup};
 
-// Global lazy DynamoDB client to avoid creating connections on each call
-static DYNAMODB_CLIENT: tokio::sync::OnceCell<aws_sdk_dynamodb::Client> =
-    tokio::sync::OnceCell::const_new();
-
 pub struct SetupDynamoDb {
     isolation: TestIsolation,
+    // Per-test-instance client to avoid runtime issues with static sharing
+    client: OnceCell<aws_sdk_dynamodb::Client>,
 }
 
 impl SetupDynamoDb {
     pub fn new() -> Self {
         Self {
             isolation: TestIsolation::new(),
+            client: OnceCell::new(),
         }
     }
 
-    /// Get or create the global DynamoDB client
-    async fn get_client() -> &'static aws_sdk_dynamodb::Client {
-        DYNAMODB_CLIENT
+    /// Get or create the per-test-instance DynamoDB client
+    async fn get_client(&self) -> &aws_sdk_dynamodb::Client {
+        self.client
             .get_or_init(|| async {
                 use aws_config::BehaviorVersion;
 
@@ -77,8 +77,8 @@ impl Setup for SetupDynamoDb {
     {
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
 
-        // Get the cached DynamoDB client
-        let client = Self::get_client().await;
+        // Get the per-test-instance DynamoDB client
+        let client = self.get_client().await;
 
         // Convert filter to DynamoDB key
         let mut key = HashMap::new();

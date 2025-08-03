@@ -1,42 +1,47 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use toasty::driver::Capability;
 use toasty::{db, Db};
+use toasty_core::stmt;
+use tokio::sync::OnceCell;
 
 use crate::{isolation::TestIsolation, Setup};
 
-// Global lazy PostgreSQL client to avoid creating connections on each call
-static POSTGRESQL_CLIENT: tokio::sync::OnceCell<tokio_postgres::Client> =
-    tokio::sync::OnceCell::const_new();
-
 pub struct SetupPostgreSQL {
     isolation: TestIsolation,
+    // Per-test-instance client to avoid runtime issues with static sharing
+    client: OnceCell<Arc<tokio_postgres::Client>>,
 }
 
 impl SetupPostgreSQL {
     pub fn new() -> Self {
         Self {
             isolation: TestIsolation::new(),
+            client: OnceCell::new(),
         }
     }
 
-    /// Get or create the global PostgreSQL client
-    async fn get_client() -> &'static tokio_postgres::Client {
-        POSTGRESQL_CLIENT
+    /// Get or create the per-test-instance PostgreSQL client
+    async fn get_client(&self) -> &Arc<tokio_postgres::Client> {
+        self.client
             .get_or_init(|| async {
                 use tokio_postgres::NoTls;
 
                 let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
                     .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
+
                 let (client, connection) = tokio_postgres::connect(&url, NoTls)
                     .await
                     .unwrap_or_else(|e| panic!("PostgreSQL connection failed: {e}"));
 
                 // Spawn the connection task
                 tokio::spawn(async move {
-                    let _ = connection.await;
+                    if let Err(e) = connection.await {
+                        eprintln!("PostgreSQL connection error: {e}");
+                    }
                 });
 
-                client
+                Arc::new(client)
             })
             .await
     }
@@ -73,10 +78,10 @@ impl Setup for SetupPostgreSQL {
         &self,
         table: &str,
         column: &str,
-        filter: HashMap<String, toasty_core::stmt::Value>,
+        filter: HashMap<String, stmt::Value>,
     ) -> toasty::Result<T>
     where
-        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
+        T: TryFrom<stmt::Value, Error = toasty_core::Error>,
     {
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
 
@@ -91,10 +96,10 @@ impl Setup for SetupPostgreSQL {
 
             // Convert each value individually to avoid trait bound issues
             match value {
-                toasty_core::stmt::Value::String(s) => pg_params.push(s),
-                toasty_core::stmt::Value::I64(i) => pg_params.push(i.to_string()),
-                toasty_core::stmt::Value::U64(u) => pg_params.push((u as i64).to_string()),
-                toasty_core::stmt::Value::Id(id) => {
+                stmt::Value::String(s) => pg_params.push(s),
+                stmt::Value::I64(i) => pg_params.push(i.to_string()),
+                stmt::Value::U64(u) => pg_params.push((u as i64).to_string()),
+                stmt::Value::Id(id) => {
                     // Convert Id to string representation
                     pg_params.push(id.to_string());
                 }
@@ -111,8 +116,8 @@ impl Setup for SetupPostgreSQL {
 
         let query = format!("SELECT {column} FROM {full_table_name}{where_clause}");
 
-        // Get the cached PostgreSQL client
-        let client = Self::get_client().await;
+        // Get the per-test-instance PostgreSQL client
+        let client = self.get_client().await;
 
         // For simplicity, use string parameters for now
         let string_params: Vec<&str> = pg_params.iter().map(|s| s.as_str()).collect();
@@ -178,16 +183,16 @@ impl SetupPostgreSQL {
         &self,
         row: &tokio_postgres::Row,
         col: usize,
-    ) -> toasty::Result<toasty_core::stmt::Value> {
+    ) -> toasty::Result<stmt::Value> {
         use tokio_postgres::types::Type;
 
         let column = &row.columns()[col];
         match *column.type_() {
-            Type::INT2 => Ok(toasty_core::stmt::Value::I16(row.get(col))),
-            Type::INT4 => Ok(toasty_core::stmt::Value::I32(row.get(col))),
-            Type::INT8 => Ok(toasty_core::stmt::Value::I64(row.get(col))),
-            Type::TEXT | Type::VARCHAR => Ok(toasty_core::stmt::Value::String(row.get(col))),
-            Type::BOOL => Ok(toasty_core::stmt::Value::Bool(row.get(col))),
+            Type::INT2 => Ok(stmt::Value::I16(row.get(col))),
+            Type::INT4 => Ok(stmt::Value::I32(row.get(col))),
+            Type::INT8 => Ok(stmt::Value::I64(row.get(col))),
+            Type::TEXT | Type::VARCHAR => Ok(stmt::Value::String(row.get(col))),
+            Type::BOOL => Ok(stmt::Value::Bool(row.get(col))),
             _ => todo!("Unsupported PostgreSQL type: {:?}", column.type_()),
         }
     }
