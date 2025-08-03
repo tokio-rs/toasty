@@ -4,6 +4,10 @@ use toasty::{db, Db};
 
 use crate::{isolation::TestIsolation, Setup};
 
+// Global lazy PostgreSQL client to avoid creating connections on each call
+static POSTGRESQL_CLIENT: tokio::sync::OnceCell<tokio_postgres::Client> =
+    tokio::sync::OnceCell::const_new();
+
 pub struct SetupPostgreSQL {
     isolation: TestIsolation,
 }
@@ -13,6 +17,28 @@ impl SetupPostgreSQL {
         Self {
             isolation: TestIsolation::new(),
         }
+    }
+
+    /// Get or create the global PostgreSQL client
+    async fn get_client() -> &'static tokio_postgres::Client {
+        POSTGRESQL_CLIENT
+            .get_or_init(|| async {
+                use tokio_postgres::NoTls;
+
+                let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
+                    .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
+                let (client, connection) = tokio_postgres::connect(&url, NoTls)
+                    .await
+                    .unwrap_or_else(|e| panic!("PostgreSQL connection failed: {e}"));
+
+                // Spawn the connection task
+                tokio::spawn(async move {
+                    let _ = connection.await;
+                });
+
+                client
+            })
+            .await
     }
 }
 
@@ -52,8 +78,6 @@ impl Setup for SetupPostgreSQL {
     where
         T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
     {
-        use tokio_postgres::NoTls;
-
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
 
         // Build WHERE clause from filter
@@ -87,15 +111,8 @@ impl Setup for SetupPostgreSQL {
 
         let query = format!("SELECT {column} FROM {full_table_name}{where_clause}");
 
-        // Connect directly to PostgreSQL
-        let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
-            .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
-        let (client, connection) = tokio_postgres::connect(&url, NoTls)
-            .await
-            .unwrap_or_else(|e| panic!("PostgreSQL connection failed: {e}"));
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
+        // Get the cached PostgreSQL client
+        let client = Self::get_client().await;
 
         // For simplicity, use string parameters for now
         let string_params: Vec<&str> = pg_params.iter().map(|s| s.as_str()).collect();

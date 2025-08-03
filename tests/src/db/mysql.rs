@@ -4,6 +4,9 @@ use toasty::{db, Db};
 
 use crate::{isolation::TestIsolation, Setup};
 
+// Global lazy MySQL connection pool to avoid creating connections on each call
+static MYSQL_POOL: tokio::sync::OnceCell<mysql_async::Pool> = tokio::sync::OnceCell::const_new();
+
 pub struct SetupMySQL {
     isolation: TestIsolation,
 }
@@ -13,6 +16,17 @@ impl SetupMySQL {
         Self {
             isolation: TestIsolation::new(),
         }
+    }
+
+    /// Get or create the global MySQL connection pool
+    async fn get_pool() -> &'static mysql_async::Pool {
+        MYSQL_POOL
+            .get_or_init(|| async {
+                let url = std::env::var("TOASTY_TEST_MYSQL_URL")
+                    .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
+                mysql_async::Pool::new(url.as_str())
+            })
+            .await
     }
 }
 
@@ -106,11 +120,8 @@ impl Setup for SetupMySQL {
 
         let query = format!("SELECT {column} FROM {full_table_name}{where_clause}");
 
-        // Connect to MySQL
-        let url = std::env::var("TOASTY_TEST_MYSQL_URL")
-            .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
-
-        let pool = mysql_async::Pool::new(url.as_str());
+        // Get connection from cached pool
+        let pool = Self::get_pool().await;
         let mut conn = pool
             .get_conn()
             .await
