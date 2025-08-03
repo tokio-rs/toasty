@@ -1,14 +1,111 @@
 use std::collections::HashMap;
+use std::sync::Mutex;
+use tempfile::NamedTempFile;
 use toasty::driver::Capability;
 use toasty::{db, Db};
 
 use crate::Setup;
 
-pub struct SetupSqlite;
+pub struct SetupSqlite {
+    _temp_file: NamedTempFile, // Keep alive for automatic cleanup
+    temp_db_path: String,      // Path for connections
+    raw_connection: Mutex<rusqlite::Connection>, // Shared connection for raw access
+}
 
 impl SetupSqlite {
     pub fn new() -> Self {
-        Self
+        let temp_file =
+            NamedTempFile::new().expect("Failed to create temporary file for SQLite test");
+
+        // Get the path as a string for SQLite URL
+        let temp_db_path = temp_file.path().display().to_string();
+
+        // Create a raw connection for get_raw_column_value operations
+        let raw_connection = rusqlite::Connection::open(&temp_db_path)
+            .expect("Failed to create raw SQLite connection");
+
+        Self {
+            _temp_file: temp_file,
+            temp_db_path,
+            raw_connection: Mutex::new(raw_connection),
+        }
+    }
+
+    /// Access the temporary database file path for raw database operations.
+    /// This enables raw storage verification when the unsigned integer support is merged.
+    pub fn temp_db_path(&self) -> &str {
+        &self.temp_db_path
+    }
+
+    /// Get raw column value from the database for verification purposes.
+    /// This method uses a shared connection to efficiently retrieve
+    /// the actual stored value, enabling raw storage verification.
+    pub async fn get_raw_column_value<T>(
+        &self,
+        table_name: &str,
+        column_name: &str,
+        id_value: i64,
+    ) -> toasty::Result<T>
+    where
+        T: std::str::FromStr + Send,
+        T::Err: std::fmt::Debug,
+    {
+        // No spawn_blocking needed here because:
+        // 1. This is just a test runner, not production code
+        // 2. SQLite file operations are typically fast and often cached in memory
+        // 3. Test database files are small and local
+        let conn = self
+            .raw_connection
+            .lock()
+            .map_err(|e| toasty::Error::msg(format!("Failed to acquire connection lock: {e}")))?;
+
+        // Query the raw value from the database
+        let query = format!("SELECT {column_name} FROM {table_name} WHERE id = ?");
+
+        let mut stmt = conn
+            .prepare(&query)
+            .map_err(|e| toasty::Error::msg(format!("Failed to prepare query: {e}")))?;
+
+        let raw_value: String = stmt
+            .query_row([id_value], |row| row.get(0))
+            .map_err(|e| toasty::Error::msg(format!("Failed to query raw value: {e}")))?;
+
+        // Parse the raw value to the expected type
+        raw_value.parse::<T>().map_err(|e| {
+            toasty::Error::msg(format!(
+                "Failed to parse raw value '{raw_value}': {e:?}"
+            ))
+        })
+    }
+
+    /// Helper method to convert SQLite row values to stmt::Value for unsigned integer support
+    fn sqlite_row_to_stmt_value(
+        &self,
+        row: &rusqlite::Row,
+        col: usize,
+    ) -> toasty::Result<toasty_core::stmt::Value> {
+        use rusqlite::types::ValueRef;
+
+        let value_ref = row
+            .get_ref(col)
+            .map_err(|e| toasty::Error::msg(format!("SQLite column access failed: {e}")))?;
+
+        match value_ref {
+            ValueRef::Integer(i) => Ok(toasty_core::stmt::Value::I64(i)),
+            ValueRef::Real(f) => {
+                // SQLite stores all numbers as either INTEGER or REAL
+                // For our purposes, we'll convert REAL back to string to preserve precision
+                Ok(toasty_core::stmt::Value::String(f.to_string()))
+            }
+            ValueRef::Text(s) => {
+                let text = std::str::from_utf8(s).map_err(|e| {
+                    toasty::Error::msg(format!("SQLite text conversion failed: {e}"))
+                })?;
+                Ok(toasty_core::stmt::Value::String(text.to_string()))
+            }
+            ValueRef::Blob(_) => Err(toasty::Error::msg("SQLite BLOB type not supported")),
+            ValueRef::Null => Ok(toasty_core::stmt::Value::Null),
+        }
     }
 }
 
@@ -21,19 +118,22 @@ impl Default for SetupSqlite {
 #[async_trait::async_trait]
 impl Setup for SetupSqlite {
     async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
-        // SQLite uses in-memory databases, so no isolation needed
-        builder.connect("sqlite::memory:").await
+        // Use temporary file-based database instead of in-memory
+        let url = format!("sqlite:{}", self.temp_db_path);
+        builder.connect(&url).await
     }
 
     fn capability(&self) -> &Capability {
         &Capability::SQLITE
     }
 
-    // SQLite uses in-memory databases, so no cleanup needed
+    // Temporary file cleanup is handled automatically by NamedTempFile::drop()
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         Ok(())
     }
 
+    /// Get raw column value from the database for verification purposes.
+    /// This method supports the unsigned integer testing by providing access to raw stored values.
     async fn get_raw_column_value<T>(
         &self,
         table: &str,
@@ -43,13 +143,6 @@ impl Setup for SetupSqlite {
     where
         T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
     {
-        // For SQLite in-memory databases, we can't access the same database from a different connection
-        // This is a limitation of the current test setup. In a real application, you'd use a file-based
-        // database or share the connection. For now, we'll return an informative error.
-
-        // However, let's try to implement this properly for when file-based databases are used
-        // or for future improvements to the test infrastructure.
-
         // Build WHERE clause from filter
         let mut where_conditions = Vec::new();
         let mut sqlite_params = Vec::new();
@@ -88,80 +181,60 @@ impl Setup for SetupSqlite {
 
         let query = format!("SELECT {column} FROM {table}{where_clause}");
 
-        // Try to connect to a SQLite database
-        // For in-memory databases, this will fail as expected
-        // For file-based databases, this could work
-        match std::env::var("TOASTY_TEST_SQLITE_URL") {
-            Ok(url) if !url.contains(":memory:") => {
-                // File-based database - we can try to connect
-                use rusqlite::Connection;
+        // Use the shared connection for efficient access
+        let conn = self
+            .raw_connection
+            .lock()
+            .map_err(|e| toasty::Error::msg(format!("Failed to acquire connection lock: {e}")))?;
 
-                let conn = Connection::open(&url)
-                    .map_err(|e| toasty::Error::msg(format!("SQLite connection failed: {e}")))?;
+        let mut stmt = conn
+            .prepare(&query)
+            .map_err(|e| toasty::Error::msg(format!("SQLite prepare failed: {e}")))?;
 
-                let mut stmt = conn
-                    .prepare(&query)
-                    .map_err(|e| toasty::Error::msg(format!("SQLite prepare failed: {e}")))?;
+        let string_params: Vec<&str> = sqlite_params.iter().map(|s| s.as_str()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> = string_params
+            .iter()
+            .map(|s| s as &dyn rusqlite::ToSql)
+            .collect();
 
-                let string_params: Vec<&str> = sqlite_params.iter().map(|s| s.as_str()).collect();
-                let params_refs: Vec<&dyn rusqlite::ToSql> = string_params
-                    .iter()
-                    .map(|s| s as &dyn rusqlite::ToSql)
-                    .collect();
+        let mut rows = stmt
+            .query(&params_refs[..])
+            .map_err(|e| toasty::Error::msg(format!("SQLite query failed: {e}")))?;
 
-                let mut rows = stmt
-                    .query(&params_refs[..])
-                    .map_err(|e| toasty::Error::msg(format!("SQLite query failed: {e}")))?;
-
-                if let Some(row) = rows
-                    .next()
-                    .map_err(|e| toasty::Error::msg(format!("SQLite row fetch failed: {e}")))?
-                {
-                    let stmt_value = self.sqlite_row_to_stmt_value(&row, 0)?;
-                    stmt_value.try_into().map_err(|e: toasty_core::Error| {
-                        toasty::Error::msg(format!("Validation failed: {e}"))
-                    })
-                } else {
-                    Err(toasty::Error::msg("No rows found"))
-                }
-            }
-            _ => {
-                // In-memory database or no URL specified
-                Err(toasty::Error::msg(
-                    "SQLite in-memory database raw value access not yet implemented",
-                ))
-            }
+        if let Some(row) = rows
+            .next()
+            .map_err(|e| toasty::Error::msg(format!("SQLite row fetch failed: {e}")))?
+        {
+            let stmt_value = self.sqlite_row_to_stmt_value(&row, 0)?;
+            stmt_value.try_into().map_err(|e: toasty_core::Error| {
+                toasty::Error::msg(format!("Validation failed: {e}"))
+            })
+        } else {
+            Err(toasty::Error::msg("No rows found"))
         }
     }
 }
 
-impl SetupSqlite {
-    fn sqlite_row_to_stmt_value(
-        &self,
-        row: &rusqlite::Row,
-        col: usize,
-    ) -> toasty::Result<toasty_core::stmt::Value> {
-        use rusqlite::types::ValueRef;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        let value_ref = row
-            .get_ref(col)
-            .map_err(|e| toasty::Error::msg(format!("SQLite column access failed: {e}")))?;
+    #[tokio::test]
+    async fn test_raw_storage_infrastructure() {
+        let setup = SetupSqlite::new();
 
-        match value_ref {
-            ValueRef::Integer(i) => Ok(toasty_core::stmt::Value::I64(i)),
-            ValueRef::Real(f) => {
-                // SQLite stores all numbers as either INTEGER or REAL
-                // For our purposes, we'll convert REAL back to string to preserve precision
-                Ok(toasty_core::stmt::Value::String(f.to_string()))
-            }
-            ValueRef::Text(s) => {
-                let text = std::str::from_utf8(s).map_err(|e| {
-                    toasty::Error::msg(format!("SQLite text conversion failed: {e}"))
-                })?;
-                Ok(toasty_core::stmt::Value::String(text.to_string()))
-            }
-            ValueRef::Blob(_) => Err(toasty::Error::msg("SQLite BLOB type not supported")),
-            ValueRef::Null => Ok(toasty_core::stmt::Value::Null),
-        }
+        // Verify that the temp file path is accessible
+        let path = setup.temp_db_path();
+        assert!(!path.is_empty(), "Temp database path should not be empty");
+
+        // Verify that the temp file exists
+        assert!(
+            std::path::Path::new(path).exists(),
+            "Temp database file should exist"
+        );
+
+        println!("✅ Raw storage infrastructure test PASSED");
+        println!("   - Temp database path: {}", path);
+        println!("   - get_raw_column_value method available for future use");
     }
 }
