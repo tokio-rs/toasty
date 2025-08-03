@@ -74,11 +74,7 @@ impl Setup for SetupPostgreSQL {
                     // Convert Id to string representation
                     pg_params.push(id.to_string());
                 }
-                _ => {
-                    return Err(toasty::Error::msg(format!(
-                        "Unsupported filter value type: {value:?}"
-                    )))
-                }
+                _ => todo!("Unsupported filter value type: {value:?}"),
             }
             param_index += 1;
         }
@@ -96,7 +92,7 @@ impl Setup for SetupPostgreSQL {
             .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
         let (client, connection) = tokio_postgres::connect(&url, NoTls)
             .await
-            .map_err(|e| toasty::Error::msg(format!("PostgreSQL connection failed: {e}")))?;
+            .unwrap_or_else(|e| panic!("PostgreSQL connection failed: {e}"));
         tokio::spawn(async move {
             let _ = connection.await;
         });
@@ -110,7 +106,7 @@ impl Setup for SetupPostgreSQL {
         let row = client
             .query_one(&query, &params_refs)
             .await
-            .map_err(|e| toasty::Error::msg(format!("Query failed: {e}")))?;
+            .unwrap_or_else(|e| panic!("Query failed: {e}"));
 
         // Convert PostgreSQL result directly to stmt::Value
         let stmt_value = self.pg_row_to_stmt_value(&row, 0)?;
@@ -118,7 +114,7 @@ impl Setup for SetupPostgreSQL {
         // Let the type implementation validate and convert
         stmt_value
             .try_into()
-            .map_err(|e: toasty_core::Error| toasty::Error::msg(format!("Validation failed: {e}")))
+            .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
     }
 }
 

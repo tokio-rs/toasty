@@ -160,11 +160,7 @@ impl Setup for SetupSqlite {
                     sqlite_params.push(if b { "1".to_string() } else { "0".to_string() })
                 }
                 toasty_core::stmt::Value::Id(id) => sqlite_params.push(id.to_string()),
-                _ => {
-                    return Err(toasty::Error::msg(format!(
-                        "Unsupported filter value type for SQLite: {value:?}"
-                    )))
-                }
+                _ => todo!("Unsupported filter value type for SQLite: {value:?}"),
             }
         }
 
@@ -180,11 +176,11 @@ impl Setup for SetupSqlite {
         let conn = self
             .raw_connection
             .lock()
-            .map_err(|e| toasty::Error::msg(format!("Failed to acquire connection lock: {e}")))?;
+            .unwrap_or_else(|e| panic!("Failed to acquire connection lock: {e}"));
 
         let mut stmt = conn
             .prepare(&query)
-            .map_err(|e| toasty::Error::msg(format!("SQLite prepare failed: {e}")))?;
+            .unwrap_or_else(|e| panic!("SQLite prepare failed: {e}"));
 
         let string_params: Vec<&str> = sqlite_params.iter().map(|s| s.as_str()).collect();
         let params_refs: Vec<&dyn rusqlite::ToSql> = string_params
@@ -194,18 +190,18 @@ impl Setup for SetupSqlite {
 
         let mut rows = stmt
             .query(&params_refs[..])
-            .map_err(|e| toasty::Error::msg(format!("SQLite query failed: {e}")))?;
+            .unwrap_or_else(|e| panic!("SQLite query failed: {e}"));
 
         if let Some(row) = rows
             .next()
-            .map_err(|e| toasty::Error::msg(format!("SQLite row fetch failed: {e}")))?
+            .unwrap_or_else(|e| panic!("SQLite row fetch failed: {e}"))
         {
             let stmt_value = self.sqlite_row_to_stmt_value(row, 0)?;
             stmt_value.try_into().map_err(|e: toasty_core::Error| {
-                toasty::Error::msg(format!("Validation failed: {e}"))
+                panic!("Validation failed: {e}")
             })
         } else {
-            Err(toasty::Error::msg("No rows found"))
+            panic!("No rows found")
         }
     }
 }

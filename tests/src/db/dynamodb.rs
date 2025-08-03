@@ -81,21 +81,19 @@ impl Setup for SetupDynamoDb {
             .set_key(Some(key))
             .send()
             .await
-            .map_err(|e| toasty::Error::msg(format!("DynamoDB get_item failed: {e}")))?;
+            .unwrap_or_else(|e| panic!("DynamoDB get_item failed: {e}"));
 
         if let Some(item) = response.item {
             if let Some(attr_value) = item.get(column) {
                 let stmt_value = self.dynamodb_attr_to_stmt_value(attr_value)?;
                 stmt_value.try_into().map_err(|e: toasty_core::Error| {
-                    toasty::Error::msg(format!("Validation failed: {e}"))
+                    panic!("Validation failed: {e}")
                 })
             } else {
-                Err(toasty::Error::msg(format!(
-                    "Column '{column}' not found in DynamoDB item"
-                )))
+                panic!("Column '{column}' not found in DynamoDB item")
             }
         } else {
-            Err(toasty::Error::msg("No item found in DynamoDB"))
+            panic!("No item found in DynamoDB")
         }
     }
 }
@@ -184,9 +182,7 @@ impl SetupDynamoDb {
             toasty_core::stmt::Value::Bool(b) => Ok(AttributeValue::Bool(*b)),
             toasty_core::stmt::Value::Id(id) => Ok(AttributeValue::S(id.to_string())),
             toasty_core::stmt::Value::Null => Ok(AttributeValue::Null(true)),
-            _ => Err(toasty::Error::msg(format!(
-                "Unsupported stmt::Value type for DynamoDB: {value:?}"
-            ))),
+            _ => todo!("Unsupported stmt::Value type for DynamoDB: {value:?}"),
         }
     }
 
@@ -205,9 +201,7 @@ impl SetupDynamoDb {
             }
             AttributeValue::Bool(b) => Ok(toasty_core::stmt::Value::Bool(*b)),
             AttributeValue::Null(_) => Ok(toasty_core::stmt::Value::Null),
-            _ => Err(toasty::Error::msg(format!(
-                "Unsupported DynamoDB AttributeValue type: {attr:?}"
-            ))),
+            _ => todo!("Unsupported DynamoDB AttributeValue type: {attr:?}"),
         }
     }
 }
