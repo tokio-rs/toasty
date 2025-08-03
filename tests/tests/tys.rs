@@ -21,10 +21,21 @@ macro_rules! def_num_ty_tests {
                 }
 
                 let db = s.setup(models!(Foo)).await;
-                let test_values: &[$t] = $test_values;
+                let mut test_values: Vec<$t> = $test_values.to_vec();
+
+                // Filter test values based on database capabilities for unsigned integers
+                // Unsigned types have MIN == 0, signed types have MIN < 0
+                if <$t>::MIN == 0 {
+                    if let Some(max_unsigned) = s.capability().storage_types.max_unsigned_integer {
+                        test_values.retain(|&val| {
+                            let val_as_u64 = val as u64;
+                            val_as_u64 <= max_unsigned
+                        });
+                    }
+                }
 
                 // Test 1: All test values round-trip
-                for &val in test_values {
+                for &val in &test_values {
                     let created = Foo::create().val(val).exec(&db).await.unwrap();
                     let read = Foo::get_by_id(&db, &created.id).await.unwrap();
                     assert_eq!(read.val, val, "Round-trip failed for: {}", val);
@@ -40,39 +51,23 @@ macro_rules! def_num_ty_tests {
                                 "Raw storage verification failed for {}: expected {}, got {}",
                                 stringify!($t), val, raw_stored_value
                             );
-                            println!(
-                                "✅ Raw storage verification PASSED for {} value: {}",
-                                stringify!($t), val
-                            );
                         }
                         Err(e) => {
                             let error_msg = format!("{}", e);
-                            if error_msg.contains("not yet implemented") ||
-                               error_msg.contains("relation") && error_msg.contains("does not exist") ||
-                               error_msg.contains("NUMERIC type conversion not yet implemented") {
-                                // Expected for some database configurations
-                                println!(
-                                    "⚠️  Raw storage verification failed: {}",
-                                    error_msg
-                                );
-                                println!(
-                                    "   But {} ({}) was successfully stored and retrieved via Toasty",
-                                    stringify!($t), val
-                                );
-                            } else {
-                                // Unexpected error - this might indicate a real problem
-                                println!(
-                                    "❌ Unexpected raw storage error for {} value {}: {}",
-                                    stringify!($t), val, error_msg
-                                );
+                            if !(error_msg.contains("not yet implemented") ||
+                                 error_msg.contains("relation") && error_msg.contains("does not exist") ||
+                                 error_msg.contains("NUMERIC type conversion not yet implemented")) {
+                                // Only panic on unexpected errors
+                                panic!("Unexpected raw storage error for {} value {}: {}", stringify!($t), val, error_msg);
                             }
+                            // Expected errors are silently ignored
                         }
                     }
                 }
 
                 // Test 2: Multiple records with different values
                 let mut created_records = Vec::new();
-                for &val in test_values {
+                for &val in &test_values {
                     let created = Foo::create().val(val).exec(&db).await.unwrap();
                     created_records.push((created.id, val));
                 }
@@ -83,12 +78,14 @@ macro_rules! def_num_ty_tests {
                 }
 
                 // Test 3: Update chain
-                let mut record = Foo::create().val(test_values[0]).exec(&db).await.unwrap();
-                for &val in test_values {
-                    record.update().val(val).exec(&db).await.unwrap();
-                    let read = Foo::get_by_id(&db, &record.id).await.unwrap();
-                    assert_eq!(read.val, val, "Update chain failed for: {}", val);
-                    record.val = val;
+                if !test_values.is_empty() {
+                    let mut record = Foo::create().val(test_values[0]).exec(&db).await.unwrap();
+                    for &val in &test_values {
+                        record.update().val(val).exec(&db).await.unwrap();
+                        let read = Foo::get_by_id(&db, &record.id).await.unwrap();
+                        assert_eq!(read.val, val, "Update chain failed for: {}", val);
+                        record.val = val;
+                    }
                 }
             }
         )*
