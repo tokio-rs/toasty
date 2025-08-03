@@ -287,21 +287,6 @@ fn postgres_to_toasty(
                 _ => stmt::Value::I64(v), // Default fallback
             })
             .unwrap_or(stmt::Value::Null)
-    } else if column.type_() == &Type::NUMERIC {
-        // Handle NUMERIC type for u64 values using rust_decimal
-        row.get::<usize, Option<rust_decimal::Decimal>>(index)
-            .map(|v| match expected_ty {
-                stmt::Type::U64 => {
-                    // Convert Decimal to u64
-                    let as_u64 = v
-                        .to_string()
-                        .parse::<u64>()
-                        .unwrap_or_else(|_| panic!("Failed to parse NUMERIC as u64: {v}"));
-                    stmt::Value::U64(as_u64)
-                }
-                _ => panic!("unexpected type for NUMERIC: {expected_ty:#?}"),
-            })
-            .unwrap_or(stmt::Value::Null)
     } else {
         todo!(
             "implement PostgreSQL to toasty conversion for `{:#?}`",

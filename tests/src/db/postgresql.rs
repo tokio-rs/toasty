@@ -178,9 +178,9 @@ impl SetupPostgreSQL {
             Type::NUMERIC => {
                 // PostgreSQL NUMERIC type is tricky to handle generically
                 // For now, we'll indicate this is not yet fully supported
-                Err(toasty::Error::msg(format!(
-                    "PostgreSQL NUMERIC type conversion not yet implemented - this is expected for u64 values"
-                )))
+                Err(toasty::Error::msg(
+                    "PostgreSQL NUMERIC type conversion not yet implemented - this is expected for u64 values".to_string()
+                ))
             }
             _ => Err(toasty::Error::msg(format!(
                 "Unsupported PostgreSQL type: {:?}",

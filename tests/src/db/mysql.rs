@@ -177,7 +177,7 @@ impl SetupMySQL {
 
         let value = row
             .as_ref(col)
-            .ok_or_else(|| toasty::Error::msg(format!("MySQL column {} not found", col)))?;
+            .ok_or_else(|| toasty::Error::msg(format!("MySQL column {col} not found")))?;
 
         match value {
             Value::NULL => Ok(toasty_core::stmt::Value::Null),
@@ -200,18 +200,15 @@ impl SetupMySQL {
             Value::Date(year, month, day, hour, minute, second, microsecond) => {
                 // Convert MySQL date/time to string representation
                 let datetime_str = format!(
-                    "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}",
-                    year, month, day, hour, minute, second, microsecond
+                    "{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}.{microsecond:06}"
                 );
                 Ok(toasty_core::stmt::Value::String(datetime_str))
             }
             Value::Time(is_negative, days, hours, minutes, seconds, microseconds) => {
                 // Convert MySQL time to string representation
                 let sign = if *is_negative { "-" } else { "" };
-                let time_str = format!(
-                    "{}{} {:02}:{:02}:{:02}.{:06}",
-                    sign, days, hours, minutes, seconds, microseconds
-                );
+                let time_str =
+                    format!("{sign}{days} {hours:02}:{minutes:02}:{seconds:02}.{microseconds:06}");
                 Ok(toasty_core::stmt::Value::String(time_str))
             }
         }

@@ -112,8 +112,10 @@ impl StorageTypes {
         // table‐creation time.
         varchar: Some(10_485_760),
 
-        // PostgreSQL supports full u64 range via NUMERIC type
-        max_unsigned_integer: None,
+        // PostgreSQL BIGINT is signed 64-bit, so unsigned integers are limited
+        // to i64::MAX. While NUMERIC could theoretically support larger values,
+        // we prefer explicit limits over implicit type switching.
+        max_unsigned_integer: Some(i64::MAX as u64),
     };
 
     pub const MYSQL: StorageTypes = StorageTypes {

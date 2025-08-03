@@ -21,10 +21,10 @@ impl ToSql for &db::Type {
                     },
                     Flavor::Postgresql => {
                         match size {
-                            1 => fmt!(f, "SMALLINT"),    // u8 -> SMALLINT (i16)
-                            2 => fmt!(f, "INTEGER"),     // u16 -> INTEGER (i32)
-                            3..=4 => fmt!(f, "BIGINT"),  // u32 -> BIGINT (i64)
-                            5..=8 => fmt!(f, "NUMERIC"), // u64 -> NUMERIC (arbitrary precision)
+                            1 => fmt!(f, "SMALLINT"),   // u8 -> SMALLINT (i16)
+                            2 => fmt!(f, "INTEGER"),    // u16 -> INTEGER (i32)
+                            3..=4 => fmt!(f, "BIGINT"), // u32 -> BIGINT (i64)
+                            5..=8 => fmt!(f, "BIGINT"), // u64 -> BIGINT (i64) with capability limits
                             _ => todo!("Unsupported unsigned integer size: {}", size),
                         }
                     }

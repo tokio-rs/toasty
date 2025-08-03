@@ -72,9 +72,7 @@ impl SetupSqlite {
 
         // Parse the raw value to the expected type
         raw_value.parse::<T>().map_err(|e| {
-            toasty::Error::msg(format!(
-                "Failed to parse raw value '{raw_value}': {e:?}"
-            ))
+            toasty::Error::msg(format!("Failed to parse raw value '{raw_value}': {e:?}"))
         })
     }
 
@@ -205,7 +203,7 @@ impl Setup for SetupSqlite {
             .next()
             .map_err(|e| toasty::Error::msg(format!("SQLite row fetch failed: {e}")))?
         {
-            let stmt_value = self.sqlite_row_to_stmt_value(&row, 0)?;
+            let stmt_value = self.sqlite_row_to_stmt_value(row, 0)?;
             stmt_value.try_into().map_err(|e: toasty_core::Error| {
                 toasty::Error::msg(format!("Validation failed: {e}"))
             })

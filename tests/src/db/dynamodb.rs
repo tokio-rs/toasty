@@ -86,8 +86,7 @@ impl Setup for SetupDynamoDb {
                 })
             } else {
                 Err(toasty::Error::msg(format!(
-                    "Column '{}' not found in DynamoDB item",
-                    column
+                    "Column '{column}' not found in DynamoDB item"
                 )))
             }
         } else {
