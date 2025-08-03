@@ -175,17 +175,7 @@ impl SetupPostgreSQL {
             Type::INT8 => Ok(toasty_core::stmt::Value::I64(row.get(col))),
             Type::TEXT | Type::VARCHAR => Ok(toasty_core::stmt::Value::String(row.get(col))),
             Type::BOOL => Ok(toasty_core::stmt::Value::Bool(row.get(col))),
-            Type::NUMERIC => {
-                // PostgreSQL NUMERIC type is tricky to handle generically
-                // For now, we'll indicate this is not yet fully supported
-                Err(toasty::Error::msg(
-                    "PostgreSQL NUMERIC type conversion not yet implemented - this is expected for u64 values".to_string()
-                ))
-            }
-            _ => Err(toasty::Error::msg(format!(
-                "Unsupported PostgreSQL type: {:?}",
-                column.type_()
-            ))),
+            _ => todo!("Unsupported PostgreSQL type: {:?}", column.type_()),
         }
     }
 }

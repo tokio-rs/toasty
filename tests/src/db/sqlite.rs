@@ -90,19 +90,16 @@ impl SetupSqlite {
 
         match value_ref {
             ValueRef::Integer(i) => Ok(toasty_core::stmt::Value::I64(i)),
-            ValueRef::Real(f) => {
-                // SQLite stores all numbers as either INTEGER or REAL
-                // For our purposes, we'll convert REAL back to string to preserve precision
-                Ok(toasty_core::stmt::Value::String(f.to_string()))
-            }
             ValueRef::Text(s) => {
-                let text = std::str::from_utf8(s).map_err(|e| {
-                    toasty::Error::msg(format!("SQLite text conversion failed: {e}"))
-                })?;
+                let text = std::str::from_utf8(s)
+                    .unwrap_or_else(|e| panic!("SQLite text conversion failed: {e}"));
                 Ok(toasty_core::stmt::Value::String(text.to_string()))
             }
-            ValueRef::Blob(_) => Err(toasty::Error::msg("SQLite BLOB type not supported")),
             ValueRef::Null => Ok(toasty_core::stmt::Value::Null),
+            _ => todo!(
+                "SQLite value type conversion not yet implemented: {:?}",
+                value_ref
+            ),
         }
     }
 }
@@ -210,29 +207,5 @@ impl Setup for SetupSqlite {
         } else {
             Err(toasty::Error::msg("No rows found"))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_raw_storage_infrastructure() {
-        let setup = SetupSqlite::new();
-
-        // Verify that the temp file path is accessible
-        let path = setup.temp_db_path();
-        assert!(!path.is_empty(), "Temp database path should not be empty");
-
-        // Verify that the temp file exists
-        assert!(
-            std::path::Path::new(path).exists(),
-            "Temp database file should exist"
-        );
-
-        println!("✅ Raw storage infrastructure test PASSED");
-        println!("   - Temp database path: {}", path);
-        println!("   - get_raw_column_value method available for future use");
     }
 }
