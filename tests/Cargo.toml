@@ -23,6 +23,7 @@ tokio-postgres.workspace = true
 mysql_async.workspace = true
 aws-config.workspace = true
 aws-sdk-dynamodb.workspace = true
+rusqlite.workspace = true
 
 # Utilities
 std-util.workspace = true
