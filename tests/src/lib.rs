@@ -8,6 +8,7 @@ mod toasty_test;
 // Re-export for use in macros - needs to be public for macro expansion
 pub use toasty_test::ToastyTest;
 
+use std::collections::HashMap;
 use toasty::Db;
 use toasty_core::driver::Capability;
 
@@ -30,6 +31,21 @@ pub trait Setup: Send + Sync + 'static {
     /// This method should drop only the tables that belong to this test,
     /// identified by the table prefix used during setup.
     async fn cleanup_my_tables(&self) -> toasty::Result<()>;
+
+    /// Get the raw value stored in the database for verification
+    ///
+    /// - `table`: Table name WITHOUT prefix (e.g., "foo", not "test_123_foo")
+    /// - `column`: Column name to retrieve (e.g., "val")  
+    /// - `filter`: WHERE clause conditions as column_name -> value pairs
+    /// - `T`: The expected application type - implementation validates the raw storage
+    async fn get_raw_column_value<T>(
+        &self,
+        table: &str,
+        column: &str,
+        filter: HashMap<String, toasty_core::stmt::Value>,
+    ) -> toasty::Result<T>
+    where
+        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>;
 }
 
 #[macro_export]

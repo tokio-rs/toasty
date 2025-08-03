@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 use tempfile::NamedTempFile;
 use toasty::driver::Capability;
@@ -74,6 +75,33 @@ impl SetupSqlite {
             toasty::Error::msg(format!("Failed to parse raw value '{raw_value}': {e:?}"))
         })
     }
+
+    /// Helper method to convert SQLite row values to stmt::Value for unsigned integer support
+    fn sqlite_row_to_stmt_value(
+        &self,
+        row: &rusqlite::Row,
+        col: usize,
+    ) -> toasty::Result<toasty_core::stmt::Value> {
+        use rusqlite::types::ValueRef;
+
+        let value_ref = row
+            .get_ref(col)
+            .map_err(|e| toasty::Error::msg(format!("SQLite column access failed: {e}")))?;
+
+        match value_ref {
+            ValueRef::Integer(i) => Ok(toasty_core::stmt::Value::I64(i)),
+            ValueRef::Text(s) => {
+                let text = std::str::from_utf8(s)
+                    .unwrap_or_else(|e| panic!("SQLite text conversion failed: {e}"));
+                Ok(toasty_core::stmt::Value::String(text.to_string()))
+            }
+            ValueRef::Null => Ok(toasty_core::stmt::Value::Null),
+            _ => todo!(
+                "SQLite value type conversion not yet implemented: {:?}",
+                value_ref
+            ),
+        }
+    }
 }
 
 impl Default for SetupSqlite {
@@ -85,7 +113,7 @@ impl Default for SetupSqlite {
 #[async_trait::async_trait]
 impl Setup for SetupSqlite {
     async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
-        // Use temporary file database for consistent access across connections
+        // Use temporary file-based database instead of in-memory
         let url = format!("sqlite:{}", self.temp_db_path);
         builder.connect(&url).await
     }
@@ -97,5 +125,83 @@ impl Setup for SetupSqlite {
     // Temporary file cleanup is handled automatically by NamedTempFile::drop()
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         Ok(())
+    }
+
+    /// Get raw column value from the database for verification purposes.
+    /// This method supports the unsigned integer testing by providing access to raw stored values.
+    async fn get_raw_column_value<T>(
+        &self,
+        table: &str,
+        column: &str,
+        filter: HashMap<String, toasty_core::stmt::Value>,
+    ) -> toasty::Result<T>
+    where
+        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
+    {
+        // Build WHERE clause from filter
+        let mut where_conditions = Vec::new();
+        let mut sqlite_params = Vec::new();
+
+        for (col_name, value) in filter {
+            where_conditions.push(format!("{col_name} = ?"));
+
+            // Convert stmt::Value to SQLite parameter
+            match value {
+                toasty_core::stmt::Value::String(s) => sqlite_params.push(s),
+                toasty_core::stmt::Value::I64(i) => sqlite_params.push(i.to_string()),
+                toasty_core::stmt::Value::U64(u) => sqlite_params.push(u.to_string()),
+                toasty_core::stmt::Value::I32(i) => sqlite_params.push(i.to_string()),
+                toasty_core::stmt::Value::I16(i) => sqlite_params.push(i.to_string()),
+                toasty_core::stmt::Value::I8(i) => sqlite_params.push(i.to_string()),
+                toasty_core::stmt::Value::U32(u) => sqlite_params.push(u.to_string()),
+                toasty_core::stmt::Value::U16(u) => sqlite_params.push(u.to_string()),
+                toasty_core::stmt::Value::U8(u) => sqlite_params.push(u.to_string()),
+                toasty_core::stmt::Value::Bool(b) => {
+                    sqlite_params.push(if b { "1".to_string() } else { "0".to_string() })
+                }
+                toasty_core::stmt::Value::Id(id) => sqlite_params.push(id.to_string()),
+                _ => todo!("Unsupported filter value type for SQLite: {value:?}"),
+            }
+        }
+
+        let where_clause = if where_conditions.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", where_conditions.join(" AND "))
+        };
+
+        let query = format!("SELECT {column} FROM {table}{where_clause}");
+
+        // Use the shared connection for efficient access
+        let conn = self
+            .raw_connection
+            .lock()
+            .unwrap_or_else(|e| panic!("Failed to acquire connection lock: {e}"));
+
+        let mut stmt = conn
+            .prepare(&query)
+            .unwrap_or_else(|e| panic!("SQLite prepare failed: {e}"));
+
+        let string_params: Vec<&str> = sqlite_params.iter().map(|s| s.as_str()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> = string_params
+            .iter()
+            .map(|s| s as &dyn rusqlite::ToSql)
+            .collect();
+
+        let mut rows = stmt
+            .query(&params_refs[..])
+            .unwrap_or_else(|e| panic!("SQLite query failed: {e}"));
+
+        if let Some(row) = rows
+            .next()
+            .unwrap_or_else(|e| panic!("SQLite row fetch failed: {e}"))
+        {
+            let stmt_value = self.sqlite_row_to_stmt_value(row, 0)?;
+            stmt_value
+                .try_into()
+                .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
+        } else {
+            panic!("No rows found")
+        }
     }
 }

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use toasty::driver::Capability;
 use toasty::{db, Db};
 
@@ -41,6 +42,59 @@ impl Setup for SetupDynamoDb {
         cleanup_dynamodb_tables(&self.isolation)
             .await
             .map_err(|e| toasty::Error::msg(format!("DynamoDB cleanup failed: {e}")))
+    }
+
+    async fn get_raw_column_value<T>(
+        &self,
+        table: &str,
+        column: &str,
+        filter: HashMap<String, toasty_core::stmt::Value>,
+    ) -> toasty::Result<T>
+    where
+        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
+    {
+        use aws_config::BehaviorVersion;
+        use aws_sdk_dynamodb::Client;
+
+        let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
+
+        // Create DynamoDB client with test credentials (matching the driver setup)
+        let config = aws_config::defaults(BehaviorVersion::latest())
+            .region("foo")
+            .credentials_provider(aws_sdk_dynamodb::config::Credentials::for_tests())
+            .endpoint_url("http://localhost:8000")
+            .load()
+            .await;
+        let client = Client::new(&config);
+
+        // Convert filter to DynamoDB key
+        let mut key = HashMap::new();
+        for (col_name, value) in filter {
+            let attr_value = self.stmt_value_to_dynamodb_attr(&value)?;
+            key.insert(col_name, attr_value);
+        }
+
+        // Get item from DynamoDB
+        let response = client
+            .get_item()
+            .table_name(&full_table_name)
+            .set_key(Some(key))
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("DynamoDB get_item failed: {e}"));
+
+        if let Some(item) = response.item {
+            if let Some(attr_value) = item.get(column) {
+                let stmt_value = self.dynamodb_attr_to_stmt_value(attr_value)?;
+                stmt_value
+                    .try_into()
+                    .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
+            } else {
+                panic!("Column '{column}' not found in DynamoDB item")
+            }
+        } else {
+            panic!("No item found in DynamoDB")
+        }
     }
 }
 
@@ -106,4 +160,48 @@ async fn cleanup_dynamodb_tables(
     }
 
     Ok(())
+}
+
+impl SetupDynamoDb {
+    fn stmt_value_to_dynamodb_attr(
+        &self,
+        value: &toasty_core::stmt::Value,
+    ) -> toasty::Result<aws_sdk_dynamodb::types::AttributeValue> {
+        use aws_sdk_dynamodb::types::AttributeValue;
+
+        match value {
+            toasty_core::stmt::Value::String(s) => Ok(AttributeValue::S(s.clone())),
+            toasty_core::stmt::Value::I64(i) => Ok(AttributeValue::N(i.to_string())),
+            toasty_core::stmt::Value::U64(u) => Ok(AttributeValue::N(u.to_string())),
+            toasty_core::stmt::Value::I32(i) => Ok(AttributeValue::N(i.to_string())),
+            toasty_core::stmt::Value::I16(i) => Ok(AttributeValue::N(i.to_string())),
+            toasty_core::stmt::Value::I8(i) => Ok(AttributeValue::N(i.to_string())),
+            toasty_core::stmt::Value::U32(u) => Ok(AttributeValue::N(u.to_string())),
+            toasty_core::stmt::Value::U16(u) => Ok(AttributeValue::N(u.to_string())),
+            toasty_core::stmt::Value::U8(u) => Ok(AttributeValue::N(u.to_string())),
+            toasty_core::stmt::Value::Bool(b) => Ok(AttributeValue::Bool(*b)),
+            toasty_core::stmt::Value::Id(id) => Ok(AttributeValue::S(id.to_string())),
+            toasty_core::stmt::Value::Null => Ok(AttributeValue::Null(true)),
+            _ => todo!("Unsupported stmt::Value type for DynamoDB: {value:?}"),
+        }
+    }
+
+    fn dynamodb_attr_to_stmt_value(
+        &self,
+        attr: &aws_sdk_dynamodb::types::AttributeValue,
+    ) -> toasty::Result<toasty_core::stmt::Value> {
+        use aws_sdk_dynamodb::types::AttributeValue;
+
+        match attr {
+            AttributeValue::S(s) => Ok(toasty_core::stmt::Value::String(s.clone())),
+            AttributeValue::N(n) => {
+                // DynamoDB stores all numbers as strings, so we return as String
+                // and let the TryFrom implementation handle the parsing
+                Ok(toasty_core::stmt::Value::String(n.clone()))
+            }
+            AttributeValue::Bool(b) => Ok(toasty_core::stmt::Value::Bool(*b)),
+            AttributeValue::Null(_) => Ok(toasty_core::stmt::Value::Null),
+            _ => todo!("Unsupported DynamoDB AttributeValue type: {attr:?}"),
+        }
+    }
 }
