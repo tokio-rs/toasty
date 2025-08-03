@@ -94,11 +94,7 @@ impl Setup for SetupMySQL {
                 toasty_core::stmt::Value::Id(id) => {
                     mysql_params.push(mysql_async::Value::Bytes(id.to_string().into_bytes()))
                 }
-                _ => {
-                    return Err(toasty::Error::msg(format!(
-                        "Unsupported filter value type for MySQL: {value:?}"
-                    )))
-                }
+                _ => todo!("Unsupported filter value type for MySQL: {value:?}"),
             }
         }
 
@@ -118,20 +114,20 @@ impl Setup for SetupMySQL {
         let mut conn = pool
             .get_conn()
             .await
-            .map_err(|e| toasty::Error::msg(format!("MySQL connection failed: {e}")))?;
+            .unwrap_or_else(|e| panic!("MySQL connection failed: {e}"));
 
         let mut result = conn
             .exec_iter(&query, mysql_params)
             .await
-            .map_err(|e| toasty::Error::msg(format!("MySQL query failed: {e}")))?;
+            .unwrap_or_else(|e| panic!("MySQL query failed: {e}"));
 
         if let Ok(Some(row)) = result.next().await {
             let stmt_value = self.mysql_row_to_stmt_value(&row, 0)?;
             stmt_value.try_into().map_err(|e: toasty_core::Error| {
-                toasty::Error::msg(format!("Validation failed: {e}"))
+                panic!("Validation failed: {e}")
             })
         } else {
-            Err(toasty::Error::msg("No rows found"))
+            panic!("No rows found")
         }
     }
 }
