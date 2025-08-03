@@ -4,7 +4,7 @@ use toasty::{db, Db};
 
 use crate::{isolation::TestIsolation, Setup};
 
-// Global lazy MySQL connection pool to avoid creating connections on each call
+// Global lazy MySQL connection pool with proper configuration for concurrent tests
 static MYSQL_POOL: tokio::sync::OnceCell<mysql_async::Pool> = tokio::sync::OnceCell::const_new();
 
 pub struct SetupMySQL {
@@ -18,13 +18,24 @@ impl SetupMySQL {
         }
     }
 
-    /// Get or create the global MySQL connection pool
+    /// Get or create the global MySQL connection pool with proper configuration
     async fn get_pool() -> &'static mysql_async::Pool {
         MYSQL_POOL
             .get_or_init(|| async {
                 let url = std::env::var("TOASTY_TEST_MYSQL_URL")
                     .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
-                mysql_async::Pool::new(url.as_str())
+
+                // Configure pool for concurrent test usage
+                let opts =
+                    mysql_async::OptsBuilder::from_opts(mysql_async::Opts::from_url(&url).unwrap())
+                        .pool_opts(
+                            mysql_async::PoolOpts::default()
+                                .with_constraints(mysql_async::PoolConstraints::new(5, 30).unwrap()) // min 5, max 30 connections
+                                .with_inactive_connection_ttl(std::time::Duration::from_secs(60)) // keep connections alive longer
+                                .with_ttl_check_interval(std::time::Duration::from_secs(30)), // check less frequently
+                        );
+
+                mysql_async::Pool::new(opts)
             })
             .await
     }
@@ -120,7 +131,7 @@ impl Setup for SetupMySQL {
 
         let query = format!("SELECT {column} FROM {full_table_name}{where_clause}");
 
-        // Get connection from cached pool
+        // Get connection from properly configured pool
         let pool = Self::get_pool().await;
         let mut conn = pool
             .get_conn()
