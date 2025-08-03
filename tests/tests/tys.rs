@@ -44,25 +44,14 @@ macro_rules! def_num_ty_tests {
                     let mut filter = std::collections::HashMap::new();
                     filter.insert("id".to_string(), toasty_core::stmt::Value::from(created.id));
 
-                    match s.get_raw_column_value::<$t>("foos", "val", filter).await {
-                        Ok(raw_stored_value) => {
-                            assert_eq!(
-                                raw_stored_value, val,
-                                "Raw storage verification failed for {}: expected {}, got {}",
-                                stringify!($t), val, raw_stored_value
-                            );
-                        }
-                        Err(e) => {
-                            let error_msg = format!("{}", e);
-                            if !(error_msg.contains("not yet implemented") ||
-                                 error_msg.contains("relation") && error_msg.contains("does not exist") ||
-                                 error_msg.contains("NUMERIC type conversion not yet implemented")) {
-                                // Only panic on unexpected errors
-                                panic!("Unexpected raw storage error for {} value {}: {}", stringify!($t), val, error_msg);
-                            }
-                            // Expected errors are silently ignored
-                        }
-                    }
+                    let raw_stored_value = s.get_raw_column_value::<$t>("foos", "val", filter).await
+                        .unwrap_or_else(|e| panic!("Raw storage verification failed for {} value {}: {}", stringify!($t), val, e));
+
+                    assert_eq!(
+                        raw_stored_value, val,
+                        "Raw storage verification failed for {}: expected {}, got {}",
+                        stringify!($t), val, raw_stored_value
+                    );
                 }
 
                 // Test 2: Multiple records with different values

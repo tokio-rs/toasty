@@ -123,6 +123,6 @@ impl ToSql for Value {
         }
     }
 
-    accepts!(BOOL, INT2, INT4, INT8, NUMERIC, TEXT, VARCHAR);
+    accepts!(BOOL, INT2, INT4, INT8, TEXT, VARCHAR);
     to_sql_checked!();
 }
