@@ -6,13 +6,28 @@ use crate::{isolation::TestIsolation, Setup};
 
 pub struct SetupMySQL {
     isolation: TestIsolation,
+    // Per-test-instance pool to avoid runtime issues with static sharing
+    pool: tokio::sync::OnceCell<mysql_async::Pool>,
 }
 
 impl SetupMySQL {
     pub fn new() -> Self {
         Self {
             isolation: TestIsolation::new(),
+            pool: tokio::sync::OnceCell::new(),
         }
+    }
+
+    /// Get or create the per-test-instance MySQL connection pool
+    async fn get_pool(&self) -> &mysql_async::Pool {
+        self.pool
+            .get_or_init(|| async {
+                let url = std::env::var("TOASTY_TEST_MYSQL_URL")
+                    .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
+
+                mysql_async::Pool::new(url.as_str())
+            })
+            .await
     }
 }
 
@@ -106,11 +121,8 @@ impl Setup for SetupMySQL {
 
         let query = format!("SELECT {column} FROM {full_table_name}{where_clause}");
 
-        // Connect to MySQL
-        let url = std::env::var("TOASTY_TEST_MYSQL_URL")
-            .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
-
-        let pool = mysql_async::Pool::new(url.as_str());
+        // Get connection from per-test-instance pool
+        let pool = self.get_pool().await;
         let mut conn = pool
             .get_conn()
             .await

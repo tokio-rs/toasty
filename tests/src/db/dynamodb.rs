@@ -1,18 +1,40 @@
 use std::collections::HashMap;
 use toasty::driver::Capability;
 use toasty::{db, Db};
+use tokio::sync::OnceCell;
 
 use crate::{isolation::TestIsolation, Setup};
 
 pub struct SetupDynamoDb {
     isolation: TestIsolation,
+    // Per-test-instance client to avoid runtime issues with static sharing
+    client: OnceCell<aws_sdk_dynamodb::Client>,
 }
 
 impl SetupDynamoDb {
     pub fn new() -> Self {
         Self {
             isolation: TestIsolation::new(),
+            client: OnceCell::new(),
         }
+    }
+
+    /// Get or create the per-test-instance DynamoDB client
+    async fn get_client(&self) -> &aws_sdk_dynamodb::Client {
+        self.client
+            .get_or_init(|| async {
+                use aws_config::BehaviorVersion;
+
+                // Create DynamoDB client with test credentials (matching the driver setup)
+                let config = aws_config::defaults(BehaviorVersion::latest())
+                    .region("foo")
+                    .credentials_provider(aws_sdk_dynamodb::config::Credentials::for_tests())
+                    .endpoint_url("http://localhost:8000")
+                    .load()
+                    .await;
+                aws_sdk_dynamodb::Client::new(&config)
+            })
+            .await
     }
 }
 
@@ -53,19 +75,10 @@ impl Setup for SetupDynamoDb {
     where
         T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
     {
-        use aws_config::BehaviorVersion;
-        use aws_sdk_dynamodb::Client;
-
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
 
-        // Create DynamoDB client with test credentials (matching the driver setup)
-        let config = aws_config::defaults(BehaviorVersion::latest())
-            .region("foo")
-            .credentials_provider(aws_sdk_dynamodb::config::Credentials::for_tests())
-            .endpoint_url("http://localhost:8000")
-            .load()
-            .await;
-        let client = Client::new(&config);
+        // Get the per-test-instance DynamoDB client
+        let client = self.get_client().await;
 
         // Convert filter to DynamoDB key
         let mut key = HashMap::new();
