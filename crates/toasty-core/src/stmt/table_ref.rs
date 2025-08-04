@@ -1,6 +1,6 @@
 use super::TableId;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum TableRef {
     /// An aliased table (in a `FROM` statement or equivalent).
     Cte {
