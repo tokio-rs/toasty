@@ -21,7 +21,7 @@ impl Expand<'_> {
                         db::{self, IndexOp, IndexScope},
                         Name,
                     },
-                    Model as ModelTrait,
+                    Model,
                     Type,
                 };
 
