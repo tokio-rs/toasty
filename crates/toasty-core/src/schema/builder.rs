@@ -51,7 +51,7 @@ impl Builder {
             },
         };
 
-        for model in app.models.values_mut() {
+        for model in app.models.iter_mut() {
             // Initial verification pass to ensure all models are valid based on the
             // specified driver capability.
             model.verify(db)?;

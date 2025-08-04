@@ -1,16 +1,15 @@
 use super::*;
 
 use crate::Result;
-use indexmap::IndexMap;
 
 #[derive(Debug, Default)]
 pub struct Schema {
-    pub models: IndexMap<ModelId, Model>,
+    pub models: Vec<Model>,
 }
 
 #[derive(Default)]
 struct Builder {
-    models: IndexMap<ModelId, Model>,
+    models: Vec<Model>,
 }
 
 impl Schema {
@@ -32,12 +31,13 @@ impl Schema {
     }
 
     pub fn models(&self) -> impl Iterator<Item = &Model> {
-        self.models.values()
+        self.models.iter()
     }
 
     /// Get a model by ID
     pub fn model(&self, id: impl Into<ModelId>) -> &Model {
-        self.models.get(&id.into()).expect("invalid model ID")
+        let model_id = id.into();
+        &self.models[model_id.0]
     }
 }
 
@@ -45,8 +45,19 @@ impl Builder {
     pub(crate) fn from_macro(models: &[Model]) -> Result<Schema> {
         let mut builder = Self { ..Self::default() };
 
-        for model in models {
-            builder.models.insert(model.id, model.clone());
+        // Create a Vec with the correct capacity
+        builder.models = Vec::with_capacity(models.len());
+        
+        // Sort models by their ModelId to ensure correct order
+        let mut sorted_models: Vec<_> = models.iter().collect();
+        sorted_models.sort_by_key(|model| model.id.0);
+        
+        // Verify sequential ModelIds and insert in order
+        for (expected_index, model) in sorted_models.iter().enumerate() {
+            assert_eq!(model.id.0, expected_index, 
+                "Expected ModelId {} but found {}. ModelIds must be sequential starting from 0.", 
+                expected_index, model.id.0);
+            builder.models.push((*model).clone());
         }
 
         builder.process_models()?;
@@ -133,17 +144,17 @@ impl Builder {
                 let pair = match &self.models[curr].fields[index].ty {
                     FieldTy::BelongsTo(belongs_to) => {
                         let mut pair = None;
-                        let target = self.models.get_index_of(&belongs_to.target).unwrap();
+                        let target_index = belongs_to.target.0;
 
-                        for target_index in 0..self.models[target].fields.len() {
-                            pair = match &self.models[target].fields[target_index].ty {
+                        for target_field_index in 0..self.models[target_index].fields.len() {
+                            pair = match &self.models[target_index].fields[target_field_index].ty {
                                 FieldTy::HasMany(has_many) if has_many.pair == field_id => {
                                     assert!(pair.is_none());
-                                    Some(self.models[target].fields[target_index].id)
+                                    Some(self.models[target_index].fields[target_field_index].id)
                                 }
                                 FieldTy::HasOne(has_one) if has_one.pair == field_id => {
                                     assert!(pair.is_none());
-                                    Some(self.models[target].fields[target_index].id)
+                                    Some(self.models[target_index].fields[target_field_index].id)
                                 }
                                 _ => continue,
                             }
@@ -169,13 +180,10 @@ impl Builder {
     }
 
     fn find_belongs_to_pair(&self, src: ModelId, target: ModelId) -> Option<FieldId> {
-        let target = match self.models.get(&target) {
-            Some(target) => target,
-            None => todo!("lol no"),
-        };
+        let target_model = &self.models[target.0];
 
         // Find all BelongsTo relations that reference the model
-        let belongs_to: Vec<_> = target
+        let belongs_to: Vec<_> = target_model
             .fields
             .iter()
             .filter(|field| match &field.ty {
@@ -199,7 +207,7 @@ impl Builder {
         todo!(
             "missing relation attribute; source={:#?}; target={:#?}",
             src,
-            self.models.get(&target)
+            &self.models[target.0]
         );
     }
 }

@@ -66,23 +66,32 @@ impl Builder {
                     }
                     crate::schema::FieldTy::BelongsTo(belongs_to) => {
                         // Convert field names to FieldId references
-                        // For now, we'll create a placeholder ForeignKey - this needs proper resolution
+                        let foreign_key_fields = belongs_to
+                            .foreign_key_fields
+                            .iter()
+                            .map(|field_name| {
+                                // Find the field index by name within this model
+                                let source_field_index = schema_model.fields.iter()
+                                    .position(|f| f.name == *field_name)
+                                    .unwrap_or_else(|| panic!("Foreign key field '{}' not found in model", field_name));
+                                
+                                // For now, assume the target field is always index 0 (primary key)
+                                // TODO: This should be resolved based on the actual target field name
+                                app::ForeignKeyField {
+                                    source: app::FieldId {
+                                        model: model_id,
+                                        index: source_field_index,
+                                    },
+                                    target: app::FieldId {
+                                        model: belongs_to.target,
+                                        index: 0, // Assume primary key for now
+                                    },
+                                }
+                            })
+                            .collect();
+
                         let foreign_key = app::ForeignKey {
-                            fields: belongs_to
-                                .foreign_key_fields
-                                .iter()
-                                .map(|_field_name| {
-                                    // TODO: Resolve field name to actual FieldId
-                                    // For now, create a placeholder
-                                    app::ForeignKeyField {
-                                        source: field_id, // Placeholder
-                                        target: app::FieldId {
-                                            model: belongs_to.target,
-                                            index: 0,
-                                        }, // Placeholder
-                                    }
-                                })
-                                .collect(),
+                            fields: foreign_key_fields,
                         };
 
                         app::FieldTy::BelongsTo(app::BelongsTo {
