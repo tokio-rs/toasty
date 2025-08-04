@@ -55,7 +55,7 @@ impl Builder {
         // Verify sequential ModelIds and insert in order
         for (expected_index, model) in sorted_models.iter().enumerate() {
             assert_eq!(model.id.0, expected_index, 
-                "Expected ModelId {} but found {}. ModelIds must be sequential starting from 0.", 
+                "ModelIds must be sequential starting from 0. Expected {} but found {}.", 
                 expected_index, model.id.0);
             builder.models.push((*model).clone());
         }
