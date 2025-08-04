@@ -22,6 +22,10 @@ pub trait Visit {
         visit_association(self, i);
     }
 
+    fn visit_cte(&mut self, i: &Cte) {
+        visit_cte(self, i);
+    }
+
     fn visit_expr(&mut self, i: &Expr) {
         visit_expr(self, i);
     }
@@ -134,6 +138,10 @@ pub trait Visit {
         visit_insert_target(self, i);
     }
 
+    fn visit_join(&mut self, i: &Join) {
+        visit_join(self, i);
+    }
+
     fn visit_limit(&mut self, i: &Limit) {
         visit_limit(self, i);
     }
@@ -150,6 +158,10 @@ pub trait Visit {
         visit_order_by_expr(self, i);
     }
 
+    fn visit_path(&mut self, i: &Path) {
+        visit_path(self, i);
+    }
+
     fn visit_projection(&mut self, i: &Projection) {
         visit_projection(self, i);
     }
@@ -160,6 +172,10 @@ pub trait Visit {
 
     fn visit_source(&mut self, i: &Source) {
         visit_source(self, i);
+    }
+
+    fn visit_source_model(&mut self, i: &SourceModel) {
+        visit_source_model(self, i);
     }
 
     fn visit_stmt(&mut self, i: &Statement) {
@@ -186,6 +202,18 @@ pub trait Visit {
         visit_stmt_update(self, i);
     }
 
+    fn visit_table_ref(&mut self, i: &TableRef) {
+        visit_table_ref(self, i);
+    }
+
+    fn visit_table_with_joins(&mut self, i: &TableWithJoins) {
+        visit_table_with_joins(self, i);
+    }
+
+    fn visit_type(&mut self, i: &Type) {
+        visit_type(self, i);
+    }
+
     fn visit_update_target(&mut self, i: &UpdateTarget) {
         visit_update_target(self, i);
     }
@@ -201,6 +229,10 @@ pub trait Visit {
     fn visit_values(&mut self, i: &Values) {
         visit_values(self, i);
     }
+
+    fn visit_with(&mut self, i: &With) {
+        visit_with(self, i);
+    }
 }
 
 impl<V: Visit> Visit for &mut V {
@@ -214,6 +246,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_association(&mut self, i: &Association) {
         Visit::visit_association(&mut **self, i);
+    }
+
+    fn visit_cte(&mut self, i: &Cte) {
+        Visit::visit_cte(&mut **self, i);
     }
 
     fn visit_expr(&mut self, i: &Expr) {
@@ -328,6 +364,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_insert_target(&mut **self, i);
     }
 
+    fn visit_join(&mut self, i: &Join) {
+        Visit::visit_join(&mut **self, i);
+    }
+
     fn visit_limit(&mut self, i: &Limit) {
         Visit::visit_limit(&mut **self, i);
     }
@@ -342,6 +382,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_order_by_expr(&mut self, i: &OrderByExpr) {
         Visit::visit_order_by_expr(&mut **self, i);
+    }
+
+    fn visit_path(&mut self, i: &Path) {
+        Visit::visit_path(&mut **self, i);
     }
 
     fn visit_projection(&mut self, i: &Projection) {
@@ -380,6 +424,18 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_stmt_update(&mut **self, i);
     }
 
+    fn visit_table_ref(&mut self, i: &TableRef) {
+        Visit::visit_table_ref(&mut **self, i);
+    }
+
+    fn visit_table_with_joins(&mut self, i: &TableWithJoins) {
+        Visit::visit_table_with_joins(&mut **self, i);
+    }
+
+    fn visit_type(&mut self, i: &Type) {
+        Visit::visit_type(&mut **self, i);
+    }
+
     fn visit_update_target(&mut self, i: &UpdateTarget) {
         Visit::visit_update_target(&mut **self, i);
     }
@@ -394,6 +450,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_values(&mut self, i: &Values) {
         Visit::visit_values(&mut **self, i);
+    }
+
+    fn visit_with(&mut self, i: &With) {
+        Visit::visit_with(&mut **self, i);
     }
 }
 
@@ -418,6 +478,13 @@ where
     V: Visit + ?Sized,
 {
     v.visit_stmt_query(&node.source);
+}
+
+pub fn visit_cte<V>(v: &mut V, node: &Cte)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_stmt_query(&node.query);
 }
 
 pub fn visit_expr<V>(v: &mut V, node: &Expr)
@@ -492,6 +559,7 @@ where
     V: Visit + ?Sized,
 {
     v.visit_expr(&node.expr);
+    v.visit_type(&node.ty);
 }
 
 pub fn visit_expr_column<V>(v: &mut V, node: &ExprColumn)
@@ -648,6 +716,7 @@ pub fn visit_expr_ty<V>(v: &mut V, node: &ExprTy)
 where
     V: Visit + ?Sized,
 {
+    v.visit_type(&node.ty);
 }
 
 pub fn visit_expr_pattern<V>(v: &mut V, node: &ExprPattern)
@@ -674,6 +743,16 @@ where
 {
     if let InsertTarget::Scope(stmt) = node {
         v.visit_stmt_query(stmt);
+    }
+}
+
+pub fn visit_join<V>(v: &mut V, node: &Join)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_table_ref(&node.table);
+    match &node.constraint {
+        JoinOp::Left(expr) => v.visit_expr(expr),
     }
 }
 
@@ -714,6 +793,13 @@ where
     v.visit_expr(&node.expr);
 }
 
+pub fn visit_path<V>(v: &mut V, node: &Path)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_projection(&node.projection);
+}
+
 pub fn visit_projection<V>(v: &mut V, node: &Projection)
 where
     V: Visit + ?Sized,
@@ -730,10 +816,30 @@ where
     }
 }
 
-pub fn visit_source<V>(_v: &mut V, _node: &Source)
+pub fn visit_source<V>(v: &mut V, node: &Source)
 where
     V: Visit + ?Sized,
 {
+    match node {
+        Source::Model(source_model) => v.visit_source_model(source_model),
+        Source::Table(tables) => {
+            for table in tables {
+                v.visit_table_with_joins(table);
+            }
+        }
+    }
+}
+
+pub fn visit_source_model<V>(v: &mut V, node: &SourceModel)
+where
+    V: Visit + ?Sized,
+{
+    if let Some(association) = &node.via {
+        v.visit_association(association);
+    }
+    for path in &node.include {
+        v.visit_path(path);
+    }
 }
 
 pub fn visit_stmt<V>(v: &mut V, node: &Statement)
@@ -778,7 +884,19 @@ pub fn visit_stmt_query<V>(v: &mut V, node: &Query)
 where
     V: Visit + ?Sized,
 {
+    if let Some(with) = &node.with {
+        v.visit_with(with);
+    }
+
     v.visit_expr_set(&node.body);
+
+    if let Some(order_by) = &node.order_by {
+        v.visit_order_by(order_by);
+    }
+
+    if let Some(limit) = &node.limit {
+        v.visit_limit(limit);
+    }
 }
 
 pub fn visit_stmt_select<V>(v: &mut V, node: &Select)
@@ -804,6 +922,30 @@ where
     if let Some(expr) = &node.condition {
         v.visit_expr(expr);
     }
+}
+
+pub fn visit_table_ref<V>(v: &mut V, node: &TableRef)
+where
+    V: Visit + ?Sized,
+{
+    // TableRef is just identifiers, no traversal needed
+}
+
+pub fn visit_table_with_joins<V>(v: &mut V, node: &TableWithJoins)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_table_ref(&node.table);
+    for join in &node.joins {
+        v.visit_join(join);
+    }
+}
+
+pub fn visit_type<V>(v: &mut V, node: &Type)
+where
+    V: Visit + ?Sized,
+{
+    // Type is just type information, no traversal needed
 }
 
 pub fn visit_update_target<V>(v: &mut V, node: &UpdateTarget)
@@ -839,6 +981,15 @@ where
 {
     for expr in &node.rows {
         v.visit_expr(expr);
+    }
+}
+
+pub fn visit_with<V>(v: &mut V, node: &With)
+where
+    V: Visit + ?Sized,
+{
+    for cte in &node.ctes {
+        v.visit_cte(cte);
     }
 }
 
