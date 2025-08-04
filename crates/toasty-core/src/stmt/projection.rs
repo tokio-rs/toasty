@@ -3,12 +3,12 @@ use crate::schema::app;
 
 use std::{fmt, ops};
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq)]
 pub struct Projection {
     steps: Steps,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 enum Steps {
     /// References the projection base
     Identity,

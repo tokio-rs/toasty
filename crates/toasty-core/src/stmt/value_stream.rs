@@ -19,7 +19,7 @@ struct Iter<I> {
     iter: I,
 }
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Default)]
 enum Buffer {
     #[default]
     Empty,
@@ -277,7 +277,7 @@ mod tests {
     #[test]
     fn default() {
         let (buffer, stream) = ValueStream::default().into_inner();
-        assert!(buffer == Buffer::Empty);
+        assert!(matches!(buffer, Buffer::Empty));
         assert!(stream.is_none());
     }
 }

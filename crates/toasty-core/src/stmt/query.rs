@@ -19,7 +19,7 @@ pub struct Query {
     pub locks: Vec<Lock>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Lock {
     Update,
     Share,
