@@ -7,7 +7,6 @@ use quote::quote;
 impl Expand<'_> {
     pub(super) fn expand_model_schema(&self) -> TokenStream {
         let toasty = &self.toasty;
-        let id = &self.tokenized_id;
         let name = self.expand_model_name();
         let fields = self.expand_model_fields();
         let primary_key = self.expand_primary_key();
@@ -15,21 +14,18 @@ impl Expand<'_> {
         let table_name = self.expand_table_name();
 
         quote! {
-            fn schema() -> #toasty::schema::app::Model {
+            fn schema() -> #toasty::schema::Model {
                 use #toasty::{
                     schema::{
-                        app::*,
+                        app,
                         db::{self, IndexOp, IndexScope},
-                        Name
+                        Name,
                     },
-                    Model,
+                    Model as ModelTrait,
                     Type,
                 };
 
-                let id = #toasty::ModelId(#id);
-
-                #toasty::schema::app::Model {
-                    id,
+                #toasty::schema::Model {
                     name: #name,
                     fields: #fields,
                     primary_key: #primary_key,
@@ -46,10 +42,8 @@ impl Expand<'_> {
 
     fn expand_model_fields(&self) -> TokenStream {
         let toasty = &self.toasty;
-        let model_id = &self.tokenized_id;
 
         let fields = self.model.fields.iter().enumerate().map(|(index, field)| {
-            let index_tokenized = util::int(index);
             let name = field.name.ident.to_string();
             let field_ty;
             let nullable;
@@ -65,7 +59,7 @@ impl Expand<'_> {
                     };
 
                     nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
-                    field_ty = quote!(FieldTy::Primitive(FieldPrimitive {
+                    field_ty = quote!(#toasty::schema::FieldTy::Primitive(app::FieldPrimitive {
                         ty: <#ty as #toasty::stmt::Primitive>::TYPE,
                         storage_ty: #storage_ty,
                     }));
@@ -73,30 +67,15 @@ impl Expand<'_> {
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
 
-                    let fk_fields = rel.foreign_key.iter().map(|fk_field| {
-                        let source = util::int(fk_field.source);
-                        let target = fk_field.target.to_string();
-
-                        quote! {
-                            ForeignKeyField {
-                                source: FieldId {
-                                    model: #toasty::ModelId(#model_id),
-                                    index: #source,
-                                },
-                                target: <#ty as #toasty::Relation>::field_name_to_id(#target),
-                            }
-                        }
+                    let fk_field_names = rel.foreign_key.iter().map(|fk_field| {
+                        fk_field.target.to_string()
                     });
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(FieldTy::BelongsTo(BelongsTo {
-                        target:  <#ty as #toasty::Relation>::Model::ID,
+                    field_ty = quote!(#toasty::schema::FieldTy::BelongsTo(#toasty::schema::BelongsTo {
+                        target: <#ty as #toasty::Relation>::Model::ID,
                         expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::ID),
-                        // The pair is populated at runtime.
-                        pair: None,
-                        foreign_key: ForeignKey {
-                            fields: vec![ #( #fk_fields ),* ],
-                        },
+                        foreign_key_fields: vec![ #( #fk_field_names.to_string() ),* ],
                     }));
                 }
                 FieldTy::HasMany(rel) => {
@@ -104,46 +83,32 @@ impl Expand<'_> {
                     let singular_name = expand_name(&rel.singular);
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(FieldTy::HasMany(HasMany {
+                    field_ty = quote!(#toasty::schema::FieldTy::HasMany(#toasty::schema::HasMany {
                         target: <#ty as #toasty::Relation>::Model::ID,
                         expr_ty: Type::List(Box::new(Type::Model(<#ty as #toasty::Relation>::Model::ID))),
                         singular: #singular_name,
-                        // The pair is populated at runtime.
-                        pair: FieldId {
-                            model: ModelId(usize::MAX),
-                            index: usize::MAX,
-                        },
                     }));
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(FieldTy::HasOne(HasOne {
+                    field_ty = quote!(#toasty::schema::FieldTy::HasOne(#toasty::schema::HasOne {
                         target: <#ty as #toasty::Relation>::Model::ID,
                         expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::ID),
-                        // The pair is populated at runtime.
-                        pair: FieldId {
-                            model: ModelId(usize::MAX),
-                            index: usize::MAX,
-                        },
                     }));
                 }
             }
 
             let primary_key = self.model.primary_key.fields.contains(&index);
             let auto = if field.attrs.auto {
-                quote!(Some(Auto::Id))
+                quote!(Some(app::Auto::Id))
             } else {
                 quote!(None)
             };
 
             quote! {
-                Field {
-                    id: FieldId {
-                        model: #toasty::ModelId(#model_id),
-                        index: #index_tokenized,
-                    },
+                #toasty::schema::Field {
                     name: #name.to_string(),
                     ty: #field_ty,
                     nullable: #nullable,
@@ -160,72 +125,50 @@ impl Expand<'_> {
     }
 
     fn expand_primary_key(&self) -> TokenStream {
+        let toasty = &self.toasty;
         let fields = self.model.primary_key.fields.iter().map(|field| {
-            let field_tokenized = util::int(*field);
-
-            quote! {
-                FieldId {
-                    model: id,
-                    index: #field_tokenized,
-                }
-            }
+            let field_index = util::int(*field);
+            quote! { #field_index }
         });
 
         quote! {
-            PrimaryKey {
+            #toasty::schema::PrimaryKey {
                 fields: vec![ #( #fields ),* ],
-                index: IndexId {
-                    model: id,
-                    index: 0,
-                },
             }
         }
     }
 
     fn expand_model_indices(&self) -> TokenStream {
         use crate::schema::IndexScope;
+        let toasty = &self.toasty;
 
-        let indices = self
-            .model
-            .indices
-            .iter()
-            .enumerate()
-            .map(|(index, model_index)| {
-                let index_tokenized = util::int(index);
-                let unique = &model_index.unique;
-                let primary_key = &model_index.primary_key;
+        let indices = self.model.indices.iter().map(|model_index| {
+            let unique = &model_index.unique;
+            let primary_key = &model_index.primary_key;
 
-                let fields = model_index.fields.iter().map(|index_field| {
-                    let field_tokenized = util::int(index_field.field);
-                    let scope = match &index_field.scope {
-                        IndexScope::Partition => quote!(IndexScope::Partition),
-                        IndexScope::Local => quote!(IndexScope::Local),
-                    };
-
-                    quote! {
-                        IndexField {
-                            field: FieldId {
-                                model: id,
-                                index: #field_tokenized,
-                            },
-                            op: IndexOp::Eq,
-                            scope: #scope,
-                        }
-                    }
-                });
+            let fields = model_index.fields.iter().map(|index_field| {
+                let field_index = util::int(index_field.field);
+                let scope = match &index_field.scope {
+                    IndexScope::Partition => quote!(IndexScope::Partition),
+                    IndexScope::Local => quote!(IndexScope::Local),
+                };
 
                 quote! {
-                    Index {
-                        id: IndexId {
-                            model: id,
-                            index: #index_tokenized,
-                        },
-                        fields: vec![ #( #fields ),* ],
-                        unique: #unique,
-                        primary_key: #primary_key,
+                    #toasty::schema::IndexField {
+                        field: #field_index,
+                        scope: #scope,
                     }
                 }
             });
+
+            quote! {
+                #toasty::schema::Index {
+                    fields: vec![ #( #fields ),* ],
+                    unique: #unique,
+                    primary_key: #primary_key,
+                }
+            }
+        });
 
         quote! {
             vec![ #( #indices ),* ]

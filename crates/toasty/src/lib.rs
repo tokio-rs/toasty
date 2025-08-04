@@ -40,10 +40,23 @@ pub mod codegen_support {
     pub use std::{convert::Into, default::Default, option::Option};
     pub use toasty_core::{
         driver,
-        schema::{
-            self,
-            app::{FieldId, ModelId},
-        },
+        schema::app::{FieldId, ModelId},
         stmt::{Type, Value, ValueRecord, ValueStream},
     };
+
+    // Schema module for macro generation
+    // This provides both the new macro-time types and the core runtime types
+    pub mod schema {
+        // New macro-time schema types
+        pub use crate::schema::{
+            BelongsTo, Field, FieldTy, HasMany, HasOne, Index, IndexField, Model, PrimaryKey,
+        };
+
+        // Core runtime types (re-exported for convenience)
+        pub use toasty_core::schema::{
+            app::{self, FieldId, ModelId},
+            db::{self, IndexOp, IndexScope},
+            Name,
+        };
+    }
 }

@@ -75,10 +75,7 @@ impl HasMany {
 impl HasOne {
     /// Create a new macro has-one relation
     pub fn new(target: app::ModelId, expr_ty: stmt::Type) -> Self {
-        Self {
-            target,
-            expr_ty,
-        }
+        Self { target, expr_ty }
     }
 }
 

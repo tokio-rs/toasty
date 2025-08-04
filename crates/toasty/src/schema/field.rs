@@ -2,7 +2,7 @@ use super::*;
 use toasty_core::schema::app;
 
 /// Represents a field's schema as known at macro compilation time.
-/// 
+///
 /// This is the "incomplete" version of `toasty_core::schema::app::Field` that contains only
 /// information available to the macro. Notably missing:
 /// - FieldId (depends on ModelId which isn't assigned yet)
@@ -33,13 +33,13 @@ pub struct Field {
 pub enum FieldTy {
     /// Primitive field (no references to resolve)
     Primitive(app::FieldPrimitive),
-    
+
     /// Belongs-to relation (references target ModelId, not FieldId)
     BelongsTo(BelongsTo),
-    
+
     /// Has-many relation (references target ModelId, not FieldId)
     HasMany(HasMany),
-    
+
     /// Has-one relation (references target ModelId, not FieldId)
     HasOne(HasOne),
 }

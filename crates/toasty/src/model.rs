@@ -1,8 +1,5 @@
 use crate::Error;
-use toasty_core::{
-    schema::app::{self, ModelId},
-    stmt,
-};
+use toasty_core::{schema::app::ModelId, stmt};
 
 pub trait Model: Sized {
     /// Unique identifier for this model within the schema.
@@ -13,9 +10,11 @@ pub trait Model: Sized {
     /// Load an instance of the model, populating fields using the given row.
     fn load(row: stmt::ValueRecord) -> Result<Self, Error>;
 
-    fn schema() -> app::Model {
-        todo!()
-    }
+    /// Returns the macro-time schema representation for this model.
+    ///
+    /// This contains unresolved references that will be resolved during
+    /// schema registration when all models are known.
+    fn schema() -> crate::schema::Model;
 }
 
 // TODO: This is a hack to aid in the transition from schema code gen to proc
@@ -27,7 +26,7 @@ impl<T: Model> Model for Option<T> {
         Ok(Some(T::load(row)?))
     }
 
-    fn schema() -> app::Model {
-        todo!()
+    fn schema() -> crate::schema::Model {
+        T::schema()
     }
 }

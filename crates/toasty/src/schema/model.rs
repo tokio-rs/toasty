@@ -2,7 +2,7 @@ use super::*;
 use toasty_core::schema::{db, Name};
 
 /// Represents a model's schema as known at macro compilation time.
-/// 
+///
 /// This is the "incomplete" version of `toasty_core::schema::app::Model` that contains only
 /// information available to the macro. Notably missing:
 /// - ModelId (not assigned until schema registration)
@@ -38,10 +38,10 @@ pub struct PrimaryKey {
 pub struct Index {
     /// Field indices that make up this index
     pub fields: Vec<IndexField>,
-    
+
     /// Whether this index enforces uniqueness
     pub unique: bool,
-    
+
     /// Whether this is the primary key index
     pub primary_key: bool,
 }
@@ -51,7 +51,7 @@ pub struct Index {
 pub struct IndexField {
     /// Index of the field within the model
     pub field: usize,
-    
+
     /// Scope of the index field
     pub scope: db::IndexScope,
 }
@@ -69,7 +69,10 @@ impl Model {
 
     /// Iterate over primary key fields
     pub fn primary_key_fields(&self) -> impl Iterator<Item = &Field> {
-        self.primary_key.fields.iter().map(|&index| &self.fields[index])
+        self.primary_key
+            .fields
+            .iter()
+            .map(|&index| &self.fields[index])
     }
 }
 
