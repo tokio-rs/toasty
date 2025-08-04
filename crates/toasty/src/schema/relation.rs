@@ -15,10 +15,19 @@ pub struct BelongsTo {
     /// to from a user's point of view.
     pub expr_ty: stmt::Type,
 
-    /// Foreign key field names (will be resolved to FieldIds later)
-    pub foreign_key_fields: Vec<String>,
+    /// Foreign key field information
+    pub foreign_key: Vec<ForeignKeyField>,
     // Note: No `pair` field - this is resolved during schema registration
     // when all models are known and cross-references can be established
+}
+
+/// Represents a foreign key field mapping
+#[derive(Debug, Clone)]
+pub struct ForeignKeyField {
+    /// Source field name (in this model)
+    pub source: String,
+    /// Target field name (in the target model)
+    pub target: String,
 }
 
 /// Macro-time representation of a HasMany relation
@@ -52,11 +61,15 @@ pub struct HasOne {
 
 impl BelongsTo {
     /// Create a new macro belongs-to relation
-    pub fn new(target: app::ModelId, expr_ty: stmt::Type, foreign_key_fields: Vec<String>) -> Self {
+    pub fn new(
+        target: app::ModelId,
+        expr_ty: stmt::Type,
+        foreign_key: Vec<ForeignKeyField>,
+    ) -> Self {
         Self {
             target,
             expr_ty,
-            foreign_key_fields,
+            foreign_key,
         }
     }
 }

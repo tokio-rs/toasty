@@ -49,7 +49,8 @@ pub mod codegen_support {
     pub mod schema {
         // New macro-time schema types
         pub use crate::schema::{
-            BelongsTo, Field, FieldTy, HasMany, HasOne, Index, IndexField, Model, PrimaryKey,
+            BelongsTo, Field, FieldTy, ForeignKeyField, HasMany, HasOne, Index, IndexField, Model,
+            PrimaryKey,
         };
 
         // Core runtime types (re-exported for convenience)

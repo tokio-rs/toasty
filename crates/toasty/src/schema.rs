@@ -6,7 +6,7 @@ mod model;
 pub use model::{Index, IndexField, Model, PrimaryKey};
 
 mod relation;
-pub use relation::{BelongsTo, HasMany, HasOne};
+pub use relation::{BelongsTo, ForeignKeyField, HasMany, HasOne};
 
 // Re-export core schema types for convenience
 pub use toasty_core::schema::*;

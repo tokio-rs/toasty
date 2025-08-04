@@ -31,7 +31,7 @@ impl Builder {
 
     pub fn build_app_schema(&self) -> Result<app::Schema> {
         // Convert schema::Model -> app::Model
-        let app_models = self
+        let mut app_models = self
             .models
             .iter()
             .enumerate()
@@ -40,7 +40,50 @@ impl Builder {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        // Resolve foreign key target field indices
+        self.resolve_foreign_key_targets(&mut app_models)?;
+
         app::Schema::from_macro(&app_models)
+    }
+
+    /// Resolve foreign key target field indices using target field names
+    ///
+    /// During the initial conversion, we set target field indices to placeholder values
+    /// because we need access to all models to resolve field names to indices.
+    /// This second pass resolves the actual target field indices.
+    fn resolve_foreign_key_targets(&self, app_models: &mut [app::Model]) -> Result<()> {
+        // Iterate through all models and their fields to find BelongsTo relations
+        for (model_index, schema_model) in self.models.iter().enumerate() {
+            for (field_index, schema_field) in schema_model.fields.iter().enumerate() {
+                if let crate::schema::FieldTy::BelongsTo(belongs_to) = &schema_field.ty {
+                    // Process each foreign key field in this BelongsTo relation
+                    for (fk_index, fk_field) in belongs_to.foreign_key.iter().enumerate() {
+                        // Look up the target field index by name in the target model
+                        // We can safely access by index since models are stored sequentially
+                        let target_field_index = app_models[belongs_to.target.0]
+                            .fields
+                            .iter()
+                            .position(|f| f.name == fk_field.target)
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "Foreign key target field '{}' not found in target model",
+                                    fk_field.target
+                                )
+                            });
+
+                        // Apply the resolution directly by accessing the source model by index
+                        // This avoids borrowing conflicts since we're using index-based access
+                        if let app::FieldTy::BelongsTo(app_belongs_to) =
+                            &mut app_models[model_index].fields[field_index].ty
+                        {
+                            app_belongs_to.foreign_key.fields[fk_index].target.index =
+                                target_field_index;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Convert a schema::Model to app::Model with assigned ModelId
@@ -67,16 +110,24 @@ impl Builder {
                     crate::schema::FieldTy::BelongsTo(belongs_to) => {
                         // Convert field names to FieldId references
                         let foreign_key_fields = belongs_to
-                            .foreign_key_fields
+                            .foreign_key
                             .iter()
-                            .map(|field_name| {
-                                // Find the field index by name within this model
-                                let source_field_index = schema_model.fields.iter()
-                                    .position(|f| f.name == *field_name)
-                                    .unwrap_or_else(|| panic!("Foreign key field '{}' not found in model", field_name));
-                                
-                                // For now, assume the target field is always index 0 (primary key)
-                                // TODO: This should be resolved based on the actual target field name
+                            .map(|fk_field| {
+                                // Find the source field index by name within this model
+                                let source_field_index = schema_model
+                                    .fields
+                                    .iter()
+                                    .position(|f| f.name == fk_field.source)
+                                    .unwrap_or_else(|| {
+                                        panic!(
+                                            "Foreign key source field '{}' not found in model",
+                                            fk_field.source
+                                        )
+                                    });
+
+                                // Store target field name for later resolution
+                                // We use usize::MAX as a placeholder since we need access to all models
+                                // to resolve target field names to indices (done in resolve_foreign_key_targets)
                                 app::ForeignKeyField {
                                     source: app::FieldId {
                                         model: model_id,
@@ -84,7 +135,7 @@ impl Builder {
                                     },
                                     target: app::FieldId {
                                         model: belongs_to.target,
-                                        index: 0, // Assume primary key for now
+                                        index: usize::MAX, // Placeholder - will be resolved later
                                     },
                                 }
                             })

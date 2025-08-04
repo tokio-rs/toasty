@@ -67,15 +67,22 @@ impl Expand<'_> {
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
 
-                    let fk_field_names = rel.foreign_key.iter().map(|fk_field| {
-                        fk_field.target.to_string()
+                    let fk_fields = rel.foreign_key.iter().map(|fk_field| {
+                        let source_name = self.model.fields[fk_field.source].name.ident.to_string();
+                        let target_name = fk_field.target.to_string();
+                        quote! {
+                            #toasty::schema::ForeignKeyField {
+                                source: #source_name.to_string(),
+                                target: #target_name.to_string(),
+                            }
+                        }
                     });
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(#toasty::schema::FieldTy::BelongsTo(#toasty::schema::BelongsTo {
                         target: <#ty as #toasty::Relation>::Model::ID,
                         expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::ID),
-                        foreign_key_fields: vec![ #( #fk_field_names.to_string() ),* ],
+                        foreign_key: vec![ #( #fk_fields ),* ],
                     }));
                 }
                 FieldTy::HasMany(rel) => {
