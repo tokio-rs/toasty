@@ -5,7 +5,7 @@ use super::*;
 /// Describes a traversal through fields.
 ///
 /// The root is not specified as part of the struct.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct Path {
     /// Model the path originates from
     pub root: ModelId,

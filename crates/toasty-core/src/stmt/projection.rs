@@ -3,12 +3,12 @@ use crate::schema::app;
 
 use std::{fmt, ops};
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone)]
 pub struct Projection {
     steps: Steps,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 enum Steps {
     /// References the projection base
     Identity,
@@ -71,7 +71,16 @@ impl Projection {
 
     pub fn resolves_to(&self, other: impl Into<Self>) -> bool {
         let other = other.into();
-        *self == other
+        self.steps_equal(&other.steps)
+    }
+
+    fn steps_equal(&self, other: &Steps) -> bool {
+        match (&self.steps, other) {
+            (Steps::Identity, Steps::Identity) => true,
+            (Steps::Single(a), Steps::Single(b)) => a == b,
+            (Steps::Multi(a), Steps::Multi(b)) => a == b,
+            _ => false,
+        }
     }
 }
 
