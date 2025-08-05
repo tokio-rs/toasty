@@ -38,7 +38,7 @@ async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
 
     // Find the user, include TODOs
     let user = User::filter_by_id(&user.id)
-        .include(User::FIELDS.todos)
+        .include(User::FIELDS.todos())
         .get(&db)
         .await
         .unwrap();
@@ -49,7 +49,7 @@ async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
     let id = user.todos.get()[0].id.clone();
 
     let todo = Todo::filter_by_id(&id)
-        .include(Todo::FIELDS.user)
+        .include(Todo::FIELDS.user())
         .get(&db)
         .await
         .unwrap();

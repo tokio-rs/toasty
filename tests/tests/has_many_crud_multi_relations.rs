@@ -174,7 +174,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         &expect,
         category
             .todos()
-            .query(Todo::FIELDS.user.eq(&user))
+            .query(Todo::FIELDS.user().eq(&user))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
@@ -185,7 +185,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         &db,
         &expect,
         user.todos()
-            .query(Todo::FIELDS.category.eq(&category))
+            .query(Todo::FIELDS.category().eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
@@ -196,7 +196,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         &db,
         &expect,
         Todo::filter_by_user_id(&user.id)
-            .filter(Todo::FIELDS.category.eq(&category))
+            .filter(Todo::FIELDS.category().eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),

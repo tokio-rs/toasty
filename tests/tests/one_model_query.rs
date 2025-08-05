@@ -106,7 +106,7 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     }
 
     // Query on the partition key only
-    let teams = Team::filter(Team::FIELDS.league.eq("EPL"))
+    let teams = Team::filter(Team::FIELDS.league().eq("EPL"))
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
@@ -122,9 +122,9 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     // Query on the partition key and local key
     let teams = Team::filter(
         Team::FIELDS
-            .league
+            .league()
             .eq("MLS")
-            .and(Team::FIELDS.name.eq("Portland Timbers")),
+            .and(Team::FIELDS.name().eq("Portland Timbers")),
     )
     .all(&db)
     .await
@@ -141,9 +141,9 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     // Query on the partition key and a non-index field
     let teams = Team::filter(
         Team::FIELDS
-            .league
+            .league()
             .eq("MLS")
-            .and(Team::FIELDS.founded.eq(2009)),
+            .and(Team::FIELDS.founded().eq(2009)),
     )
     .all(&db)
     .await
@@ -160,10 +160,10 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     // Query on the partition key, local key, and a non-index field with a match
     let teams = Team::filter(
         Team::FIELDS
-            .league
+            .league()
             .eq("MLS")
-            .and(Team::FIELDS.founded.eq(2009))
-            .and(Team::FIELDS.name.eq("Portland Timbers")),
+            .and(Team::FIELDS.founded().eq(2009))
+            .and(Team::FIELDS.name().eq("Portland Timbers")),
     )
     .all(&db)
     .await
@@ -183,10 +183,10 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     // Query on the partition key, local key, and a non-index field without a match
     let teams = Team::filter(
         Team::FIELDS
-            .league
+            .league()
             .eq("MLS")
-            .and(Team::FIELDS.founded.eq(2009))
-            .and(Team::FIELDS.name.eq("LA Galaxy")),
+            .and(Team::FIELDS.founded().eq(2009))
+            .and(Team::FIELDS.name().eq("LA Galaxy")),
     )
     .all(&db)
     .await
@@ -241,7 +241,7 @@ async fn query_local_key_cmp(s: impl Setup) {
     }
 
     let events: Vec<_> = Event::filter_by_kind("info")
-        .filter(Event::FIELDS.timestamp.ne(10))
+        .filter(Event::FIELDS.timestamp().ne(10))
         .collect(&db)
         .await
         .unwrap();
@@ -252,7 +252,7 @@ async fn query_local_key_cmp(s: impl Setup) {
     );
 
     let events: Vec<_> = Event::filter_by_kind("info")
-        .filter(Event::FIELDS.timestamp.gt(10))
+        .filter(Event::FIELDS.timestamp().gt(10))
         .collect(&db)
         .await
         .unwrap();
@@ -263,7 +263,7 @@ async fn query_local_key_cmp(s: impl Setup) {
     );
 
     let events: Vec<_> = Event::filter_by_kind("info")
-        .filter(Event::FIELDS.timestamp.ge(10))
+        .filter(Event::FIELDS.timestamp().ge(10))
         .collect(&db)
         .await
         .unwrap();
@@ -274,7 +274,7 @@ async fn query_local_key_cmp(s: impl Setup) {
     );
 
     let events: Vec<_> = Event::filter_by_kind("info")
-        .filter(Event::FIELDS.timestamp.lt(10))
+        .filter(Event::FIELDS.timestamp().lt(10))
         .collect(&db)
         .await
         .unwrap();
@@ -285,7 +285,7 @@ async fn query_local_key_cmp(s: impl Setup) {
     );
 
     let events: Vec<_> = Event::filter_by_kind("info")
-        .filter(Event::FIELDS.timestamp.le(10))
+        .filter(Event::FIELDS.timestamp().le(10))
         .collect(&db)
         .await
         .unwrap();
@@ -346,7 +346,7 @@ async fn query_arbitrary_constraint(s: impl Setup) {
             .unwrap();
     }
 
-    let events: Vec<_> = Event::filter(Event::FIELDS.timestamp.gt(12))
+    let events: Vec<_> = Event::filter(Event::FIELDS.timestamp().gt(12))
         .collect(&db)
         .await
         .unwrap();
@@ -358,9 +358,9 @@ async fn query_arbitrary_constraint(s: impl Setup) {
 
     let events: Vec<_> = Event::filter(
         Event::FIELDS
-            .timestamp
+            .timestamp()
             .gt(12)
-            .and(Event::FIELDS.kind.ne("info")),
+            .and(Event::FIELDS.kind().ne("info")),
     )
     .collect(&db)
     .await
@@ -375,9 +375,9 @@ async fn query_arbitrary_constraint(s: impl Setup) {
 
     let events: Vec<_> = Event::filter(
         Event::FIELDS
-            .kind
+            .kind()
             .eq("info")
-            .and(Event::FIELDS.timestamp.ne(10)),
+            .and(Event::FIELDS.timestamp().ne(10)),
     )
     .collect(&db)
     .await
@@ -390,9 +390,9 @@ async fn query_arbitrary_constraint(s: impl Setup) {
 
     let events: Vec<_> = Event::filter(
         Event::FIELDS
-            .kind
+            .kind()
             .eq("info")
-            .and(Event::FIELDS.timestamp.gt(10)),
+            .and(Event::FIELDS.timestamp().gt(10)),
     )
     .collect(&db)
     .await
@@ -405,9 +405,9 @@ async fn query_arbitrary_constraint(s: impl Setup) {
 
     let events: Vec<_> = Event::filter(
         Event::FIELDS
-            .kind
+            .kind()
             .eq("info")
-            .and(Event::FIELDS.timestamp.ge(10)),
+            .and(Event::FIELDS.timestamp().ge(10)),
     )
     .collect(&db)
     .await
@@ -420,9 +420,9 @@ async fn query_arbitrary_constraint(s: impl Setup) {
 
     let events: Vec<_> = Event::filter(
         Event::FIELDS
-            .kind
+            .kind()
             .eq("info")
-            .and(Event::FIELDS.timestamp.lt(10)),
+            .and(Event::FIELDS.timestamp().lt(10)),
     )
     .collect(&db)
     .await
@@ -435,9 +435,9 @@ async fn query_arbitrary_constraint(s: impl Setup) {
 
     let events: Vec<_> = Event::filter(
         Event::FIELDS
-            .kind
+            .kind()
             .eq("info")
-            .and(Event::FIELDS.timestamp.le(10)),
+            .and(Event::FIELDS.timestamp().le(10)),
     )
     .collect(&db)
     .await
