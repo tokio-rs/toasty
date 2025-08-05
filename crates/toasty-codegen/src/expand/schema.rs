@@ -26,6 +26,7 @@ impl Expand<'_> {
                 };
 
                 #toasty::schema::Model {
+                    type_id: std::any::TypeId::of::<Self>(),
                     name: #name,
                     fields: #fields,
                     primary_key: #primary_key,
@@ -80,8 +81,8 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(#toasty::schema::FieldTy::BelongsTo(#toasty::schema::BelongsTo {
-                        target: <#ty as #toasty::Relation>::Model::ID,
-                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::ID),
+                        target: std::any::TypeId::of::<<#ty as #toasty::Relation>::Model>(),
+                        expr_ty: Type::Model(#toasty::schema::app::ModelId(0)), // Placeholder - will be resolved
                         foreign_key: vec![ #( #fk_fields ),* ],
                     }));
                 }
@@ -91,8 +92,8 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(#toasty::schema::FieldTy::HasMany(#toasty::schema::HasMany {
-                        target: <#ty as #toasty::Relation>::Model::ID,
-                        expr_ty: Type::List(Box::new(Type::Model(<#ty as #toasty::Relation>::Model::ID))),
+                        target: std::any::TypeId::of::<<#ty as #toasty::Relation>::Model>(),
+                        expr_ty: Type::List(Box::new(Type::Model(#toasty::schema::app::ModelId(0)))), // Placeholder
                         singular: #singular_name,
                     }));
                 }
@@ -101,8 +102,8 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(#toasty::schema::FieldTy::HasOne(#toasty::schema::HasOne {
-                        target: <#ty as #toasty::Relation>::Model::ID,
-                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::ID),
+                        target: std::any::TypeId::of::<<#ty as #toasty::Relation>::Model>(),
+                        expr_ty: Type::Model(#toasty::schema::app::ModelId(0)), // Placeholder
                     }));
                 }
             }

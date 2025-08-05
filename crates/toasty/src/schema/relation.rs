@@ -1,15 +1,15 @@
 use super::*;
-use toasty_core::schema::{app, Name};
+use toasty_core::schema::Name;
 use toasty_core::stmt;
 
 /// Macro-time representation of a BelongsTo relation
 ///
-/// References the target model by ModelId (available via `<T as Model>::ID`),
-/// but eliminates FieldId usage to avoid circular dependencies.
+/// References the target model by TypeId (available via `TypeId::of::<T>()`),
+/// eliminating ModelId usage to avoid circular dependencies.
 #[derive(Debug, Clone)]
 pub struct BelongsTo {
-    /// ModelId of the target model (e.g., `<User as Model>::ID`)
-    pub target: app::ModelId,
+    /// TypeId of the target model (e.g., `TypeId::of::<User>()`)
+    pub target: std::any::TypeId,
 
     /// The association's expression type. This is the type the field evaluates
     /// to from a user's point of view.
@@ -33,8 +33,8 @@ pub struct ForeignKeyField {
 /// Macro-time representation of a HasMany relation
 #[derive(Debug, Clone)]
 pub struct HasMany {
-    /// ModelId of the target model (e.g., `<Todo as Model>::ID`)
-    pub target: app::ModelId,
+    /// TypeId of the target model (e.g., `TypeId::of::<Todo>()`)
+    pub target: std::any::TypeId,
 
     /// The association's expression type. This is the type the field evaluates
     /// to from a user's point of view.
@@ -49,8 +49,8 @@ pub struct HasMany {
 /// Macro-time representation of a HasOne relation
 #[derive(Debug, Clone)]
 pub struct HasOne {
-    /// ModelId of the target model (e.g., `<Profile as Model>::ID`)
-    pub target: app::ModelId,
+    /// TypeId of the target model (e.g., `TypeId::of::<Profile>()`)
+    pub target: std::any::TypeId,
 
     /// The association's expression type. This is the type the field evaluates
     /// to from a user's point of view.
@@ -62,7 +62,7 @@ pub struct HasOne {
 impl BelongsTo {
     /// Create a new macro belongs-to relation
     pub fn new(
-        target: app::ModelId,
+        target: std::any::TypeId,
         expr_ty: stmt::Type,
         foreign_key: Vec<ForeignKeyField>,
     ) -> Self {
@@ -76,7 +76,7 @@ impl BelongsTo {
 
 impl HasMany {
     /// Create a new macro has-many relation
-    pub fn new(target: app::ModelId, expr_ty: stmt::Type, singular: Name) -> Self {
+    pub fn new(target: std::any::TypeId, expr_ty: stmt::Type, singular: Name) -> Self {
         Self {
             target,
             expr_ty,
@@ -87,7 +87,7 @@ impl HasMany {
 
 impl HasOne {
     /// Create a new macro has-one relation
-    pub fn new(target: app::ModelId, expr_ty: stmt::Type) -> Self {
+    pub fn new(target: std::any::TypeId, expr_ty: stmt::Type) -> Self {
         Self { target, expr_ty }
     }
 }

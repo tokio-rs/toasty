@@ -25,7 +25,7 @@ impl<'a> ExprTarget<'a> {
     pub(crate) fn from_source(schema: &'a Schema, source: &stmt::Source) -> Self {
         match source {
             stmt::Source::Model(source_model) => {
-                let model = schema.app.model(source_model.model);
+                let model = schema.app.model(source_model.model.model_id());
                 ExprTarget::from(model)
             }
             stmt::Source::Table(tables_with_joins) => {
@@ -51,7 +51,7 @@ impl<'a> ExprTarget<'a> {
                 ExprTarget::from(model)
             }
             stmt::InsertTarget::Model(model_id) => {
-                let model = schema.app.model(*model_id);
+                let model = schema.app.model(model_id.model_id());
                 ExprTarget::from(model)
             }
             stmt::InsertTarget::Table(table_with_columns) => {
@@ -68,7 +68,7 @@ impl<'a> ExprTarget<'a> {
                 ExprTarget::from(model)
             }
             stmt::UpdateTarget::Model(model_id) => {
-                let model = schema.app.model(*model_id);
+                let model = schema.app.model(model_id.model_id());
                 ExprTarget::from(model)
             }
             stmt::UpdateTarget::Table(_) => ExprTarget::Table,

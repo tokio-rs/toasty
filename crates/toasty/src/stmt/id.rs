@@ -42,7 +42,7 @@ impl<M: Model> IntoExpr<Self> for Id<M> {
 
 impl<M: Model> IntoExpr<Id<M>> for String {
     fn into_expr(self) -> Expr<Id<M>> {
-        Expr::from_value(stmt::Id::from_string(M::ID, self).into())
+        Expr::from_value(stmt::Id::from_string(stmt::ModelRef::from_type::<M>(), self).into())
     }
 
     fn by_ref(&self) -> Expr<Id<M>> {
@@ -52,7 +52,9 @@ impl<M: Model> IntoExpr<Id<M>> for String {
 
 impl<M: Model> IntoExpr<Id<M>> for &str {
     fn into_expr(self) -> Expr<Id<M>> {
-        Expr::from_value(stmt::Id::from_string(M::ID, self.into()).into())
+        Expr::from_value(
+            stmt::Id::from_string(stmt::ModelRef::from_type::<M>(), self.into()).into(),
+        )
     }
 
     fn by_ref(&self) -> Expr<Id<M>> {
@@ -62,7 +64,9 @@ impl<M: Model> IntoExpr<Id<M>> for &str {
 
 impl<M: Model> IntoExpr<Id<M>> for &String {
     fn into_expr(self) -> Expr<Id<M>> {
-        Expr::from_value(stmt::Id::from_string(M::ID, self.into()).into())
+        Expr::from_value(
+            stmt::Id::from_string(stmt::ModelRef::from_type::<M>(), self.into()).into(),
+        )
     }
 
     fn by_ref(&self) -> Expr<Id<M>> {

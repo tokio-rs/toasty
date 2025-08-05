@@ -124,6 +124,9 @@ pub use join::{Join, JoinOp};
 mod limit;
 pub use limit::Limit;
 
+mod model_ref;
+pub use model_ref::{ModelRef, ModelRefError};
+
 mod node;
 pub use node::Node;
 

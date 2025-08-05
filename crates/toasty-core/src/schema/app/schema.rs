@@ -1,20 +1,32 @@
 use super::*;
 
 use crate::Result;
+use std::any::TypeId;
+use std::collections::HashMap;
 
 #[derive(Debug, Default)]
 pub struct Schema {
     pub models: Vec<Model>,
+    /// Mapping from TypeId to ModelId for runtime resolution
+    pub type_to_model: HashMap<TypeId, ModelId>,
 }
 
 #[derive(Default)]
 struct Builder {
     models: Vec<Model>,
+    type_to_model: HashMap<TypeId, ModelId>,
 }
 
 impl Schema {
     pub fn from_macro(models: &[Model]) -> Result<Self> {
-        Builder::from_macro(models)
+        Self::from_macro_with_mapping(models, HashMap::new())
+    }
+
+    pub fn from_macro_with_mapping(
+        models: &[Model],
+        type_to_model: HashMap<TypeId, ModelId>,
+    ) -> Result<Self> {
+        Builder::from_macro_with_mapping(models, type_to_model)
     }
 
     /// Get a field by ID
@@ -39,15 +51,33 @@ impl Schema {
         let model_id = id.into();
         &self.models[model_id.0]
     }
+
+    /// Resolve a TypeId to a ModelId
+    pub fn type_to_model_id(&self, type_id: TypeId) -> Result<ModelId> {
+        self.type_to_model.get(&type_id).copied().ok_or_else(|| {
+            crate::Error::msg(format!(
+                "TypeId {:?} not found in schema - model may not be registered",
+                type_id
+            ))
+        })
+    }
 }
 
 impl Builder {
     pub(crate) fn from_macro(models: &[Model]) -> Result<Schema> {
-        let mut builder = Self { ..Self::default() };
+        Self::from_macro_with_mapping(models, HashMap::new())
+    }
+
+    pub(crate) fn from_macro_with_mapping(
+        models: &[Model],
+        type_to_model: HashMap<TypeId, ModelId>,
+    ) -> Result<Schema> {
+        let mut builder = Self {
+            models: Vec::with_capacity(models.len()),
+            type_to_model,
+        };
 
         // Create a Vec with the correct capacity
-        builder.models = Vec::with_capacity(models.len());
-
         // Sort models by their ModelId to ensure correct order
         let mut sorted_models: Vec<_> = models.iter().collect();
         sorted_models.sort_by_key(|model| model.id.0);
@@ -69,6 +99,7 @@ impl Builder {
     fn into_schema(self) -> Result<Schema> {
         Ok(Schema {
             models: self.models,
+            type_to_model: self.type_to_model,
         })
     }
 

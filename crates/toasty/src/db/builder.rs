@@ -30,60 +30,32 @@ impl Builder {
     }
 
     pub fn build_app_schema(&self) -> Result<app::Schema> {
-        // Convert schema::Model -> app::Model
-        let mut app_models = self
+        // Build TypeId to ModelId mapping with sequential assignment
+        let type_to_model_mapping = self.build_sequential_type_to_model_mapping();
+
+        // Convert schema::Model -> app::Model using sequential ModelIds
+        let app_models = self
             .models
             .iter()
             .enumerate()
             .map(|(index, schema_model)| {
-                self.convert_schema_to_app(schema_model, app::ModelId(index))
+                let model_id = app::ModelId(index); // Sequential assignment!
+                self.convert_schema_to_app(schema_model, model_id, &type_to_model_mapping)
             })
             .collect::<Result<Vec<_>>>()?;
 
-        // Resolve foreign key target field indices
-        self.resolve_foreign_key_targets(&mut app_models)?;
-
-        app::Schema::from_macro(&app_models)
+        app::Schema::from_macro_with_mapping(&app_models, type_to_model_mapping)
     }
 
-    /// Resolve foreign key target field indices using target field names
-    ///
-    /// During the initial conversion, we set target field indices to placeholder values
-    /// because we need access to all models to resolve field names to indices.
-    /// This second pass resolves the actual target field indices.
-    fn resolve_foreign_key_targets(&self, app_models: &mut [app::Model]) -> Result<()> {
-        // Iterate through all models and their fields to find BelongsTo relations
-        for (model_index, schema_model) in self.models.iter().enumerate() {
-            for (field_index, schema_field) in schema_model.fields.iter().enumerate() {
-                if let crate::schema::FieldTy::BelongsTo(belongs_to) = &schema_field.ty {
-                    // Process each foreign key field in this BelongsTo relation
-                    for (fk_index, fk_field) in belongs_to.foreign_key.iter().enumerate() {
-                        // Look up the target field index by name in the target model
-                        // We can safely access by index since models are stored sequentially
-                        let target_field_index = app_models[belongs_to.target.0]
-                            .fields
-                            .iter()
-                            .position(|f| f.name == fk_field.target)
-                            .unwrap_or_else(|| {
-                                panic!(
-                                    "Foreign key target field '{}' not found in target model",
-                                    fk_field.target
-                                )
-                            });
-
-                        // Apply the resolution directly by accessing the source model by index
-                        // This avoids borrowing conflicts since we're using index-based access
-                        if let app::FieldTy::BelongsTo(app_belongs_to) =
-                            &mut app_models[model_index].fields[field_index].ty
-                        {
-                            app_belongs_to.foreign_key.fields[fk_index].target.index =
-                                target_field_index;
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
+    /// Build a mapping from TypeId to sequential ModelId based on registration order
+    fn build_sequential_type_to_model_mapping(
+        &self,
+    ) -> std::collections::HashMap<std::any::TypeId, app::ModelId> {
+        self.models
+            .iter()
+            .enumerate()
+            .map(|(index, schema_model)| (schema_model.type_id, app::ModelId(index)))
+            .collect()
     }
 
     /// Convert a schema::Model to app::Model with assigned ModelId
@@ -91,6 +63,7 @@ impl Builder {
         &self,
         schema_model: &crate::schema::Model,
         model_id: app::ModelId,
+        type_to_model_mapping: &std::collections::HashMap<std::any::TypeId, app::ModelId>,
     ) -> Result<app::Model> {
         // Convert fields
         let fields = schema_model
@@ -108,6 +81,14 @@ impl Builder {
                         app::FieldTy::Primitive(primitive.clone())
                     }
                     crate::schema::FieldTy::BelongsTo(belongs_to) => {
+                        // Convert TypeId to ModelId using the mapping
+                        let target_model_id = type_to_model_mapping
+                            .get(&belongs_to.target)
+                            .copied()
+                            .unwrap_or_else(|| {
+                                panic!("TypeId {:?} not found in mapping", belongs_to.target)
+                            });
+
                         // Convert field names to FieldId references
                         let foreign_key_fields = belongs_to
                             .foreign_key
@@ -134,7 +115,7 @@ impl Builder {
                                         index: source_field_index,
                                     },
                                     target: app::FieldId {
-                                        model: belongs_to.target,
+                                        model: target_model_id,
                                         index: usize::MAX, // Placeholder - will be resolved later
                                     },
                                 }
@@ -146,15 +127,23 @@ impl Builder {
                         };
 
                         app::FieldTy::BelongsTo(app::BelongsTo {
-                            target: belongs_to.target,
+                            target: target_model_id,
                             expr_ty: belongs_to.expr_ty.clone(),
                             pair: None, // Resolved later
                             foreign_key,
                         })
                     }
                     crate::schema::FieldTy::HasMany(has_many) => {
+                        // Convert TypeId to ModelId using the mapping
+                        let target_model_id = type_to_model_mapping
+                            .get(&has_many.target)
+                            .copied()
+                            .unwrap_or_else(|| {
+                                panic!("TypeId {:?} not found in mapping", has_many.target)
+                            });
+
                         app::FieldTy::HasMany(app::HasMany {
-                            target: has_many.target,
+                            target: target_model_id,
                             expr_ty: has_many.expr_ty.clone(),
                             singular: has_many.singular.clone(),
                             pair: app::FieldId {
@@ -164,8 +153,16 @@ impl Builder {
                         })
                     }
                     crate::schema::FieldTy::HasOne(has_one) => {
+                        // Convert TypeId to ModelId using the mapping
+                        let target_model_id = type_to_model_mapping
+                            .get(&has_one.target)
+                            .copied()
+                            .unwrap_or_else(|| {
+                                panic!("TypeId {:?} not found in mapping", has_one.target)
+                            });
+
                         app::FieldTy::HasOne(app::HasOne {
-                            target: has_one.target,
+                            target: target_model_id,
                             expr_ty: has_one.expr_ty.clone(),
                             pair: app::FieldId {
                                 model: app::ModelId(usize::MAX),

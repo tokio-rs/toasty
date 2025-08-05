@@ -9,7 +9,7 @@ impl Planner<'_> {
     ) -> Result<plan::VarId> {
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
-        let model = self.schema.app.model(source_model.model);
+        let model = self.schema.app.model(source_model.model.model_id());
 
         let source_model = match &stmt.body {
             stmt::ExprSet::Select(select) => {
@@ -56,7 +56,7 @@ impl Planner<'_> {
         };
 
         for include in &source_model.include {
-            self.plan_select_include(source_model.model, include, ret)?;
+            self.plan_select_include(source_model.model.model_id(), include, ret)?;
         }
 
         Ok(ret)
@@ -308,7 +308,7 @@ impl Planner<'_> {
         input: plan::VarId,
     ) -> Result<()> {
         // TODO: move this into verifier
-        assert_eq!(base, path.root);
+        assert_eq!(base, path.root.model_id());
 
         let [step] = &path.projection[..] else {
             todo!()

@@ -72,8 +72,8 @@ impl Field {
         )
     }
 
-    /// Get the target ModelId if this is a relation field
-    pub fn relation_target(&self) -> Option<app::ModelId> {
+    /// Get the target TypeId if this is a relation field
+    pub fn relation_target(&self) -> Option<std::any::TypeId> {
         match &self.ty {
             FieldTy::BelongsTo(rel) => Some(rel.target),
             FieldTy::HasMany(rel) => Some(rel.target),

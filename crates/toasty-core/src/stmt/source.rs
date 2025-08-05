@@ -12,7 +12,7 @@ pub enum Source {
 #[derive(Debug, Clone)]
 pub struct SourceModel {
     /// The source model
-    pub model: ModelId,
+    pub model: ModelRef,
 
     /// Selecting via an association
     pub via: Option<Association>,
@@ -26,6 +26,14 @@ impl Source {
         matches!(self, Self::Model(_))
     }
 
+    /// Resolve ModelRef to ModelId using the provided schema
+    pub fn resolve(&mut self, schema: &crate::schema::app::Schema) -> Result<()> {
+        match self {
+            Self::Model(source_model) => source_model.resolve(schema),
+            Self::Table(_) => Ok(()), // No ModelRef in table sources
+        }
+    }
+
     #[track_caller]
     pub fn as_model(&self) -> &SourceModel {
         match self {
@@ -35,7 +43,7 @@ impl Source {
     }
 
     pub fn as_model_id(&self) -> ModelId {
-        self.as_model().model
+        self.as_model().model.model_id() // Will panic if not resolved
     }
 
     pub fn is_table(&self) -> bool {
@@ -59,17 +67,23 @@ impl Source {
 
 impl From<&Model> for Source {
     fn from(value: &Model) -> Self {
-        Self::from(value.id)
+        Self::from(ModelRef::from(value.id))
     }
 }
 
-impl From<ModelId> for Source {
-    fn from(value: ModelId) -> Self {
+impl From<ModelRef> for Source {
+    fn from(value: ModelRef) -> Self {
         Self::Model(SourceModel {
             model: value,
             via: None,
             include: vec![],
         })
+    }
+}
+
+impl From<ModelId> for Source {
+    fn from(value: ModelId) -> Self {
+        Self::from(ModelRef::from(value))
     }
 }
 
@@ -88,5 +102,17 @@ impl From<TableRef> for Source {
 impl From<TableWithJoins> for Source {
     fn from(value: TableWithJoins) -> Self {
         Self::Table(vec![value])
+    }
+}
+
+impl SourceModel {
+    /// Resolve ModelRef to ModelId using the provided schema
+    pub fn resolve(&mut self, schema: &crate::schema::app::Schema) -> Result<()> {
+        self.model.resolve(schema)?;
+        // TODO: Also resolve via and include paths when we implement those
+        for path in &mut self.include {
+            path.resolve(schema)?;
+        }
+        Ok(())
     }
 }

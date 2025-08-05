@@ -11,9 +11,12 @@ impl<M: Model> Update<M> {
     pub fn new(mut selection: Select<M>) -> Self {
         if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
             let rows = std::mem::take(&mut values.rows);
-            let filter = stmt::Expr::in_list(stmt::Expr::key(M::ID), rows);
-            selection.untyped.body =
-                stmt::ExprSet::Select(Box::new(stmt::Select::new(M::ID, filter)));
+            let filter =
+                stmt::Expr::in_list(stmt::Expr::key(stmt::ModelRef::from_type::<M>()), rows);
+            selection.untyped.body = stmt::ExprSet::Select(Box::new(stmt::Select::new(
+                stmt::ModelRef::from_type::<M>(),
+                filter,
+            )));
         }
 
         let mut stmt = selection.untyped.update();
@@ -48,27 +51,25 @@ impl<M: Model> Update<M> {
     pub fn set_returning_none(&mut self) {
         self.untyped.returning = None;
     }
+
+    pub fn blank() -> Self {
+        Self {
+            untyped: stmt::Update {
+                target: stmt::UpdateTarget::Model(stmt::ModelRef::from_type::<M>()),
+                assignments: stmt::Assignments::default(),
+                filter: Some(stmt::Expr::from(false)),
+                condition: None,
+                returning: Some(stmt::Returning::Changed),
+            },
+            _p: PhantomData,
+        }
+    }
 }
 
 impl<M> Clone for Update<M> {
     fn clone(&self) -> Self {
         Self {
             untyped: self.untyped.clone(),
-            _p: PhantomData,
-        }
-    }
-}
-
-impl<M: Model> Default for Update<M> {
-    fn default() -> Self {
-        Self {
-            untyped: stmt::Update {
-                target: stmt::UpdateTarget::Model(M::ID),
-                assignments: stmt::Assignments::default(),
-                filter: Some(stmt::Expr::from(false)),
-                condition: None,
-                returning: Some(stmt::Returning::Changed),
-            },
             _p: PhantomData,
         }
     }

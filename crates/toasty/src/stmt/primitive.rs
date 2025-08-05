@@ -90,7 +90,8 @@ impl Primitive for String {
 }
 
 impl<T: Model> Primitive for Id<T> {
-    const TYPE: stmt::Type = stmt::Type::Id(T::ID);
+    // Placeholder const - the actual model ID will be resolved at runtime
+    const TYPE: stmt::Type = stmt::Type::Id(toasty_core::schema::app::ModelId(0));
 
     fn load(value: stmt::Value) -> Result<Self> {
         match value {

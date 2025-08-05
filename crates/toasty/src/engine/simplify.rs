@@ -179,7 +179,9 @@ impl VisitMut for Simplify<'_> {
                 None
             };
 
-            stmt.target = stmt::UpdateTarget::Model(select.source.as_model_id());
+            stmt.target = stmt::UpdateTarget::Model(stmt::ModelRef::from_model_id(
+                select.source.as_model_id(),
+            ));
         }
 
         let target = mem::replace(

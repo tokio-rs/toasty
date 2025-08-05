@@ -8,30 +8,30 @@ use super::*;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Path {
     /// Model the path originates from
-    pub root: ModelId,
+    pub root: ModelRef,
 
     /// Traversal through the fields
     pub projection: Projection,
 }
 
 impl Path {
-    pub fn model(root: impl Into<ModelId>) -> Self {
+    pub fn model(root: impl Into<ModelRef>) -> Self {
         Self {
             root: root.into(),
             projection: Projection::identity(),
         }
     }
 
-    pub fn field(root: impl Into<ModelId>, field: usize) -> Self {
+    pub fn field(root: impl Into<ModelRef>, field: usize) -> Self {
         Self {
             root: root.into(),
             projection: Projection::single(field),
         }
     }
 
-    pub const fn from_index(root: ModelId, index: usize) -> Self {
+    pub fn from_index(root: impl Into<ModelRef>, index: usize) -> Self {
         Self {
-            root,
+            root: root.into(),
             projection: Projection::from_index(index),
         }
     }
@@ -44,8 +44,14 @@ impl Path {
         self.projection.len()
     }
 
+    /// Resolve the ModelRef to ModelId using the provided schema
+    pub fn resolve(&mut self, schema: &app::Schema) -> Result<()> {
+        self.root.resolve(schema)
+    }
+
     pub fn resolve_field<'a>(&self, schema: &'a app::Schema) -> &'a Field {
-        let expr_self = schema.model(self.root);
+        let model_id = self.root.model_id(); // Will panic if not resolved
+        let expr_self = schema.model(model_id);
         self.projection.resolve_field(schema, expr_self)
     }
 
@@ -56,11 +62,12 @@ impl Path {
     }
 
     pub fn into_stmt(self) -> Expr {
+        let model_id = self.root.model_id(); // Will panic if not resolved
         match self.projection.as_slice() {
-            [] => Expr::key(self.root),
+            [] => Expr::key(model_id),
             [field, project @ ..] => {
                 let mut ret = Expr::field(FieldId {
-                    model: self.root,
+                    model: model_id,
                     index: *field,
                 });
 

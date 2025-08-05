@@ -5,7 +5,7 @@ use std::fmt;
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub struct Id {
     /// The model the identifier is associated with.
-    model: ModelId,
+    model: ModelRef,
 
     /// How the identifier is represented
     repr: Repr,
@@ -31,23 +31,28 @@ impl Value {
 }
 
 impl Id {
-    pub fn from_int(model: ModelId, id: u64) -> Self {
+    pub fn from_int(model: impl Into<ModelRef>, id: u64) -> Self {
         Self {
-            model,
+            model: model.into(),
             repr: Repr::Int(id),
         }
     }
 
-    pub fn from_string(model: ModelId, string: String) -> Self {
+    pub fn from_string(model: impl Into<ModelRef>, string: String) -> Self {
         Self {
-            model,
+            model: model.into(),
             repr: Repr::String(string),
         }
     }
 
     /// The model this identifier represents
     pub fn model_id(&self) -> ModelId {
-        self.model
+        self.model.model_id() // Will panic if not resolved
+    }
+
+    /// Resolve ModelRef to ModelId using the provided schema
+    pub fn resolve(&mut self, schema: &crate::schema::app::Schema) -> Result<()> {
+        self.model.resolve(schema)
     }
 
     /// Return an integer representation of the record identifier.

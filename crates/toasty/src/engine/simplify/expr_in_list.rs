@@ -17,7 +17,7 @@ impl Simplify<'_> {
 
     fn rewrite_expr_in_list_when_model(&self, expr: &mut stmt::ExprInList) {
         if let stmt::Expr::Key(expr_key) = &mut *expr.expr {
-            let model = self.schema.app.model(expr_key.model);
+            let model = self.schema.app.model(expr_key.model.model_id());
 
             let [pk_field_id] = &model.primary_key.fields[..] else {
                 todo!()
