@@ -24,7 +24,7 @@ async fn sort_asc(s: impl Setup) {
     }
 
     let foos_asc: Vec<_> = Foo::all()
-        .order_by(Foo::FIELDS.order.asc())
+        .order_by(Foo::FIELDS.order().asc())
         .collect(&db)
         .await
         .unwrap();
@@ -36,7 +36,7 @@ async fn sort_asc(s: impl Setup) {
     }
 
     let foos_desc: Vec<_> = Foo::all()
-        .order_by(Foo::FIELDS.order.desc())
+        .order_by(Foo::FIELDS.order().desc())
         .collect(&db)
         .await
         .unwrap();
@@ -60,7 +60,7 @@ async fn paginate(s: impl Setup) {
     }
 
     let foos: Vec<_> = Foo::all()
-        .order_by(Foo::FIELDS.order.desc())
+        .order_by(Foo::FIELDS.order().desc())
         .paginate(10)
         .collect(&db)
         .await
@@ -72,7 +72,7 @@ async fn paginate(s: impl Setup) {
     }
 
     let foos: Vec<_> = Foo::all()
-        .order_by(Foo::FIELDS.order.desc())
+        .order_by(Foo::FIELDS.order().desc())
         .paginate(10)
         .after(90)
         .collect(&db)

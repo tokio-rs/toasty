@@ -71,7 +71,7 @@ async fn crud_person_self_referential(s: impl Setup) {
 
     // Try preloading this time
     let p1 = Person::filter_by_id(&p1.id)
-        .include(Person::FIELDS.children)
+        .include(Person::FIELDS.children())
         .get(&db)
         .await
         .unwrap();
