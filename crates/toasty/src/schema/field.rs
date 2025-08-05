@@ -72,8 +72,8 @@ impl Field {
         )
     }
 
-    /// Get the target TypeId if this is a relation field
-    pub fn relation_target(&self) -> Option<std::any::TypeId> {
+    /// Get the target ModelRef if this is a relation field
+    pub fn relation_target(&self) -> Option<toasty_core::stmt::ModelRef> {
         match &self.ty {
             FieldTy::BelongsTo(rel) => Some(rel.target),
             FieldTy::HasMany(rel) => Some(rel.target),

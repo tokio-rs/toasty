@@ -54,7 +54,13 @@ impl Builder {
         self.models
             .iter()
             .enumerate()
-            .map(|(index, schema_model)| (schema_model.type_id, app::ModelId(index)))
+            .map(|(index, schema_model)| {
+                let type_id = schema_model
+                    .model_ref
+                    .type_id()
+                    .expect("ModelRef must be unresolved (Type variant) to extract TypeId");
+                (type_id, app::ModelId(index))
+            })
             .collect()
     }
 
@@ -76,101 +82,117 @@ impl Builder {
                     index: field_index,
                 };
 
-                let field_ty = match &schema_field.ty {
-                    crate::schema::FieldTy::Primitive(primitive) => {
-                        app::FieldTy::Primitive(primitive.clone())
-                    }
-                    crate::schema::FieldTy::BelongsTo(belongs_to) => {
-                        // Convert TypeId to ModelId using the mapping
-                        let target_model_id = type_to_model_mapping
-                            .get(&belongs_to.target)
-                            .copied()
-                            .unwrap_or_else(|| {
-                                panic!("TypeId {:?} not found in mapping", belongs_to.target)
-                            });
+                let field_ty =
+                    match &schema_field.ty {
+                        crate::schema::FieldTy::Primitive(primitive) => {
+                            app::FieldTy::Primitive(primitive.clone())
+                        }
+                        crate::schema::FieldTy::BelongsTo(belongs_to) => {
+                            // Extract TypeId from ModelRef for mapping lookup
+                            let target_type_id = belongs_to.target.type_id().expect(
+                                "ModelRef must be unresolved (Type variant) to extract TypeId",
+                            );
 
-                        // Convert field names to FieldId references
-                        let foreign_key_fields = belongs_to
-                            .foreign_key
-                            .iter()
-                            .map(|fk_field| {
-                                // Find the source field index by name within this model
-                                let source_field_index = schema_model
-                                    .fields
-                                    .iter()
-                                    .position(|f| f.name == fk_field.source)
-                                    .unwrap_or_else(|| {
-                                        panic!(
-                                            "Foreign key source field '{}' not found in model",
-                                            fk_field.source
-                                        )
-                                    });
+                            // Convert TypeId to ModelId using the mapping
+                            let target_model_id = type_to_model_mapping
+                                .get(&target_type_id)
+                                .copied()
+                                .unwrap_or_else(|| {
+                                    panic!("TypeId {:?} not found in mapping", target_type_id)
+                                });
 
-                                // Store target field name for later resolution
-                                // We use usize::MAX as a placeholder since we need access to all models
-                                // to resolve target field names to indices (done in resolve_foreign_key_targets)
-                                app::ForeignKeyField {
-                                    source: app::FieldId {
-                                        model: model_id,
-                                        index: source_field_index,
-                                    },
-                                    target: app::FieldId {
-                                        model: target_model_id,
-                                        index: usize::MAX, // Placeholder - will be resolved later
-                                    },
-                                }
+                            // Convert field names to FieldId references
+                            let foreign_key_fields = belongs_to
+                                .foreign_key
+                                .iter()
+                                .map(|fk_field| {
+                                    // Find the source field index by name within this model
+                                    let source_field_index = schema_model
+                                        .fields
+                                        .iter()
+                                        .position(|f| f.name == fk_field.source)
+                                        .unwrap_or_else(|| {
+                                            panic!(
+                                                "Foreign key source field '{}' not found in model",
+                                                fk_field.source
+                                            )
+                                        });
+
+                                    // Store target field name for later resolution
+                                    // We use usize::MAX as a placeholder since we need access to all models
+                                    // to resolve target field names to indices (done in resolve_foreign_key_targets)
+                                    app::ForeignKeyField {
+                                        source: app::FieldId {
+                                            model: model_id,
+                                            index: source_field_index,
+                                        },
+                                        target: app::FieldId {
+                                            model: target_model_id,
+                                            index: usize::MAX, // Placeholder - will be resolved later
+                                        },
+                                    }
+                                })
+                                .collect();
+
+                            let foreign_key = app::ForeignKey {
+                                fields: foreign_key_fields,
+                            };
+
+                            app::FieldTy::BelongsTo(app::BelongsTo {
+                                target: target_model_id,
+                                expr_ty: belongs_to.expr_ty.clone(),
+                                pair: None, // Resolved later
+                                foreign_key,
                             })
-                            .collect();
+                        }
+                        crate::schema::FieldTy::HasMany(has_many) => {
+                            // Extract TypeId from ModelRef for mapping lookup
+                            let target_type_id = has_many.target.type_id().expect(
+                                "ModelRef must be unresolved (Type variant) to extract TypeId",
+                            );
 
-                        let foreign_key = app::ForeignKey {
-                            fields: foreign_key_fields,
-                        };
+                            // Convert TypeId to ModelId using the mapping
+                            let target_model_id = type_to_model_mapping
+                                .get(&target_type_id)
+                                .copied()
+                                .unwrap_or_else(|| {
+                                    panic!("TypeId {:?} not found in mapping", has_many.target)
+                                });
 
-                        app::FieldTy::BelongsTo(app::BelongsTo {
-                            target: target_model_id,
-                            expr_ty: belongs_to.expr_ty.clone(),
-                            pair: None, // Resolved later
-                            foreign_key,
-                        })
-                    }
-                    crate::schema::FieldTy::HasMany(has_many) => {
-                        // Convert TypeId to ModelId using the mapping
-                        let target_model_id = type_to_model_mapping
-                            .get(&has_many.target)
-                            .copied()
-                            .unwrap_or_else(|| {
-                                panic!("TypeId {:?} not found in mapping", has_many.target)
-                            });
+                            app::FieldTy::HasMany(app::HasMany {
+                                target: target_model_id,
+                                expr_ty: has_many.expr_ty.clone(),
+                                singular: has_many.singular.clone(),
+                                pair: app::FieldId {
+                                    model: app::ModelId(usize::MAX),
+                                    index: usize::MAX,
+                                }, // Placeholder
+                            })
+                        }
+                        crate::schema::FieldTy::HasOne(has_one) => {
+                            // Extract TypeId from ModelRef for mapping lookup
+                            let target_type_id = has_one.target.type_id().expect(
+                                "ModelRef must be unresolved (Type variant) to extract TypeId",
+                            );
 
-                        app::FieldTy::HasMany(app::HasMany {
-                            target: target_model_id,
-                            expr_ty: has_many.expr_ty.clone(),
-                            singular: has_many.singular.clone(),
-                            pair: app::FieldId {
-                                model: app::ModelId(usize::MAX),
-                                index: usize::MAX,
-                            }, // Placeholder
-                        })
-                    }
-                    crate::schema::FieldTy::HasOne(has_one) => {
-                        // Convert TypeId to ModelId using the mapping
-                        let target_model_id = type_to_model_mapping
-                            .get(&has_one.target)
-                            .copied()
-                            .unwrap_or_else(|| {
-                                panic!("TypeId {:?} not found in mapping", has_one.target)
-                            });
+                            // Convert TypeId to ModelId using the mapping
+                            let target_model_id = type_to_model_mapping
+                                .get(&target_type_id)
+                                .copied()
+                                .unwrap_or_else(|| {
+                                    panic!("TypeId {:?} not found in mapping", has_one.target)
+                                });
 
-                        app::FieldTy::HasOne(app::HasOne {
-                            target: target_model_id,
-                            expr_ty: has_one.expr_ty.clone(),
-                            pair: app::FieldId {
-                                model: app::ModelId(usize::MAX),
-                                index: usize::MAX,
-                            }, // Placeholder
-                        })
-                    }
-                };
+                            app::FieldTy::HasOne(app::HasOne {
+                                target: target_model_id,
+                                expr_ty: has_one.expr_ty.clone(),
+                                pair: app::FieldId {
+                                    model: app::ModelId(usize::MAX),
+                                    index: usize::MAX,
+                                }, // Placeholder
+                            })
+                        }
+                    };
 
                 app::Field {
                     id: field_id,

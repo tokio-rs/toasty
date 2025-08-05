@@ -1,5 +1,6 @@
 use super::*;
 use toasty_core::schema::{db, Name};
+use toasty_core::stmt::ModelRef;
 
 /// Represents a model's schema as known at macro compilation time.
 ///
@@ -10,8 +11,8 @@ use toasty_core::schema::{db, Name};
 /// - Resolved relation pairs (require cross-model analysis)
 #[derive(Debug, Clone)]
 pub struct Model {
-    /// TypeId of the model type (used for relation resolution)
-    pub type_id: std::any::TypeId,
+    /// ModelRef of the model type (used for relation resolution)
+    pub model_ref: ModelRef,
 
     /// Name of the model
     pub name: Name,
