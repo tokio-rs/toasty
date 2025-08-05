@@ -90,8 +90,8 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(FieldTy::BelongsTo(BelongsTo {
-                        target:  <#ty as #toasty::Relation>::Model::ID,
-                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::ID),
+                        target:  <#ty as #toasty::Relation>::Model::id(),
+                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::id()),
                         // The pair is populated at runtime.
                         pair: None,
                         foreign_key: ForeignKey {
@@ -105,8 +105,8 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(FieldTy::HasMany(HasMany {
-                        target: <#ty as #toasty::Relation>::Model::ID,
-                        expr_ty: Type::List(Box::new(Type::Model(<#ty as #toasty::Relation>::Model::ID))),
+                        target: <#ty as #toasty::Relation>::Model::id(),
+                        expr_ty: Type::List(Box::new(Type::Model(<#ty as #toasty::Relation>::Model::id()))),
                         singular: #singular_name,
                         // The pair is populated at runtime.
                         pair: FieldId {
@@ -120,8 +120,8 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(FieldTy::HasOne(HasOne {
-                        target: <#ty as #toasty::Relation>::Model::ID,
-                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::ID),
+                        target: <#ty as #toasty::Relation>::Model::id(),
+                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::id()),
                         // The pair is populated at runtime.
                         pair: FieldId {
                             model: ModelId(usize::MAX),

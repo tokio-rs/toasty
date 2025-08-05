@@ -90,7 +90,7 @@ impl Primitive for String {
 }
 
 impl<T: Model> Primitive for Id<T> {
-    const TYPE: stmt::Type = stmt::Type::Id(T::ID);
+    const TYPE: stmt::Type = stmt::Type::Id(T::id());
 
     fn load(value: stmt::Value) -> Result<Self> {
         match value {

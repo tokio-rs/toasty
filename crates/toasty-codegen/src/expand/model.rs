@@ -65,7 +65,9 @@ impl Expand<'_> {
             }
 
             impl #toasty::Model for #model_ident {
-                const ID: #toasty::ModelId = #toasty::ModelId(#id);
+                fn id() -> #toasty::ModelId {
+                    #toasty::ModelId(#id)
+                }
 
                 fn load(mut record: #toasty::ValueRecord) -> #toasty::Result<Self> {
                     Ok(Self {

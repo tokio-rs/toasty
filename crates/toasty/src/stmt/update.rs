@@ -11,9 +11,9 @@ impl<M: Model> Update<M> {
     pub fn new(mut selection: Select<M>) -> Self {
         if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
             let rows = std::mem::take(&mut values.rows);
-            let filter = stmt::Expr::in_list(stmt::Expr::key(M::ID), rows);
+            let filter = stmt::Expr::in_list(stmt::Expr::key(M::id()), rows);
             selection.untyped.body =
-                stmt::ExprSet::Select(Box::new(stmt::Select::new(M::ID, filter)));
+                stmt::ExprSet::Select(Box::new(stmt::Select::new(M::id(), filter)));
         }
 
         let mut stmt = selection.untyped.update();
@@ -63,7 +63,7 @@ impl<M: Model> Default for Update<M> {
     fn default() -> Self {
         Self {
             untyped: stmt::Update {
-                target: stmt::UpdateTarget::Model(M::ID),
+                target: stmt::UpdateTarget::Model(M::id()),
                 assignments: stmt::Assignments::default(),
                 filter: Some(stmt::Expr::from(false)),
                 condition: None,

@@ -16,7 +16,7 @@ impl<M: Model> Insert<M> {
     pub fn blank() -> Self {
         Self {
             untyped: stmt::Insert {
-                target: stmt::InsertTarget::Model(M::ID),
+                target: stmt::InsertTarget::Model(M::id()),
                 source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(vec![]).into()]),
                 returning: Some(stmt::Returning::Star),
             },
