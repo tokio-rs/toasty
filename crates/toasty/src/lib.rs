@@ -32,6 +32,7 @@ pub mod codegen_support {
     pub use crate::{
         batch::CreateMany,
         cursor::{Cursor, FromCursor},
+        model::generate_unique_id,
         relation::Relation,
         relation::{BelongsTo, HasMany, HasOne},
         stmt::{self, Id, IntoExpr, IntoInsert, IntoSelect, Path},

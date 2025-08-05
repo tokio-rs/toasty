@@ -9,7 +9,6 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let id = &self.tokenized_id;
         let query_struct_ident = &self.model.query_struct_ident;
         let create_struct_ident = &self.model.create_struct_ident;
         let update_struct_ident = &self.model.update_struct_ident;
@@ -66,7 +65,8 @@ impl Expand<'_> {
 
             impl #toasty::Model for #model_ident {
                 fn id() -> #toasty::ModelId {
-                    #toasty::ModelId(#id)
+                    static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
+                    *ID.get_or_init(|| #toasty::generate_unique_id())
                 }
 
                 fn load(mut record: #toasty::ValueRecord) -> #toasty::Result<Self> {

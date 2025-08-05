@@ -4,6 +4,20 @@ use toasty_core::{
     stmt,
 };
 
+/// Generate a unique model ID at runtime.
+///
+/// This function uses a global atomic counter to ensure each call returns
+/// a unique ModelId. IDs start at 0 and increment with each call.
+/// This is thread-safe and can be called concurrently.
+pub fn generate_unique_id() -> ModelId {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static NEXT_MODEL_ID: AtomicUsize = AtomicUsize::new(0);
+
+    let id = NEXT_MODEL_ID.fetch_add(1, Ordering::Relaxed);
+    ModelId(id)
+}
+
 pub trait Model: Sized {
     /// Unique identifier for this model within the schema.
     ///
