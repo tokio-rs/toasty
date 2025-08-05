@@ -24,7 +24,7 @@ impl Expand<'_> {
                 match &field.ty {
                     Primitive(ty) => {
                         quote! {
-                            #vis fn #field_ident() -> #toasty::Path<#ty> {
+                            #vis fn #field_ident(&self) -> #toasty::Path<#ty> {
                                 #toasty::Path::from_field_index::<#model_ident>(#field_offset)
                             }
                         }
@@ -33,7 +33,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
 
                         quote! {
-                            #vis fn #field_ident() -> <#ty as #toasty::Relation>::OneField {
+                            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField {
                                 <#ty as #toasty::Relation>::OneField::from_path(
                                     #toasty::Path::from_field_index::<#model_ident>(#field_offset)
                                 )
@@ -44,7 +44,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
 
                         quote! {
-                            #vis fn #field_ident() -> <#ty as #toasty::Relation>::ManyField {
+                            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField {
                                 <#ty as #toasty::Relation>::ManyField::from_path(
                                     #toasty::Path::from_field_index::<#model_ident>(#field_offset)
                                 )
@@ -55,7 +55,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
 
                         quote! {
-                            #vis fn #field_ident() -> <#ty as #toasty::Relation>::OneField {
+                            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField {
                                 <#ty as #toasty::Relation>::OneField::from_path(
                                     #toasty::Path::from_field_index::<#model_ident>(#field_offset)
                                 )
