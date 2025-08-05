@@ -3,7 +3,7 @@ use crate::{stmt::Id, Model, Result};
 use toasty_core::stmt;
 
 pub trait Primitive: Sized {
-    const TYPE: stmt::Type;
+    fn ty() -> stmt::Type;
     const NULLABLE: bool = false;
 
     fn load(value: stmt::Value) -> Result<Self>;
@@ -15,7 +15,9 @@ pub trait Primitive: Sized {
 }
 
 impl Primitive for i8 {
-    const TYPE: stmt::Type = stmt::Type::I8;
+    fn ty() -> stmt::Type {
+        stmt::Type::I8
+    }
 
     fn load(value: stmt::Value) -> Result<Self> {
         value.try_into()
@@ -23,7 +25,9 @@ impl Primitive for i8 {
 }
 
 impl Primitive for i16 {
-    const TYPE: stmt::Type = stmt::Type::I16;
+    fn ty() -> stmt::Type {
+        stmt::Type::I16
+    }
 
     fn load(value: stmt::Value) -> Result<Self> {
         value.try_into()
@@ -31,7 +35,9 @@ impl Primitive for i16 {
 }
 
 impl Primitive for i32 {
-    const TYPE: stmt::Type = stmt::Type::I32;
+    fn ty() -> stmt::Type {
+        stmt::Type::I32
+    }
 
     fn load(value: stmt::Value) -> Result<Self> {
         value.try_into()
@@ -39,7 +45,9 @@ impl Primitive for i32 {
 }
 
 impl Primitive for i64 {
-    const TYPE: stmt::Type = stmt::Type::I64;
+    fn ty() -> stmt::Type {
+        stmt::Type::I64
+    }
 
     fn load(value: stmt::Value) -> Result<Self> {
         value.try_into()
@@ -47,7 +55,9 @@ impl Primitive for i64 {
 }
 
 impl Primitive for u8 {
-    const TYPE: stmt::Type = stmt::Type::U8;
+    fn ty() -> stmt::Type {
+        stmt::Type::U8
+    }
 
     fn load(value: stmt::Value) -> Result<Self> {
         value.try_into()
@@ -55,7 +65,9 @@ impl Primitive for u8 {
 }
 
 impl Primitive for u16 {
-    const TYPE: stmt::Type = stmt::Type::U16;
+    fn ty() -> stmt::Type {
+        stmt::Type::U16
+    }
 
     fn load(value: stmt::Value) -> Result<Self> {
         value.try_into()
@@ -63,7 +75,9 @@ impl Primitive for u16 {
 }
 
 impl Primitive for u32 {
-    const TYPE: stmt::Type = stmt::Type::U32;
+    fn ty() -> stmt::Type {
+        stmt::Type::U32
+    }
 
     fn load(value: stmt::Value) -> Result<Self> {
         value.try_into()
@@ -71,7 +85,9 @@ impl Primitive for u32 {
 }
 
 impl Primitive for u64 {
-    const TYPE: stmt::Type = stmt::Type::U64;
+    fn ty() -> stmt::Type {
+        stmt::Type::U64
+    }
 
     fn load(value: stmt::Value) -> Result<Self> {
         value.try_into()
@@ -79,7 +95,9 @@ impl Primitive for u64 {
 }
 
 impl Primitive for String {
-    const TYPE: stmt::Type = stmt::Type::String;
+    fn ty() -> stmt::Type {
+        stmt::Type::String
+    }
 
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
@@ -90,7 +108,9 @@ impl Primitive for String {
 }
 
 impl<T: Model> Primitive for Id<T> {
-    const TYPE: stmt::Type = stmt::Type::Id(T::id());
+    fn ty() -> stmt::Type {
+        stmt::Type::Id(T::id())
+    }
 
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
@@ -101,7 +121,9 @@ impl<T: Model> Primitive for Id<T> {
 }
 
 impl<T: Primitive> Primitive for Option<T> {
-    const TYPE: stmt::Type = T::TYPE;
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
     const NULLABLE: bool = true;
 
     fn load(value: stmt::Value) -> Result<Self> {

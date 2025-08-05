@@ -66,7 +66,7 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
                     field_ty = quote!(FieldTy::Primitive(FieldPrimitive {
-                        ty: <#ty as #toasty::stmt::Primitive>::TYPE,
+                        ty: <#ty as #toasty::stmt::Primitive>::ty(),
                         storage_ty: #storage_ty,
                     }));
                 }
