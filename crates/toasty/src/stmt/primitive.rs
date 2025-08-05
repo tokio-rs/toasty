@@ -10,84 +10,33 @@ pub trait Primitive: Sized {
     fn load(value: stmt::Value) -> Result<Self>;
 }
 
-impl Primitive for i8 {
-    fn ty() -> stmt::Type {
-        stmt::Type::I8
-    }
+/// Macro to generate Primitive implementations for numeric types that use `try_into()`
+macro_rules! impl_primitive_numeric {
+    ($($ty:ty => $stmt_ty:ident),* $(,)?) => {
+        $(
+            impl Primitive for $ty {
+                fn ty() -> stmt::Type {
+                    stmt::Type::$stmt_ty
+                }
 
-    fn load(value: stmt::Value) -> Result<Self> {
-        value.try_into()
-    }
+                fn load(value: stmt::Value) -> Result<Self> {
+                    value.try_into()
+                }
+            }
+        )*
+    };
 }
 
-impl Primitive for i16 {
-    fn ty() -> stmt::Type {
-        stmt::Type::I16
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        value.try_into()
-    }
-}
-
-impl Primitive for i32 {
-    fn ty() -> stmt::Type {
-        stmt::Type::I32
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        value.try_into()
-    }
-}
-
-impl Primitive for i64 {
-    fn ty() -> stmt::Type {
-        stmt::Type::I64
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        value.try_into()
-    }
-}
-
-impl Primitive for u8 {
-    fn ty() -> stmt::Type {
-        stmt::Type::U8
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        value.try_into()
-    }
-}
-
-impl Primitive for u16 {
-    fn ty() -> stmt::Type {
-        stmt::Type::U16
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        value.try_into()
-    }
-}
-
-impl Primitive for u32 {
-    fn ty() -> stmt::Type {
-        stmt::Type::U32
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        value.try_into()
-    }
-}
-
-impl Primitive for u64 {
-    fn ty() -> stmt::Type {
-        stmt::Type::U64
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        value.try_into()
-    }
+// Generate implementations for all numeric types
+impl_primitive_numeric! {
+    i8 => I8,
+    i16 => I16,
+    i32 => I32,
+    i64 => I64,
+    u8 => U8,
+    u16 => U16,
+    u32 => U32,
+    u64 => U64,
 }
 
 impl Primitive for String {
