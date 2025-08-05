@@ -3,15 +3,11 @@ use crate::{stmt::Id, Model, Result};
 use toasty_core::stmt;
 
 pub trait Primitive: Sized {
-    fn ty() -> stmt::Type;
     const NULLABLE: bool = false;
 
-    fn load(value: stmt::Value) -> Result<Self>;
+    fn ty() -> stmt::Type;
 
-    /// Returns `true` if the primitive represents a nullable type (e.g. `Option`).
-    fn nullable() -> bool {
-        false
-    }
+    fn load(value: stmt::Value) -> Result<Self>;
 }
 
 impl Primitive for i8 {
