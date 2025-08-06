@@ -1,5 +1,4 @@
-use tests::{models, tests, Setup};
-
+use tests::{assert_err, models, tests, Setup};
 use toasty::stmt::Id;
 
 async fn specify_constrained_string_field(s: impl Setup) {

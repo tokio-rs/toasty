@@ -1,5 +1,4 @@
 use tests::{models, tests, Setup};
-
 use toasty::stmt::Id;
 
 async fn crud_user_optional_profile_one_direction(s: impl Setup) {

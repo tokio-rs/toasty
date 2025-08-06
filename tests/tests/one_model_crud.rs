@@ -1,6 +1,5 @@
+use std_util::{assert_err, assert_none, assert_ok, assert_unique, num::NumUtil, slice::SliceUtil};
 use tests::{models, tests, Setup};
-
-use std_util::{assert_err, assert_none, assert_ok, assert_unique, num::NumUtil};
 use toasty::stmt::Id;
 
 const MORE: i32 = 10;
@@ -39,7 +38,7 @@ async fn crud_no_fields(s: impl Setup) {
         ids.push(foo.id);
     }
 
-    std_util::assert_unique!(ids);
+    assert_unique!(ids);
 
     for id in &ids {
         let read = Foo::filter_by_id(id)
@@ -123,7 +122,7 @@ async fn crud_one_string(s: impl Setup) {
         ids.push(foo.id);
     }
 
-    std_util::assert_unique!(ids);
+    assert_unique!(ids);
 
     for (i, id) in ids.iter().enumerate() {
         let read = Foo::filter_by_id(id)

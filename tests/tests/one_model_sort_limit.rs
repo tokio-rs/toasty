@@ -1,5 +1,4 @@
 use tests::{models, tests, Setup};
-
 use toasty::stmt::Id;
 
 #[derive(toasty::Model)]
