@@ -1,4 +1,4 @@
-use super::*;
+use super::{ColumnId, IndexId};
 
 #[derive(Debug, PartialEq)]
 pub struct PrimaryKey {

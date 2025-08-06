@@ -1,6 +1,5 @@
-use super::*;
-
-use crate::schema::db::{IndexId, TableId};
+use super::Operation;
+use crate::{schema::db::{IndexId, TableId}, stmt};
 
 #[derive(Debug)]
 pub struct FindPkByIndex {

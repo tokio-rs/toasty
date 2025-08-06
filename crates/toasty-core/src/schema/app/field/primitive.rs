@@ -1,6 +1,4 @@
-use super::*;
-
-use crate::schema::db;
+use crate::{schema::db, stmt};
 
 #[derive(Debug, Clone)]
 pub struct FieldPrimitive {

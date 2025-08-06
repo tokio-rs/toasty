@@ -1,4 +1,4 @@
-use super::*;
+use super::Operation;
 use crate::{schema::db::TableId, stmt};
 
 #[derive(Debug)]

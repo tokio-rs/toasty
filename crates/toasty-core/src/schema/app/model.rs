@@ -1,7 +1,5 @@
-use crate::{driver, Result};
-
-use super::*;
-
+use crate::{driver, Result, stmt};
+use super::{Field, FieldId, FieldPrimitive, FieldTy, Index, Name, PrimaryKey};
 use std::fmt;
 
 #[derive(Debug, Clone)]

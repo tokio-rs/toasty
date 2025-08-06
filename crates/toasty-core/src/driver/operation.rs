@@ -22,7 +22,6 @@ pub use transaction::Transaction;
 mod update_by_key;
 pub use update_by_key::UpdateByKey;
 
-use super::*;
 
 #[derive(Debug)]
 pub enum Operation {

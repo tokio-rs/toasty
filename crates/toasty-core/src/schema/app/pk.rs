@@ -1,4 +1,4 @@
-use super::*;
+use super::{FieldId, IndexId};
 
 #[derive(Debug, Clone)]
 pub struct PrimaryKey {

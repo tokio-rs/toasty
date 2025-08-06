@@ -1,4 +1,5 @@
-use super::*;
+use super::{table, TableId, Type};
+use crate::stmt;
 
 use std::fmt;
 
