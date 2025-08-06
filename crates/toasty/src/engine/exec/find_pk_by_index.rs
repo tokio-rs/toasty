@@ -1,5 +1,6 @@
-use super::{operation, plan, simplify, Exec, Result};
+use super::{operation, plan, Exec, Result};
 use crate::driver::Rows;
+use crate::engine::simplify;
 
 impl Exec<'_> {
     pub(super) async fn action_find_pk_by_index(

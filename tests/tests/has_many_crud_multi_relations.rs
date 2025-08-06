@@ -1,4 +1,4 @@
-use tests::*;
+use tests::{models, tests, Setup};
 
 use std::collections::HashMap;
 use toasty::stmt::Id;

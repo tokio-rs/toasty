@@ -1,4 +1,4 @@
-use tests::*;
+use tests::{models, tests, Setup};
 use toasty::stmt::Id;
 
 fn assert_sync_send<T: Send>(val: T) -> T {

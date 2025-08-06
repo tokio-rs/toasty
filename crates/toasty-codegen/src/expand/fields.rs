@@ -1,6 +1,5 @@
 use super::{util, Expand};
-use crate::schema::FieldTy::*;
-
+use crate::schema::FieldTy::{BelongsTo, HasMany, HasOne, Primitive};
 use proc_macro2::TokenStream;
 use quote::quote;
 

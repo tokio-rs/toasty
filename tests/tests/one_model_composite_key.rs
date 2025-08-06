@@ -1,4 +1,4 @@
-use tests::*;
+use tests::{models, tests, Setup};
 
 async fn batch_get_by_key(s: impl Setup) {
     #[derive(Debug, toasty::Model)]

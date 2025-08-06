@@ -13,9 +13,16 @@ mod update_by_key;
 mod var_store;
 pub(crate) use var_store::VarStore;
 
-use crate::{driver::operation, engine::*, Result};
-
+use crate::{
+    driver::operation,
+    engine::{
+        eval,
+        plan::{self, Action},
+    },
+    Db, Result,
+};
 use toasty_core::stmt;
+use toasty_core::stmt::ValueStream;
 
 struct Exec<'a> {
     db: &'a Db,

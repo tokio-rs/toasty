@@ -1,4 +1,4 @@
-use super::*;
+use super::{Name, Statement};
 
 use toasty_core::schema::db::Table;
 

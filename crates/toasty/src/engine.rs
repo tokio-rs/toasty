@@ -2,7 +2,7 @@ mod eval;
 mod exec;
 
 mod plan;
-use plan::{Action, Plan};
+use plan::Plan;
 
 mod planner;
 mod simplify;

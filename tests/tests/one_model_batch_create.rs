@@ -1,4 +1,4 @@
-use tests::*;
+use tests::{models, tests, Setup};
 use toasty::stmt::Id;
 
 #[derive(Debug, toasty::Model)]

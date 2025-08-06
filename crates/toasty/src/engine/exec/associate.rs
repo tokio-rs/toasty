@@ -1,4 +1,5 @@
-use super::{plan, Exec, Result, ValueStream};
+use super::{plan, Exec, Result};
+use toasty_core::stmt::ValueStream;
 use toasty_core::{schema::app::FieldTy, stmt};
 
 impl Exec<'_> {

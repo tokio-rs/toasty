@@ -11,12 +11,10 @@ impl SetOp {}
 
 impl fmt::Display for SetOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use SetOp::*;
-
         match self {
-            Union => "UNION".fmt(f),
-            Except => "EXCEPT".fmt(f),
-            Intersect => "INTERSECT".fmt(f),
+            SetOp::Union => "UNION".fmt(f),
+            SetOp::Except => "EXCEPT".fmt(f),
+            SetOp::Intersect => "INTERSECT".fmt(f),
         }
     }
 }

@@ -1,4 +1,4 @@
-use tests::*;
+use tests::{models, tests, Setup};
 
 async fn different_field_name(s: impl Setup) {
     #[derive(Debug, toasty::Model)]

@@ -1,4 +1,4 @@
-use tests::*;
+use tests::{models, tests, Setup};
 
 async fn query_index_eq(s: impl Setup) {
     #[derive(Debug, toasty::Model)]

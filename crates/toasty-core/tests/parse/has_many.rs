@@ -1,6 +1,5 @@
 use super::util::field;
-
-use toasty_schema::*;
+use toasty_schema::{relation, Auto, Field, FieldId, Model, ModelId, Schema, Type};
 
 #[test]
 fn user_todo() {

@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    ddb_key_schema, ddb_ty, AttributeDefinition, DynamoDb, GlobalSecondaryIndex, Projection,
+    ProjectionType, ProvisionedThroughput, Result, Schema, Table,
+};
 
 impl DynamoDb {
     pub(crate) async fn create_table(

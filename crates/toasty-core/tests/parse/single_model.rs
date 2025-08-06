@@ -1,5 +1,5 @@
-use super::util::*;
-
+use super::util::{field, hash_index_field, index};
+use toasty_schema::{Auto, Field, Index, Model, ModelId, Schema, Type};
 use toasty_schema::*;
 
 #[test]
