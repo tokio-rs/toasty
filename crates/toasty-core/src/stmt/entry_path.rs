@@ -1,4 +1,4 @@
-use super::*;
+use super::{projection, Projection};
 
 pub trait EntryPath {
     type Iter: Iterator<Item = usize>;

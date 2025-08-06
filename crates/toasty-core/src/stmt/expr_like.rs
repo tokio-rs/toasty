@@ -1,4 +1,4 @@
-use super::*;
+use super::{Expr, ExprPattern};
 
 /// Tests if the string expression matches `pattern`.
 #[derive(Debug, Clone)]

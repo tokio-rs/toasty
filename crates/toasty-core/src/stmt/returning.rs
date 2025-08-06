@@ -1,4 +1,5 @@
-use super::*;
+use super::Expr;
+use crate::stmt;
 
 /// TODO: rename since this is also used in `Select`?
 #[derive(Debug, Clone)]

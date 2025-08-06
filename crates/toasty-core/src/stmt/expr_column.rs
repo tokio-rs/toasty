@@ -1,4 +1,5 @@
-use super::*;
+use super::Expr;
+use crate::schema::db::{Column, ColumnId};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ExprColumn {
