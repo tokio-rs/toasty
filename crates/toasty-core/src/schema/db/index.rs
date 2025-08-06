@@ -1,4 +1,5 @@
-use super::*;
+use super::{Column, ColumnId, Schema, TableId};
+use crate::stmt;
 
 use std::fmt;
 

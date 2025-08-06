@@ -1,8 +1,10 @@
 mod table;
 
-use super::*;
-
+use super::{app, db, mapping, Result};
+use crate::schema::{ColumnId, Mapping, Schema, Table, TableId};
+use crate::{driver, stmt};
 use indexmap::IndexMap;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Builder {

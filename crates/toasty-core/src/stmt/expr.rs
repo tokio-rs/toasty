@@ -1,4 +1,11 @@
-use super::{expr_reference::ExprReference, *};
+use super::{
+    expr_reference::ExprReference, substitute, visit_mut, Entry, EntryMut, EntryPath, ExprAnd,
+    ExprArg, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprOr, ExprPattern,
+    ExprProject, ExprRecord, ExprStmt, ExprTy, Node, Projection, Type, Value, Visit, VisitMut,
+};
+use crate::schema::app::{Field, FieldId};
+use std::fmt;
 
 #[derive(Clone)]
 pub enum Expr {

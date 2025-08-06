@@ -1,4 +1,5 @@
-use super::*;
+use super::{InsertTarget, Node, Query, Returning, Statement, Visit, VisitMut};
+use crate::stmt;
 
 #[derive(Debug, Clone)]
 pub struct Insert {

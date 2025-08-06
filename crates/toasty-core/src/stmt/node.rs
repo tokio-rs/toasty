@@ -1,5 +1,4 @@
-use super::*;
-
+use super::{Visit, VisitMut};
 use std::fmt;
 
 pub trait Node: fmt::Debug {

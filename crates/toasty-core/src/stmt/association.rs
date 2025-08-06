@@ -1,4 +1,4 @@
-use super::*;
+use super::{Path, Query};
 
 #[derive(Debug, Clone)]
 pub struct Association {

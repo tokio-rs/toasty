@@ -1,10 +1,8 @@
 mod primitive;
 pub use primitive::FieldPrimitive;
 
-use crate::{driver, Result};
-
-use super::*;
-
+use super::{Auto, BelongsTo, Constraint, HasMany, HasOne, Model, ModelId, Schema};
+use crate::{driver, stmt, Result};
 use std::fmt;
 
 #[derive(Debug, Clone)]

@@ -30,8 +30,4 @@ pub use relation::{BelongsTo, HasMany, HasOne};
 mod schema;
 pub use schema::Schema;
 
-use super::{
-    db::{IndexOp, IndexScope},
-    Name,
-};
-use crate::stmt;
+use super::Name;

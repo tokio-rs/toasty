@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    substitute, Expr, Node, Path, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut,
+};
+use crate::schema::db::TableId;
 
 #[derive(Debug, Clone)]
 pub struct Select {

@@ -7,7 +7,7 @@ pub use response::{Response, Rows};
 pub mod operation;
 pub use operation::Operation;
 
-use crate::{async_trait, schema::db::Schema, stmt};
+use crate::{async_trait, schema::db::Schema};
 
 use std::{fmt::Debug, sync::Arc};
 

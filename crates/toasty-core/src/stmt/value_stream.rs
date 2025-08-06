@@ -1,4 +1,4 @@
-use super::*;
+use super::Value;
 
 use std::{
     collections::VecDeque,
@@ -272,7 +272,7 @@ impl Buffer {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Buffer, ValueStream};
 
     #[test]
     fn default() {

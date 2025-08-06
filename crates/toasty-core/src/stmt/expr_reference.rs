@@ -1,4 +1,4 @@
-use super::*;
+use crate::schema::app::{FieldId, ModelId};
 use std::fmt;
 
 #[derive(Debug, Clone)]

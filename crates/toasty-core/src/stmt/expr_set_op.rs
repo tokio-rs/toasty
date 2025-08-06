@@ -1,4 +1,4 @@
-use super::*;
+use super::{substitute, ExprSet, SetOp};
 
 #[derive(Debug, Clone)]
 pub struct ExprSetOp {

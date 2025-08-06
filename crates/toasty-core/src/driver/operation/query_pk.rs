@@ -1,6 +1,8 @@
-use super::*;
-
-use crate::schema::db::{ColumnId, TableId};
+use super::Operation;
+use crate::{
+    schema::db::{ColumnId, TableId},
+    stmt,
+};
 
 #[derive(Debug)]
 pub struct QueryPk {

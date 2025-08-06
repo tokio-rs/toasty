@@ -1,4 +1,4 @@
-use super::*;
+use super::{Expr, Projection};
 
 use indexmap::{Equivalent, IndexMap};
 use std::{hash::Hash, ops};

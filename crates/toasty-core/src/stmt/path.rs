@@ -1,6 +1,5 @@
-use crate::schema::app;
-
-use super::*;
+use super::{Expr, Projection};
+use crate::schema::app::{self, Field, FieldId, ModelId};
 
 /// Describes a traversal through fields.
 ///

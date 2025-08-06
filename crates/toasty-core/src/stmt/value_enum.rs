@@ -1,4 +1,4 @@
-use super::*;
+use super::{Value, ValueRecord};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValueEnum {

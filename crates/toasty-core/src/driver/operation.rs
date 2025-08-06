@@ -22,8 +22,6 @@ pub use transaction::Transaction;
 mod update_by_key;
 pub use update_by_key::UpdateByKey;
 
-use super::*;
-
 #[derive(Debug)]
 pub enum Operation {
     /// Create a new record. This will always be a lowered `stmt::Insert`

@@ -1,4 +1,4 @@
-use super::*;
+use super::{Expr, ExprArg, Value};
 
 pub trait Input {
     fn resolve_arg(&mut self, expr_arg: &ExprArg) -> Expr;

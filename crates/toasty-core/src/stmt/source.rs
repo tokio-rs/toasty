@@ -1,4 +1,8 @@
-use super::*;
+use super::{Association, Path, TableRef, TableWithJoins};
+use crate::schema::{
+    app::{Model, ModelId},
+    db::TableId,
+};
 
 #[derive(Debug, Clone)]
 pub enum Source {

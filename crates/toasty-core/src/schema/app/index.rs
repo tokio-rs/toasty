@@ -1,4 +1,5 @@
-use super::*;
+use super::{FieldId, ModelId};
+use crate::schema::db::{IndexOp, IndexScope};
 
 #[derive(Debug, Clone)]
 pub struct Index {

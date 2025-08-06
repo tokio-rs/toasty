@@ -1,4 +1,5 @@
-use super::*;
+use super::{Expr, Node, Query, Returning, Source, Statement, Visit, VisitMut};
+use crate::stmt;
 
 #[derive(Debug, Clone)]
 pub struct Delete {

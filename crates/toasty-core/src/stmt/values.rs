@@ -1,4 +1,4 @@
-use super::*;
+use super::{substitute, Expr, ExprSet, Query};
 
 /// Set of values to insert
 #[derive(Debug, Default, Clone)]
