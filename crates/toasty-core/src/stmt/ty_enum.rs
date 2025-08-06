@@ -1,4 +1,4 @@
-use super::*;
+use super::Type;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct TypeEnum {

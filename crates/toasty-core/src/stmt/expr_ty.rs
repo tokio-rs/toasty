@@ -1,4 +1,4 @@
-use super::*;
+use super::{Expr, Type};
 
 #[derive(Debug, Clone)]
 pub struct ExprTy {

@@ -1,4 +1,4 @@
-use super::*;
+use super::{Direction, Expr};
 
 #[derive(Debug, Clone)]
 pub struct OrderByExpr {

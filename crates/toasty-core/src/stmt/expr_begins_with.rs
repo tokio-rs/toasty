@@ -1,4 +1,4 @@
-use super::*;
+use super::{Expr, ExprPattern};
 
 #[derive(Debug, Clone)]
 pub struct ExprBeginsWith {

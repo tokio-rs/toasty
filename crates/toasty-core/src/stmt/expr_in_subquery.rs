@@ -1,4 +1,4 @@
-use super::*;
+use super::{Expr, Query};
 
 #[derive(Debug, Clone)]
 pub struct ExprInSubquery {

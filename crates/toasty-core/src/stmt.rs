@@ -214,7 +214,7 @@ use crate::{
         app::{Field, FieldId, Model, ModelId},
         db::{Column, ColumnId, TableId},
     },
-    stmt, Error, Result,
+    stmt, Result,
 };
 
 use std::fmt;

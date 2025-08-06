@@ -1,4 +1,4 @@
-use super::*;
+use super::{Join, TableRef};
 
 #[derive(Debug, Clone)]
 pub struct TableWithJoins {
