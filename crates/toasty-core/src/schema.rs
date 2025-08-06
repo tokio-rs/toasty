@@ -13,8 +13,6 @@ pub use name::Name;
 
 mod verify;
 
-use crate::*;
-
 use app::ModelId;
 use db::{ColumnId, Table, TableId};
 
