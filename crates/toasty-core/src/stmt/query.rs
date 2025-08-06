@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    substitute, Delete, Expr, ExprSet, ExprSetOp, Limit, Node, OrderBy, Path, Returning, Select,
+    SetOp, Source, Statement, Update, UpdateTarget, Values, Visit, VisitMut, With,
+};
+use crate::stmt;
 
 #[derive(Debug, Clone)]
 pub struct Query {

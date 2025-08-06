@@ -1,6 +1,14 @@
 #![allow(unused_variables)]
 
-use super::*;
+use super::{
+    Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
+    ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprFunc, ExprInList, ExprInSubquery,
+    ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
+    ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
+    JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
+    Source, SourceModel, Statement, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value,
+    ValueRecord, Values, With,
+};
 
 pub trait Visit {
     fn visit<N: Node>(&mut self, i: &N)

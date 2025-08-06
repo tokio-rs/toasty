@@ -1,4 +1,8 @@
-use super::*;
+use super::{Assignments, Expr, Node, Query, Returning, Statement, Visit, VisitMut};
+use crate::{
+    schema::{app::ModelId, db::TableId},
+    stmt,
+};
 
 #[derive(Debug, Clone)]
 pub struct Update {
