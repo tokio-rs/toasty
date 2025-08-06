@@ -1,4 +1,4 @@
-use super::*;
+use super::{PathFieldSet, Type, Value, ValueRecord};
 
 /// A typed record, indicating the record represents a specific model (or a
 /// subset of its fields).

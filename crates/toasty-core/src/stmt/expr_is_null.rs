@@ -1,4 +1,4 @@
-use super::*;
+use super::Expr;
 
 #[derive(Debug, Clone)]
 pub struct ExprIsNull {

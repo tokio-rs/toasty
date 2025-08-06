@@ -1,5 +1,7 @@
-use super::*;
-use crate::schema::app;
+use crate::schema::{
+    app::{self, Field, FieldId, Model},
+    db::ColumnId,
+};
 
 use std::{fmt, ops};
 
