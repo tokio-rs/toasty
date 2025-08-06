@@ -1,9 +1,9 @@
-use super::*;
-
-use crate::Result;
-use db::ColumnId;
-
+use super::{eval, plan, Insertion, Planner, Result};
 use std::collections::hash_map::Entry;
+use toasty_core::{
+    schema::{app, db::ColumnId},
+    stmt,
+};
 
 /// Process the scope component of an insert statement.
 struct ApplyInsertScope<'a> {

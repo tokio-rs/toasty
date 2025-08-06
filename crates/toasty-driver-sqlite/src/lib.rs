@@ -1,3 +1,8 @@
+use rusqlite::Connection;
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 use toasty_core::{
     driver::{
         operation::{Operation, Transaction},
@@ -7,12 +12,6 @@ use toasty_core::{
     stmt, Result,
 };
 use toasty_sql as sql;
-
-use rusqlite::Connection;
-use std::{
-    path::Path,
-    sync::{Arc, Mutex},
-};
 use url::Url;
 
 #[derive(Debug)]

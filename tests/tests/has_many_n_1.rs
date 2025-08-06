@@ -1,4 +1,4 @@
-use tests::*;
+use tests::{tests, Setup};
 // use toasty::stmt::Id;
 
 // What is this testing?

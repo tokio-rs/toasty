@@ -3,13 +3,12 @@
 mod value;
 pub(crate) use value::Value;
 
-use std::sync::Arc;
-
 use mysql_async::{
     consts::ColumnType,
     prelude::{Queryable, ToValue},
     Pool,
 };
+use std::sync::Arc;
 use toasty_core::{
     driver::{operation::Transaction, Capability, Operation, Response},
     schema::db::{Schema, Table},
@@ -17,7 +16,6 @@ use toasty_core::{
     Driver, Result,
 };
 use toasty_sql as sql;
-
 use url::Url;
 
 #[derive(Debug)]

@@ -1,6 +1,7 @@
-use super::*;
-
+use super::{IntoExpr, IntoSelect, Path, Select, Statement};
+use crate::Model;
 use std::{fmt, marker::PhantomData};
+use toasty_core::stmt;
 
 pub struct Association<T: ?Sized> {
     pub(crate) untyped: stmt::Association,

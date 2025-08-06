@@ -1,6 +1,7 @@
-use super::*;
-
+use super::Select;
+use crate::Model;
 use std::{fmt, marker::PhantomData};
+use toasty_core::stmt;
 
 pub struct Update<M> {
     pub(crate) untyped: stmt::Update,

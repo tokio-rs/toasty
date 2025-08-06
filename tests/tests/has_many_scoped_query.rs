@@ -1,7 +1,6 @@
-use tests::*;
-use toasty::stmt::Id;
-
 use std::collections::HashSet;
+use tests::{assert_eq_unordered, models, tests, Setup};
+use toasty::stmt::Id;
 
 async fn scoped_query_eq(s: impl Setup) {
     #[derive(Debug, toasty::Model)]

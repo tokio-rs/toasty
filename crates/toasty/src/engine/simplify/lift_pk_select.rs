@@ -1,7 +1,7 @@
-use super::*;
-use toasty_core::schema::app::FieldId;
-
-use toasty_core::schema::*;
+use toasty_core::{
+    schema::{app::FieldId, Schema},
+    stmt,
+};
 
 // TODO: move this to a better location
 pub(crate) fn lift_key_select(

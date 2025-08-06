@@ -1,6 +1,5 @@
-use super::*;
-
-use crate::schema::db::TableId;
+use super::{eval, stmt, Action, Input};
+use toasty_core::schema::db::TableId;
 
 /// Input is the key to delete
 #[derive(Debug)]

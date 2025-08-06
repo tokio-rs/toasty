@@ -1,4 +1,4 @@
-use super::*;
+use super::{plan, Exec, Result};
 
 impl Exec<'_> {
     pub(super) async fn action_batch_write(&mut self, action: &plan::BatchWrite) -> Result<()> {

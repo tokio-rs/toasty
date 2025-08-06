@@ -1,4 +1,5 @@
-use super::*;
+use super::{Expr, Value};
+use toasty_core::stmt;
 
 pub trait IntoExpr<T: ?Sized> {
     fn into_expr(self) -> Expr<T>;

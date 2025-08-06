@@ -1,6 +1,6 @@
-use super::*;
+use super::{eval, Action, Input, Output};
 
-use crate::schema::db::{ColumnId, TableId};
+use toasty_core::schema::db::{ColumnId, TableId};
 
 /// Get a model by key
 #[derive(Debug)]

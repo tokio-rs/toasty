@@ -1,4 +1,4 @@
-use super::*;
+use super::{stmt, Action};
 
 #[derive(Debug)]
 pub(crate) struct SetVar {

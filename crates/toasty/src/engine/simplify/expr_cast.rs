@@ -1,4 +1,5 @@
-use super::*;
+use super::Simplify;
+use toasty_core::stmt;
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_cast(&self, expr: &mut stmt::ExprCast) -> Option<stmt::Expr> {

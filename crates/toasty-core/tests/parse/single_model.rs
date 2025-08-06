@@ -1,6 +1,5 @@
-use super::util::*;
-
-use toasty_schema::*;
+use super::util::{field, hash_index_field, index};
+use toasty_schema::{Auto, Field, Index, Model, ModelId, Schema, Type};
 
 #[test]
 fn empty() {

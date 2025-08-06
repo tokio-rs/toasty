@@ -1,6 +1,4 @@
-use super::*;
-
-use stmt::{self, Projection, Value};
+use toasty_core::stmt::{self, Projection, Value};
 
 pub trait Input {
     fn resolve_arg(&mut self, expr_arg: &stmt::ExprArg, projection: &Projection) -> Value;

@@ -1,5 +1,4 @@
-use toasty_schema::*;
-
+use toasty_schema::{Auto, Field, FieldId, Index, IndexField, IndexId, IndexKind, ModelId, Schema, Type};
 use std::path::{Path, PathBuf};
 
 const ROOT: &str = env!("CARGO_MANIFEST_DIR");

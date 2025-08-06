@@ -1,6 +1,6 @@
-use super::*;
-
+use super::{Insert, IntoExpr};
 use std::marker::PhantomData;
+use toasty_core::stmt;
 
 #[derive(Debug)]
 pub struct Expr<T: ?Sized> {

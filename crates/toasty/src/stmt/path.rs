@@ -1,8 +1,7 @@
-use super::*;
-
-use toasty_core::stmt::{Direction, OrderByExpr};
-
-use std::fmt;
+use super::{Expr, IntoExpr, IntoSelect};
+use crate::Model;
+use std::{fmt, marker::PhantomData};
+use toasty_core::stmt::{self, Direction, OrderByExpr};
 
 pub struct Path<T: ?Sized> {
     pub(super) untyped: stmt::Path,

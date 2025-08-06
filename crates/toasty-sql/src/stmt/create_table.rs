@@ -1,4 +1,4 @@
-use super::*;
+use super::{ColumnDef, Name, Statement};
 
 use toasty_core::{driver::Capability, schema::db::Table, stmt};
 

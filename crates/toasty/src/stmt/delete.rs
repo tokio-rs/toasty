@@ -1,4 +1,7 @@
-use super::*;
+use super::Statement;
+use crate::Model;
+use std::marker::PhantomData;
+use toasty_core::stmt;
 
 pub struct Delete<M: ?Sized> {
     pub(crate) untyped: stmt::Delete,

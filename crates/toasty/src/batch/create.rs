@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{stmt, Cursor, Db, Model, Result};
 
 pub struct CreateMany<M: Model> {
     /// The builder holds an `Insert` statement which can create multiple

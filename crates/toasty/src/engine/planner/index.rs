@@ -1,9 +1,11 @@
-use super::*;
-
-use db::{Index, Table};
-
+use super::Planner;
+use crate::driver::Capability;
 use by_address::ByAddress;
-use std::collections::hash_map;
+use std::collections::{hash_map, HashMap};
+use toasty_core::{
+    schema::db::{Index, Table},
+    stmt,
+};
 
 /*
 1) Match all restrictions with related indices.

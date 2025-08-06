@@ -1,6 +1,5 @@
-use super::*;
-
-use crate::schema::db::{IndexId, TableId};
+use super::{stmt, Action, Input, Output};
+use toasty_core::schema::db::{IndexId, TableId};
 
 /// Schema: `self` references [index-fields, input-fields] flattened
 #[derive(Debug)]

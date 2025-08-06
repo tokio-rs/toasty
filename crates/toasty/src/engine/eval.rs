@@ -7,8 +7,8 @@ pub(crate) use convert::Convert;
 mod input;
 pub(crate) use input::Input;
 
-use super::*;
-use crate::engine::ty;
+use crate::{engine::ty, Result};
+use toasty_core::stmt;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Func<T = stmt::Expr> {

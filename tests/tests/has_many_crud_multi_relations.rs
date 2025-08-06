@@ -1,6 +1,5 @@
-use tests::*;
-
 use std::collections::HashMap;
+use tests::{assert_empty, models, tests, Setup};
 use toasty::stmt::Id;
 
 async fn crud_user_todos_categories(s: impl Setup) {

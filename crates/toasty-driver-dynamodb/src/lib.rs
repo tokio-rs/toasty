@@ -1,10 +1,7 @@
 mod op;
 
 use toasty_core::{
-    driver::{
-        operation::{self, Operation},
-        Capability, Driver, Response,
-    },
+    driver::{operation::Operation, Capability, Driver, Response},
     schema::{
         app,
         db::{Column, ColumnId, Schema, Table},
@@ -14,9 +11,17 @@ use toasty_core::{
 
 use anyhow::Result;
 use aws_sdk_dynamodb::{
-    error::SdkError, operation::update_item::UpdateItemError, types::*, Client,
+    error::SdkError,
+    operation::update_item::UpdateItemError,
+    types::{
+        AttributeDefinition, AttributeValue, Delete, GlobalSecondaryIndex, KeySchemaElement,
+        KeyType, KeysAndAttributes, Projection, ProjectionType, ProvisionedThroughput, Put,
+        PutRequest, ReturnValuesOnConditionCheckFailure, ScalarAttributeType, TransactWriteItem,
+        Update, WriteRequest,
+    },
+    Client,
 };
-use std::{collections::HashMap, fmt::Write, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 use url::Url;
 
 #[derive(Debug)]

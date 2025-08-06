@@ -1,9 +1,7 @@
 use toasty_core::{
-    schema::app::ModelId,
-    stmt::{self, Visit},
+    schema::{app::ModelId, Schema},
+    stmt::{self, Statement, Visit},
 };
-
-use super::*;
 
 struct Verify<'a> {
     schema: &'a Schema,

@@ -1,7 +1,6 @@
-use tests::*;
-use toasty::stmt::Id;
-
 use std::collections::HashMap;
+use tests::{assert_none, models, tests, Setup};
+use toasty::stmt::Id;
 
 async fn crud_person_self_referential(s: impl Setup) {
     #[derive(Debug, toasty::Model)]

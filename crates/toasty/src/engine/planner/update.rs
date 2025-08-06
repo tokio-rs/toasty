@@ -1,6 +1,8 @@
-use super::*;
-
-use app::{FieldTy, Model};
+use super::{eval, plan, Planner, Result};
+use toasty_core::{
+    schema::app::{FieldTy, Model},
+    stmt::{self, VisitMut},
+};
 
 // Strategy:
 // * Create a batch of queries to operate atomically.

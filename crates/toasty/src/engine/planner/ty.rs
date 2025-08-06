@@ -1,6 +1,5 @@
-use super::*;
-
-use db::Index;
+use super::Planner;
+use toasty_core::{schema::db::Index, stmt};
 
 impl Planner<'_> {
     /// Infer the type of an expression

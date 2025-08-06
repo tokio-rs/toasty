@@ -43,8 +43,8 @@ pub(crate) use set_var::{SetVar, VarId};
 mod update_by_key;
 pub(crate) use update_by_key::UpdateByKey;
 
-use super::*;
-use std::fmt;
+use crate::engine::{eval, exec};
+use toasty_core::stmt;
 
 #[derive(Debug)]
 pub(crate) struct Plan {

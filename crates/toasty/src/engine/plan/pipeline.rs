@@ -1,4 +1,4 @@
-use super::*;
+use super::{Action, VarId};
 
 #[derive(Debug)]
 pub(crate) struct Pipeline {

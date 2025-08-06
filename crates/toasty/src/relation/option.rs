@@ -1,4 +1,5 @@
-use super::*;
+use super::Relation;
+use toasty_core::schema::app::FieldId;
 
 impl<T: Relation> Relation for Option<T> {
     type Model = T::Model;

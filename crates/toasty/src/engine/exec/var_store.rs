@@ -1,6 +1,5 @@
+use super::plan;
 use toasty_core::stmt::ValueStream;
-
-use super::*;
 
 #[derive(Debug)]
 pub(crate) struct VarStore {

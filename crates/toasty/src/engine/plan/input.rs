@@ -1,4 +1,4 @@
-use super::*;
+use super::{eval, stmt, VarId};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Input {
