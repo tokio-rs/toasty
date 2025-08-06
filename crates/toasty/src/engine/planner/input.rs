@@ -1,6 +1,5 @@
-use super::*;
-
-// fn partition_expr_input(expr: &mut stmt::Expr, sources: &[plan::InputSource])
+use super::{eval, plan, Planner};
+use toasty_core::stmt;
 
 struct Partitioner<'a> {
     planner: &'a Planner<'a>,

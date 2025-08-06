@@ -1,4 +1,5 @@
-use super::*;
+use super::plan;
+use toasty_core::stmt;
 
 /// Tracks available slots to store record streams in. These slots are used to
 /// pass record streams from action outputs into the next input.

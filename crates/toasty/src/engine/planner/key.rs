@@ -1,6 +1,5 @@
-use super::*;
-
-use db::Index;
+use super::{eval, Planner};
+use toasty_core::{schema::db::Index, stmt};
 
 /// Try to convert an index filter expression to a key expression
 struct TryConvert<'a> {

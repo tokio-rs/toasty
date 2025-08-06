@@ -1,7 +1,12 @@
-use super::*;
-use toasty_core::schema::app::FieldId;
-
-use db::{Column, Table};
+use super::{simplify, Planner};
+use toasty_core::{
+    schema::{
+        app::{self, FieldId},
+        db::{Column, Table},
+        mapping, Schema,
+    },
+    stmt::{self, VisitMut},
+};
 
 struct LowerStatement<'a> {
     schema: &'a Schema,
