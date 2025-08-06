@@ -1,5 +1,5 @@
-use super::*;
-use toasty_core::schema::app::FieldTy;
+use super::{plan, Exec, Result, ValueStream};
+use toasty_core::{schema::app::FieldTy, stmt};
 
 impl Exec<'_> {
     pub(super) async fn action_associate(&mut self, action: &plan::Associate) -> Result<()> {
