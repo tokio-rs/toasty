@@ -272,7 +272,7 @@ impl Buffer {
 
 #[cfg(test)]
 mod tests {
-    use super::{Value, ValueStream};
+    use super::{Buffer, ValueStream};
 
     #[test]
     fn default() {
