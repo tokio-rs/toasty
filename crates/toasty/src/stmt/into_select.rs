@@ -1,4 +1,5 @@
-use super::*;
+use super::Select;
+use crate::Model;
 
 pub trait IntoSelect {
     type Model: Model;

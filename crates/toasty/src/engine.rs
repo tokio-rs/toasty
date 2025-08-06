@@ -10,11 +10,7 @@ mod ty;
 mod verify;
 
 use crate::{Db, Result};
-
-use toasty_core::{
-    stmt::{self, Statement, ValueStream},
-    Schema,
-};
+use toasty_core::stmt::{Statement, ValueStream};
 
 pub(crate) async fn exec(db: &Db, stmt: Statement) -> Result<ValueStream> {
     if cfg!(debug_assertions) {

@@ -1,5 +1,7 @@
-use super::*;
-use toasty_core::schema::app::FieldId;
+use toasty_core::{
+    schema::{app::FieldId, Schema},
+    stmt,
+};
 
 pub(crate) trait Resolve {
     fn resolve_column(&self, stmt: &stmt::ExprColumn) -> &stmt::Type;
