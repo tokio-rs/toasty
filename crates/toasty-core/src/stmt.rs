@@ -209,11 +209,7 @@ pub use visit::Visit;
 mod with;
 pub use with::With;
 
-use crate::schema::{
-    app::{Field, FieldId},
-    db::TableId,
-};
-
+use crate::schema::db::TableId;
 use std::fmt;
 
 #[derive(Clone)]

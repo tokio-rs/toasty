@@ -13,9 +13,9 @@ pub use name::Name;
 
 mod verify;
 
+use anyhow::Result;
 use app::ModelId;
 use db::{ColumnId, Table, TableId};
-
 use std::sync::Arc;
 
 #[derive(Debug)]
