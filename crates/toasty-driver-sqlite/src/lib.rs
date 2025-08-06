@@ -6,7 +6,7 @@ use toasty_core::{
     schema::db::{Schema, Table},
     stmt, Result,
 };
-use toasty_sql::{Serializer, Statement};
+use toasty_sql as sql;
 
 use rusqlite::Connection;
 use std::{

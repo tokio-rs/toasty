@@ -16,7 +16,7 @@ use toasty_core::{
     stmt::{self, ValueRecord},
     Driver, Result,
 };
-use toasty_sql::{Serializer, Statement};
+use toasty_sql as sql;
 
 use url::Url;
 
