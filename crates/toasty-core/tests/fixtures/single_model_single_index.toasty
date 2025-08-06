@@ -1,6 +1,0 @@
-
-model User {
-    name: string;
-    @unique
-    email: string;
-}
