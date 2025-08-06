@@ -45,7 +45,7 @@ impl TestIsolation {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::TestIsolation;
 
     #[test]
     fn test_isolation_generates_unique_prefixes() {

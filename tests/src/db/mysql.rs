@@ -67,7 +67,7 @@ impl Setup for SetupMySQL {
     where
         T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
     {
-        use mysql_async::prelude::*;
+        use mysql_async::prelude::Queryable;
 
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
 
@@ -147,7 +147,7 @@ impl Setup for SetupMySQL {
 impl SetupMySQL {
     /// Cleanup MySQL tables using the cached connection
     async fn cleanup_mysql_tables_impl(&self) -> Result<(), Box<dyn std::error::Error>> {
-        use mysql_async::prelude::*;
+        use mysql_async::prelude::Queryable;
 
         // Reuse the cached connection pool
         let pool = self.get_pool().await;

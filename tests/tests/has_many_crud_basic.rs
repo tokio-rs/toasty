@@ -6,7 +6,7 @@ use tests::{models, tests, Setup};
 use toasty::stmt::Id;
 
 use std::collections::HashMap;
-use std_util::prelude::*;
+use std_util::{assert_empty, assert_err, assert_none, num::NumUtil};
 
 async fn crud_user_todos(s: impl Setup) {
     #[derive(Debug, toasty::Model)]

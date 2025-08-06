@@ -1,6 +1,6 @@
 use tests::{models, tests, Setup};
 
-use std_util::prelude::*;
+use std_util::{assert_err, assert_none, assert_ok, assert_unique, num::NumUtil};
 use toasty::stmt::Id;
 
 const MORE: i32 = 10;
