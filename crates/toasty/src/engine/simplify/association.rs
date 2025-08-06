@@ -1,4 +1,5 @@
-use super::*;
+use super::Simplify;
+use toasty_core::{schema::app, stmt};
 
 impl Simplify<'_> {
     pub(super) fn simplify_via_association_for_delete(&mut self, stmt: &mut stmt::Delete) {

@@ -1,6 +1,5 @@
-use super::*;
-
-use stmt::Value;
+use super::Simplify;
+use toasty_core::stmt::{self, Value};
 
 impl Simplify<'_> {
     pub(super) fn uncast_value_id(&self, value: &mut stmt::Value) {

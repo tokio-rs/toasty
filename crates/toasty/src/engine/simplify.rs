@@ -1,8 +1,6 @@
 mod expr_target;
 pub(crate) use expr_target::ExprTarget;
 
-// TODO: don't have these be public.
-pub(crate) mod flatten_bool_ops;
 pub(crate) mod lift_pk_select;
 
 mod association;

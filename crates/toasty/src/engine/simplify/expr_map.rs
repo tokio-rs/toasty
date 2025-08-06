@@ -1,6 +1,6 @@
-use super::*;
-
+use super::Simplify;
 use crate::engine::eval::Func;
+use toasty_core::stmt::{self, Expr};
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_map(&self, expr: &mut stmt::Expr) -> Option<Expr> {

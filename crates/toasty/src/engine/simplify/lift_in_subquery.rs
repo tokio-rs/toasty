@@ -1,8 +1,8 @@
-use super::*;
-use app::{BelongsTo, FieldTy, HasOne};
-use toasty_core::schema::app::FieldId;
-
-use stmt::Visit;
+use super::Simplify;
+use toasty_core::{
+    schema::app::{BelongsTo, FieldId, FieldTy, HasOne},
+    stmt::{self, Visit},
+};
 
 struct LiftBelongsTo<'a> {
     belongs_to: &'a BelongsTo,

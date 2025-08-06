@@ -1,7 +1,8 @@
-use super::*;
-use app::FieldTy;
-
-use stmt::Expr;
+use super::{ExprTarget, Simplify};
+use toasty_core::{
+    schema::app::FieldTy,
+    stmt::{self, Expr},
+};
 
 impl Simplify<'_> {
     /// Recursively walk a binary expression in parallel

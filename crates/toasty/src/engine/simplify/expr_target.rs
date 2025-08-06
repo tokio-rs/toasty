@@ -1,7 +1,11 @@
-use super::*;
-
-use app::Model;
-use db::{ColumnId, Table};
+use toasty_core::{
+    schema::{
+        app::Model,
+        db::{ColumnId, Table},
+        Schema,
+    },
+    stmt,
+};
 
 /// The "root" an expression is targetting. This can be a model, table, ...
 #[derive(Debug, Clone)]

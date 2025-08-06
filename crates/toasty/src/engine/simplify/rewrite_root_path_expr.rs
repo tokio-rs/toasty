@@ -1,5 +1,5 @@
-use super::*;
-use app::Model;
+use super::Simplify;
+use toasty_core::{schema::app::Model, stmt};
 
 impl Simplify<'_> {
     /// Rewrites expressions where one half is a path referencing `self`. In
