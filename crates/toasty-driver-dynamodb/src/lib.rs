@@ -1,10 +1,7 @@
 mod op;
 
 use toasty_core::{
-    driver::{
-        operation::{self, Operation},
-        Capability, Driver, Response,
-    },
+    driver::{operation::Operation, Capability, Driver, Response},
     schema::{
         app,
         db::{Column, ColumnId, Schema, Table},

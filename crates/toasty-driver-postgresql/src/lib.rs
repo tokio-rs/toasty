@@ -1,13 +1,12 @@
 mod value;
 pub(crate) use value::Value;
 
-use std::sync::Arc;
-
 use postgres::{
     tls::MakeTlsConnect,
     types::{ToSql, Type},
     Column, Row, Socket,
 };
+use std::sync::Arc;
 use toasty_core::{
     driver::{Capability, Operation, Response},
     schema::db::{Schema, Table},
