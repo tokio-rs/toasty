@@ -1,4 +1,4 @@
-use super::*;
+use crate::schema::db::ColumnId;
 
 #[derive(Debug, Clone)]
 pub struct Field {

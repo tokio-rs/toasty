@@ -1,14 +1,14 @@
+use super::BuildSchema;
 use crate::{
     driver,
     schema::{
-        app::{self, BelongsTo, FieldId, FieldPrimitive, FieldTy, HasMany, HasOne, Model},
-        db::{self, Column, ColumnId, Index, IndexColumn, IndexId, IndexOp, Schema, Table, TableId},
+        app::{self, FieldId, Model},
+        db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping},
         Name,
     },
-    stmt::{self, Expr, ExprRecord, Type, TypeEnum, Value},
+    stmt::{self},
 };
-use super::BuildSchema;
 
 struct BuildTableFromModels<'a> {
     /// Database-specific capabilities

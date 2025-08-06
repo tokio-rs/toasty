@@ -1,6 +1,11 @@
 mod relations_are_indexed;
 
-use super::*;
+use super::{
+    app::{FieldId, ModelId},
+    db::{ColumnId, IndexId},
+    Result, Schema,
+};
+use crate::stmt;
 
 use std::collections::HashSet;
 

@@ -1,4 +1,4 @@
-use super::{BelongsTo, Field, FieldId, FieldTy, HasMany, HasOne, Model, ModelId};
+use super::{Field, FieldId, FieldTy, Model, ModelId};
 
 use crate::Result;
 use indexmap::IndexMap;

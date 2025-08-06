@@ -1,8 +1,8 @@
 mod table;
 
-use super::{app, db, mapping, verify, Result};
-use crate::{driver, stmt};
+use super::{app, db, mapping, Result};
 use crate::schema::{ColumnId, Mapping, Schema, Table, TableId};
+use crate::{driver, stmt};
 use indexmap::IndexMap;
 use std::sync::Arc;
 

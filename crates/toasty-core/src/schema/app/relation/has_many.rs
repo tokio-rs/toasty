@@ -1,4 +1,7 @@
-use crate::{schema::app::{BelongsTo, FieldId, Model, ModelId, Name, Schema}, stmt};
+use crate::{
+    schema::app::{BelongsTo, FieldId, Model, ModelId, Name, Schema},
+    stmt,
+};
 
 #[derive(Debug, Clone)]
 pub struct HasMany {

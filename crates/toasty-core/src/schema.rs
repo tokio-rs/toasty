@@ -15,8 +15,8 @@ mod verify;
 
 use crate::*;
 
-use app::{Field, FieldId, Model, ModelId};
-use db::{ColumnId, IndexId, Table, TableId};
+use app::ModelId;
+use db::{ColumnId, Table, TableId};
 
 use std::sync::Arc;
 

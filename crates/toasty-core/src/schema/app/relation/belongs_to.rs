@@ -1,4 +1,7 @@
-use crate::{schema::app::{FieldId, FieldTy, ForeignKey, HasMany, HasOne, Model, ModelId, Schema}, stmt};
+use crate::{
+    schema::app::{FieldId, FieldTy, ForeignKey, Model, ModelId, Schema},
+    stmt,
+};
 
 #[derive(Debug, Clone)]
 pub struct BelongsTo {

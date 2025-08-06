@@ -209,12 +209,9 @@ pub use visit::Visit;
 mod with;
 pub use with::With;
 
-use crate::{
-    schema::{
-        app::{Field, FieldId, Model, ModelId},
-        db::{Column, ColumnId, TableId},
-    },
-    stmt, Result,
+use crate::schema::{
+    app::{Field, FieldId},
+    db::TableId,
 };
 
 use std::fmt;

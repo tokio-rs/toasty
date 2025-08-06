@@ -1,4 +1,11 @@
-use super::*;
+use super::Field;
+use crate::{
+    schema::{
+        app::ModelId,
+        db::{ColumnId, TableId},
+    },
+    stmt,
+};
 
 #[derive(Debug, Clone)]
 pub struct Model {

@@ -4,8 +4,7 @@ pub use field::Field;
 mod model;
 pub use model::Model;
 
-use super::*;
-
+use super::app::ModelId;
 use indexmap::IndexMap;
 
 /// Maps an app-level schema to a database-level schema

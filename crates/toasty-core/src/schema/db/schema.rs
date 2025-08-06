@@ -1,4 +1,4 @@
-use super::*;
+use super::{Column, ColumnId, Index, IndexId, Table, TableId};
 
 #[derive(Debug, Default)]
 pub struct Schema {
