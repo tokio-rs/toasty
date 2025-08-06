@@ -58,19 +58,19 @@ async fn paginate(s: impl Setup) {
         Foo::create().order(i).exec(&db).await.unwrap();
     }
 
-    let foos: Vec<_> = Foo::all()
+    let page = Foo::all()
         .order_by(Foo::FIELDS.order().desc())
         .paginate(10)
         .collect(&db)
         .await
         .unwrap();
 
-    assert_eq!(foos.len(), 10);
+    assert_eq!(page.items.len(), 10);
     for (i, order) in (99..90).enumerate() {
-        assert_eq!(foos[i].order, order);
+        assert_eq!(page.items[i].order, order);
     }
 
-    let foos: Vec<_> = Foo::all()
+    let page = Foo::all()
         .order_by(Foo::FIELDS.order().desc())
         .paginate(10)
         .after(90)
@@ -78,9 +78,9 @@ async fn paginate(s: impl Setup) {
         .await
         .unwrap();
 
-    assert_eq!(foos.len(), 10);
+    assert_eq!(page.items.len(), 10);
     for (i, order) in (89..80).enumerate() {
-        assert_eq!(foos[i].order, order);
+        assert_eq!(page.items[i].order, order);
     }
 }
 

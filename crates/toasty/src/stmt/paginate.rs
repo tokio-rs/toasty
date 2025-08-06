@@ -40,10 +40,16 @@ impl<M: Model> Paginate<M> {
         self
     }
 
-    pub async fn collect<A>(self, db: &Db) -> Result<A>
-    where
-        A: FromCursor<M>,
-    {
-        db.all(self.query).await?.collect().await
+    pub async fn collect(self, db: &Db) -> Result<crate::Page<M>> {
+        let items: Vec<M> = db.all(self.query.clone()).await?.collect().await?;
+
+        // For now, create a basic Page without cursor logic
+        // TODO: Implement proper cursor extraction and has_next detection
+        Ok(crate::Page::new(
+            items, 
+            self.query,
+            None, // next_cursor
+            None, // prev_cursor
+        ))
     }
 }
