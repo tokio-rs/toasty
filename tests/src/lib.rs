@@ -42,15 +42,13 @@ pub trait Setup: Send + Sync + 'static {
     /// - `table`: Table name WITHOUT prefix (e.g., "foo", not "test_123_foo")
     /// - `column`: Column name to retrieve (e.g., "val")
     /// - `filter`: WHERE clause conditions as column_name -> value pairs
-    /// - `T`: The expected application type - implementation validates the raw storage
-    async fn get_raw_column_value<T>(
+    /// Returns the raw `Value` from the database
+    async fn get_raw_column_value(
         &self,
         table: &str,
         column: &str,
         filter: HashMap<String, toasty_core::stmt::Value>,
-    ) -> toasty::Result<T>
-    where
-        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>;
+    ) -> toasty::Result<toasty_core::stmt::Value>;
 }
 
 #[macro_export]

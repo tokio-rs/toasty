@@ -134,15 +134,12 @@ impl Setup for SetupSqlite {
 
     /// Get raw column value from the database for verification purposes.
     /// This method supports the unsigned integer testing by providing access to raw stored values.
-    async fn get_raw_column_value<T>(
+    async fn get_raw_column_value(
         &self,
         table: &str,
         column: &str,
         filter: HashMap<String, toasty_core::stmt::Value>,
-    ) -> toasty::Result<T>
-    where
-        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
-    {
+    ) -> toasty::Result<toasty_core::stmt::Value> {
         // Build WHERE clause from filter
         let mut where_conditions = Vec::new();
         let mut sqlite_params = Vec::new();
@@ -201,10 +198,7 @@ impl Setup for SetupSqlite {
             .next()
             .unwrap_or_else(|e| panic!("SQLite row fetch failed: {e}"))
         {
-            let stmt_value = self.sqlite_row_to_stmt_value(row, 0)?;
-            stmt_value
-                .try_into()
-                .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
+            self.sqlite_row_to_stmt_value(row, 0)
         } else {
             panic!("No rows found")
         }

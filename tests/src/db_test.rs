@@ -94,7 +94,8 @@ impl<S: Setup> DbTest<S> {
         T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
     {
         let setup = self.setup.as_ref().expect("Setup already consumed");
-        setup.get_raw_column_value(table, column, filter).await
+        let value = setup.get_raw_column_value(table, column, filter).await?;
+        T::try_from(value).map_err(Into::into)
     }
 
     /// Run a test function with a mutable reference to self, using our managed runtime.

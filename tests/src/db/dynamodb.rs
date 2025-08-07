@@ -69,15 +69,12 @@ impl Setup for SetupDynamoDb {
             .map_err(|e| toasty::Error::msg(format!("DynamoDB cleanup failed: {e}")))
     }
 
-    async fn get_raw_column_value<T>(
+    async fn get_raw_column_value(
         &self,
         table: &str,
         column: &str,
         filter: HashMap<String, toasty_core::stmt::Value>,
-    ) -> toasty::Result<T>
-    where
-        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
-    {
+    ) -> toasty::Result<toasty_core::stmt::Value> {
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
 
         // Get the per-test-instance DynamoDB client
@@ -101,10 +98,7 @@ impl Setup for SetupDynamoDb {
 
         if let Some(item) = response.item {
             if let Some(attr_value) = item.get(column) {
-                let stmt_value = self.dynamodb_attr_to_stmt_value(attr_value)?;
-                stmt_value
-                    .try_into()
-                    .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
+                self.dynamodb_attr_to_stmt_value(attr_value)
             } else {
                 panic!("Column '{column}' not found in DynamoDB item")
             }

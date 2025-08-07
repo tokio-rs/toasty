@@ -78,15 +78,12 @@ impl Setup for SetupPostgreSQL {
             .map_err(|e| toasty::Error::msg(format!("PostgreSQL cleanup failed: {e}")))
     }
 
-    async fn get_raw_column_value<T>(
+    async fn get_raw_column_value(
         &self,
         table: &str,
         column: &str,
         filter: HashMap<String, stmt::Value>,
-    ) -> toasty::Result<T>
-    where
-        T: TryFrom<stmt::Value, Error = toasty_core::Error>,
-    {
+    ) -> toasty::Result<stmt::Value> {
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
 
         // Build WHERE clause from filter
@@ -135,12 +132,7 @@ impl Setup for SetupPostgreSQL {
             .unwrap_or_else(|e| panic!("Query failed: {e}"));
 
         // Convert PostgreSQL result directly to stmt::Value
-        let stmt_value = self.pg_row_to_stmt_value(&row, 0)?;
-
-        // Let the type implementation validate and convert
-        stmt_value
-            .try_into()
-            .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
+        self.pg_row_to_stmt_value(&row, 0)
     }
 }
 

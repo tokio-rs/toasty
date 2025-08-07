@@ -62,15 +62,12 @@ impl Setup for SetupMySQL {
             .map_err(|e| toasty::Error::msg(format!("MySQL cleanup failed: {e}")))
     }
 
-    async fn get_raw_column_value<T>(
+    async fn get_raw_column_value(
         &self,
         table: &str,
         column: &str,
         filter: HashMap<String, toasty_core::stmt::Value>,
-    ) -> toasty::Result<T>
-    where
-        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
-    {
+    ) -> toasty::Result<toasty_core::stmt::Value> {
         use mysql_async::prelude::Queryable;
 
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
@@ -138,10 +135,7 @@ impl Setup for SetupMySQL {
             .unwrap_or_else(|e| panic!("MySQL query failed: {e}"));
 
         if let Ok(Some(row)) = result.next().await {
-            let stmt_value = self.mysql_row_to_stmt_value(&row, 0)?;
-            stmt_value
-                .try_into()
-                .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
+            self.mysql_row_to_stmt_value(&row, 0)
         } else {
             panic!("No rows found")
         }
