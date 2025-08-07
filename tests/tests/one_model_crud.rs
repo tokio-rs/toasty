@@ -1,10 +1,10 @@
 use std_util::{assert_err, assert_none, assert_ok, assert_unique, num::NumUtil, slice::SliceUtil};
-use tests::{models, tests, Setup};
+use tests::{models, tests, Setup, ToastyTest};
 use toasty::stmt::Id;
 
 const MORE: i32 = 10;
 
-async fn crud_no_fields(s: impl Setup) {
+async fn crud_no_fields(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -12,7 +12,7 @@ async fn crud_no_fields(s: impl Setup) {
         id: Id<Self>,
     }
 
-    let db = s.setup(models!(Foo)).await;
+    let db = test.setup_db(models!(Foo)).await;
 
     let created = Foo::create().exec(&db).await.unwrap();
 
@@ -80,7 +80,7 @@ async fn crud_no_fields(s: impl Setup) {
     }
 }
 
-async fn crud_one_string(s: impl Setup) {
+async fn crud_one_string(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -90,7 +90,7 @@ async fn crud_one_string(s: impl Setup) {
         val: String,
     }
 
-    let db = s.setup(models!(Foo)).await;
+    let db = test.setup_db(models!(Foo)).await;
 
     let mut created = Foo::create().val("hello world").exec(&db).await.unwrap();
 
@@ -168,7 +168,7 @@ async fn crud_one_string(s: impl Setup) {
     assert_err!(Foo::get_by_id(&db, &ids[0]).await);
 }
 
-async fn required_field_create_without_setting(s: impl Setup) {
+async fn required_field_create_without_setting(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -176,13 +176,13 @@ async fn required_field_create_without_setting(s: impl Setup) {
         id: Id<Self>,
     }
 
-    let db = s.setup(models!(User)).await;
+    let db = test.setup_db(models!(User)).await;
 
     // Try creating a user without setting the name field results in an error
     assert_err!(User::create().exec(&db).await);
 }
 
-async fn unique_index_required_field_update(s: impl Setup) {
+async fn unique_index_required_field_update(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -193,7 +193,7 @@ async fn unique_index_required_field_update(s: impl Setup) {
         email: String,
     }
 
-    let db = s.setup(models!(User)).await;
+    let db = test.setup_db(models!(User)).await;
 
     let email = "user1@example.com";
 
@@ -282,7 +282,7 @@ async fn unique_index_required_field_update(s: impl Setup) {
     assert_ok!(User::create().email("user2@example.com").exec(&db).await);
 }
 
-async fn unique_index_nullable_field_update(s: impl Setup) {
+async fn unique_index_nullable_field_update(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -293,7 +293,7 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
         email: Option<String>,
     }
 
-    let db = s.setup(models!(User)).await;
+    let db = test.setup_db(models!(User)).await;
 
     // Create a user without an email address
     let mut u1 = User::create().exec(&db).await.unwrap();
@@ -371,7 +371,7 @@ async fn unique_index_nullable_field_update(s: impl Setup) {
     assert_eq!(u4_reload.id, u4.id);
 }
 
-async fn unique_index_no_update(s: impl Setup) {
+async fn unique_index_no_update(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -384,7 +384,7 @@ async fn unique_index_no_update(s: impl Setup) {
         name: String,
     }
 
-    let db = s.setup(models!(User)).await;
+    let db = test.setup_db(models!(User)).await;
 
     let mut user = User::create()
         .email("user@example.com")
@@ -409,7 +409,7 @@ async fn unique_index_no_update(s: impl Setup) {
     assert_eq!(user.name, u.name);
 }
 
-async fn batch_get_by_id(s: impl Setup) {
+async fn batch_get_by_id(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -417,7 +417,7 @@ async fn batch_get_by_id(s: impl Setup) {
         id: Id<Self>,
     }
 
-    let db = s.setup(models!(Foo)).await;
+    let db = test.setup_db(models!(Foo)).await;
     let mut keys = vec![];
 
     for _ in 0..5 {
@@ -437,7 +437,7 @@ async fn batch_get_by_id(s: impl Setup) {
     }
 }
 
-async fn empty_batch_get_by_id(s: impl Setup) {
+async fn empty_batch_get_by_id(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -445,7 +445,7 @@ async fn empty_batch_get_by_id(s: impl Setup) {
         id: Id<Self>,
     }
 
-    let db = s.setup(models!(Foo)).await;
+    let db = test.setup_db(models!(Foo)).await;
     let mut ids = vec![];
 
     for _ in 0..5 {
@@ -461,7 +461,7 @@ async fn empty_batch_get_by_id(s: impl Setup) {
     assert_eq!(0, foos.len());
 }
 
-async fn update_multiple_fields(s: impl Setup) {
+async fn update_multiple_fields(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -472,7 +472,7 @@ async fn update_multiple_fields(s: impl Setup) {
         email: String,
     }
 
-    let db = s.setup(models!(User)).await;
+    let db = test.setup_db(models!(User)).await;
 
     let mut user = User::create()
         .name("John Doe")

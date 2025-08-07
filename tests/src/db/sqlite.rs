@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use tempfile::NamedTempFile;
 use toasty::driver::Capability;
-use toasty::{db, Db};
+use toasty::db;
 
 use crate::Setup;
 
@@ -112,10 +112,15 @@ impl Default for SetupSqlite {
 
 #[async_trait::async_trait]
 impl Setup for SetupSqlite {
-    async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
-        // Use temporary file-based database instead of in-memory
+    type Driver = toasty::driver::Connection;
+    
+    async fn connect(&self) -> toasty::Result<Self::Driver> {
         let url = format!("sqlite:{}", self.temp_db_path);
-        builder.connect(&url).await
+        toasty::driver::Connection::connect(&url).await
+    }
+    
+    fn configure_builder(&self, _builder: &mut db::Builder) {
+        // SQLite doesn't need table prefixes for isolation
     }
 
     fn capability(&self) -> &Capability {

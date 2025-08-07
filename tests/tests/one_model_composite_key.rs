@@ -1,6 +1,6 @@
-use tests::{models, tests, Setup};
+use tests::{models, tests, Setup, ToastyTest};
 
-async fn batch_get_by_key(s: impl Setup) {
+async fn batch_get_by_key(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -10,7 +10,7 @@ async fn batch_get_by_key(s: impl Setup) {
         two: String,
     }
 
-    let db = s.setup(models!(Foo)).await;
+    let db = test.setup_db(models!(Foo)).await;
     let mut keys = vec![];
 
     for i in 0..5 {

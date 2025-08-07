@@ -1,7 +1,7 @@
-use tests::{models, tests, Setup};
+use tests::{models, tests, Setup, ToastyTest};
 use toasty::stmt::Id;
 
-async fn crud_user_optional_profile_one_direction(s: impl Setup) {
+async fn crud_user_optional_profile_one_direction(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -22,7 +22,7 @@ async fn crud_user_optional_profile_one_direction(s: impl Setup) {
         id: Id<Self>,
     }
 
-    let db = s.setup(models!(User, Profile)).await;
+    let db = test.setup_db(models!(User, Profile)).await;
 
     // Create a user
     let user = User::create()

@@ -55,13 +55,17 @@ impl Default for SetupPostgreSQL {
 
 #[async_trait::async_trait]
 impl Setup for SetupPostgreSQL {
-    async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
-        let prefix = self.isolation.table_prefix();
-
+    type Driver = toasty::driver::Connection;
+    
+    async fn connect(&self) -> toasty::Result<Self::Driver> {
         let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
             .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
+        toasty::driver::Connection::connect(&url).await
+    }
 
-        builder.table_name_prefix(&prefix).connect(&url).await
+    fn configure_builder(&self, builder: &mut toasty::db::Builder) {
+        let prefix = self.isolation.table_prefix();
+        builder.table_name_prefix(&prefix);
     }
 
     fn capability(&self) -> &Capability {

@@ -46,14 +46,17 @@ impl Default for SetupDynamoDb {
 
 #[async_trait::async_trait]
 impl Setup for SetupDynamoDb {
-    /// Try building the full schema and connecting to the database.
-    async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
+    type Driver = toasty::driver::Connection;
+    
+    async fn connect(&self) -> toasty::Result<Self::Driver> {
+        let url = std::env::var("TOASTY_TEST_DYNAMODB_URL")
+            .unwrap_or_else(|_| "dynamodb://".to_string());
+        toasty::driver::Connection::connect(&url).await
+    }
+
+    fn configure_builder(&self, builder: &mut toasty::db::Builder) {
         let prefix = self.isolation.table_prefix();
-
-        let url =
-            std::env::var("TOASTY_TEST_DYNAMODB_URL").unwrap_or_else(|_| "dynamodb://".to_string());
-
-        builder.table_name_prefix(&prefix).connect(&url).await
+        builder.table_name_prefix(&prefix);
     }
 
     fn capability(&self) -> &Capability {

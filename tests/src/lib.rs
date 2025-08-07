@@ -3,26 +3,31 @@ mod macros;
 
 pub mod db;
 mod isolation;
+mod logging_driver;
 mod toasty_test;
 
 // Re-export for use in macros - needs to be public for macro expansion
+pub use logging_driver::{DriverOp, LoggingDriver};
 pub use toasty_test::ToastyTest;
 
 use std::collections::HashMap;
-use toasty::Db;
 use toasty_core::driver::Capability;
 
 pub use std_util::*;
 
 #[async_trait::async_trait]
 pub trait Setup: Send + Sync + 'static {
-    async fn setup(&self, db: toasty::db::Builder) -> Db {
-        let db = self.connect(db).await.unwrap();
-        db.reset_db().await.unwrap();
-        db
-    }
+    /// The concrete driver type for this database
+    type Driver: toasty_core::driver::Driver;
 
-    async fn connect(&self, mut builder: toasty::db::Builder) -> toasty::Result<Db>;
+    /// Create a connection to the database
+    async fn connect(&self) -> toasty::Result<Self::Driver>;
+
+    /// Configure the builder with database-specific settings (like table prefixes)
+    fn configure_builder(&self, _builder: &mut toasty::db::Builder) {
+        // Default: no configuration needed (SQLite)
+        // Other databases override this to add table prefixes
+    }
 
     fn capability(&self) -> &Capability;
 
@@ -35,7 +40,7 @@ pub trait Setup: Send + Sync + 'static {
     /// Get the raw value stored in the database for verification
     ///
     /// - `table`: Table name WITHOUT prefix (e.g., "foo", not "test_123_foo")
-    /// - `column`: Column name to retrieve (e.g., "val")  
+    /// - `column`: Column name to retrieve (e.g., "val")
     /// - `filter`: WHERE clause conditions as column_name -> value pairs
     /// - `T`: The expected application type - implementation validates the raw storage
     async fn get_raw_column_value<T>(
@@ -77,9 +82,9 @@ macro_rules! tests {
                         $crate::db::dynamodb::SetupDynamoDb::new()
                     );
 
-                    test.run_test(|setup| async move {
-                        super::$f(setup).await;
-                    });
+                    test.run_test(move |test| Box::pin(async move {
+                        super::$f(test).await;
+                    }));
                 }
             )*
         }
@@ -94,9 +99,9 @@ macro_rules! tests {
                         $crate::db::sqlite::SetupSqlite::new()
                     );
 
-                    test.run_test(|setup| async move {
-                        super::$f(setup).await;
-                    });
+                    test.run_test(move |test| Box::pin(async move {
+                        super::$f(test).await;
+                    }));
                 }
             )*
         }
@@ -111,9 +116,9 @@ macro_rules! tests {
                         $crate::db::mysql::SetupMySQL::new()
                     );
 
-                    test.run_test(|setup| async move {
-                        super::$f(setup).await;
-                    });
+                    test.run_test(move |test| Box::pin(async move {
+                        super::$f(test).await;
+                    }));
                 }
             )*
         }
@@ -128,9 +133,9 @@ macro_rules! tests {
                         $crate::db::postgresql::SetupPostgreSQL::new()
                     );
 
-                    test.run_test(|setup| async move {
-                        super::$f(setup).await;
-                    });
+                    test.run_test(move |test| Box::pin(async move {
+                        super::$f(test).await;
+                    }));
                 }
             )*
         }

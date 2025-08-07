@@ -12,7 +12,7 @@ use std::sync::Arc;
 use url::Url;
 
 #[derive(Debug)]
-pub(crate) enum Connection {
+pub(crate) enum Flavor {
     #[cfg(feature = "dynamodb")]
     DynamoDb(toasty_driver_dynamodb::DynamoDb),
 
@@ -26,8 +26,12 @@ pub(crate) enum Connection {
     Sqlite(toasty_driver_sqlite::Sqlite),
 }
 
+/// A connection to a database, wrapping the specific driver implementation.
+#[derive(Debug)]
+pub struct Connection(pub(crate) Flavor);
+
 impl Connection {
-    pub(crate) async fn connect(url: &str) -> Result<Self> {
+    pub async fn connect(url: &str) -> Result<Self> {
         let url = Url::parse(url)?;
 
         match url.scheme() {
@@ -44,7 +48,7 @@ impl Connection {
     #[cfg(feature = "dynamodb")]
     async fn connect_dynamodb(url: &Url) -> Result<Connection> {
         let driver = toasty_driver_dynamodb::DynamoDb::connect(url.as_str()).await?;
-        Ok(Connection::DynamoDb(driver))
+        Ok(Connection(Flavor::DynamoDb(driver)))
     }
 
     #[cfg(not(feature = "dynamodb"))]
@@ -55,7 +59,7 @@ impl Connection {
     #[cfg(feature = "mysql")]
     async fn connect_mysql(url: &Url) -> Result<Connection> {
         let driver = toasty_driver_mysql::MySQL::connect(url.as_str()).await?;
-        Ok(Connection::MySQL(driver))
+        Ok(Connection(Flavor::MySQL(driver)))
     }
 
     #[cfg(not(feature = "mysql"))]
@@ -66,7 +70,7 @@ impl Connection {
     #[cfg(feature = "postgresql")]
     async fn connect_postgresql(url: &Url) -> Result<Connection> {
         let driver = toasty_driver_postgresql::PostgreSQL::connect(url.as_str()).await?;
-        Ok(Connection::PostgreSQL(driver))
+        Ok(Connection(Flavor::PostgreSQL(driver)))
     }
 
     #[cfg(not(feature = "postgresql"))]
@@ -75,9 +79,9 @@ impl Connection {
     }
 
     #[cfg(feature = "sqlite")]
-    fn connect_sqlite(url: &Url) -> Result<Self> {
+    fn connect_sqlite(url: &Url) -> Result<Connection> {
         let driver = toasty_driver_sqlite::Sqlite::connect(url.as_str())?;
-        Ok(Self::Sqlite(driver))
+        Ok(Connection(Flavor::Sqlite(driver)))
     }
 
     #[cfg(not(feature = "sqlite"))]
@@ -88,18 +92,18 @@ impl Connection {
 
 macro_rules! match_db {
     ($self:expr, $driver:pat => $e:expr) => {
-        match *$self {
+        match $self.0 {
             #[cfg(feature = "dynamodb")]
-            Connection::DynamoDb($driver) => $e,
+            Flavor::DynamoDb($driver) => $e,
 
             #[cfg(feature = "mysql")]
-            Connection::MySQL($driver) => $e,
+            Flavor::MySQL($driver) => $e,
 
             #[cfg(feature = "postgresql")]
-            Connection::PostgreSQL($driver) => $e,
+            Flavor::PostgreSQL($driver) => $e,
 
             #[cfg(feature = "sqlite")]
-            Connection::Sqlite($driver) => $e,
+            Flavor::Sqlite($driver) => $e,
         }
     };
 }

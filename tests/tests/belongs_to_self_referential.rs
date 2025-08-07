@@ -1,8 +1,9 @@
 use std::collections::HashMap;
-use tests::{assert_none, models, tests, Setup};
+use std_util::assert_none;
+use tests::{models, tests, Setup, ToastyTest};
 use toasty::stmt::Id;
 
-async fn crud_person_self_referential(s: impl Setup) {
+async fn crud_person_self_referential(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct Person {
         #[key]
@@ -21,7 +22,7 @@ async fn crud_person_self_referential(s: impl Setup) {
         children: toasty::HasMany<Person>,
     }
 
-    let db = s.setup(models!(Person)).await;
+    let db = test.setup_db(models!(Person)).await;
 
     let p1 = Person::create().name("person 1").exec(&db).await.unwrap();
 

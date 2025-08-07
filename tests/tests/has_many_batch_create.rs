@@ -1,7 +1,7 @@
-use tests::{assert_eq_unordered, models, tests, Setup};
+use tests::{assert_eq_unordered, models, tests, Setup, ToastyTest};
 use toasty::stmt::Id;
 
-async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
+async fn user_batch_create_todos_one_level_basic_fk(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -29,7 +29,7 @@ async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
         title: String,
     }
 
-    let db = s.setup(models!(User, Todo)).await;
+    let db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user with some todos
     let user = User::create()
@@ -51,7 +51,7 @@ async fn user_batch_create_todos_one_level_basic_fk(s: impl Setup) {
     assert_eq!("Make pizza", todo.title);
 }
 
-async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
+async fn user_batch_create_todos_two_levels_basic_fk(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -97,7 +97,7 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
         todos: toasty::HasMany<Todo>,
     }
 
-    let db = s.setup(models!(User, Todo, Category)).await;
+    let db = test.setup_db(models!(User, Todo, Category)).await;
 
     // Create a user with some todos
     let user = User::create()
@@ -164,7 +164,7 @@ async fn user_batch_create_todos_two_levels_basic_fk(s: impl Setup) {
     assert_eq!(1, todos.len());
 }
 
-async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
+async fn user_batch_create_todos_set_category_by_value(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -210,7 +210,7 @@ async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
         todos: toasty::HasMany<Todo>,
     }
 
-    let db = s.setup(models!(User, Todo, Category)).await;
+    let db = test.setup_db(models!(User, Todo, Category)).await;
 
     let category = Category::create().name("Eating").exec(&db).await.unwrap();
     assert_eq!(category.name, "Eating");
@@ -243,7 +243,7 @@ async fn user_batch_create_todos_set_category_by_value(s: impl Setup) {
     );
 }
 
-async fn user_batch_create_todos_set_category_by_query(_s: impl Setup) {}
+async fn user_batch_create_todos_set_category_by_query(_test: &mut ToastyTest<impl Setup>) {}
 
 tests!(
     user_batch_create_todos_one_level_basic_fk,

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
-use tests::{assert_empty, models, tests, Setup};
+use std_util::assert_empty;
+use tests::{models, tests, Setup, ToastyTest};
 use toasty::stmt::Id;
 
-async fn crud_user_todos_categories(s: impl Setup) {
+async fn crud_user_todos_categories(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -48,7 +49,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         todos: toasty::HasMany<Todo>,
     }
 
-    let db = s.setup(models!(User, Todo, Category)).await;
+    let db = test.setup_db(models!(User, Todo, Category)).await;
 
     // Create a user
     let user = User::create().name("Ann Chovey").exec(&db).await.unwrap();

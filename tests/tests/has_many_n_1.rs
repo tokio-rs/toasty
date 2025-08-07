@@ -1,8 +1,8 @@
-use tests::{tests, Setup};
+use tests::{models, tests, Setup, ToastyTest};
 // use toasty::stmt::Id;
 
 // What is this testing?
-async fn hello_world(_s: impl Setup) {
+async fn hello_world(_test: &mut ToastyTest<impl Setup>) {
     /*
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -47,7 +47,7 @@ async fn hello_world(_s: impl Setup) {
         name: String,
     }
 
-    let db = s.setup(models!(User, Todo, Category)).await;
+    let db = test.setup_db(models!(User, Todo, Category)).await;
 
     let cat1 = Category::create().name("a").exec(&db).await.unwrap();
     let cat2 = Category::create().name("b").exec(&db).await.unwrap();
