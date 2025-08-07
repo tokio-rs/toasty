@@ -1,5 +1,6 @@
 use crate::{
-    logging_driver::{DriverOp, LoggingDriver},
+    exec_log::ExecLog,
+    logging_driver::LoggingDriver,
     Setup,
 };
 use std::sync::{Arc, Mutex};
@@ -15,7 +16,7 @@ use toasty::Db;
 pub struct DbTest {
     runtime: tokio::runtime::Runtime,
     setup: Option<Box<dyn Setup>>,
-    ops_log: Arc<Mutex<Vec<DriverOp>>>,
+    exec_log: ExecLog,
 }
 
 impl DbTest {
@@ -29,7 +30,7 @@ impl DbTest {
         Self {
             runtime,
             setup: Some(setup),
-            ops_log: Arc::new(Mutex::new(Vec::new())),
+            exec_log: ExecLog::new(Arc::new(Mutex::new(Vec::new()))),
         }
     }
 
@@ -43,9 +44,10 @@ impl DbTest {
         // Get the driver from the setup
         let driver = setup.connect().await?;
 
-        // Always wrap with logging, using our existing ops_log
+        // Always wrap with logging
         let logging_driver = LoggingDriver::new(driver);
-        self.ops_log = logging_driver.ops_log_handle();
+        let ops_log = logging_driver.ops_log_handle();
+        self.exec_log = ExecLog::new(ops_log);
 
         // Build the database with the logging driver
         let db = builder.build(logging_driver).await?;
@@ -59,9 +61,9 @@ impl DbTest {
         self.try_setup_db(builder).await.unwrap()
     }
 
-    /// Get the operations log for assertions
-    pub fn ops_log(&self) -> Arc<Mutex<Vec<DriverOp>>> {
-        self.ops_log.clone()
+    /// Get the execution log for assertions
+    pub fn log(&mut self) -> &mut ExecLog {
+        &mut self.exec_log
     }
 
     /// Get capability information from the setup

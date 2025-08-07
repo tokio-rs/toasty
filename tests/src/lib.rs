@@ -3,11 +3,13 @@ mod macros;
 
 pub mod db;
 mod db_test;
+mod exec_log;
 mod isolation;
 mod logging_driver;
 
 // Re-export for use in macros - needs to be public for macro expansion
 pub use db_test::DbTest;
+pub use exec_log::ExecLog;
 pub use logging_driver::{DriverOp, LoggingDriver};
 
 use std::collections::HashMap;
