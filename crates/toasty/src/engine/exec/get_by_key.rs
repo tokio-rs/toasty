@@ -1,5 +1,5 @@
 use super::{operation, plan, Exec, Result};
-use crate::driver::Rows;
+use crate::{driver::Rows, engine::ExecResponse};
 use toasty_core::stmt::ValueStream;
 
 impl Exec<'_> {
@@ -8,7 +8,7 @@ impl Exec<'_> {
             .eval_keys_maybe_using_input(&action.keys, &action.input)
             .await?;
 
-        let res = if keys.is_empty() {
+        let values = if keys.is_empty() {
             ValueStream::default()
         } else {
             let op = operation::GetByKey {
@@ -30,7 +30,13 @@ impl Exec<'_> {
             )
         };
 
-        self.vars.store(action.output.var, res);
+        self.vars.store(
+            action.output.var,
+            ExecResponse {
+                values,
+                metadata: None,
+            },
+        );
         Ok(())
     }
 }

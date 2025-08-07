@@ -1,5 +1,5 @@
 use super::{operation, plan, Exec, Result};
-use crate::driver::Rows;
+use crate::{driver::Rows, engine::ExecResponse};
 use toasty_core::stmt;
 use toasty_core::stmt::ValueStream;
 
@@ -90,7 +90,7 @@ impl Exec<'_> {
         // TODO: don't clone
         let project = out.project.clone();
 
-        let res = match res.rows {
+        let values = match res.rows {
             Rows::Count(count) => {
                 assert!(!expect_rows);
                 ValueStream::from_stream(async_stream::try_stream! {
@@ -111,7 +111,13 @@ impl Exec<'_> {
             }
         };
 
-        self.vars.store(out.var, res);
+        self.vars.store(
+            out.var,
+            ExecResponse {
+                values,
+                metadata: None,
+            },
+        );
 
         Ok(())
     }

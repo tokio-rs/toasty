@@ -1,5 +1,5 @@
 use super::{operation, plan, Exec, Result};
-use crate::driver::Rows;
+use crate::{driver::Rows, engine::ExecResponse};
 
 impl Exec<'_> {
     pub(super) async fn action_query_pk(&mut self, action: &plan::QueryPk) -> Result<()> {
@@ -23,13 +23,19 @@ impl Exec<'_> {
             _ => todo!("res={res:#?}"),
         };
 
-        let res = self.project_and_filter_output(
+        let values = self.project_and_filter_output(
             rows,
             &action.output.project,
             action.post_filter.as_ref(),
         );
 
-        self.vars.store(action.output.var, res);
+        self.vars.store(
+            action.output.var,
+            ExecResponse {
+                values,
+                metadata: None,
+            },
+        );
 
         Ok(())
     }
