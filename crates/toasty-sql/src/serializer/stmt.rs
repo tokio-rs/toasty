@@ -97,9 +97,19 @@ impl ToSql for &stmt::InsertTarget {
 
 impl ToSql for &stmt::Limit {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        assert!(self.offset.is_none(), "TODO");
-
-        fmt!(f, "LIMIT " self.limit);
+        match self {
+            stmt::Limit::Offset { limit, offset } => {
+                assert!(offset.is_none(), "TODO: Offset support not implemented yet");
+                fmt!(f, "LIMIT " limit);
+            }
+            stmt::Limit::PaginateForward { .. } => {
+                panic!(
+                    "stmt::Limit::PaginateForward should never reach toasty-sql. \
+                     This is a Toasty application-level concept that must be transformed \
+                     by the engine into valid SQL before reaching the SQL serializer."
+                );
+            }
+        }
     }
 }
 
