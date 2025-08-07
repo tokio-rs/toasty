@@ -1,15 +1,15 @@
 use std::sync::{Arc, Mutex};
 use toasty_core::{
     async_trait,
-    driver::{Capability, Driver, Operation, Response},
+    driver::{Capability, Driver, Operation, Response, Rows},
     schema::db::Schema,
     Result,
 };
 
 #[derive(Debug)]
 pub struct DriverOp {
-    pub operation: String, // Store debug representation
-    pub response: String,  // Store debug representation
+    pub operation: Operation,
+    pub response: Response,
 }
 
 /// A driver wrapper that logs all operations for testing purposes
@@ -48,19 +48,19 @@ impl Driver for LoggingDriver {
     }
 
     async fn exec(&self, schema: &Arc<Schema>, operation: Operation) -> Result<Response> {
-        // Capture debug representation before executing
-        let op_debug = format!("{:?}", operation);
+        // Clone the operation for logging
+        let operation_clone = operation.clone();
 
         // Execute the operation on the underlying driver
-        let response = self.inner.exec(schema, operation).await?;
+        let mut response = self.inner.exec(schema, operation).await?;
 
-        // Capture response debug representation
-        let resp_debug = format!("{:?}", response);
+        // Duplicate the response for logging
+        let duplicated_response = duplicate_response_mut(&mut response).await?;
 
         // Log the operation and response
         let driver_op = DriverOp {
-            operation: op_debug,
-            response: resp_debug,
+            operation: operation_clone,
+            response: duplicated_response,
         };
 
         self.ops_log
@@ -74,4 +74,19 @@ impl Driver for LoggingDriver {
     async fn reset_db(&self, schema: &Schema) -> Result<()> {
         self.inner.reset_db(schema).await
     }
+}
+
+/// Duplicate a Response, using ValueStream::dup() for value streams
+/// This version takes a mutable reference so we can call dup() on the ValueStream
+async fn duplicate_response_mut(response: &mut Response) -> Result<Response> {
+    let rows = match &mut response.rows {
+        Rows::Count(count) => Rows::Count(*count),
+        Rows::Values(stream) => {
+            // Duplicate the value stream
+            let duplicated_stream = stream.dup().await?;
+            Rows::Values(duplicated_stream)
+        }
+    };
+
+    Ok(Response { rows })
 }

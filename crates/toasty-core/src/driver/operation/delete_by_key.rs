@@ -1,7 +1,7 @@
 use super::Operation;
 use crate::{schema::db::TableId, stmt};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DeleteByKey {
     /// Which table to delete from
     pub table: TableId,
