@@ -1,7 +1,7 @@
-use tests::{assert_err, models, tests, Setup};
+use tests::{assert_err, models, tests, Setup, ToastyTest};
 use toasty::stmt::Id;
 
-async fn specify_constrained_string_field(s: impl Setup) {
+async fn specify_constrained_string_field(test: &mut ToastyTest<impl Setup>) {
     #[derive(toasty::Model)]
     struct User {
         #[key]
@@ -12,11 +12,11 @@ async fn specify_constrained_string_field(s: impl Setup) {
         name: String,
     }
 
-    if s.capability().storage_types.varchar.is_none() {
+    if test.capability().storage_types.varchar.is_none() {
         return;
     }
 
-    let db = s.setup(models!(User)).await;
+    let db = test.setup_db(models!(User)).await;
 
     let u = User::create().name("foo").exec(&db).await.unwrap();
     assert_eq!(u.name, "foo");
@@ -26,7 +26,7 @@ async fn specify_constrained_string_field(s: impl Setup) {
     assert!(res.is_err());
 }
 
-async fn specify_invalid_varchar_size(s: impl Setup) {
+async fn specify_invalid_varchar_size(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
@@ -38,7 +38,7 @@ async fn specify_invalid_varchar_size(s: impl Setup) {
         name: String,
     }
 
-    let Some(max) = s.capability().storage_types.varchar else {
+    let Some(max) = test.capability().storage_types.varchar else {
         return;
     };
 
@@ -46,14 +46,15 @@ async fn specify_invalid_varchar_size(s: impl Setup) {
         return;
     }
 
-    let err = assert_err!(s.connect(models!(User)).await);
+    // Try to setup a database with an invalid varchar size
+    let err = assert_err!(test.try_setup_db(models!(User)).await);
     assert_eq!(
         err.to_string(),
         format!("max varchar capacity exceeded: 1000000000000 > {max}")
     );
 }
 
-async fn specify_varchar_ty_when_not_supported(s: impl Setup) {
+async fn specify_varchar_ty_when_not_supported(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
@@ -65,11 +66,12 @@ async fn specify_varchar_ty_when_not_supported(s: impl Setup) {
         name: String,
     }
 
-    if let Some(_) = s.capability().storage_types.varchar {
+    if let Some(_) = test.capability().storage_types.varchar {
         return;
     }
 
-    let err = assert_err!(s.connect(models!(User)).await);
+    // Try to setup a database with varchar when not supported
+    let err = assert_err!(test.try_setup_db(models!(User)).await);
     assert_eq!(err.to_string(), "varchar storage type not supported");
 }
 
