@@ -1,4 +1,4 @@
-use tests::{models, tests, Setup, ToastyTest};
+use tests::{models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
 macro_rules! def_num_ty_tests {
@@ -7,7 +7,7 @@ macro_rules! def_num_ty_tests {
     ) => {
         $(
             #[allow(dead_code)]
-            async fn $test_name(test: &mut ToastyTest<impl Setup>) {
+            async fn $test_name(test: &mut DbTest<impl Setup>) {
                 #[derive(Debug, toasty::Model)]
                 #[allow(dead_code)]
                 struct Foo {
@@ -90,7 +90,7 @@ def_num_ty_tests!(
 );
 
 #[allow(dead_code)]
-async fn ty_str(test: &mut ToastyTest<impl Setup>) {
+async fn ty_str(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
@@ -116,10 +116,12 @@ async fn ty_str(test: &mut ToastyTest<impl Setup>) {
         gen_string(100, "spaces"),
     ]
     .into_iter()
-    .filter(|value| match test.capability().default_string_max_length() {
-        Some(max_len) => max_len >= value.len() as _,
-        None => true,
-    })
+    .filter(
+        |value| match test.capability().default_string_max_length() {
+            Some(max_len) => max_len >= value.len() as _,
+            None => true,
+        },
+    )
     .collect();
 
     // Test 1: All test values round-trip
@@ -154,14 +156,4 @@ fn gen_string(length: usize, pattern: &str) -> String {
     }
 }
 
-tests!(
-    ty_i8,
-    ty_i16,
-    ty_i32,
-    ty_i64,
-    ty_u8,
-    ty_u16,
-    ty_u32,
-    ty_u64,
-    ty_str,
-);
+tests!(ty_i8, ty_i16, ty_i32, ty_i64, ty_u8, ty_u16, ty_u32, ty_u64, ty_str,);

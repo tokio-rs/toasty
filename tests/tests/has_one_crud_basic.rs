@@ -1,8 +1,8 @@
 use std_util::{assert_err, assert_none};
-use tests::{models, tests, Setup, ToastyTest};
+use tests::{models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
-async fn crud_has_one_bi_direction_optional(test: &mut ToastyTest<impl Setup>) {
+async fn crud_has_one_bi_direction_optional(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -124,7 +124,7 @@ async fn crud_has_one_bi_direction_optional(test: &mut ToastyTest<impl Setup>) {
     assert_none!(profile_reloaded.user_id);
 }
 
-async fn crud_has_one_required_belongs_to_optional(test: &mut ToastyTest<impl Setup>) {
+async fn crud_has_one_required_belongs_to_optional(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -174,7 +174,7 @@ async fn crud_has_one_required_belongs_to_optional(test: &mut ToastyTest<impl Se
     assert_err!(User::create().exec(&db).await);
 }
 
-async fn update_belongs_to_with_required_has_one_pair(test: &mut ToastyTest<impl Setup>) {
+async fn update_belongs_to_with_required_has_one_pair(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -282,7 +282,7 @@ async fn update_belongs_to_with_required_has_one_pair(test: &mut ToastyTest<impl
     */
 }
 
-async fn crud_has_one_optional_belongs_to_required(test: &mut ToastyTest<impl Setup>) {
+async fn crud_has_one_optional_belongs_to_required(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -330,7 +330,7 @@ async fn crud_has_one_optional_belongs_to_required(test: &mut ToastyTest<impl Se
 
 // TODO: implement this for proc macros
 /*
-async fn has_one_must_specify_be_uniquely_indexed(_test: &mut ToastyTest<impl Setup>) {
+async fn has_one_must_specify_be_uniquely_indexed(_test: &mut DbTest<impl Setup>) {
     toasty_core::schema::from_str(
         "
         model User {
@@ -358,7 +358,7 @@ async fn has_one_must_specify_be_uniquely_indexed(_test: &mut ToastyTest<impl Se
 }
 */
 
-async fn set_has_one_by_value_in_update_query(test: &mut ToastyTest<impl Setup>) {
+async fn set_has_one_by_value_in_update_query(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -400,9 +400,9 @@ async fn set_has_one_by_value_in_update_query(test: &mut ToastyTest<impl Setup>)
     assert_eq!(profile_reload.user_id.as_ref().unwrap(), &user.id);
 }
 
-async fn unset_has_one_in_batch_update(_test: &mut ToastyTest<impl Setup>) {}
+async fn unset_has_one_in_batch_update(_test: &mut DbTest<impl Setup>) {}
 
-async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut ToastyTest<impl Setup>) {
+async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -448,7 +448,7 @@ async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut ToastyTe
     assert_err!(Profile::get_by_id(&db, &profile.id).await);
 }
 
-async fn unset_has_one_with_required_pair_in_non_pk_query_update(test: &mut ToastyTest<impl Setup>) {
+async fn unset_has_one_with_required_pair_in_non_pk_query_update(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -497,7 +497,7 @@ async fn unset_has_one_with_required_pair_in_non_pk_query_update(test: &mut Toas
     assert_err!(Profile::get_by_id(&db, &profile.id).await);
 }
 
-async fn associate_has_one_by_val_on_insert(test: &mut ToastyTest<impl Setup>) {
+async fn associate_has_one_by_val_on_insert(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -541,7 +541,7 @@ async fn associate_has_one_by_val_on_insert(test: &mut ToastyTest<impl Setup>) {
     assert_eq!(profile.bio, profile_reloaded.bio);
 }
 
-async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut ToastyTest<impl Setup>) {
+async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut DbTest<impl Setup>) {
     /*
     #[derive(Debug, toasty::Model)]
     struct User {

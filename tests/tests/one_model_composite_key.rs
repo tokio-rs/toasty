@@ -1,6 +1,6 @@
-use tests::{models, tests, Setup, ToastyTest};
+use tests::{models, tests, DbTest, Setup};
 
-async fn batch_get_by_key(test: &mut ToastyTest<impl Setup>) {
+async fn batch_get_by_key(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]

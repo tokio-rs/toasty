@@ -1,8 +1,8 @@
 use std_util::{assert_err, assert_none, assert_ok};
-use tests::{models, tests, Setup, ToastyTest};
+use tests::{models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
-async fn remove_add_single_relation_option_belongs_to(test: &mut ToastyTest<impl Setup>) {
+async fn remove_add_single_relation_option_belongs_to(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -74,7 +74,7 @@ async fn remove_add_single_relation_option_belongs_to(test: &mut ToastyTest<impl
     assert_ok!(user.todos().get_by_id(&db, &todos[0].id).await);
 }
 
-async fn add_remove_single_relation_required_belongs_to(test: &mut ToastyTest<impl Setup>) {
+async fn add_remove_single_relation_required_belongs_to(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -128,7 +128,7 @@ async fn add_remove_single_relation_required_belongs_to(test: &mut ToastyTest<im
     assert_eq!(todos_reloaded.len(), 2);
 }
 
-async fn reassign_relation_required_belongs_to(test: &mut ToastyTest<impl Setup>) {
+async fn reassign_relation_required_belongs_to(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -173,7 +173,7 @@ async fn reassign_relation_required_belongs_to(test: &mut ToastyTest<impl Setup>
     assert_eq!(t1.id, todos[0].id);
 }
 
-async fn add_remove_multiple_relation_option_belongs_to(test: &mut ToastyTest<impl Setup>) {
+async fn add_remove_multiple_relation_option_belongs_to(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std_util::assert_empty;
-use tests::{models, tests, Setup, ToastyTest};
+use tests::{models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
-async fn crud_user_todos_categories(test: &mut ToastyTest<impl Setup>) {
+async fn crud_user_todos_categories(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]

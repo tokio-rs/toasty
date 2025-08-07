@@ -56,7 +56,7 @@ impl Default for SetupPostgreSQL {
 #[async_trait::async_trait]
 impl Setup for SetupPostgreSQL {
     type Driver = toasty::driver::Connection;
-    
+
     async fn connect(&self) -> toasty::Result<Self::Driver> {
         let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
             .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());

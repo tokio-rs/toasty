@@ -1,6 +1,6 @@
-use tests::{assert_eq_unordered, models, tests, Setup, ToastyTest};
+use tests::{assert_eq_unordered, models, tests, DbTest, Setup};
 
-async fn query_index_eq(test: &mut ToastyTest<impl Setup>) {
+async fn query_index_eq(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -64,7 +64,7 @@ async fn query_index_eq(test: &mut ToastyTest<impl Setup>) {
     assert_eq!("one@example.com", users[1].email);
 }
 
-async fn query_partition_key_string_eq(test: &mut ToastyTest<impl Setup>) {
+async fn query_partition_key_string_eq(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     #[key(partition = league, local = name)]
     struct Team {
@@ -198,7 +198,7 @@ async fn query_partition_key_string_eq(test: &mut ToastyTest<impl Setup>) {
     assert!(teams.is_empty());
 }
 
-async fn query_local_key_cmp(test: &mut ToastyTest<impl Setup>) {
+async fn query_local_key_cmp(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     #[key(partition = kind, local = timestamp)]
     struct Event {
@@ -296,7 +296,7 @@ async fn query_local_key_cmp(test: &mut ToastyTest<impl Setup>) {
     );
 }
 
-async fn query_arbitrary_constraint(test: &mut ToastyTest<impl Setup>) {
+async fn query_arbitrary_constraint(test: &mut DbTest<impl Setup>) {
     // Only supported by SQL
     if !test.capability().sql {
         return;

@@ -1,11 +1,11 @@
-use tests::{models, tests, Setup, ToastyTest};
+use tests::{models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
 fn assert_sync_send<T: Send>(val: T) -> T {
     val
 }
 
-async fn ensure_types_sync_send(test: &mut ToastyTest<impl Setup>) {
+async fn ensure_types_sync_send(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]

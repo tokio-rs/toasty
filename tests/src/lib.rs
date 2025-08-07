@@ -2,13 +2,13 @@
 mod macros;
 
 pub mod db;
+mod db_test;
 mod isolation;
 mod logging_driver;
-mod toasty_test;
 
 // Re-export for use in macros - needs to be public for macro expansion
+pub use db_test::DbTest;
 pub use logging_driver::{DriverOp, LoggingDriver};
-pub use toasty_test::ToastyTest;
 
 use std::collections::HashMap;
 use toasty_core::driver::Capability;
@@ -78,7 +78,7 @@ macro_rules! tests {
                 #[test]
                 $( #[$attrs] )*
                 fn $f() {
-                    let mut test = $crate::ToastyTest::new(
+                    let mut test = $crate::DbTest::new(
                         $crate::db::dynamodb::SetupDynamoDb::new()
                     );
 
@@ -95,7 +95,7 @@ macro_rules! tests {
                 #[test]
                 $( #[$attrs] )*
                 fn $f() {
-                    let mut test = $crate::ToastyTest::new(
+                    let mut test = $crate::DbTest::new(
                         $crate::db::sqlite::SetupSqlite::new()
                     );
 
@@ -112,7 +112,7 @@ macro_rules! tests {
                 #[test]
                 $( #[$attrs] )*
                 fn $f() {
-                    let mut test = $crate::ToastyTest::new(
+                    let mut test = $crate::DbTest::new(
                         $crate::db::mysql::SetupMySQL::new()
                     );
 
@@ -129,7 +129,7 @@ macro_rules! tests {
                 #[test]
                 $( #[$attrs] )*
                 fn $f() {
-                    let mut test = $crate::ToastyTest::new(
+                    let mut test = $crate::DbTest::new(
                         $crate::db::postgresql::SetupPostgreSQL::new()
                     );
 

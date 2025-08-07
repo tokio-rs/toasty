@@ -1,7 +1,7 @@
-use tests::{assert_err, models, tests, Setup, ToastyTest};
+use tests::{assert_err, models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
-async fn specify_constrained_string_field(test: &mut ToastyTest<impl Setup>) {
+async fn specify_constrained_string_field(test: &mut DbTest<impl Setup>) {
     #[derive(toasty::Model)]
     struct User {
         #[key]
@@ -26,7 +26,7 @@ async fn specify_constrained_string_field(test: &mut ToastyTest<impl Setup>) {
     assert!(res.is_err());
 }
 
-async fn specify_invalid_varchar_size(test: &mut ToastyTest<impl Setup>) {
+async fn specify_invalid_varchar_size(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
@@ -54,7 +54,7 @@ async fn specify_invalid_varchar_size(test: &mut ToastyTest<impl Setup>) {
     );
 }
 
-async fn specify_varchar_ty_when_not_supported(test: &mut ToastyTest<impl Setup>) {
+async fn specify_varchar_ty_when_not_supported(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {

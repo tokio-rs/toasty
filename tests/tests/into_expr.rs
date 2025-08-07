@@ -1,7 +1,7 @@
-use tests::{models, tests, Setup, ToastyTest};
+use tests::{models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
-async fn string_to_id_expr(test: &mut ToastyTest<impl Setup>) {
+async fn string_to_id_expr(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]

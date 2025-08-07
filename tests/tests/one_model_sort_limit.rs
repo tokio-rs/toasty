@@ -1,4 +1,4 @@
-use tests::{models, tests, Setup, ToastyTest};
+use tests::{models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
 #[derive(toasty::Model)]
@@ -11,7 +11,7 @@ struct Foo {
     order: i64,
 }
 
-async fn sort_asc(test: &mut ToastyTest<impl Setup>) {
+async fn sort_asc(test: &mut DbTest<impl Setup>) {
     if !test.capability().sql {
         return;
     }
@@ -47,7 +47,7 @@ async fn sort_asc(test: &mut ToastyTest<impl Setup>) {
     }
 }
 
-async fn paginate(test: &mut ToastyTest<impl Setup>) {
+async fn paginate(test: &mut DbTest<impl Setup>) {
     if !test.capability().sql {
         return;
     }

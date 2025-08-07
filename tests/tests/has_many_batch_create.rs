@@ -1,7 +1,7 @@
-use tests::{assert_eq_unordered, models, tests, Setup, ToastyTest};
+use tests::{assert_eq_unordered, models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
-async fn user_batch_create_todos_one_level_basic_fk(test: &mut ToastyTest<impl Setup>) {
+async fn user_batch_create_todos_one_level_basic_fk(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -51,7 +51,7 @@ async fn user_batch_create_todos_one_level_basic_fk(test: &mut ToastyTest<impl S
     assert_eq!("Make pizza", todo.title);
 }
 
-async fn user_batch_create_todos_two_levels_basic_fk(test: &mut ToastyTest<impl Setup>) {
+async fn user_batch_create_todos_two_levels_basic_fk(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -164,7 +164,7 @@ async fn user_batch_create_todos_two_levels_basic_fk(test: &mut ToastyTest<impl 
     assert_eq!(1, todos.len());
 }
 
-async fn user_batch_create_todos_set_category_by_value(test: &mut ToastyTest<impl Setup>) {
+async fn user_batch_create_todos_set_category_by_value(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -243,7 +243,7 @@ async fn user_batch_create_todos_set_category_by_value(test: &mut ToastyTest<imp
     );
 }
 
-async fn user_batch_create_todos_set_category_by_query(_test: &mut ToastyTest<impl Setup>) {}
+async fn user_batch_create_todos_set_category_by_query(_test: &mut DbTest<impl Setup>) {}
 
 tests!(
     user_batch_create_todos_one_level_basic_fk,

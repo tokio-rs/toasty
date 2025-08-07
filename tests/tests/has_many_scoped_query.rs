@@ -1,8 +1,8 @@
 use std::collections::HashSet;
-use tests::{assert_eq_unordered, models, tests, Setup, ToastyTest};
+use tests::{assert_eq_unordered, models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
-async fn scoped_query_eq(test: &mut ToastyTest<impl Setup>) {
+async fn scoped_query_eq(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -139,7 +139,7 @@ async fn scoped_query_eq(test: &mut ToastyTest<impl Setup>) {
     assert!(todos.is_empty());
 }
 
-async fn scoped_query_gt(test: &mut ToastyTest<impl Setup>) {
+async fn scoped_query_gt(test: &mut DbTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
