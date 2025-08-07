@@ -46,12 +46,11 @@ impl Default for SetupDynamoDb {
 
 #[async_trait::async_trait]
 impl Setup for SetupDynamoDb {
-    type Driver = toasty::driver::Connection;
-
-    async fn connect(&self) -> toasty::Result<Self::Driver> {
+    async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
         let url =
             std::env::var("TOASTY_TEST_DYNAMODB_URL").unwrap_or_else(|_| "dynamodb://".to_string());
-        toasty::driver::Connection::connect(&url).await
+        let conn = toasty::driver::Connection::connect(&url).await?;
+        Ok(Box::new(conn))
     }
 
     fn configure_builder(&self, builder: &mut toasty::db::Builder) {

@@ -44,7 +44,7 @@ impl<S: Setup> DbTest<S> {
         let driver = setup.connect().await?;
 
         // Always wrap with logging, using our existing ops_log
-        let logging_driver = LoggingDriver::new(Box::new(driver));
+        let logging_driver = LoggingDriver::new(driver);
         self.ops_log = logging_driver.ops_log_handle();
 
         // Build the database with the logging driver
@@ -78,7 +78,7 @@ impl<S: Setup> DbTest<S> {
     }
 
     /// Connect to get a raw driver (for error testing)
-    pub async fn connect(&self) -> toasty::Result<<S as Setup>::Driver> {
+    pub async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
         let setup = self.setup.as_ref().expect("Setup already consumed");
         setup.connect().await
     }

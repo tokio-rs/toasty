@@ -17,11 +17,8 @@ pub use std_util::*;
 
 #[async_trait::async_trait]
 pub trait Setup: Send + Sync + 'static {
-    /// The concrete driver type for this database
-    type Driver: toasty_core::driver::Driver;
-
     /// Create a connection to the database
-    async fn connect(&self) -> toasty::Result<Self::Driver>;
+    async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>>;
 
     /// Configure the builder with database-specific settings (like table prefixes)
     fn configure_builder(&self, _builder: &mut toasty::db::Builder) {
