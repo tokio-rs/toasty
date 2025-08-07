@@ -1,7 +1,7 @@
 use tests::{models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
-async fn crud_user_optional_profile_one_direction(test: &mut DbTest<impl Setup>) {
+async fn crud_user_optional_profile_one_direction(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]

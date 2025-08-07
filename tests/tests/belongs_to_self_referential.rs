@@ -3,7 +3,7 @@ use std_util::assert_none;
 use tests::{models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
-async fn crud_person_self_referential(test: &mut DbTest<impl Setup>) {
+async fn crud_person_self_referential(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct Person {
         #[key]

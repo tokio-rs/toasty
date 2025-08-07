@@ -1,7 +1,7 @@
 use tests::{models, tests, DbTest, Setup};
 use toasty::stmt::Id;
 
-async fn basic_has_many_and_belongs_to_preload(test: &mut DbTest<impl Setup>) {
+async fn basic_has_many_and_belongs_to_preload(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]

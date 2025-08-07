@@ -1,6 +1,6 @@
 use tests::{models, tests, DbTest, Setup};
 
-async fn different_field_name(test: &mut DbTest<impl Setup>) {
+async fn different_field_name(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]

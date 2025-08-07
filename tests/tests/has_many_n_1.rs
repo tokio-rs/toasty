@@ -2,7 +2,7 @@ use tests::{models, tests, DbTest, Setup};
 // use toasty::stmt::Id;
 
 // What is this testing?
-async fn hello_world(_test: &mut DbTest<impl Setup>) {
+async fn hello_world(_test: &mut DbTest) {
     /*
     #[derive(Debug, toasty::Model)]
     struct User {

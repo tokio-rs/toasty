@@ -11,7 +11,7 @@ struct Foo {
     order: i64,
 }
 
-async fn sort_asc(test: &mut DbTest<impl Setup>) {
+async fn sort_asc(test: &mut DbTest) {
     if !test.capability().sql {
         return;
     }
@@ -47,7 +47,7 @@ async fn sort_asc(test: &mut DbTest<impl Setup>) {
     }
 }
 
-async fn paginate(test: &mut DbTest<impl Setup>) {
+async fn paginate(test: &mut DbTest) {
     if !test.capability().sql {
         return;
     }

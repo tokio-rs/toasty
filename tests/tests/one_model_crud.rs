@@ -4,7 +4,7 @@ use toasty::stmt::Id;
 
 const MORE: i32 = 10;
 
-async fn crud_no_fields(test: &mut DbTest<impl Setup>) {
+async fn crud_no_fields(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -80,7 +80,7 @@ async fn crud_no_fields(test: &mut DbTest<impl Setup>) {
     }
 }
 
-async fn crud_one_string(test: &mut DbTest<impl Setup>) {
+async fn crud_one_string(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -168,7 +168,7 @@ async fn crud_one_string(test: &mut DbTest<impl Setup>) {
     assert_err!(Foo::get_by_id(&db, &ids[0]).await);
 }
 
-async fn required_field_create_without_setting(test: &mut DbTest<impl Setup>) {
+async fn required_field_create_without_setting(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -182,7 +182,7 @@ async fn required_field_create_without_setting(test: &mut DbTest<impl Setup>) {
     assert_err!(User::create().exec(&db).await);
 }
 
-async fn unique_index_required_field_update(test: &mut DbTest<impl Setup>) {
+async fn unique_index_required_field_update(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -282,7 +282,7 @@ async fn unique_index_required_field_update(test: &mut DbTest<impl Setup>) {
     assert_ok!(User::create().email("user2@example.com").exec(&db).await);
 }
 
-async fn unique_index_nullable_field_update(test: &mut DbTest<impl Setup>) {
+async fn unique_index_nullable_field_update(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -371,7 +371,7 @@ async fn unique_index_nullable_field_update(test: &mut DbTest<impl Setup>) {
     assert_eq!(u4_reload.id, u4.id);
 }
 
-async fn unique_index_no_update(test: &mut DbTest<impl Setup>) {
+async fn unique_index_no_update(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -409,7 +409,7 @@ async fn unique_index_no_update(test: &mut DbTest<impl Setup>) {
     assert_eq!(user.name, u.name);
 }
 
-async fn batch_get_by_id(test: &mut DbTest<impl Setup>) {
+async fn batch_get_by_id(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -437,7 +437,7 @@ async fn batch_get_by_id(test: &mut DbTest<impl Setup>) {
     }
 }
 
-async fn empty_batch_get_by_id(test: &mut DbTest<impl Setup>) {
+async fn empty_batch_get_by_id(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -461,7 +461,7 @@ async fn empty_batch_get_by_id(test: &mut DbTest<impl Setup>) {
     assert_eq!(0, foos.len());
 }
 
-async fn update_multiple_fields(test: &mut DbTest<impl Setup>) {
+async fn update_multiple_fields(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]

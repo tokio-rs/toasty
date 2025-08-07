@@ -74,7 +74,7 @@ macro_rules! tests {
                 $( #[$attrs] )*
                 fn $f() {
                     let mut test = $crate::DbTest::new(
-                        $crate::db::dynamodb::SetupDynamoDb::new()
+                        Box::new($crate::db::dynamodb::SetupDynamoDb::new())
                     );
 
                     test.run_test(move |test| Box::pin(async move {
@@ -91,7 +91,7 @@ macro_rules! tests {
                 $( #[$attrs] )*
                 fn $f() {
                     let mut test = $crate::DbTest::new(
-                        $crate::db::sqlite::SetupSqlite::new()
+                        Box::new($crate::db::sqlite::SetupSqlite::new())
                     );
 
                     test.run_test(move |test| Box::pin(async move {
@@ -108,7 +108,7 @@ macro_rules! tests {
                 $( #[$attrs] )*
                 fn $f() {
                     let mut test = $crate::DbTest::new(
-                        $crate::db::mysql::SetupMySQL::new()
+                        Box::new($crate::db::mysql::SetupMySQL::new())
                     );
 
                     test.run_test(move |test| Box::pin(async move {
@@ -125,7 +125,7 @@ macro_rules! tests {
                 $( #[$attrs] )*
                 fn $f() {
                     let mut test = $crate::DbTest::new(
-                        $crate::db::postgresql::SetupPostgreSQL::new()
+                        Box::new($crate::db::postgresql::SetupPostgreSQL::new())
                     );
 
                     test.run_test(move |test| Box::pin(async move {

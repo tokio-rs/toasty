@@ -7,7 +7,7 @@ macro_rules! def_num_ty_tests {
     ) => {
         $(
             #[allow(dead_code)]
-            async fn $test_name(test: &mut DbTest<impl Setup>) {
+            async fn $test_name(test: &mut DbTest) {
                 #[derive(Debug, toasty::Model)]
                 #[allow(dead_code)]
                 struct Foo {
@@ -90,7 +90,7 @@ def_num_ty_tests!(
 );
 
 #[allow(dead_code)]
-async fn ty_str(test: &mut DbTest<impl Setup>) {
+async fn ty_str(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {

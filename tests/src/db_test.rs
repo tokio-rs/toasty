@@ -12,15 +12,15 @@ use toasty::Db;
 /// 2. Ensure cleanup blocks before the test process exits
 /// 3. Keep the existing test API unchanged
 /// 4. Always log driver operations for debugging
-pub struct DbTest<S: Setup> {
+pub struct DbTest {
     runtime: tokio::runtime::Runtime,
-    setup: Option<S>,
+    setup: Option<Box<dyn Setup>>,
     ops_log: Arc<Mutex<Vec<DriverOp>>>,
 }
 
-impl<S: Setup> DbTest<S> {
+impl DbTest {
     /// Create a new DbTest with a current-thread runtime.
-    pub fn new(setup: S) -> Self {
+    pub fn new(setup: Box<dyn Setup>) -> Self {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -102,12 +102,12 @@ impl<S: Setup> DbTest<S> {
     pub fn run_test<F>(&mut self, test_fn: F)
     where
         F: for<'a> FnOnce(
-            &'a mut DbTest<S>,
+            &'a mut DbTest,
         ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>>,
     {
         // Use unsafe to get a mutable reference to self inside the closure
         // This is safe because we control the runtime and know there's no aliasing
-        let self_ptr = self as *mut DbTest<S>;
+        let self_ptr = self as *mut DbTest;
 
         self.runtime.block_on(async {
             let self_mut = unsafe { &mut *self_ptr };
@@ -116,7 +116,7 @@ impl<S: Setup> DbTest<S> {
     }
 }
 
-impl<S: Setup> Drop for DbTest<S> {
+impl Drop for DbTest {
     fn drop(&mut self) {
         // If setup is still present, clean it up
         if let Some(setup) = self.setup.take() {

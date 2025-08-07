@@ -5,7 +5,7 @@ fn assert_sync_send<T: Send>(val: T) -> T {
     val
 }
 
-async fn ensure_types_sync_send(test: &mut DbTest<impl Setup>) {
+async fn ensure_types_sync_send(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
