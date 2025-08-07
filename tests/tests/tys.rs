@@ -1,8 +1,5 @@
-use tests::{models, tests, Setup};
-
+use tests::{models, tests, Setup, ToastyTest};
 use toasty::stmt::Id;
-
-tests!(ty_i8, ty_i16, ty_i32, ty_i64, ty_u8, ty_u16, ty_u32, ty_u64, ty_str,);
 
 macro_rules! def_num_ty_tests {
     (
@@ -10,7 +7,7 @@ macro_rules! def_num_ty_tests {
     ) => {
         $(
             #[allow(dead_code)]
-            async fn $test_name(s: impl Setup) {
+            async fn $test_name(test: &mut ToastyTest<impl Setup>) {
                 #[derive(Debug, toasty::Model)]
                 #[allow(dead_code)]
                 struct Foo {
@@ -20,13 +17,13 @@ macro_rules! def_num_ty_tests {
                     val: $t,
                 }
 
-                let db = s.setup(models!(Foo)).await;
+                let db = test.setup_db(models!(Foo)).await;
                 let mut test_values: Vec<$t> = $test_values.to_vec();
 
                 // Filter test values based on database capabilities for unsigned integers
                 // Unsigned types have MIN == 0, signed types have MIN < 0
                 if <$t>::MIN == 0 {
-                    if let Some(max_unsigned) = s.capability().storage_types.max_unsigned_integer {
+                    if let Some(max_unsigned) = test.capability().storage_types.max_unsigned_integer {
                         test_values.retain(|&val| {
                             let val_as_u64 = val as u64;
                             val_as_u64 <= max_unsigned
@@ -44,7 +41,7 @@ macro_rules! def_num_ty_tests {
                     let mut filter = std::collections::HashMap::new();
                     filter.insert("id".to_string(), toasty_core::stmt::Value::from(created.id));
 
-                    let raw_stored_value = s.get_raw_column_value::<$t>("foos", "val", filter).await
+                    let raw_stored_value = test.get_raw_column_value::<$t>("foos", "val", filter).await
                         .unwrap_or_else(|e| panic!("Raw storage verification failed for {} value {}: {}", stringify!($t), val, e));
 
                     assert_eq!(
@@ -93,7 +90,7 @@ def_num_ty_tests!(
 );
 
 #[allow(dead_code)]
-async fn ty_str(s: impl Setup) {
+async fn ty_str(test: &mut ToastyTest<impl Setup>) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
@@ -103,7 +100,7 @@ async fn ty_str(s: impl Setup) {
         val: String,
     }
 
-    let db = s.setup(models!(Foo)).await;
+    let db = test.setup_db(models!(Foo)).await;
 
     let test_values: Vec<_> = [
         gen_string(0, "empty"),
@@ -119,7 +116,7 @@ async fn ty_str(s: impl Setup) {
         gen_string(100, "spaces"),
     ]
     .into_iter()
-    .filter(|value| match s.capability().default_string_max_length() {
+    .filter(|value| match test.capability().default_string_max_length() {
         Some(max_len) => max_len >= value.len() as _,
         None => true,
     })
@@ -156,3 +153,15 @@ fn gen_string(length: usize, pattern: &str) -> String {
         _ => pattern.repeat(length / pattern.len().max(1)),
     }
 }
+
+tests!(
+    ty_i8,
+    ty_i16,
+    ty_i32,
+    ty_i64,
+    ty_u8,
+    ty_u16,
+    ty_u32,
+    ty_u64,
+    ty_str,
+);
