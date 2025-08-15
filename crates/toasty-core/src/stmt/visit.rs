@@ -527,6 +527,9 @@ where
             }
         }
         Expr::DecodeEnum(base, ..) => v.visit_expr(base),
+        Expr::AlwaysTrue => {
+            // nothing to visit
+        },
         _ => todo!("{node:#?}"),
     }
 }

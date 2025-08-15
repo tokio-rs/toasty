@@ -83,6 +83,9 @@ pub enum Expr {
 
     // TODO: get rid of this?
     DecodeEnum(Box<Expr>, Type, usize),
+
+    // Always evaluates to true, used for no-op filters
+    AlwaysTrue,
 }
 
 impl Expr {
@@ -97,7 +100,7 @@ impl Expr {
 
     /// Returns true if the expression is the `true` boolean expression
     pub fn is_true(&self) -> bool {
-        matches!(self, Self::Value(Value::Bool(true)))
+        matches!(self, Self::Value(Value::Bool(true)) | Expr::AlwaysTrue)
     }
 
     /// Returns `true` if the expression is the `false` boolean expression
@@ -360,6 +363,7 @@ impl fmt::Debug for Expr {
                 .field(ty)
                 .field(variant)
                 .finish(),
+            Self::AlwaysTrue => f.write_str("AlwaysTrue"),
         }
     }
 }

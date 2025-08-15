@@ -533,6 +533,9 @@ where
             }
         }
         Expr::DecodeEnum(base, ..) => v.visit_expr_mut(base),
+        Expr::AlwaysTrue => {
+            // nothing to visit
+        }
     }
 }
 

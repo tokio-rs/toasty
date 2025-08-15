@@ -68,13 +68,13 @@ impl From<Select> for Query {
 
 impl From<TableId> for Select {
     fn from(value: TableId) -> Self {
-        Self::new(Source::table(value), true)
+        Self::new(Source::table(value), Expr::AlwaysTrue)
     }
 }
 
 impl From<SourceModel> for Select {
     fn from(value: SourceModel) -> Self {
-        Self::new(Source::Model(value), true)
+        Self::new(Source::Model(value), Expr::AlwaysTrue)
     }
 }
 
