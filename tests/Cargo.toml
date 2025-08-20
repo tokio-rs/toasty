@@ -12,9 +12,10 @@ dynamodb = ["toasty/dynamodb"]
 postgresql = ["toasty/postgresql"]
 
 [dependencies]
+assert-struct.workspace = true
 async-trait.workspace = true
 toasty.workspace = true
-toasty-core.workspace = true
+toasty-core = { workspace = true, features = ["assert-struct"] }
 toasty-macros.workspace = true
 tokio.workspace = true
 

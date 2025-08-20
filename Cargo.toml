@@ -43,6 +43,7 @@ toasty-driver-sqlite = { path = "crates/toasty-driver-sqlite" }
 
 # Other crates
 anyhow = "1.0.92"
+assert-struct = { path = "/Users/carllerche/Code/assert-struct/assert-struct" }
 async-recursion = "1.1.1"
 async-stream = "0.3.6"
 async-trait = "0.1.83"

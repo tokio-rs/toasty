@@ -43,6 +43,10 @@ impl Assignments {
         self.assignments.is_empty()
     }
 
+    pub fn len(&self) -> usize {
+        self.assignments.len()
+    }
+
     pub fn contains(&self, key: usize) -> bool {
         self.assignments.contains_key(&key)
     }

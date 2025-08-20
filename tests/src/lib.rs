@@ -4,6 +4,7 @@ mod macros;
 pub mod db;
 mod db_test;
 mod exec_log;
+pub mod expr;
 mod isolation;
 mod logging_driver;
 
