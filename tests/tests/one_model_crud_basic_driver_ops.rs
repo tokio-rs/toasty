@@ -1,9 +1,9 @@
 use assert_struct::assert_struct;
 use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
+use toasty::{stmt::Id, Model};
 use toasty_core::{
     driver::{Operation, Rows},
-    schema::db::{ColumnId, TableId},
+    schema::db::ColumnId,
     stmt::{Expr, ExprColumn, ExprSet, Source, Statement, Value},
 };
 
@@ -19,6 +19,9 @@ async fn basic_crud(test: &mut DbTest) {
     }
 
     let db = test.setup_db(models!(User)).await;
+    
+    // Helper function to get the table ID for the User model
+    let user_table_id = db.schema().table_id_for(User::id());
 
     // Clear any setup operations (from reset_db, etc.)
     test.log().clear();
@@ -44,12 +47,12 @@ async fn basic_crud(test: &mut DbTest) {
             assert_struct!(query_sql, _ {
                 stmt: Statement::Insert(_ {
                     target: toasty_core::stmt::InsertTarget::Table(_ {
-                        table: TableId(0),
+                        table: user_table_id,
                         columns.len(): 3,
                         columns: [
-                            ColumnId { table: TableId(0), index: 0 },
-                            ColumnId { table: TableId(0), index: 1 },
-                            ColumnId { table: TableId(0), index: 2 }
+                            ColumnId { table: user_table_id, index: 0 },
+                            ColumnId { table: user_table_id, index: 1 },
+                            ColumnId { table: user_table_id, index: 2 }
                         ],
                         ..
                     }),
@@ -106,9 +109,14 @@ async fn basic_crud(test: &mut DbTest) {
 
             assert_eq!(tables.len(), 1, "Should select from 1 table");
             assert_struct!(tables[0], _ {
-                table: toasty_core::stmt::TableRef::Table(TableId(_)),
+                table: toasty_core::stmt::TableRef::Table(_),
                 ..
             });
+            
+            // Verify it's the correct table
+            if let toasty_core::stmt::TableRef::Table(table_id) = &tables[0].table {
+                assert_eq!(*table_id, user_table_id, "Should query from User table");
+            }
 
             // Check the WHERE clause filters by ID
             let Expr::BinaryOp(bin_op) = &select.filter else {
@@ -124,7 +132,7 @@ async fn basic_crud(test: &mut DbTest) {
             assert_eq!(
                 *col_id,
                 ColumnId {
-                    table: TableId(0),
+                    table: user_table_id,
                     index: 0
                 },
                 "Should filter by ID column"
@@ -147,7 +155,7 @@ async fn basic_crud(test: &mut DbTest) {
             }
 
             assert_struct!(get, _ {
-                table: TableId(0),
+                table: user_table_id,
                 ..
             });
 
@@ -192,7 +200,7 @@ async fn basic_crud(test: &mut DbTest) {
             // Comprehensive UPDATE validation: statement type, target, assignments, and values
             assert_struct!(query_sql, _ {
                 stmt: Statement::Update(_ {
-                    target: toasty_core::stmt::UpdateTarget::Table(TableId(0)),
+                    target: toasty_core::stmt::UpdateTarget::Table(user_table_id),
                     assignments.len(): 1,
                     assignments[2]: _ {
                         expr: Expr::Value(Value::I32(31)),
@@ -222,7 +230,7 @@ async fn basic_crud(test: &mut DbTest) {
             assert_eq!(
                 *col_id,
                 ColumnId {
-                    table: TableId(0),
+                    table: user_table_id,
                     index: 0
                 },
                 "Should filter by ID column"
@@ -250,7 +258,7 @@ async fn basic_crud(test: &mut DbTest) {
             }
 
             assert_struct!(update, _ {
-                table: TableId(0),
+                table: user_table_id,
                 filter: None,
                 keys.len(): 1,
                 keys[0]: Value::String(_),
@@ -305,9 +313,14 @@ async fn basic_crud(test: &mut DbTest) {
 
             assert_eq!(tables.len(), 1, "Should delete from 1 table");
             assert_struct!(tables[0], _ {
-                table: toasty_core::stmt::TableRef::Table(TableId(_)),
+                table: toasty_core::stmt::TableRef::Table(_),
                 ..
             });
+            
+            // Verify it's the correct table
+            if let toasty_core::stmt::TableRef::Table(table_id) = &tables[0].table {
+                assert_eq!(*table_id, user_table_id, "Should delete from User table");
+            }
 
             // Check the WHERE clause
             let Expr::BinaryOp(bin_op) = &delete.filter else {
@@ -323,7 +336,7 @@ async fn basic_crud(test: &mut DbTest) {
             assert_eq!(
                 *col_id,
                 ColumnId {
-                    table: TableId(0),
+                    table: user_table_id,
                     index: 0
                 },
                 "Should filter by ID column"
@@ -347,7 +360,7 @@ async fn basic_crud(test: &mut DbTest) {
             }
 
             assert_struct!(delete, _ {
-                table: TableId(0),
+                table: user_table_id,
                 filter: None,
                 keys.len(): 1,
                 keys[0]: Value::String(_),
