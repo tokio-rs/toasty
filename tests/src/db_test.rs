@@ -1,8 +1,4 @@
-use crate::{
-    exec_log::ExecLog,
-    logging_driver::LoggingDriver,
-    Setup,
-};
+use crate::{exec_log::ExecLog, logging_driver::LoggingDriver, Setup};
 use std::sync::{Arc, Mutex};
 use toasty::Db;
 
