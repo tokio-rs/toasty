@@ -38,8 +38,9 @@ async fn basic_crud(test: &mut DbTest) {
 
     match create_op {
         Operation::QuerySql(query_sql) => {
-            // Verify the statement is an INSERT
             // Comprehensive CREATE validation: statement, target, columns, values, and return type
+            use tests::expr::Any;
+
             assert_struct!(query_sql, _ {
                 stmt: Statement::Insert(_ {
                     target: toasty_core::stmt::InsertTarget::Table(_ {
@@ -53,10 +54,7 @@ async fn basic_crud(test: &mut DbTest) {
                         ..
                     }),
                     source: _ {
-                        body: ExprSet::Values(_ {
-                            rows.len(): 1,
-                            ..
-                        }),
+                        body: =~ [(Any, "Alice", 30)],
                         ..
                     },
                     ..
@@ -64,19 +62,6 @@ async fn basic_crud(test: &mut DbTest) {
                 ret: None,
                 ..
             });
-
-            // Extract values for semantic validation using Like trait
-            let Statement::Insert(insert) = &query_sql.stmt else {
-                unreachable!()
-            };
-            let ExprSet::Values(values) = &insert.source.body else {
-                unreachable!()
-            };
-
-            // Semantic validation using Like trait - handles both Expr::Value(Value::Record) and Expr::Record
-            use tests::expr::Any;
-
-            assert_struct!(values.rows[0], =~ (Any, "Alice", 30));
         }
         _ => panic!("Unexpected operation type for CREATE: {:?}", create_op),
     }

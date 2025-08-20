@@ -7,7 +7,7 @@
 //! The primary use case is handling polymorphic AST structures where different database
 //! drivers generate different representations for the same semantic content.
 
-use super::{Expr, Value};
+use super::{Expr, ExprSet, Value};
 use assert_struct::Like;
 
 /// Helper function to extract Values from an Expr (handles both polymorphic representations)
@@ -129,6 +129,46 @@ where
             values[0].like(&pattern.0)
         } else {
             false
+        }
+    }
+}
+
+/// Support for matching ExprSet against arrays of any length using const generics
+impl<T, const N: usize> Like<[T; N]> for ExprSet
+where
+    Expr: Like<T>,
+{
+    fn like(&self, pattern: &[T; N]) -> bool {
+        match self {
+            ExprSet::Values(values) => {
+                values.rows.len() == N
+                    && values
+                        .rows
+                        .iter()
+                        .zip(pattern)
+                        .all(|(expr, p)| expr.like(p))
+            }
+            _ => false,
+        }
+    }
+}
+
+/// Support for matching ExprSet against Vec patterns
+impl<T> Like<Vec<T>> for ExprSet
+where
+    Expr: Like<T>,
+{
+    fn like(&self, pattern: &Vec<T>) -> bool {
+        match self {
+            ExprSet::Values(values) => {
+                values.rows.len() == pattern.len()
+                    && values
+                        .rows
+                        .iter()
+                        .zip(pattern)
+                        .all(|(expr, p)| expr.like(p))
+            }
+            _ => false,
         }
     }
 }
