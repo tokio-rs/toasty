@@ -87,55 +87,33 @@ async fn basic_crud(test: &mut DbTest) {
                 panic!("Non-SQL drivers (except DynamoDB) should not use QuerySql for reads");
             }
 
-            // Verify it's a SELECT query
-            let Statement::Query(query) = &query_sql.stmt else {
-                panic!("Expected Query statement, got {:?}", query_sql.stmt);
-            };
-
-            // Check the query body is a SELECT
-            let ExprSet::Select(select) = &query.body else {
-                panic!("Expected Select in query body");
-            };
-
-            // Check we're selecting from the User table
-            let Source::Table(tables) = &select.source else {
-                panic!("Expected Table source");
-            };
-
-            assert_eq!(tables.len(), 1, "Should select from 1 table");
-            assert_struct!(tables[0], _ {
-                table: toasty_core::stmt::TableRef::Table(_),
+            // Comprehensive SELECT query validation
+            assert_struct!(query_sql, _ {
+                stmt: Statement::Query(_ {
+                    body: ExprSet::Select(_ {
+                        source: Source::Table(_),
+                        filter: Expr::BinaryOp(_),
+                        ..
+                    }),
+                    ..
+                }),
+                ret: Some(_),
                 ..
             });
-
-            // Verify it's the correct table
-            if let toasty_core::stmt::TableRef::Table(table_id) = &tables[0].table {
-                assert_eq!(*table_id, user_table_id, "Should query from User table");
-            }
-
-            // Check the WHERE clause filters by ID
-            let Expr::BinaryOp(bin_op) = &select.filter else {
-                panic!("Expected BinaryOp filter");
-            };
-
-            assert!(bin_op.op.is_eq(), "Should use equality operator");
-
-            // Check LHS is the ID column
-            let Expr::Column(ExprColumn::Column(col_id)) = &*bin_op.lhs else {
-                panic!("Expected Column in filter LHS");
-            };
-            assert_eq!(*col_id, columns(&db, "users", &["id"])[0], "Should filter by ID column");
-
-            // Check RHS is the user ID
-            let Expr::Value(Value::String(id)) = &*bin_op.rhs else {
-                panic!("Expected String value in filter RHS");
-            };
-            assert_eq!(id, &user_id_string, "Filter should use correct user ID");
-
-            // Check return type - should return the row data
-            assert!(query_sql.ret.is_some(), "SELECT should have return type");
-            let ret_types = query_sql.ret.as_ref().unwrap();
-            assert_eq!(ret_types.len(), 3, "Should return 3 columns");
+            
+            // Extract and validate specific details
+            let Statement::Query(query) = &query_sql.stmt else { unreachable!() };
+            let ExprSet::Select(select) = &query.body else { unreachable!() };
+            let Source::Table(tables) = &select.source else { unreachable!() };
+            let Expr::BinaryOp(bin_op) = &select.filter else { unreachable!() };
+            
+            // Validate table and filter in one go
+            assert!(tables.len() == 1);
+            assert!(matches!(tables[0].table, toasty_core::stmt::TableRef::Table(tid) if tid == user_table_id));
+            assert!(bin_op.op.is_eq());
+            assert!(matches!(&*bin_op.lhs, Expr::Column(ExprColumn::Column(col_id)) if *col_id == columns(&db, "users", &["id"])[0]));
+            assert!(matches!(&*bin_op.rhs, Expr::Value(Value::String(ref id)) if id == &user_id_string));
+            assert_eq!(query_sql.ret.as_ref().unwrap().len(), 3);
         }
         Operation::GetByKey(get) => {
             if is_sql {
