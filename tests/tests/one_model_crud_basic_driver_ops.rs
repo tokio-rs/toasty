@@ -1,5 +1,5 @@
 use assert_struct::assert_struct;
-use tests::{models, tests, DbTest};
+use tests::{columns, models, tests, DbTest};
 use toasty::{stmt::Id, Model};
 use toasty_core::{
     driver::{Operation, Rows},
@@ -49,11 +49,10 @@ async fn basic_crud(test: &mut DbTest) {
                     target: toasty_core::stmt::InsertTarget::Table(_ {
                         table: user_table_id,
                         columns.len(): 3,
-                        columns: [
-                            ColumnId { table: user_table_id, index: 0 },
-                            ColumnId { table: user_table_id, index: 1 },
-                            ColumnId { table: user_table_id, index: 2 }
-                        ],
+                        columns: == {
+                            let table_name = db.schema().table_for(User::id()).name.as_str();
+                            columns!(db, table_name, ["id", "name", "age"])
+                        },
                         ..
                     }),
                     source: _ {
