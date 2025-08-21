@@ -91,7 +91,9 @@ async fn basic_crud(test: &mut DbTest) {
             assert_struct!(query_sql, _ {
                 stmt: Statement::Query(_ {
                     body: ExprSet::Select(_ {
-                        source: Source::Table(_),
+                        source: Source::Table([
+                            _ { table: == user_table_id, .. },
+                        ]),
                         filter: Expr::BinaryOp(_),
                         ..
                     }),
@@ -100,16 +102,13 @@ async fn basic_crud(test: &mut DbTest) {
                 ret: Some(_),
                 ..
             });
-            
+
             // Extract and validate specific details
             let Statement::Query(query) = &query_sql.stmt else { unreachable!() };
             let ExprSet::Select(select) = &query.body else { unreachable!() };
-            let Source::Table(tables) = &select.source else { unreachable!() };
             let Expr::BinaryOp(bin_op) = &select.filter else { unreachable!() };
-            
-            // Validate table and filter in one go
-            assert!(tables.len() == 1);
-            assert!(matches!(tables[0].table, toasty_core::stmt::TableRef::Table(tid) if tid == user_table_id));
+
+            // Validate filter details
             assert!(bin_op.op.is_eq());
             assert!(matches!(&*bin_op.lhs, Expr::Column(ExprColumn::Column(col_id)) if *col_id == columns(&db, "users", &["id"])[0]));
             assert!(matches!(&*bin_op.rhs, Expr::Value(Value::String(ref id)) if id == &user_id_string));
