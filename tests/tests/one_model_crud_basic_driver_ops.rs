@@ -1,5 +1,5 @@
 use assert_struct::assert_struct;
-use tests::{column, columns, expr::Any, models, table_id, tests, DbTest};
+use tests::{expr::Any, prelude::*};
 use toasty::stmt::Id;
 use toasty_core::{
     driver::{Operation, Rows},
@@ -36,7 +36,7 @@ async fn basic_crud(test: &mut DbTest) {
         .unwrap();
 
     // Check the CREATE operation
-    let (op, resp) = test.log().pop().expect("Expected create operation");
+    let (op, resp) = test.log().pop();
 
     assert_struct!(op, Operation::QuerySql(_ {
         stmt: Statement::Insert(_ {
@@ -70,7 +70,7 @@ async fn basic_crud(test: &mut DbTest) {
     assert_eq!(fetched.age, 30);
 
     // Check the READ operation
-    let (op, resp) = test.log().pop().expect("Expected read operation");
+    let (op, resp) = test.log().pop();
 
     if is_sql {
         assert_struct!(op, Operation::QuerySql(_ {
@@ -117,7 +117,7 @@ async fn basic_crud(test: &mut DbTest) {
         .unwrap();
 
     // Check the UPDATE operation
-    let (op, resp) = test.log().pop().expect("Expected update operation");
+    let (op, resp) = test.log().pop();
 
     if is_sql {
         assert_struct!(op, Operation::QuerySql(_ {
@@ -128,12 +128,12 @@ async fn basic_crud(test: &mut DbTest) {
                     expr: Expr::Value(Value::I32(31)),
                     ..
                 },
-                filter: Expr::BinaryOp(_ {
+                filter: Some(Expr::BinaryOp(_ {
                     *lhs: Expr::Column(ExprColumn::Column(== column(&db, "users", "id"))),
                     op: BinaryOp::Eq,
                     *rhs: == user_id,
                     ..
-                }),
+                })),
                 ..
             }),
             ..
@@ -166,7 +166,7 @@ async fn basic_crud(test: &mut DbTest) {
     User::filter_by_id(&user_id).delete(&db).await.unwrap();
 
     // Check the DELETE operation
-    let (op, resp) = test.log().pop().expect("Expected delete operation");
+    let (op, resp) = test.log().pop();
 
     if is_sql {
         assert_struct!(op, Operation::QuerySql(_ {
@@ -202,11 +202,7 @@ async fn basic_crud(test: &mut DbTest) {
     });
 
     // ========== VERIFY LOG IS EMPTY ==========
-    assert!(
-        test.log().is_empty(),
-        "Log should be empty after all operations, but has {} entries",
-        test.log().len()
-    );
+    assert!(test.log().is_empty(), "Log should be empty");
 }
 
 tests!(basic_crud,);
