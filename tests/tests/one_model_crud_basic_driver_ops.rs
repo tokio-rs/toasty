@@ -3,7 +3,6 @@ use tests::{columns, models, table_id, tests, DbTest};
 use toasty::stmt::Id;
 use toasty_core::{
     driver::{Operation, Rows},
-    schema::db::ColumnId,
     stmt::{Expr, ExprColumn, ExprSet, Source, Statement, Value},
 };
 
@@ -125,14 +124,7 @@ async fn basic_crud(test: &mut DbTest) {
             let Expr::Column(ExprColumn::Column(col_id)) = &*bin_op.lhs else {
                 panic!("Expected Column in filter LHS");
             };
-            assert_eq!(
-                *col_id,
-                ColumnId {
-                    table: user_table_id,
-                    index: 0
-                },
-                "Should filter by ID column"
-            );
+            assert_eq!(*col_id, columns(&db, "users", &["id"])[0], "Should filter by ID column");
 
             // Check RHS is the user ID
             let Expr::Value(Value::String(id)) = &*bin_op.rhs else {
@@ -152,11 +144,6 @@ async fn basic_crud(test: &mut DbTest) {
 
             assert_struct!(get, _ {
                 table: user_table_id,
-                ..
-            });
-
-            // Verify the key matches and column count
-            assert_struct!(get, _ {
                 keys.len(): 1,
                 keys[0]: Value::String(_),
                 select.len(): 3,
@@ -223,14 +210,7 @@ async fn basic_crud(test: &mut DbTest) {
             let Expr::Column(ExprColumn::Column(col_id)) = &*bin_op.lhs else {
                 panic!("Expected Column in filter LHS");
             };
-            assert_eq!(
-                *col_id,
-                ColumnId {
-                    table: user_table_id,
-                    index: 0
-                },
-                "Should filter by ID column"
-            );
+            assert_eq!(*col_id, columns(&db, "users", &["id"])[0], "Should filter by ID column");
 
             // Check RHS is the user ID
             let Expr::Value(Value::String(id)) = &*bin_op.rhs else {
@@ -329,14 +309,7 @@ async fn basic_crud(test: &mut DbTest) {
             let Expr::Column(ExprColumn::Column(col_id)) = &*bin_op.lhs else {
                 panic!("Expected Column in filter LHS");
             };
-            assert_eq!(
-                *col_id,
-                ColumnId {
-                    table: user_table_id,
-                    index: 0
-                },
-                "Should filter by ID column"
-            );
+            assert_eq!(*col_id, columns(&db, "users", &["id"])[0], "Should filter by ID column");
 
             // Check RHS is the user ID
             let Expr::Value(Value::String(id)) = &*bin_op.rhs else {
