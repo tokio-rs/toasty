@@ -15,14 +15,14 @@ macro_rules! impl_value_eq {
                     matches!(self, Value::$variant(val) if val == other)
                 }
             }
-            
+
             /// PartialEq implementation for Expr and primitive type
             impl PartialEq<$ty> for Expr {
                 fn eq(&self, other: &$ty) -> bool {
                     matches!(self, Expr::Value(Value::$variant(val)) if val == other)
                 }
             }
-            
+
             /// Reverse PartialEq implementation for convenience
             impl PartialEq<Value> for $ty {
                 fn eq(&self, other: &Value) -> bool {

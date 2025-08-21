@@ -109,14 +109,24 @@ async fn basic_crud(test: &mut DbTest) {
             });
 
             // Extract and validate specific details
-            let Statement::Query(query) = &query_sql.stmt else { unreachable!() };
-            let ExprSet::Select(select) = &query.body else { unreachable!() };
-            let Expr::BinaryOp(bin_op) = &select.filter else { unreachable!() };
+            let Statement::Query(query) = &query_sql.stmt else {
+                unreachable!()
+            };
+            let ExprSet::Select(select) = &query.body else {
+                unreachable!()
+            };
+            let Expr::BinaryOp(bin_op) = &select.filter else {
+                unreachable!()
+            };
 
             // Validate filter details
             assert!(bin_op.op.is_eq());
-            assert!(matches!(&*bin_op.lhs, Expr::Column(ExprColumn::Column(col_id)) if *col_id == columns(&db, "users", &["id"])[0]));
-            assert!(matches!(&*bin_op.rhs, Expr::Value(Value::String(ref id)) if id == &user_id_string));
+            assert!(
+                matches!(&*bin_op.lhs, Expr::Column(ExprColumn::Column(col_id)) if *col_id == columns(&db, "users", &["id"])[0])
+            );
+            assert!(
+                matches!(&*bin_op.rhs, Expr::Value(Value::String(ref id)) if id == &user_id_string)
+            );
             assert_eq!(query_sql.ret.as_ref().unwrap().len(), 3);
         }
         Operation::GetByKey(get) => {
@@ -192,7 +202,11 @@ async fn basic_crud(test: &mut DbTest) {
             let Expr::Column(ExprColumn::Column(col_id)) = &*bin_op.lhs else {
                 panic!("Expected Column in filter LHS");
             };
-            assert_eq!(*col_id, columns(&db, "users", &["id"])[0], "Should filter by ID column");
+            assert_eq!(
+                *col_id,
+                columns(&db, "users", &["id"])[0],
+                "Should filter by ID column"
+            );
 
             // Check RHS is the user ID
             let Expr::Value(Value::String(id)) = &*bin_op.rhs else {
@@ -291,7 +305,11 @@ async fn basic_crud(test: &mut DbTest) {
             let Expr::Column(ExprColumn::Column(col_id)) = &*bin_op.lhs else {
                 panic!("Expected Column in filter LHS");
             };
-            assert_eq!(*col_id, columns(&db, "users", &["id"])[0], "Should filter by ID column");
+            assert_eq!(
+                *col_id,
+                columns(&db, "users", &["id"])[0],
+                "Should filter by ID column"
+            );
 
             // Check RHS is the user ID
             let Expr::Value(Value::String(id)) = &*bin_op.rhs else {

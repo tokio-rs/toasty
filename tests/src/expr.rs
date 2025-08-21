@@ -23,4 +23,3 @@ impl Like<Any> for Value {
         true // Any matches everything
     }
 }
-
