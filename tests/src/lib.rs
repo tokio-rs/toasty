@@ -37,6 +37,15 @@ pub fn table_id(db: &toasty::Db, table_name: &str) -> toasty_core::schema::db::T
     panic!("Table '{}' not found. Available tables: {:?}", table_name, available_tables);
 }
 
+/// Helper function to get a single ColumnId for specified table and column
+pub fn column(
+    db: &toasty::Db, 
+    table_name: &str, 
+    column_name: &str
+) -> toasty_core::schema::db::ColumnId {
+    columns(db, table_name, &[column_name])[0]
+}
+
 /// Helper function to generate a Vec<ColumnId> for specified table and columns
 pub fn columns(
     db: &toasty::Db, 

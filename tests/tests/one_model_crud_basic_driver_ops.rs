@@ -1,9 +1,9 @@
 use assert_struct::assert_struct;
-use tests::{columns, models, table_id, tests, DbTest};
+use tests::{column, columns, models, table_id, tests, DbTest};
 use toasty::stmt::Id;
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{Expr, ExprColumn, ExprSet, Source, Statement, Value},
+    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement, Value},
 };
 
 async fn basic_crud(test: &mut DbTest) {
@@ -92,9 +92,14 @@ async fn basic_crud(test: &mut DbTest) {
                 stmt: Statement::Query(_ {
                     body: ExprSet::Select(_ {
                         source: Source::Table([
-                            _ { table: == user_table_id, .. },
+                            _ { table: user_table_id, .. },
                         ]),
-                        filter: Expr::BinaryOp(_),
+                        filter: Expr::BinaryOp(_ {
+                            *lhs: Expr::Column(ExprColumn::Column(== column(&db, "users", "id"))),
+                            op: BinaryOp::Eq,
+                            *rhs: =~ user_id_string,
+                            ..
+                        }),
                         ..
                     }),
                     ..

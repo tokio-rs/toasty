@@ -191,6 +191,8 @@ pub use update::{Update, UpdateTarget};
 mod value;
 pub use value::Value;
 
+mod value_cmp;
+
 mod values;
 pub use values::Values;
 

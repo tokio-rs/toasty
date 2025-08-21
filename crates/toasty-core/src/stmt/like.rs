@@ -172,3 +172,17 @@ where
         }
     }
 }
+
+/// Like implementation for Expr and String (delegates to PartialEq)
+impl Like<String> for Expr {
+    fn like(&self, pattern: &String) -> bool {
+        self == pattern
+    }
+}
+
+/// Like implementation for Expr and &str (delegates to PartialEq)  
+impl Like<&str> for Expr {
+    fn like(&self, pattern: &&str) -> bool {
+        self == *pattern
+    }
+}
