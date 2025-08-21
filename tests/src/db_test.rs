@@ -1,6 +1,10 @@
 use crate::{exec_log::ExecLog, logging_driver::LoggingDriver, Setup};
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 use toasty::Db;
+use toasty_core::stmt;
 
 /// Internal wrapper that manages the Tokio runtime and ensures cleanup happens.
 ///
@@ -86,10 +90,10 @@ impl DbTest {
         &self,
         table: &str,
         column: &str,
-        filter: std::collections::HashMap<String, toasty_core::stmt::Value>,
+        filter: HashMap<String, stmt::Value>,
     ) -> toasty::Result<T>
     where
-        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
+        T: TryFrom<stmt::Value, Error = toasty_core::Error>,
     {
         let setup = self.setup.as_ref().expect("Setup already consumed");
         let value = setup.get_raw_column_value(table, column, filter).await?;
