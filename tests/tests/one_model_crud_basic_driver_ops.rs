@@ -19,7 +19,7 @@ async fn basic_crud(test: &mut DbTest) {
     }
 
     let db = test.setup_db(models!(User)).await;
-    
+
     // Helper function to get the table ID for the User model
     let user_table_id = db.schema().table_id_for(User::id());
 
@@ -49,10 +49,11 @@ async fn basic_crud(test: &mut DbTest) {
                     target: toasty_core::stmt::InsertTarget::Table(_ {
                         table: user_table_id,
                         columns.len(): 3,
-                        columns: == {
-                            let table_name = db.schema().table_for(User::id()).name.as_str();
-                            columns!(db, table_name, ["id", "name", "age"])
-                        },
+                        columns: == columns(
+                            &db,
+                            db.schema().table_for(User::id()).name.as_str(),
+                            &["id", "name", "age"]
+                        ),
                         ..
                     }),
                     source: _ {
@@ -111,7 +112,7 @@ async fn basic_crud(test: &mut DbTest) {
                 table: toasty_core::stmt::TableRef::Table(_),
                 ..
             });
-            
+
             // Verify it's the correct table
             if let toasty_core::stmt::TableRef::Table(table_id) = &tables[0].table {
                 assert_eq!(*table_id, user_table_id, "Should query from User table");
@@ -315,7 +316,7 @@ async fn basic_crud(test: &mut DbTest) {
                 table: toasty_core::stmt::TableRef::Table(_),
                 ..
             });
-            
+
             // Verify it's the correct table
             if let toasty_core::stmt::TableRef::Table(table_id) = &tables[0].table {
                 assert_eq!(*table_id, user_table_id, "Should delete from User table");

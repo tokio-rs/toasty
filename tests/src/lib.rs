@@ -18,6 +18,30 @@ use toasty_core::driver::Capability;
 
 pub use std_util::*;
 
+/// Helper function to generate a Vec<ColumnId> for specified table and columns
+pub fn columns(
+    db: &toasty::Db, 
+    table_name: &str, 
+    column_names: &[&str]
+) -> Vec<toasty_core::schema::db::ColumnId> {
+    let schema = db.schema();
+    let table = schema.db.tables.iter()
+        .find(|t| t.name == table_name)
+        .expect(&format!("Table '{}' not found", table_name));
+    
+    let table_id = toasty_core::schema::db::TableId(
+        schema.db.tables.iter().position(|t| t.name == table_name).unwrap()
+    );
+    
+    column_names.iter().map(|col_name| {
+        let index = table.columns.iter()
+            .position(|c| c.name == *col_name)
+            .expect(&format!("Column '{}' not found in table '{}'", col_name, table_name));
+        
+        toasty_core::schema::db::ColumnId { table: table_id, index }
+    }).collect()
+}
+
 #[async_trait::async_trait]
 pub trait Setup: Send + Sync + 'static {
     /// Create a connection to the database
