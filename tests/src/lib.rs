@@ -18,6 +18,16 @@ use toasty_core::driver::Capability;
 
 pub use std_util::*;
 
+/// Helper function to look up TableId by table name
+pub fn table_id(db: &toasty::Db, table_name: &str) -> toasty_core::schema::db::TableId {
+    let schema = db.schema();
+    let position = schema.db.tables.iter()
+        .position(|t| t.name == table_name)
+        .expect(&format!("Table '{}' not found", table_name));
+    
+    toasty_core::schema::db::TableId(position)
+}
+
 /// Helper function to generate a Vec<ColumnId> for specified table and columns
 pub fn columns(
     db: &toasty::Db, 
@@ -29,9 +39,7 @@ pub fn columns(
         .find(|t| t.name == table_name)
         .expect(&format!("Table '{}' not found", table_name));
     
-    let table_id = toasty_core::schema::db::TableId(
-        schema.db.tables.iter().position(|t| t.name == table_name).unwrap()
-    );
+    let table_id = table_id(db, table_name);
     
     column_names.iter().map(|col_name| {
         let index = table.columns.iter()

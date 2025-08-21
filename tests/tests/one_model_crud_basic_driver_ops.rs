@@ -1,5 +1,5 @@
 use assert_struct::assert_struct;
-use tests::{columns, models, tests, DbTest};
+use tests::{columns, models, table_id, tests, DbTest};
 use toasty::{stmt::Id, Model};
 use toasty_core::{
     driver::{Operation, Rows},
@@ -20,8 +20,9 @@ async fn basic_crud(test: &mut DbTest) {
 
     let db = test.setup_db(models!(User)).await;
 
-    // Helper function to get the table ID for the User model
-    let user_table_id = db.schema().table_id_for(User::id());
+    // Helper to get the User table name (handles database-specific prefixes)
+    let user_table_name = db.schema().table_for(User::id()).name.as_str();
+    let user_table_id = table_id(&db, user_table_name);
 
     // Clear any setup operations (from reset_db, etc.)
     test.log().clear();
@@ -49,11 +50,7 @@ async fn basic_crud(test: &mut DbTest) {
                     target: toasty_core::stmt::InsertTarget::Table(_ {
                         table: user_table_id,
                         columns.len(): 3,
-                        columns: == columns(
-                            &db,
-                            db.schema().table_for(User::id()).name.as_str(),
-                            &["id", "name", "age"]
-                        ),
+                        columns: == columns(&db, user_table_name, &["id", "name", "age"]),
                         ..
                     }),
                     source: _ {
