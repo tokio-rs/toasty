@@ -95,7 +95,7 @@ async fn basic_crud(test: &mut DbTest) {
     } else {
         assert_struct!(op, Operation::GetByKey(_ {
             table: user_table_id,
-            keys.len(): 1,
+            keys: [ == user_id ],
             keys[0]: Value::String(_),
             select.len(): 3,
             ..
@@ -107,23 +107,6 @@ async fn basic_crud(test: &mut DbTest) {
             =~ (user_id.clone(), "Alice", 30),
         ],
     ));
-
-    // Check response has values and validate actual returned data
-    match resp.rows {
-        Rows::Values(stream) => {
-            let values = stream.collect().await.unwrap();
-            assert_eq!(values.len(), 1, "Should return exactly one user record");
-
-            // Check that the returned record contains user data (id, name, age)
-            if let Value::Record(ref record) = values[0] {
-                assert_eq!(record.fields.len(), 3, "User record should have 3 fields");
-                // The exact order and format may vary by driver, but we should have the core data
-            } else {
-                panic!("Expected Record value, got {:?}", values[0]);
-            }
-        }
-        _ => panic!("READ operation should return Values, got {:?}", resp.rows),
-    }
 
     // ========== UPDATE ==========
     User::filter_by_id(&user_id)
@@ -159,8 +142,12 @@ async fn basic_crud(test: &mut DbTest) {
         assert_struct!(op, Operation::UpdateByKey(_ {
             table: user_table_id,
             filter: None,
-            keys.len(): 1,
-            keys[0]: Value::String(_),
+            keys: [== user_id],
+            assignments.len(): 1,
+            assignments[2]: _ {
+                expr: Expr::Value(Value::I32(31)),
+                ..
+            },
             ..
         }));
     }
@@ -173,25 +160,11 @@ async fn basic_crud(test: &mut DbTest) {
         });
     } else {
         // DynamoDB and some KV stores return values from updates
-        match resp.rows {
-            Rows::Values(stream) => {
-                let values = stream.collect().await.unwrap();
-                assert_eq!(values.len(), 1, "Should return exactly one updated record");
-
-                // Check that the returned record contains updated data
-                if let Value::Record(ref record) = values[0] {
-                    assert_eq!(
-                        record.fields.len(),
-                        3,
-                        "Updated record should have 3 fields"
-                    );
-                    // Should contain the updated age value (31)
-                } else {
-                    panic!("Expected Record value from UPDATE, got {:?}", values[0]);
-                }
-            }
-            _ => panic!("Non-SQL UPDATE should return Values, got {:?}", resp.rows),
-        }
+        assert_struct!(resp.rows, Rows::Values(
+            0.buffered(): [
+                =~ (31,),
+            ],
+        ));
     }
 
     // ========== DELETE ==========
@@ -221,8 +194,7 @@ async fn basic_crud(test: &mut DbTest) {
         assert_struct!(op, Operation::DeleteByKey(_ {
             table: user_table_id,
             filter: None,
-            keys.len(): 1,
-            keys[0]: Value::String(_),
+            keys: [== user_id],
             ..
         }));
     }
