@@ -79,59 +79,64 @@ impl Like<String> for Value {
     }
 }
 
-/// Generic support for 3-tuple patterns
-impl<T1, T2, T3> Like<(T1, T2, T3)> for Expr
-where
-    Value: Like<T1> + Like<T2> + Like<T3>,
-{
-    fn like(&self, pattern: &(T1, T2, T3)) -> bool {
-        if let Some(values) = extract_values_from_expr(self) {
-            if values.len() != 3 {
-                return false;
+/// Macro to generate Like implementations for tuple patterns using Alice's pattern
+///
+/// Based on: https://users.rust-lang.org/t/macro-to-impl-trait-for-tuple/79165/2
+/// Takes index-type pairs and generates both Expr and Value implementations.
+macro_rules! impl_like_tuple {
+    ($($idx:tt $t:ident),+) => {
+        #[allow(non_snake_case)]
+        impl<$($t),+> Like<($($t,)+)> for Expr
+        where
+            $(Value: Like<$t>),+
+        {
+            fn like(&self, pattern: &($($t,)+)) -> bool {
+                if let Some(values) = extract_values_from_expr(self) {
+                    values.len() == impl_like_tuple!(@count $($t)+) && $(
+                        values[$idx].like(&pattern.$idx)
+                    )&&+
+                } else {
+                    false
+                }
             }
-
-            values[0].like(&pattern.0) && values[1].like(&pattern.1) && values[2].like(&pattern.2)
-        } else {
-            false
         }
-    }
+
+        #[allow(non_snake_case)]
+        impl<$($t),+> Like<($($t,)+)> for Value
+        where
+            $(Value: Like<$t>),+
+        {
+            fn like(&self, pattern: &($($t,)+)) -> bool {
+                if let Value::Record(record) = self {
+                    record.fields.len() == impl_like_tuple!(@count $($t)+) && $(
+                        record.fields[$idx].like(&pattern.$idx)
+                    )&&+
+                } else {
+                    false
+                }
+            }
+        }
+    };
+
+    // Helper to count elements
+    (@count $t:ident) => (1);
+    (@count $t:ident $($ts:ident)+) => (1 + impl_like_tuple!(@count $($ts)+));
 }
 
-/// Generic support for 2-tuple patterns  
-impl<T1, T2> Like<(T1, T2)> for Expr
-where
-    Value: Like<T1> + Like<T2>,
-{
-    fn like(&self, pattern: &(T1, T2)) -> bool {
-        if let Some(values) = extract_values_from_expr(self) {
-            if values.len() != 2 {
-                return false;
-            }
-
-            values[0].like(&pattern.0) && values[1].like(&pattern.1)
-        } else {
-            false
-        }
-    }
-}
-
-/// Generic support for 1-tuple patterns
-impl<T1> Like<(T1,)> for Expr
-where
-    Value: Like<T1>,
-{
-    fn like(&self, pattern: &(T1,)) -> bool {
-        if let Some(values) = extract_values_from_expr(self) {
-            if values.len() != 1 {
-                return false;
-            }
-
-            values[0].like(&pattern.0)
-        } else {
-            false
-        }
-    }
-}
+// Generate implementations for tuples from size 1 to 12
+// Using Alice's clean pattern: index-type pairs
+impl_like_tuple!(0 T1);
+impl_like_tuple!(0 T1, 1 T2);
+impl_like_tuple!(0 T1, 1 T2, 2 T3);
+impl_like_tuple!(0 T1, 1 T2, 2 T3, 3 T4);
+impl_like_tuple!(0 T1, 1 T2, 2 T3, 3 T4, 4 T5);
+impl_like_tuple!(0 T1, 1 T2, 2 T3, 3 T4, 4 T5, 5 T6);
+impl_like_tuple!(0 T1, 1 T2, 2 T3, 3 T4, 4 T5, 5 T6, 6 T7);
+impl_like_tuple!(0 T1, 1 T2, 2 T3, 3 T4, 4 T5, 5 T6, 6 T7, 7 T8);
+impl_like_tuple!(0 T1, 1 T2, 2 T3, 3 T4, 4 T5, 5 T6, 6 T7, 7 T8, 8 T9);
+impl_like_tuple!(0 T1, 1 T2, 2 T3, 3 T4, 4 T5, 5 T6, 6 T7, 7 T8, 8 T9, 9 T10);
+impl_like_tuple!(0 T1, 1 T2, 2 T3, 3 T4, 4 T5, 5 T6, 6 T7, 7 T8, 8 T9, 9 T10, 10 T11);
+impl_like_tuple!(0 T1, 1 T2, 2 T3, 3 T4, 4 T5, 5 T6, 6 T7, 7 T8, 8 T9, 9 T10, 10 T11, 11 T12);
 
 /// Support for matching ExprSet against arrays of any length using const generics
 impl<T, const N: usize> Like<[T; N]> for ExprSet

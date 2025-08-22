@@ -1,5 +1,5 @@
 use assert_struct::assert_struct;
-use tests::{expr::Any, prelude::*};
+use tests::{prelude::*, stmt::Any};
 use toasty::stmt::Id;
 use toasty_core::{
     driver::{Operation, Rows},
@@ -102,11 +102,28 @@ async fn basic_crud(test: &mut DbTest) {
         }));
     }
 
-    // Check response has values
-    assert_struct!(resp, _ {
-        rows: Rows::Values(_),
-        ..
-    });
+    assert_struct!(resp.rows, Rows::Values(
+        0.buffered(): [
+            =~ (user_id.clone(), "Alice", 30),
+        ],
+    ));
+
+    // Check response has values and validate actual returned data
+    match resp.rows {
+        Rows::Values(stream) => {
+            let values = stream.collect().await.unwrap();
+            assert_eq!(values.len(), 1, "Should return exactly one user record");
+
+            // Check that the returned record contains user data (id, name, age)
+            if let Value::Record(ref record) = values[0] {
+                assert_eq!(record.fields.len(), 3, "User record should have 3 fields");
+                // The exact order and format may vary by driver, but we should have the core data
+            } else {
+                panic!("Expected Record value, got {:?}", values[0]);
+            }
+        }
+        _ => panic!("READ operation should return Values, got {:?}", resp.rows),
+    }
 
     // ========== UPDATE ==========
     User::filter_by_id(&user_id)
@@ -156,10 +173,25 @@ async fn basic_crud(test: &mut DbTest) {
         });
     } else {
         // DynamoDB and some KV stores return values from updates
-        assert_struct!(resp, _ {
-            rows: Rows::Values(_),
-            ..
-        });
+        match resp.rows {
+            Rows::Values(stream) => {
+                let values = stream.collect().await.unwrap();
+                assert_eq!(values.len(), 1, "Should return exactly one updated record");
+
+                // Check that the returned record contains updated data
+                if let Value::Record(ref record) = values[0] {
+                    assert_eq!(
+                        record.fields.len(),
+                        3,
+                        "Updated record should have 3 fields"
+                    );
+                    // Should contain the updated age value (31)
+                } else {
+                    panic!("Expected Record value from UPDATE, got {:?}", values[0]);
+                }
+            }
+            _ => panic!("Non-SQL UPDATE should return Values, got {:?}", resp.rows),
+        }
     }
 
     // ========== DELETE ==========

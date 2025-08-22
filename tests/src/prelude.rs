@@ -11,3 +11,6 @@ pub use crate::DbTest;
 
 // Re-export macros
 pub use crate::{models, tests};
+
+// Re-export extension traits
+pub use crate::stmt::ValueStreamExt;

@@ -124,6 +124,21 @@ impl ValueStream {
         Ok(())
     }
 
+    /// Returns `true` if the ValueStream is fully buffered (no remaining stream)
+    pub fn is_buffered(&self) -> bool {
+        self.stream.is_none()
+    }
+
+    /// Returns a clone of only the currently buffered values
+    /// Does not consume any stream data or wait for additional values
+    pub fn buffered_to_vec(&self) -> Vec<Value> {
+        match &self.buffer {
+            Buffer::Empty => Vec::new(),
+            Buffer::One(value) => vec![value.clone()],
+            Buffer::Many(values) => values.iter().cloned().collect(),
+        }
+    }
+
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Value> {
         assert!(self.stream.is_none());
 
@@ -133,13 +148,6 @@ impl ValueStream {
             Buffer::One(v) => Box::new(Some(v).into_iter()),
             Buffer::Many(v) => Box::new(v.iter_mut()) as Box<dyn Iterator<Item = &mut Value>>,
         }
-    }
-
-    // NOTE: this method is only used for testing purposes. It should not ever be made
-    // available via the public API.
-    #[cfg(test)]
-    fn into_inner(self) -> (Buffer, Option<DynStream>) {
-        (self.buffer, self.stream)
     }
 }
 
@@ -272,12 +280,34 @@ impl Buffer {
 
 #[cfg(test)]
 mod tests {
-    use super::{Buffer, ValueStream};
+    use super::*;
 
     #[test]
-    fn default() {
-        let (buffer, stream) = ValueStream::default().into_inner();
-        assert!(matches!(buffer, Buffer::Empty));
-        assert!(stream.is_none());
+    fn test_is_buffered_and_buffered_to_vec() {
+        // Test Empty buffer
+        let empty_stream = ValueStream::default();
+        assert!(empty_stream.is_buffered());
+        assert_eq!(empty_stream.buffered_to_vec(), Vec::<Value>::new());
+
+        // Test One value
+        let one_stream = ValueStream::from_value(Value::String("test".to_string()));
+        assert!(one_stream.is_buffered());
+        let buffered = one_stream.buffered_to_vec();
+        assert_eq!(buffered.len(), 1);
+        assert!(matches!(buffered[0], Value::String(ref s) if s == "test"));
+
+        // Test Many values
+        let values = vec![
+            Value::String("test1".to_string()),
+            Value::I32(42),
+            Value::String("test2".to_string()),
+        ];
+        let many_stream = ValueStream::from_vec(values.clone());
+        assert!(many_stream.is_buffered());
+        let buffered = many_stream.buffered_to_vec();
+        assert_eq!(buffered.len(), 3);
+        assert!(matches!(buffered[0], Value::String(ref s) if s == "test1"));
+        assert!(matches!(buffered[1], Value::I32(42)));
+        assert!(matches!(buffered[2], Value::String(ref s) if s == "test2"));
     }
 }

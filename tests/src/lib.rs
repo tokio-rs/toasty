@@ -9,7 +9,6 @@ pub use db_test::DbTest;
 mod exec_log;
 pub use exec_log::ExecLog;
 
-pub mod expr;
 pub mod helpers;
 mod isolation;
 
@@ -22,3 +21,5 @@ mod setup;
 pub use setup::Setup;
 
 pub use std_util::*;
+
+pub mod stmt;
