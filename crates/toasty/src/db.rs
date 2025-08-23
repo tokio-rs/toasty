@@ -57,10 +57,10 @@ impl Db {
         let mut res = engine::exec(self, statement.untyped).await?;
 
         // If the execution is lazy, force it to begin.
-        res.tap().await?;
+        res.values.tap().await?;
 
         // Return the typed result
-        Ok(res)
+        Ok(res.values)
     }
 
     /// Execute a statement, assume only one record is returned

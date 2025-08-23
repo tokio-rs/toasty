@@ -1,5 +1,5 @@
 use crate::stmt::Select;
-use crate::{Db, Model, Result};
+use crate::Model;
 use toasty_core::stmt;
 
 /// A page of results from a paginated query.

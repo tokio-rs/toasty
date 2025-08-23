@@ -1,6 +1,6 @@
 use super::Select;
 
-use crate::{cursor::FromCursor, Db, Model, Result};
+use crate::{Db, Model, Result};
 
 use toasty_core::stmt;
 
@@ -21,9 +21,9 @@ impl<M: Model> Paginate<M> {
             "pagination requires an order_by clause"
         );
 
-        query.untyped.limit = Some(stmt::Limit {
+        query.untyped.limit = Some(stmt::Limit::PaginateForward {
             limit: stmt::Value::from(per_page as i64).into(),
-            offset: None,
+            after: None,
         });
 
         Self { query }
@@ -35,21 +35,67 @@ impl<M: Model> Paginate<M> {
             panic!("pagination requires a limit clause");
         };
 
-        limit.offset = Some(stmt::Offset::After(key.into()));
+        match limit {
+            stmt::Limit::PaginateForward { after, .. } => {
+                *after = Some(key.into());
+            }
+            stmt::Limit::Offset { .. } => {
+                panic!("Cannot set after cursor on offset-based limit");
+            }
+        }
 
         self
     }
 
     pub async fn collect(self, db: &Db) -> Result<crate::Page<M>> {
-        let items: Vec<M> = db.all(self.query.clone()).await?.collect().await?;
+        // Extract the limit from the query to determine page size
+        let page_size = match &self.query.untyped.limit {
+            Some(stmt::Limit::PaginateForward { limit, .. }) => {
+                match limit {
+                    stmt::Expr::Value(stmt::Value::I64(n)) => *n as usize,
+                    _ => {
+                        // Fallback if we can't determine the limit
+                        let items: Vec<M> = db.all(self.query.clone()).await?.collect().await?;
+                        return Ok(crate::Page::new(items, self.query, None, None));
+                    }
+                }
+            }
+            _ => {
+                // Not a paginated query, just collect all items
+                let items: Vec<M> = db.all(self.query.clone()).await?.collect().await?;
+                return Ok(crate::Page::new(items, self.query, None, None));
+            }
+        };
 
-        // For now, create a basic Page without cursor logic
-        // TODO: Implement proper cursor extraction and has_next detection
+        // Query for one more item than requested to detect if there's a next page
+        let mut query_with_extra = self.query.clone();
+        if let Some(stmt::Limit::PaginateForward { limit, .. }) = &mut query_with_extra.untyped.limit {
+            *limit = stmt::Value::from((page_size + 1) as i64).into();
+        }
+
+        let items: Vec<M> = db.all(query_with_extra).await?.collect().await?;
+        
+        let has_next = items.len() > page_size;
+        let items = if has_next {
+            items.into_iter().take(page_size).collect()
+        } else {
+            items
+        };
+
+        // Create cursor from the last item if there's a next page
+        let next_cursor = if has_next && !items.is_empty() {
+            // TODO: Implement proper cursor extraction from the last item
+            // For now, use a placeholder cursor value to indicate there's a next page
+            Some(stmt::Value::from(0_i64).into())
+        } else {
+            None
+        };
+
         Ok(crate::Page::new(
             items, 
             self.query,
-            None, // next_cursor
-            None, // prev_cursor
+            next_cursor,
+            None, // prev_cursor not implemented yet
         ))
     }
 }

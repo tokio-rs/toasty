@@ -64,8 +64,9 @@ impl Verify<'_> {
             return;
         };
 
-        let Some(stmt::Offset::After(offset)) = limit.offset.as_ref() else {
-            return;
+        let offset = match limit {
+            stmt::Limit::PaginateForward { after: Some(offset), .. } => offset,
+            _ => return, // No after clause to verify
         };
 
         let Some(order_by) = i.order_by.as_ref() else {
