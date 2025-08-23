@@ -59,10 +59,9 @@ pub fn columns(
                 .columns
                 .iter()
                 .position(|c| c.name == *col_name)
-                .unwrap_or_else(|| panic!(
-                    "Column '{}' not found in table '{}'",
-                    col_name, table_name
-                ));
+                .unwrap_or_else(|| {
+                    panic!("Column '{}' not found in table '{}'", col_name, table_name)
+                });
 
             toasty_core::schema::db::ColumnId {
                 table: table_id,
