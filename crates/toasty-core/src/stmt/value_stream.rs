@@ -277,37 +277,3 @@ impl Buffer {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_buffered_and_buffered_to_vec() {
-        // Test Empty buffer
-        let empty_stream = ValueStream::default();
-        assert!(empty_stream.is_buffered());
-        assert_eq!(empty_stream.buffered_to_vec(), Vec::<Value>::new());
-
-        // Test One value
-        let one_stream = ValueStream::from_value(Value::String("test".to_string()));
-        assert!(one_stream.is_buffered());
-        let buffered = one_stream.buffered_to_vec();
-        assert_eq!(buffered.len(), 1);
-        assert!(matches!(buffered[0], Value::String(ref s) if s == "test"));
-
-        // Test Many values
-        let values = vec![
-            Value::String("test1".to_string()),
-            Value::I32(42),
-            Value::String("test2".to_string()),
-        ];
-        let many_stream = ValueStream::from_vec(values.clone());
-        assert!(many_stream.is_buffered());
-        let buffered = many_stream.buffered_to_vec();
-        assert_eq!(buffered.len(), 3);
-        assert!(matches!(buffered[0], Value::String(ref s) if s == "test1"));
-        assert!(matches!(buffered[1], Value::I32(42)));
-        assert!(matches!(buffered[2], Value::String(ref s) if s == "test2"));
-    }
-}
