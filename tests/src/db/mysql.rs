@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use toasty::driver::Capability;
-use toasty::{db, Db};
 
 use crate::{isolation::TestIsolation, Setup};
 
@@ -39,13 +38,16 @@ impl Default for SetupMySQL {
 
 #[async_trait::async_trait]
 impl Setup for SetupMySQL {
-    async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
-        let prefix = self.isolation.table_prefix();
-
+    async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
         let url = std::env::var("TOASTY_TEST_MYSQL_URL")
             .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
+        let conn = toasty::driver::Connection::connect(&url).await?;
+        Ok(Box::new(conn))
+    }
 
-        builder.table_name_prefix(&prefix).connect(&url).await
+    fn configure_builder(&self, builder: &mut toasty::db::Builder) {
+        let prefix = self.isolation.table_prefix();
+        builder.table_name_prefix(&prefix);
     }
 
     fn capability(&self) -> &Capability {
@@ -58,15 +60,12 @@ impl Setup for SetupMySQL {
             .map_err(|e| toasty::Error::msg(format!("MySQL cleanup failed: {e}")))
     }
 
-    async fn get_raw_column_value<T>(
+    async fn get_raw_column_value(
         &self,
         table: &str,
         column: &str,
         filter: HashMap<String, toasty_core::stmt::Value>,
-    ) -> toasty::Result<T>
-    where
-        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
-    {
+    ) -> toasty::Result<toasty_core::stmt::Value> {
         use mysql_async::prelude::Queryable;
 
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
@@ -134,10 +133,7 @@ impl Setup for SetupMySQL {
             .unwrap_or_else(|e| panic!("MySQL query failed: {e}"));
 
         if let Ok(Some(row)) = result.next().await {
-            let stmt_value = self.mysql_row_to_stmt_value(&row, 0)?;
-            stmt_value
-                .try_into()
-                .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
+            self.mysql_row_to_stmt_value(&row, 0)
         } else {
             panic!("No rows found")
         }

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use toasty::driver::Capability;
-use toasty::{db, Db};
 use tokio::sync::OnceCell;
 
 use crate::{isolation::TestIsolation, Setup};
@@ -46,14 +45,16 @@ impl Default for SetupDynamoDb {
 
 #[async_trait::async_trait]
 impl Setup for SetupDynamoDb {
-    /// Try building the full schema and connecting to the database.
-    async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
-        let prefix = self.isolation.table_prefix();
-
+    async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
         let url =
             std::env::var("TOASTY_TEST_DYNAMODB_URL").unwrap_or_else(|_| "dynamodb://".to_string());
+        let conn = toasty::driver::Connection::connect(&url).await?;
+        Ok(Box::new(conn))
+    }
 
-        builder.table_name_prefix(&prefix).connect(&url).await
+    fn configure_builder(&self, builder: &mut toasty::db::Builder) {
+        let prefix = self.isolation.table_prefix();
+        builder.table_name_prefix(&prefix);
     }
 
     fn capability(&self) -> &Capability {
@@ -66,15 +67,12 @@ impl Setup for SetupDynamoDb {
             .map_err(|e| toasty::Error::msg(format!("DynamoDB cleanup failed: {e}")))
     }
 
-    async fn get_raw_column_value<T>(
+    async fn get_raw_column_value(
         &self,
         table: &str,
         column: &str,
         filter: HashMap<String, toasty_core::stmt::Value>,
-    ) -> toasty::Result<T>
-    where
-        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
-    {
+    ) -> toasty::Result<toasty_core::stmt::Value> {
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
 
         // Get the per-test-instance DynamoDB client
@@ -98,10 +96,7 @@ impl Setup for SetupDynamoDb {
 
         if let Some(item) = response.item {
             if let Some(attr_value) = item.get(column) {
-                let stmt_value = self.dynamodb_attr_to_stmt_value(attr_value)?;
-                stmt_value
-                    .try_into()
-                    .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
+                self.dynamodb_attr_to_stmt_value(attr_value)
             } else {
                 panic!("Column '{column}' not found in DynamoDB item")
             }

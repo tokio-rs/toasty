@@ -1,6 +1,6 @@
-use tests::{assert_eq_unordered, models, tests, Setup};
+use tests::{assert_eq_unordered, models, tests, DbTest};
 
-async fn query_index_eq(s: impl Setup) {
+async fn query_index_eq(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -13,7 +13,7 @@ async fn query_index_eq(s: impl Setup) {
         email: String,
     }
 
-    let db = s.setup(models!(User)).await;
+    let db = test.setup_db(models!(User)).await;
 
     // Create a few users
     for &(name, email) in &[
@@ -64,7 +64,7 @@ async fn query_index_eq(s: impl Setup) {
     assert_eq!("one@example.com", users[1].email);
 }
 
-async fn query_partition_key_string_eq(s: impl Setup) {
+async fn query_partition_key_string_eq(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     #[key(partition = league, local = name)]
     struct Team {
@@ -75,7 +75,7 @@ async fn query_partition_key_string_eq(s: impl Setup) {
         founded: i64,
     }
 
-    let db = s.setup(models!(Team)).await;
+    let db = test.setup_db(models!(Team)).await;
 
     // Create some teams
     for (league, name, founded) in [
@@ -198,7 +198,7 @@ async fn query_partition_key_string_eq(s: impl Setup) {
     assert!(teams.is_empty());
 }
 
-async fn query_local_key_cmp(s: impl Setup) {
+async fn query_local_key_cmp(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     #[key(partition = kind, local = timestamp)]
     struct Event {
@@ -207,7 +207,7 @@ async fn query_local_key_cmp(s: impl Setup) {
         timestamp: i64,
     }
 
-    let db = s.setup(models!(Event)).await;
+    let db = test.setup_db(models!(Event)).await;
 
     // Create a bunch of entries
     for (kind, ts) in [
@@ -296,9 +296,9 @@ async fn query_local_key_cmp(s: impl Setup) {
     );
 }
 
-async fn query_arbitrary_constraint(s: impl Setup) {
+async fn query_arbitrary_constraint(test: &mut DbTest) {
     // Only supported by SQL
-    if !s.capability().sql {
+    if !test.capability().sql {
         return;
     }
 
@@ -313,7 +313,7 @@ async fn query_arbitrary_constraint(s: impl Setup) {
         timestamp: i64,
     }
 
-    let db = s.setup(models!(Event)).await;
+    let db = test.setup_db(models!(Event)).await;
 
     // Create a bunch of entries
     for (kind, ts) in [

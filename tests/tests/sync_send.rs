@@ -1,11 +1,11 @@
-use tests::{models, tests, Setup};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
 fn assert_sync_send<T: Send>(val: T) -> T {
     val
 }
 
-async fn ensure_types_sync_send(s: impl Setup) {
+async fn ensure_types_sync_send(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -16,7 +16,7 @@ async fn ensure_types_sync_send(s: impl Setup) {
         email: String,
     }
 
-    let db = s.setup(models!(User)).await;
+    let db = test.setup_db(models!(User)).await;
 
     let res = assert_sync_send(User::filter_by_email("hello@example.com").first(&db))
         .await

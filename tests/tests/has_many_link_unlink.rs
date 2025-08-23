@@ -1,7 +1,8 @@
-use tests::{assert_err, assert_none, assert_ok, models, tests, Setup};
+use std_util::{assert_err, assert_none, assert_ok};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
-async fn remove_add_single_relation_option_belongs_to(s: impl Setup) {
+async fn remove_add_single_relation_option_belongs_to(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -25,7 +26,7 @@ async fn remove_add_single_relation_option_belongs_to(s: impl Setup) {
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let db = s.setup(models!(User, Todo)).await;
+    let db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user with some todos
     let user = User::create()
@@ -73,7 +74,7 @@ async fn remove_add_single_relation_option_belongs_to(s: impl Setup) {
     assert_ok!(user.todos().get_by_id(&db, &todos[0].id).await);
 }
 
-async fn add_remove_single_relation_required_belongs_to(s: impl Setup) {
+async fn add_remove_single_relation_required_belongs_to(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -97,7 +98,7 @@ async fn add_remove_single_relation_required_belongs_to(s: impl Setup) {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = s.setup(models!(User, Todo)).await;
+    let db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user with no todos
     let user = User::create().exec(&db).await.unwrap();
@@ -127,7 +128,7 @@ async fn add_remove_single_relation_required_belongs_to(s: impl Setup) {
     assert_eq!(todos_reloaded.len(), 2);
 }
 
-async fn reassign_relation_required_belongs_to(s: impl Setup) {
+async fn reassign_relation_required_belongs_to(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -151,7 +152,7 @@ async fn reassign_relation_required_belongs_to(s: impl Setup) {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = s.setup(models!(User, Todo)).await;
+    let db = test.setup_db(models!(User, Todo)).await;
 
     // Create users with no todos
     let u1 = User::create().exec(&db).await.unwrap();
@@ -172,7 +173,7 @@ async fn reassign_relation_required_belongs_to(s: impl Setup) {
     assert_eq!(t1.id, todos[0].id);
 }
 
-async fn add_remove_multiple_relation_option_belongs_to(s: impl Setup) {
+async fn add_remove_multiple_relation_option_belongs_to(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -196,7 +197,7 @@ async fn add_remove_multiple_relation_option_belongs_to(s: impl Setup) {
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let db = s.setup(models!(User, Todo)).await;
+    let db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user with no todos
     let user = User::create().exec(&db).await.unwrap();

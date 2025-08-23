@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tempfile::NamedTempFile;
+use toasty::db;
 use toasty::driver::Capability;
-use toasty::{db, Db};
 
 use crate::Setup;
 
@@ -112,10 +112,14 @@ impl Default for SetupSqlite {
 
 #[async_trait::async_trait]
 impl Setup for SetupSqlite {
-    async fn connect(&self, mut builder: db::Builder) -> toasty::Result<Db> {
-        // Use temporary file-based database instead of in-memory
+    async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
         let url = format!("sqlite:{}", self.temp_db_path);
-        builder.connect(&url).await
+        let conn = toasty::driver::Connection::connect(&url).await?;
+        Ok(Box::new(conn))
+    }
+
+    fn configure_builder(&self, _builder: &mut db::Builder) {
+        // SQLite doesn't need table prefixes for isolation
     }
 
     fn capability(&self) -> &Capability {
@@ -129,15 +133,12 @@ impl Setup for SetupSqlite {
 
     /// Get raw column value from the database for verification purposes.
     /// This method supports the unsigned integer testing by providing access to raw stored values.
-    async fn get_raw_column_value<T>(
+    async fn get_raw_column_value(
         &self,
         table: &str,
         column: &str,
         filter: HashMap<String, toasty_core::stmt::Value>,
-    ) -> toasty::Result<T>
-    where
-        T: TryFrom<toasty_core::stmt::Value, Error = toasty_core::Error>,
-    {
+    ) -> toasty::Result<toasty_core::stmt::Value> {
         // Build WHERE clause from filter
         let mut where_conditions = Vec::new();
         let mut sqlite_params = Vec::new();
@@ -196,10 +197,7 @@ impl Setup for SetupSqlite {
             .next()
             .unwrap_or_else(|e| panic!("SQLite row fetch failed: {e}"))
         {
-            let stmt_value = self.sqlite_row_to_stmt_value(row, 0)?;
-            stmt_value
-                .try_into()
-                .map_err(|e: toasty_core::Error| panic!("Validation failed: {e}"))
+            self.sqlite_row_to_stmt_value(row, 0)
         } else {
             panic!("No rows found")
         }
