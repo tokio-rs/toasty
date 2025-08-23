@@ -1,6 +1,6 @@
-use tests::{models, tests, Setup};
+use tests::{models, tests, DbTest};
 
-async fn different_field_name(s: impl Setup) {
+async fn different_field_name(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -26,7 +26,7 @@ async fn different_field_name(s: impl Setup) {
         title: String,
     }
 
-    let db = s.setup(models!(User, Todo)).await;
+    let db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user
     let user = User::create().exec(&db).await.unwrap();

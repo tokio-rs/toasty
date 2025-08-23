@@ -124,6 +124,9 @@ pub use join::{Join, JoinOp};
 mod limit;
 pub use limit::Limit;
 
+#[cfg(feature = "assert-struct")]
+mod like;
+
 mod node;
 pub use node::Node;
 
@@ -187,6 +190,8 @@ pub use update::{Update, UpdateTarget};
 
 mod value;
 pub use value::Value;
+
+mod value_cmp;
 
 mod values;
 pub use values::Values;

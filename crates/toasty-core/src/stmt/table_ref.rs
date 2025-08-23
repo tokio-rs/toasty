@@ -34,3 +34,9 @@ impl From<TableId> for TableRef {
         Self::Table(value)
     }
 }
+
+impl PartialEq<TableId> for TableRef {
+    fn eq(&self, other: &TableId) -> bool {
+        self.references(*other)
+    }
+}

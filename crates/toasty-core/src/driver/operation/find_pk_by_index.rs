@@ -4,7 +4,7 @@ use crate::{
     stmt,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FindPkByIndex {
     /// Table to query
     pub table: TableId,

@@ -2,7 +2,7 @@ use super::Operation;
 
 use crate::{schema::db::TableId, stmt};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UpdateByKey {
     /// Which table to update
     pub table: TableId,

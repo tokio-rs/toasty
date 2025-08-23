@@ -1,7 +1,7 @@
-use tests::{models, tests, Setup};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
-async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
+async fn basic_has_many_and_belongs_to_preload(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -25,7 +25,7 @@ async fn basic_has_many_and_belongs_to_preload(s: impl Setup) {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = s.setup(models!(User, Todo)).await;
+    let db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user with a few todos
     let user = User::create()

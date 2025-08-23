@@ -1,7 +1,7 @@
-use tests::{models, tests, Setup};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
-async fn string_to_id_expr(s: impl Setup) {
+async fn string_to_id_expr(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -9,7 +9,7 @@ async fn string_to_id_expr(s: impl Setup) {
         id: Id<Self>,
     }
 
-    let db = s.setup(models!(Foo)).await;
+    let db = test.setup_db(models!(Foo)).await;
 
     #[allow(clippy::disallowed_names)]
     let foo = Foo::create().exec(&db).await.unwrap();
