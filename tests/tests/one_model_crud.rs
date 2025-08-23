@@ -33,9 +33,9 @@ async fn crud_no_fields(test: &mut DbTest) {
     let mut ids = vec![];
 
     for _ in 0..MORE {
-        let foo = Foo::create().exec(&db).await.unwrap();
-        assert_ne!(foo.id, created.id);
-        ids.push(foo.id);
+        let item = Foo::create().exec(&db).await.unwrap();
+        assert_ne!(item.id, created.id);
+        ids.push(item.id);
     }
 
     assert_unique!(ids);
@@ -74,8 +74,8 @@ async fn crud_no_fields(test: &mut DbTest) {
 
         // Assert other foos remain
         for id in &ids {
-            let foo = Foo::get_by_id(&db, id).await.unwrap();
-            assert_eq!(*id, foo.id);
+            let item = Foo::get_by_id(&db, id).await.unwrap();
+            assert_eq!(*id, item.id);
         }
     }
 }
@@ -112,14 +112,14 @@ async fn crud_one_string(test: &mut DbTest) {
     let mut ids = vec![];
 
     for i in 0..10 {
-        let foo = Foo::create()
+        let item = Foo::create()
             .val(format!("hello {i}"))
             .exec(&db)
             .await
             .unwrap();
 
-        assert_ne!(foo.id, created.id);
-        ids.push(foo.id);
+        assert_ne!(item.id, created.id);
+        ids.push(item.id);
     }
 
     assert_unique!(ids);
@@ -421,19 +421,19 @@ async fn batch_get_by_id(test: &mut DbTest) {
     let mut keys = vec![];
 
     for _ in 0..5 {
-        let foo = Foo::create().exec(&db).await.unwrap();
-        keys.push(foo.id);
+        let item = Foo::create().exec(&db).await.unwrap();
+        keys.push(item.id);
     }
 
-    let foos: Vec<_> = Foo::filter_by_id_batch([&keys[0], &keys[1], &keys[2]])
+    let items: Vec<_> = Foo::filter_by_id_batch([&keys[0], &keys[1], &keys[2]])
         .collect(&db)
         .await
         .unwrap();
 
-    assert_eq!(3, foos.len());
+    assert_eq!(3, items.len());
 
-    for foo in foos {
-        assert!(keys.contains(&foo.id));
+    for item in items {
+        assert!(keys.contains(&item.id));
     }
 }
 
@@ -449,16 +449,16 @@ async fn empty_batch_get_by_id(test: &mut DbTest) {
     let mut ids = vec![];
 
     for _ in 0..5 {
-        let foo = Foo::create().exec(&db).await.unwrap();
-        ids.push(foo.id);
+        let item = Foo::create().exec(&db).await.unwrap();
+        ids.push(item.id);
     }
 
-    let foos: Vec<_> = Foo::filter_by_id_batch(&[] as &[toasty::stmt::Id<Foo>])
+    let items: Vec<_> = Foo::filter_by_id_batch(&[] as &[toasty::stmt::Id<Foo>])
         .collect(&db)
         .await
         .unwrap();
 
-    assert_eq!(0, foos.len());
+    assert_eq!(0, items.len());
 }
 
 async fn update_multiple_fields(test: &mut DbTest) {
