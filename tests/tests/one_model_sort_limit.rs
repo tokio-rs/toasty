@@ -1,4 +1,4 @@
-use tests::{models, tests, DbTest, Setup};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
 #[derive(toasty::Model)]
@@ -66,7 +66,7 @@ async fn paginate(test: &mut DbTest) {
         .unwrap();
 
     assert_eq!(foos.len(), 10);
-    for (i, order) in (99..90).enumerate() {
+    for (i, order) in (90..100).rev().enumerate() {
         assert_eq!(foos[i].order, order);
     }
 
@@ -79,7 +79,7 @@ async fn paginate(test: &mut DbTest) {
         .unwrap();
 
     assert_eq!(foos.len(), 10);
-    for (i, order) in (89..80).enumerate() {
+    for (i, order) in (80..90).rev().enumerate() {
         assert_eq!(foos[i].order, order);
     }
 }

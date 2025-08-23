@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std_util::assert_empty;
-use tests::{models, tests, DbTest, Setup};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
 async fn crud_user_todos_categories(test: &mut DbTest) {
@@ -164,7 +164,7 @@ async fn crud_user_todos_categories(test: &mut DbTest) {
 
         for (id, actual) in actual {
             assert_eq!(expect[&id].title, actual.title);
-            let category = actual.category().get(&db).await.unwrap();
+            let category = actual.category().get(db).await.unwrap();
             assert_eq!(category.name, "Food");
         }
     }

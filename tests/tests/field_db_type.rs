@@ -66,7 +66,7 @@ async fn specify_varchar_ty_when_not_supported(test: &mut DbTest) {
         name: String,
     }
 
-    if let Some(_) = test.capability().storage_types.varchar {
+    if test.capability().storage_types.varchar.is_some() {
         return;
     }
 
