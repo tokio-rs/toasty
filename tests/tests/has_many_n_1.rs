@@ -1,4 +1,4 @@
-use tests::{models, tests, DbTest, Setup};
+use tests::{tests, DbTest};
 // use toasty::stmt::Id;
 
 // What is this testing?

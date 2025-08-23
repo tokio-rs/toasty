@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std_util::{assert_empty, assert_err, assert_none, num::NumUtil};
-use tests::{models, tests, DbTest, Setup};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
 async fn crud_user_todos(test: &mut DbTest) {

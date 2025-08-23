@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use tests::{assert_eq_unordered, models, tests, DbTest, Setup};
+use tests::{assert_eq_unordered, models, tests, DbTest};
 use toasty::stmt::Id;
 
 async fn scoped_query_eq(test: &mut DbTest) {

@@ -1,4 +1,4 @@
-use tests::{assert_err, models, tests, DbTest, Setup};
+use tests::{assert_err, models, tests, DbTest};
 use toasty::stmt::Id;
 
 async fn specify_constrained_string_field(test: &mut DbTest) {

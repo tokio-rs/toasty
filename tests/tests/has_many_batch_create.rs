@@ -1,4 +1,4 @@
-use tests::{assert_eq_unordered, models, tests, DbTest, Setup};
+use tests::{assert_eq_unordered, models, tests, DbTest};
 use toasty::stmt::Id;
 
 async fn user_batch_create_todos_one_level_basic_fk(test: &mut DbTest) {

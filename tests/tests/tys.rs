@@ -1,4 +1,4 @@
-use tests::{models, tests, DbTest, Setup};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
 macro_rules! def_num_ty_tests {

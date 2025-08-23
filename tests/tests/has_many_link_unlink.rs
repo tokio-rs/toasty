@@ -1,5 +1,5 @@
 use std_util::{assert_err, assert_none, assert_ok};
-use tests::{models, tests, DbTest, Setup};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
 async fn remove_add_single_relation_option_belongs_to(test: &mut DbTest) {

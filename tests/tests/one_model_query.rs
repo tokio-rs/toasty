@@ -1,4 +1,4 @@
-use tests::{assert_eq_unordered, models, tests, DbTest, Setup};
+use tests::{assert_eq_unordered, models, tests, DbTest};
 
 async fn query_index_eq(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]

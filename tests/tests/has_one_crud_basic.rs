@@ -1,5 +1,5 @@
 use std_util::{assert_err, assert_none};
-use tests::{models, tests, DbTest, Setup};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
 async fn crud_has_one_bi_direction_optional(test: &mut DbTest) {

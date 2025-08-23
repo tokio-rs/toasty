@@ -1,5 +1,5 @@
 use std_util::{assert_err, assert_none, assert_ok, assert_unique, num::NumUtil, slice::SliceUtil};
-use tests::{models, tests, DbTest, Setup};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
 const MORE: i32 = 10;

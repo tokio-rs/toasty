@@ -1,4 +1,4 @@
-use tests::{models, tests, DbTest, Setup};
+use tests::{models, tests, DbTest};
 
 async fn different_field_name(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]

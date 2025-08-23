@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std_util::assert_none;
-use tests::{models, tests, DbTest, Setup};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
 async fn crud_person_self_referential(test: &mut DbTest) {
