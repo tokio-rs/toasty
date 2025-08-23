@@ -1,10 +1,15 @@
-use super::{Expr, Offset};
+use super::Expr;
 
 #[derive(Debug, Clone)]
-pub struct Limit {
-    /// The limit expression
-    pub limit: Expr,
-
-    /// The offset expression
-    pub offset: Option<Offset>,
+pub enum Limit {
+    /// Traditional LIMIT/OFFSET - no pagination metadata needed
+    Offset { 
+        limit: Expr, 
+        offset: Option<Expr> 
+    },
+    /// Forward cursor-based pagination - engine should return next_cursor
+    PaginateForward { 
+        limit: Expr, 
+        after: Option<Expr> 
+    },
 }

@@ -16,7 +16,7 @@ pub(crate) use var_store::VarStore;
 use crate::{
     driver::operation,
     engine::{
-        eval,
+        eval, ExecResponse,
         plan::{self, Action},
     },
     Db, Result,
@@ -33,12 +33,12 @@ pub(crate) async fn exec(
     db: &Db,
     pipeline: &plan::Pipeline,
     vars: VarStore,
-) -> Result<ValueStream> {
+) -> Result<ExecResponse> {
     Exec { db, vars }.exec_pipeline(pipeline).await
 }
 
 impl Exec<'_> {
-    async fn exec_pipeline(&mut self, pipeline: &plan::Pipeline) -> Result<ValueStream> {
+    async fn exec_pipeline(&mut self, pipeline: &plan::Pipeline) -> Result<ExecResponse> {
         for step in &pipeline.actions {
             self.exec_step(step).await?;
         }
@@ -46,7 +46,10 @@ impl Exec<'_> {
         Ok(if let Some(returning) = pipeline.returning {
             self.vars.load(returning)
         } else {
-            ValueStream::default()
+            ExecResponse {
+                values: ValueStream::default(),
+                metadata: None,
+            }
         })
     }
 
@@ -62,8 +65,13 @@ impl Exec<'_> {
             Action::QueryPk(action) => self.action_query_pk(action).await,
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
             Action::SetVar(action) => {
-                self.vars
-                    .store(action.var, ValueStream::from_vec(action.value.clone()));
+                self.vars.store(
+                    action.var,
+                    ExecResponse {
+                        values: ValueStream::from_vec(action.value.clone()),
+                        metadata: None,
+                    },
+                );
                 Ok(())
             }
             Action::UpdateByKey(action) => self.action_update_by_key(action).await,
@@ -71,12 +79,13 @@ impl Exec<'_> {
     }
 
     async fn collect_input(&mut self, input: &plan::Input) -> Result<stmt::Value> {
-        let value_stream = match input.source {
+        let exec_response = match input.source {
             plan::InputSource::Value(var_id) => self.vars.load(var_id),
             plan::InputSource::Ref(var_id) => self.vars.dup(var_id).await?,
         };
 
-        let mut values = stmt::Value::List(value_stream.collect().await?);
+        // Extract the value stream from the response
+        let mut values = stmt::Value::List(exec_response.values.collect().await?);
 
         if !input.project.is_identity() {
             values = input.project.eval(&[values])?;

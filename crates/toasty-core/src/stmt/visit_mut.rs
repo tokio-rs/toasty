@@ -773,10 +773,19 @@ pub fn visit_limit_mut<V>(v: &mut V, node: &mut Limit)
 where
     V: VisitMut + ?Sized,
 {
-    v.visit_expr_mut(&mut node.limit);
-
-    if let Some(offset) = &mut node.offset {
-        v.visit_offset_mut(offset);
+    match node {
+        Limit::Offset { limit, offset } => {
+            v.visit_expr_mut(limit);
+            if let Some(offset_expr) = offset {
+                v.visit_expr_mut(offset_expr);
+            }
+        }
+        Limit::PaginateForward { limit, after } => {
+            v.visit_expr_mut(limit);
+            if let Some(after_expr) = after {
+                v.visit_expr_mut(after_expr);
+            }
+        }
     }
 }
 

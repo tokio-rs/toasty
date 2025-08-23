@@ -1,11 +1,12 @@
 use super::{plan, Exec, Result};
+use crate::engine::ExecResponse;
 use toasty_core::stmt::ValueStream;
 use toasty_core::{schema::app::FieldTy, stmt};
 
 impl Exec<'_> {
     pub(super) async fn action_associate(&mut self, action: &plan::Associate) -> Result<()> {
-        let mut source = self.vars.load(action.source).collect().await?;
-        let target = self.vars.load(action.target).collect().await?;
+        let mut source = self.vars.load(action.source).values.collect().await?;
+        let target = self.vars.load(action.target).values.collect().await?;
 
         match &self.db.schema.app.field(action.field).ty {
             FieldTy::BelongsTo(rel) => {
@@ -54,8 +55,13 @@ impl Exec<'_> {
             _ => todo!(),
         }
 
-        self.vars
-            .store(action.source, ValueStream::from_vec(source));
+        self.vars.store(
+            action.source,
+            ExecResponse {
+                values: ValueStream::from_vec(source),
+                metadata: None,
+            },
+        );
         Ok(())
     }
 }
