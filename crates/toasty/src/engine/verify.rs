@@ -102,7 +102,8 @@ impl VerifyExpr<'_> {
             | InList(_)
             | InSubquery(_)
             | Or(_)
-            | Value(stmt::Value::Bool(_)) => {}
+            | Value(stmt::Value::Bool(_))
+            | AlwaysTrue => {}
             expr => panic!("Not a bool? {expr:#?}"),
         }
     }
