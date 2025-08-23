@@ -48,7 +48,7 @@ pub fn columns(
         .tables
         .iter()
         .find(|t| t.name == table_name || t.name.ends_with(table_name))
-        .expect(&format!("Table '{}' not found", table_name));
+        .unwrap_or_else(|| panic!("Table '{}' not found", table_name));
 
     let table_id = table_id(db, table_name);
 
@@ -59,7 +59,7 @@ pub fn columns(
                 .columns
                 .iter()
                 .position(|c| c.name == *col_name)
-                .expect(&format!(
+                .unwrap_or_else(|| panic!(
                     "Column '{}' not found in table '{}'",
                     col_name, table_name
                 ));

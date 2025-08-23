@@ -97,7 +97,7 @@ impl DbTest {
     {
         let setup = self.setup.as_ref().expect("Setup already consumed");
         let value = setup.get_raw_column_value(table, column, filter).await?;
-        T::try_from(value).map_err(Into::into)
+        T::try_from(value)
     }
 
     /// Run a test function with a mutable reference to self, using our managed runtime.

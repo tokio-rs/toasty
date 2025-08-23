@@ -123,11 +123,7 @@ async fn basic_crud(test: &mut DbTest) {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Update(_ {
                 target: toasty_core::stmt::UpdateTarget::Table(user_table_id),
-                assignments.len(): 1,
-                assignments[2]: _ {
-                    expr: Expr::Value(Value::I32(31)),
-                    ..
-                },
+                assignments: #{ 2: _ { expr: 31, .. }},
                 filter: Some(Expr::BinaryOp(_ {
                     *lhs: Expr::Column(ExprColumn::Column(== column(&db, "users", "id"))),
                     op: BinaryOp::Eq,
@@ -143,11 +139,7 @@ async fn basic_crud(test: &mut DbTest) {
             table: user_table_id,
             filter: None,
             keys: [== user_id],
-            assignments.len(): 1,
-            assignments[2]: _ {
-                expr: Expr::Value(Value::I32(31)),
-                ..
-            },
+            assignments: #{ 2: _ { expr: 31, .. }},
             ..
         }));
     }

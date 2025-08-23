@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use toasty::driver::Capability;
-use toasty::{db, Db};
 use toasty_core::stmt;
 use tokio::sync::OnceCell;
 
