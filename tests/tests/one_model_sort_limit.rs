@@ -69,7 +69,7 @@ async fn paginate(test: &mut DbTest) {
     // There are 100 items total, we're on the first page of 10, so there should be more pages
     assert!(page.has_next(), "First page should have next");
     assert!(!page.has_prev(), "First page should not have prev");
-    
+
     for (i, order) in (99..90).enumerate() {
         assert_eq!(page.items[i].order, order);
     }
@@ -86,11 +86,11 @@ async fn paginate(test: &mut DbTest) {
     assert!(page.has_next(), "Second page should have next");
     // Note: prev cursor is not implemented yet, so this will be false
     assert!(!page.has_prev(), "Prev cursor not implemented yet");
-    
+
     for (i, order) in (89..80).enumerate() {
         assert_eq!(page.items[i].order, order);
     }
-    
+
     // Test last page (items with order 9..0)
     let last_page = Foo::all()
         .order_by(Foo::FIELDS.order().desc())
@@ -99,10 +99,10 @@ async fn paginate(test: &mut DbTest) {
         .collect(&db)
         .await
         .unwrap();
-    
+
     assert_eq!(last_page.items.len(), 10);
     assert!(!last_page.has_next(), "Last page should not have next");
-    
+
     for (i, order) in (9..0).enumerate() {
         assert_eq!(last_page.items[i].order, order);
     }

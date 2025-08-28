@@ -10,7 +10,7 @@ mod ty;
 mod verify;
 
 use crate::{Db, Result};
-use toasty_core::stmt::{Statement, ValueStream, Expr, Query};
+use toasty_core::stmt::{Expr, Query, Statement, ValueStream};
 
 /// Response from executing a statement, containing the value stream and optional metadata
 #[derive(Debug)]
@@ -26,7 +26,7 @@ pub struct ExecResponse {
 pub struct Metadata {
     /// Cursor pointing to the next page (for pagination)
     pub next_cursor: Option<Expr>,
-    /// Cursor pointing to the previous page (for pagination) 
+    /// Cursor pointing to the previous page (for pagination)
     pub prev_cursor: Option<Expr>,
     /// The original query that was executed
     pub query: Query,

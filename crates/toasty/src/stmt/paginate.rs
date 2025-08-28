@@ -69,12 +69,14 @@ impl<M: Model> Paginate<M> {
 
         // Query for one more item than requested to detect if there's a next page
         let mut query_with_extra = self.query.clone();
-        if let Some(stmt::Limit::PaginateForward { limit, .. }) = &mut query_with_extra.untyped.limit {
+        if let Some(stmt::Limit::PaginateForward { limit, .. }) =
+            &mut query_with_extra.untyped.limit
+        {
             *limit = stmt::Value::from((page_size + 1) as i64).into();
         }
 
         let items: Vec<M> = db.all(query_with_extra).await?.collect().await?;
-        
+
         let has_next = items.len() > page_size;
         let items = if has_next {
             items.into_iter().take(page_size).collect()
@@ -92,7 +94,7 @@ impl<M: Model> Paginate<M> {
         };
 
         Ok(crate::Page::new(
-            items, 
+            items,
             self.query,
             next_cursor,
             None, // prev_cursor not implemented yet

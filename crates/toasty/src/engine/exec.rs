@@ -16,8 +16,9 @@ pub(crate) use var_store::VarStore;
 use crate::{
     driver::operation,
     engine::{
-        eval, ExecResponse,
+        eval,
         plan::{self, Action},
+        ExecResponse,
     },
     Db, Result,
 };

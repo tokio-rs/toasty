@@ -24,7 +24,7 @@ pub(crate) struct ExecStatement {
 pub(crate) struct Pagination {
     /// Original limit before +1 transformation
     pub limit: u64,
-    
+
     /// Function to extract cursor from a row
     /// Takes row as arg[0], returns cursor value(s)
     pub extract_cursor: eval::Func,

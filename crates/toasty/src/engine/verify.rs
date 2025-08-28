@@ -65,7 +65,10 @@ impl Verify<'_> {
         };
 
         let offset = match limit {
-            stmt::Limit::PaginateForward { after: Some(offset), .. } => offset,
+            stmt::Limit::PaginateForward {
+                after: Some(offset),
+                ..
+            } => offset,
             _ => return, // No after clause to verify
         };
 

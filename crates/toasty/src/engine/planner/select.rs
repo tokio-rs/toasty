@@ -396,9 +396,7 @@ impl Planner<'_> {
 
         // First, handle any after clause by converting it to a filter
         let offset = match limit {
-            stmt::Limit::PaginateForward { after, .. } => {
-                after.take()
-            }
+            stmt::Limit::PaginateForward { after, .. } => after.take(),
             stmt::Limit::Offset { .. } => return, // No after clause in offset-based limits
         };
 
@@ -429,7 +427,10 @@ impl Planner<'_> {
         }
 
         // Convert PaginateForward to Offset variant now that we've processed the after clause
-        if let stmt::Limit::PaginateForward { limit: limit_expr, .. } = limit {
+        if let stmt::Limit::PaginateForward {
+            limit: limit_expr, ..
+        } = limit
+        {
             *limit = stmt::Limit::Offset {
                 limit: limit_expr.clone(),
                 offset: None,
