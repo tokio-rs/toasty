@@ -7,7 +7,8 @@
 //! The primary use case is handling polymorphic AST structures where different database
 //! drivers generate different representations for the same semantic content.
 
-use super::{Expr, ExprSet, Value};
+use super::{Expr, ExprColumn, ExprSet, Value};
+use crate::schema::db::ColumnId;
 use assert_struct::Like;
 
 /// Helper function to extract Values from an Expr (handles both polymorphic representations)
@@ -189,5 +190,15 @@ impl Like<String> for Expr {
 impl Like<&str> for Expr {
     fn like(&self, pattern: &&str) -> bool {
         self == *pattern
+    }
+}
+
+/// Like implementation for Expr and ColumnId - matches column references
+impl Like<ColumnId> for Expr {
+    fn like(&self, pattern: &ColumnId) -> bool {
+        match self {
+            Expr::Column(ExprColumn::Column(column_id)) => column_id == pattern,
+            _ => false,
+        }
     }
 }

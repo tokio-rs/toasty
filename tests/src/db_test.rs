@@ -73,6 +73,11 @@ impl DbTest {
             .expect("Setup already consumed")
             .capability()
     }
+
+    /// Check if the database uses SQL (convenience method)
+    pub fn is_sql(&self) -> bool {
+        self.capability().sql
+    }
     /// Configure a builder (for error testing)
     pub fn configure_builder(&self, builder: &mut toasty::db::Builder) {
         let setup = self.setup.as_ref().expect("Setup already consumed");
