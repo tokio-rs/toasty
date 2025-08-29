@@ -24,7 +24,6 @@ impl Like<Any> for Value {
     }
 }
 
-
 /// Extension trait for ValueStream providing convenient testing methods
 pub trait ValueStreamExt {
     /// Returns buffered values, asserting that the stream is fully buffered

@@ -1,9 +1,11 @@
 use assert_struct::assert_struct;
-use tests::{models, tests, DbTest, prelude::*};
+use tests::{models, prelude::*, tests, DbTest};
 use toasty::stmt::Id;
 use toasty_core::{
     driver::Operation,
-    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Limit, OrderBy, OrderByExpr, Source, Statement, Value},
+    stmt::{
+        BinaryOp, Expr, ExprColumn, ExprSet, Limit, OrderBy, OrderByExpr, Source, Statement, Value,
+    },
 };
 
 #[derive(toasty::Model)]
@@ -58,7 +60,7 @@ async fn paginate(test: &mut DbTest) {
     }
 
     let db = test.setup_db(models!(Foo)).await;
-    let foo_table_id = table_id(&db, "foos");
+    let foo_table_id = table(&db, "foos");
 
     for i in 0..100 {
         Foo::create().order(i).exec(&db).await.unwrap();
@@ -91,21 +93,19 @@ async fn paginate(test: &mut DbTest) {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Query(_ {
                 body: ExprSet::Select(_ {
-                    source: Source::Table([
-                        _ { table: foo_table_id, .. },
-                    ]),
+                    source: =~ table(&db, "foos"),
                     ..
                 }),
                 order_by: Some(OrderBy {
                     exprs: [OrderByExpr {
-                        expr: Expr::Column(ExprColumn::Column(== column(&db, "foos", "order"))),
+                        expr: =~ column(&db, "foos", "order"),
                         order: Some(_),
                         ..
-                    }, ..],
+                    }],
                     ..
                 }),
                 limit: Some(Limit::Offset {
-                    limit: Expr::Value(Value::I64(11)),
+                    limit: =~ 11,
                     offset: None,
                 }),
                 ..
@@ -115,8 +115,9 @@ async fn paginate(test: &mut DbTest) {
     } else {
         // For NoSQL databases, expect FindPkByIndex operation
         assert_struct!(op, Operation::FindPkByIndex(_ {
-            table: foo_table_id,
-            // Should use index on the order field
+            table: == table(&db, "foos"),
+            index: == index(&db, "foos", "order"),
+            filter: _,
             ..
         }));
     }
@@ -252,7 +253,10 @@ async fn paginate(test: &mut DbTest) {
     }
 
     // Verify log is empty
-    assert!(test.log().is_empty(), "Log should be empty after all assertions");
+    assert!(
+        test.log().is_empty(),
+        "Log should be empty after all assertions"
+    );
 }
 
 tests!(sort_asc, paginate,);

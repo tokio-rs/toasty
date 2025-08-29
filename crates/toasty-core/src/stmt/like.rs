@@ -7,8 +7,8 @@
 //! The primary use case is handling polymorphic AST structures where different database
 //! drivers generate different representations for the same semantic content.
 
-use super::{Expr, ExprColumn, ExprSet, Value};
-use crate::schema::db::ColumnId;
+use super::{Expr, ExprColumn, ExprSet, Source, Value};
+use crate::schema::db::{ColumnId, TableId};
 use assert_struct::Like;
 
 /// Helper function to extract Values from an Expr (handles both polymorphic representations)
@@ -186,7 +186,7 @@ impl Like<String> for Expr {
     }
 }
 
-/// Like implementation for Expr and &str (delegates to PartialEq)  
+/// Like implementation for Expr and &str (delegates to PartialEq)
 impl Like<&str> for Expr {
     fn like(&self, pattern: &&str) -> bool {
         self == *pattern
@@ -198,6 +198,43 @@ impl Like<ColumnId> for Expr {
     fn like(&self, pattern: &ColumnId) -> bool {
         match self {
             Expr::Column(ExprColumn::Column(column_id)) => column_id == pattern,
+            _ => false,
+        }
+    }
+}
+
+impl<T> Like<T> for Expr
+where
+    T: TryFrom<Value> + PartialEq,
+{
+    fn like(&self, pattern: &T) -> bool {
+        match self {
+            Expr::Value(value) => {
+                if let Ok(typed_value) = T::try_from(value.clone()) {
+                    typed_value == *pattern
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+}
+
+/// Like implementation for Source and TableId - matches table sources without joins
+impl Like<TableId> for Source {
+    fn like(&self, pattern: &TableId) -> bool {
+        match self {
+            Source::Table(tables) => {
+                // Check if there's exactly one TableWithJoins
+                if tables.len() == 1 {
+                    let table_with_joins = &tables[0];
+                    // Check if the table matches and there are no joins
+                    table_with_joins.table.references(*pattern) && table_with_joins.joins.is_empty()
+                } else {
+                    false
+                }
+            }
             _ => false,
         }
     }

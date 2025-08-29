@@ -20,7 +20,7 @@ async fn basic_crud(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
 
     // Helper to get the table ID (handles database-specific prefixes automatically)
-    let user_table_id = table_id(&db, "users");
+    let user_table_id = table(&db, "users");
 
     // Clear any setup operations (from reset_db, etc.)
     test.log().clear();
