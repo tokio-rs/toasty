@@ -17,4 +17,16 @@ impl Planner<'_> {
             ),
         }
     }
+
+    /// Get the record type for a model (all fields as their primitive types)
+    pub(crate) fn infer_model_record_type(
+        &self,
+        model: &toasty_core::schema::app::Model,
+    ) -> stmt::Type {
+        let mut field_types = vec![];
+        for field in &model.fields {
+            field_types.push(field.expr_ty().clone());
+        }
+        stmt::Type::Record(field_types)
+    }
 }

@@ -11,10 +11,10 @@ pub struct HasMany<T> {
 impl<T: Model> HasMany<T> {
     pub fn load(input: Value) -> crate::Result<Self> {
         match input {
-            Value::Record(record) => {
+            Value::List(items) => {
                 let mut values = vec![];
 
-                for value in record.fields {
+                for value in items {
                     let Value::Record(record) = value else {
                         panic!("unexpected input; value={value:#?}")
                     };

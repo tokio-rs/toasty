@@ -1,6 +1,6 @@
 use super::{eval, plan, Context, Planner, Result};
 use toasty_core::{
-    schema::app::{FieldTy, Model, ModelId},
+    schema::app::{self, FieldTy, Model, ModelId},
     stmt,
 };
 
@@ -34,7 +34,33 @@ impl Planner<'_> {
         self.lower_stmt_query(model, &mut stmt);
 
         // Compute the return type
-        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
+        let mut project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
+
+        // Adjust the return type to account for includes
+        if !source_model.include.is_empty() {
+            if let stmt::Type::Record(ref mut fields) = &mut project.ret {
+                for include in &source_model.include {
+                    let [field_idx] = &include.projection[..] else {
+                        continue;
+                    };
+                    let field = &model.fields[*field_idx];
+                    match &field.ty {
+                        app::FieldTy::HasMany(rel) => {
+                            // Replace Null with List type for HasMany fields
+                            let target_model = self.schema.app.model(rel.target);
+                            let target_record_type = self.infer_model_record_type(target_model);
+                            fields[*field_idx] = stmt::Type::list(target_record_type);
+                        }
+                        app::FieldTy::BelongsTo(rel) => {
+                            // Replace Null with Record type for BelongsTo fields
+                            let target_model = self.schema.app.model(rel.target);
+                            fields[*field_idx] = self.infer_model_record_type(target_model);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
 
         // Register a variable for the output
         let output = self
