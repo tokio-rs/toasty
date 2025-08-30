@@ -30,6 +30,7 @@ impl Exec<'_> {
             FieldTy::HasMany(rel) => {
                 let pair = rel.pair(&self.db.schema.app);
 
+                // TODO: this is N^2, not super efficient.
                 for source_item in &mut source {
                     let source_item = source_item.expect_record_mut();
                     let mut associated = vec![];
@@ -47,8 +48,7 @@ impl Exec<'_> {
                         }
                     }
 
-                    source_item[action.field.index] =
-                        stmt::ValueRecord::from_vec(associated).into();
+                    source_item[action.field.index] = stmt::Value::List(associated);
                 }
             }
             _ => todo!(),
