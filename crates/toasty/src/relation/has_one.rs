@@ -23,6 +23,10 @@ impl<T: Model> HasOne<T> {
     pub fn get(&self) -> &T {
         self.value.as_ref().expect("association not loaded")
     }
+
+    pub fn not_loaded(&self) -> bool {
+        self.value.is_none()
+    }
 }
 
 impl<T: Relation> Relation for HasOne<T> {
@@ -59,5 +63,15 @@ impl<T: fmt::Debug> fmt::Debug for HasOne<T> {
                 Ok(())
             }
         }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: serde::Serialize> serde::Serialize for HasOne<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.value.serialize(serializer)
     }
 }

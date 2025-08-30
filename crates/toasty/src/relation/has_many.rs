@@ -38,6 +38,10 @@ impl<T: Model> HasMany<T> {
             .expect("association not loaded")
             .as_slice()
     }
+
+    pub fn not_loaded(&self) -> bool {
+        self.values.is_none()
+    }
 }
 
 impl<T: Relation> Relation for HasMany<T> {
@@ -68,5 +72,15 @@ impl<T> Default for HasMany<T> {
 impl<T: fmt::Debug> fmt::Debug for HasMany<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_list().finish()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: serde::Serialize> serde::Serialize for HasMany<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.values.serialize(serializer)
     }
 }
