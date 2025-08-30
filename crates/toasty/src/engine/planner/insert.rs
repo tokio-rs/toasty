@@ -1,4 +1,5 @@
 use super::{eval, plan, Insertion, Planner, Result};
+use crate::engine::typed::Typed;
 use std::collections::hash_map::Entry;
 use toasty_core::{
     schema::{app, db::ColumnId},
@@ -25,7 +26,11 @@ impl Planner<'_> {
         // scope, check constraints, ...)
         self.preprocess_insert_values(model, &mut stmt)?;
 
-        self.lower_stmt_insert(model, &mut stmt);
+        // For inserts, we use the model's record type - inserts don't have complex type transformations
+        let model_mapping = self.schema.mapping.model(model.id);
+        let mut typed_stmt = Typed::new(stmt, model_mapping.record_ty.clone());
+        self.lower_stmt_insert(model, &mut typed_stmt);
+        stmt = typed_stmt.value;
 
         // If the statement `Returning` is constant (i.e. does not depend on the
         // database evaluating the statement), then extract it here.
@@ -35,10 +40,21 @@ impl Planner<'_> {
 
         // First, lower the returning part of the statement and get any
         // necessary in-memory projection.
-        let project = stmt
-            .returning
-            .as_mut()
-            .map(|returning| self.partition_returning(returning));
+        let project = stmt.returning.as_mut().map(|returning| {
+            // Compute the return type for the returning clause
+            let ret_type = match returning {
+                stmt::Returning::Star => {
+                    // For INSERT RETURNING *, return the full model record type
+                    let model_mapping = self.schema.mapping.model(model.id);
+                    model_mapping.record_ty.clone()
+                }
+                _ => {
+                    // For specific returning expressions, infer the type
+                    self.infer_expr_ty(returning.as_expr(), &[])
+                }
+            };
+            self.partition_returning(returning, ret_type)
+        });
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {

@@ -27,9 +27,11 @@ enum Partition {
 impl Planner<'_> {
     /// Partition a returning statement between what can be handled by the
     /// target database and what Toasty handles in-memory.
-    pub(crate) fn partition_returning(&self, stmt: &mut stmt::Returning) -> eval::Func {
-        let ret = self.infer_expr_ty(stmt.as_expr(), &[]);
-
+    pub(crate) fn partition_returning(
+        &self,
+        stmt: &mut stmt::Returning,
+        ret: stmt::Type,
+    ) -> eval::Func {
         match stmt {
             stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => {
                 // returning an expression record is special-cased because it
@@ -119,9 +121,10 @@ impl Planner<'_> {
     pub fn partition_maybe_returning(
         &self,
         stmt: &mut Option<stmt::Returning>,
+        ret: stmt::Type,
     ) -> Option<eval::Func> {
         let Some(returning) = stmt else { return None };
-        let project = self.partition_returning(returning);
+        let project = self.partition_returning(returning, ret);
 
         if returning.as_expr().as_record().is_empty() {
             *stmt = None;

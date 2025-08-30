@@ -1,4 +1,5 @@
 use super::{eval, plan, Planner, Result};
+use crate::engine::typed::Typed;
 use toasty_core::{
     schema::app::{FieldTy, Model},
     stmt::{self, VisitMut},
@@ -92,20 +93,40 @@ impl Planner<'_> {
             self.plan_subqueries(&mut stmt)?;
         }
 
-        self.lower_stmt_update(model, &mut stmt);
+        // For updates, we use the model's record type - updates don't have complex type transformations
+        let model_mapping = self.schema.mapping.model(model.id);
+        let mut typed_stmt = Typed::new(stmt, model_mapping.record_ty.clone());
+        self.lower_stmt_update(model, &mut typed_stmt);
+        stmt = typed_stmt.value;
 
         // If the statement `Returning` is constant (i.e. does not depend on the
         // database evaluating the statement), then extract it here.
         self.constantize_update_returning(&mut stmt);
 
-        let output = self
-            .partition_maybe_returning(&mut stmt.returning)
-            .map(|project| plan::Output {
-                var: self
-                    .var_table
-                    .register_var(stmt::Type::list(project.ret.clone())),
-                project,
-            });
+        let output = if let Some(ref returning) = stmt.returning {
+            // Compute the return type for the returning clause
+            let ret_type = match returning {
+                stmt::Returning::Star => {
+                    // For UPDATE RETURNING *, return the full model record type
+                    let model_mapping = self.schema.mapping.model(model.id);
+                    model_mapping.record_ty.clone()
+                }
+                _ => {
+                    // For specific returning expressions, infer the type
+                    self.infer_expr_ty(returning.as_expr(), &[])
+                }
+            };
+
+            self.partition_maybe_returning(&mut stmt.returning, ret_type)
+                .map(|project| plan::Output {
+                    var: self
+                        .var_table
+                        .register_var(stmt::Type::list(project.ret.clone())),
+                    project,
+                })
+        } else {
+            None
+        };
 
         Ok(if self.capability.sql {
             self.plan_update_sql(stmt, output)

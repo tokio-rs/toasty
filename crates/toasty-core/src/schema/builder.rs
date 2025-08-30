@@ -90,6 +90,7 @@ impl Builder {
                     model_to_table: stmt::ExprRecord::default(),
                     model_pk_to_table: stmt::Expr::default(),
                     table_to_model: stmt::ExprRecord::default(),
+                    record_ty: stmt::Type::Null, // Will be populated during table building
                 },
             );
         }

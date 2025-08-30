@@ -1,6 +1,7 @@
 use super::{eval, plan, Context, Planner, Result};
+use crate::engine::typed::Typed;
 use toasty_core::{
-    schema::app::{self, FieldTy, Model, ModelId},
+    schema::app::{FieldTy, Model, ModelId},
     stmt,
 };
 
@@ -8,67 +9,40 @@ impl Planner<'_> {
     pub(super) fn plan_stmt_select(
         &mut self,
         cx: &Context,
-        mut stmt: stmt::Query,
+        stmt: stmt::Query,
     ) -> Result<plan::VarId> {
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.app.model(source_model.model);
 
-        let source_model = match &stmt.body {
-            stmt::ExprSet::Select(select) => {
-                match &select.source {
-                    stmt::Source::Model(source_model) => {
-                        if !source_model.include.is_empty() {
-                            // For now, the full model must be selected
-                            assert!(matches!(select.returning, stmt::Returning::Star));
-                        }
-
-                        source_model.clone()
-                    }
-                    _ => todo!(),
-                }
-            }
-            _ => todo!(),
-        };
-
-        self.lower_stmt_query(model, &mut stmt);
-
-        // Compute the return type
-        let mut project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
-
-        // Adjust the return type to account for includes
         if !source_model.include.is_empty() {
-            if let stmt::Type::Record(ref mut fields) = &mut project.ret {
-                for include in &source_model.include {
-                    let [field_idx] = &include.projection[..] else {
-                        continue;
-                    };
-                    let field = &model.fields[*field_idx];
-                    match &field.ty {
-                        app::FieldTy::HasMany(rel) => {
-                            // Replace Null with List type for HasMany fields
-                            let target_model = self.schema.app.model(rel.target);
-                            let target_record_type = self.infer_model_record_type(target_model);
-                            fields[*field_idx] = stmt::Type::list(target_record_type);
-                        }
-                        app::FieldTy::BelongsTo(rel) => {
-                            // Replace Null with Record type for BelongsTo fields
-                            let target_model = self.schema.app.model(rel.target);
-                            fields[*field_idx] = self.infer_model_record_type(target_model);
-                        }
-                        _ => {}
-                    }
-                }
-            }
+            // For now, the full model must be selected
+            assert!(matches!(
+                stmt.body.as_select().returning,
+                stmt::Returning::Star
+            ));
         }
 
-        // Register a variable for the output
+        // Create typed statement with base record_ty (has semantic types)
+        let model_mapping = self.schema.mapping.model(model.id);
+        let mut typed_stmt = Typed::new(stmt, model_mapping.record_ty.clone());
+
+        // Lowering will update both statement and type based on includes
+        self.lower_stmt_query(model, &mut typed_stmt);
+
+        // partition_returning uses the correctly lowered type
+        let project = self.partition_returning(
+            &mut typed_stmt.value.body.as_select_mut().returning,
+            typed_stmt.ty.clone(),
+        );
+
+        // Step 4: Register variable with the correct type
         let output = self
             .var_table
             .register_var(stmt::Type::list(project.ret.clone()));
 
         // If the filter expression is false, then the result will be empty.
-        if let stmt::ExprSet::Select(select) = &stmt.body {
+        if let stmt::ExprSet::Select(select) = &typed_stmt.value.body {
             if select.filter.is_false() {
                 self.push_action(plan::SetVar {
                     var: output,
@@ -79,9 +53,9 @@ impl Planner<'_> {
         }
 
         let ret = if self.capability.sql {
-            self.plan_select_sql(cx, output, project, stmt)
+            self.plan_select_sql(cx, output, project, typed_stmt.value)
         } else {
-            self.plan_select_kv(cx, model, output, project, stmt)
+            self.plan_select_kv(cx, model, output, project, typed_stmt.value)
         };
 
         for include in &source_model.include {
@@ -395,6 +369,38 @@ impl Planner<'_> {
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.source),
                     ),
                 );
+                let Some(out) =
+                    self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())?
+                else {
+                    todo!()
+                };
+
+                // Associate target records with the source
+                self.push_action(plan::Associate {
+                    source: input,
+                    target: out,
+                    field: field.id,
+                });
+            }
+            FieldTy::HasOne(rel) => {
+                let pair = rel.pair(&self.schema.app);
+
+                let [fk_field] = &pair.foreign_key.fields[..] else {
+                    todo!("composite key")
+                };
+
+                let cx = Context {
+                    input: vec![plan::InputSource::Ref(input)],
+                };
+
+                let filter = stmt::Expr::in_list(
+                    fk_field.source,
+                    stmt::Expr::map(
+                        stmt::Expr::arg(0),
+                        stmt::Expr::project(stmt::Expr::arg(0), fk_field.target),
+                    ),
+                );
+
                 let Some(out) =
                     self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())?
                 else {

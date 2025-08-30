@@ -1,4 +1,5 @@
 use super::{eval, plan, Context, Planner, Result};
+use crate::engine::typed::Typed;
 use toasty_core::{schema::app, stmt};
 
 impl Planner<'_> {
@@ -44,13 +45,16 @@ impl Planner<'_> {
         Ok(())
     }
 
-    fn plan_delete_sql(&mut self, model: &app::Model, mut stmt: stmt::Delete) {
-        self.lower_stmt_delete(model, &mut stmt);
+    fn plan_delete_sql(&mut self, model: &app::Model, stmt: stmt::Delete) {
+        // For deletes, we use a basic type - delete operations don't have complex return types
+        let model_mapping = self.schema.mapping.model(model.id);
+        let mut typed_stmt = Typed::new(stmt, model_mapping.record_ty.clone());
+        self.lower_stmt_delete(model, &mut typed_stmt);
 
         self.push_action(plan::ExecStatement {
             output: None,
             input: None,
-            stmt: stmt.into(),
+            stmt: typed_stmt.value.into(),
             conditional_update_with_no_returning: false,
         });
     }
@@ -61,7 +65,10 @@ impl Planner<'_> {
         // Subqueries are planned before lowering
         let input_sources = self.plan_subqueries(&mut stmt)?;
 
-        self.lower_stmt_delete(model, &mut stmt);
+        let model_mapping = self.schema.mapping.model(model.id);
+        let mut typed_stmt = Typed::new(stmt, model_mapping.record_ty.clone());
+        self.lower_stmt_delete(model, &mut typed_stmt);
+        stmt = typed_stmt.value;
 
         let input = if input_sources.is_empty() {
             None

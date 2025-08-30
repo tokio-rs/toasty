@@ -502,9 +502,17 @@ impl BuildMapping<'_> {
             self.model_pk_to_table.push(expr);
         }
 
+        // Build the record type for this model by inferring from table_to_model
+        // This uses the same logic as the old infer_model_record_type but cached
+        let mut field_types = vec![];
+        for field in &model.fields {
+            field_types.push(field.expr_ty().clone());
+        }
+
         self.mapping.columns = self.lowering_columns;
         self.mapping.model_to_table = stmt::ExprRecord::from_vec(self.model_to_table);
         self.mapping.table_to_model = stmt::ExprRecord::from_vec(self.table_to_model);
+        self.mapping.record_ty = stmt::Type::Record(field_types);
         self.mapping.model_pk_to_table = if self.model_pk_to_table.len() == 1 {
             let expr = self.model_pk_to_table.into_iter().next().unwrap();
             debug_assert!(expr.is_field() || expr.is_cast(), "expr={expr:#?}");

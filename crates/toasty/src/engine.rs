@@ -7,6 +7,7 @@ use plan::Plan;
 mod planner;
 mod simplify;
 mod ty;
+mod typed;
 mod verify;
 
 use crate::{Db, Result};

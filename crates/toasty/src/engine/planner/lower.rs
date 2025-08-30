@@ -1,4 +1,5 @@
 use super::{simplify, Planner};
+use crate::engine::typed::Typed;
 use toasty_core::{
     schema::{
         app::{self, FieldId},
@@ -40,24 +41,129 @@ impl<'a> LowerStatement<'a> {
 }
 
 impl Planner<'_> {
-    pub(crate) fn lower_stmt_delete(&self, model: &app::Model, stmt: &mut stmt::Delete) {
-        LowerStatement::from_model(self.schema, model).visit_stmt_delete_mut(stmt);
-        simplify::simplify_stmt(self.schema, stmt);
+    pub(crate) fn lower_stmt_delete(
+        &self,
+        model: &app::Model,
+        typed_stmt: &mut Typed<stmt::Delete>,
+    ) {
+        LowerStatement::from_model(self.schema, model).visit_stmt_delete_mut(&mut typed_stmt.value);
+        simplify::simplify_stmt(self.schema, &mut typed_stmt.value);
     }
 
-    pub(crate) fn lower_stmt_query(&self, model: &app::Model, stmt: &mut stmt::Query) {
-        LowerStatement::from_model(self.schema, model).visit_stmt_query_mut(stmt);
-        simplify::simplify_stmt(self.schema, stmt);
+    pub(crate) fn lower_stmt_query(&self, model: &app::Model, typed_stmt: &mut Typed<stmt::Query>) {
+        // Extract includes before visitor runs - collect into Vec to avoid borrow issues
+        let includes: Vec<stmt::Path> = match &typed_stmt.value.body {
+            stmt::ExprSet::Select(select) => match &select.source {
+                stmt::Source::Model(source) => source.include.clone(),
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
+        };
+
+        // Build the lowered type based on includes
+        let lowered_type = self.build_lowered_type(model, &includes);
+        typed_stmt.ty = lowered_type;
+
+        // If we have Returning::Star and includes, build custom table_to_model
+        if !includes.is_empty() {
+            if let stmt::ExprSet::Select(select) = &mut typed_stmt.value.body {
+                if matches!(select.returning, stmt::Returning::Star) {
+                    let custom_table_to_model =
+                        self.build_include_aware_table_to_model(model, &includes);
+                    select.returning = stmt::Returning::Expr(custom_table_to_model.into());
+                }
+            }
+        }
+
+        // Now run the normal visitor (which will handle non-Star returning)
+        LowerStatement::from_model(self.schema, model).visit_stmt_query_mut(&mut typed_stmt.value);
+        simplify::simplify_stmt(self.schema, &mut typed_stmt.value);
     }
 
-    pub(crate) fn lower_stmt_insert(&self, model: &app::Model, stmt: &mut stmt::Insert) {
-        LowerStatement::from_model(self.schema, model).visit_stmt_insert_mut(stmt);
-        simplify::simplify_stmt(self.schema, stmt);
+    pub(crate) fn lower_stmt_insert(
+        &self,
+        model: &app::Model,
+        typed_stmt: &mut Typed<stmt::Insert>,
+    ) {
+        LowerStatement::from_model(self.schema, model).visit_stmt_insert_mut(&mut typed_stmt.value);
+        simplify::simplify_stmt(self.schema, &mut typed_stmt.value);
     }
 
-    pub(crate) fn lower_stmt_update(&self, model: &app::Model, stmt: &mut stmt::Update) {
-        LowerStatement::from_model(self.schema, model).visit_stmt_update_mut(stmt);
-        simplify::simplify_stmt(self.schema, stmt);
+    pub(crate) fn lower_stmt_update(
+        &self,
+        model: &app::Model,
+        typed_stmt: &mut Typed<stmt::Update>,
+    ) {
+        LowerStatement::from_model(self.schema, model).visit_stmt_update_mut(&mut typed_stmt.value);
+        simplify::simplify_stmt(self.schema, &mut typed_stmt.value);
+    }
+
+    /// Build the lowered type based on includes - associations become either
+    /// their target record type (if included) or Null (if not included)
+    fn build_lowered_type(&self, model: &app::Model, includes: &[stmt::Path]) -> stmt::Type {
+        let model_mapping = self.schema.mapping.model(model.id);
+        let mut record_ty = model_mapping.record_ty.clone(); // Has semantic types
+
+        if let stmt::Type::Record(ref mut field_types) = record_ty {
+            for (i, field) in model.fields.iter().enumerate() {
+                // Check if this field is included
+                let is_included = includes
+                    .iter()
+                    .any(|inc| matches!(&inc.projection[..], [idx] if *idx == i));
+
+                match &field.ty {
+                    app::FieldTy::HasMany(hm) if is_included => {
+                        let target_mapping = self.schema.mapping.model(hm.target);
+                        field_types[i] = stmt::Type::list(target_mapping.record_ty.clone());
+                    }
+                    app::FieldTy::BelongsTo(bt) if is_included => {
+                        let target_mapping = self.schema.mapping.model(bt.target);
+                        field_types[i] = target_mapping.record_ty.clone();
+                    }
+                    app::FieldTy::HasOne(ho) if is_included => {
+                        let target_mapping = self.schema.mapping.model(ho.target);
+                        field_types[i] = target_mapping.record_ty.clone();
+                    }
+                    app::FieldTy::HasMany(_)
+                    | app::FieldTy::BelongsTo(_)
+                    | app::FieldTy::HasOne(_) => {
+                        // Not included - set to Null
+                        field_types[i] = stmt::Type::Null;
+                    }
+                    app::FieldTy::Primitive(_) => {
+                        // Keep primitive types as-is
+                    }
+                }
+            }
+        }
+
+        record_ty
+    }
+
+    /// Build a custom table_to_model expression that matches the lowered type
+    fn build_include_aware_table_to_model(
+        &self,
+        model: &app::Model,
+        includes: &[stmt::Path],
+    ) -> stmt::ExprRecord {
+        let model_mapping = self.schema.mapping.model(model.id);
+        let mut fields = vec![];
+
+        for (i, field) in model.fields.iter().enumerate() {
+            let is_included = includes
+                .iter()
+                .any(|inc| matches!(&inc.projection[..], [idx] if *idx == i));
+
+            if is_included && field.ty.is_relation() {
+                // For included relations, we'll populate with actual data later
+                // For now, use the base mapping but mark for population
+                fields.push(model_mapping.table_to_model[i].clone());
+            } else {
+                fields.push(model_mapping.table_to_model[i].clone());
+            }
+        }
+
+        stmt::ExprRecord::from_vec(fields)
     }
 }
 
