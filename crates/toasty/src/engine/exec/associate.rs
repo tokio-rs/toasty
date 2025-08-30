@@ -30,7 +30,7 @@ impl Exec<'_> {
             FieldTy::HasMany(rel) => {
                 let pair = rel.pair(&self.db.schema.app);
 
-                // TODO: this is N^2, not super efficient.
+                // TODO: this is N^2, not super efficient. (tokio-rs/toasty#141)
                 for source_item in &mut source {
                     let source_item = source_item.expect_record_mut();
                     let mut associated = vec![];
