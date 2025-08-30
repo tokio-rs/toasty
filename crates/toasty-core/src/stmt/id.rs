@@ -58,6 +58,14 @@ impl Id {
         }
     }
 
+    /// Return a string representation of the record identifier.
+    pub fn as_str(&self) -> Result<&str, Error> {
+        match &self.repr {
+            Repr::String(id) => Ok(id.as_str()),
+            Repr::Int(_) => anyhow::bail!("Id not a string"),
+        }
+    }
+
     pub fn to_primitive(&self) -> stmt::Value {
         match &self.repr {
             Repr::Int(_) => todo!(),
