@@ -19,6 +19,7 @@ async fn basic_has_many_and_belongs_to_preload(test: &mut DbTest) {
         id: Id<Self>,
 
         #[index]
+        #[allow(dead_code)]
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
@@ -65,6 +66,7 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
         #[auto]
         id: Id<Self>,
 
+        #[allow(dead_code)]
         name: String,
 
         #[has_many]
@@ -80,9 +82,11 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
         #[auto]
         id: Id<Self>,
 
+        #[allow(dead_code)]
         title: String,
 
         #[index]
+        #[allow(dead_code)]
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
@@ -95,9 +99,11 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
         #[auto]
         id: Id<Self>,
 
+        #[allow(dead_code)]
         text: String,
 
         #[index]
+        #[allow(dead_code)]
         user_id: Id<User>,
 
         #[belongs_to(key = user_id, references = id)]
