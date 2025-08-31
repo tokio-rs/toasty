@@ -30,54 +30,35 @@ impl Select {
         match &self.returning {
             Returning::Star => {
                 // For SELECT *, infer based on the source
-                self.source.infer_ty(schema, args)
+                match &self.source {
+                    Source::Model(source_model) => {
+                        let model = schema.app.model(source_model.model);
+                        let field_types: Vec<Type> =
+                            model.fields.iter().map(|f| f.expr_ty().clone()).collect();
+                        Type::Record(field_types)
+                    }
+                    Source::Table(table_with_joins) => {
+                        // For table-based sources, infer from the first table's columns
+                        if let Some(first_table) = table_with_joins.first() {
+                            match &first_table.table {
+                                TableRef::Table(table_id) => {
+                                    let table = &schema.db.tables[table_id.0];
+                                    let column_types: Vec<Type> = table.columns.iter().map(|c| c.ty.clone()).collect();
+                                    Type::Record(column_types)
+                                }
+                                TableRef::Cte { .. } => {
+                                    // CTE references are not yet supported
+                                    Type::Unknown
+                                }
+                            }
+                        } else {
+                            Type::Unknown
+                        }
+                    }
+                }
             }
             Returning::Expr(expr) => expr.infer_ty(schema, args),
             Returning::Changed => Type::I64, // Returns count of changed rows
-        }
-    }
-}
-
-impl TableWithJoins {
-    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
-        // For now, just infer based on the main table
-        self.table.infer_ty(schema, args)
-    }
-}
-
-impl Source {
-    pub fn infer_ty(&self, schema: &Schema, _args: &[Type]) -> Type {
-        match self {
-            Source::Model(source_model) => {
-                let model = schema.app.model(source_model.model);
-                let field_types: Vec<Type> =
-                    model.fields.iter().map(|f| f.expr_ty().clone()).collect();
-                Type::Record(field_types)
-            }
-            Source::Table(table_with_joins) => {
-                // For now, just infer based on the first table
-                if let Some(first_table) = table_with_joins.first() {
-                    first_table.infer_ty(schema, _args)
-                } else {
-                    Type::Unknown
-                }
-            }
-        }
-    }
-}
-
-impl TableRef {
-    pub fn infer_ty(&self, schema: &Schema, _args: &[Type]) -> Type {
-        match self {
-            TableRef::Table(table_id) => {
-                let table = &schema.db.tables[table_id.0];
-                let column_types: Vec<Type> = table.columns.iter().map(|c| c.ty.clone()).collect();
-                Type::Record(column_types)
-            }
-            TableRef::Cte { .. } => {
-                // TODO: Handle CTE references
-                Type::Unknown
-            }
         }
     }
 }
@@ -86,7 +67,18 @@ impl ExprSetOp {
     pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
         // All branches of a set operation should have the same type
         if let Some(first) = self.operands.first() {
-            first.infer_ty(schema, args)
+            let first_ty = first.infer_ty(schema, args);
+            
+            // Debug assertion to check that every operand has the same type
+            #[cfg(debug_assertions)]
+            {
+                for operand in &self.operands[1..] {
+                    debug_assert_eq!(operand.infer_ty(schema, args), first_ty, 
+                        "All operands in a set operation should have the same type");
+                }
+            }
+            
+            first_ty
         } else {
             Type::Unknown
         }
@@ -112,6 +104,16 @@ impl Values {
 
         // Infer from the first row
         let first_row_ty = self.rows[0].infer_ty(schema, args);
+        
+        // Debug assertion to check that every row has the same type
+        #[cfg(debug_assertions)]
+        {
+            for row in &self.rows[1..] {
+                debug_assert_eq!(row.infer_ty(schema, args), first_row_ty, 
+                    "All rows in VALUES should have the same type");
+            }
+        }
+        
         Type::List(Box::new(first_row_ty))
     }
 }
@@ -166,6 +168,8 @@ impl Expr {
             Expr::BinaryOp(_) => Type::Bool,
             Expr::IsNull(_) => Type::Bool,
             Expr::Pattern(_) => Type::Bool,
+            Expr::InList(_) => Type::Bool,
+            Expr::InSubquery(_) => Type::Bool,
 
             // Argument reference
             Expr::Arg(e) => {
@@ -194,8 +198,7 @@ impl Expr {
                     schema.app.field(field_id).expr_ty().clone()
                 }
                 ExprReference::Cte { .. } => {
-                    // TODO: Handle CTE references
-                    Type::Unknown
+                    todo!("Handle CTE references")
                 }
             },
 
@@ -220,13 +223,11 @@ impl Expr {
             Expr::ConcatStr(_) => Type::String,
 
             // Subqueries and statements
-            Expr::InList(_) => Type::Bool,
-            Expr::InSubquery(_) => Type::Bool,
             Expr::Stmt(e) => e.stmt.infer_ty(schema, args),
 
             // Enums
             Expr::Enum(e) => e.infer_ty(schema, args),
-            Expr::Type(_) => Type::Unknown, // Type references don't have runtime types
+            Expr::Type(_) => panic!("Type references should not be reached during type inference"),
 
             // Values
             Expr::Value(v) => v.infer_ty(schema, args),
@@ -314,17 +315,24 @@ impl ExprConcat {
             return Type::Unknown;
         }
 
-        // For now, assume all concatenated expressions have the same type
-        // and return that type
-        self.exprs[0].infer_ty(schema, args)
+        let first_ty = self.exprs[0].infer_ty(schema, args);
+        
+        // Debug assertion to check that all concatenated expressions have the same type
+        #[cfg(debug_assertions)]
+        {
+            for expr in &self.exprs[1..] {
+                debug_assert_eq!(expr.infer_ty(schema, args), first_ty, 
+                    "All expressions in concatenation should have the same type");
+            }
+        }
+        
+        first_ty
     }
 }
 
 impl ExprEnum {
     pub fn infer_ty(&self, _schema: &Schema, _args: &[Type]) -> Type {
-        // TODO: Need to get the actual enum variant from schema
-        // For now, return Unknown since we don't have direct access
-        Type::Unknown
+        todo!("Need to get the actual enum variant from schema")
     }
 }
 
@@ -333,9 +341,7 @@ impl Value {
         match self {
             Value::Bool(_) => Type::Bool,
             Value::Enum(_e) => {
-                // TODO: Need to get the actual enum variant from schema
-                // For now, return Unknown since we don't have direct access
-                Type::Unknown
+                todo!("Need to get the actual enum variant from schema")
             }
             Value::I8(_) => Type::I8,
             Value::I16(_) => Type::I16,
