@@ -1,0 +1,374 @@
+use crate::{
+    schema::{app::FieldId, Schema},
+    stmt::*,
+};
+
+impl Statement {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        match self {
+            Statement::Delete(d) => d.infer_ty(schema, args),
+            Statement::Insert(i) => i.infer_ty(schema, args),
+            Statement::Query(q) => q.infer_ty(schema, args),
+            Statement::Update(u) => u.infer_ty(schema, args),
+        }
+    }
+}
+
+impl Query {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        match &self.body {
+            ExprSet::Select(select) => select.infer_ty(schema, args),
+            ExprSet::SetOp(set_op) => set_op.infer_ty(schema, args),
+            ExprSet::Values(values) => values.infer_ty(schema, args),
+            ExprSet::Update(update) => update.infer_ty(schema, args),
+        }
+    }
+}
+
+impl Select {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        match &self.returning {
+            Returning::Star => {
+                // For SELECT *, infer based on the source
+                self.source.infer_ty(schema, args)
+            }
+            Returning::Expr(expr) => expr.infer_ty(schema, args),
+            Returning::Changed => Type::I64, // Returns count of changed rows
+        }
+    }
+}
+
+impl TableWithJoins {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        // For now, just infer based on the main table
+        self.table.infer_ty(schema, args)
+    }
+}
+
+impl Source {
+    pub fn infer_ty(&self, schema: &Schema, _args: &[Type]) -> Type {
+        match self {
+            Source::Model(source_model) => {
+                let model = schema.app.model(source_model.model);
+                let field_types: Vec<Type> =
+                    model.fields.iter().map(|f| f.expr_ty().clone()).collect();
+                Type::Record(field_types)
+            }
+            Source::Table(table_with_joins) => {
+                // For now, just infer based on the first table
+                if let Some(first_table) = table_with_joins.first() {
+                    first_table.infer_ty(schema, _args)
+                } else {
+                    Type::Unknown
+                }
+            }
+        }
+    }
+}
+
+impl TableRef {
+    pub fn infer_ty(&self, schema: &Schema, _args: &[Type]) -> Type {
+        match self {
+            TableRef::Table(table_id) => {
+                let table = &schema.db.tables[table_id.0];
+                let column_types: Vec<Type> = table.columns.iter().map(|c| c.ty.clone()).collect();
+                Type::Record(column_types)
+            }
+            TableRef::Cte { .. } => {
+                // TODO: Handle CTE references
+                Type::Unknown
+            }
+        }
+    }
+}
+
+impl ExprSetOp {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        // All branches of a set operation should have the same type
+        if let Some(first) = self.operands.first() {
+            first.infer_ty(schema, args)
+        } else {
+            Type::Unknown
+        }
+    }
+}
+
+impl ExprSet {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        match self {
+            ExprSet::Select(select) => select.infer_ty(schema, args),
+            ExprSet::SetOp(set_op) => set_op.infer_ty(schema, args),
+            ExprSet::Values(values) => values.infer_ty(schema, args),
+            ExprSet::Update(update) => update.infer_ty(schema, args),
+        }
+    }
+}
+
+impl Values {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        if self.rows.is_empty() {
+            return Type::Unknown;
+        }
+
+        // Infer from the first row
+        let first_row_ty = self.rows[0].infer_ty(schema, args);
+        Type::List(Box::new(first_row_ty))
+    }
+}
+
+impl Insert {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        match &self.returning {
+            Some(returning) => returning.infer_ty(schema, args),
+            None => Type::Null, // INSERT without RETURNING returns nothing
+        }
+    }
+}
+
+impl Update {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        match &self.returning {
+            Some(returning) => returning.infer_ty(schema, args),
+            None => Type::Null, // UPDATE without RETURNING returns nothing
+        }
+    }
+}
+
+impl Delete {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        match &self.returning {
+            Some(returning) => returning.infer_ty(schema, args),
+            None => Type::Null, // DELETE without RETURNING returns nothing
+        }
+    }
+}
+
+impl Returning {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        match self {
+            Returning::Star => {
+                // Return all fields - need context to know which model
+                // For now, return Unknown as we need more context
+                Type::Unknown
+            }
+            Returning::Expr(expr) => expr.infer_ty(schema, args),
+            Returning::Changed => Type::I64, // Returns count of changed rows
+        }
+    }
+}
+
+impl Expr {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        match self {
+            // Boolean expressions
+            Expr::And(_) => Type::Bool,
+            Expr::Or(_) => Type::Bool,
+            Expr::BinaryOp(_) => Type::Bool,
+            Expr::IsNull(_) => Type::Bool,
+            Expr::Pattern(_) => Type::Bool,
+
+            // Argument reference
+            Expr::Arg(e) => {
+                if e.position < args.len() {
+                    args[e.position].clone()
+                } else {
+                    Type::Unknown
+                }
+            }
+
+            // Schema-dependent references
+            Expr::Column(e) => {
+                if let Some(column_id) = e.try_to_column_id() {
+                    schema.db.column(column_id).ty.clone()
+                } else {
+                    Type::Unknown
+                }
+            }
+
+            Expr::Reference(ref_expr) => match ref_expr {
+                ExprReference::Field { model, index } => {
+                    let field_id = FieldId {
+                        model: *model,
+                        index: *index,
+                    };
+                    schema.app.field(field_id).expr_ty().clone()
+                }
+                ExprReference::Cte { .. } => {
+                    // TODO: Handle CTE references
+                    Type::Unknown
+                }
+            },
+
+            Expr::Key(e) => Type::Id(e.model),
+
+            // Type-preserving operations
+            Expr::Cast(e) => e.ty.clone(),
+
+            // Collection operations
+            Expr::Map(e) => e.infer_ty(schema, args),
+            Expr::List(e) => e.infer_ty(schema, args),
+
+            // Structure operations
+            Expr::Project(e) => e.infer_ty(schema, args),
+            Expr::Record(e) => e.infer_ty(schema, args),
+
+            // Functions
+            Expr::Func(e) => e.infer_ty(schema, args),
+
+            // Concatenation
+            Expr::Concat(e) => e.infer_ty(schema, args),
+            Expr::ConcatStr(_) => Type::String,
+
+            // Subqueries and statements
+            Expr::InList(_) => Type::Bool,
+            Expr::InSubquery(_) => Type::Bool,
+            Expr::Stmt(e) => e.stmt.infer_ty(schema, args),
+
+            // Enums
+            Expr::Enum(e) => e.infer_ty(schema, args),
+            Expr::Type(_) => Type::Unknown, // Type references don't have runtime types
+
+            // Values
+            Expr::Value(v) => v.infer_ty(schema, args),
+
+            // Special cases
+            Expr::DecodeEnum(_, ty, _) => ty.clone(),
+        }
+    }
+}
+
+impl ExprMap {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        let base_ty = self.base.infer_ty(schema, args);
+
+        // Extract the element type from the base
+        let element_ty = match &base_ty {
+            Type::List(inner) => *inner.clone(),
+            _ => base_ty, // If base isn't a list, use it as element type
+        };
+
+        // Infer the mapped type by treating the element as arg[0]
+        let map_args = vec![element_ty];
+        let mapped_ty = self.map.infer_ty(schema, &map_args);
+
+        Type::List(Box::new(mapped_ty))
+    }
+}
+
+impl ExprList {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        if self.items.is_empty() {
+            return Type::Unknown;
+        }
+
+        // Infer from the first item
+        let item_ty = self.items[0].infer_ty(schema, args);
+        Type::List(Box::new(item_ty))
+    }
+}
+
+impl ExprProject {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        let mut base_ty = self.base.infer_ty(schema, args);
+
+        // Navigate through the projection path
+        for step in self.projection.iter() {
+            match &base_ty {
+                Type::Record(fields) => {
+                    if *step < fields.len() {
+                        base_ty = fields[*step].clone();
+                    } else {
+                        return Type::Unknown;
+                    }
+                }
+                _ => return Type::Unknown,
+            }
+        }
+
+        base_ty
+    }
+}
+
+impl ExprRecord {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        let field_types: Vec<Type> = self
+            .fields
+            .iter()
+            .map(|field| field.infer_ty(schema, args))
+            .collect();
+        Type::Record(field_types)
+    }
+}
+
+impl ExprFunc {
+    pub fn infer_ty(&self, _schema: &Schema, _args: &[Type]) -> Type {
+        match self {
+            ExprFunc::Count(_) => Type::I64,
+        }
+    }
+}
+
+impl ExprConcat {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        if self.exprs.is_empty() {
+            return Type::Unknown;
+        }
+
+        // For now, assume all concatenated expressions have the same type
+        // and return that type
+        self.exprs[0].infer_ty(schema, args)
+    }
+}
+
+impl ExprEnum {
+    pub fn infer_ty(&self, _schema: &Schema, _args: &[Type]) -> Type {
+        // TODO: Need to get the actual enum variant from schema
+        // For now, return Unknown since we don't have direct access
+        Type::Unknown
+    }
+}
+
+impl Value {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        match self {
+            Value::Bool(_) => Type::Bool,
+            Value::Enum(_e) => {
+                // TODO: Need to get the actual enum variant from schema
+                // For now, return Unknown since we don't have direct access
+                Type::Unknown
+            }
+            Value::I8(_) => Type::I8,
+            Value::I16(_) => Type::I16,
+            Value::I32(_) => Type::I32,
+            Value::I64(_) => Type::I64,
+            Value::U8(_) => Type::U8,
+            Value::U16(_) => Type::U16,
+            Value::U32(_) => Type::U32,
+            Value::U64(_) => Type::U64,
+            Value::Id(id) => Type::Id(id.model_id()),
+            Value::SparseRecord(r) => Type::SparseRecord(r.fields.clone()),
+            Value::Null => Type::Null,
+            Value::Record(r) => r.infer_ty(schema, args),
+            Value::List(items) => {
+                if items.is_empty() {
+                    Type::Unknown
+                } else {
+                    let item_ty = items[0].infer_ty(schema, args);
+                    Type::List(Box::new(item_ty))
+                }
+            }
+            Value::String(_) => Type::String,
+        }
+    }
+}
+
+impl ValueRecord {
+    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
+        let field_types: Vec<Type> = self
+            .fields
+            .iter()
+            .map(|field| field.infer_ty(schema, args))
+            .collect();
+        Type::Record(field_types)
+    }
+}

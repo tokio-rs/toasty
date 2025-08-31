@@ -62,6 +62,9 @@ pub enum Type {
     Null,
 
     SparseRecord(PathFieldSet),
+
+    /// A type that could not be inferred (e.g., empty list)
+    Unknown,
 }
 
 impl Type {
