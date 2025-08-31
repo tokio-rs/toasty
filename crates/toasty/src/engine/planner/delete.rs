@@ -3,9 +3,9 @@ use crate::engine::typed::Typed;
 use toasty_core::{schema::app, stmt};
 
 impl Planner<'_> {
-    pub(super) fn plan_stmt_delete(&mut self, stmt: stmt::Delete) -> Result<()> {
-        let model = self.model(stmt.from.as_model_id());
-        let selection = stmt.selection();
+    pub(super) fn plan_stmt_delete(&mut self, typed_stmt: Typed<stmt::Delete>) -> Result<()> {
+        let model = self.model(typed_stmt.value.from.as_model_id());
+        let selection = typed_stmt.value.selection();
 
         // Handle any cascading deletes
         for field in model.fields.iter() {
@@ -29,26 +29,25 @@ impl Planner<'_> {
                     let mut update = query.update();
                     update.assignments.set(pair.id, stmt::Value::Null);
 
-                    self.plan_stmt(&Context::default(), update.into())?;
+                    self.plan_stmt_raw(&Context::default(), update.into())?;
                 } else {
-                    self.plan_stmt(&Context::default(), query.delete().into())?;
+                    self.plan_stmt_raw(&Context::default(), query.delete().into())?;
                 }
             }
         }
 
         if self.capability.sql {
-            self.plan_delete_sql(model, stmt);
+            self.plan_delete_sql(model, typed_stmt);
         } else {
-            self.plan_delete_kv(model, stmt)?;
+            self.plan_delete_kv(model, typed_stmt.value)?;
         }
 
         Ok(())
     }
 
-    fn plan_delete_sql(&mut self, model: &app::Model, stmt: stmt::Delete) {
-        // For deletes, we use a basic type - delete operations don't have complex return types
-        let model_mapping = self.schema.mapping.model(model.id);
-        let mut typed_stmt = Typed::new(stmt, model_mapping.record_ty.clone());
+    fn plan_delete_sql(&mut self, model: &app::Model, typed_stmt: Typed<stmt::Delete>) {
+        // Use the passed-in typed statement - no need to create our own
+        let mut typed_stmt = typed_stmt;
         self.lower_stmt_delete(model, &mut typed_stmt);
 
         self.push_action(plan::ExecStatement {

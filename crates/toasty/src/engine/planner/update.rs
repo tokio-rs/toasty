@@ -15,8 +15,9 @@ impl Planner<'_> {
     // method returns the var in which it will be stored.
     pub(super) fn plan_stmt_update(
         &mut self,
-        mut stmt: stmt::Update,
+        typed_stmt: Typed<stmt::Update>,
     ) -> Result<Option<plan::VarId>> {
+        let mut stmt = typed_stmt.value;
         let model = self.model(stmt.target.as_model_id());
 
         // Make sure the update statement isn't empty
@@ -93,9 +94,8 @@ impl Planner<'_> {
             self.plan_subqueries(&mut stmt)?;
         }
 
-        // For updates, we use the model's record type - updates don't have complex type transformations
-        let model_mapping = self.schema.mapping.model(model.id);
-        let mut typed_stmt = Typed::new(stmt, model_mapping.record_ty.clone());
+        // Use the passed-in typed statement - no need to create our own
+        let mut typed_stmt = Typed::new(stmt, typed_stmt.ty);
         self.lower_stmt_update(model, &mut typed_stmt);
         stmt = typed_stmt.value;
 
@@ -103,19 +103,9 @@ impl Planner<'_> {
         // database evaluating the statement), then extract it here.
         self.constantize_update_returning(&mut stmt);
 
-        let output = if let Some(ref returning) = stmt.returning {
-            // Compute the return type for the returning clause
-            let ret_type = match returning {
-                stmt::Returning::Star => {
-                    // For UPDATE RETURNING *, return the full model record type
-                    let model_mapping = self.schema.mapping.model(model.id);
-                    model_mapping.record_ty.clone()
-                }
-                _ => {
-                    // For specific returning expressions, infer the type
-                    self.infer_expr_ty(returning.as_expr(), &[])
-                }
-            };
+        let output = if let Some(ref _returning) = stmt.returning {
+            // Use the type from the typed statement (already computed in build_initial_typed_stmt)
+            let ret_type = typed_stmt.ty.clone();
 
             self.partition_maybe_returning(&mut stmt.returning, ret_type)
                 .map(|project| plan::Output {

@@ -1,8 +1,9 @@
 use super::{simplify, Planner};
 use crate::engine::typed::Typed;
+use std::collections::HashSet;
 use toasty_core::{
     schema::{
-        app::{self, FieldId},
+        app::{self, FieldId, ModelId},
         db::{Column, Table},
         mapping, Schema,
     },
@@ -60,7 +61,7 @@ impl Planner<'_> {
             _ => Vec::new(),
         };
 
-        // Build the lowered type based on includes
+        // Convert the type from model-level to table-level types
         let lowered_type = self.build_lowered_type(model, &includes);
         typed_stmt.ty = lowered_type;
 
@@ -98,46 +99,113 @@ impl Planner<'_> {
         simplify::simplify_stmt(self.schema, &mut typed_stmt.value);
     }
 
-    /// Build the lowered type based on includes - associations become either
-    /// their target record type (if included) or Null (if not included)
+    /// Build the lowered type with only primitive types (no model-level types)
     fn build_lowered_type(&self, model: &app::Model, includes: &[stmt::Path]) -> stmt::Type {
         let model_mapping = self.schema.mapping.model(model.id);
-        let mut record_ty = model_mapping.record_ty.clone(); // Has semantic types
+        let mut record_ty = model_mapping.record_ty.clone();
 
-        if let stmt::Type::Record(ref mut field_types) = record_ty {
-            for (i, field) in model.fields.iter().enumerate() {
-                // Check if this field is included
-                let is_included = includes
-                    .iter()
-                    .any(|inc| matches!(&inc.projection[..], [idx] if *idx == i));
+        // Convert any remaining model-level types to primitive types
+        let mut visited = std::collections::HashSet::new();
+        record_ty = self.resolve_to_primitive_types(&record_ty, includes, model, &mut visited);
 
-                match &field.ty {
-                    app::FieldTy::HasMany(hm) if is_included => {
-                        let target_mapping = self.schema.mapping.model(hm.target);
-                        field_types[i] = stmt::Type::list(target_mapping.record_ty.clone());
-                    }
-                    app::FieldTy::BelongsTo(bt) if is_included => {
-                        let target_mapping = self.schema.mapping.model(bt.target);
-                        field_types[i] = target_mapping.record_ty.clone();
-                    }
-                    app::FieldTy::HasOne(ho) if is_included => {
-                        let target_mapping = self.schema.mapping.model(ho.target);
-                        field_types[i] = target_mapping.record_ty.clone();
-                    }
-                    app::FieldTy::HasMany(_)
-                    | app::FieldTy::BelongsTo(_)
-                    | app::FieldTy::HasOne(_) => {
-                        // Not included - set to Null
-                        field_types[i] = stmt::Type::Null;
-                    }
-                    app::FieldTy::Primitive(_) => {
-                        // Keep primitive types as-is
-                    }
+        // For queries, wrap the record type in a List
+        stmt::Type::List(Box::new(record_ty))
+    }
+
+    /// Recursively resolve all model-level types to primitive types
+    fn resolve_to_primitive_types(
+        &self,
+        ty: &stmt::Type,
+        includes: &[stmt::Path],
+        model: &app::Model,
+        visited: &mut HashSet<ModelId>,
+    ) -> stmt::Type {
+        match ty {
+            stmt::Type::Model(model_id) => {
+                // Prevent infinite recursion by tracking visited models
+                if visited.contains(model_id) {
+                    // If we've seen this model before, return a simplified representation
+                    // This handles circular references by breaking the cycle
+                    return stmt::Type::Null;
                 }
-            }
-        }
 
-        record_ty
+                visited.insert(*model_id);
+                let target_mapping = self.schema.mapping.model(*model_id);
+                let result =
+                    self.resolve_to_primitive_types(&target_mapping.record_ty, &[], model, visited);
+                visited.remove(model_id);
+                result
+            }
+            stmt::Type::List(inner) => stmt::Type::List(Box::new(
+                self.resolve_to_primitive_types(inner, includes, model, visited),
+            )),
+            stmt::Type::Record(field_types) => {
+                let resolved_fields = field_types
+                    .iter()
+                    .enumerate()
+                    .map(|(i, field_ty)| {
+                        match field_ty {
+                            stmt::Type::Null => {
+                                // Check if this field should be included
+                                let is_included = includes
+                                    .iter()
+                                    .any(|inc| matches!(&inc.projection[..], [idx] if *idx == i));
+
+                                if is_included && i < model.fields.len() {
+                                    let field = &model.fields[i];
+                                    match &field.ty {
+                                        app::FieldTy::HasMany(rel) => {
+                                            let target_mapping =
+                                                self.schema.mapping.model(rel.target);
+                                            let target_record = self.resolve_to_primitive_types(
+                                                &target_mapping.record_ty,
+                                                &[],
+                                                model,
+                                                visited,
+                                            );
+                                            stmt::Type::List(Box::new(target_record))
+                                        }
+                                        app::FieldTy::BelongsTo(rel) => {
+                                            let target_mapping =
+                                                self.schema.mapping.model(rel.target);
+                                            self.resolve_to_primitive_types(
+                                                &target_mapping.record_ty,
+                                                &[],
+                                                model,
+                                                visited,
+                                            )
+                                        }
+                                        app::FieldTy::HasOne(rel) => {
+                                            let target_mapping =
+                                                self.schema.mapping.model(rel.target);
+                                            self.resolve_to_primitive_types(
+                                                &target_mapping.record_ty,
+                                                &[],
+                                                model,
+                                                visited,
+                                            )
+                                        }
+                                        _ => stmt::Type::Null,
+                                    }
+                                } else {
+                                    stmt::Type::Null
+                                }
+                            }
+                            _ => {
+                                self.resolve_to_primitive_types(field_ty, includes, model, visited)
+                            }
+                        }
+                    })
+                    .collect();
+                stmt::Type::Record(resolved_fields)
+            }
+            // Convert other model-level types to primitives
+            stmt::Type::Id(_) => stmt::Type::String, // IDs are typically stored as strings
+            stmt::Type::Key(_) => stmt::Type::String, // Keys are typically stored as strings
+            stmt::Type::ForeignKey(_) => stmt::Type::String, // Foreign keys are typically stored as strings
+            // Primitive types and other lowered types pass through unchanged
+            _ => ty.clone(),
+        }
     }
 
     /// Build a custom table_to_model expression that matches the lowered type

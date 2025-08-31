@@ -1,4 +1,5 @@
 use super::{plan, Context, Planner, Result};
+use crate::engine::typed::Typed;
 use toasty_core::stmt;
 
 impl Planner<'_> {
@@ -26,7 +27,14 @@ impl Planner<'_> {
                 let arg = stmt::Expr::arg(sources.len());
                 *expr = stmt::Expr::in_list(base, arg);
 
-                match self.plan_stmt_select(&Context::default(), query) {
+                // Create a typed query directly instead of going through statement
+                let model_id = match &query.body {
+                    stmt::ExprSet::Select(select) => select.source.as_model().model,
+                    _ => todo!("Unsupported query type"),
+                };
+                let ty = stmt::Type::List(Box::new(stmt::Type::Model(model_id)));
+                let typed_query = Typed::new(query, ty);
+                match self.plan_stmt_select(&Context::default(), typed_query) {
                     Ok(output) => {
                         sources.push(plan::InputSource::Value(output));
                     }

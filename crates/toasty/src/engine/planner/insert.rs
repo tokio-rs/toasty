@@ -14,8 +14,9 @@ struct ApplyInsertScope<'a> {
 impl Planner<'_> {
     pub(super) fn plan_stmt_insert(
         &mut self,
-        mut stmt: stmt::Insert,
+        typed_stmt: Typed<stmt::Insert>,
     ) -> Result<Option<plan::VarId>> {
+        let mut stmt = typed_stmt.value;
         let model = self.model(stmt.target.as_model());
 
         if let stmt::ExprSet::Values(values) = &stmt.source.body {
@@ -26,9 +27,8 @@ impl Planner<'_> {
         // scope, check constraints, ...)
         self.preprocess_insert_values(model, &mut stmt)?;
 
-        // For inserts, we use the model's record type - inserts don't have complex type transformations
-        let model_mapping = self.schema.mapping.model(model.id);
-        let mut typed_stmt = Typed::new(stmt, model_mapping.record_ty.clone());
+        // Use the passed-in typed statement - no need to create our own
+        let mut typed_stmt = Typed::new(stmt, typed_stmt.ty);
         self.lower_stmt_insert(model, &mut typed_stmt);
         stmt = typed_stmt.value;
 
@@ -41,18 +41,8 @@ impl Planner<'_> {
         // First, lower the returning part of the statement and get any
         // necessary in-memory projection.
         let project = stmt.returning.as_mut().map(|returning| {
-            // Compute the return type for the returning clause
-            let ret_type = match returning {
-                stmt::Returning::Star => {
-                    // For INSERT RETURNING *, return the full model record type
-                    let model_mapping = self.schema.mapping.model(model.id);
-                    model_mapping.record_ty.clone()
-                }
-                _ => {
-                    // For specific returning expressions, infer the type
-                    self.infer_expr_ty(returning.as_expr(), &[])
-                }
-            };
+            // Use the type from the typed statement (already computed in build_initial_typed_stmt)
+            let ret_type = typed_stmt.ty.clone();
             self.partition_returning(returning, ret_type)
         });
 

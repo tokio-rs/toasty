@@ -43,7 +43,7 @@ impl Exec<'_> {
             output.and_then(|out| match &out.project.args[..] {
                 [stmt::Type::Record(fields), ..] => Some(fields.clone()),
                 [] => None,
-                _ => todo!(),
+                _ => todo!("{out:#?}"),
             })
         };
 

@@ -89,6 +89,37 @@ impl Type {
         matches!(self, Self::String)
     }
 
+    /// Returns true if the type contains no model-level types (after lowering).
+    /// Model-level types are: Id(ModelId), Key(ModelId), Model(ModelId), ForeignKey(FieldId)
+    pub fn is_lowered(&self) -> bool {
+        match self {
+            // Model-level types - these should not exist after lowering
+            Self::Id(_) | Self::Key(_) | Self::Model(_) | Self::ForeignKey(_) => false,
+
+            // Primitive types - these are fine after lowering
+            Self::Bool
+            | Self::String
+            | Self::I8
+            | Self::I16
+            | Self::I32
+            | Self::I64
+            | Self::U8
+            | Self::U16
+            | Self::U32
+            | Self::U64
+            | Self::Null => true,
+
+            // Composite types - recursively check their contents
+            Self::List(inner) => inner.is_lowered(),
+            Self::Record(fields) => fields.iter().all(|field| field.is_lowered()),
+            Self::Enum(type_enum) => type_enum
+                .variants
+                .iter()
+                .all(|variant| variant.fields.iter().all(|field| field.is_lowered())),
+            Self::SparseRecord(_) => true, // SparseRecord is a table-level construct
+        }
+    }
+
     pub fn cast(&self, value: Value) -> Result<Value> {
         use stmt::Value;
 

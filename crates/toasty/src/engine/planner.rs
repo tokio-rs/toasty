@@ -19,7 +19,7 @@ use var::VarTable;
 
 use crate::{
     driver::Capability,
-    engine::{eval, plan, simplify, Plan},
+    engine::{eval, plan, simplify, typed::Typed, Plan},
     Result,
 };
 use toasty_core::{
@@ -103,29 +103,99 @@ impl<'a> Planner<'a> {
             assert!(matches!(stmt.returning, Some(stmt::Returning::Star)));
         }
 
-        if let Some(output) = self.plan_stmt(&Context::default(), stmt)? {
+        // Create typed statement early with simple model-level types
+        let typed_stmt = self.build_initial_typed_stmt(stmt);
+
+        if let Some(output) = self.plan_stmt(&Context::default(), typed_stmt)? {
             self.returning = Some(output);
         }
 
         Ok(())
     }
 
+    /// Build initial typed statement with simple model-level types
+    fn build_initial_typed_stmt(&self, stmt: stmt::Statement) -> Typed<stmt::Statement> {
+        let ty = match &stmt {
+            stmt::Statement::Query(query) => {
+                let model_id = match &query.body {
+                    stmt::ExprSet::Select(select) => select.source.as_model().model,
+                    _ => todo!("Unsupported query type"),
+                };
+                stmt::Type::List(Box::new(stmt::Type::Model(model_id)))
+            }
+            stmt::Statement::Insert(insert) => {
+                let model_id = insert.target.as_model();
+                if insert.returning.is_some() {
+                    // Returning clause - return the model(s) inserted
+                    match &insert.source.body {
+                        stmt::ExprSet::Values(values) if values.rows.len() == 1 => {
+                            // Single insert
+                            stmt::Type::Model(model_id)
+                        }
+                        _ => {
+                            // Batch insert
+                            stmt::Type::List(Box::new(stmt::Type::Model(model_id)))
+                        }
+                    }
+                } else {
+                    // No returning clause
+                    stmt::Type::Null
+                }
+            }
+            stmt::Statement::Update(update) => {
+                let model_id = update.target.as_model_id();
+                if update.returning.is_some() {
+                    stmt::Type::List(Box::new(stmt::Type::Model(model_id)))
+                } else {
+                    stmt::Type::Null
+                }
+            }
+            stmt::Statement::Delete(_) => {
+                // Delete operations don't return values
+                stmt::Type::Null
+            }
+        };
+
+        Typed::new(stmt, ty)
+    }
+
     fn plan_stmt(
         &mut self,
         cx: &Context,
-        mut stmt: stmt::Statement,
+        mut typed_stmt: Typed<stmt::Statement>,
     ) -> Result<Option<plan::VarId>> {
-        self.simplify_stmt(&mut stmt);
+        self.simplify_stmt(&mut typed_stmt.value);
 
-        Ok(match stmt {
+        Ok(match typed_stmt.value {
             stmt::Statement::Delete(stmt) => {
-                self.plan_stmt_delete(stmt)?;
+                let typed_delete = Typed::new(stmt, typed_stmt.ty);
+                self.plan_stmt_delete(typed_delete)?;
                 None
             }
-            stmt::Statement::Insert(stmt) => self.plan_stmt_insert(stmt)?,
-            stmt::Statement::Query(stmt) => Some(self.plan_stmt_select(cx, stmt)?),
-            stmt::Statement::Update(stmt) => self.plan_stmt_update(stmt)?,
+            stmt::Statement::Insert(stmt) => {
+                let typed_insert = Typed::new(stmt, typed_stmt.ty);
+                self.plan_stmt_insert(typed_insert)?
+            }
+            stmt::Statement::Query(stmt) => {
+                let typed_query = Typed::new(stmt, typed_stmt.ty);
+                Some(self.plan_stmt_select(cx, typed_query)?)
+            }
+            stmt::Statement::Update(stmt) => {
+                let typed_update = Typed::new(stmt, typed_stmt.ty);
+                self.plan_stmt_update(typed_update)?
+            }
         })
+    }
+
+    /// Temporary method to wrap raw stmt::Statement calls during transition
+    /// This will be removed once all call sites are updated
+    fn plan_stmt_raw(
+        &mut self,
+        cx: &Context,
+        stmt: stmt::Statement,
+    ) -> Result<Option<plan::VarId>> {
+        let typed_stmt = self.build_initial_typed_stmt(stmt);
+        self.plan_stmt(cx, typed_stmt)
     }
 
     fn build(mut self) -> Result<Plan> {

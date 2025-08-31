@@ -9,37 +9,58 @@ impl Planner<'_> {
     pub(super) fn plan_stmt_select(
         &mut self,
         cx: &Context,
-        stmt: stmt::Query,
+        typed_stmt: Typed<stmt::Query>,
     ) -> Result<plan::VarId> {
+        // Verify that the input type is always a List (as expected for queries)
+        debug_assert!(
+            typed_stmt.ty.is_list(),
+            "Expected List type at start of plan_stmt_select, got: {:?}",
+            typed_stmt.ty
+        );
+
         // TODO: don't clone?
-        let source_model = stmt.body.as_select().source.as_model().clone();
+        let source_model = typed_stmt.value.body.as_select().source.as_model().clone();
         let model = self.schema.app.model(source_model.model);
 
         if !source_model.include.is_empty() {
             // For now, the full model must be selected
             assert!(matches!(
-                stmt.body.as_select().returning,
+                typed_stmt.value.body.as_select().returning,
                 stmt::Returning::Star
             ));
         }
 
-        // Create typed statement with base record_ty (has semantic types)
-        let model_mapping = self.schema.mapping.model(model.id);
-        let mut typed_stmt = Typed::new(stmt, model_mapping.record_ty.clone());
+        // Use the passed-in typed statement - no need to create our own
+        let mut typed_stmt = typed_stmt;
 
         // Lowering will update both statement and type based on includes
         self.lower_stmt_query(model, &mut typed_stmt);
 
-        // partition_returning uses the correctly lowered type
-        let project = self.partition_returning(
-            &mut typed_stmt.value.body.as_select_mut().returning,
-            typed_stmt.ty.clone(),
+        // Verify that after lowering, there are no more model-level types
+        debug_assert!(
+            typed_stmt.ty.is_lowered(),
+            "Type not properly lowered, still contains model-level types: {:?}",
+            typed_stmt.ty
         );
 
-        // Step 4: Register variable with the correct type
-        let output = self
-            .var_table
-            .register_var(stmt::Type::list(project.ret.clone()));
+        // partition_returning uses the correctly lowered type
+        // After lowering, typed_stmt.ty should be List(Record(...))
+        // Extract the inner record type for the projection function
+        let record_type = match &typed_stmt.ty {
+            stmt::Type::List(inner) => (**inner).clone(),
+            _ => panic!(
+                "Expected List type after lowering, got: {:?}",
+                typed_stmt.ty
+            ),
+        };
+
+        let project = self.partition_returning(
+            &mut typed_stmt.value.body.as_select_mut().returning,
+            record_type,
+        );
+
+        // Step 4: Register variable with the correct type (the full List type)
+        let output = self.var_table.register_var(typed_stmt.ty.clone());
 
         // If the filter expression is false, then the result will be empty.
         if let stmt::ExprSet::Select(select) = &typed_stmt.value.body {
@@ -341,7 +362,7 @@ impl Planner<'_> {
                 );
 
                 let Some(out) =
-                    self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())?
+                    self.plan_stmt_raw(&cx, stmt::Query::filter(rel.target, filter).into())?
                 else {
                     todo!()
                 };
@@ -370,7 +391,7 @@ impl Planner<'_> {
                     ),
                 );
                 let Some(out) =
-                    self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())?
+                    self.plan_stmt_raw(&cx, stmt::Query::filter(rel.target, filter).into())?
                 else {
                     todo!()
                 };
@@ -402,7 +423,7 @@ impl Planner<'_> {
                 );
 
                 let Some(out) =
-                    self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())?
+                    self.plan_stmt_raw(&cx, stmt::Query::filter(rel.target, filter).into())?
                 else {
                     todo!()
                 };
