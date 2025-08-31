@@ -56,6 +56,11 @@ impl Planner<'_> {
                             let target_model = self.schema.app.model(rel.target);
                             fields[*field_idx] = self.infer_model_record_type(target_model);
                         }
+                        app::FieldTy::HasOne(rel) => {
+                            // Replace Null with Record type for HasOne fields
+                            let target_model = self.schema.app.model(rel.target);
+                            fields[*field_idx] = self.infer_model_record_type(target_model);
+                        }
                         _ => {}
                     }
                 }
@@ -395,6 +400,38 @@ impl Planner<'_> {
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.source),
                     ),
                 );
+                let Some(out) =
+                    self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())?
+                else {
+                    todo!()
+                };
+
+                // Associate target records with the source
+                self.push_action(plan::Associate {
+                    source: input,
+                    target: out,
+                    field: field.id,
+                });
+            }
+            FieldTy::HasOne(rel) => {
+                let pair = rel.pair(&self.schema.app);
+
+                let [fk_field] = &pair.foreign_key.fields[..] else {
+                    todo!("composite key")
+                };
+
+                let cx = Context {
+                    input: vec![plan::InputSource::Ref(input)],
+                };
+
+                let filter = stmt::Expr::in_list(
+                    fk_field.source,
+                    stmt::Expr::map(
+                        stmt::Expr::arg(0),
+                        stmt::Expr::project(stmt::Expr::arg(0), fk_field.target),
+                    ),
+                );
+
                 let Some(out) =
                     self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())?
                 else {
