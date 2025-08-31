@@ -51,6 +51,27 @@ impl Exec<'_> {
                     source_item[action.field.index] = stmt::Value::List(associated);
                 }
             }
+            FieldTy::HasOne(rel) => {
+                let pair = rel.pair(&self.db.schema.app);
+
+                for source_item in &mut source {
+                    let source_item = source_item.expect_record_mut();
+
+                    for target_item in &target {
+                        let target_item = target_item.expect_record();
+
+                        let [fk_field] = &pair.foreign_key.fields[..] else {
+                            todo!("composite keys")
+                        };
+
+                        if target_item[fk_field.source.index] == source_item[fk_field.target.index]
+                        {
+                            source_item[action.field.index] = target_item.clone().into();
+                            break;
+                        }
+                    }
+                }
+            }
             _ => todo!(),
         }
 
