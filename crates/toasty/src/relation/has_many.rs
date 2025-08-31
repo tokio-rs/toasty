@@ -67,6 +67,12 @@ impl<T> Default for HasMany<T> {
 
 impl<T: fmt::Debug> fmt::Debug for HasMany<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.debug_list().finish()
+        match self.values.as_ref() {
+            Some(t) => t.fmt(fmt),
+            None => {
+                write!(fmt, "<not loaded>")?;
+                Ok(())
+            }
+        }
     }
 }
