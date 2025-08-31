@@ -121,7 +121,31 @@ impl Values {
 impl Insert {
     pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
         match &self.returning {
-            Some(returning) => returning.infer_ty(schema, args),
+            Some(returning) => {
+                match returning {
+                    Returning::Star => {
+                        // Return all fields from the target being inserted into
+                        match &self.target {
+                            InsertTarget::Model(model_id) => {
+                                let model = schema.app.model(*model_id);
+                                let field_types: Vec<Type> =
+                                    model.fields.iter().map(|f| f.expr_ty().clone()).collect();
+                                Type::Record(field_types)
+                            }
+                            InsertTarget::Scope(query) => {
+                                // For scope targets, infer from the underlying query
+                                query.infer_ty(schema, args)
+                            }
+                            InsertTarget::Table(_) => {
+                                // For table targets, we'd need table schema info
+                                Type::Unknown
+                            }
+                        }
+                    }
+                    Returning::Expr(expr) => expr.infer_ty(schema, args),
+                    Returning::Changed => Type::I64, // Returns count of changed rows
+                }
+            }
             None => Type::Null, // INSERT without RETURNING returns nothing
         }
     }
@@ -130,7 +154,31 @@ impl Insert {
 impl Update {
     pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
         match &self.returning {
-            Some(returning) => returning.infer_ty(schema, args),
+            Some(returning) => {
+                match returning {
+                    Returning::Star => {
+                        // Return all fields from the target being updated
+                        match &self.target {
+                            UpdateTarget::Model(model_id) => {
+                                let model = schema.app.model(*model_id);
+                                let field_types: Vec<Type> =
+                                    model.fields.iter().map(|f| f.expr_ty().clone()).collect();
+                                Type::Record(field_types)
+                            }
+                            UpdateTarget::Query(query) => {
+                                // For query targets, infer from the underlying query
+                                query.infer_ty(schema, args)
+                            }
+                            UpdateTarget::Table(_) => {
+                                // For table targets, we'd need table schema info
+                                Type::Unknown
+                            }
+                        }
+                    }
+                    Returning::Expr(expr) => expr.infer_ty(schema, args),
+                    Returning::Changed => Type::I64, // Returns count of changed rows
+                }
+            }
             None => Type::Null, // UPDATE without RETURNING returns nothing
         }
     }
@@ -139,25 +187,32 @@ impl Update {
 impl Delete {
     pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
         match &self.returning {
-            Some(returning) => returning.infer_ty(schema, args),
+            Some(returning) => {
+                match returning {
+                    Returning::Star => {
+                        // Return all fields from the source being deleted from
+                        match &self.from {
+                            Source::Model(source_model) => {
+                                let model = schema.app.model(source_model.model);
+                                let field_types: Vec<Type> =
+                                    model.fields.iter().map(|f| f.expr_ty().clone()).collect();
+                                Type::Record(field_types)
+                            }
+                            Source::Table(_) => {
+                                // For table sources, we'd need table schema info
+                                Type::Unknown
+                            }
+                        }
+                    }
+                    Returning::Expr(expr) => expr.infer_ty(schema, args),
+                    Returning::Changed => Type::I64, // Returns count of changed rows
+                }
+            }
             None => Type::Null, // DELETE without RETURNING returns nothing
         }
     }
 }
 
-impl Returning {
-    pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
-        match self {
-            Returning::Star => {
-                // Return all fields - need context to know which model
-                // For now, return Unknown as we need more context
-                Type::Unknown
-            }
-            Returning::Expr(expr) => expr.infer_ty(schema, args),
-            Returning::Changed => Type::I64, // Returns count of changed rows
-        }
-    }
-}
 
 impl Expr {
     pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
