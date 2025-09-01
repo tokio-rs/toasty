@@ -172,20 +172,12 @@ impl Delete {
                     Returning::Star => {
                         // Return all fields from the source being deleted from
                         match &self.from {
-                            Source::Model(source_model) => {
-                                let model = schema.app.model(source_model.model);
-                                let field_types: Vec<Type> =
-                                    model.fields.iter().map(|f| f.expr_ty().clone()).collect();
-                                Type::Record(field_types)
-                            }
-                            Source::Table(_) => {
-                                // For table sources, we'd need table schema info
-                                Type::Unknown
-                            }
+                            Source::Model(source_model) => Type::list(source_model.model),
+                            Source::Table(_) => todo!(),
                         }
                     }
                     Returning::Expr(expr) => Type::list(expr.infer_ty(schema, args)),
-                    Returning::Changed => Type::I64, // Returns count of changed rows
+                    Returning::Changed => panic!("invalid statement"),
                 }
             }
             None => Type::Null, // DELETE without RETURNING returns nothing
@@ -237,23 +229,7 @@ impl Expr {
                 }
             },
 
-            Expr::Key(e) => {
-                let model = schema.app.model(e.model);
-                if model.primary_key.fields.len() == 1 {
-                    // Single field primary key
-                    let field = schema.app.field(model.primary_key.fields[0]);
-                    field.expr_ty().clone()
-                } else {
-                    // Composite primary key - return record of field types
-                    let field_types: Vec<Type> = model
-                        .primary_key
-                        .fields
-                        .iter()
-                        .map(|field_id| schema.app.field(*field_id).expr_ty().clone())
-                        .collect();
-                    Type::Record(field_types)
-                }
-            }
+            Expr::Key(e) => Type::Key(e.model),
 
             // Type-preserving operations
             Expr::Cast(e) => e.ty.clone(),
@@ -331,7 +307,7 @@ impl ExprList {
             }
         }
 
-        Type::List(Box::new(item_ty))
+        Type::list(item_ty)
     }
 }
 
@@ -434,7 +410,7 @@ impl Value {
                     Type::Unknown
                 } else {
                     let item_ty = items[0].infer_ty(schema, args);
-                    Type::List(Box::new(item_ty))
+                    Type::list(item_ty)
                 }
             }
             Value::String(_) => Type::String,
