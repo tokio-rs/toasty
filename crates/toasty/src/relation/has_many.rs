@@ -39,7 +39,7 @@ impl<T: Model> HasMany<T> {
             .as_slice()
     }
 
-    pub fn not_loaded(&self) -> bool {
+    pub fn is_unloaded(&self) -> bool {
         self.values.is_none()
     }
 }
