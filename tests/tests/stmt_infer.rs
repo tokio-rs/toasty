@@ -52,18 +52,10 @@ async fn test_query_returns_list_type(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let user_model_id = schema
-        .app
-        .models
-        .iter()
-        .find(|m| m.1.name.snake_case() == "user")
-        .map(|(id, _)| *id)
-        .unwrap();
-
     let query = Query {
         body: ExprSet::Select(Box::new(Select {
             source: Source::Model(SourceModel {
-                model: user_model_id,
+                model: User::id(),
                 include: Default::default(),
                 via: None,
             }),
@@ -80,7 +72,7 @@ async fn test_query_returns_list_type(test: &mut DbTest) {
 
     // Verify it's a list type (this tests the debug assertion in Query::infer_ty)
     assert!(inferred_type.is_list());
-    assert_eq!(inferred_type, Type::list(user_model_id));
+    assert_eq!(inferred_type, Type::list(User::id()));
 }
 
 /// Test Select with Returning::Star on Model source
@@ -88,17 +80,9 @@ async fn test_select_star_model_source(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let user_model_id = schema
-        .app
-        .models
-        .iter()
-        .find(|m| m.1.name.snake_case() == "user")
-        .map(|(id, _)| *id)
-        .unwrap();
-
     let select = Select {
         source: Source::Model(SourceModel {
-            model: user_model_id,
+            model: User::id(),
             include: Default::default(),
             via: None,
         }),
@@ -107,7 +91,7 @@ async fn test_select_star_model_source(test: &mut DbTest) {
     };
 
     let inferred_type = select.infer_ty(schema, &[]);
-    assert_eq!(inferred_type, Type::list(user_model_id));
+    assert_eq!(inferred_type, Type::list(User::id()));
 }
 
 /// Test Select with Returning::Expr
@@ -115,17 +99,9 @@ async fn test_select_returning_expr(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let user_model_id = schema
-        .app
-        .models
-        .iter()
-        .find(|m| m.1.name.snake_case() == "user")
-        .map(|(id, _)| *id)
-        .unwrap();
-
     let select = Select {
         source: Source::Model(SourceModel {
-            model: user_model_id,
+            model: User::id(),
             include: Default::default(),
             via: None,
         }),
@@ -166,16 +142,8 @@ async fn test_insert_returning_star(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let user_model_id = schema
-        .app
-        .models
-        .iter()
-        .find(|m| m.1.name.snake_case() == "user")
-        .map(|(id, _)| *id)
-        .unwrap();
-
     let insert = Insert {
-        target: InsertTarget::Model(user_model_id),
+        target: InsertTarget::Model(User::id()),
         source: Query {
             body: ExprSet::Values(Values { rows: vec![] }),
             with: None,
@@ -187,7 +155,7 @@ async fn test_insert_returning_star(test: &mut DbTest) {
     };
 
     let inferred_type = insert.infer_ty(schema, &[]);
-    assert_eq!(inferred_type, Type::list(user_model_id));
+    assert_eq!(inferred_type, Type::list(User::id()));
 }
 
 /// Test Insert with no returning clause
@@ -195,16 +163,8 @@ async fn test_insert_no_returning(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let user_model_id = schema
-        .app
-        .models
-        .iter()
-        .find(|m| m.1.name.snake_case() == "user")
-        .map(|(id, _)| *id)
-        .unwrap();
-
     let insert = Insert {
-        target: InsertTarget::Model(user_model_id),
+        target: InsertTarget::Model(User::id()),
         source: Query {
             body: ExprSet::Values(Values { rows: vec![] }),
             with: None,
@@ -224,16 +184,8 @@ async fn test_update_returning_star(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let user_model_id = schema
-        .app
-        .models
-        .iter()
-        .find(|m| m.1.name.snake_case() == "user")
-        .map(|(id, _)| *id)
-        .unwrap();
-
     let update = Update {
-        target: UpdateTarget::Model(user_model_id),
+        target: UpdateTarget::Model(User::id()),
         assignments: Assignments::default(),
         filter: None,
         condition: None,
@@ -241,7 +193,7 @@ async fn test_update_returning_star(test: &mut DbTest) {
     };
 
     let inferred_type = update.infer_ty(schema, &[]);
-    assert_eq!(inferred_type, Type::list(user_model_id));
+    assert_eq!(inferred_type, Type::list(User::id()));
 }
 
 /// Test Update with Returning::Changed returns SparseRecord
@@ -249,20 +201,12 @@ async fn test_update_returning_changed(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let user_model_id = schema
-        .app
-        .models
-        .iter()
-        .find(|m| m.1.name.snake_case() == "user")
-        .map(|(id, _)| *id)
-        .unwrap();
-
     let mut assignments = Assignments::default();
     assignments.set(1, Expr::Value(Value::String("new_name".to_string())));
     assignments.set(2, Expr::Value(Value::I32(25)));
 
     let update = Update {
-        target: UpdateTarget::Model(user_model_id),
+        target: UpdateTarget::Model(User::id()),
         assignments,
         filter: None,
         condition: None,
@@ -290,17 +234,9 @@ async fn test_delete_returning_star(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let user_model_id = schema
-        .app
-        .models
-        .iter()
-        .find(|m| m.1.name.snake_case() == "user")
-        .map(|(id, _)| *id)
-        .unwrap();
-
     let delete = Delete {
         from: Source::Model(SourceModel {
-            model: user_model_id,
+            model: User::id(),
             include: Default::default(),
             via: None,
         }),
@@ -309,7 +245,7 @@ async fn test_delete_returning_star(test: &mut DbTest) {
     };
 
     let inferred_type = delete.infer_ty(schema, &[]);
-    assert_eq!(inferred_type, Type::list(user_model_id));
+    assert_eq!(inferred_type, Type::list(User::id()));
 }
 
 /// Test Expr::Arg with valid index
