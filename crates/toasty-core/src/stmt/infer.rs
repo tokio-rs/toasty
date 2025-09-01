@@ -36,10 +36,7 @@ impl Select {
                 // For SELECT *, infer based on the source
                 match &self.source {
                     Source::Model(source_model) => {
-                        let model = schema.app.model(source_model.model);
-                        let field_types: Vec<Type> =
-                            model.fields.iter().map(|f| f.expr_ty().clone()).collect();
-                        Type::Record(field_types)
+                        Type::List(Box::new(Type::Model(source_model.model)))
                     }
                     Source::Table(table_with_joins) => {
                         // For table-based sources, infer from the first table's columns
