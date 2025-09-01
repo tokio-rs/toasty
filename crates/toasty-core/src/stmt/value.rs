@@ -1,4 +1,5 @@
 use super::{sparse_record::SparseRecord, Entry, EntryPath, Id, Type, ValueEnum, ValueRecord};
+use std::hash::Hash;
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum Value {
@@ -231,6 +232,32 @@ where
         match value {
             Some(value) => Self::from(value),
             None => Self::Null,
+        }
+    }
+}
+
+impl Eq for Value {}
+
+impl Hash for Value {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Value::Bool(v) => v.hash(state),
+            Value::Enum(v) => v.hash(state),
+            Value::I8(v) => v.hash(state),
+            Value::I16(v) => v.hash(state),
+            Value::I32(v) => v.hash(state),
+            Value::I64(v) => v.hash(state),
+            Value::U8(v) => v.hash(state),
+            Value::U16(v) => v.hash(state),
+            Value::U32(v) => v.hash(state),
+            Value::U64(v) => v.hash(state),
+            Value::Id(v) => v.hash(state),
+            Value::String(v) => v.hash(state),
+            Value::Null => {},
+            Value::Record(v) => v.hash(state),
+            Value::List(v) => v.hash(state),
+            Value::SparseRecord(v) => v.hash(state),
         }
     }
 }

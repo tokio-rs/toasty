@@ -50,3 +50,11 @@ impl PartialEq for ValueRecord {
         **self == **other
     }
 }
+
+impl Eq for ValueRecord {}
+
+impl std::hash::Hash for ValueRecord {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.fields.hash(state);
+    }
+}
