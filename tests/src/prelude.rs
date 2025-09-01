@@ -4,7 +4,7 @@
 //! in test files with `use tests::prelude::*;`
 
 // Re-export helper functions
-pub use crate::helpers::{column, columns, table_id};
+pub use crate::helpers::{column, columns, index, table};
 
 // Re-export core test infrastructure
 pub use crate::DbTest;
@@ -12,5 +12,5 @@ pub use crate::DbTest;
 // Re-export macros
 pub use crate::{models, tests};
 
-// Re-export extension traits
+// Re-export extension traits and test utilities
 pub use crate::stmt::ValueStreamExt;

@@ -1,5 +1,5 @@
 /// Helper function to look up TableId by table name (handles database-specific prefixes)
-pub fn table_id(db: &toasty::Db, table_name: &str) -> toasty_core::schema::db::TableId {
+pub fn table(db: &toasty::Db, table_name: &str) -> toasty_core::schema::db::TableId {
     let schema = db.schema();
 
     // First try exact match
@@ -43,19 +43,19 @@ pub fn columns(
     let schema = db.schema();
 
     // Find the table using the same logic as table_id (handles prefixes)
-    let table = schema
+    let table_def = schema
         .db
         .tables
         .iter()
         .find(|t| t.name == table_name || t.name.ends_with(table_name))
         .unwrap_or_else(|| panic!("Table '{}' not found", table_name));
 
-    let table_id = table_id(db, table_name);
+    let table_id = table(db, table_name);
 
     column_names
         .iter()
         .map(|col_name| {
-            let index = table
+            let index = table_def
                 .columns
                 .iter()
                 .position(|c| c.name == *col_name)
@@ -69,4 +69,42 @@ pub fn columns(
             }
         })
         .collect()
+}
+
+/// Helper function to get an IndexId by table name and column name
+pub fn index(
+    db: &toasty::Db,
+    table_name: &str,
+    column_name: &str,
+) -> toasty_core::schema::db::IndexId {
+    let schema = db.schema();
+    let table_id = table(db, table_name);
+
+    // Find the table
+    let table_def = schema
+        .db
+        .tables
+        .iter()
+        .find(|t| t.name == table_name || t.name.ends_with(table_name))
+        .unwrap_or_else(|| panic!("Table '{}' not found", table_name));
+
+    // Find the index by looking for an index on the specified column
+    let column_id = column(db, table_name, column_name);
+
+    // Look for an index that contains this column
+    let index_position = table_def
+        .indices
+        .iter()
+        .position(|idx| idx.columns.iter().any(|col| col.column == column_id))
+        .unwrap_or_else(|| {
+            panic!(
+                "No index found on column '{}' in table '{}'",
+                column_name, table_name
+            )
+        });
+
+    toasty_core::schema::db::IndexId {
+        table: table_id,
+        index: index_position,
+    }
 }

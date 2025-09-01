@@ -768,10 +768,19 @@ pub fn visit_limit<V>(v: &mut V, node: &Limit)
 where
     V: Visit + ?Sized,
 {
-    v.visit_expr(&node.limit);
-
-    if let Some(offset) = &node.offset {
-        v.visit_offset(offset);
+    match node {
+        Limit::Offset { limit, offset } => {
+            v.visit_expr(limit);
+            if let Some(offset_expr) = offset {
+                v.visit_expr(offset_expr);
+            }
+        }
+        Limit::PaginateForward { limit, after } => {
+            v.visit_expr(limit);
+            if let Some(after_expr) = after {
+                v.visit_expr(after_expr);
+            }
+        }
     }
 }
 

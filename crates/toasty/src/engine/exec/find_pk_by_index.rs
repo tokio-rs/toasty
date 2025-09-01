@@ -1,6 +1,6 @@
 use super::{operation, plan, Exec, Result};
 use crate::driver::Rows;
-use crate::engine::simplify;
+use crate::engine::{simplify, ExecResponse};
 
 impl Exec<'_> {
     pub(super) async fn action_find_pk_by_index(
@@ -36,8 +36,14 @@ impl Exec<'_> {
             Rows::Count(_) => todo!(),
         };
 
-        let res = self.project_and_filter_output(rows, &action.output.project, None);
-        self.vars.store(action.output.var, res);
+        let values = self.project_and_filter_output(rows, &action.output.project, None);
+        self.vars.store(
+            action.output.var,
+            ExecResponse {
+                values,
+                metadata: None,
+            },
+        );
 
         Ok(())
     }

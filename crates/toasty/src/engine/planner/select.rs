@@ -123,6 +123,7 @@ impl Planner<'_> {
             }),
             stmt: stmt.into(),
             conditional_update_with_no_returning: false,
+            pagination: None, // TODO: Extract pagination info from limit clause
         });
 
         output
@@ -456,32 +457,47 @@ impl Planner<'_> {
             return;
         };
 
-        let Some(stmt::Offset::After(offset)) = limit.offset.take() else {
-            return;
+        // First, handle any after clause by converting it to a filter
+        let offset = match limit {
+            stmt::Limit::PaginateForward { after, .. } => after.take(),
+            stmt::Limit::Offset { .. } => return, // No after clause in offset-based limits
         };
 
-        let Some(order_by) = &mut stmt.order_by else {
-            return;
-        };
+        if let Some(offset) = offset {
+            let Some(order_by) = &mut stmt.order_by else {
+                return;
+            };
 
-        let stmt::ExprSet::Select(body) = &mut stmt.body else {
-            todo!("stmt={stmt:#?}");
-        };
+            let stmt::ExprSet::Select(body) = &mut stmt.body else {
+                todo!("stmt={stmt:#?}");
+            };
 
-        match offset {
-            stmt::Expr::Value(stmt::Value::Record(_)) => {
-                todo!()
-            }
-            stmt::Expr::Value(value) => {
-                let expr =
-                    self.rewrite_offset_after_field_as_filter(&order_by.exprs[0], value, true);
-                if body.filter.is_true() {
-                    body.filter = expr;
-                } else {
-                    body.filter = stmt::Expr::and(body.filter.take(), expr);
+            match offset {
+                stmt::Expr::Value(stmt::Value::Record(_)) => {
+                    todo!()
                 }
+                stmt::Expr::Value(value) => {
+                    let expr =
+                        self.rewrite_offset_after_field_as_filter(&order_by.exprs[0], value, true);
+                    if body.filter.is_true() {
+                        body.filter = expr;
+                    } else {
+                        body.filter = stmt::Expr::and(body.filter.take(), expr);
+                    }
+                }
+                _ => todo!(),
             }
-            _ => todo!(),
+        }
+
+        // Convert PaginateForward to Offset variant now that we've processed the after clause
+        if let stmt::Limit::PaginateForward {
+            limit: limit_expr, ..
+        } = limit
+        {
+            *limit = stmt::Limit::Offset {
+                limit: limit_expr.clone(),
+                offset: None,
+            };
         }
     }
 

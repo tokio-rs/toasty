@@ -1,5 +1,24 @@
 use super::{Type, Value};
 
+// Helper macros to reduce duplication in TryFrom implementations
+macro_rules! try_convert {
+    ($val:expr, $target_ty:ty) => {
+        $val.try_into().map_err(|_| {
+            anyhow::anyhow!(
+                "value {} cannot be converted to {}",
+                $val,
+                stringify!($target_ty)
+            )
+        })
+    };
+}
+
+macro_rules! conversion_fallback {
+    ($value:expr, $target_ty:ty) => {
+        anyhow::bail!("cannot convert {:?} to {}", $value, stringify!($target_ty))
+    };
+}
+
 macro_rules! impl_num {
     (
         $(
@@ -26,6 +45,21 @@ macro_rules! impl_num {
             impl From<&$ty> for Value {
                 fn from(value: &$ty) -> Self {
                     Self::$variant(*value)
+                }
+            }
+
+            impl TryFrom<Value> for $ty {
+                type Error = crate::Error;
+
+                fn try_from(value: Value) -> Result<Self, Self::Error> {
+                    match value {
+                        Value::U8(val) => try_convert!(val, $ty),
+                        Value::I8(val) => try_convert!(val, $ty),
+                        Value::I16(val) => try_convert!(val, $ty),
+                        Value::I32(val) => try_convert!(val, $ty),
+                        Value::I64(val) => try_convert!(val, $ty),
+                        _ => conversion_fallback!(value, u8),
+                    }
                 }
             }
         )*
@@ -64,193 +98,5 @@ impl_num! {
     U64(u64) {
         to_u64
         is_u64
-    }
-}
-
-// Enhanced TryFrom implementations that support cross-type conversions
-// These provide comprehensive conversion support between all numeric Value variants
-// and use std's try_into() for safe bounds checking
-
-// Helper macros to reduce duplication in TryFrom implementations
-macro_rules! try_convert {
-    ($val:expr, $target_ty:ty) => {
-        $val.try_into().map_err(|_| {
-            anyhow::anyhow!(
-                "value {} cannot be converted to {}",
-                $val,
-                stringify!($target_ty)
-            )
-        })
-    };
-}
-
-macro_rules! try_convert_range {
-    ($val:expr, $target_ty:ty) => {
-        $val.try_into().map_err(|_| {
-            anyhow::anyhow!(
-                "value {} is out of range for {}",
-                $val,
-                stringify!($target_ty)
-            )
-        })
-    };
-}
-
-macro_rules! parse_string {
-    ($s:expr, $target_ty:ty) => {
-        $s.parse::<$target_ty>()
-            .map_err(|_| anyhow::anyhow!("cannot parse '{}' as {}", $s, stringify!($target_ty)))
-    };
-}
-
-macro_rules! conversion_fallback {
-    ($value:expr, $target_ty:ty) => {
-        anyhow::bail!("cannot convert {:?} to {}", $value, stringify!($target_ty))
-    };
-}
-
-impl TryFrom<Value> for u8 {
-    type Error = crate::Error;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::U8(val) => Ok(val),
-            Value::I8(val) => try_convert!(val, u8),
-            Value::I16(val) => try_convert_range!(val, u8),
-            Value::I32(val) => try_convert_range!(val, u8),
-            Value::I64(val) => try_convert_range!(val, u8),
-            Value::String(s) => parse_string!(s, u8),
-            _ => conversion_fallback!(value, u8),
-        }
-    }
-}
-
-impl TryFrom<Value> for u16 {
-    type Error = crate::Error;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::U16(val) => Ok(val),
-            Value::U8(val) => Ok(val.into()),
-            Value::I8(val) => try_convert!(val, u16),
-            Value::I16(val) => try_convert!(val, u16),
-            Value::I32(val) => try_convert_range!(val, u16),
-            Value::I64(val) => try_convert_range!(val, u16),
-            Value::String(s) => parse_string!(s, u16),
-            _ => conversion_fallback!(value, u16),
-        }
-    }
-}
-
-impl TryFrom<Value> for u32 {
-    type Error = crate::Error;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::U32(val) => Ok(val),
-            Value::U8(val) => Ok(val.into()),
-            Value::U16(val) => Ok(val.into()),
-            Value::I8(val) => try_convert!(val, u32),
-            Value::I16(val) => try_convert!(val, u32),
-            Value::I32(val) => try_convert!(val, u32),
-            Value::I64(val) => try_convert_range!(val, u32),
-            Value::String(s) => parse_string!(s, u32),
-            _ => conversion_fallback!(value, u32),
-        }
-    }
-}
-
-impl TryFrom<Value> for u64 {
-    type Error = crate::Error;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::U64(val) => Ok(val),
-            Value::U8(val) => Ok(val.into()),
-            Value::U16(val) => Ok(val.into()),
-            Value::U32(val) => Ok(val.into()),
-            Value::I8(val) => try_convert!(val, u64),
-            Value::I16(val) => try_convert!(val, u64),
-            Value::I32(val) => try_convert!(val, u64),
-            Value::I64(val) => try_convert!(val, u64),
-            Value::String(s) => parse_string!(s, u64),
-            _ => conversion_fallback!(value, u64),
-        }
-    }
-}
-
-impl TryFrom<Value> for i8 {
-    type Error = crate::Error;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::I8(val) => Ok(val),
-            Value::I16(val) => try_convert_range!(val, i8),
-            Value::I32(val) => try_convert_range!(val, i8),
-            Value::I64(val) => try_convert_range!(val, i8),
-            Value::U8(val) => try_convert_range!(val, i8),
-            Value::U16(val) => try_convert_range!(val, i8),
-            Value::U32(val) => try_convert_range!(val, i8),
-            Value::U64(val) => try_convert_range!(val, i8),
-            Value::String(s) => parse_string!(s, i8),
-            _ => conversion_fallback!(value, i8),
-        }
-    }
-}
-
-impl TryFrom<Value> for i16 {
-    type Error = crate::Error;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::I16(val) => Ok(val),
-            Value::I8(val) => Ok(val.into()),
-            Value::U8(val) => Ok(val.into()),
-            Value::I32(val) => try_convert_range!(val, i16),
-            Value::I64(val) => try_convert_range!(val, i16),
-            Value::U16(val) => try_convert_range!(val, i16),
-            Value::U32(val) => try_convert_range!(val, i16),
-            Value::U64(val) => try_convert_range!(val, i16),
-            Value::String(s) => parse_string!(s, i16),
-            _ => conversion_fallback!(value, i16),
-        }
-    }
-}
-
-impl TryFrom<Value> for i32 {
-    type Error = crate::Error;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::I32(val) => Ok(val),
-            Value::I8(val) => Ok(val.into()),
-            Value::I16(val) => Ok(val.into()),
-            Value::U8(val) => Ok(val.into()),
-            Value::U16(val) => Ok(val.into()),
-            Value::I64(val) => try_convert_range!(val, i32),
-            Value::U32(val) => try_convert_range!(val, i32),
-            Value::U64(val) => try_convert_range!(val, i32),
-            Value::String(s) => parse_string!(s, i32),
-            _ => conversion_fallback!(value, i32),
-        }
-    }
-}
-
-impl TryFrom<Value> for i64 {
-    type Error = crate::Error;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::I64(val) => Ok(val),
-            Value::I8(val) => Ok(val.into()),
-            Value::I16(val) => Ok(val.into()),
-            Value::I32(val) => Ok(val.into()),
-            Value::U8(val) => Ok(val.into()),
-            Value::U16(val) => Ok(val.into()),
-            Value::U32(val) => Ok(val.into()),
-            Value::U64(val) => try_convert_range!(val, i64),
-            Value::String(s) => parse_string!(s, i64),
-            _ => conversion_fallback!(value, i64),
-        }
     }
 }
