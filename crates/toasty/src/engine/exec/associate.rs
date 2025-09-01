@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use super::{plan, Exec, Result};
 use toasty_core::stmt::ValueStream;
 use toasty_core::{schema::app::FieldTy, stmt};
@@ -9,21 +10,24 @@ impl Exec<'_> {
 
         match &self.db.schema.app.field(action.field).ty {
             FieldTy::BelongsTo(rel) => {
+                let [fk_field] = &rel.foreign_key.fields[..] else {
+                    todo!("composite keys")
+                };
+
+                let mut target_by_pk: std::collections::HashMap<stmt::Value, stmt::ValueRecord> =
+                    HashMap::new();
+                for target_item in &target {
+                    let target_item = target_item.expect_record();
+                    let pk_value = target_item[fk_field.target.index].clone();
+                    target_by_pk.insert(pk_value, target_item.clone());
+                }
+
                 for source_item in &mut source {
                     let source_item = source_item.expect_record_mut();
+                    let fk_value = &source_item[fk_field.source.index];
 
-                    for target_item in &target {
-                        let target_item = target_item.expect_record();
-
-                        let [fk_field] = &rel.foreign_key.fields[..] else {
-                            todo!("composite keys")
-                        };
-
-                        if source_item[fk_field.source.index] == target_item[fk_field.target.index]
-                        {
-                            source_item[action.field.index] = target_item.clone().into();
-                            break;
-                        }
+                    if let Some(target_record) = target_by_pk.get(fk_value) {
+                        source_item[action.field.index] = target_record.clone().into();
                     }
                 }
             }
@@ -61,21 +65,24 @@ impl Exec<'_> {
             FieldTy::HasOne(rel) => {
                 let pair = rel.pair(&self.db.schema.app);
 
+                let [fk_field] = &pair.foreign_key.fields[..] else {
+                    todo!("composite keys")
+                };
+
+                let mut target_by_fk: std::collections::HashMap<stmt::Value, stmt::ValueRecord> =
+                    HashMap::new();
+                for target_item in &target {
+                    let target_item = target_item.expect_record();
+                    let fk_value = target_item[fk_field.source.index].clone();
+                    target_by_fk.entry(fk_value).or_insert(target_item.clone());
+                }
+
                 for source_item in &mut source {
                     let source_item = source_item.expect_record_mut();
+                    let pk_value = &source_item[fk_field.target.index];
 
-                    for target_item in &target {
-                        let target_item = target_item.expect_record();
-
-                        let [fk_field] = &pair.foreign_key.fields[..] else {
-                            todo!("composite keys")
-                        };
-
-                        if target_item[fk_field.source.index] == source_item[fk_field.target.index]
-                        {
-                            source_item[action.field.index] = target_item.clone().into();
-                            break;
-                        }
+                    if let Some(target_record) = target_by_fk.get(pk_value) {
+                        source_item[action.field.index] = target_record.clone().into();
                     }
                 }
             }
