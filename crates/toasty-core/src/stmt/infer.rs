@@ -56,13 +56,13 @@ impl Select {
                                 }
                             }
                         } else {
-                            Type::Unknown
+                            panic!("Cannot infer type for empty table joins")
                         }
                     }
                 }
             }
             Returning::Expr(expr) => expr.infer_ty(schema, args),
-            Returning::Changed => Type::I64, // Returns count of changed rows
+            Returning::Changed => panic!("Returning::Changed type inference not yet implemented"),
         }
     }
 }
