@@ -2,7 +2,7 @@ use super::Value;
 
 use std::ops;
 
-#[derive(Debug, Default, Clone, Eq, Hash)]
+#[derive(Debug, Default, Clone)]
 pub struct ValueRecord {
     pub fields: Vec<Value>,
 }
@@ -48,5 +48,13 @@ impl<'a> IntoIterator for &'a mut ValueRecord {
 impl PartialEq for ValueRecord {
     fn eq(&self, other: &Self) -> bool {
         **self == **other
+    }
+}
+
+impl Eq for ValueRecord {}
+
+impl std::hash::Hash for ValueRecord {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.fields.hash(state);
     }
 }
