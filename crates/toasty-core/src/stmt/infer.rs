@@ -43,7 +43,8 @@ impl Select {
                             match &first_table.table {
                                 TableRef::Table(table_id) => {
                                     let table = &schema.db.tables[table_id.0];
-                                    let column_types: Vec<Type> = table.columns.iter().map(|c| c.ty.clone()).collect();
+                                    let column_types: Vec<Type> =
+                                        table.columns.iter().map(|c| c.ty.clone()).collect();
                                     Type::Record(column_types)
                                 }
                                 TableRef::Cte { .. } => {
@@ -68,16 +69,19 @@ impl ExprSetOp {
         // All branches of a set operation should have the same type
         if let Some(first) = self.operands.first() {
             let first_ty = first.infer_ty(schema, args);
-            
+
             // Debug assertion to check that every operand has the same type
             #[cfg(debug_assertions)]
             {
                 for operand in &self.operands[1..] {
-                    debug_assert_eq!(operand.infer_ty(schema, args), first_ty, 
-                        "All operands in a set operation should have the same type");
+                    debug_assert_eq!(
+                        operand.infer_ty(schema, args),
+                        first_ty,
+                        "All operands in a set operation should have the same type"
+                    );
                 }
             }
-            
+
             first_ty
         } else {
             Type::Unknown
@@ -104,16 +108,19 @@ impl Values {
 
         // Infer from the first row
         let first_row_ty = self.rows[0].infer_ty(schema, args);
-        
+
         // Debug assertion to check that every row has the same type
         #[cfg(debug_assertions)]
         {
             for row in &self.rows[1..] {
-                debug_assert_eq!(row.infer_ty(schema, args), first_row_ty, 
-                    "All rows in VALUES should have the same type");
+                debug_assert_eq!(
+                    row.infer_ty(schema, args),
+                    first_row_ty,
+                    "All rows in VALUES should have the same type"
+                );
             }
         }
-        
+
         Type::List(Box::new(first_row_ty))
     }
 }
@@ -213,35 +220,35 @@ impl Delete {
     }
 }
 
-
 impl Expr {
     pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
         match self {
             // Boolean expressions
-            Expr::And(_) => Type::Bool,
-            Expr::Or(_) => Type::Bool,
-            Expr::BinaryOp(_) => Type::Bool,
-            Expr::IsNull(_) => Type::Bool,
-            Expr::Pattern(_) => Type::Bool,
-            Expr::InList(_) => Type::Bool,
-            Expr::InSubquery(_) => Type::Bool,
+            Expr::And(_)
+            | Expr::Or(_)
+            | Expr::BinaryOp(_)
+            | Expr::IsNull(_)
+            | Expr::Pattern(_)
+            | Expr::InList(_)
+            | Expr::InSubquery(_) => Type::Bool,
 
             // Argument reference
             Expr::Arg(e) => {
-                if e.position < args.len() {
-                    args[e.position].clone()
-                } else {
-                    Type::Unknown
-                }
+                assert!(
+                    e.position < args.len(),
+                    "Argument position {} is out of bounds (args length: {})",
+                    e.position,
+                    args.len()
+                );
+                args[e.position].clone()
             }
 
             // Schema-dependent references
             Expr::Column(e) => {
-                if let Some(column_id) = e.try_to_column_id() {
-                    schema.db.column(column_id).ty.clone()
-                } else {
-                    Type::Unknown
-                }
+                let column_id = e
+                    .try_to_column_id()
+                    .expect("Column expression must reference a valid column");
+                schema.db.column(column_id).ty.clone()
             }
 
             Expr::Reference(ref_expr) => match ref_expr {
@@ -257,7 +264,23 @@ impl Expr {
                 }
             },
 
-            Expr::Key(e) => Type::Id(e.model),
+            Expr::Key(e) => {
+                let model = schema.app.model(e.model);
+                if model.primary_key.fields.len() == 1 {
+                    // Single field primary key
+                    let field = schema.app.field(model.primary_key.fields[0]);
+                    field.expr_ty().clone()
+                } else {
+                    // Composite primary key - return record of field types
+                    let field_types: Vec<Type> = model
+                        .primary_key
+                        .fields
+                        .iter()
+                        .map(|field_id| schema.app.field(*field_id).expr_ty().clone())
+                        .collect();
+                    Type::Record(field_types)
+                }
+            }
 
             // Type-preserving operations
             Expr::Cast(e) => e.ty.clone(),
@@ -300,7 +323,10 @@ impl ExprMap {
         // Extract the element type from the base
         let element_ty = match &base_ty {
             Type::List(inner) => *inner.clone(),
-            _ => base_ty, // If base isn't a list, use it as element type
+            _ => panic!(
+                "Map operation requires a List base type, got: {:?}",
+                base_ty
+            ),
         };
 
         // Infer the mapped type by treating the element as arg[0]
@@ -319,6 +345,19 @@ impl ExprList {
 
         // Infer from the first item
         let item_ty = self.items[0].infer_ty(schema, args);
+
+        // Debug assertion to check that all items have the same type
+        #[cfg(debug_assertions)]
+        {
+            for item in &self.items[1..] {
+                debug_assert_eq!(
+                    item.infer_ty(schema, args),
+                    item_ty,
+                    "All items in a list should have the same type"
+                );
+            }
+        }
+
         Type::List(Box::new(item_ty))
     }
 }
@@ -334,10 +373,14 @@ impl ExprProject {
                     if *step < fields.len() {
                         base_ty = fields[*step].clone();
                     } else {
-                        return Type::Unknown;
+                        panic!(
+                            "Projection index {} out of bounds for record with {} fields",
+                            step,
+                            fields.len()
+                        );
                     }
                 }
-                _ => return Type::Unknown,
+                _ => panic!("Cannot project into non-record type: {:?}", base_ty),
             }
         }
 
@@ -371,16 +414,19 @@ impl ExprConcat {
         }
 
         let first_ty = self.exprs[0].infer_ty(schema, args);
-        
+
         // Debug assertion to check that all concatenated expressions have the same type
         #[cfg(debug_assertions)]
         {
             for expr in &self.exprs[1..] {
-                debug_assert_eq!(expr.infer_ty(schema, args), first_ty, 
-                    "All expressions in concatenation should have the same type");
+                debug_assert_eq!(
+                    expr.infer_ty(schema, args),
+                    first_ty,
+                    "All expressions in concatenation should have the same type"
+                );
             }
         }
-        
+
         first_ty
     }
 }
