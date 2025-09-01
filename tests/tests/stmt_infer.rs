@@ -1,9 +1,8 @@
 use tests::{models, tests, DbTest};
 use toasty::{stmt::Id, Model};
 use toasty_core::stmt::{
-    Assignments, Delete, Expr, ExprFunc, ExprSet, FuncCount, Insert,
-    InsertTarget, Query, Returning, Select, Source, SourceModel, Statement, Type, Update,
-    UpdateTarget, Value, Values,
+    Assignments, Delete, Expr, ExprFunc, ExprSet, FuncCount, Insert, InsertTarget, Query,
+    Returning, Select, Statement, Type, Update, UpdateTarget, Value, Values,
 };
 
 /// Simple test models
@@ -26,11 +25,7 @@ async fn test_statement_query_delegation(test: &mut DbTest) {
     // Create a simple SELECT * query
     let query = Query {
         body: ExprSet::Select(Box::new(Select {
-            source: Source::Model(SourceModel {
-                model: User::id(),
-                include: Default::default(),
-                via: None,
-            }),
+            source: User::id().into(),
             returning: Returning::Star,
             filter: true.into(),
         })),
@@ -54,11 +49,7 @@ async fn test_query_returns_list_type(test: &mut DbTest) {
 
     let query = Query {
         body: ExprSet::Select(Box::new(Select {
-            source: Source::Model(SourceModel {
-                model: User::id(),
-                include: Default::default(),
-                via: None,
-            }),
+            source: User::id().into(),
             returning: Returning::Star,
             filter: true.into(),
         })),
@@ -81,11 +72,7 @@ async fn test_select_star_model_source(test: &mut DbTest) {
     let schema = db.schema();
 
     let select = Select {
-        source: Source::Model(SourceModel {
-            model: User::id(),
-            include: Default::default(),
-            via: None,
-        }),
+        source: User::id().into(),
         returning: Returning::Star,
         filter: true.into(),
     };
@@ -100,11 +87,7 @@ async fn test_select_returning_expr(test: &mut DbTest) {
     let schema = db.schema();
 
     let select = Select {
-        source: Source::Model(SourceModel {
-            model: User::id(),
-            include: Default::default(),
-            via: None,
-        }),
+        source: User::id().into(),
         returning: Returning::Expr("test".into()),
         filter: true.into(),
     };
@@ -142,13 +125,7 @@ async fn test_insert_returning_star(test: &mut DbTest) {
 
     let insert = Insert {
         target: InsertTarget::Model(User::id()),
-        source: Query {
-            body: ExprSet::Values(Values { rows: vec![] }),
-            with: None,
-            order_by: None,
-            limit: None,
-            locks: vec![],
-        },
+        source: Query::values(Values { rows: vec![] }),
         returning: Some(Returning::Star),
     };
 
@@ -163,13 +140,7 @@ async fn test_insert_no_returning(test: &mut DbTest) {
 
     let insert = Insert {
         target: InsertTarget::Model(User::id()),
-        source: Query {
-            body: ExprSet::Values(Values { rows: vec![] }),
-            with: None,
-            order_by: None,
-            limit: None,
-            locks: vec![],
-        },
+        source: Query::values(Values { rows: vec![] }),
         returning: None,
     };
 
@@ -233,11 +204,7 @@ async fn test_delete_returning_star(test: &mut DbTest) {
     let schema = db.schema();
 
     let delete = Delete {
-        from: Source::Model(SourceModel {
-            model: User::id(),
-            include: Default::default(),
-            via: None,
-        }),
+        from: User::id().into(),
         filter: true.into(),
         returning: Some(Returning::Star),
     };
@@ -295,10 +262,7 @@ async fn test_expr_list_with_items(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let list_expr = Expr::list_from_vec(vec![
-        "a".into(),
-        "b".into(),
-    ]);
+    let list_expr = Expr::list_from_vec(vec!["a".into(), "b".into()]);
 
     let inferred_type = list_expr.infer_ty(schema, &[]);
     assert_eq!(inferred_type, Type::list(Type::String));
@@ -320,10 +284,7 @@ async fn test_expr_record(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let record_expr = Expr::record_from_vec(vec![
-        "test".into(),
-        42_i64.into(),
-    ]);
+    let record_expr = Expr::record_from_vec(vec!["test".into(), 42_i64.into()]);
 
     let inferred_type = record_expr.infer_ty(schema, &[]);
     assert_eq!(inferred_type, Type::Record(vec![Type::String, Type::I64]));
