@@ -1,9 +1,9 @@
 use tests::{models, tests, DbTest};
 use toasty::{stmt::Id, Model};
 use toasty_core::stmt::{
-    Assignments, Delete, Expr, ExprArg, ExprFunc, ExprList, ExprRecord, ExprSet, FuncCount, Insert,
+    Assignments, Delete, Expr, ExprFunc, ExprSet, FuncCount, Insert,
     InsertTarget, Query, Returning, Select, Source, SourceModel, Statement, Type, Update,
-    UpdateTarget, Value, ValueRecord, Values,
+    UpdateTarget, Value, Values,
 };
 
 /// Simple test models
@@ -32,7 +32,7 @@ async fn test_statement_query_delegation(test: &mut DbTest) {
                 via: None,
             }),
             returning: Returning::Star,
-            filter: Expr::Value(Value::Bool(true)),
+            filter: true.into(),
         })),
         with: None,
         order_by: None,
@@ -60,7 +60,7 @@ async fn test_query_returns_list_type(test: &mut DbTest) {
                 via: None,
             }),
             returning: Returning::Star,
-            filter: Expr::Value(Value::Bool(true)),
+            filter: true.into(),
         })),
         with: None,
         order_by: None,
@@ -87,7 +87,7 @@ async fn test_select_star_model_source(test: &mut DbTest) {
             via: None,
         }),
         returning: Returning::Star,
-        filter: Expr::Value(Value::Bool(true)),
+        filter: true.into(),
     };
 
     let inferred_type = select.infer_ty(schema, &[]);
@@ -105,8 +105,8 @@ async fn test_select_returning_expr(test: &mut DbTest) {
             include: Default::default(),
             via: None,
         }),
-        returning: Returning::Expr(Expr::Value(Value::String("test".to_string()))),
-        filter: Expr::Value(Value::Bool(true)),
+        returning: Returning::Expr("test".into()),
+        filter: true.into(),
     };
 
     let inferred_type = select.infer_ty(schema, &[]);
@@ -119,11 +119,11 @@ async fn test_values_with_rows(test: &mut DbTest) {
     let schema = db.schema();
 
     let values = Values {
-        rows: vec![Expr::Value(Value::I32(42)), Expr::Value(Value::I32(43))],
+        rows: vec![42_i64.into(), 43_i64.into()],
     };
 
     let inferred_type = values.infer_ty(schema, &[]);
-    assert_eq!(inferred_type, Type::list(Type::I32));
+    assert_eq!(inferred_type, Type::list(Type::I64));
 }
 
 /// Test Values with empty rows returns Unknown
@@ -131,9 +131,7 @@ async fn test_values_empty_returns_unknown(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let values = Values { rows: vec![] };
-
-    let inferred_type = values.infer_ty(schema, &[]);
+    let inferred_type = Values { rows: vec![] }.infer_ty(schema, &[]);
     assert_eq!(inferred_type, Type::Unknown);
 }
 
@@ -202,8 +200,8 @@ async fn test_update_returning_changed(test: &mut DbTest) {
     let schema = db.schema();
 
     let mut assignments = Assignments::default();
-    assignments.set(1, Expr::Value(Value::String("new_name".to_string())));
-    assignments.set(2, Expr::Value(Value::I32(25)));
+    assignments.set(1, "new_name");
+    assignments.set(2, 25_i64);
 
     let update = Update {
         target: UpdateTarget::Model(User::id()),
@@ -240,7 +238,7 @@ async fn test_delete_returning_star(test: &mut DbTest) {
             include: Default::default(),
             via: None,
         }),
-        filter: Expr::Value(Value::Bool(true)),
+        filter: true.into(),
         returning: Some(Returning::Star),
     };
 
@@ -253,7 +251,7 @@ async fn test_expr_arg_valid_index(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let arg_expr = Expr::Arg(ExprArg { position: 0 });
+    let arg_expr = Expr::Arg(0.into());
     let args = vec![Type::String, Type::I32];
 
     let inferred_type = arg_expr.infer_ty(schema, &args);
@@ -266,9 +264,9 @@ async fn test_expr_value_types(test: &mut DbTest) {
     let schema = db.schema();
 
     let test_cases = vec![
-        (Value::Bool(true), Type::Bool),
-        (Value::I32(42), Type::I32),
-        (Value::String("test".to_string()), Type::String),
+        (true.into(), Type::Bool),
+        (42_i32.into(), Type::I32),
+        ("test".into(), Type::String),
         (Value::Null, Type::Null),
     ];
 
@@ -292,60 +290,54 @@ async fn test_expr_func_count(test: &mut DbTest) {
     assert_eq!(inferred_type, Type::I64);
 }
 
-/// Test ExprList with items
+/// Test Expr::List with items
 async fn test_expr_list_with_items(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let list_expr = ExprList {
-        items: vec![
-            Expr::Value(Value::String("a".to_string())),
-            Expr::Value(Value::String("b".to_string())),
-        ],
-    };
+    let list_expr = Expr::list_from_vec(vec![
+        "a".into(),
+        "b".into(),
+    ]);
 
     let inferred_type = list_expr.infer_ty(schema, &[]);
     assert_eq!(inferred_type, Type::list(Type::String));
 }
 
-/// Test ExprList empty returns Unknown
+/// Test Expr::List empty returns Unknown
 async fn test_expr_list_empty_returns_unknown(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let empty_list = ExprList { items: vec![] };
+    let empty_list = Expr::list_from_vec(vec![]);
 
     let inferred_type = empty_list.infer_ty(schema, &[]);
     assert_eq!(inferred_type, Type::Unknown);
 }
 
-/// Test ExprRecord
+/// Test Expr::Record
 async fn test_expr_record(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let record_expr = ExprRecord {
-        fields: vec![
-            Expr::Value(Value::String("test".to_string())),
-            Expr::Value(Value::I32(42)),
-        ],
-    };
+    let record_expr = Expr::record_from_vec(vec![
+        "test".into(),
+        42_i64.into(),
+    ]);
 
     let inferred_type = record_expr.infer_ty(schema, &[]);
-    assert_eq!(inferred_type, Type::Record(vec![Type::String, Type::I32]));
+    assert_eq!(inferred_type, Type::Record(vec![Type::String, Type::I64]));
 }
 
-/// Test ValueRecord
+/// Test Value::Record
 async fn test_value_record(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let record_value = ValueRecord {
-        fields: vec![Value::String("test".to_string()), Value::I32(42)],
-    };
+    let record_value = Value::record_from_vec(vec!["test".into(), 42_i64.into()]);
 
     let inferred_type = record_value.infer_ty(schema, &[]);
-    assert_eq!(inferred_type, Type::Record(vec![Type::String, Type::I32]));
+    assert_eq!(inferred_type, Type::Record(vec![Type::String, Type::I64]));
 }
 
 /// Test Value::List with items
@@ -353,10 +345,10 @@ async fn test_value_list_with_items(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let list_value = Value::List(vec![Value::I32(1), Value::I32(2), Value::I32(3)]);
+    let list_value = Value::list_from_vec(vec![1_i64.into(), 2_i64.into(), 3_i64.into()]);
 
     let inferred_type = list_value.infer_ty(schema, &[]);
-    assert_eq!(inferred_type, Type::list(Type::I32));
+    assert_eq!(inferred_type, Type::list(Type::I64));
 }
 
 /// Test Value::List empty returns Unknown
@@ -364,7 +356,7 @@ async fn test_value_list_empty_returns_unknown(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
-    let empty_list = Value::List(vec![]);
+    let empty_list = Value::list_from_vec(vec![]);
 
     let inferred_type = empty_list.infer_ty(schema, &[]);
     assert_eq!(inferred_type, Type::Unknown);
