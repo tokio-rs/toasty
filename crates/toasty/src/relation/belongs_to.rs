@@ -24,7 +24,7 @@ impl<T: Model> BelongsTo<T> {
         self.value.as_ref().expect("association not loaded")
     }
 
-    pub fn not_loaded(&self) -> bool {
+    pub fn is_unloaded(&self) -> bool {
         self.value.is_none()
     }
 }
