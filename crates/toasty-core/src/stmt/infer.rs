@@ -52,8 +52,7 @@ impl Select {
                                     Type::Record(column_types)
                                 }
                                 TableRef::Cte { .. } => {
-                                    // CTE references are not yet supported
-                                    Type::Unknown
+                                    panic!("CTE references are not yet supported")
                                 }
                             }
                         } else {
