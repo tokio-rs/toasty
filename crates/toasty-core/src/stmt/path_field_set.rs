@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use indexmap::IndexSet;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -46,5 +47,14 @@ impl FromIterator<usize> for PathFieldSet {
         }
 
         ret
+    }
+}
+
+impl Hash for PathFieldSet {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.container.len().hash(state);
+        let mut items: Vec<_> = self.container.iter().copied().collect();
+        items.sort_unstable();
+        items.hash(state);
     }
 }

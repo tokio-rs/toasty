@@ -30,23 +30,30 @@ impl Exec<'_> {
             FieldTy::HasMany(rel) => {
                 let pair = rel.pair(&self.db.schema.app);
 
-                // TODO: this is N^2, not super efficient. (tokio-rs/toasty#141)
+                let [fk_field] = &pair.foreign_key.fields[..] else {
+                    todo!("composite keys")
+                };
+
+                let mut target_by_fk: std::collections::HashMap<stmt::Value, Vec<stmt::ValueRecord>> =
+                    std::collections::HashMap::new();
+
+                for target_item in &target {
+                    let target_item = target_item.expect_record();
+                    let fk_value = target_item[fk_field.source.index].clone();
+                    target_by_fk
+                        .entry(fk_value)
+                        .or_default()
+                        .push(target_item.clone());
+                }
+
                 for source_item in &mut source {
                     let source_item = source_item.expect_record_mut();
-                    let mut associated = vec![];
+                    let pk_value = &source_item[fk_field.target.index];
 
-                    for target_item in &target {
-                        let target_item = target_item.expect_record();
-
-                        let [fk_field] = &pair.foreign_key.fields[..] else {
-                            todo!("composite keys")
-                        };
-
-                        if target_item[fk_field.source.index] == source_item[fk_field.target.index]
-                        {
-                            associated.push(target_item.clone().into());
-                        }
-                    }
+                    let associated = target_by_fk
+                        .get(pk_value)
+                        .map(|records| records.iter().map(|r| r.clone().into()).collect())
+                        .unwrap_or_default();
 
                     source_item[action.field.index] = stmt::Value::List(associated);
                 }

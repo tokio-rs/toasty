@@ -2,7 +2,7 @@ use super::Value;
 
 use std::ops;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Eq, Hash)]
 pub struct ValueRecord {
     pub fields: Vec<Value>,
 }
