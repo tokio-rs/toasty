@@ -1,6 +1,10 @@
 use crate::{
     schema::{app::FieldId, Schema},
-    stmt::*,
+    stmt::{
+        Delete, Expr, ExprConcat, ExprEnum, ExprFunc, ExprList, ExprMap, ExprProject, ExprRecord,
+        ExprReference, ExprSet, ExprSetOp, Insert, InsertTarget, Query, Returning, Select, Source,
+        Statement, TableRef, Type, Update, UpdateTarget, Value, ValueRecord, Values,
+    },
 };
 
 impl Statement {
