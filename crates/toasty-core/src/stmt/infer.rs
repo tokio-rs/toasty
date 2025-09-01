@@ -3,7 +3,7 @@ use crate::{
     stmt::{
         Delete, Expr, ExprConcat, ExprEnum, ExprFunc, ExprList, ExprMap, ExprProject, ExprRecord,
         ExprReference, ExprSet, ExprSetOp, Insert, InsertTarget, Query, Returning, Select, Source,
-        Statement, TableRef, Type, Update, UpdateTarget, Value, ValueRecord, Values,
+        Statement, Type, Update, UpdateTarget, Value, ValueRecord, Values,
     },
 };
 
@@ -20,12 +20,14 @@ impl Statement {
 
 impl Query {
     pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
-        match &self.body {
+        let ty = match &self.body {
             ExprSet::Select(select) => select.infer_ty(schema, args),
             ExprSet::SetOp(set_op) => set_op.infer_ty(schema, args),
             ExprSet::Values(values) => values.infer_ty(schema, args),
             ExprSet::Update(update) => update.infer_ty(schema, args),
-        }
+        };
+        debug_assert!(ty.is_list());
+        ty
     }
 }
 
@@ -35,30 +37,11 @@ impl Select {
             Returning::Star => {
                 // For SELECT *, infer based on the source
                 match &self.source {
-                    Source::Model(source_model) => {
-                        Type::List(Box::new(Type::Model(source_model.model)))
-                    }
-                    Source::Table(table_with_joins) => {
-                        // For table-based sources, infer from the first table's columns
-                        if let Some(first_table) = table_with_joins.first() {
-                            match &first_table.table {
-                                TableRef::Table(table_id) => {
-                                    let table = &schema.db.tables[table_id.0];
-                                    let column_types: Vec<Type> =
-                                        table.columns.iter().map(|c| c.ty.clone()).collect();
-                                    Type::Record(column_types)
-                                }
-                                TableRef::Cte { .. } => {
-                                    panic!("CTE references are not yet supported")
-                                }
-                            }
-                        } else {
-                            panic!("Cannot infer type for empty table joins")
-                        }
-                    }
+                    Source::Model(source_model) => Type::list(source_model.model),
+                    Source::Table(..) => todo!(),
                 }
             }
-            Returning::Expr(expr) => expr.infer_ty(schema, args),
+            Returning::Expr(expr) => Type::list(expr.infer_ty(schema, args)),
             Returning::Changed => panic!("Returning::Changed type inference not yet implemented"),
         }
     }
@@ -121,7 +104,7 @@ impl Values {
             }
         }
 
-        Type::List(Box::new(first_row_ty))
+        Type::list(first_row_ty)
     }
 }
 
@@ -133,24 +116,16 @@ impl Insert {
                     Returning::Star => {
                         // Return all fields from the target being inserted into
                         match &self.target {
-                            InsertTarget::Model(model_id) => {
-                                let model = schema.app.model(*model_id);
-                                let field_types: Vec<Type> =
-                                    model.fields.iter().map(|f| f.expr_ty().clone()).collect();
-                                Type::Record(field_types)
-                            }
+                            InsertTarget::Model(model_id) => Type::list(*model_id),
                             InsertTarget::Scope(query) => {
                                 // For scope targets, infer from the underlying query
                                 query.infer_ty(schema, args)
                             }
-                            InsertTarget::Table(_) => {
-                                // For table targets, we'd need table schema info
-                                Type::Unknown
-                            }
+                            InsertTarget::Table(..) => todo!(),
                         }
                     }
                     Returning::Expr(expr) => expr.infer_ty(schema, args),
-                    Returning::Changed => Type::I64, // Returns count of changed rows
+                    Returning::Changed => panic!("invalid"),
                 }
             }
             None => Type::Null, // INSERT without RETURNING returns nothing
@@ -166,24 +141,22 @@ impl Update {
                     Returning::Star => {
                         // Return all fields from the target being updated
                         match &self.target {
-                            UpdateTarget::Model(model_id) => {
-                                let model = schema.app.model(*model_id);
-                                let field_types: Vec<Type> =
-                                    model.fields.iter().map(|f| f.expr_ty().clone()).collect();
-                                Type::Record(field_types)
-                            }
+                            UpdateTarget::Model(model_id) => Type::list(*model_id),
                             UpdateTarget::Query(query) => {
                                 // For query targets, infer from the underlying query
                                 query.infer_ty(schema, args)
                             }
                             UpdateTarget::Table(_) => {
-                                // For table targets, we'd need table schema info
-                                Type::Unknown
+                                todo!()
                             }
                         }
                     }
-                    Returning::Expr(expr) => expr.infer_ty(schema, args),
-                    Returning::Changed => Type::I64, // Returns count of changed rows
+                    Returning::Expr(expr) => Type::list(expr.infer_ty(schema, args)),
+                    Returning::Changed => {
+                        // Return List(SparseRecord) with fields being updated
+                        let field_set = self.assignments.keys().collect();
+                        Type::list(Type::SparseRecord(field_set))
+                    }
                 }
             }
             None => Type::Null, // UPDATE without RETURNING returns nothing
@@ -211,7 +184,7 @@ impl Delete {
                             }
                         }
                     }
-                    Returning::Expr(expr) => expr.infer_ty(schema, args),
+                    Returning::Expr(expr) => Type::list(expr.infer_ty(schema, args)),
                     Returning::Changed => Type::I64, // Returns count of changed rows
                 }
             }
