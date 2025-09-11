@@ -59,7 +59,6 @@ async fn basic_has_many_and_belongs_to_preload(test: &mut DbTest) {
     assert_eq!(user.id, todo.user_id);
 }
 
-
 async fn multiple_includes_same_model(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -121,8 +120,10 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
     let posts_per_user = 5;
     let comments_per_user = 5;
 
-    println!("Setting up benchmark data: {} users with {} posts and {} comments each",
-             num_users, posts_per_user, comments_per_user);
+    println!(
+        "Setting up benchmark data: {} users with {} posts and {} comments each",
+        num_users, posts_per_user, comments_per_user
+    );
 
     let mut user_ids = vec![];
 
@@ -154,14 +155,16 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
         }
     }
 
-    println!("Created {} posts and {} comments total",
-             num_users * posts_per_user,
-             num_users * comments_per_user);
+    println!(
+        "Created {} posts and {} comments total",
+        num_users * posts_per_user,
+        num_users * comments_per_user
+    );
     println!("---");
 
     let start = std::time::Instant::now();
 
-    let users_with_associations :Vec<User> = User::all()
+    let users_with_associations: Vec<User> = User::all()
         .include(User::FIELDS.posts())
         .include(User::FIELDS.comments())
         .collect(&db)
@@ -171,12 +174,19 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
     let duration = start.elapsed();
 
     println!("Performance Results:");
-    println!("  Loading {} users with all associations: {:?}",
-             users_with_associations.len(), duration);
-    println!("  Total associations processed: {}",
-             num_users * (posts_per_user + comments_per_user));
-    println!("  Average time per association: {:?}",
-             duration / (num_users * (posts_per_user + comments_per_user)) as u32);
+    println!(
+        "  Loading {} users with all associations: {:?}",
+        users_with_associations.len(),
+        duration
+    );
+    println!(
+        "  Total associations processed: {}",
+        num_users * (posts_per_user + comments_per_user)
+    );
+    println!(
+        "  Average time per association: {:?}",
+        duration / (num_users * (posts_per_user + comments_per_user)) as u32
+    );
 
     assert_eq!(num_users, users_with_associations.len());
     for user in &users_with_associations {
@@ -193,7 +203,10 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
         .unwrap();
     let duration_single = start_single.elapsed();
 
-    println!("  Loading single user with associations: {:?}", duration_single);
+    println!(
+        "  Loading single user with associations: {:?}",
+        duration_single
+    );
 
     assert_eq!(posts_per_user, single_user.posts.get().len());
     assert_eq!(comments_per_user, single_user.comments.get().len());

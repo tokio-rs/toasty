@@ -1,5 +1,5 @@
-use std::hash::Hash;
 use indexmap::IndexSet;
+use std::hash::Hash;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PathFieldSet {

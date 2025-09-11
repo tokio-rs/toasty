@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use super::{plan, Exec, Result};
+use std::collections::HashMap;
 use toasty_core::stmt::ValueStream;
 use toasty_core::{schema::app::FieldTy, stmt};
 
@@ -38,8 +38,10 @@ impl Exec<'_> {
                     todo!("composite keys")
                 };
 
-                let mut target_by_fk: std::collections::HashMap<stmt::Value, Vec<stmt::ValueRecord>> =
-                    std::collections::HashMap::new();
+                let mut target_by_fk: std::collections::HashMap<
+                    stmt::Value,
+                    Vec<stmt::ValueRecord>,
+                > = std::collections::HashMap::new();
 
                 for target_item in &target {
                     let target_item = target_item.expect_record();

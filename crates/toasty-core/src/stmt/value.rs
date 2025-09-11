@@ -254,7 +254,7 @@ impl Hash for Value {
             Value::U64(v) => v.hash(state),
             Value::Id(v) => v.hash(state),
             Value::String(v) => v.hash(state),
-            Value::Null => {},
+            Value::Null => {}
             Value::Record(v) => v.hash(state),
             Value::List(v) => v.hash(state),
             Value::SparseRecord(v) => v.hash(state),
