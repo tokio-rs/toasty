@@ -14,20 +14,20 @@ impl Exec<'_> {
                     todo!("composite keys")
                 };
 
-                let mut target_by_pk: std::collections::HashMap<stmt::Value, stmt::ValueRecord> =
-                    HashMap::new();
-                for target_item in &target {
-                    let target_item = target_item.expect_record();
-                    let pk_value = target_item[fk_field.target.index].clone();
-                    target_by_pk.insert(pk_value, target_item.clone());
+                // Index source items: HashMap<Value, &mut Record>
+                let mut source_by_fk: HashMap<stmt::Value, &mut stmt::ValueRecord> = HashMap::new();
+                for source_item in &mut source {
+                    let source_record = source_item.expect_record_mut();
+                    let fk_value = source_record[fk_field.source.index].clone();
+                    source_by_fk.insert(fk_value, source_record);
                 }
 
-                for source_item in &mut source {
-                    let source_item = source_item.expect_record_mut();
-                    let fk_value = &source_item[fk_field.source.index];
+                for target_item in &target {
+                    let target_record = target_item.expect_record();
+                    let pk_value = &target_record[fk_field.target.index];
 
-                    if let Some(target_record) = target_by_pk.get(fk_value) {
-                        source_item[action.field.index] = target_record.clone().into();
+                    if let Some(source_record) = source_by_fk.get_mut(pk_value) {
+                        source_record[action.field.index] = target_record.clone().into();
                     }
                 }
             }
@@ -38,30 +38,25 @@ impl Exec<'_> {
                     todo!("composite keys")
                 };
 
-                let mut target_by_fk: std::collections::HashMap<
-                    stmt::Value,
-                    Vec<stmt::ValueRecord>,
-                > = std::collections::HashMap::new();
-
-                for target_item in &target {
-                    let target_item = target_item.expect_record();
-                    let fk_value = target_item[fk_field.source.index].clone();
-                    target_by_fk
-                        .entry(fk_value)
-                        .or_default()
-                        .push(target_item.clone());
+                let mut source_by_pk: HashMap<stmt::Value, &mut stmt::ValueRecord> = HashMap::new();
+                for source_item in &mut source {
+                    let source_record = source_item.expect_record_mut();
+                    let pk_value = source_record[fk_field.target.index].clone();
+                    source_by_pk.insert(pk_value, source_record);
                 }
 
-                for source_item in &mut source {
-                    let source_item = source_item.expect_record_mut();
-                    let pk_value = &source_item[fk_field.target.index];
+                for target_item in &target {
+                    let target_record = target_item.expect_record();
+                    let fk_value = &target_record[fk_field.source.index];
 
-                    let associated = target_by_fk
-                        .get(pk_value)
-                        .map(|records| records.iter().map(|r| r.clone().into()).collect())
-                        .unwrap_or_default();
-
-                    source_item[action.field.index] = stmt::Value::List(associated);
+                    if let Some(source_record) = source_by_pk.get_mut(fk_value) {
+                        if !matches!(source_record[action.field.index], stmt::Value::List(_)) {
+                            source_record[action.field.index] = stmt::Value::List(Vec::new());
+                        }
+                        if let stmt::Value::List(ref mut list) = source_record[action.field.index] {
+                            list.push(target_record.clone().into());
+                        }
+                    }
                 }
             }
             FieldTy::HasOne(rel) => {
@@ -71,20 +66,19 @@ impl Exec<'_> {
                     todo!("composite keys")
                 };
 
-                let mut target_by_fk: std::collections::HashMap<stmt::Value, stmt::ValueRecord> =
-                    HashMap::new();
-                for target_item in &target {
-                    let target_item = target_item.expect_record();
-                    let fk_value = target_item[fk_field.source.index].clone();
-                    target_by_fk.entry(fk_value).or_insert(target_item.clone());
+                let mut source_by_pk: HashMap<stmt::Value, &mut stmt::ValueRecord> = HashMap::new();
+                for source_item in &mut source {
+                    let source_record = source_item.expect_record_mut();
+                    let pk_value = source_record[fk_field.target.index].clone();
+                    source_by_pk.insert(pk_value, source_record);
                 }
 
-                for source_item in &mut source {
-                    let source_item = source_item.expect_record_mut();
-                    let pk_value = &source_item[fk_field.target.index];
+                for target_item in &target {
+                    let target_record = target_item.expect_record();
+                    let fk_value = &target_record[fk_field.source.index];
 
-                    if let Some(target_record) = target_by_fk.get(pk_value) {
-                        source_item[action.field.index] = target_record.clone().into();
+                    if let Some(source_record) = source_by_pk.get_mut(fk_value) {
+                        source_record[action.field.index] = target_record.clone().into();
                     }
                 }
             }

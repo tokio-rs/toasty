@@ -1,10 +1,9 @@
-use indexmap::IndexSet;
-use std::hash::Hash;
+use bit_set::BitSet;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct PathFieldSet {
-    // TODO: rewrite as a bitfield set
-    container: IndexSet<usize>,
+    // didn't know if we wanted to use usize or the default u32
+    container: BitSet<usize>,
 }
 
 impl PathFieldSet {
@@ -22,12 +21,20 @@ impl PathFieldSet {
     }
 
     pub fn contains(&self, val: impl Into<usize>) -> bool {
-        self.container.contains(&val.into())
+        self.container.contains(val.into())
     }
 
+    // was looking into this and the only way to keep this impl is to allocate an vec
+    // tho I think it defeats the purpose of bitsets memory effficiency
     pub fn iter(&self) -> impl ExactSizeIterator<Item = usize> + '_ {
-        self.container.iter().map(Clone::clone)
+        let items: Vec<usize> = self.container.iter().collect();
+        items.into_iter()
     }
+
+    // was thinking of adding an functon like this to get the raw bitset iter?
+    // pub fn iter_raw(&self) -> impl Iterator<Item = usize> + '_ {
+    //     self.container.iter()
+    // }
 
     pub fn is_empty(&self) -> bool {
         self.container.is_empty()
@@ -40,21 +47,8 @@ impl PathFieldSet {
 
 impl FromIterator<usize> for PathFieldSet {
     fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
-        let mut ret = Self::new();
-
-        for key in iter {
-            ret.container.insert(key);
+        Self {
+            container: BitSet::from_iter(iter),
         }
-
-        ret
-    }
-}
-
-impl Hash for PathFieldSet {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.container.len().hash(state);
-        let mut items: Vec<_> = self.container.iter().copied().collect();
-        items.sort_unstable();
-        items.hash(state);
     }
 }

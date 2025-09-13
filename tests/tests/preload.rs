@@ -112,107 +112,10 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
 
     let db = test.setup_db(models!(User, Post, Comment)).await;
 
-    // NOTE:
-    // 1. Temporarily change these values to (500, 100, 100)
-    // 2. Run with --nocapture to see timing
-    // 3. Revert to old algorithm and compare
-    let num_users = 10;
-    let posts_per_user = 5;
-    let comments_per_user = 5;
-
-    println!(
-        "Setting up benchmark data: {} users with {} posts and {} comments each",
-        num_users, posts_per_user, comments_per_user
-    );
-
-    let mut user_ids = vec![];
-
-    for i in 0..num_users {
-        let user = User::create()
-            .name(&format!("User {}", i))
-            .exec(&db)
-            .await
-            .unwrap();
-
-        user_ids.push(user.id.clone());
-
-        for j in 0..posts_per_user {
-            Post::create()
-                .title(&format!("Post {} for User {}", j, i))
-                .user(&user)
-                .exec(&db)
-                .await
-                .unwrap();
-        }
-
-        for j in 0..comments_per_user {
-            Comment::create()
-                .text(&format!("Comment {} for User {}", j, i))
-                .user(&user)
-                .exec(&db)
-                .await
-                .unwrap();
-        }
-    }
-
-    println!(
-        "Created {} posts and {} comments total",
-        num_users * posts_per_user,
-        num_users * comments_per_user
-    );
-    println!("---");
-
-    let start = std::time::Instant::now();
-
-    let users_with_associations: Vec<User> = User::all()
-        .include(User::FIELDS.posts())
-        .include(User::FIELDS.comments())
-        .collect(&db)
-        .await
-        .unwrap();
-
-    let duration = start.elapsed();
-
-    println!("Performance Results:");
-    println!(
-        "  Loading {} users with all associations: {:?}",
-        users_with_associations.len(),
-        duration
-    );
-    println!(
-        "  Total associations processed: {}",
-        num_users * (posts_per_user + comments_per_user)
-    );
-    println!(
-        "  Average time per association: {:?}",
-        duration / (num_users * (posts_per_user + comments_per_user)) as u32
-    );
-
-    assert_eq!(num_users, users_with_associations.len());
-    for user in &users_with_associations {
-        assert_eq!(posts_per_user, user.posts.get().len());
-        assert_eq!(comments_per_user, user.comments.get().len());
-    }
-
-    let start_single = std::time::Instant::now();
-    let single_user = User::filter_by_id(&user_ids[0])
-        .include(User::FIELDS.posts())
-        .include(User::FIELDS.comments())
-        .get(&db)
-        .await
-        .unwrap();
-    let duration_single = start_single.elapsed();
-
-    println!(
-        "  Loading single user with associations: {:?}",
-        duration_single
-    );
-
-    assert_eq!(posts_per_user, single_user.posts.get().len());
-    assert_eq!(comments_per_user, single_user.comments.get().len());
-
+    // Create a user
     let user = User::create().name("Test User").exec(&db).await.unwrap();
 
+    // Create posts associated with the user
     Post::create()
         .title("Post 1")
         .user(&user)
@@ -227,6 +130,7 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
         .await
         .unwrap();
 
+    // Create comments associated with the user
     Comment::create()
         .text("Comment 1")
         .user(&user)
@@ -248,6 +152,7 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
         .await
         .unwrap();
 
+    // Test individual includes work (baseline)
     let user_with_posts = User::filter_by_id(&user.id)
         .include(User::FIELDS.posts())
         .get(&db)
@@ -262,9 +167,12 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
         .unwrap();
     assert_eq!(3, user_with_comments.comments.get().len());
 
+    println!("---");
+
+    // Test multiple includes in one query
     let loaded_user = User::filter_by_id(&user.id)
-        .include(User::FIELDS.posts())
-        .include(User::FIELDS.comments())
+        .include(User::FIELDS.posts()) // First include
+        .include(User::FIELDS.comments()) // Second include
         .get(&db)
         .await
         .unwrap();

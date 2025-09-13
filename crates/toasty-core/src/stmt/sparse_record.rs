@@ -3,7 +3,7 @@ use std::hash::Hash;
 
 /// A typed record, indicating the record represents a specific model (or a
 /// subset of its fields).
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SparseRecord {
     /// Fields that are present
     pub fields: PathFieldSet,
