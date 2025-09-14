@@ -130,10 +130,10 @@ impl<M> Hash for Id<M> {
 }
 
 #[cfg(feature = "serde")]
-impl<T> serde::Serialize for Id<T> {
+impl<T> serde_core::Serialize for Id<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: serde_core::Serializer,
     {
         match (self.inner.as_str(), self.inner.to_int()) {
             (Err(_), Ok(id)) => id.serialize(serializer),

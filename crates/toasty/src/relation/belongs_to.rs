@@ -67,10 +67,10 @@ impl<T: fmt::Debug> fmt::Debug for BelongsTo<T> {
 }
 
 #[cfg(feature = "serde")]
-impl<T: serde::Serialize> serde::Serialize for BelongsTo<T> {
+impl<T: serde_core::Serialize> serde_core::Serialize for BelongsTo<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: serde_core::Serializer,
     {
         self.value.serialize(serializer)
     }

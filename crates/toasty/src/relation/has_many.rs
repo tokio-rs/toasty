@@ -82,10 +82,10 @@ impl<T: fmt::Debug> fmt::Debug for HasMany<T> {
 }
 
 #[cfg(feature = "serde")]
-impl<T: serde::Serialize> serde::Serialize for HasMany<T> {
+impl<T: serde_core::Serialize> serde_core::Serialize for HasMany<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: serde_core::Serializer,
     {
         self.values.serialize(serializer)
     }
