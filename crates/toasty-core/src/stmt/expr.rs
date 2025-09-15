@@ -231,8 +231,25 @@ impl Expr {
         Substitute(input).visit_expr_mut(self);
     }
 
+    /// Create a field reference for current scope (nesting = 0)
     pub fn field(field: impl Into<FieldId>) -> Self {
         ExprReference::from(field.into()).into()
+    }
+
+    /// Create a field reference for parent scope
+    pub fn parent_field(field: impl Into<FieldId>, nesting: usize) -> Self {
+        let field_id = field.into();
+        ExprReference::parent_field(field_id.model, field_id.index, nesting).into()
+    }
+
+    /// Create a CTE field reference
+    pub fn cte_field(cte_index: usize, field_index: usize) -> Self {
+        ExprReference::cte(0, cte_index, field_index).into()
+    }
+
+    /// Create a reference to any ExprReference
+    pub fn reference(reference: impl Into<ExprReference>) -> Self {
+        Self::Reference(reference.into())
     }
 
     pub fn is_field(&self) -> bool {

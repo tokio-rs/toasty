@@ -1,4 +1,4 @@
-use super::{Association, Path, TableRef, TableWithJoins};
+use super::{Association, TableRef, TableWithJoins};
 use crate::schema::{
     app::{Model, ModelId},
     db::TableId,
@@ -14,15 +14,12 @@ pub enum Source {
 }
 
 #[derive(Debug, Clone)]
-pub struct SourceModel {
+pub struct  SourceModel {
     /// The source model
     pub model: ModelId,
 
     /// Selecting via an association
     pub via: Option<Association>,
-
-    /// Associations to include
-    pub include: Vec<Path>,
 }
 
 impl Source {
@@ -38,12 +35,26 @@ impl Source {
         }
     }
 
+    #[track_caller]
+    pub fn as_model_mut(&mut self) -> &mut SourceModel {
+        match self {
+            Self::Model(source) => source,
+            Self::Table(_) => todo!(),
+        }
+    }
+
     pub fn as_model_id(&self) -> ModelId {
         self.as_model().model
     }
 
     pub fn is_table(&self) -> bool {
         matches!(self, Self::Table(_))
+    }
+
+    /// Check if source is a CTE (Common Table Expression)
+    /// TODO: This is a placeholder for future CTE implementation
+    pub fn is_cte(&self) -> bool {
+        todo!()
     }
 
     pub fn table(table: impl Into<TableRef>) -> Self {
@@ -72,7 +83,6 @@ impl From<ModelId> for Source {
         Self::Model(SourceModel {
             model: value,
             via: None,
-            include: vec![],
         })
     }
 }

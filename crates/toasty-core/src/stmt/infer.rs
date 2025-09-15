@@ -41,6 +41,13 @@ impl Select {
                     Source::Table(..) => todo!(),
                 }
             }
+            Returning::Model { .. } => {
+                // For model returning, infer based on the source model
+                match &self.source {
+                    Source::Model(source_model) => Type::list(source_model.model),
+                    Source::Table(..) => panic!("Returning::Model requires Source::Model"),
+                }
+            }
             Returning::Expr(expr) => Type::list(expr.infer_ty(schema, args)),
             Returning::Changed => panic!("Returning::Changed type inference not yet implemented"),
         }
@@ -124,6 +131,17 @@ impl Insert {
                             InsertTarget::Table(..) => todo!(),
                         }
                     }
+                    Returning::Model { .. } => {
+                        // For model returning, return the target model
+                        match &self.target {
+                            InsertTarget::Model(model_id) => Type::list(*model_id),
+                            InsertTarget::Scope(query) => {
+                                // For scope targets, infer from the underlying query
+                                query.infer_ty(schema, args)
+                            }
+                            InsertTarget::Table(..) => panic!("Returning::Model requires InsertTarget::Model"),
+                        }
+                    }
                     Returning::Expr(expr) => expr.infer_ty(schema, args),
                     Returning::Changed => panic!("invalid"),
                 }
@@ -151,6 +169,17 @@ impl Update {
                             }
                         }
                     }
+                    Returning::Model { .. } => {
+                        // For model returning, return the target model
+                        match &self.target {
+                            UpdateTarget::Model(model_id) => Type::list(*model_id),
+                            UpdateTarget::Query(query) => {
+                                // For query targets, infer from the underlying query
+                                query.infer_ty(schema, args)
+                            }
+                            UpdateTarget::Table(_) => panic!("Returning::Model requires UpdateTarget::Model"),
+                        }
+                    }
                     Returning::Expr(expr) => Type::list(expr.infer_ty(schema, args)),
                     Returning::Changed => {
                         // Return List(SparseRecord) with fields being updated
@@ -174,6 +203,13 @@ impl Delete {
                         match &self.from {
                             Source::Model(source_model) => Type::list(source_model.model),
                             Source::Table(_) => todo!(),
+                        }
+                    }
+                    Returning::Model { .. } => {
+                        // For model returning, return the source model
+                        match &self.from {
+                            Source::Model(source_model) => Type::list(source_model.model),
+                            Source::Table(_) => panic!("Returning::Model requires Source::Model"),
                         }
                     }
                     Returning::Expr(expr) => Type::list(expr.infer_ty(schema, args)),
@@ -217,16 +253,30 @@ impl Expr {
             }
 
             Expr::Reference(ref_expr) => match ref_expr {
-                ExprReference::Field { model, index } => {
+                ExprReference::Field {
+                    model,
+                    index,
+                    nesting: _,
+                } => {
                     let field_id = FieldId {
                         model: *model,
                         index: *index,
                     };
                     schema.app.field(field_id).expr_ty().clone()
                 }
-                ExprReference::Cte { .. } => {
-                    todo!("Handle CTE references")
-                }
+                ExprReference::Column {
+                    table,
+                    index,
+                    nesting: _,
+                } => match table {
+                    super::TableRef::Table(table_id) => {
+                        let column = &schema.db.table(*table_id).columns[*index];
+                        column.ty.clone()
+                    }
+                    super::TableRef::Cte { .. } => {
+                        todo!("Handle CTE references")
+                    }
+                },
             },
 
             Expr::Key(e) => Type::Key(e.model),

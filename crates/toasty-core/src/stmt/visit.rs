@@ -820,6 +820,11 @@ where
 {
     match node {
         Returning::Star | Returning::Changed => {}
+        Returning::Model { include } => {
+            for path in include {
+                v.visit_path(path);
+            }
+        }
         Returning::Expr(expr) => v.visit_expr(expr),
     }
 }
@@ -844,9 +849,6 @@ where
 {
     if let Some(association) = &node.via {
         v.visit_association(association);
-    }
-    for path in &node.include {
-        v.visit_path(path);
     }
 }
 
@@ -1020,4 +1022,107 @@ where
     }
 
     node.visit(ForEach { f });
+}
+
+/// Traverse expressions within the current statement only.
+/// This helper visits expressions but does NOT descend into nested ExprStmt subqueries,
+/// which is essential for acyclic flow analysis to detect cyclic dependencies.
+pub fn for_each_expr_curr_stmt<F>(expr: &Expr, mut f: F)
+where
+    F: FnMut(&Expr),
+{
+    visit_expr_curr_stmt(expr, &mut f);
+}
+
+fn visit_expr_curr_stmt<F>(expr: &Expr, f: &mut F)
+where
+    F: FnMut(&Expr),
+{
+    f(expr);
+
+    match expr {
+        // DON'T recurse into nested statements - this is the key difference
+        Expr::Stmt(_) => {}
+
+        Expr::InSubquery(expr_in_subquery) => {
+            visit_expr_curr_stmt(&*&expr_in_subquery.expr, f);
+        }
+
+        // Recurse into container expressions
+        Expr::Record(record) => {
+            for field in &record.fields {
+                visit_expr_curr_stmt(field, f);
+            }
+        }
+        Expr::List(list) => {
+            for item in &list.items {
+                visit_expr_curr_stmt(item, f);
+            }
+        }
+        Expr::BinaryOp(binary) => {
+            visit_expr_curr_stmt(&binary.lhs, f);
+            visit_expr_curr_stmt(&binary.rhs, f);
+        }
+        Expr::And(and_expr) => {
+            for expr in &and_expr.operands {
+                visit_expr_curr_stmt(expr, f);
+            }
+        }
+        Expr::Or(or_expr) => {
+            for expr in &or_expr.operands {
+                visit_expr_curr_stmt(expr, f);
+            }
+        }
+        Expr::Cast(cast_expr) => {
+            visit_expr_curr_stmt(&cast_expr.expr, f);
+        }
+        Expr::Concat(concat_expr) => {
+            for expr in &concat_expr.exprs {
+                visit_expr_curr_stmt(expr, f);
+            }
+        }
+        Expr::Func(func_expr) => {
+            // ExprFunc is an enum, need to handle different variants
+            match func_expr {
+                super::ExprFunc::Count(_) => {
+                    todo!()
+                }
+            }
+        }
+        Expr::InList(in_list) => {
+            visit_expr_curr_stmt(&in_list.expr, f);
+            visit_expr_curr_stmt(&in_list.list, f);
+        }
+        Expr::IsNull(is_null) => {
+            visit_expr_curr_stmt(&is_null.expr, f);
+        }
+        Expr::Map(map_expr) => {
+            visit_expr_curr_stmt(&map_expr.base, f);
+            visit_expr_curr_stmt(&map_expr.map, f);
+        }
+        Expr::Pattern(pattern_expr) => {
+            // ExprPattern is an enum, need to handle different variants
+            match pattern_expr {
+                super::ExprPattern::BeginsWith(begins_with) => {
+                    visit_expr_curr_stmt(&begins_with.expr, f);
+                }
+                super::ExprPattern::Like(like_expr) => {
+                    visit_expr_curr_stmt(&like_expr.expr, f);
+                }
+            }
+        }
+        Expr::Project(project_expr) => {
+            visit_expr_curr_stmt(&project_expr.base, f);
+        }
+        // Leaf expressions - no further traversal needed
+        Expr::Arg(_)
+        | Expr::Column(_)
+        | Expr::Key(_)
+        | Expr::Reference(_)
+        | Expr::Type(_)
+        | Expr::Value(_) => {}
+        // ConcatStr contains only string literals, no subexpressions
+        Expr::ConcatStr(_) => {}
+        Expr::Enum(_) | Expr::DecodeEnum(..) => todo!(),
+    }
 }

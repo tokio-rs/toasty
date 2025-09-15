@@ -53,7 +53,11 @@ pub(crate) fn infer_expr_ty(
         BinaryOp(_) => stmt::Type::Bool,
         Cast(e) => e.ty.clone(),
         Column(e) => resolve.resolve_column(e).clone(),
-        Reference(stmt::ExprReference::Field { model, index }) => {
+        Reference(stmt::ExprReference::Field {
+            model,
+            index,
+            nesting: _,
+        }) => {
             let field_id = FieldId {
                 model: *model,
                 index: *index,

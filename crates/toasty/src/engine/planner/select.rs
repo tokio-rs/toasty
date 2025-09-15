@@ -18,10 +18,7 @@ impl Planner<'_> {
             stmt::ExprSet::Select(select) => {
                 match &select.source {
                     stmt::Source::Model(source_model) => {
-                        if !source_model.include.is_empty() {
-                            // For now, the full model must be selected
-                            assert!(matches!(select.returning, stmt::Returning::Star));
-                        }
+                        // NOTE: include handling moved to returning clause
 
                         source_model.clone()
                     }
@@ -36,36 +33,8 @@ impl Planner<'_> {
         // Compute the return type
         let mut project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
 
-        // Adjust the return type to account for includes
-        if !source_model.include.is_empty() {
-            if let stmt::Type::Record(ref mut fields) = &mut project.ret {
-                for include in &source_model.include {
-                    let [field_idx] = &include.projection[..] else {
-                        continue;
-                    };
-                    let field = &model.fields[*field_idx];
-                    match &field.ty {
-                        app::FieldTy::HasMany(rel) => {
-                            // Replace Null with List type for HasMany fields
-                            let target_model = self.schema.app.model(rel.target);
-                            let target_record_type = self.infer_model_record_type(target_model);
-                            fields[*field_idx] = stmt::Type::list(target_record_type);
-                        }
-                        app::FieldTy::BelongsTo(rel) => {
-                            // Replace Null with Record type for BelongsTo fields
-                            let target_model = self.schema.app.model(rel.target);
-                            fields[*field_idx] = self.infer_model_record_type(target_model);
-                        }
-                        app::FieldTy::HasOne(rel) => {
-                            // Replace Null with Record type for HasOne fields
-                            let target_model = self.schema.app.model(rel.target);
-                            fields[*field_idx] = self.infer_model_record_type(target_model);
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
+        // TODO: Remove this old include handling code
+        // NOTE: include handling moved to returning clause and handled during simplification
 
         // Register a variable for the output
         let output = self
@@ -89,9 +58,10 @@ impl Planner<'_> {
             self.plan_select_kv(cx, model, output, project, stmt)
         };
 
-        for include in &source_model.include {
-            self.plan_select_include(source_model.model, include, ret)?;
-        }
+        // TODO: Remove this old include handling code - includes now handled during simplification
+        // for include in &source_model.include {
+        //     self.plan_select_include(source_model.model, include, ret)?;
+        // }
 
         Ok(ret)
     }
