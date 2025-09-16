@@ -578,7 +578,7 @@ impl BuildMapping<'_> {
         let column = self.table.column(column_id);
 
         match &column.ty {
-            c_ty if *c_ty == primitive.ty => todo!("Need table context for ExprColumn"),
+            c_ty if *c_ty == primitive.ty => stmt::Expr::column(stmt::ExprColumn::new(0, 0, column_id.index)),
             stmt::Type::Enum(ty_enum) => {
                 let variant = ty_enum
                     .variants
@@ -589,10 +589,14 @@ impl BuildMapping<'_> {
                     })
                     .unwrap();
 
-                todo!("Need table context for ExprColumn in DecodeEnum")
+                stmt::Expr::DecodeEnum(
+                    Box::new(stmt::Expr::column(stmt::ExprColumn::new(0, 0, column_id.index))),
+                    primitive.ty.clone(),
+                    variant.discriminant,
+                )
             }
             stmt::Type::String if primitive.ty.is_id() => {
-                todo!("Need table context for ExprColumn in cast")
+                stmt::Expr::cast(stmt::Expr::column(stmt::ExprColumn::new(0, 0, column_id.index)), &primitive.ty)
             }
             _ => todo!("column={column:#?}; primitive={primitive:#?}"),
         }

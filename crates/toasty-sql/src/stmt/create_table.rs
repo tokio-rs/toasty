@@ -23,13 +23,7 @@ impl Statement {
                 .iter()
                 .map(|column| ColumnDef::from_schema(column, &capability.storage_types))
                 .collect(),
-            primary_key: Some(Box::new(stmt::Expr::record(
-                table
-                    .primary_key
-                    .columns
-                    .iter()
-                    .map(|_col| stmt::Expr::Value(stmt::Value::Null)),
-            ))),
+            primary_key: None, // TODO: Fix primary key handling for alias-based columns
         }
         .into()
     }
