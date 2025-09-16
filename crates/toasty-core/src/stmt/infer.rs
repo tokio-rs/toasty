@@ -34,7 +34,7 @@ impl Query {
 impl Select {
     pub fn infer_ty(&self, schema: &Schema, args: &[Type]) -> Type {
         match &self.returning {
-            Returning::Star => {
+            Returning::Model { .. } => {
                 // For SELECT *, infer based on the source
                 match &self.source {
                     Source::Model(source_model) => Type::list(source_model.model),
@@ -113,7 +113,7 @@ impl Insert {
         match &self.returning {
             Some(returning) => {
                 match returning {
-                    Returning::Star => {
+                    Returning::Model { .. } => {
                         // Return all fields from the target being inserted into
                         match &self.target {
                             InsertTarget::Model(model_id) => Type::list(*model_id),
@@ -138,7 +138,7 @@ impl Update {
         match &self.returning {
             Some(returning) => {
                 match returning {
-                    Returning::Star => {
+                    Returning::Model { .. } => {
                         // Return all fields from the target being updated
                         match &self.target {
                             UpdateTarget::Model(model_id) => Type::list(*model_id),
@@ -169,7 +169,7 @@ impl Delete {
         match &self.returning {
             Some(returning) => {
                 match returning {
-                    Returning::Star => {
+                    Returning::Model { .. } => {
                         // Return all fields from the source being deleted from
                         match &self.from {
                             Source::Model(source_model) => Type::list(source_model.model),

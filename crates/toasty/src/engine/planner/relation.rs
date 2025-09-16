@@ -133,7 +133,10 @@ impl Planner<'_> {
                 // Only returning that makes sense here as that is the type that
                 // "belongs" in this field. We translate it to the key to set
                 // the FK fields in the source model.
-                assert!(matches!(insert.returning, Some(stmt::Returning::Star)));
+                assert!(matches!(
+                    insert.returning,
+                    Some(stmt::Returning::Model { .. })
+                ));
 
                 // Previous value of returning does nothing in this
                 // context

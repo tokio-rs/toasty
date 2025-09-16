@@ -14,20 +14,24 @@ impl Planner<'_> {
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.app.model(source_model.model);
 
-        let source_model = match &stmt.body {
-            stmt::ExprSet::Select(select) => {
-                match &select.source {
-                    stmt::Source::Model(source_model) => {
-                        if !source_model.include.is_empty() {
-                            // For now, the full model must be selected
-                            assert!(matches!(select.returning, stmt::Returning::Star));
+        let (source_model, includes) = match &stmt.body {
+            stmt::ExprSet::Select(select) => match &select.source {
+                stmt::Source::Model(source_model) => {
+                    let includes = match &select.returning {
+                        stmt::Returning::Model { include } => {
+                            if !include.is_empty() {
+                                include.clone()
+                            } else {
+                                vec![]
+                            }
                         }
+                        _ => vec![],
+                    };
 
-                        source_model.clone()
-                    }
-                    _ => todo!(),
+                    (source_model.clone(), includes)
                 }
-            }
+                _ => todo!(),
+            },
             _ => todo!(),
         };
 
@@ -37,9 +41,9 @@ impl Planner<'_> {
         let mut project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
 
         // Adjust the return type to account for includes
-        if !source_model.include.is_empty() {
+        if !includes.is_empty() {
             if let stmt::Type::Record(ref mut fields) = &mut project.ret {
-                for include in &source_model.include {
+                for include in &includes {
                     let [field_idx] = &include.projection[..] else {
                         continue;
                     };
@@ -89,7 +93,7 @@ impl Planner<'_> {
             self.plan_select_kv(cx, model, output, project, stmt)
         };
 
-        for include in &source_model.include {
+        for include in &includes {
             self.plan_select_include(source_model.model, include, ret)?;
         }
 

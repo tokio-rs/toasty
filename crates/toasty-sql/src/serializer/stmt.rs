@@ -151,7 +151,7 @@ impl ToSql for &stmt::OrderByExpr {
 impl ToSql for &stmt::Returning {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         match self {
-            stmt::Returning::Star => fmt!(f, "*"),
+            stmt::Returning::Model { .. } => fmt!(f, "*"),
             stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => {
                 let fields = expr_record
                     .fields

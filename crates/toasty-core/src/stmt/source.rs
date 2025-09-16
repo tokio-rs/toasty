@@ -1,4 +1,4 @@
-use super::{Association, Path, TableRef, TableWithJoins};
+use super::{Association, TableRef, TableWithJoins};
 use crate::schema::{
     app::{Model, ModelId},
     db::TableId,
@@ -20,9 +20,6 @@ pub struct SourceModel {
 
     /// Selecting via an association
     pub via: Option<Association>,
-
-    /// Associations to include
-    pub include: Vec<Path>,
 }
 
 impl Source {
@@ -72,7 +69,6 @@ impl From<ModelId> for Source {
         Self::Model(SourceModel {
             model: value,
             via: None,
-            include: vec![],
         })
     }
 }

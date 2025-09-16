@@ -26,7 +26,7 @@ async fn test_statement_query_delegation(test: &mut DbTest) {
     let query = Query {
         body: ExprSet::Select(Box::new(Select {
             source: User::id().into(),
-            returning: Returning::Star,
+            returning: Returning::Model { include: vec![] },
             filter: true.into(),
         })),
         with: None,
@@ -50,7 +50,7 @@ async fn test_query_returns_list_type(test: &mut DbTest) {
     let query = Query {
         body: ExprSet::Select(Box::new(Select {
             source: User::id().into(),
-            returning: Returning::Star,
+            returning: Returning::Model { include: vec![] },
             filter: true.into(),
         })),
         with: None,
@@ -66,14 +66,14 @@ async fn test_query_returns_list_type(test: &mut DbTest) {
     assert_eq!(inferred_type, Type::list(User::id()));
 }
 
-/// Test Select with Returning::Star on Model source
+/// Test Select with Returning::Model on Model source
 async fn test_select_star_model_source(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
     let select = Select {
         source: User::id().into(),
-        returning: Returning::Star,
+        returning: Returning::Model { include: vec![] },
         filter: true.into(),
     };
 
@@ -118,7 +118,7 @@ async fn test_values_empty_returns_unknown(test: &mut DbTest) {
     assert_eq!(inferred_type, Type::Unknown);
 }
 
-/// Test Insert with Returning::Star and Model target
+/// Test Insert with Returning::Model and Model target
 async fn test_insert_returning_star(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
@@ -126,7 +126,7 @@ async fn test_insert_returning_star(test: &mut DbTest) {
     let insert = Insert {
         target: InsertTarget::Model(User::id()),
         source: Query::values(Values { rows: vec![] }),
-        returning: Some(Returning::Star),
+        returning: Some(Returning::Model { include: vec![] }),
     };
 
     let inferred_type = insert.infer_ty(schema, &[]);
@@ -148,7 +148,7 @@ async fn test_insert_no_returning(test: &mut DbTest) {
     assert_eq!(inferred_type, Type::Null);
 }
 
-/// Test Update with Returning::Star and Model target
+/// Test Update with Returning::Model and Model target
 async fn test_update_returning_star(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
@@ -158,7 +158,7 @@ async fn test_update_returning_star(test: &mut DbTest) {
         assignments: Assignments::default(),
         filter: None,
         condition: None,
-        returning: Some(Returning::Star),
+        returning: Some(Returning::Model { include: vec![] }),
     };
 
     let inferred_type = update.infer_ty(schema, &[]);
@@ -198,7 +198,7 @@ async fn test_update_returning_changed(test: &mut DbTest) {
     }
 }
 
-/// Test Delete with Returning::Star and Model source
+/// Test Delete with Returning::Model and Model source
 async fn test_delete_returning_star(test: &mut DbTest) {
     let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
@@ -206,7 +206,7 @@ async fn test_delete_returning_star(test: &mut DbTest) {
     let delete = Delete {
         from: User::id().into(),
         filter: true.into(),
-        returning: Some(Returning::Star),
+        returning: Some(Returning::Model { include: vec![] }),
     };
 
     let inferred_type = delete.infer_ty(schema, &[]);
