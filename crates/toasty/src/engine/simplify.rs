@@ -22,7 +22,10 @@ mod lift_in_subquery;
 mod rewrite_root_path_expr;
 
 use toasty_core::{
-    schema::*,
+    schema::{
+        app::{FieldId, FieldTy, ModelId},
+        *,
+    },
     stmt::{self, Node, VisitMut},
 };
 
@@ -134,6 +137,11 @@ impl VisitMut for Simplify<'_> {
 
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
         self.simplify_via_association_for_query(stmt);
+
+        // Transform includes to ExprStmt before other simplifications
+        if let stmt::ExprSet::Select(select) = &mut stmt.body {
+            self.simplify_include_to_expr_stmt(select);
+        }
 
         stmt::visit_mut::visit_stmt_query_mut(self, stmt);
     }
@@ -266,6 +274,137 @@ impl<'a> Simplify<'a> {
                     operands.push(std::mem::take(expr_set));
                 }
                 _ => todo!("expr={:#?}", expr_set),
+            }
+        }
+    }
+
+    /// Transform Returning::Model includes to nested ExprStmt (app-level normalization)
+    fn simplify_include_to_expr_stmt(&mut self, stmt: &mut stmt::Select) {
+        // Debug assertion: Verify we're starting with a model source
+        debug_assert!(
+            stmt.source.is_model(),
+            "Simplification should only handle model sources, not table sources"
+        );
+
+        // Only process if we have Returning::Model with includes
+        let include_paths = match &stmt.returning {
+            stmt::Returning::Model { include } => {
+                if include.is_empty() {
+                    return;
+                }
+                include.clone()
+            }
+            _ => return,
+        };
+
+        let source_model = stmt.source.as_model();
+
+        // Convert Model returning to explicit Record
+        stmt.returning = self.expand_star_returning(source_model.model);
+
+        // Add ExprStmt for each include path
+        for include_path in &include_paths {
+            let subquery = self.build_include_subquery(source_model.model, include_path);
+            self.add_subquery_to_returning(&mut stmt.returning, subquery);
+        }
+    }
+
+    /// Expand Star returning to explicit Record with model fields
+    fn expand_star_returning(&self, model_id: ModelId) -> stmt::Returning {
+        let model = self.schema.app.model(model_id);
+        let mut fields = Vec::new();
+
+        for (index, _field) in model.fields.iter().enumerate() {
+            let field_id = FieldId {
+                model: model_id,
+                index,
+            };
+            fields.push(stmt::Expr::field(field_id));
+        }
+
+        stmt::Returning::Expr(stmt::Expr::Record(stmt::ExprRecord { fields }))
+    }
+
+    /// Build a subquery ExprStmt for an include path
+    fn build_include_subquery(&self, parent_model: ModelId, path: &stmt::Path) -> stmt::ExprStmt {
+        let [field_index] = &path.projection[..] else {
+            todo!("Multi-step include paths not yet supported")
+        };
+
+        let parent_model_obj = self.schema.app.model(parent_model);
+        let field = &parent_model_obj.fields[*field_index];
+
+        match &field.ty {
+            FieldTy::HasMany(rel) => {
+                let pair = rel.pair(&self.schema.app);
+                let [fk_field] = &pair.foreign_key.fields[..] else {
+                    todo!("composite keys")
+                };
+
+                let filter = stmt::Expr::eq(
+                    stmt::Expr::field(fk_field.source),
+                    stmt::Expr::parent_field(fk_field.target, 1),
+                );
+
+                stmt::ExprStmt {
+                    stmt: Box::new(stmt::Query::filter(rel.target, filter).into()),
+                }
+            }
+            FieldTy::BelongsTo(rel) => {
+                let [fk_field] = &rel.foreign_key.fields[..] else {
+                    todo!("composite keys")
+                };
+
+                let filter = stmt::Expr::eq(
+                    stmt::Expr::field(fk_field.target),
+                    stmt::Expr::parent_field(fk_field.source, 1),
+                );
+
+                stmt::ExprStmt {
+                    stmt: Box::new(stmt::Query::filter(rel.target, filter).into()),
+                }
+            }
+            FieldTy::HasOne(rel) => {
+                let pair = rel.pair(&self.schema.app);
+                let [fk_field] = &pair.foreign_key.fields[..] else {
+                    todo!("composite keys")
+                };
+
+                let filter = stmt::Expr::eq(
+                    stmt::Expr::field(fk_field.source),
+                    stmt::Expr::parent_field(fk_field.target, 1),
+                );
+
+                stmt::ExprStmt {
+                    stmt: Box::new(stmt::Query::filter(rel.target, filter).into()),
+                }
+            }
+            _ => todo!("Unsupported field type for include: {:?}", field.ty),
+        }
+    }
+
+    /// Add a subquery to the returning clause
+    fn add_subquery_to_returning(&self, returning: &mut stmt::Returning, subquery: stmt::ExprStmt) {
+        match returning {
+            stmt::Returning::Expr(stmt::Expr::Record(record)) => {
+                record.fields.push(stmt::Expr::Stmt(subquery));
+            }
+            _ => {
+                // Convert other returning types to Record and add subquery
+                let existing_expr = match returning {
+                    stmt::Returning::Star => {
+                        unreachable!("Star should have been converted already")
+                    }
+                    stmt::Returning::Model { .. } => {
+                        unreachable!("Model should have been converted already")
+                    }
+                    stmt::Returning::Changed => todo!("Handle Changed returning"),
+                    stmt::Returning::Expr(expr) => expr.clone(),
+                };
+
+                *returning = stmt::Returning::Expr(stmt::Expr::Record(stmt::ExprRecord {
+                    fields: vec![existing_expr, stmt::Expr::Stmt(subquery)],
+                }));
             }
         }
     }

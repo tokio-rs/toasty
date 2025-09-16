@@ -19,17 +19,23 @@ pub struct Select {
 
 impl Select {
     pub fn new(source: impl Into<Source>, filter: impl Into<Expr>) -> Self {
+        let source = source.into();
+        let returning = match &source {
+            Source::Model(_) => Returning::Model { include: vec![] },
+            Source::Table(_) => Returning::Star,
+        };
+
         Self {
-            returning: Returning::Star,
-            source: source.into(),
+            returning,
+            source,
             filter: filter.into(),
         }
     }
 
     pub(crate) fn include(&mut self, path: impl Into<Path>) {
-        match &mut self.source {
-            Source::Model(source) => source.include.push(path.into()),
-            Source::Table(_) => panic!(),
+        match &mut self.returning {
+            Returning::Model { include } => include.push(path.into()),
+            _ => panic!("include() can only be called on selects with Returning::Model"),
         }
     }
 

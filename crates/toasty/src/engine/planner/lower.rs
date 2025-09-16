@@ -127,10 +127,25 @@ impl VisitMut for LowerStatement<'_> {
             stmt::Expr::BinaryOp(expr) => {
                 self.lower_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
-            stmt::Expr::Reference(stmt::ExprReference::Field { model: _, index }) => {
-                *i = self.mapping.table_to_model[*index].clone();
-
-                self.visit_expr_mut(i);
+            stmt::Expr::Reference(stmt::ExprReference::Field {
+                model,
+                index,
+                nesting,
+            }) => {
+                if *nesting == 0 {
+                    // Current scope: use existing resolution logic
+                    *i = self.mapping.table_to_model[*index].clone();
+                    self.visit_expr_mut(i);
+                } else {
+                    // Parent scope: convert Field reference to Column reference
+                    let table_id = self.schema.table_for(*model).id;
+                    let ref_expr = stmt::ExprReference::Column {
+                        nesting: *nesting,
+                        table: stmt::TableRef::Table(table_id),
+                        index: *index,
+                    };
+                    *i = stmt::Expr::Reference(ref_expr);
+                }
                 return;
             }
             stmt::Expr::InList(expr) => self.lower_expr_in_list(&mut expr.expr, &mut expr.list),
@@ -167,7 +182,30 @@ impl VisitMut for LowerStatement<'_> {
         self.visit_expr_mut(&mut i.expr);
     }
 
-    fn visit_expr_stmt_mut(&mut self, _i: &mut stmt::ExprStmt) {}
+    fn visit_expr_stmt_mut(&mut self, i: &mut stmt::ExprStmt) {
+        // ExprStmt contains a Statement, which should be a Query
+        let stmt::Statement::Query(ref mut query) = i.stmt.as_mut() else {
+            panic!("ExprStmt should contain a Query statement");
+        };
+
+        // Debug assertion: Verify ExprStmt still has model source before lowering
+        debug_assert!(
+            query.body.as_select().source.is_model(),
+            "ExprStmt should have model source before lowering, not table source"
+        );
+
+        let sub_model = self
+            .schema
+            .app
+            .model(query.body.as_select().source.as_model_id());
+        LowerStatement::from_model(self.schema, sub_model).visit_stmt_query_mut(query);
+
+        // Debug assertion: Verify ExprStmt now has table source after lowering
+        debug_assert!(
+            query.body.as_select().source.is_table(),
+            "ExprStmt should have table source after lowering, not model source"
+        );
+    }
 
     fn visit_insert_target_mut(&mut self, i: &mut stmt::InsertTarget) {
         *i = stmt::InsertTable {
@@ -178,8 +216,15 @@ impl VisitMut for LowerStatement<'_> {
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
-        if let stmt::Returning::Star = *i {
-            *i = stmt::Returning::Expr(self.mapping.table_to_model.clone().into());
+        match i {
+            stmt::Returning::Star => {
+                *i = stmt::Returning::Expr(self.mapping.table_to_model.clone().into());
+            }
+            stmt::Returning::Model { .. } => {
+                // Model returning should have been converted to Expr during simplification
+                panic!("Returning::Model should not reach lowering phase");
+            }
+            _ => {}
         }
 
         stmt::visit_mut::visit_returning_mut(self, i);
@@ -458,7 +503,11 @@ impl LowerStatement<'_> {
 impl<I: Input> VisitMut for Substitute<I> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         match i {
-            stmt::Expr::Reference(stmt::ExprReference::Field { model, index }) => {
+            stmt::Expr::Reference(stmt::ExprReference::Field {
+                model,
+                index,
+                nesting: _,
+            }) => {
                 let field_id = FieldId {
                     model: *model,
                     index: *index,

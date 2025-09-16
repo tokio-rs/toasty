@@ -1,3 +1,4 @@
+mod acyclic;
 mod delete;
 mod index;
 use index::IndexPlan;

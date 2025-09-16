@@ -92,7 +92,6 @@ impl<T: Model> IntoSelect for Association<[T]> {
             stmt::Query::builder(stmt::SourceModel {
                 model: T::id(),
                 via: Some(self.untyped),
-                include: vec![],
             })
             .build(),
         )
@@ -107,7 +106,6 @@ impl<T: Model> IntoSelect for Association<T> {
             stmt::Query::builder(stmt::SourceModel {
                 model: T::id(),
                 via: Some(self.untyped),
-                include: vec![],
             })
             .build(),
         )
