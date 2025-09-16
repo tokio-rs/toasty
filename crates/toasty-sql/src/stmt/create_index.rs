@@ -1,7 +1,7 @@
 use super::{Name, Statement};
 
 use toasty_core::{
-    schema::db::{Index, IndexOp, TableId},
+    schema::db::{ColumnId, Index, IndexOp, TableId},
     stmt,
 };
 
@@ -13,8 +13,8 @@ pub struct CreateIndex {
     /// Which table to index
     pub on: TableId,
 
-    /// The columns to index
-    pub columns: Vec<stmt::OrderByExpr>,
+    /// The columns to index (stored as ColumnIds for DDL)
+    pub columns: Vec<(ColumnId, Option<stmt::Direction>)>,
 
     /// When true, the index is unique
     pub unique: bool,
@@ -28,12 +28,12 @@ impl Statement {
             columns: index
                 .columns
                 .iter()
-                .map(|index_column| stmt::OrderByExpr {
-                    expr: stmt::Expr::Value(stmt::Value::Null), // TODO: Need table context
-                    order: match index_column.op {
+                .map(|index_column| {
+                    let direction = match index_column.op {
                         IndexOp::Eq => None,
                         IndexOp::Sort(direction) => Some(direction),
-                    },
+                    };
+                    (index_column.column, direction)
                 })
                 .collect(),
             unique: index.unique,

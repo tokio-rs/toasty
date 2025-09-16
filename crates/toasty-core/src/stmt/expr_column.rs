@@ -39,7 +39,9 @@ impl ExprColumn {
     /// This recreates a ColumnId from the column index, assuming table 0
     /// TODO: This should be replaced with proper table context resolution
     pub fn try_to_column_id(&self) -> Option<ColumnId> {
-        if self.table == 0 {
+        // This method can only work reliably in simple single-table contexts
+        // For now, return None for non-trivial cases to avoid creating invalid ColumnIds
+        if self.nesting == 0 && self.table == 0 {
             // For single table context, we can reconstruct the ColumnId
             // Note: This assumes the table ID corresponds to the first table in the schema
             Some(ColumnId {

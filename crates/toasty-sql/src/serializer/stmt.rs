@@ -2,6 +2,7 @@ use super::{Comma, Delimited, Ident, Params, ToSql};
 
 use crate::stmt;
 use toasty_core::schema::db;
+use toasty_core::stmt::Value;
 
 struct ColumnsWithConstraints<'a>(&'a stmt::CreateTable);
 
@@ -20,12 +21,27 @@ impl ToSql for ColumnsWithConstraints<'_> {
 impl ToSql for &stmt::CreateIndex {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         let table_name = f.serializer.table_name(self.on);
-        let columns = Comma(&self.columns);
         let unique = if self.unique { "UNIQUE " } else { "" };
 
-        fmt!(
-            f, "CREATE " unique "INDEX " self.name " ON " table_name " (" columns ")"
-        );
+        fmt!(f, "CREATE " unique "INDEX " self.name " ON " table_name " (");
+
+        for (i, (column_id, direction)) in self.columns.iter().enumerate() {
+            if i > 0 {
+                f.dst.push_str(", ");
+            }
+
+            // Get column name directly from schema using ColumnId
+            let column_name = f.serializer.column_name(*column_id);
+            column_name.to_sql(f);
+
+            // Add direction if specified
+            if let Some(direction) = direction {
+                f.dst.push(' ');
+                direction.to_sql(f);
+            }
+        }
+
+        f.dst.push(')');
     }
 }
 
@@ -43,7 +59,18 @@ impl ToSql for &stmt::Delete {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         assert!(self.returning.is_none());
 
+        // Set up table context for column references in WHERE clause
+        let tables = match &self.from {
+            stmt::Source::Table(table_with_joins) => {
+                table_with_joins.iter().map(|twj| twj.table.clone()).collect()
+            }
+            _ => Vec::new(), // TODO: handle other source types
+        };
+        f.push_table_context(tables);
+
         fmt!(f, "DELETE FROM " self.from " WHERE " self.filter);
+
+        f.pop_table_context();
     }
 }
 
@@ -174,11 +201,23 @@ impl ToSql for &stmt::Returning {
 
 impl ToSql for &stmt::Select {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+        // Extract table references from the source and push to context
+        let tables = match &self.source {
+            stmt::Source::Table(table_with_joins) => {
+                table_with_joins.iter().map(|twj| twj.table.clone()).collect()
+            }
+            _ => Vec::new(), // TODO: handle other source types
+        };
+
+        f.push_table_context(tables);
+
         fmt!(
             f,
             "SELECT " self.returning " FROM " self.source
             " WHERE " self.filter
         );
+
+        f.pop_table_context();
     }
 }
 
@@ -274,6 +313,10 @@ impl ToSql for &stmt::Update {
         let table = f.serializer.schema.table(self.target.as_table());
         let assignments = (table, &self.assignments);
 
+        // Set up table context for column references in WHERE clause
+        let table_ref = stmt::TableRef::Table(self.target.as_table());
+        f.push_table_context(vec![table_ref]);
+
         let filter = self.filter.as_ref().map(|expr| (" WHERE ", expr));
         let returning = self
             .returning
@@ -286,6 +329,8 @@ impl ToSql for &stmt::Update {
         );
 
         fmt!(f, "UPDATE " self.target " SET " assignments filter returning);
+
+        f.pop_table_context();
     }
 }
 
