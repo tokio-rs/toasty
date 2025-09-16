@@ -28,7 +28,7 @@ impl Statement {
                     .primary_key
                     .columns
                     .iter()
-                    .map(|col| stmt::Expr::column(*col)),
+                    .map(|_col| stmt::Expr::Value(stmt::Value::Null)),
             ))),
         }
         .into()

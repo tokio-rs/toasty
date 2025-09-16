@@ -1,22 +1,15 @@
 use super::Expr;
-use crate::schema::db::{Column, ColumnId};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum ExprColumn {
-    /// Directly reference a column
-    Column(ColumnId),
+pub struct ExprColumn {
+    /// Which query the alias is listed in
+    pub nesting: usize,
 
-    /// Reference a column aliased in `FROM` or equivalent clause
-    Alias {
-        /// Which query the alias is listed in
-        nesting: usize,
+    /// The index of the alias in the `FROM` (or equivalent) clause
+    pub table: usize,
 
-        /// The index of the alias in the `FROM` (or equivalent) clause
-        table: usize,
-
-        /// The index of the column in the table
-        column: usize,
-    },
+    /// The index of the column in the table
+    pub column: usize,
 }
 
 impl Expr {
@@ -30,18 +23,8 @@ impl Expr {
 }
 
 impl ExprColumn {
-    pub fn references(&self, column_id: ColumnId) -> bool {
-        match self {
-            Self::Column(id) => id == &column_id,
-            Self::Alias { .. } => todo!(),
-        }
-    }
-
-    pub fn try_to_column_id(&self) -> Option<ColumnId> {
-        match self {
-            Self::Column(id) => Some(*id),
-            Self::Alias { .. } => None,
-        }
+    pub fn new(nesting: usize, table: usize, column: usize) -> Self {
+        Self { nesting, table, column }
     }
 }
 
@@ -51,26 +34,3 @@ impl From<ExprColumn> for Expr {
     }
 }
 
-impl From<&Column> for ExprColumn {
-    fn from(value: &Column) -> Self {
-        value.id.into()
-    }
-}
-
-impl From<&Column> for Expr {
-    fn from(value: &Column) -> Self {
-        value.id.into()
-    }
-}
-
-impl From<ColumnId> for ExprColumn {
-    fn from(value: ColumnId) -> Self {
-        Self::Column(value)
-    }
-}
-
-impl From<ColumnId> for Expr {
-    fn from(value: ColumnId) -> Self {
-        Self::column(value)
-    }
-}

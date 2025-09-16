@@ -29,7 +29,7 @@ impl Statement {
                 .columns
                 .iter()
                 .map(|index_column| stmt::OrderByExpr {
-                    expr: stmt::Expr::column(index_column.column),
+                    expr: stmt::Expr::Value(stmt::Value::Null), // TODO: Need table context
                     order: match index_column.op {
                         IndexOp::Eq => None,
                         IndexOp::Sort(direction) => Some(direction),
