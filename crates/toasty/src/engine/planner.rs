@@ -100,7 +100,10 @@ impl<'a> Planner<'a> {
         if let stmt::Statement::Insert(stmt) = &stmt {
             // TODO: this isn't always true. The assert is there to help
             // debug old code.
-            assert!(matches!(stmt.returning, Some(stmt::Returning::Star)));
+            assert!(matches!(
+                stmt.returning,
+                Some(stmt::Returning::Model { .. })
+            ));
         }
 
         if let Some(output) = self.plan_stmt(&Context::default(), stmt)? {

@@ -49,8 +49,8 @@ impl Planner<'_> {
 
                 // TODO
                 match stmt.returning {
-                    Some(stmt::Returning::Star) => {
-                        assert!(matches!(existing, Some(stmt::Returning::Star)));
+                    Some(stmt::Returning::Model { .. }) => {
+                        assert!(matches!(existing, Some(stmt::Returning::Model { .. })));
                     }
                     None => {
                         assert!(existing.is_none());

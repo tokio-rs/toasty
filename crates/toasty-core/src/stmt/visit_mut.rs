@@ -824,7 +824,12 @@ where
     V: VisitMut + ?Sized,
 {
     match node {
-        Returning::Star | Returning::Changed => {}
+        Returning::Model { include } => {
+            for path in include {
+                v.visit_path_mut(path);
+            }
+        }
+        Returning::Changed => {}
         Returning::Expr(expr) => v.visit_expr_mut(expr),
     }
 }
@@ -849,9 +854,6 @@ where
 {
     if let Some(association) = &mut node.via {
         v.visit_association_mut(association);
-    }
-    for path in &mut node.include {
-        v.visit_path_mut(path);
     }
 }
 

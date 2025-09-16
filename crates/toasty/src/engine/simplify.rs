@@ -167,7 +167,7 @@ impl VisitMut for Simplify<'_> {
                 todo!()
             };
 
-            assert!(select.returning.is_star());
+            assert!(select.returning.is_model());
 
             stmt.filter = if let Some(filter) = stmt.filter.take() {
                 Some(stmt::Expr::and(filter, select.filter.take()))

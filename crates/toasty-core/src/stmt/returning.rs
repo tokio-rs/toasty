@@ -1,11 +1,13 @@
-use super::Expr;
+use super::{Expr, Path};
 use crate::stmt;
 
 /// TODO: rename since this is also used in `Select`?
 #[derive(Debug, Clone)]
 pub enum Returning {
-    // TODO: rename this `Model` as it returns the full model?
-    Star,
+    /// Return the full model with specified includes
+    Model {
+        include: Vec<Path>,
+    },
 
     Changed,
 
@@ -14,8 +16,22 @@ pub enum Returning {
 }
 
 impl Returning {
-    pub fn is_star(&self) -> bool {
-        matches!(self, Self::Star)
+    pub fn is_model(&self) -> bool {
+        matches!(self, Self::Model { .. })
+    }
+
+    pub fn as_model_includes(&self) -> &[Path] {
+        match self {
+            Self::Model { include } => include,
+            _ => &[],
+        }
+    }
+
+    pub fn as_model_includes_mut(&mut self) -> &mut Vec<Path> {
+        match self {
+            Self::Model { include } => include,
+            _ => panic!("not a Model variant"),
+        }
     }
 
     pub fn is_changed(&self) -> bool {

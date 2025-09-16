@@ -178,7 +178,7 @@ impl VisitMut for LowerStatement<'_> {
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
-        if let stmt::Returning::Star = *i {
+        if let stmt::Returning::Model { .. } = *i {
             *i = stmt::Returning::Expr(self.mapping.table_to_model.clone().into());
         }
 

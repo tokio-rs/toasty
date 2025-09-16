@@ -19,7 +19,7 @@ impl<M: Model> Insert<M> {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::id()),
                 source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(vec![]).into()]),
-                returning: Some(stmt::Returning::Star),
+                returning: Some(stmt::Returning::Model { include: vec![] }),
             },
             _p: PhantomData,
         }

@@ -819,7 +819,12 @@ where
     V: Visit + ?Sized,
 {
     match node {
-        Returning::Star | Returning::Changed => {}
+        Returning::Model { include } => {
+            for path in include {
+                v.visit_path(path);
+            }
+        }
+        Returning::Changed => {}
         Returning::Expr(expr) => v.visit_expr(expr),
     }
 }
@@ -844,9 +849,6 @@ where
 {
     if let Some(association) = &node.via {
         v.visit_association(association);
-    }
-    for path in &node.include {
-        v.visit_path(path);
     }
 }
 
