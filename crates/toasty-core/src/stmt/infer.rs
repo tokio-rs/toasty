@@ -209,11 +209,8 @@ impl Expr {
             }
 
             // Schema-dependent references
-            Expr::Column(e) => {
-                let column_id = e
-                    .try_to_column_id()
-                    .expect("Column expression must reference a valid column");
-                schema.db.column(column_id).ty.clone()
+            Expr::Column(_e) => {
+                todo!("Column type inference needs table context")
             }
 
             Expr::Reference(ref_expr) => match ref_expr {

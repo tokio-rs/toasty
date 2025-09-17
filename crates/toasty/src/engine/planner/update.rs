@@ -224,8 +224,10 @@ impl Planner<'_> {
             fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
                 stmt::visit_mut::visit_expr_mut(self, expr);
 
-                if let stmt::Expr::Column(stmt::ExprColumn::Column(column_id)) = expr {
-                    if let Some(assignment) = self.assignments.get(&column_id.index) {
+                if let stmt::Expr::Column(expr_column) = expr {
+                    // TODO: This needs to be fixed to properly handle alias-based columns
+                    // For now, use column field as index for backwards compatibility
+                    if let Some(assignment) = self.assignments.get(&expr_column.column) {
                         assert!(assignment.op.is_set());
                         assert!(assignment.expr.is_const());
 
@@ -299,16 +301,8 @@ impl Planner<'_> {
                         .into(),
                         filter: true.into(),
                         returning: stmt::Returning::Expr(stmt::Expr::eq(
-                            stmt::ExprColumn::Alias {
-                                nesting: 0,
-                                table: 0,
-                                column: 0,
-                            },
-                            stmt::ExprColumn::Alias {
-                                nesting: 0,
-                                table: 0,
-                                column: 1,
-                            },
+                            stmt::ExprColumn::new(0, 0, 0),
+                            stmt::ExprColumn::new(0, 0, 1),
                         )),
                     }),
                 )),
@@ -322,28 +316,13 @@ impl Planner<'_> {
         });
 
         let mut columns = vec![
-            stmt::ExprColumn::Alias {
-                nesting: 0,
-                table: 0,
-                column: 0,
-            }
-            .into(),
-            stmt::ExprColumn::Alias {
-                nesting: 0,
-                table: 0,
-                column: 1,
-            }
-            .into(),
+            stmt::ExprColumn::new(0, 0, 0).into(),
+            stmt::ExprColumn::new(0, 0, 1).into(),
         ];
 
         for i in 0..returning_len {
             columns.push(
-                stmt::ExprColumn::Alias {
-                    nesting: 0,
-                    table: 1,
-                    column: i,
-                }
-                .into(),
+                stmt::ExprColumn::new(0, 1, i).into(),
             );
         }
 

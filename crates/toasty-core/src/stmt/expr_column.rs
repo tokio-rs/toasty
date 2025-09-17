@@ -1,22 +1,16 @@
 use super::Expr;
-use crate::schema::db::{Column, ColumnId};
+use crate::schema::db::ColumnId;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum ExprColumn {
-    /// Directly reference a column
-    Column(ColumnId),
+pub struct ExprColumn {
+    /// Which query the alias is listed in
+    pub nesting: usize,
 
-    /// Reference a column aliased in `FROM` or equivalent clause
-    Alias {
-        /// Which query the alias is listed in
-        nesting: usize,
+    /// The index of the alias in the `FROM` (or equivalent) clause
+    pub table: usize,
 
-        /// The index of the alias in the `FROM` (or equivalent) clause
-        table: usize,
-
-        /// The index of the column in the table
-        column: usize,
-    },
+    /// The index of the column in the table
+    pub column: usize,
 }
 
 impl Expr {
@@ -30,17 +24,32 @@ impl Expr {
 }
 
 impl ExprColumn {
-    pub fn references(&self, column_id: ColumnId) -> bool {
-        match self {
-            Self::Column(id) => id == &column_id,
-            Self::Alias { .. } => todo!(),
-        }
+    pub fn new(nesting: usize, table: usize, column: usize) -> Self {
+        Self { nesting, table, column }
     }
 
+    /// Basic implementation that matches on column index
+    /// This assumes single table context where column field corresponds to column_id.index
+    /// TODO: This should be replaced with proper table context checking
+    pub fn references(&self, column_id: ColumnId) -> bool {
+        self.table == 0 && self.column == column_id.index
+    }
+
+    /// Basic implementation that assumes single table context
+    /// This recreates a ColumnId from the column index, assuming table 0
+    /// TODO: This should be replaced with proper table context resolution
     pub fn try_to_column_id(&self) -> Option<ColumnId> {
-        match self {
-            Self::Column(id) => Some(*id),
-            Self::Alias { .. } => None,
+        // This method can only work reliably in simple single-table contexts
+        // For now, return None for non-trivial cases to avoid creating invalid ColumnIds
+        if self.nesting == 0 && self.table == 0 {
+            // For single table context, we can reconstruct the ColumnId
+            // Note: This assumes the table ID corresponds to the first table in the schema
+            Some(ColumnId {
+                table: crate::schema::db::TableId(0), // Assume first table
+                index: self.column,
+            })
+        } else {
+            None
         }
     }
 }
@@ -51,21 +60,12 @@ impl From<ExprColumn> for Expr {
     }
 }
 
-impl From<&Column> for ExprColumn {
-    fn from(value: &Column) -> Self {
-        value.id.into()
-    }
-}
-
-impl From<&Column> for Expr {
-    fn from(value: &Column) -> Self {
-        value.id.into()
-    }
-}
-
+// Temporary From implementation for backwards compatibility
+// This assumes single table context (table 0) and uses column ID index as column index
+// TODO: This should be replaced with proper table context tracking
 impl From<ColumnId> for ExprColumn {
     fn from(value: ColumnId) -> Self {
-        Self::Column(value)
+        Self::new(0, 0, value.index)
     }
 }
 
@@ -74,3 +74,4 @@ impl From<ColumnId> for Expr {
         Self::column(value)
     }
 }
+

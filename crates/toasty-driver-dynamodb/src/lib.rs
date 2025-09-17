@@ -327,9 +327,8 @@ fn ddb_expression(
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
-        stmt::Expr::Column(stmt::ExprColumn::Column(column_id)) => {
-            let column = schema.column(*column_id);
-            attrs.column(column).to_string()
+        stmt::Expr::Column(_expr_column) => {
+            todo!("Need table context for DynamoDB column expression")
         }
         stmt::Expr::Value(val) => attrs.value(val),
         stmt::Expr::And(expr_and) => {

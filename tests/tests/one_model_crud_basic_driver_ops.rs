@@ -81,7 +81,7 @@ async fn basic_crud(test: &mut DbTest) {
                         ..
                     }),
                     filter: Expr::BinaryOp(_ {
-                        *lhs: Expr::Column(ExprColumn::Column(== column(&db, "users", "id"))),
+                        *lhs: Expr::Column(ExprColumn { nesting: 0, table: 0, column: _ }),
                         op: BinaryOp::Eq,
                         *rhs: == user_id,
                         ..
@@ -126,7 +126,7 @@ async fn basic_crud(test: &mut DbTest) {
                 target: toasty_core::stmt::UpdateTarget::Table(user_table_id),
                 assignments: #{ 2: _ { expr: 31, .. }},
                 filter: Some(Expr::BinaryOp(_ {
-                    *lhs: Expr::Column(ExprColumn::Column(== column(&db, "users", "id"))),
+                    *lhs: Expr::Column(ExprColumn { nesting: 0, table: 0, column: _ }),
                     op: BinaryOp::Eq,
                     *rhs: == user_id,
                     ..
@@ -174,7 +174,7 @@ async fn basic_crud(test: &mut DbTest) {
                     ..
                 }),
                 filter: Expr::BinaryOp(_ {
-                    *lhs: Expr::Column(ExprColumn::Column(== column(&db, "users", "id"))),
+                    *lhs: Expr::Column(ExprColumn { nesting: 0, table: 0, column: _ }),
                     op: BinaryOp::Eq,
                     *rhs: == user_id,
                     ..

@@ -16,15 +16,8 @@ impl ToSql for &stmt::Expr {
 
                 fmt!(f, expr.lhs " " expr.op " " expr.rhs);
             }
-            Column(stmt::ExprColumn::Column(column_id)) => {
-                let column = f.serializer.column_name(*column_id);
-                fmt!(f, column);
-            }
-            Column(stmt::ExprColumn::Alias {
-                nesting, column, ..
-            }) => {
-                let depth = f.depth - *nesting;
-                fmt!(f, "tbl_" depth ".col_" column)
+            Column(expr_column) => {
+                f.write_column(expr_column);
             }
             Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
                 (None, None) => fmt!(f, "COUNT(*)"),
