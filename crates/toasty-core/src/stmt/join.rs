@@ -1,9 +1,9 @@
-use super::{Expr, TableRef};
+use super::{Expr, SourceTableId};
 
 #[derive(Debug, Clone)]
 pub struct Join {
     /// The table to join
-    pub table: TableRef,
+    pub table: SourceTableId,
 
     /// The join condition
     pub constraint: JoinOp,

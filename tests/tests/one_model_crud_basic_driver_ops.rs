@@ -76,9 +76,10 @@ async fn basic_crud(test: &mut DbTest) {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Query(_ {
                 body: ExprSet::Select(_ {
-                    source: Source::Table([
-                        _ { table: user_table_id, .. },
-                    ]),
+                    source: Source::Table(_ {
+                        tables: [user_table_id, ..],
+                        ..
+                    }),
                     filter: Expr::BinaryOp(_ {
                         *lhs: Expr::Column(ExprColumn::Column(== column(&db, "users", "id"))),
                         op: BinaryOp::Eq,
@@ -168,10 +169,10 @@ async fn basic_crud(test: &mut DbTest) {
     if is_sql {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Delete(_ {
-                from: Source::Table([_ {
-                    table: user_table_id,
+                from: Source::Table(_ {
+                    tables: [user_table_id, ..],
                     ..
-                }]),
+                }),
                 filter: Expr::BinaryOp(_ {
                     *lhs: Expr::Column(ExprColumn::Column(== column(&db, "users", "id"))),
                     op: BinaryOp::Eq,

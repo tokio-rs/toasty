@@ -32,16 +32,17 @@ impl<'a> ExprTarget<'a> {
                 let model = schema.app.model(source_model.model);
                 ExprTarget::from(model)
             }
-            stmt::Source::Table(tables_with_joins) => {
-                let [table_with_joins] = &tables_with_joins[..] else {
+            stmt::Source::Table(source_table) => {
+                // For now, we'll handle the simple case where the main table relation
+                // is a direct table reference
+                let stmt::TableFactor::Table(table_id) = &source_table.from_item.relation;
+
+                let table_ref = &source_table.tables[table_id.0];
+                let stmt::TableRef::Table(table_id) = table_ref else {
                     todo!("source={source:#?}")
                 };
 
-                let stmt::TableRef::Table(table_id) = table_with_joins.table else {
-                    todo!("source={source:#?}")
-                };
-
-                let table = schema.db.table(table_id);
+                let table = schema.db.table(*table_id);
                 ExprTarget::from(table)
             }
         }

@@ -194,8 +194,8 @@ impl ToSql for &stmt::Lock {
 impl ToSql for &stmt::Source {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
         match self {
-            stmt::Source::Table(table) => {
-                fmt!(f, Comma(table));
+            stmt::Source::Table(source_table) => {
+                source_table.to_sql(f);
             }
             _ => todo!("self={self:?}"),
         }
@@ -233,19 +233,27 @@ impl ToSql for &stmt::Statement {
     }
 }
 
-impl ToSql for &stmt::TableWithJoins {
+impl ToSql for &stmt::SourceTable {
     fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
-        fmt!(f, &self.table);
+        // Serialize the main table relation
+        match &self.from_item.relation {
+            stmt::TableFactor::Table(table_id) => {
+                let table_ref = &self.tables[table_id.0];
+                fmt!(f, table_ref);
 
-        if self.table.is_cte() {
-            let depth = f.depth;
-            fmt!(f, " AS tbl_" depth);
+                if table_ref.is_cte() {
+                    let depth = f.depth;
+                    fmt!(f, " AS tbl_" depth);
+                }
+            }
         }
 
-        for join in &self.joins {
+        // Serialize the joins
+        for join in &self.from_item.joins {
             match &join.constraint {
                 stmt::JoinOp::Left(expr) => {
-                    fmt!(f, " LEFT JOIN " join.table " ON " expr);
+                    let join_table_ref = &self.tables[join.table.0];
+                    fmt!(f, " LEFT JOIN " join_table_ref " ON " expr);
                 }
             }
         }

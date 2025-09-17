@@ -168,6 +168,12 @@ pub use select::Select;
 mod source;
 pub use source::{Source, SourceModel};
 
+mod source_table;
+pub use source_table::SourceTable;
+
+mod source_table_id;
+pub use source_table_id::SourceTableId;
+
 mod sparse_record;
 pub use sparse_record::SparseRecord;
 
@@ -177,6 +183,9 @@ mod infer;
 
 mod table_ref;
 pub use table_ref::TableRef;
+
+mod table_factor;
+pub use table_factor::TableFactor;
 
 mod table_with_joins;
 pub use table_with_joins::TableWithJoins;

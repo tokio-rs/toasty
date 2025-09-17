@@ -1,4 +1,4 @@
-use super::{Association, TableRef, TableWithJoins};
+use super::{Association, SourceTable, SourceTableId, TableFactor, TableRef, TableWithJoins};
 use crate::schema::{
     app::{Model, ModelId},
     db::TableId,
@@ -10,7 +10,7 @@ pub enum Source {
     Model(SourceModel),
 
     /// Source is a database table (lowered)
-    Table(Vec<TableWithJoins>),
+    Table(SourceTable),
 }
 
 #[derive(Debug, Clone)]
@@ -44,13 +44,18 @@ impl Source {
     }
 
     pub fn table(table: impl Into<TableRef>) -> Self {
-        Self::Table(vec![TableWithJoins {
-            table: table.into(),
-            joins: vec![],
-        }])
+        let table_ref = table.into();
+        let source_table = SourceTable::new(
+            vec![table_ref],
+            TableWithJoins {
+                relation: TableFactor::Table(SourceTableId(0)),
+                joins: vec![],
+            },
+        );
+        Self::Table(source_table)
     }
 
-    pub fn as_table_with_joins(&self) -> &[TableWithJoins] {
+    pub fn as_source_table(&self) -> &SourceTable {
         match self {
             Self::Table(source) => source,
             _ => todo!(),
@@ -85,8 +90,10 @@ impl From<TableRef> for Source {
     }
 }
 
-impl From<TableWithJoins> for Source {
-    fn from(value: TableWithJoins) -> Self {
-        Self::Table(vec![value])
+impl Source {
+    /// Create a source from a table with joins, providing explicit table refs
+    pub fn table_with_joins(tables: Vec<TableRef>, from_item: TableWithJoins) -> Self {
+        let source_table = SourceTable::new(tables, from_item);
+        Self::Table(source_table)
     }
 }

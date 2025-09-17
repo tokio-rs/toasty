@@ -1,9 +1,9 @@
-use super::{Join, TableRef};
+use super::{Join, TableFactor};
 
 #[derive(Debug, Clone)]
 pub struct TableWithJoins {
-    /// Identify a table
-    pub table: TableRef,
+    /// The table relation
+    pub relation: TableFactor,
 
     /// Joins to apply
     pub joins: Vec<Join>,
