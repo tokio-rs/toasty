@@ -1,4 +1,4 @@
-use super::{ExprTarget, Simplify};
+use super::Simplify;
 use toasty_core::{
     schema::app::FieldTy,
     stmt::{self, Expr},
@@ -25,20 +25,18 @@ impl Simplify<'_> {
             }
             (stmt::Expr::Key(_), other) | (other, stmt::Expr::Key(_)) => {
                 assert!(op.is_eq());
-                assert!(self.target.is_model());
 
                 // At this point, we must be in a model context, otherwise key
                 // expressions don't make sense.
-                let ExprTarget::Model(model) = self.target else {
-                    todo!()
+                let Some(model) = self.cx.target_as_model() else {
+                    todo!();
                 };
+
                 Some(self.rewrite_root_path_expr(model, other.take()))
             }
             (stmt::Expr::Reference(expr_reference), other)
             | (other, stmt::Expr::Reference(expr_reference)) => {
-                let Some(field) = self.resolve_expr_reference(expr_reference) else {
-                    todo!("handle None");
-                };
+                let field = self.cx.resolve_expr_reference(expr_reference);
 
                 match &field.ty {
                     FieldTy::Primitive(_) => None,

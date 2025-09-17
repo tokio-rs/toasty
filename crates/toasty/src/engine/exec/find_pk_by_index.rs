@@ -14,7 +14,7 @@ impl Exec<'_> {
 
             filter.substitute(&[input]);
 
-            simplify::simplify_expr(&self.db.schema, simplify::ExprTarget::Const, &mut filter);
+            simplify::simplify_expr(&self.db.schema, &mut filter);
         }
 
         let res = self

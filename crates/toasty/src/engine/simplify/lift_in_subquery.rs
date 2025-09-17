@@ -1,5 +1,3 @@
-use crate::engine::simplify::ExprTarget;
-
 use super::Simplify;
 use toasty_core::{
     schema::app::{BelongsTo, FieldId, FieldTy, HasOne},
@@ -26,9 +24,7 @@ impl Simplify<'_> {
             stmt::Expr::Project(_) => {
                 todo!()
             }
-            stmt::Expr::Reference(expr_reference) => self
-                .resolve_expr_reference(expr_reference)
-                .unwrap_or_else(|| todo!("handle None")),
+            stmt::Expr::Reference(expr_reference) => self.cx.resolve_expr_reference(expr_reference),
             _ => {
                 return None;
             }
@@ -97,10 +93,7 @@ impl Simplify<'_> {
         );
 
         let mut lift = LiftBelongsTo {
-            simplify: &Simplify::new(
-                self.schema,
-                ExprTarget::from_source(self.schema, &select.source),
-            ),
+            simplify: &self.scope(&select.source),
             belongs_to,
             fk_field_matches: vec![false; belongs_to.foreign_key.fields.len()],
             operands: vec![],
@@ -144,7 +137,7 @@ impl Simplify<'_> {
             return None;
         }
 
-        let pair = has_one.pair(&self.schema.app);
+        let pair = has_one.pair(&self.schema().app);
 
         let expr = match &pair.foreign_key.fields[..] {
             [fk_field] => stmt::Expr::field(fk_field.target),
@@ -180,9 +173,7 @@ impl Visit for LiftBelongsTo<'_> {
             | (other, stmt::Expr::Reference(expr_reference)) => {
                 assert!(i.op.is_eq());
 
-                let Some(field) = self.simplify.resolve_expr_reference(expr_reference) else {
-                    return;
-                };
+                let field = self.simplify.cx.resolve_expr_reference(expr_reference);
 
                 self.lift_fk_constraint(field.id, other);
             }

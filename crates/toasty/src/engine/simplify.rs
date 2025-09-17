@@ -1,6 +1,3 @@
-mod expr_target;
-pub(crate) use expr_target::ExprTarget;
-
 mod association;
 mod expr_and;
 mod expr_binary_op;
@@ -21,37 +18,24 @@ mod lift_pk_select;
 mod rewrite_root_path_expr;
 
 use toasty_core::{
-    schema::{app::Field, *},
-    stmt::{self, Node, VisitMut},
+    schema::{
+        app::{Field, FieldId, Model, ModelId},
+        *,
+    },
+    stmt::{self, Expr, Node, VisitMut},
 };
 
-use std::mem;
-use stmt::Expr;
-
 pub(crate) struct Simplify<'a> {
-    /// Schema the statement is referencing
-    schema: &'a Schema,
-
-    /// The context in which expressions are evaluated. This is a model or
-    /// table.
-    target: ExprTarget<'a>,
+    cx: stmt::ExprContext<'a>,
 }
 
 pub(crate) fn simplify_stmt<T: Node>(schema: &Schema, stmt: &mut T) {
-    Simplify::new_with_const_target(schema).visit_mut(stmt);
+    Simplify::new(schema).visit_mut(stmt);
 }
 
-// TODO: get rid of this
-pub(crate) fn simplify_expr<'a>(
-    schema: &'a Schema,
-    target: impl Into<ExprTarget<'a>>,
-    expr: &mut stmt::Expr,
-) {
-    Simplify {
-        schema,
-        target: target.into(),
-    }
-    .visit_expr_mut(expr);
+// TODO: get rid of this?
+pub(crate) fn simplify_expr(schema: &Schema, expr: &mut stmt::Expr) {
+    Simplify::new(schema).visit_expr_mut(expr);
 }
 
 impl VisitMut for Simplify<'_> {
@@ -110,25 +94,45 @@ impl VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_delete_mut(&mut self, stmt: &mut stmt::Delete) {
-        let target = mem::replace(
-            &mut self.target,
-            ExprTarget::from_source(self.schema, &stmt.from),
-        );
+        // Visit and simplify source first before pushing a new scope
+        self.visit_source_mut(&mut stmt.from);
+
+        // Convert "via" associations into WHERE filters. For example,
+        // user.todos().delete(...) becomes "DELETE FROM Todo" with via association,
+        // which gets simplified to "DELETE FROM Todo WHERE user_id IN (SELECT id FROM User WHERE ...)"
         self.simplify_via_association_for_delete(stmt);
-        stmt::visit_mut::visit_stmt_delete_mut(self, stmt);
-        self.target = target;
+
+        let mut s = self.scope(&stmt.from);
+
+        s.visit_expr_mut(&mut stmt.filter);
+
+        if let Some(returning) = &mut stmt.returning {
+            s.visit_returning_mut(returning);
+        }
     }
 
     fn visit_stmt_insert_mut(&mut self, stmt: &mut stmt::Insert) {
-        let target = mem::replace(
-            &mut self.target,
-            ExprTarget::from_insert_target(self.schema, &stmt.target),
-        );
+        // Visit target first before pushing a new scope.
+        self.visit_insert_target_mut(&mut stmt.target);
 
+        // Convert "via" associations in insert scopes into WHERE filters. For example,
+        // user.todos().insert(...) creates a scope query that gets simplified to ensure
+        // inserted todos are automatically linked to the specific user.
         self.simplify_via_association_for_insert(stmt);
 
-        stmt::visit_mut::visit_stmt_insert_mut(self, stmt);
-        self.target = target;
+        // Create a new scope for the insert target
+        let mut s = self.scope(&stmt.target);
+
+        // First, simplify the source
+        s.visit_stmt_query_mut(&mut stmt.source);
+
+        if let stmt::ExprSet::Values(values) = &mut stmt.source.body {
+            s.normalize_insertion_values(values, stmt.target.width(s.schema()));
+        }
+
+        if let Some(returning) = &mut stmt.returning {
+            s.visit_returning_mut(returning);
+        }
     }
 
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
@@ -138,22 +142,20 @@ impl VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
-        // Swap the current simplification target
-        let target = mem::replace(
-            &mut self.target,
-            ExprTarget::from_source(self.schema, &stmt.source),
-        );
-
         if let stmt::Source::Model(model) = &mut stmt.source {
             if let Some(via) = model.via.take() {
                 todo!("via={via:#?}");
             }
         }
 
-        stmt::visit_mut::visit_stmt_select_mut(self, stmt);
+        // Simplify the source first
+        self.visit_source_mut(&mut stmt.source);
 
-        // Replace the current simplification target
-        self.target = target;
+        // Create a new scope for the insert target
+        let mut s = self.scope(&stmt.source);
+
+        s.visit_expr_mut(&mut stmt.filter);
+        s.visit_returning_mut(&mut stmt.returning);
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
@@ -179,77 +181,53 @@ impl VisitMut for Simplify<'_> {
             stmt.target = stmt::UpdateTarget::Model(select.source.as_model_id());
         }
 
-        let target = mem::replace(
-            &mut self.target,
-            ExprTarget::from_update_target(self.schema, &stmt.target),
-        );
+        self.visit_update_target_mut(&mut stmt.target);
 
-        stmt::visit_mut::visit_stmt_update_mut(self, stmt);
-        self.target = target;
-    }
+        let mut s = self.scope(&stmt.target);
+        s.visit_assignments_mut(&mut stmt.assignments);
 
-    fn visit_values_mut(&mut self, values: &mut stmt::Values) {
-        stmt::visit_mut::visit_values_mut(self, values);
+        if let Some(expr) = &mut stmt.filter {
+            s.visit_expr_mut(expr);
+        }
 
-        let width = match &self.target {
-            ExprTarget::Const => todo!(),
-            ExprTarget::Model(model) => model.fields.len(),
-            ExprTarget::Table => todo!(),
-            ExprTarget::TableWithColumns(columns) => columns.len(),
-        };
+        if let Some(expr) = &mut stmt.condition {
+            s.visit_expr_mut(expr);
+        }
 
-        for row in &mut values.rows {
-            let actual = match row {
-                stmt::Expr::Record(row) => {
-                    while row.len() < width {
-                        row.push(stmt::Expr::default());
-                    }
-
-                    row.len()
-                }
-                stmt::Expr::Value(stmt::Value::Record(row)) => {
-                    while row.len() < width {
-                        row.fields.push(stmt::Value::default());
-                    }
-
-                    row.len()
-                }
-                _ => todo!("row={row:#?}"),
-            };
-
-            assert_eq!(actual, width, "target={:#?}", self.target);
+        if let Some(returning) = &mut stmt.returning {
+            s.visit_returning_mut(returning);
         }
     }
 }
 
 impl<'a> Simplify<'a> {
-    pub(crate) fn new(schema: &'a Schema, target: ExprTarget<'a>) -> Self {
-        Simplify { schema, target }
-    }
-
-    pub(crate) fn new_with_const_target(schema: &'a Schema) -> Self {
-        Simplify::new(schema, ExprTarget::Const)
-    }
-
-    pub(crate) fn new_with_model_target(schema: &'a Schema, target: &'a app::Model) -> Self {
+    pub(crate) fn new(schema: &'a Schema) -> Self {
         Simplify {
-            schema,
-            target: ExprTarget::Model(target),
+            cx: stmt::ExprContext::new(schema),
         }
     }
 
-    fn resolve_expr_reference(&self, expr_reference: &stmt::ExprReference) -> Option<&'a Field> {
-        let ExprTarget::Model(target) = self.target else {
-            todo!("handle incorrect call here");
-        };
+    fn schema(&self) -> &'a Schema {
+        self.cx.schema()
+    }
 
-        let stmt::ExprReference::Field { nesting, index } = expr_reference else {
-            return None;
-        };
+    fn model(&self, model_id: impl Into<ModelId>) -> &Model {
+        self.cx.schema().app.model(model_id.into())
+    }
 
-        assert!(*nesting == 0, "TODO: handle nesting > 0");
+    fn field(&self, field_id: impl Into<FieldId>) -> &Field {
+        self.cx.schema().app.field(field_id.into())
+    }
 
-        Some(&target.fields[*index])
+    /// Return a new `Simplify` instance that operates on a nested scope
+    /// targeting the provided relation.
+    pub(crate) fn scope<'scope>(
+        &'scope self,
+        target: impl Into<stmt::ExprTarget<'scope>>,
+    ) -> Simplify<'scope> {
+        Simplify {
+            cx: self.cx.scope(target),
+        }
     }
 
     /// Returns the source model
@@ -287,6 +265,28 @@ impl<'a> Simplify<'a> {
                     operands.push(std::mem::take(expr_set));
                 }
                 _ => todo!("expr={:#?}", expr_set),
+            }
+        }
+    }
+
+    fn normalize_insertion_values(&mut self, values: &mut stmt::Values, width: usize) {
+        for row in &mut values.rows {
+            match row {
+                stmt::Expr::Record(row) => {
+                    assert!(row.len() <= width);
+
+                    while row.len() < width {
+                        row.push(stmt::Expr::default());
+                    }
+                }
+                stmt::Expr::Value(stmt::Value::Record(row)) => {
+                    assert!(row.len() <= width);
+
+                    while row.len() < width {
+                        row.fields.push(stmt::Value::default());
+                    }
+                }
+                _ => todo!("row={row:#?}"),
             }
         }
     }

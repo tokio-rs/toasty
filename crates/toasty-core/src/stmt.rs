@@ -7,6 +7,9 @@ pub use association::Association;
 mod cte;
 pub use cte::Cte;
 
+mod cx;
+pub use cx::{ExprContext, ExprTarget};
+
 mod delete;
 pub use delete::Delete;
 
