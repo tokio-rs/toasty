@@ -30,7 +30,7 @@ impl<'a> ExprTarget<'a> {
         match source {
             stmt::Source::Model(source_model) => {
                 let model = schema.app.model(source_model.model);
-                ExprTarget::from(model)
+                ExprTarget::Model(model)
             }
             stmt::Source::Table(source_table) => {
                 // For now, we'll handle the simple case where the main table relation
@@ -53,11 +53,11 @@ impl<'a> ExprTarget<'a> {
             stmt::InsertTarget::Scope(query) => {
                 let model_id = query.body.as_select().source.as_model_id();
                 let model = schema.app.model(model_id);
-                ExprTarget::from(model)
+                ExprTarget::Model(model)
             }
             stmt::InsertTarget::Model(model_id) => {
                 let model = schema.app.model(*model_id);
-                ExprTarget::from(model)
+                ExprTarget::Model(model)
             }
             stmt::InsertTarget::Table(table_with_columns) => {
                 ExprTarget::TableWithColumns(table_with_columns.columns.clone())
@@ -70,11 +70,11 @@ impl<'a> ExprTarget<'a> {
             stmt::UpdateTarget::Query(query) => {
                 let model_id = query.body.as_select().source.as_model_id();
                 let model = schema.app.model(model_id);
-                ExprTarget::from(model)
+                ExprTarget::Model(model)
             }
             stmt::UpdateTarget::Model(model_id) => {
                 let model = schema.app.model(*model_id);
-                ExprTarget::from(model)
+                ExprTarget::Model(model)
             }
             stmt::UpdateTarget::Table(_) => ExprTarget::Table,
         }
@@ -82,12 +82,6 @@ impl<'a> ExprTarget<'a> {
 
     pub(crate) fn is_model(&self) -> bool {
         matches!(self, ExprTarget::Model(_))
-    }
-}
-
-impl<'a> From<&'a Model> for ExprTarget<'a> {
-    fn from(value: &'a Model) -> Self {
-        ExprTarget::Model(value)
     }
 }
 

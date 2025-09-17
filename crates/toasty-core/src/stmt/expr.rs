@@ -4,7 +4,6 @@ use super::{
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprOr, ExprPattern,
     ExprProject, ExprRecord, ExprStmt, ExprTy, Node, Projection, Type, Value, Visit, VisitMut,
 };
-use crate::schema::app::{Field, FieldId};
 use std::fmt;
 
 #[derive(Clone)]
@@ -230,14 +229,6 @@ impl Expr {
 
         Substitute(input).visit_expr_mut(self);
     }
-
-    pub fn field(field: impl Into<FieldId>) -> Self {
-        ExprReference::from(field.into()).into()
-    }
-
-    pub fn is_field(&self) -> bool {
-        matches!(self, Self::Reference(ExprReference::Field { .. }))
-    }
 }
 
 impl Default for Expr {
@@ -297,18 +288,6 @@ impl From<&str> for Expr {
 impl From<Value> for Expr {
     fn from(value: Value) -> Self {
         Self::Value(value)
-    }
-}
-
-impl From<&Field> for Expr {
-    fn from(value: &Field) -> Self {
-        Self::field(value.id())
-    }
-}
-
-impl From<FieldId> for Expr {
-    fn from(value: FieldId) -> Self {
-        Self::field(value)
     }
 }
 

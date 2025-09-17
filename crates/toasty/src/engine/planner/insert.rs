@@ -413,10 +413,13 @@ impl ApplyInsertScope<'_> {
     }
 
     fn apply_eq_const(&mut self, expr_ref: &stmt::ExprReference, val: &stmt::Value, set: bool) {
-        let field_id = expr_ref
-            .as_field_id()
-            .unwrap_or_else(|| todo!("handle non-field reference"));
-        let mut existing = self.expr.entry_mut(field_id.index);
+        let stmt::ExprReference::Field { nesting, index } = expr_ref else {
+            todo!("handle non-field reference");
+        };
+
+        assert!(*nesting == 0, "TODO: handle references to parent scopes");
+
+        let mut existing = self.expr.entry_mut(*index);
 
         if !existing.is_value_null() {
             if let stmt::EntryMut::Value(existing) = existing {

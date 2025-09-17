@@ -41,8 +41,12 @@ impl Simplify<'_> {
             app::FieldTy::BelongsTo(rel) => {
                 self.rewrite_association_belongs_to_as_filter(rel, association)
             }
-            app::FieldTy::HasOne(rel) => stmt::Expr::in_subquery(rel.pair, *association.source),
-            app::FieldTy::HasMany(rel) => stmt::Expr::in_subquery(rel.pair, *association.source),
+            app::FieldTy::HasOne(rel) => {
+                stmt::Expr::in_subquery(stmt::Expr::field(rel.pair), *association.source)
+            }
+            app::FieldTy::HasMany(rel) => {
+                stmt::Expr::in_subquery(stmt::Expr::field(rel.pair), *association.source)
+            }
             _ => todo!("field={field:#?}"),
         }
     }

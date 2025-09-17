@@ -179,8 +179,6 @@ pub use sparse_record::SparseRecord;
 
 pub mod substitute;
 
-mod infer;
-
 mod table_ref;
 pub use table_ref::TableRef;
 
