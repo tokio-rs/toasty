@@ -1,10 +1,17 @@
-use crate::schema::app::{FieldId, ModelId};
-use std::fmt;
+use crate::{schema::app::FieldId, stmt::Expr};
 
 #[derive(Debug, Clone)]
 pub enum ExprReference {
-    /// Reference a field from a model
-    Field { model: ModelId, index: usize },
+    /// Reference a specific field in a query's relation.
+    ///
+    /// For Query/Delete statements, the relation is the Source.
+    /// For Insert/Update statements, the relation is the target.
+    Field {
+        /// Query scope nesting level: 0 = current query, 1+ = higher scope queries
+        nesting: usize,
+        /// Index of the field within the relation
+        index: usize,
+    },
 
     /// Reference a column from a CTE table
     Cte {
@@ -17,49 +24,34 @@ pub enum ExprReference {
     },
 }
 
+impl Expr {
+    /// Creates an expression that references a field in the current query.
+    ///
+    /// This creates an `ExprReference::Field` with `nesting = 0`, meaning it
+    /// references a field in the current query scope rather than an outer query.
+    ///
+    /// # Arguments
+    ///
+    /// * `field` - A field identifier that can be converted into a `FieldId`
+    ///
+    /// # Returns
+    ///
+    /// An `Expr::Reference` containing an `ExprReference::Field` that points to
+    /// the specified field in the current query's relation.
+    pub fn field(field: impl Into<FieldId>) -> Self {
+        ExprReference::field(field).into()
+    }
+
+    pub fn is_field(&self) -> bool {
+        matches!(self, Self::Reference(ExprReference::Field { .. }))
+    }
+}
+
 impl ExprReference {
-    pub fn field(model: ModelId, index: usize) -> Self {
-        Self::Field { model, index }
-    }
-
-    pub fn cte(nesting: usize, index: usize) -> Self {
-        Self::Cte { nesting, index }
-    }
-
-    /// Set this reference to point to a specific field
-    pub fn set_field(&mut self, field_id: FieldId) {
-        *self = Self::Field {
-            model: field_id.model,
-            index: field_id.index,
-        };
-    }
-
-    /// Get the FieldId if this is a field reference
-    pub fn as_field_id(&self) -> Option<FieldId> {
-        match self {
-            Self::Field { model, index } => Some(FieldId {
-                model: *model,
-                index: *index,
-            }),
-            Self::Cte { .. } => None,
-        }
-    }
-}
-
-impl From<FieldId> for ExprReference {
-    fn from(field_id: FieldId) -> Self {
-        Self::Field {
-            model: field_id.model,
-            index: field_id.index,
-        }
-    }
-}
-
-impl fmt::Display for ExprReference {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Field { model, index } => write!(f, "field({}, {index})", model.0),
-            Self::Cte { nesting, index } => write!(f, "cte({nesting}, {index})"),
+    pub fn field(field: impl Into<FieldId>) -> Self {
+        ExprReference::Field {
+            nesting: 0,
+            index: field.into().index,
         }
     }
 }

@@ -1,8 +1,6 @@
 mod expr_target;
 pub(crate) use expr_target::ExprTarget;
 
-pub(crate) mod lift_pk_select;
-
 mod association;
 mod expr_and;
 mod expr_binary_op;
@@ -19,10 +17,11 @@ mod value;
 // Simplifications
 // TODO: unify names
 mod lift_in_subquery;
+mod lift_pk_select;
 mod rewrite_root_path_expr;
 
 use toasty_core::{
-    schema::*,
+    schema::{app::Field, *},
     stmt::{self, Node, VisitMut},
 };
 
@@ -39,7 +38,7 @@ pub(crate) struct Simplify<'a> {
 }
 
 pub(crate) fn simplify_stmt<T: Node>(schema: &Schema, stmt: &mut T) {
-    Simplify::new(schema).visit_mut(stmt);
+    Simplify::new_with_const_target(schema).visit_mut(stmt);
 }
 
 // TODO: get rid of this
@@ -224,11 +223,33 @@ impl VisitMut for Simplify<'_> {
 }
 
 impl<'a> Simplify<'a> {
-    pub(crate) fn new(schema: &'a Schema) -> Self {
+    pub(crate) fn new(schema: &'a Schema, target: ExprTarget<'a>) -> Self {
+        Simplify { schema, target }
+    }
+
+    pub(crate) fn new_with_const_target(schema: &'a Schema) -> Self {
+        Simplify::new(schema, ExprTarget::Const)
+    }
+
+    pub(crate) fn new_with_model_target(schema: &'a Schema, target: &'a app::Model) -> Self {
         Simplify {
             schema,
-            target: ExprTarget::Const,
+            target: ExprTarget::Model(target),
         }
+    }
+
+    fn resolve_expr_reference(&self, expr_reference: &stmt::ExprReference) -> Option<&'a Field> {
+        let ExprTarget::Model(target) = self.target else {
+            todo!("handle incorrect call here");
+        };
+
+        let stmt::ExprReference::Field { nesting, index } = expr_reference else {
+            return None;
+        };
+
+        assert!(*nesting == 0, "TODO: handle nesting > 0");
+
+        Some(&target.fields[*index])
     }
 
     /// Returns the source model

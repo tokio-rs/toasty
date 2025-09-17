@@ -1,4 +1,6 @@
-use super::{simplify, Context, Planner, Result};
+use crate::engine::simplify::Simplify;
+
+use super::{Context, Planner, Result};
 use std::mem;
 use toasty_core::{
     schema::app::{self, Field, FieldId, FieldTy, HasMany, HasOne},
@@ -95,7 +97,7 @@ impl Planner<'_> {
 
                     let scope = stmt::Query::filter(
                         field.id.model,
-                        stmt::Expr::eq(fk_field.source, value.clone()),
+                        stmt::Expr::eq(stmt::Expr::field(fk_field.source), value.clone()),
                     );
 
                     if field.nullable {
@@ -158,6 +160,7 @@ impl Planner<'_> {
                 *expr = insertion_output.into_iter().next().unwrap().into();
             }
             stmt::Statement::Query(query) => {
+                let target = self.schema.app.model(belongs_to.target);
                 // First, we have to try to extract the FK from the select
                 // without having to perform the query
                 //
@@ -169,9 +172,8 @@ impl Planner<'_> {
                     .map(|fk_field| fk_field.target)
                     .collect();
 
-                // TODO: move this out
-                let Some(e) =
-                    simplify::lift_pk_select::lift_key_select(self.schema, &fields, &query)
+                let Some(e) = Simplify::new_with_model_target(self.schema, target)
+                    .extract_key_value(&fields, &query)
                 else {
                     todo!("belongs_to={:#?}; stmt={:#?}", belongs_to, query);
                 };
@@ -201,7 +203,7 @@ impl Planner<'_> {
                         let filter = &mut scope.body.as_select_mut().filter;
                         *filter = stmt::Expr::and(
                             filter.take(),
-                            stmt::Expr::ne(field, stmt::Value::Null),
+                            stmt::Expr::ne(stmt::Expr::field(field), stmt::Value::Null),
                         );
                     }
 
@@ -302,7 +304,10 @@ impl Planner<'_> {
             let mut stmt = selection.update();
 
             // This protects against races.
-            stmt.condition = Some(stmt::Expr::in_subquery(has_many.pair, scope.clone()));
+            stmt.condition = Some(stmt::Expr::in_subquery(
+                stmt::Expr::field(has_many.pair),
+                scope.clone(),
+            ));
             stmt.assignments.set(has_many.pair, stmt::Value::Null);
             let out = self.plan_stmt(&Context::default(), stmt.into())?;
             assert!(out.is_none());
@@ -457,7 +462,10 @@ impl Planner<'_> {
     /// Translate a source model scope to a target model scope for a has_one
     /// relation.
     fn relation_pair_scope(&self, pair: FieldId, scope: stmt::Query) -> stmt::Query {
-        stmt::Query::filter(pair.model, stmt::Expr::in_subquery(pair, scope))
+        stmt::Query::filter(
+            pair.model,
+            stmt::Expr::in_subquery(stmt::Expr::field(pair), scope),
+        )
     }
 
     fn relation_step(

@@ -22,7 +22,10 @@ struct LowerStatement<'a> {
 }
 
 /// Substitute fields for columns
-struct Substitute<I>(I);
+struct Substitute<'a, I> {
+    target: &'a app::Model,
+    input: I,
+}
 
 trait Input {
     fn resolve_field(&mut self, field_id: FieldId) -> stmt::Expr;
@@ -104,7 +107,7 @@ impl VisitMut for LowerStatement<'_> {
                     };
 
                     let mut lowered = self.mapping.model_to_table[field_mapping.lowering].clone();
-                    Substitute(&*i).visit_expr_mut(&mut lowered);
+                    Substitute::new(self.model, &*i).visit_expr_mut(&mut lowered);
                     assignments.set(field_mapping.column, lowered);
                 }
                 _ => {
@@ -127,7 +130,8 @@ impl VisitMut for LowerStatement<'_> {
             stmt::Expr::BinaryOp(expr) => {
                 self.lower_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
-            stmt::Expr::Reference(stmt::ExprReference::Field { model: _, index }) => {
+            stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
+                assert!(*nesting == 0, "TODO: handle non-z");
                 *i = self.mapping.table_to_model[*index].clone();
 
                 self.visit_expr_mut(i);
@@ -413,7 +417,7 @@ impl LowerStatement<'_> {
 
     fn lower_insert_values(&self, expr: &mut stmt::Expr) {
         let mut lowered = self.mapping.model_to_table.clone();
-        Substitute(&mut *expr).visit_expr_record_mut(&mut lowered);
+        Substitute::new(self.model, &mut *expr).visit_expr_record_mut(&mut lowered);
         *expr = lowered.into();
     }
 
@@ -455,15 +459,23 @@ impl LowerStatement<'_> {
     }
 }
 
-impl<I: Input> VisitMut for Substitute<I> {
+impl<'a, I> Substitute<'a, I> {
+    fn new(target: &'a app::Model, input: I) -> Self {
+        Substitute { target, input }
+    }
+}
+
+impl<'a, I: Input> VisitMut for Substitute<'a, I> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         match i {
-            stmt::Expr::Reference(stmt::ExprReference::Field { model, index }) => {
+            stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
+                assert!(*nesting == 0, "TODO: support references to parent scopes");
+
                 let field_id = FieldId {
-                    model: *model,
+                    model: self.target.id,
                     index: *index,
                 };
-                *i = self.0.resolve_field(field_id);
+                *i = self.input.resolve_field(field_id);
             }
             // Do not traverse these
             stmt::Expr::InSubquery(_) | stmt::Expr::Stmt(_) => {}

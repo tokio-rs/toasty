@@ -36,11 +36,9 @@ impl Simplify<'_> {
             }
             (stmt::Expr::Reference(expr_reference), other)
             | (other, stmt::Expr::Reference(expr_reference)) => {
-                let field = self
-                    .schema
-                    .app
-                    .field_from_expr(expr_reference)
-                    .unwrap_or_else(|| todo!("handle None"));
+                let Some(field) = self.resolve_expr_reference(expr_reference) else {
+                    todo!("handle None");
+                };
 
                 match &field.ty {
                     FieldTy::Primitive(_) => None,
@@ -55,7 +53,7 @@ impl Simplify<'_> {
                             assert!(other.is_value_null());
 
                             // Update the field reference to point to the foreign key field
-                            expr_reference.set_field(fk_field.source);
+                            *expr_reference = stmt::ExprReference::field(fk_field.source);
 
                             None
                         }
@@ -65,7 +63,7 @@ impl Simplify<'_> {
                             };
 
                             // Update the field reference to point to the foreign key field
-                            expr_reference.set_field(fk_field.source);
+                            *expr_reference = stmt::ExprReference::field(fk_field.source);
 
                             *other = match other.take() {
                                 stmt::Expr::Record(_) => todo!(),
