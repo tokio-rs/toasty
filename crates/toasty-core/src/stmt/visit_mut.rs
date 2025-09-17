@@ -6,8 +6,8 @@ use super::{
     ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
     ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
     JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
-    Source, SourceModel, Statement, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value,
-    ValueRecord, Values, With,
+    Source, SourceModel, SourceTable, SourceTableId, Statement, TableFactor, TableRef,
+    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait VisitMut {
@@ -186,6 +186,14 @@ pub trait VisitMut {
         visit_source_model_mut(self, i);
     }
 
+    fn visit_source_table_mut(&mut self, i: &mut SourceTable) {
+        visit_source_table_mut(self, i);
+    }
+
+    fn visit_source_table_id_mut(&mut self, i: &mut SourceTableId) {
+        visit_source_table_id_mut(self, i);
+    }
+
     fn visit_stmt_mut(&mut self, i: &mut Statement) {
         visit_stmt_mut(self, i);
     }
@@ -212,6 +220,10 @@ pub trait VisitMut {
 
     fn visit_table_ref_mut(&mut self, i: &mut TableRef) {
         visit_table_ref_mut(self, i);
+    }
+
+    fn visit_table_factor_mut(&mut self, i: &mut TableFactor) {
+        visit_table_factor_mut(self, i);
     }
 
     fn visit_table_with_joins_mut(&mut self, i: &mut TableWithJoins) {
@@ -412,6 +424,14 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_source_model_mut(&mut **self, i);
     }
 
+    fn visit_source_table_mut(&mut self, i: &mut SourceTable) {
+        VisitMut::visit_source_table_mut(&mut **self, i);
+    }
+
+    fn visit_source_table_id_mut(&mut self, i: &mut SourceTableId) {
+        VisitMut::visit_source_table_id_mut(&mut **self, i);
+    }
+
     fn visit_stmt_mut(&mut self, i: &mut Statement) {
         VisitMut::visit_stmt_mut(&mut **self, i);
     }
@@ -438,6 +458,10 @@ impl<V: VisitMut> VisitMut for &mut V {
 
     fn visit_table_ref_mut(&mut self, i: &mut TableRef) {
         VisitMut::visit_table_ref_mut(&mut **self, i);
+    }
+
+    fn visit_table_factor_mut(&mut self, i: &mut TableFactor) {
+        VisitMut::visit_table_factor_mut(&mut **self, i);
     }
 
     fn visit_table_with_joins_mut(&mut self, i: &mut TableWithJoins) {
@@ -763,7 +787,7 @@ pub fn visit_join_mut<V>(v: &mut V, node: &mut Join)
 where
     V: VisitMut + ?Sized,
 {
-    v.visit_table_ref_mut(&mut node.table);
+    v.visit_source_table_id_mut(&mut node.table);
     match &mut node.constraint {
         JoinOp::Left(expr) => v.visit_expr_mut(expr),
     }
@@ -840,11 +864,7 @@ where
 {
     match node {
         Source::Model(source_model) => v.visit_source_model_mut(source_model),
-        Source::Table(tables) => {
-            for table in tables {
-                v.visit_table_with_joins_mut(table);
-            }
-        }
+        Source::Table(source_table) => v.visit_source_table_mut(source_table),
     }
 }
 
@@ -854,6 +874,32 @@ where
 {
     if let Some(association) = &mut node.via {
         v.visit_association_mut(association);
+    }
+}
+
+pub fn visit_source_table_mut<V>(v: &mut V, node: &mut SourceTable)
+where
+    V: VisitMut + ?Sized,
+{
+    for table_ref in &mut node.tables {
+        v.visit_table_ref_mut(table_ref);
+    }
+    v.visit_table_with_joins_mut(&mut node.from_item);
+}
+
+pub fn visit_source_table_id_mut<V>(v: &mut V, node: &mut SourceTableId)
+where
+    V: VisitMut + ?Sized,
+{
+    // SourceTableId is just an index, nothing to visit
+}
+
+pub fn visit_table_factor_mut<V>(v: &mut V, node: &mut TableFactor)
+where
+    V: VisitMut + ?Sized,
+{
+    match node {
+        TableFactor::Table(table_id) => v.visit_source_table_id_mut(table_id),
     }
 }
 
@@ -952,7 +998,7 @@ pub fn visit_table_with_joins_mut<V>(v: &mut V, node: &mut TableWithJoins)
 where
     V: VisitMut + ?Sized,
 {
-    v.visit_table_ref_mut(&mut node.table);
+    v.visit_table_factor_mut(&mut node.relation);
     for join in &mut node.joins {
         v.visit_join_mut(join);
     }

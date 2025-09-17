@@ -348,19 +348,25 @@ impl Planner<'_> {
         }
 
         stmt::Query::builder(stmt::Select {
-            source: stmt::Source::Table(vec![stmt::TableWithJoins {
-                table: stmt::TableRef::Cte {
-                    nesting: 0,
-                    index: 0,
-                },
-                joins: vec![stmt::Join {
-                    table: stmt::TableRef::Cte {
+            source: stmt::Source::table_with_joins(
+                vec![
+                    stmt::TableRef::Cte {
+                        nesting: 0,
+                        index: 0,
+                    },
+                    stmt::TableRef::Cte {
                         nesting: 0,
                         index: 1,
                     },
-                    constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
-                }],
-            }]),
+                ],
+                stmt::TableWithJoins {
+                    relation: stmt::TableFactor::Table(stmt::SourceTableId(0)),
+                    joins: vec![stmt::Join {
+                        table: stmt::SourceTableId(1),
+                        constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
+                    }],
+                },
+            ),
             filter: stmt::Expr::from(true),
             returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
         })
