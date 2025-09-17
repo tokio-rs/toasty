@@ -58,3 +58,16 @@ impl<M: Model> Cursor<M> {
         }
     }
 }
+
+/// Extract cursor expression from a model for single-field ordering
+/// This is a placeholder implementation - actual cursor extraction will be
+/// implemented when we integrate with the paginate logic
+pub(crate) fn extract_cursor_from_model<M: Model>(
+    _item: &M,
+    _order_by: &stmt::OrderBy,
+) -> Option<stmt::Expr> {
+    // TODO: Implement proper cursor extraction
+    // This requires integration with the generated model code and
+    // understanding of the field being ordered by
+    None
+}

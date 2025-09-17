@@ -1,5 +1,5 @@
 use super::{operation, plan, Exec, Result};
-use crate::driver::Rows;
+use crate::{driver::Rows, engine::ExecResponse};
 use toasty_core::stmt;
 use toasty_core::stmt::ValueStream;
 
@@ -18,7 +18,13 @@ impl Exec<'_> {
 
         if keys.is_empty() {
             if let Some(output) = &action.output {
-                self.vars.store(output.var, ValueStream::default());
+                self.vars.store(
+                    output.var,
+                    ExecResponse {
+                        values: ValueStream::default(),
+                        metadata: None,
+                    },
+                );
             }
         } else {
             let op = operation::UpdateByKey {
@@ -39,8 +45,14 @@ impl Exec<'_> {
                         todo!("action={action:#?}");
                     };
 
-                    let res = self.project_and_filter_output(rows, &output.project, None);
-                    self.vars.store(output.var, res);
+                    let values = self.project_and_filter_output(rows, &output.project, None);
+                    self.vars.store(
+                        output.var,
+                        ExecResponse {
+                            values,
+                            metadata: None,
+                        },
+                    );
                 }
                 Rows::Count(_) => {
                     debug_assert!(action.output.is_none());

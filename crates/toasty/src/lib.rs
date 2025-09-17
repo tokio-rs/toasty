@@ -15,6 +15,9 @@ mod engine;
 mod model;
 pub use model::Model;
 
+mod page;
+pub use page::Page;
+
 pub mod relation;
 pub use relation::{BelongsTo, HasMany, HasOne};
 
