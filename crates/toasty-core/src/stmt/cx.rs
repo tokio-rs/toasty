@@ -131,8 +131,26 @@ impl<'a> ExprContext<'a> {
             ExprTarget::Source(Source::Model(_)) => {
                 todo!("ExprColumn should only be used with lowered Source::Table")
             }
-            ExprTarget::Insert(_) => todo!("insert target column resolution"),
-            ExprTarget::Update(_) => todo!("update target column resolution"),
+            ExprTarget::Insert(InsertTarget::Table(insert_table)) => {
+                let table = self.schema.db.table(insert_table.table);
+                &table.columns[expr_column.column]
+            }
+            ExprTarget::Insert(InsertTarget::Model(_)) => {
+                todo!("ExprColumn should only be used with lowered InsertTarget::Table")
+            }
+            ExprTarget::Insert(InsertTarget::Scope(_)) => {
+                todo!("ExprColumn should only be used with lowered InsertTarget::Table")
+            }
+            ExprTarget::Update(UpdateTarget::Table(table_id)) => {
+                let table = self.schema.db.table(*table_id);
+                &table.columns[expr_column.column]
+            }
+            ExprTarget::Update(UpdateTarget::Model(_)) => {
+                todo!("ExprColumn should only be used with lowered UpdateTarget::Table")
+            }
+            ExprTarget::Update(UpdateTarget::Query(_)) => {
+                todo!("ExprColumn should only be used with lowered UpdateTarget::Table")
+            }
         }
     }
 }
