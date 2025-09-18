@@ -11,7 +11,16 @@ pub enum ExprColumn {
         /// Which query the alias is listed in
         nesting: usize,
 
-        /// The index of the alias in the `FROM` (or equivalent) clause
+        /// Index into the table references vector for this column's source relation.
+        ///
+        /// For statements with multiple tables (SELECT with JOINs), this indexes into
+        /// the `SourceTable::tables` field to identify which specific table contains
+        /// this column. For single-target statements (INSERT, UPDATE), this is
+        /// typically 0 since these operations target only one relation at a time.
+        ///
+        /// Note: This references the database-level table mapping, not app-level
+        /// models. ExprColumn::Alias represents resolved column references after
+        /// lowering from the application schema to the database schema.
         table: usize,
 
         /// The index of the column in the table
