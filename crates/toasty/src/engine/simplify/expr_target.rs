@@ -21,7 +21,10 @@ pub(crate) enum ExprTarget<'a> {
     /// The expression has already been lowered and is in context of a table
     Table,
 
-    /// A lowered insert specifies the columns to insert into
+    /// Used for insert statements where specific columns are named.
+    /// The Vec<ColumnId> tracks which columns will receive values, allowing
+    /// the simplifier to validate that insert data has the right number of
+    /// fields and to pad missing fields with defaults when needed.
     TableWithColumns(Vec<ColumnId>),
 }
 

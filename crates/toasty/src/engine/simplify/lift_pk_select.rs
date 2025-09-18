@@ -26,11 +26,15 @@ impl Simplify<'_> {
         key: &[FieldId],
         stmt: &stmt::Query,
     ) -> Option<stmt::Expr> {
+        let cx = self.cx.scope(stmt);
+
         let stmt::ExprSet::Select(select) = &stmt.body else {
             return None;
         };
 
-        let model = self.schema.app.model(select.source.as_model_id());
+        let Some(model) = cx.target_as_model() else {
+            todo!()
+        };
 
         match &select.filter {
             stmt::Expr::BinaryOp(expr_binary_op) => {
@@ -46,9 +50,7 @@ impl Simplify<'_> {
                     stmt::Expr::Reference(expr_ref) => expr_ref,
                     _ => return None,
                 };
-                let Some(lhs_field) = self.resolve_expr_reference(expr_reference) else {
-                    todo!("handle None");
-                };
+                let lhs_field = cx.resolve_expr_reference(expr_reference);
 
                 if *key_field == lhs_field.id {
                     if let stmt::Expr::Value(value) = &*expr_binary_op.rhs {

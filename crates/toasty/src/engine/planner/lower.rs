@@ -262,7 +262,7 @@ impl LowerStatement<'_> {
         // TODO: we really shouldn't have to simplify here, but until
         // simplification includes overlapping predicate pruning, we have to do
         // this here.
-        simplify::simplify_expr(self.schema, simplify::ExprTarget::Const, filter);
+        simplify::simplify_expr(self.schema, filter);
 
         let mut operands = vec![];
 

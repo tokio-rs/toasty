@@ -1,5 +1,9 @@
 use super::{Expr, InsertTable, Query};
-use crate::schema::app::ModelId;
+use crate::{
+    schema::app::ModelId,
+    stmt::{ExprSet, Source},
+    Schema,
+};
 
 #[derive(Debug, Clone)]
 pub enum InsertTarget {
@@ -38,6 +42,22 @@ impl InsertTarget {
                 *self = Self::Scope(Box::new(Query::filter(*model_id, expr)));
             }
             _ => todo!("{self:#?}"),
+        }
+    }
+
+    pub fn width(&self, schema: &Schema) -> usize {
+        match self {
+            InsertTarget::Scope(query) => match &query.body {
+                ExprSet::Select(select) => match &select.source {
+                    Source::Model(source_model) => {
+                        schema.app.model(source_model.model).fields.len()
+                    }
+                    _ => todo!("insert_target={self:#?}"),
+                },
+                _ => todo!("insert_target={self:#?}"),
+            },
+            InsertTarget::Model(model_id) => schema.app.model(model_id).fields.len(),
+            InsertTarget::Table(insert_table) => insert_table.columns.len(),
         }
     }
 }

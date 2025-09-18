@@ -160,7 +160,6 @@ impl Planner<'_> {
                 *expr = insertion_output.into_iter().next().unwrap().into();
             }
             stmt::Statement::Query(query) => {
-                let target = self.schema.app.model(belongs_to.target);
                 // First, we have to try to extract the FK from the select
                 // without having to perform the query
                 //
@@ -172,9 +171,7 @@ impl Planner<'_> {
                     .map(|fk_field| fk_field.target)
                     .collect();
 
-                let Some(e) = Simplify::new_with_model_target(self.schema, target)
-                    .extract_key_value(&fields, &query)
-                else {
+                let Some(e) = Simplify::new(self.schema).extract_key_value(&fields, &query) else {
                     todo!("belongs_to={:#?}; stmt={:#?}", belongs_to, query);
                 };
 
