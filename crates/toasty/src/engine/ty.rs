@@ -8,10 +8,39 @@ struct NoopResolve;
 
 impl Resolve for Schema {
     fn resolve_column(&self, stmt: &stmt::ExprColumn) -> &stmt::Type {
-        &self
-            .db
-            .column(stmt.try_to_column_id().expect("not referencing column"))
-            .ty
+        // Try the transition helper first
+        if let Some(column_id) = stmt.try_to_column_id() {
+            return &self.db.column(column_id).ty;
+        }
+
+        // For the new ExprColumn structure, try to resolve using the fields
+        if stmt.nesting == 0 {
+            // First try the specific table if it's specified
+            if let Some(table) = self.db.tables.get(stmt.table) {
+                if stmt.column < table.columns.len() {
+                    let column_id = toasty_core::schema::db::ColumnId {
+                        table: toasty_core::schema::db::TableId(stmt.table),
+                        index: stmt.column,
+                    };
+                    return &self.db.column(column_id).ty;
+                }
+            }
+
+            // If that didn't work, try to find the column in any table (fallback for table=0 cases)
+            if stmt.table == 0 {
+                for (table_idx, table) in self.db.tables.iter().enumerate() {
+                    if stmt.column < table.columns.len() {
+                        let column_id = toasty_core::schema::db::ColumnId {
+                            table: toasty_core::schema::db::TableId(table_idx),
+                            index: stmt.column,
+                        };
+                        return &self.db.column(column_id).ty;
+                    }
+                }
+            }
+        }
+
+        panic!("cannot resolve column type for ExprColumn: {:?}", stmt);
     }
 }
 

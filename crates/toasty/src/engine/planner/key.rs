@@ -2,7 +2,9 @@ use super::{eval, Planner};
 use toasty_core::{schema::db::Index, stmt};
 
 /// Try to convert an index filter expression to a key expression
-struct TryConvert<'a> {
+struct TryConvert<'a, 'stmt> {
+    cx: stmt::ExprContext<'stmt>,
+
     planner: &'a Planner<'a>,
 
     /// Index being keyed on
@@ -13,14 +15,34 @@ struct TryConvert<'a> {
 }
 
 impl Planner<'_> {
-    /// If the expression is shaped like a key expression, then convert it to
-    /// one.
+    /// Attempts to optimize a WHERE clause filter into a direct primary key lookup.
+    ///
+    /// This function analyzes filter expressions to detect when they're actually specifying
+    /// exact primary key values, enabling Toasty to use optimized "get by key" operations.
+    /// While SQL databases automatically perform this optimization themselves, NoSQL databases
+    /// like DynamoDB require Toasty to explicitly recognize key patterns and use their
+    /// dedicated key-based APIs (GetItem, BatchGetItem) instead of slower scan operations.
+    ///
+    /// For example, it transforms queries like:
+    /// - `WHERE id = 42` → direct key lookup for single-column primary key
+    /// - `WHERE user_id = 1 AND post_id = 5` → direct key lookup for composite primary key
+    /// - `WHERE id IN (1, 2, 3)` → batch key lookup for multiple records
+    /// - `WHERE user_id = 1 AND post_id IN (5, 6)` → batch lookup for composite keys
+    ///
+    /// This optimization is essential for NoSQL backends where the difference between key
+    /// lookups and scans can be orders of magnitude in both performance and cost. Without
+    /// this analysis, even simple `find_by_id()` calls would become expensive table scans.
+    ///
+    /// Returns `Some(eval::Func)` if the filter can be converted to key lookups, `None` if
+    /// the query requires a full scan with filtering.
     pub(crate) fn try_build_key_filter(
         &self,
+        cx: stmt::ExprContext<'_>,
         index: &Index,
         expr: &stmt::Expr,
     ) -> Option<eval::Func> {
         let mut conv = TryConvert {
+            cx,
             planner: self,
             index,
             args: vec![],
@@ -42,7 +64,7 @@ impl Planner<'_> {
     }
 }
 
-impl TryConvert<'_> {
+impl TryConvert<'_, '_> {
     fn try_convert(&mut self, expr: &stmt::Expr) -> Option<stmt::Expr> {
         use stmt::Expr::*;
 
@@ -95,13 +117,15 @@ impl TryConvert<'_> {
                         return None;
                     };
 
+                    let column = self.cx.resolve_expr_column(expr_column);
+
                     // Find the index field the operand references
                     let (index, _) = self
                         .index
                         .columns
                         .iter()
                         .enumerate()
-                        .find(|(_, c)| expr_column.references(c.column))?;
+                        .find(|(_, c)| column.id == c.column)?;
 
                     assert!(fields[index].is_value_null());
 

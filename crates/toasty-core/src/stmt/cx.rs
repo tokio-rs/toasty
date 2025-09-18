@@ -1,9 +1,17 @@
 use crate::{
-    schema::app::{Field, Model, ModelId},
-    stmt::{ExprReference, ExprSet, InsertTarget, Query, Select, Source, Update, UpdateTarget},
+    schema::{
+        app::{Field, Model, ModelId},
+        db::Column,
+    },
+    stmt::{
+        Delete, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query, Select, Source,
+        TableRef, Update, UpdateTarget,
+    },
     Schema,
 };
 
+// TODO: we probably want two lifetimes here. One for &Schema and one for the stmt.
+#[derive(Debug, Clone, Copy)]
 pub struct ExprContext<'a> {
     schema: &'a Schema,
     parent: Option<&'a ExprContext<'a>>,
@@ -94,6 +102,39 @@ impl<'a> ExprContext<'a> {
             ExprTarget::Update(UpdateTarget::Table(_)) => todo!(),
         }
     }
+
+    pub fn resolve_expr_column(&self, expr_column: &ExprColumn) -> &'a Column {
+        let mut curr = self;
+
+        // Walk up the stack to the correct nesting level
+        for _ in 0..expr_column.nesting {
+            let Some(parent) = curr.parent else {
+                todo!("bug: invalid nesting level");
+            };
+
+            curr = parent;
+        }
+
+        match curr.target {
+            ExprTarget::Const => todo!("cannot resolve column in const context"),
+            ExprTarget::Source(Source::Table(source_table)) => {
+                // Get the table reference at the specified index
+                let table_ref = &source_table.tables[expr_column.table];
+                match table_ref {
+                    TableRef::Table(table_id) => {
+                        let table = self.schema.db.table(*table_id);
+                        &table.columns[expr_column.column]
+                    }
+                    TableRef::Cte { .. } => todo!("CTE column resolution not implemented"),
+                }
+            }
+            ExprTarget::Source(Source::Model(_)) => {
+                todo!("ExprColumn should only be used with lowered Source::Table")
+            }
+            ExprTarget::Insert(_) => todo!("insert target column resolution"),
+            ExprTarget::Update(_) => todo!("update target column resolution"),
+        }
+    }
 }
 
 impl<'a> ExprTarget<'a> {
@@ -130,6 +171,12 @@ impl<'a> From<&'a Select> for ExprTarget<'a> {
     }
 }
 
+impl<'a> From<&'a Insert> for ExprTarget<'a> {
+    fn from(value: &'a Insert) -> Self {
+        ExprTarget::from(&value.target)
+    }
+}
+
 impl<'a> From<&'a InsertTarget> for ExprTarget<'a> {
     fn from(value: &'a InsertTarget) -> Self {
         ExprTarget::Insert(value)
@@ -151,5 +198,11 @@ impl<'a> From<&'a Update> for ExprTarget<'a> {
 impl<'a> From<&'a UpdateTarget> for ExprTarget<'a> {
     fn from(value: &'a UpdateTarget) -> Self {
         ExprTarget::Update(value)
+    }
+}
+
+impl<'a> From<&'a Delete> for ExprTarget<'a> {
+    fn from(value: &'a Delete) -> Self {
+        ExprTarget::from(&value.from)
     }
 }

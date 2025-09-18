@@ -327,9 +327,11 @@ fn ddb_expression(
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
-        stmt::Expr::Column(stmt::ExprColumn::Column(column_id)) => {
-            let column = schema.column(*column_id);
-            attrs.column(column).to_string()
+        stmt::Expr::Column(expr_column) => {
+            // For DynamoDB, we need to resolve the column ID from the ExprColumn
+            // This is a transitional approach - ideally DynamoDB should work with the new system
+            // For now, we'll need additional context to resolve the column properly
+            todo!("DynamoDB driver needs to be updated to handle new ExprColumn structure")
         }
         stmt::Expr::Value(val) => attrs.value(val),
         stmt::Expr::And(expr_and) => {

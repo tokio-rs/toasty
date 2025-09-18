@@ -158,7 +158,7 @@ impl ToSql for &stmt::Returning {
                     .iter()
                     .enumerate()
                     .map(|(i, expr)| match expr {
-                        stmt::Expr::Column(stmt::ExprColumn::Column(_)) => (expr, None, None),
+                        stmt::Expr::Column(_) => (expr, None, None),
                         _ => (expr, Some(" AS col_"), Some(i)),
                     });
 
@@ -241,9 +241,13 @@ impl ToSql for &stmt::SourceTable {
                 let table_ref = &self.tables[table_id.0];
                 fmt!(f, table_ref);
 
+                let depth = f.depth;
                 if table_ref.is_cte() {
-                    let depth = f.depth;
-                    fmt!(f, " AS tbl_" depth);
+                    // CTEs use cte_ prefix to differentiate from regular tables
+                    fmt!(f, " AS cte_" depth "_" table_id.0);
+                } else {
+                    // Regular tables get tbl_ prefix with table index
+                    fmt!(f, " AS tbl_" depth "_" table_id.0);
                 }
             }
         }
@@ -253,7 +257,18 @@ impl ToSql for &stmt::SourceTable {
             match &join.constraint {
                 stmt::JoinOp::Left(expr) => {
                     let join_table_ref = &self.tables[join.table.0];
-                    fmt!(f, " LEFT JOIN " join_table_ref " ON " expr);
+                    fmt!(f, " LEFT JOIN " join_table_ref);
+
+                    let depth = f.depth;
+                    if join_table_ref.is_cte() {
+                        // CTEs use cte_ prefix to differentiate from regular tables
+                        fmt!(f, " AS cte_" depth "_" join.table.0);
+                    } else {
+                        // Regular tables in joins get tbl_ prefix with table index
+                        fmt!(f, " AS tbl_" depth "_" join.table.0);
+                    }
+
+                    fmt!(f, " ON " expr);
                 }
             }
         }

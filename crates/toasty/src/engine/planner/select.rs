@@ -152,13 +152,19 @@ impl Planner<'_> {
             self.partition_stmt_query_input(&mut stmt, &cx.input)
         };
 
+        let expr_cx = stmt::ExprContext::new_with_target(self.schema, &stmt);
+
         let mut index_plan = match &stmt.body {
-            stmt::ExprSet::Select(query) => self.plan_index_path2(table, &query.filter),
+            stmt::ExprSet::Select(query) => self.plan_index_path2(expr_cx, table, &query.filter),
             _ => todo!("stmt={stmt:#?}"),
         };
 
         let keys = if index_plan.index.primary_key {
-            self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
+            self.try_build_key_filter(
+                stmt::ExprContext::new_with_target(self.schema, &stmt),
+                index_plan.index,
+                &index_plan.index_filter,
+            )
         } else {
             None
         };

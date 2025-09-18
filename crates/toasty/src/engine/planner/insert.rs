@@ -331,6 +331,7 @@ impl Planner<'_> {
         };
 
         struct ConstReturning<'a> {
+            cx: stmt::ExprContext<'a>,
             columns: &'a [ColumnId],
         }
 
@@ -339,7 +340,7 @@ impl Planner<'_> {
                 let index = self
                     .columns
                     .iter()
-                    .position(|column| stmt.references(*column))
+                    .position(|column| self.cx.resolve_expr_column(stmt).id == *column)
                     .unwrap();
 
                 Some(stmt::Expr::arg_project(0, [index]))
@@ -358,6 +359,7 @@ impl Planner<'_> {
             returning.clone(),
             vec![args],
             ConstReturning {
+                cx: stmt::ExprContext::new_with_target(self.schema, &*stmt),
                 columns: &insert_table.columns,
             },
         )
