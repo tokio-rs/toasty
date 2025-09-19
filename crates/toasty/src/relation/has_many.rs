@@ -4,6 +4,7 @@ use toasty_core::stmt::Value;
 
 use std::fmt;
 
+#[derive(Clone)]
 pub struct HasMany<T> {
     values: Option<Vec<T>>,
 }
