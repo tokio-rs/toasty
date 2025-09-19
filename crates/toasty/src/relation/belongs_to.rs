@@ -4,6 +4,7 @@ use toasty_core::stmt::Value;
 
 use std::fmt;
 
+#[derive(Clone)]
 pub struct BelongsTo<T> {
     value: Option<Box<T>>,
 }
