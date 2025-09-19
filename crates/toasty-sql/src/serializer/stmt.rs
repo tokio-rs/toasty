@@ -1,3 +1,5 @@
+use std::mem;
+
 use super::{Comma, Delimited, Ident, Params, ToSql};
 
 use crate::{serializer::ExprContext, stmt};
@@ -19,23 +21,40 @@ impl ToSql for ColumnsWithConstraints<'_> {
 
 impl ToSql for &stmt::CreateIndex {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let table_name = f.serializer.table_name(self.on);
+        let prev = mem::replace(&mut f.ddl, true);
+
+        let index = f.serializer.index(self.index);
+        let table = f.serializer.table(self.on);
+        let index_name = Ident(&index.name);
+        let table_name = Ident(&table.name);
         let columns = Comma(&self.columns);
         let unique = if self.unique { "UNIQUE " } else { "" };
 
+        // Create a new expression scope to serialize the statement
+        let cx = cx.scope(table);
+
         fmt!(
-            cx, f, "CREATE " unique "INDEX " self.name " ON " table_name " (" columns ")"
+            &cx, f, "CREATE " unique "INDEX " index_name " ON " table_name " (" columns ")"
         );
+        f.ddl = prev;
     }
 }
 
 impl ToSql for &stmt::CreateTable {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        let prev = mem::replace(&mut f.ddl, true);
+
+        let table = f.serializer.table(self.table);
+        let name = Ident(&table.name);
         let columns = ColumnsWithConstraints(self);
 
+        // Create new expression scope to serialize the statement
+        let cx = cx.scope(table);
+
         fmt!(
-            cx, f, "CREATE TABLE " self.name " (" columns ")"
+            &cx, f, "CREATE TABLE " name " (" columns ")"
         );
+        f.ddl = prev;
     }
 }
 
@@ -58,8 +77,10 @@ impl ToSql for &stmt::Direction {
 
 impl ToSql for &stmt::DropTable {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        let prev = mem::replace(&mut f.ddl, true);
         let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
         fmt!(cx, f, "DROP TABLE " if_exists self.name);
+        f.ddl = prev;
     }
 }
 

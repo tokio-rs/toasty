@@ -1,6 +1,9 @@
 use super::{Comma, Delimited, Params, ToSql};
 
-use crate::{serializer::ExprContext, stmt};
+use crate::{
+    serializer::{ExprContext, Ident},
+    stmt,
+};
 
 impl ToSql for &stmt::Expr {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
@@ -16,17 +19,17 @@ impl ToSql for &stmt::Expr {
 
                 fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
             }
+            Column(expr_column) if f.ddl => {
+                let column = cx.resolve_expr_column(expr_column);
+                fmt!(cx, f, Ident(&column.name))
+            }
             Column(stmt::ExprColumn {
                 nesting,
                 table,
                 column,
             }) => {
-                if f.ddl {
-                    todo!()
-                } else {
-                    let depth = f.depth - *nesting;
-                    fmt!(cx, f, "tbl_" depth "_" table ".col_" column)
-                }
+                let depth = f.depth - *nesting;
+                fmt!(cx, f, "tbl_" depth "_" table ".col_" column)
             }
             Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
                 (None, None) => fmt!(cx, f, "COUNT(*)"),

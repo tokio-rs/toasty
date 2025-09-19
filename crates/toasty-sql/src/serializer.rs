@@ -26,7 +26,7 @@ mod value;
 
 use crate::stmt::Statement;
 
-use toasty_core::schema::db::{self, Table};
+use toasty_core::schema::db::{self, Index, Table};
 
 /// Serialize a statement to a SQL string
 #[derive(Debug)]
@@ -59,7 +59,7 @@ struct Formatter<'a, T> {
 
 pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
 
-impl Serializer<'_> {
+impl<'a> Serializer<'a> {
     pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
         let mut ret = String::new();
 
@@ -77,6 +77,14 @@ impl Serializer<'_> {
 
         ret.push(';');
         ret
+    }
+
+    fn table(&self, id: impl Into<db::TableId>) -> &'a Table {
+        self.schema.table(id.into())
+    }
+
+    fn index(&self, id: impl Into<db::IndexId>) -> &'a Index {
+        self.schema.index(id.into())
     }
 
     fn table_name(&self, id: impl Into<db::TableId>) -> Ident<&str> {

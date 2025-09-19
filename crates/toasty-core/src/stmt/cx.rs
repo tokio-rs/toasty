@@ -20,7 +20,16 @@ pub struct ExprContext<'a, T = Schema> {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ExprTarget<'a> {
+    /// Expression does *not* reference any model or table.
     Const,
+
+    /// Expression references a single model
+    Model(&'a Model),
+
+    /// Expression references a single table
+    Table(&'a Table),
+
+    // Reference statement targets directly
     Insert(&'a InsertTarget),
     Source(&'a Source),
     Update(&'a UpdateTarget),
@@ -99,6 +108,9 @@ impl<'a> ExprContext<'a, Schema> {
 
         match curr.target {
             ExprTarget::Const => todo!("fail"),
+            ExprTarget::Model(model) => &model.fields[*index],
+            ExprTarget::Table(_) => todo!(),
+
             ExprTarget::Source(Source::Model(source_model)) => {
                 &self.schema.app.model(source_model.model).fields[*index]
             }
@@ -138,6 +150,8 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
 
         match curr.target {
             ExprTarget::Const => todo!("cannot resolve column in const context"),
+            ExprTarget::Model(_) => todo!("cannot resolve column in model context"),
+            ExprTarget::Table(table) => &table.columns[expr_column.column],
             ExprTarget::Source(Source::Table(source_table)) => {
                 // Get the table reference at the specified index
                 let table_ref = &source_table.tables[expr_column.table];
@@ -191,11 +205,24 @@ impl<'a, T> Copy for ExprContext<'a, T> {}
 impl<'a> ExprTarget<'a> {
     pub fn as_model_id(self) -> Option<ModelId> {
         Some(match self {
+            ExprTarget::Model(model) => model.id,
             ExprTarget::Source(Source::Model(source_model)) => source_model.model,
             ExprTarget::Update(UpdateTarget::Model(model_id)) => *model_id,
             ExprTarget::Insert(InsertTarget::Model(model_id)) => *model_id,
             _ => return None,
         })
+    }
+}
+
+impl<'a> From<&'a Model> for ExprTarget<'a> {
+    fn from(value: &'a Model) -> Self {
+        ExprTarget::Model(value)
+    }
+}
+
+impl<'a> From<&'a Table> for ExprTarget<'a> {
+    fn from(value: &'a Table) -> Self {
+        ExprTarget::Table(value)
     }
 }
 
