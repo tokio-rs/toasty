@@ -1,13 +1,11 @@
 use crate::{
-    schema::{
+    Schema, schema::{
         app::{Field, Model, ModelId},
-        db::Column,
-    },
-    stmt::{
+        db::{Column, ColumnId},
+    }, stmt::{
         Delete, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query, Select, Source,
         TableRef, Update, UpdateTarget,
-    },
-    Schema,
+    }
 };
 
 // TODO: we probably want two lifetimes here. One for &Schema and one for the stmt.
@@ -101,6 +99,10 @@ impl<'a> ExprContext<'a> {
             }
             ExprTarget::Update(UpdateTarget::Table(_)) => todo!(),
         }
+    }
+
+    pub fn expr_column(&self, column_id: impl Into<ColumnId>) -> ExprColumn {
+        todo!()
     }
 
     pub fn resolve_expr_column(&self, expr_column: &ExprColumn) -> &'a Column {

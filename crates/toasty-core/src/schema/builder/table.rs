@@ -569,6 +569,23 @@ impl BuildMapping<'_> {
         }
     }
 
+    /// Maps table columns to model field expressions during query lowering.
+    ///
+    /// Called during query planning to replace model field references with the appropriate
+    /// table column expressions. Handles type conversions between table storage and model types.
+    ///
+    /// # Type Conversions
+    /// - **Direct**: `user.name` → `SELECT user.name`
+    /// - **Enum decode**: `post.status` → `DECODE_ENUM(post.status_enum, 'bool', 1)`
+    /// - **ID cast**: `user.id` → `SELECT user.id_str::UserId`
+    ///
+    /// # Usage
+    /// The lowering process swaps field references with these generated expressions:
+    /// ```text
+    /// Field reference: post.published (bool)
+    /// Table storage: post.status_enum (enum with bool variant)
+    /// Generated expr: DECODE_ENUM(post.status_enum, 'bool', 1)
+    /// ```
     fn map_table_column_to_model(
         &mut self,
         field_id: FieldId,
@@ -577,8 +594,16 @@ impl BuildMapping<'_> {
         let column_id = self.mapping.fields[field_id.index].as_ref().unwrap().column;
         let column = self.table.column(column_id);
 
+        // NOTE: nesting and table are stubs here (though often the actual values).
+        // The engine must substitute these with the actual TableRef index in the query's TableSource.
+        let expr_column = stmt::Expr::column(stmt::ExprColumn {
+            nesting: 0,
+            table: 0,
+            column: column_id.index,
+        });
+
         match &column.ty {
-            c_ty if *c_ty == primitive.ty => stmt::Expr::column(column.id),
+            c_ty if *c_ty == primitive.ty => expr_column,
             stmt::Type::Enum(ty_enum) => {
                 let variant = ty_enum
                     .variants
@@ -590,13 +615,13 @@ impl BuildMapping<'_> {
                     .unwrap();
 
                 stmt::Expr::DecodeEnum(
-                    Box::new(stmt::Expr::column(column.id)),
+                    Box::new(expr_column),
                     primitive.ty.clone(),
                     variant.discriminant,
                 )
             }
             stmt::Type::String if primitive.ty.is_id() => {
-                stmt::Expr::cast(stmt::Expr::column(column.id), &primitive.ty)
+                stmt::Expr::cast(expr_column, &primitive.ty)
             }
             _ => todo!("column={column:#?}; primitive={primitive:#?}"),
         }

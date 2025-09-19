@@ -8,6 +8,7 @@ struct NoopResolve;
 
 impl Resolve for Schema {
     fn resolve_column(&self, stmt: &stmt::ExprColumn) -> &stmt::Type {
+        /*
         // Try the transition helper first
         if let Some(column_id) = stmt.try_to_column_id() {
             return &self.db.column(column_id).ty;
@@ -41,6 +42,8 @@ impl Resolve for Schema {
         }
 
         panic!("cannot resolve column type for ExprColumn: {:?}", stmt);
+        */
+        todo!()
     }
 }
 

@@ -271,7 +271,7 @@ impl LowerStatement<'_> {
             assert_eq!(self.mapping.columns[column.id.index], column.id);
 
             operands.push(stmt::Expr::begins_with(
-                stmt::Expr::column(column.id),
+                cx.expr_column(column),
                 pattern,
             ));
         }

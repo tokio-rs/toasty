@@ -189,26 +189,21 @@ impl Planner<'_> {
                         });
 
                         if !contains {
-                            todo!("returning types won't like up with projection");
-                            /*
-                            returning
-                                .fields
-                                .push(stmt::Expr::column(filter_expr.column));
-                            */
+                            todo!("returning types won't line up with projection");
                         }
                     }
                 });
             }
         }
 
+        let expr_cx = stmt::ExprContext::new_with_target(self.schema, &stmt);
+
         let columns = match &stmt.body.as_select().returning {
             stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => expr_record
                 .fields
                 .iter()
                 .map(|expr| match expr {
-                    stmt::Expr::Column(expr) => {
-                        expr.try_to_column_id().expect("not referencing column")
-                    }
+                    stmt::Expr::Column(expr_column) => expr_cx.resolve_expr_column(expr_column).id,
                     _ => todo!("stmt={stmt:#?}"),
                 })
                 .collect(),
