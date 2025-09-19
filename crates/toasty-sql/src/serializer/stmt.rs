@@ -62,7 +62,10 @@ impl ToSql for &stmt::Delete {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         assert!(self.returning.is_none());
 
-        fmt!(cx, f, "DELETE FROM " self.from " WHERE " self.filter);
+        // Create a new expression scope to serialize the statement
+        let cx = cx.scope(self);
+
+        fmt!(&cx, f, "DELETE FROM " self.from " WHERE " self.filter);
     }
 }
 
@@ -86,13 +89,16 @@ impl ToSql for &stmt::DropTable {
 
 impl ToSql for &stmt::Insert {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        // Create a new expression scope to serialize the statement
+        let cx = cx.scope(self);
+
         let returning = self
             .returning
             .as_ref()
             .map(|returning| ("RETURNING ", returning));
 
         fmt!(
-            cx, f, "INSERT INTO " self.target " " self.source returning
+            &cx, f, "INSERT INTO " self.target " " self.source returning
         );
     }
 }
@@ -126,6 +132,9 @@ impl ToSql for &stmt::Limit {
 
 impl ToSql for &stmt::Query {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        // Create a new expression scope to serialize the statement
+        let cx = cx.scope(self);
+
         let locks = if self.locks.is_empty() {
             None
         } else {
@@ -136,7 +145,7 @@ impl ToSql for &stmt::Query {
         let order_by = self.order_by.as_ref().map(|order_by| (" ", order_by));
         let limit = self.limit.as_ref().map(|limit| (" ", limit));
 
-        fmt!(cx, f, self.with body order_by limit locks)
+        fmt!(&cx, f, self.with body order_by limit locks)
     }
 }
 
@@ -318,6 +327,9 @@ impl ToSql for &stmt::Update {
         let table = f.serializer.schema.table(self.target.as_table());
         let assignments = (table, &self.assignments);
 
+        // Create a new expression scope to serialize the statement
+        let cx = cx.scope(self);
+
         let filter = self.filter.as_ref().map(|expr| (" WHERE ", expr));
         let returning = self
             .returning
@@ -329,7 +341,7 @@ impl ToSql for &stmt::Update {
             "SQL does not support update conditions"
         );
 
-        fmt!(cx, f, "UPDATE " self.target " SET " assignments filter returning);
+        fmt!(&cx, f, "UPDATE " self.target " SET " assignments filter returning);
     }
 }
 

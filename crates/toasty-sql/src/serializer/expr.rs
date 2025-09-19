@@ -23,13 +23,12 @@ impl ToSql for &stmt::Expr {
                 let column = cx.resolve_expr_column(expr_column);
                 fmt!(cx, f, Ident(&column.name))
             }
-            Column(stmt::ExprColumn {
-                nesting,
-                table,
-                column,
-            }) => {
+            Column(expr_column @ stmt::ExprColumn { nesting, table, .. }) => {
+                let column = cx.resolve_expr_column(expr_column);
+                let name = Ident(&column.name);
                 let depth = f.depth - *nesting;
-                fmt!(cx, f, "tbl_" depth "_" table ".col_" column)
+
+                fmt!(cx, f, "tbl_" depth "_" table "." name)
             }
             Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
                 (None, None) => fmt!(cx, f, "COUNT(*)"),
