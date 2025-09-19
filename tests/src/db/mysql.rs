@@ -150,7 +150,10 @@ impl SetupMySQL {
         let mut conn = pool.get_conn().await?;
 
         let my_prefix = self.isolation.table_prefix();
-        let escaped_prefix = my_prefix.replace('\\', "\\\\").replace('_', "\\_").replace('%', "\\%");
+        let escaped_prefix = my_prefix
+            .replace('\\', "\\\\")
+            .replace('_', "\\_")
+            .replace('%', "\\%");
 
         // Query for tables that belong to this test
         let rows: Vec<String> = conn

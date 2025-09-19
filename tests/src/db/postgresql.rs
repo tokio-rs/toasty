@@ -141,7 +141,10 @@ impl SetupPostgreSQL {
         let client = self.get_client().await;
 
         let my_prefix = self.isolation.table_prefix();
-        let escaped_prefix = my_prefix.replace('\\', "\\\\").replace('_', "\\_").replace('%', "\\%");
+        let escaped_prefix = my_prefix
+            .replace('\\', "\\\\")
+            .replace('_', "\\_")
+            .replace('%', "\\%");
 
         // Query for tables that belong to this test
         let rows = client
