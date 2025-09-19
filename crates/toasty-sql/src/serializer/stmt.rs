@@ -3,7 +3,7 @@ use std::mem;
 use super::{Comma, Delimited, Ident, Params, ToSql};
 
 use crate::{serializer::ExprContext, stmt};
-use toasty_core::schema::db;
+use toasty_core::{schema::db, stmt::SourceTableId};
 
 struct ColumnsWithConstraints<'a>(&'a stmt::CreateTable);
 
@@ -114,8 +114,12 @@ impl ToSql for &stmt::InsertTarget {
                         .iter()
                         .map(|column_id| f.serializer.column_name(*column_id)),
                 );
+                let alias = TableAlias {
+                    depth: f.depth,
+                    table: SourceTableId(0),
+                };
 
-                fmt!(cx, f, table_name " (" columns ")");
+                fmt!(cx, f, table_name " AS " alias " (" columns ")");
             }
             _ => todo!("self={self:?}"),
         }
@@ -269,16 +273,12 @@ impl ToSql for &stmt::SourceTable {
         match &self.from_item.relation {
             stmt::TableFactor::Table(table_id) => {
                 let table_ref = &self.tables[table_id.0];
-                fmt!(cx, f, table_ref);
+                let alias = TableAlias {
+                    depth: f.depth,
+                    table: *table_id,
+                };
 
-                let depth = f.depth;
-                if table_ref.is_cte() {
-                    // CTEs use cte_ prefix to differentiate from regular tables
-                    fmt!(cx, f, " AS cte_" depth "_" table_id.0);
-                } else {
-                    // Regular tables get tbl_ prefix with table index
-                    fmt!(cx, f, " AS tbl_" depth "_" table_id.0);
-                }
+                fmt!(cx, f, table_ref " AS " alias);
             }
         }
 
@@ -287,18 +287,11 @@ impl ToSql for &stmt::SourceTable {
             match &join.constraint {
                 stmt::JoinOp::Left(expr) => {
                     let join_table_ref = &self.tables[join.table.0];
-                    fmt!(cx, f, " LEFT JOIN " join_table_ref);
-
-                    let depth = f.depth;
-                    if join_table_ref.is_cte() {
-                        // CTEs use cte_ prefix to differentiate from regular tables
-                        fmt!(cx, f, " AS cte_" depth "_" join.table.0);
-                    } else {
-                        // Regular tables in joins get tbl_ prefix with table index
-                        fmt!(cx, f, " AS tbl_" depth "_" join.table.0);
-                    }
-
-                    fmt!(cx, f, " ON " expr);
+                    let alias = TableAlias {
+                        depth: f.depth,
+                        table: join.table,
+                    };
+                    fmt!(cx, f, " LEFT JOIN " join_table_ref " AS " alias " ON " expr);
                 }
             }
         }
@@ -319,6 +312,17 @@ impl ToSql for &stmt::TableRef {
                 fmt!(cx, f, "cte_" depth "_" index);
             }
         }
+    }
+}
+
+struct TableAlias {
+    depth: usize,
+    table: SourceTableId,
+}
+
+impl ToSql for &TableAlias {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        fmt!(cx, f, "tbl_" self.depth "_" self.table.0);
     }
 }
 
@@ -361,7 +365,12 @@ impl ToSql for &stmt::UpdateTarget {
         match self {
             stmt::UpdateTarget::Table(table_id) => {
                 let table_name = f.serializer.table_name(*table_id);
-                fmt!(cx, f, table_name);
+                let alias = TableAlias {
+                    depth: f.depth,
+                    table: SourceTableId(0),
+                };
+
+                fmt!(cx, f, table_name " AS " alias);
             }
             _ => todo!(),
         }
