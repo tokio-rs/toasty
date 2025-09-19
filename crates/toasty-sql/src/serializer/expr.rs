@@ -19,16 +19,17 @@ impl ToSql for &stmt::Expr {
 
                 fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
             }
-            Column(expr_column) if f.ddl => {
-                let column = cx.resolve_expr_column(expr_column);
-                fmt!(cx, f, Ident(&column.name))
-            }
             Column(expr_column @ stmt::ExprColumn { nesting, table, .. }) => {
-                let column = cx.resolve_expr_column(expr_column);
-                let name = Ident(&column.name);
-                let depth = f.depth - *nesting;
+                if f.alias {
+                    let column = cx.resolve_expr_column(expr_column);
+                    let name = Ident(&column.name);
+                    let depth = f.depth - *nesting;
 
-                fmt!(cx, f, "tbl_" depth "_" table "." name)
+                    fmt!(cx, f, "tbl_" depth "_" table "." name)
+                } else {
+                    let column = cx.resolve_expr_column(expr_column);
+                    fmt!(cx, f, Ident(&column.name))
+                }
             }
             Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
                 (None, None) => fmt!(cx, f, "COUNT(*)"),

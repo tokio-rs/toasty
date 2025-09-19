@@ -141,13 +141,14 @@ impl SetupPostgreSQL {
         let client = self.get_client().await;
 
         let my_prefix = self.isolation.table_prefix();
+        let escaped_prefix = my_prefix.replace('\\', "\\\\").replace('_', "\\_").replace('%', "\\%");
 
         // Query for tables that belong to this test
         let rows = client
             .query(
                 "SELECT table_name FROM information_schema.tables
              WHERE table_schema = 'public' AND table_name LIKE $1",
-                &[&format!("{my_prefix}%")],
+                &[&format!("{escaped_prefix}%")],
             )
             .await?;
 

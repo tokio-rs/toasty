@@ -53,8 +53,8 @@ struct Formatter<'a, T> {
     /// generating names
     depth: usize,
 
-    /// True when serializing a DDL statement
-    ddl: bool,
+    /// True when table names should be aliased.
+    alias: bool,
 }
 
 pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
@@ -68,7 +68,7 @@ impl<'a> Serializer<'a> {
             dst: &mut ret,
             params,
             depth: 0,
-            ddl: false,
+            alias: false,
         };
 
         let cx = ExprContext::new(self.schema);

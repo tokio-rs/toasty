@@ -21,8 +21,6 @@ impl ToSql for ColumnsWithConstraints<'_> {
 
 impl ToSql for &stmt::CreateIndex {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let prev = mem::replace(&mut f.ddl, true);
-
         let index = f.serializer.index(self.index);
         let table = f.serializer.table(self.on);
         let index_name = Ident(&index.name);
@@ -36,14 +34,11 @@ impl ToSql for &stmt::CreateIndex {
         fmt!(
             &cx, f, "CREATE " unique "INDEX " index_name " ON " table_name " (" columns ")"
         );
-        f.ddl = prev;
     }
 }
 
 impl ToSql for &stmt::CreateTable {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let prev = mem::replace(&mut f.ddl, true);
-
         let table = f.serializer.table(self.table);
         let name = Ident(&table.name);
         let columns = ColumnsWithConstraints(self);
@@ -54,18 +49,21 @@ impl ToSql for &stmt::CreateTable {
         fmt!(
             &cx, f, "CREATE TABLE " name " (" columns ")"
         );
-        f.ddl = prev;
     }
 }
 
 impl ToSql for &stmt::Delete {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        let prev = mem::replace(&mut f.alias, true);
+
         assert!(self.returning.is_none());
 
         // Create a new expression scope to serialize the statement
         let cx = cx.scope(self);
 
         fmt!(&cx, f, "DELETE FROM " self.from " WHERE " self.filter);
+
+        f.alias = prev;
     }
 }
 
@@ -80,10 +78,8 @@ impl ToSql for &stmt::Direction {
 
 impl ToSql for &stmt::DropTable {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let prev = mem::replace(&mut f.ddl, true);
         let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
         fmt!(cx, f, "DROP TABLE " if_exists self.name);
-        f.ddl = prev;
     }
 }
 
@@ -114,12 +110,8 @@ impl ToSql for &stmt::InsertTarget {
                         .iter()
                         .map(|column_id| f.serializer.column_name(*column_id)),
                 );
-                let alias = TableAlias {
-                    depth: f.depth,
-                    table: SourceTableId(0),
-                };
 
-                fmt!(cx, f, table_name " AS " alias " (" columns ")");
+                fmt!(cx, f, table_name " (" columns ")");
             }
             _ => todo!("self={self:?}"),
         }
@@ -136,6 +128,7 @@ impl ToSql for &stmt::Limit {
 
 impl ToSql for &stmt::Query {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        let prev = mem::replace(&mut f.alias, true);
         // Create a new expression scope to serialize the statement
         let cx = cx.scope(self);
 
@@ -149,7 +142,9 @@ impl ToSql for &stmt::Query {
         let order_by = self.order_by.as_ref().map(|order_by| (" ", order_by));
         let limit = self.limit.as_ref().map(|limit| (" ", limit));
 
-        fmt!(&cx, f, self.with body order_by limit locks)
+        fmt!(&cx, f, self.with body order_by limit locks);
+
+        f.alias = prev;
     }
 }
 
@@ -328,6 +323,8 @@ impl ToSql for &TableAlias {
 
 impl ToSql for &stmt::Update {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        let prev = mem::replace(&mut f.alias, true);
+
         let table = f.serializer.schema.table(self.target.as_table());
         let assignments = (table, &self.assignments);
 
@@ -346,6 +343,8 @@ impl ToSql for &stmt::Update {
         );
 
         fmt!(&cx, f, "UPDATE " self.target " SET " assignments filter returning);
+
+        f.alias = prev;
     }
 }
 
