@@ -26,7 +26,7 @@ mod value;
 
 use crate::stmt::Statement;
 
-use toasty_core::schema::db;
+use toasty_core::schema::db::{self, Table};
 
 /// Serialize a statement to a SQL string
 #[derive(Debug)]
@@ -52,7 +52,12 @@ struct Formatter<'a, T> {
     /// Current query depth. This is used to determine the nesting level when
     /// generating names
     depth: usize,
+
+    /// True when serializing a DDL statement
+    ddl: bool,
 }
+
+pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
 
 impl Serializer<'_> {
     pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
@@ -63,9 +68,12 @@ impl Serializer<'_> {
             dst: &mut ret,
             params,
             depth: 0,
+            ddl: false,
         };
 
-        stmt.to_sql(&mut fmt);
+        let cx = ExprContext::new(self.schema);
+
+        stmt.to_sql(&cx, &mut fmt);
 
         ret.push(';');
         ret

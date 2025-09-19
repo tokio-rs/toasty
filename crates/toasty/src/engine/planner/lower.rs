@@ -270,10 +270,7 @@ impl LowerStatement<'_> {
 
             assert_eq!(self.mapping.columns[column.id.index], column.id);
 
-            operands.push(stmt::Expr::begins_with(
-                cx.expr_column(column),
-                pattern,
-            ));
+            operands.push(stmt::Expr::begins_with(cx.expr_column(column), pattern));
         }
 
         if operands.is_empty() {

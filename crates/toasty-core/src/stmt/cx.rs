@@ -1,18 +1,20 @@
 use crate::{
-    Schema, schema::{
+    schema::{
         app::{Field, Model, ModelId},
-        db::{Column, ColumnId},
-    }, stmt::{
+        db::{self, Column, ColumnId, Table, TableId},
+    },
+    stmt::{
         Delete, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query, Select, Source,
         TableRef, Update, UpdateTarget,
-    }
+    },
+    Schema,
 };
 
 // TODO: we probably want two lifetimes here. One for &Schema and one for the stmt.
-#[derive(Debug, Clone, Copy)]
-pub struct ExprContext<'a> {
-    schema: &'a Schema,
-    parent: Option<&'a ExprContext<'a>>,
+#[derive(Debug)]
+pub struct ExprContext<'a, T = Schema> {
+    schema: &'a T,
+    parent: Option<&'a ExprContext<'a, T>>,
     target: ExprTarget<'a>,
 }
 
@@ -24,15 +26,28 @@ pub enum ExprTarget<'a> {
     Update(&'a UpdateTarget),
 }
 
-impl<'a> ExprContext<'a> {
-    pub fn new(schema: &'a Schema) -> ExprContext<'a> {
+pub trait DbSchema {
+    fn table(&self, id: TableId) -> &Table;
+}
+
+impl DbSchema for Schema {
+    fn table(&self, id: TableId) -> &Table {
+        self.db.table(id)
+    }
+}
+
+impl DbSchema for db::Schema {
+    fn table(&self, id: TableId) -> &Table {
+        db::Schema::table(self, id)
+    }
+}
+
+impl<'a, T> ExprContext<'a, T> {
+    pub fn new(schema: &'a T) -> ExprContext<'a, T> {
         ExprContext::new_with_target(schema, ExprTarget::Const)
     }
 
-    pub fn new_with_target(
-        schema: &'a Schema,
-        target: impl Into<ExprTarget<'a>>,
-    ) -> ExprContext<'a> {
+    pub fn new_with_target(schema: &'a T, target: impl Into<ExprTarget<'a>>) -> ExprContext<'a, T> {
         ExprContext {
             schema,
             parent: None,
@@ -40,7 +55,7 @@ impl<'a> ExprContext<'a> {
         }
     }
 
-    pub fn schema(&self) -> &'a Schema {
+    pub fn schema(&self) -> &'a T {
         self.schema
     }
 
@@ -51,14 +66,16 @@ impl<'a> ExprContext<'a> {
     pub fn scope<'child>(
         &'child self,
         target: impl Into<ExprTarget<'child>>,
-    ) -> ExprContext<'child> {
+    ) -> ExprContext<'child, T> {
         ExprContext {
             schema: self.schema,
             parent: Some(self),
             target: target.into(),
         }
     }
+}
 
+impl<'a> ExprContext<'a, Schema> {
     pub fn target_as_model(&self) -> Option<&'a Model> {
         let model_id = self.target.as_model_id()?;
         Some(self.schema.app.model(model_id))
@@ -104,7 +121,9 @@ impl<'a> ExprContext<'a> {
     pub fn expr_column(&self, column_id: impl Into<ColumnId>) -> ExprColumn {
         todo!()
     }
+}
 
+impl<'a, T: DbSchema> ExprContext<'a, T> {
     pub fn resolve_expr_column(&self, expr_column: &ExprColumn) -> &'a Column {
         let mut curr = self;
 
@@ -124,7 +143,7 @@ impl<'a> ExprContext<'a> {
                 let table_ref = &source_table.tables[expr_column.table];
                 match table_ref {
                     TableRef::Table(table_id) => {
-                        let table = self.schema.db.table(*table_id);
+                        let table = self.schema.table(*table_id);
                         &table.columns[expr_column.column]
                     }
                     TableRef::Cte { .. } => todo!("CTE column resolution not implemented"),
@@ -134,7 +153,7 @@ impl<'a> ExprContext<'a> {
                 todo!("ExprColumn should only be used with lowered Source::Table")
             }
             ExprTarget::Insert(InsertTarget::Table(insert_table)) => {
-                let table = self.schema.db.table(insert_table.table);
+                let table = self.schema.table(insert_table.table);
                 &table.columns[expr_column.column]
             }
             ExprTarget::Insert(InsertTarget::Model(_)) => {
@@ -144,7 +163,7 @@ impl<'a> ExprContext<'a> {
                 todo!("ExprColumn should only be used with lowered InsertTarget::Table")
             }
             ExprTarget::Update(UpdateTarget::Table(table_id)) => {
-                let table = self.schema.db.table(*table_id);
+                let table = self.schema.table(*table_id);
                 &table.columns[expr_column.column]
             }
             ExprTarget::Update(UpdateTarget::Model(_)) => {
@@ -156,6 +175,18 @@ impl<'a> ExprContext<'a> {
         }
     }
 }
+
+impl<'a, T> Clone for ExprContext<'a, T> {
+    fn clone(&self) -> Self {
+        Self {
+            schema: self.schema,
+            parent: self.parent.clone(),
+            target: self.target.clone(),
+        }
+    }
+}
+
+impl<'a, T> Copy for ExprContext<'a, T> {}
 
 impl<'a> ExprTarget<'a> {
     pub fn as_model_id(self) -> Option<ModelId> {
