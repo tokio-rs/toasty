@@ -168,6 +168,20 @@ impl Value {
         }
     }
 
+    /// Infer the type of a value
+    pub fn infer_ty(&self) -> Type {
+        match self {
+            Value::Bool(_) => Type::Bool,
+            Value::I64(_) => Type::I64,
+            Value::Id(v) => Type::Id(v.model_id()),
+            Value::SparseRecord(v) => Type::SparseRecord(v.fields.clone()),
+            Value::Null => Type::Null,
+            Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
+            Value::String(_) => Type::String,
+            _ => todo!("{self:#?}"),
+        }
+    }
+
     #[track_caller]
     pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
         let mut ret = Entry::Value(self);

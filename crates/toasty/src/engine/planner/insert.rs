@@ -2,7 +2,7 @@ use super::{eval, plan, Insertion, Planner, Result};
 use std::collections::hash_map::Entry;
 use toasty_core::{
     schema::{app, db::ColumnId},
-    stmt,
+    stmt::{self, ExprContext},
 };
 
 /// Process the scope component of an insert statement.
@@ -33,12 +33,14 @@ impl Planner<'_> {
 
         let mut output_var = None;
 
+        let cx = ExprContext::new_with_target(self.schema, &stmt.target);
+
         // First, lower the returning part of the statement and get any
         // necessary in-memory projection.
         let project = stmt
             .returning
             .as_mut()
-            .map(|returning| self.partition_returning(returning));
+            .map(|returning| self.partition_returning(&cx, returning));
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {

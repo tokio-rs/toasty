@@ -98,8 +98,10 @@ impl Planner<'_> {
         // database evaluating the statement), then extract it here.
         self.constantize_update_returning(&mut stmt);
 
+        let cx = stmt::ExprContext::new_with_target(self.schema, &stmt.target);
+
         let output = self
-            .partition_maybe_returning(&mut stmt.returning)
+            .partition_maybe_returning(&cx, &mut stmt.returning)
             .map(|project| plan::Output {
                 var: self
                     .var_table

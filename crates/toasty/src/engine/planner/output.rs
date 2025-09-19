@@ -1,5 +1,5 @@
 use super::{eval, Planner};
-use toasty_core::stmt;
+use toasty_core::stmt::{self, ExprContext};
 
 struct Partitioner<'a> {
     planner: &'a Planner<'a>,
@@ -27,22 +27,31 @@ enum Partition {
 impl Planner<'_> {
     /// Partition a returning statement between what can be handled by the
     /// target database and what Toasty handles in-memory.
-    pub(crate) fn partition_returning(&self, stmt: &mut stmt::Returning) -> eval::Func {
-        let ret = self.infer_expr_ty(stmt.as_expr(), &[]);
+    pub(crate) fn partition_returning(
+        &self,
+        cx: &ExprContext<'_>,
+        stmt: &mut stmt::Returning,
+    ) -> eval::Func {
+        let ret = cx.infer_expr_ty(stmt.as_expr(), &[]);
 
         match stmt {
             stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => {
                 // returning an expression record is special-cased because it
                 // might be able to be passed through to the database as an
                 // identity projection.
-                self.partition_returning_expr_record(expr_record, ret)
+                self.partition_returning_expr_record(cx, expr_record, ret)
             }
-            stmt::Returning::Expr(expr) => self.partition_returning_expr(expr, ret),
+            stmt::Returning::Expr(expr) => self.partition_returning_expr(cx, expr, ret),
             _ => todo!("returning={stmt:#?}"),
         }
     }
 
-    fn partition_returning_expr(&self, stmt: &mut stmt::Expr, ret: stmt::Type) -> eval::Func {
+    fn partition_returning_expr(
+        &self,
+        cx: &ExprContext<'_>,
+        stmt: &mut stmt::Expr,
+        ret: stmt::Type,
+    ) -> eval::Func {
         use Partition::*;
 
         let mut partitioner = Partitioner {
@@ -51,7 +60,7 @@ impl Planner<'_> {
             ty: vec![],
         };
 
-        match partitioner.partition_expr(stmt) {
+        match partitioner.partition_expr(cx, stmt) {
             Stmt => {
                 todo!()
             }
@@ -72,6 +81,7 @@ impl Planner<'_> {
 
     fn partition_returning_expr_record(
         &self,
+        cx: &ExprContext<'_>,
         stmt_record: &mut stmt::ExprRecord,
         ret: stmt::Type,
     ) -> eval::Func {
@@ -91,9 +101,9 @@ impl Planner<'_> {
                 identity = false;
                 eval_fields.push(stmt::Expr::Value(value));
             } else {
-                match partitioner.partition_expr(&field) {
+                match partitioner.partition_expr(cx, &field) {
                     Stmt => {
-                        let ty = self.infer_expr_ty(&field, &[]);
+                        let ty = cx.infer_expr_ty(&field, &[]);
                         let arg = partitioner.push_stmt_field(field, ty);
                         eval_fields.push(arg);
                     }
@@ -118,10 +128,11 @@ impl Planner<'_> {
 
     pub fn partition_maybe_returning(
         &self,
+        cx: &ExprContext<'_>,
         stmt: &mut Option<stmt::Returning>,
     ) -> Option<eval::Func> {
         let Some(returning) = stmt else { return None };
-        let project = self.partition_returning(returning);
+        let project = self.partition_returning(cx, returning);
 
         if returning.as_expr().as_record().is_empty() {
             *stmt = None;
@@ -132,13 +143,13 @@ impl Planner<'_> {
 }
 
 impl Partitioner<'_> {
-    fn partition_expr(&mut self, stmt: &stmt::Expr) -> Partition {
+    fn partition_expr(&mut self, cx: &ExprContext<'_>, stmt: &stmt::Expr) -> Partition {
         use Partition::*;
 
         match stmt {
-            stmt::Expr::Cast(expr) => match self.partition_expr(&expr.expr) {
+            stmt::Expr::Cast(expr) => match self.partition_expr(cx, &expr.expr) {
                 Stmt => {
-                    let ty = self.planner.infer_expr_ty(&expr.expr, &[]);
+                    let ty = cx.infer_expr_ty(&expr.expr, &[]);
                     let arg = self.push_stmt_field((*expr.expr).clone(), ty);
                     Eval(stmt::Expr::cast(arg, expr.ty.clone()))
                 }
@@ -146,9 +157,9 @@ impl Partitioner<'_> {
                 Eval(eval) => Eval(stmt::Expr::cast(eval, expr.ty.clone())),
             },
             stmt::Expr::Column(_) => Stmt,
-            stmt::Expr::Project(expr) => match self.partition_expr(&expr.base) {
+            stmt::Expr::Project(expr) => match self.partition_expr(cx, &expr.base) {
                 Stmt => {
-                    let ty = self.planner.infer_expr_ty(&expr.base, &[]);
+                    let ty = cx.infer_expr_ty(&expr.base, &[]);
                     let arg = self.push_stmt_field((*expr.base).clone(), ty);
                     Eval(stmt::Expr::project(arg, expr.projection.clone()))
                 }
@@ -159,7 +170,7 @@ impl Partitioner<'_> {
                 let field_partition_res: Vec<_> = expr
                     .fields
                     .iter()
-                    .map(|field| self.partition_expr(field))
+                    .map(|field| self.partition_expr(cx, field))
                     .collect();
 
                 if field_partition_res.iter().all(|res| res.is_stmt()) {
@@ -182,9 +193,9 @@ impl Partitioner<'_> {
                 }
             }
             stmt::Expr::Value(_) => ConstStmt,
-            stmt::Expr::DecodeEnum(expr, ty, variant) => match self.partition_expr(expr) {
+            stmt::Expr::DecodeEnum(expr, ty, variant) => match self.partition_expr(cx, expr) {
                 Stmt => {
-                    let base_ty = self.planner.infer_expr_ty(expr, &[]);
+                    let base_ty = cx.infer_expr_ty(expr, &[]);
                     let base = self.push_stmt_field((**expr).clone(), base_ty);
                     Eval(stmt::Expr::DecodeEnum(Box::new(base), ty.clone(), *variant))
                 }

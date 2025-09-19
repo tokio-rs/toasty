@@ -4,8 +4,8 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query, Select, Source,
-        TableRef, Update, UpdateTarget,
+        Delete, Expr, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query, Select,
+        Source, TableRef, Type, Update, UpdateTarget,
     },
     Schema,
 };
@@ -36,19 +36,7 @@ pub enum ExprTarget<'a> {
 }
 
 pub trait DbSchema {
-    fn table(&self, id: TableId) -> &Table;
-}
-
-impl DbSchema for Schema {
-    fn table(&self, id: TableId) -> &Table {
-        self.db.table(id)
-    }
-}
-
-impl DbSchema for db::Schema {
-    fn table(&self, id: TableId) -> &Table {
-        db::Schema::table(self, id)
-    }
+    fn table(&self, id: TableId) -> Option<&Table>;
 }
 
 impl<'a, T> ExprContext<'a, T> {
@@ -80,6 +68,16 @@ impl<'a, T> ExprContext<'a, T> {
             schema: self.schema,
             parent: Some(self),
             target: target.into(),
+        }
+    }
+}
+
+impl<'a> ExprContext<'a, ()> {
+    pub fn new_free() -> ExprContext<'a, ()> {
+        ExprContext {
+            schema: &(),
+            parent: None,
+            target: ExprTarget::Free,
         }
     }
 }
@@ -136,6 +134,21 @@ impl<'a> ExprContext<'a, Schema> {
 }
 
 impl<'a, T: DbSchema> ExprContext<'a, T> {
+    /// Resolves an ExprColumn reference to the actual database Column it
+    /// represents.
+    ///
+    /// Given an ExprColumn (which contains table/column indices and nesting
+    /// info), returns the Column struct containing the column's name, type,
+    /// constraints, and other metadata.
+    ///
+    /// Handles:
+    /// - Nested query scopes (walking up parent contexts based on nesting
+    ///   level)
+    /// - Different statement targets (INSERT, UPDATE, SELECT with joins, etc.)
+    /// - Table references in multi-table operations (using the table index)
+    ///
+    /// Used by SQL serialization to get column names, query planning to
+    /// match index columns, and key extraction to identify column IDs.
     pub fn resolve_expr_column(&self, expr_column: &ExprColumn) -> &'a Column {
         let mut curr = self;
 
@@ -149,7 +162,7 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
         }
 
         match curr.target {
-            ExprTarget::Free => todo!("cannot resolve column in const context"),
+            ExprTarget::Free => todo!("cannot resolve column in free context"),
             ExprTarget::Model(_) => todo!("cannot resolve column in model context"),
             ExprTarget::Table(table) => &table.columns[expr_column.column],
             ExprTarget::Source(Source::Table(source_table)) => {
@@ -157,7 +170,12 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
                 let table_ref = &source_table.tables[expr_column.table];
                 match table_ref {
                     TableRef::Table(table_id) => {
-                        let table = self.schema.table(*table_id);
+                        let Some(table) = self.schema.table(*table_id) else {
+                            panic!(
+                                "Failed to resolve table with ID {:?} - table not found in schema",
+                                table_id
+                            );
+                        };
                         &table.columns[expr_column.column]
                     }
                     TableRef::Cte { .. } => todo!("CTE column resolution not implemented"),
@@ -167,7 +185,9 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
                 todo!("ExprColumn should only be used with lowered Source::Table")
             }
             ExprTarget::Insert(InsertTarget::Table(insert_table)) => {
-                let table = self.schema.table(insert_table.table);
+                let Some(table) = self.schema.table(insert_table.table) else {
+                    panic!("Failed to resolve table with ID {:?} for INSERT target - table not found in schema", insert_table.table);
+                };
                 &table.columns[expr_column.column]
             }
             ExprTarget::Insert(InsertTarget::Model(_)) => {
@@ -177,7 +197,9 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
                 todo!("ExprColumn should only be used with lowered InsertTarget::Table")
             }
             ExprTarget::Update(UpdateTarget::Table(table_id)) => {
-                let table = self.schema.table(*table_id);
+                let Some(table) = self.schema.table(*table_id) else {
+                    panic!("Failed to resolve table with ID {:?} for UPDATE target - table not found in schema", table_id);
+                };
                 &table.columns[expr_column.column]
             }
             ExprTarget::Update(UpdateTarget::Model(_)) => {
@@ -186,6 +208,46 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
             ExprTarget::Update(UpdateTarget::Query(_)) => {
                 todo!("ExprColumn should only be used with lowered UpdateTarget::Table")
             }
+        }
+    }
+
+    pub fn infer_expr_ty(&self, expr: &Expr, args: &[Type]) -> Type {
+        match expr {
+            Expr::Arg(e) => args[e.position].clone(),
+            Expr::And(_) => Type::Bool,
+            Expr::BinaryOp(_) => Type::Bool,
+            Expr::Cast(e) => e.ty.clone(),
+            Expr::Column(e) => self.resolve_expr_column(e).ty.clone(),
+            Expr::Reference(_) => todo!(),
+            Expr::IsNull(_) => Type::Bool,
+            Expr::Map(e) => {
+                let base = self.infer_expr_ty(&e.base, args);
+                let ty = self.infer_expr_ty(&e.map, &[base]);
+                Type::list(ty)
+            }
+            Expr::Or(_) => Type::Bool,
+            Expr::Project(e) => {
+                let mut base = self.infer_expr_ty(&e.base, args);
+
+                for step in e.projection.iter() {
+                    base = match &mut base {
+                        Type::Record(fields) => std::mem::replace(&mut fields[*step], Type::Null),
+                        expr => todo!("expr={expr:#?}"),
+                    }
+                }
+
+                base
+            }
+            Expr::Record(e) => Type::Record(
+                e.fields
+                    .iter()
+                    .map(|field| self.infer_expr_ty(field, args))
+                    .collect(),
+            ),
+            Expr::Value(value) => value.infer_ty(),
+            // -- hax
+            Expr::DecodeEnum(_, ty, _) => ty.clone(),
+            _ => todo!("{expr:#?}"),
         }
     }
 }
@@ -201,6 +263,24 @@ impl<'a, T> Clone for ExprContext<'a, T> {
 }
 
 impl<'a, T> Copy for ExprContext<'a, T> {}
+
+impl DbSchema for Schema {
+    fn table(&self, id: TableId) -> Option<&Table> {
+        Some(self.db.table(id))
+    }
+}
+
+impl DbSchema for db::Schema {
+    fn table(&self, id: TableId) -> Option<&Table> {
+        Some(db::Schema::table(self, id))
+    }
+}
+
+impl DbSchema for () {
+    fn table(&self, _: TableId) -> Option<&Table> {
+        None
+    }
+}
 
 impl<'a> ExprTarget<'a> {
     pub fn as_model_id(self) -> Option<ModelId> {

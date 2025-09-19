@@ -1,7 +1,7 @@
 use super::{eval, plan, Context, Planner, Result};
 use toasty_core::{
     schema::app::{self, FieldTy, Model, ModelId},
-    stmt,
+    stmt::{self, ExprContext},
 };
 
 impl Planner<'_> {
@@ -37,8 +37,13 @@ impl Planner<'_> {
 
         self.lower_stmt_query(model, &mut stmt);
 
+        let select = stmt.body.as_select_mut();
+
         // Compute the return type
-        let mut project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
+        let mut project = self.partition_returning(
+            &ExprContext::new_with_target(self.schema, &select.source),
+            &mut select.returning,
+        );
 
         // Adjust the return type to account for includes
         if !includes.is_empty() {
