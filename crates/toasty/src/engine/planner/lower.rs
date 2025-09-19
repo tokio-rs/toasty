@@ -264,7 +264,7 @@ impl LowerStatement<'_> {
                 _ => continue,
             };
 
-            if self.is_eq_constrained(&cx, filter, column) {
+            if is_eq_constrained(&cx, filter, column) {
                 continue;
             }
 
@@ -435,39 +435,30 @@ impl LowerStatement<'_> {
             _ => todo!("{value:#?}"),
         }
     }
+}
 
-    fn is_eq_constrained(
-        &self,
-        cx: &stmt::ExprContext<'_>,
-        expr: &stmt::Expr,
-        column: &Column,
-    ) -> bool {
-        use stmt::Expr::*;
+fn is_eq_constrained(cx: &stmt::ExprContext<'_>, expr: &stmt::Expr, column: &Column) -> bool {
+    use stmt::Expr::*;
 
-        match expr {
-            And(expr) => expr
-                .iter()
-                .any(|expr| self.is_eq_constrained(cx, expr, column)),
-            Or(expr) => expr
-                .iter()
-                .all(|expr| self.is_eq_constrained(cx, expr, column)),
-            BinaryOp(expr) => {
-                if !expr.op.is_eq() {
-                    return false;
-                }
-
-                match (&*expr.lhs, &*expr.rhs) {
-                    (Column(lhs), _) => cx.resolve_expr_column(lhs).id == column.id,
-                    (_, Column(rhs)) => cx.resolve_expr_column(rhs).id == column.id,
-                    _ => false,
-                }
+    match expr {
+        And(expr) => expr.iter().any(|expr| is_eq_constrained(cx, expr, column)),
+        Or(expr) => expr.iter().all(|expr| is_eq_constrained(cx, expr, column)),
+        BinaryOp(expr) => {
+            if !expr.op.is_eq() {
+                return false;
             }
-            InList(expr) => match &*expr.expr {
-                Column(lhs) => cx.resolve_expr_column(lhs).id == column.id,
-                _ => todo!("expr={:#?}", expr),
-            },
-            _ => todo!("expr={:#?}", expr),
+
+            match (&*expr.lhs, &*expr.rhs) {
+                (Column(lhs), _) => cx.resolve_expr_column(lhs).id == column.id,
+                (_, Column(rhs)) => cx.resolve_expr_column(rhs).id == column.id,
+                _ => false,
+            }
         }
+        InList(expr) => match &*expr.expr {
+            Column(lhs) => cx.resolve_expr_column(lhs).id == column.id,
+            _ => todo!("expr={:#?}", expr),
+        },
+        _ => todo!("expr={:#?}", expr),
     }
 }
 
