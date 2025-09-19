@@ -6,9 +6,9 @@ pub(crate) trait Resolve {
 
 struct NoopResolve;
 
+/*
 impl Resolve for Schema {
     fn resolve_column(&self, stmt: &stmt::ExprColumn) -> &stmt::Type {
-        /*
         // Try the transition helper first
         if let Some(column_id) = stmt.try_to_column_id() {
             return &self.db.column(column_id).ty;
@@ -42,10 +42,9 @@ impl Resolve for Schema {
         }
 
         panic!("cannot resolve column type for ExprColumn: {:?}", stmt);
-        */
-        todo!()
     }
 }
+    */
 
 impl Resolve for NoopResolve {
     fn resolve_column(&self, _stmt: &stmt::ExprColumn) -> &stmt::Type {
@@ -53,10 +52,13 @@ impl Resolve for NoopResolve {
     }
 }
 
+/*
 pub(crate) fn infer_eval_expr_ty(expr: &stmt::Expr, args: &[stmt::Type]) -> stmt::Type {
     infer_expr_ty(expr, args, &NoopResolve)
 }
+    */
 
+/*
 /// Infer the type of an expression
 pub(crate) fn infer_expr_ty(
     expr: &stmt::Expr,
@@ -106,6 +108,7 @@ pub(crate) fn infer_expr_ty(
         _ => todo!("{expr:#?}"),
     }
 }
+    */
 
 /// Infer the type of a value
 pub(crate) fn infer_value_ty(value: &stmt::Value) -> stmt::Type {

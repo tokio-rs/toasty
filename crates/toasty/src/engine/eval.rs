@@ -23,11 +23,11 @@ pub(crate) struct Func<T = stmt::Expr> {
 }
 
 impl<T: AsExpr> Func<T> {
-    pub(crate) fn from_stmt(expr: T, args: Vec<stmt::Type>) -> Self {
-        assert!(verify_expr(expr.as_expr()));
-        let ret = ty::infer_eval_expr_ty(expr.as_expr(), &args);
-        Self { args, ret, expr }
-    }
+    // pub(crate) fn from_stmt(expr: T, args: Vec<stmt::Type>) -> Self {
+    //     assert!(verify_expr(expr.as_expr()));
+    //     let ret = ty::infer_eval_expr_ty(expr.as_expr(), &args);
+    //     Self { args, ret, expr }
+    // }
 
     pub(crate) fn from_stmt_unchecked(expr: T, args: Vec<stmt::Type>, ret: stmt::Type) -> Self {
         Self { args, ret, expr }

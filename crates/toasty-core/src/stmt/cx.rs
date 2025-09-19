@@ -21,7 +21,7 @@ pub struct ExprContext<'a, T = Schema> {
 #[derive(Debug, Clone, Copy)]
 pub enum ExprTarget<'a> {
     /// Expression does *not* reference any model or table.
-    Const,
+    Free,
 
     /// Expression references a single model
     Model(&'a Model),
@@ -53,7 +53,7 @@ impl DbSchema for db::Schema {
 
 impl<'a, T> ExprContext<'a, T> {
     pub fn new(schema: &'a T) -> ExprContext<'a, T> {
-        ExprContext::new_with_target(schema, ExprTarget::Const)
+        ExprContext::new_with_target(schema, ExprTarget::Free)
     }
 
     pub fn new_with_target(schema: &'a T, target: impl Into<ExprTarget<'a>>) -> ExprContext<'a, T> {
@@ -107,7 +107,7 @@ impl<'a> ExprContext<'a, Schema> {
         }
 
         match curr.target {
-            ExprTarget::Const => todo!("fail"),
+            ExprTarget::Free => todo!("fail"),
             ExprTarget::Model(model) => &model.fields[*index],
             ExprTarget::Table(_) => todo!(),
 
@@ -149,7 +149,7 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
         }
 
         match curr.target {
-            ExprTarget::Const => todo!("cannot resolve column in const context"),
+            ExprTarget::Free => todo!("cannot resolve column in const context"),
             ExprTarget::Model(_) => todo!("cannot resolve column in model context"),
             ExprTarget::Table(table) => &table.columns[expr_column.column],
             ExprTarget::Source(Source::Table(source_table)) => {
@@ -238,7 +238,7 @@ impl<'a> From<&'a ExprSet> for ExprTarget<'a> {
             ExprSet::Select(select) => ExprTarget::from(&**select),
             ExprSet::SetOp(_) => todo!(),
             ExprSet::Update(update) => ExprTarget::from(&**update),
-            ExprSet::Values(_) => ExprTarget::Const,
+            ExprSet::Values(_) => ExprTarget::Free,
         }
     }
 }
