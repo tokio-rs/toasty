@@ -1,9 +1,7 @@
 use super::{eval, Planner};
 use toasty_core::stmt::{self, ExprContext};
 
-struct Partitioner<'a> {
-    planner: &'a Planner<'a>,
-
+struct Partitioner {
     // Returning statement expressions. The returning statement will be a
     // record, these are the field expressions.
     stmt: Vec<stmt::Expr>,
@@ -55,7 +53,6 @@ impl Planner<'_> {
         use Partition::*;
 
         let mut partitioner = Partitioner {
-            planner: self,
             stmt: vec![],
             ty: vec![],
         };
@@ -88,7 +85,6 @@ impl Planner<'_> {
         use Partition::*;
 
         let mut partitioner = Partitioner {
-            planner: self,
             stmt: vec![],
             ty: vec![],
         };
@@ -142,7 +138,7 @@ impl Planner<'_> {
     }
 }
 
-impl Partitioner<'_> {
+impl Partitioner {
     fn partition_expr(&mut self, cx: &ExprContext<'_>, stmt: &stmt::Expr) -> Partition {
         use Partition::*;
 

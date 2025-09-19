@@ -81,7 +81,7 @@ impl ToSql for &stmt::Expr {
 }
 
 impl ToSql for &stmt::BinaryOp {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+    fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         f.dst.push_str(match self {
             stmt::BinaryOp::Eq => "=",
             stmt::BinaryOp::Gt => ">",

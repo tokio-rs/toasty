@@ -18,7 +18,7 @@ impl Params for Vec<stmt::Value> {
 }
 
 impl ToSql for Placeholder {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
+    fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
         use std::fmt::Write;
 
         match f.serializer.flavor {

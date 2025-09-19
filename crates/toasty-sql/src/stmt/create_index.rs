@@ -1,4 +1,4 @@
-use super::{Name, Statement};
+use super::Statement;
 
 use toasty_core::{
     schema::db::{Index, IndexId, IndexOp, TableId},

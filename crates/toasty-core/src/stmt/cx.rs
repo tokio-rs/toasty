@@ -286,11 +286,7 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
 
 impl<'a, T> Clone for ExprContext<'a, T> {
     fn clone(&self) -> Self {
-        Self {
-            schema: self.schema,
-            parent: self.parent.clone(),
-            target: self.target.clone(),
-        }
+        *self
     }
 }
 

@@ -15,7 +15,7 @@ pub(super) trait ToSql {
 }
 
 impl ToSql for &str {
-    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
+    fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
         f.dst.push_str(self);
     }
 }
@@ -64,14 +64,14 @@ macro_rules! fmt_numeric {
     ( $( $ty:ident ),* ) => {
         $(
             impl ToSql for $ty {
-                fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
+                fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
                     use std::fmt::Write;
                     write!(f.dst, "{self}").unwrap();
                 }
             }
 
             impl ToSql for &$ty {
-                fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
+                fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
                     use std::fmt::Write;
                     write!(f.dst, "{self}").unwrap();
                 }
