@@ -129,7 +129,39 @@ impl<'a> ExprContext<'a, Schema> {
     }
 
     pub fn expr_column(&self, column_id: impl Into<ColumnId>) -> ExprColumn {
-        todo!()
+        let column_id = column_id.into();
+
+        match self.target {
+            ExprTarget::Free => {
+                panic!("Cannot create ExprColumn in free context - no table target available")
+            }
+            ExprTarget::Model(_) => panic!(
+                "Cannot create ExprColumn for model target - use resolve_expr_reference instead"
+            ),
+            ExprTarget::Table(table) => assert_eq!(table.id, column_id.table),
+            ExprTarget::Insert(_) => todo!(),
+            ExprTarget::Source(source) => match source {
+                Source::Model(_) => panic!(
+                    "Cannot create ExprColumn for model source - should be lowered to table first"
+                ),
+                Source::Table(source_table) => {
+                    let [TableRef::Table(table_id)] = source_table.tables[..] else {
+                        panic!(
+                            "Expected exactly one table reference, found {} tables",
+                            source_table.tables.len()
+                        );
+                    };
+                    assert_eq!(table_id, column_id.table);
+                }
+            },
+            ExprTarget::Update(_) => todo!(),
+        }
+
+        ExprColumn {
+            nesting: 0,
+            table: 0,
+            column: column_id.index,
+        }
     }
 }
 
