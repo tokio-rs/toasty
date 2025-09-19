@@ -4,7 +4,7 @@ use super::{
     UpdateItemError,
 };
 use std::{collections::HashMap, fmt::Write};
-use toasty_core::driver::Response;
+use toasty_core::{driver::Response, stmt::ExprContext};
 
 impl DynamoDb {
     pub(crate) async fn exec_update_by_key(
@@ -13,6 +13,7 @@ impl DynamoDb {
         op: operation::UpdateByKey,
     ) -> Result<Response> {
         let table = schema.table(op.table);
+        let cx = ExprContext::new_with_target(schema, table);
 
         let mut expr_attrs = ExprAttrs::default();
 
@@ -32,10 +33,8 @@ impl DynamoDb {
             .collect::<Vec<_>>();
 
         let filter_expression = match (&op.filter, &op.condition) {
-            (Some(filter), None) => Some(ddb_expression(schema, &mut expr_attrs, false, filter)),
-            (None, Some(condition)) => {
-                Some(ddb_expression(schema, &mut expr_attrs, false, condition))
-            }
+            (Some(filter), None) => Some(ddb_expression(&cx, &mut expr_attrs, false, filter)),
+            (None, Some(condition)) => Some(ddb_expression(&cx, &mut expr_attrs, false, condition)),
             (Some(_), Some(_)) => {
                 todo!()
             }

@@ -6,7 +6,7 @@ use toasty_core::{
         app,
         db::{Column, ColumnId, Schema, Table},
     },
-    stmt,
+    stmt::{self, ExprContext},
 };
 
 use anyhow::Result;
@@ -304,15 +304,15 @@ fn item_to_record<'a, 'stmt>(
 }
 
 fn ddb_expression(
-    schema: &Schema,
+    cx: &ExprContext<'_, Schema>,
     attrs: &mut ExprAttrs,
     primary: bool,
     expr: &stmt::Expr,
 ) -> String {
     match expr {
         stmt::Expr::BinaryOp(expr_binary_op) => {
-            let lhs = ddb_expression(schema, attrs, primary, &expr_binary_op.lhs);
-            let rhs = ddb_expression(schema, attrs, primary, &expr_binary_op.rhs);
+            let lhs = ddb_expression(cx, attrs, primary, &expr_binary_op.lhs);
+            let rhs = ddb_expression(cx, attrs, primary, &expr_binary_op.rhs);
 
             match expr_binary_op.op {
                 stmt::BinaryOp::Eq => format!("{lhs} = {rhs}"),
@@ -328,23 +328,21 @@ fn ddb_expression(
             }
         }
         stmt::Expr::Column(expr_column) => {
-            // For DynamoDB, we need to resolve the column ID from the ExprColumn
-            // This is a transitional approach - ideally DynamoDB should work with the new system
-            // For now, we'll need additional context to resolve the column properly
-            todo!("DynamoDB driver needs to be updated to handle new ExprColumn structure")
+            let column = cx.resolve_expr_column(expr_column);
+            attrs.column(column).to_string()
         }
         stmt::Expr::Value(val) => attrs.value(val),
         stmt::Expr::And(expr_and) => {
             let operands = expr_and
                 .operands
                 .iter()
-                .map(|operand| ddb_expression(schema, attrs, primary, operand))
+                .map(|operand| ddb_expression(cx, attrs, primary, operand))
                 .collect::<Vec<_>>();
             operands.join(" AND ")
         }
         stmt::Expr::Pattern(stmt::ExprPattern::BeginsWith(begins_with)) => {
-            let expr = ddb_expression(schema, attrs, primary, &begins_with.expr);
-            let substr = ddb_expression(schema, attrs, primary, &begins_with.pattern);
+            let expr = ddb_expression(cx, attrs, primary, &begins_with.expr);
+            let substr = ddb_expression(cx, attrs, primary, &begins_with.pattern);
             format!("begins_with({expr}, {substr})")
         }
         _ => todo!("FILTER = {:#?}", expr),

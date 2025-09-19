@@ -3,7 +3,7 @@ use super::{
     TransactWriteItem,
 };
 use std::collections::HashMap;
-use toasty_core::driver::Response;
+use toasty_core::{driver::Response, stmt::ExprContext};
 
 impl DynamoDb {
     pub(crate) async fn exec_delete_by_key(
@@ -14,12 +14,13 @@ impl DynamoDb {
         use aws_sdk_dynamodb::operation::delete_item::DeleteItemError;
 
         let table = schema.table(op.table);
+        let cx = ExprContext::new_with_target(schema, table);
 
         let mut expr_attrs = ExprAttrs::default();
         let mut filter_expression = None;
 
         if let Some(filter) = &op.filter {
-            filter_expression = Some(ddb_expression(schema, &mut expr_attrs, false, filter));
+            filter_expression = Some(ddb_expression(&cx, &mut expr_attrs, false, filter));
         }
 
         let unique_indices = table
