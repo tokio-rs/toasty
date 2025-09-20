@@ -21,7 +21,13 @@ impl ToSql for &stmt::Expr {
 
                 fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
             }
-            Column(expr_column @ stmt::ExprColumn { nesting, table, column }) => {
+            Column(
+                expr_column @ stmt::ExprColumn {
+                    nesting,
+                    table,
+                    column,
+                },
+            ) => {
                 if f.alias {
                     let depth = f.depth - *nesting;
 
