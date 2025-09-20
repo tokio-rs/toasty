@@ -356,7 +356,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
         for (i, index_column) in self.index.columns.iter().enumerate() {
             // Check that the path matches an index column
-            if cx.resolve_expr_column(expr_column).id != index_column.column {
+            if cx.resolve_expr_column(expr_column).expect_column().id != index_column.column {
                 continue;
             }
 

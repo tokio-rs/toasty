@@ -449,13 +449,13 @@ fn is_eq_constrained(cx: &stmt::ExprContext<'_>, expr: &stmt::Expr, column: &Col
             }
 
             match (&*expr.lhs, &*expr.rhs) {
-                (Column(lhs), _) => cx.resolve_expr_column(lhs).id == column.id,
-                (_, Column(rhs)) => cx.resolve_expr_column(rhs).id == column.id,
+                (Column(lhs), _) => cx.resolve_expr_column(lhs).expect_column().id == column.id,
+                (_, Column(rhs)) => cx.resolve_expr_column(rhs).expect_column().id == column.id,
                 _ => false,
             }
         }
         InList(expr) => match &*expr.expr {
-            Column(lhs) => cx.resolve_expr_column(lhs).id == column.id,
+            Column(lhs) => cx.resolve_expr_column(lhs).expect_column().id == column.id,
             _ => todo!("expr={:#?}", expr),
         },
         _ => todo!("expr={:#?}", expr),

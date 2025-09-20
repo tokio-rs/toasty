@@ -18,6 +18,15 @@ pub struct ExprContext<'a, T = Schema> {
     target: ExprTarget<'a>,
 }
 
+#[derive(Debug)]
+pub enum ResolvedRef<'a> {
+    /// TODO: docs
+    Column(&'a Column),
+
+    /// TODO: fill this out
+    Cte { nesting: usize, index: usize },
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum ExprTarget<'a> {
     /// Expression does *not* reference any model or table.
@@ -181,7 +190,7 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
     ///
     /// Used by SQL serialization to get column names, query planning to
     /// match index columns, and key extraction to identify column IDs.
-    pub fn resolve_expr_column(&self, expr_column: &ExprColumn) -> &'a Column {
+    pub fn resolve_expr_column(&self, expr_column: &ExprColumn) -> ResolvedRef<'a> {
         let mut curr = self;
 
         // Walk up the stack to the correct nesting level
@@ -196,7 +205,7 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
         match curr.target {
             ExprTarget::Free => todo!("cannot resolve column in free context"),
             ExprTarget::Model(_) => todo!("cannot resolve column in model context"),
-            ExprTarget::Table(table) => &table.columns[expr_column.column],
+            ExprTarget::Table(table) => ResolvedRef::Column(&table.columns[expr_column.column]),
             ExprTarget::Source(Source::Table(source_table)) => {
                 // Get the table reference at the specified index
                 let table_ref = &source_table.tables[expr_column.table];
@@ -208,9 +217,15 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
                                 table_id
                             );
                         };
-                        &table.columns[expr_column.column]
+                        ResolvedRef::Column(&table.columns[expr_column.column])
                     }
-                    TableRef::Cte { .. } => todo!("CTE column resolution not implemented"),
+                    TableRef::Cte { nesting, index } => {
+                        // TODO: return more info
+                        ResolvedRef::Cte {
+                            nesting: expr_column.nesting + nesting,
+                            index: *index,
+                        }
+                    }
                 }
             }
             ExprTarget::Source(Source::Model(_)) => {
@@ -220,7 +235,7 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
                 let Some(table) = self.schema.table(insert_table.table) else {
                     panic!("Failed to resolve table with ID {:?} for INSERT target - table not found in schema", insert_table.table);
                 };
-                &table.columns[expr_column.column]
+                ResolvedRef::Column(&table.columns[expr_column.column])
             }
             ExprTarget::Insert(InsertTarget::Model(_)) => {
                 todo!("ExprColumn should only be used with lowered InsertTarget::Table")
@@ -232,7 +247,7 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
                 let Some(table) = self.schema.table(*table_id) else {
                     panic!("Failed to resolve table with ID {:?} for UPDATE target - table not found in schema", table_id);
                 };
-                &table.columns[expr_column.column]
+                ResolvedRef::Column(&table.columns[expr_column.column])
             }
             ExprTarget::Update(UpdateTarget::Model(_)) => {
                 todo!("ExprColumn should only be used with lowered UpdateTarget::Table")
@@ -249,7 +264,10 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
             Expr::And(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
-            Expr::Column(e) => self.resolve_expr_column(e).ty.clone(),
+            Expr::Column(e) => match self.resolve_expr_column(e) {
+                ResolvedRef::Column(column) => column.ty.clone(),
+                _ => todo!(),
+            },
             Expr::Reference(_) => todo!(),
             Expr::IsNull(_) => Type::Bool,
             Expr::Map(e) => {
@@ -291,6 +309,16 @@ impl<'a, T> Clone for ExprContext<'a, T> {
 }
 
 impl<'a, T> Copy for ExprContext<'a, T> {}
+
+impl<'a> ResolvedRef<'a> {
+    #[track_caller]
+    pub fn expect_column(self) -> &'a Column {
+        match self {
+            ResolvedRef::Column(column) => column,
+            _ => panic!("Expected ResolvedRef::Column, found {:?}", self),
+        }
+    }
+}
 
 impl DbSchema for Schema {
     fn table(&self, id: TableId) -> Option<&Table> {

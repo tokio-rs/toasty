@@ -208,7 +208,9 @@ impl Planner<'_> {
                 .fields
                 .iter()
                 .map(|expr| match expr {
-                    stmt::Expr::Column(expr_column) => expr_cx.resolve_expr_column(expr_column).id,
+                    stmt::Expr::Column(expr_column) => {
+                        expr_cx.resolve_expr_column(expr_column).expect_column().id
+                    }
                     _ => todo!("stmt={stmt:#?}"),
                 })
                 .collect(),

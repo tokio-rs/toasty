@@ -328,7 +328,7 @@ fn ddb_expression(
             }
         }
         stmt::Expr::Column(expr_column) => {
-            let column = cx.resolve_expr_column(expr_column);
+            let column = cx.resolve_expr_column(expr_column).expect_column();
             attrs.column(column).to_string()
         }
         stmt::Expr::Value(val) => attrs.value(val),

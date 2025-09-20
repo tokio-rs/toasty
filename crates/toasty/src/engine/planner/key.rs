@@ -117,7 +117,7 @@ impl TryConvert<'_, '_> {
                         return None;
                     };
 
-                    let column = self.cx.resolve_expr_column(expr_column);
+                    let column = self.cx.resolve_expr_column(expr_column).expect_column();
 
                     // Find the index field the operand references
                     let (index, _) = self

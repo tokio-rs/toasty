@@ -1,3 +1,5 @@
+use toasty_core::stmt::ResolvedRef;
+
 use super::{Comma, Delimited, Params, ToSql};
 
 use crate::{
@@ -19,15 +21,21 @@ impl ToSql for &stmt::Expr {
 
                 fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
             }
-            Column(expr_column @ stmt::ExprColumn { nesting, table, .. }) => {
+            Column(expr_column @ stmt::ExprColumn { nesting, table, column }) => {
                 if f.alias {
-                    let column = cx.resolve_expr_column(expr_column);
-                    let name = Ident(&column.name);
                     let depth = f.depth - *nesting;
 
-                    fmt!(cx, f, "tbl_" depth "_" table "." name)
+                    match cx.resolve_expr_column(expr_column) {
+                        ResolvedRef::Column(column) => {
+                            let name = Ident(&column.name);
+                            fmt!(cx, f, "tbl_" depth "_" table "." name)
+                        }
+                        ResolvedRef::Cte { .. } => {
+                            fmt!(cx, f, "tbl_" depth "_" table ".col_" column)
+                        }
+                    }
                 } else {
-                    let column = cx.resolve_expr_column(expr_column);
+                    let column = cx.resolve_expr_column(expr_column).expect_column();
                     fmt!(cx, f, Ident(&column.name))
                 }
             }

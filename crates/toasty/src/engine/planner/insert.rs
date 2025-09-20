@@ -339,10 +339,12 @@ impl Planner<'_> {
 
         impl eval::Convert for ConstReturning<'_> {
             fn convert_expr_column(&mut self, stmt: &stmt::ExprColumn) -> Option<stmt::Expr> {
+                let needle = self.cx.resolve_expr_column(stmt).expect_column();
+
                 let index = self
                     .columns
                     .iter()
-                    .position(|column| self.cx.resolve_expr_column(stmt).id == *column)
+                    .position(|column| needle.id == *column)
                     .unwrap();
 
                 Some(stmt::Expr::arg_project(0, [index]))
