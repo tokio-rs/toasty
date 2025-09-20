@@ -1,4 +1,10 @@
-use super::{expr_reference::ExprReference, *};
+use super::{
+    expr_reference::ExprReference, substitute, visit_mut, Entry, EntryMut, EntryPath, ExprAnd,
+    ExprArg, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprOr, ExprPattern,
+    ExprProject, ExprRecord, ExprStmt, ExprTy, Node, Projection, Type, Value, Visit, VisitMut,
+};
+use std::fmt;
 
 #[derive(Clone)]
 pub enum Expr {
@@ -26,9 +32,6 @@ pub enum Expr {
 
     /// Return an enum value
     Enum(ExprEnum),
-
-    /// References a field in the statement
-    Field(ExprField),
 
     /// Function call
     Func(ExprFunc),
@@ -288,6 +291,12 @@ impl From<Value> for Expr {
     }
 }
 
+impl From<ExprReference> for Expr {
+    fn from(value: ExprReference) -> Self {
+        Self::Reference(value)
+    }
+}
+
 impl<E1, E2> From<(E1, E2)> for Expr
 where
     E1: Into<Self>,
@@ -309,7 +318,6 @@ impl fmt::Debug for Expr {
             Self::Concat(e) => e.fmt(f),
             Self::ConcatStr(e) => e.fmt(f),
             Self::Enum(e) => e.fmt(f),
-            Self::Field(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),

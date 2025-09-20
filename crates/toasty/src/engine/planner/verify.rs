@@ -1,4 +1,4 @@
-use super::*;
+use super::{plan, Planner};
 
 impl Planner<'_> {
     pub(super) fn verify_action(&self, action: &plan::Action) {

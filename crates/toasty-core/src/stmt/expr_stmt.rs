@@ -1,4 +1,4 @@
-use super::*;
+use super::{Expr, Insert, Statement};
 
 #[derive(Debug, Clone)]
 pub struct ExprStmt {

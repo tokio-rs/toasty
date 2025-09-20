@@ -1,27 +1,29 @@
+use crate::serializer::ExprContext;
+
 use super::{Formatter, Params};
 
 macro_rules! fmt {
-    ($f:expr, $( $fragments:expr )*) => {{
+    ($cx:expr, $f:expr, $( $fragments:expr )*) => {{
         $(
-            $fragments.to_sql($f);
+            $fragments.to_sql($cx, $f);
         )*
     }};
 }
 
 pub(super) trait ToSql {
-    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>);
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>);
 }
 
 impl ToSql for &str {
-    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
+    fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
         f.dst.push_str(self);
     }
 }
 
 impl<T: ToSql> ToSql for Option<T> {
-    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
         if let Some(inner) = self {
-            inner.to_sql(f);
+            inner.to_sql(cx, f);
         }
     }
 }
@@ -30,9 +32,9 @@ impl<T> ToSql for &Option<T>
 where
     for<'a> &'a T: ToSql,
 {
-    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
         if let Some(inner) = self {
-            inner.to_sql(f);
+            inner.to_sql(cx, f);
         }
     }
 }
@@ -42,8 +44,8 @@ where
     T1: ToSql,
     T2: ToSql,
 {
-    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
-        fmt!(f, self.0 self.1);
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
+        fmt!(cx, f, self.0 self.1);
     }
 }
 
@@ -53,8 +55,8 @@ where
     T2: ToSql,
     T3: ToSql,
 {
-    fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
-        fmt!(f, self.0 self.1 self.2);
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
+        fmt!(cx, f, self.0 self.1 self.2);
     }
 }
 
@@ -62,14 +64,14 @@ macro_rules! fmt_numeric {
     ( $( $ty:ident ),* ) => {
         $(
             impl ToSql for $ty {
-                fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
+                fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
                     use std::fmt::Write;
                     write!(f.dst, "{self}").unwrap();
                 }
             }
 
             impl ToSql for &$ty {
-                fn to_sql<P: Params>(self, f: &mut Formatter<'_, P>) {
+                fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
                     use std::fmt::Write;
                     write!(f.dst, "{self}").unwrap();
                 }

@@ -1,9 +1,8 @@
-use tests::*;
+use std::collections::HashSet;
+use tests::{assert_eq_unordered, models, tests, DbTest};
 use toasty::stmt::Id;
 
-use std::collections::HashSet;
-
-async fn scoped_query_eq(s: impl Setup) {
+async fn scoped_query_eq(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -30,7 +29,7 @@ async fn scoped_query_eq(s: impl Setup) {
         order: i64,
     }
 
-    let db = s.setup(models!(User, Todo)).await;
+    let db = test.setup_db(models!(User, Todo)).await;
 
     // Create some users
     let u1 = User::create().exec(&db).await.unwrap();
@@ -72,7 +71,7 @@ async fn scoped_query_eq(s: impl Setup) {
     // Query todos scoped by user 1
     let todos = u1
         .todos()
-        .query(Todo::FIELDS.order.eq(0))
+        .query(Todo::FIELDS.order().eq(0))
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
@@ -85,7 +84,7 @@ async fn scoped_query_eq(s: impl Setup) {
     // Querying todos scoped by user 2
     let todos = u2
         .todos()
-        .query(Todo::FIELDS.order.eq(0))
+        .query(Todo::FIELDS.order().eq(0))
         .all(&db)
         .await
         .unwrap()
@@ -111,7 +110,7 @@ async fn scoped_query_eq(s: impl Setup) {
     // Query for order 0 todos again
     let mut todos = u1
         .todos()
-        .query(Todo::FIELDS.order.eq(0))
+        .query(Todo::FIELDS.order().eq(0))
         .all(&db)
         .await
         .unwrap();
@@ -129,7 +128,7 @@ async fn scoped_query_eq(s: impl Setup) {
     // Query for non-existent TODOs
     let todos = u2
         .todos()
-        .query(Todo::FIELDS.order.eq(1))
+        .query(Todo::FIELDS.order().eq(1))
         .all(&db)
         .await
         .unwrap()
@@ -140,7 +139,7 @@ async fn scoped_query_eq(s: impl Setup) {
     assert!(todos.is_empty());
 }
 
-async fn scoped_query_gt(s: impl Setup) {
+async fn scoped_query_gt(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -167,7 +166,7 @@ async fn scoped_query_gt(s: impl Setup) {
         order: i64,
     }
 
-    let db = s.setup(models!(User, Todo)).await;
+    let db = test.setup_db(models!(User, Todo)).await;
 
     let user = User::create().exec(&db).await.unwrap();
 
@@ -186,7 +185,7 @@ async fn scoped_query_gt(s: impl Setup) {
     // Find all != 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::FIELDS.order.ne(2))
+        .query(Todo::FIELDS.order().ne(2))
         .collect(&db)
         .await
         .unwrap();
@@ -203,7 +202,7 @@ async fn scoped_query_gt(s: impl Setup) {
     // Find all greater than 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::FIELDS.order.gt(2))
+        .query(Todo::FIELDS.order().gt(2))
         .collect(&db)
         .await
         .unwrap();
@@ -216,7 +215,7 @@ async fn scoped_query_gt(s: impl Setup) {
     // Find all greater than or equal to 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::FIELDS.order.ge(2))
+        .query(Todo::FIELDS.order().ge(2))
         .collect(&db)
         .await
         .unwrap();
@@ -229,7 +228,7 @@ async fn scoped_query_gt(s: impl Setup) {
     // Find all less than to 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::FIELDS.order.lt(2))
+        .query(Todo::FIELDS.order().lt(2))
         .collect(&db)
         .await
         .unwrap();
@@ -242,7 +241,7 @@ async fn scoped_query_gt(s: impl Setup) {
     // Find all less than or equal to 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::FIELDS.order.le(2))
+        .query(Todo::FIELDS.order().le(2))
         .collect(&db)
         .await
         .unwrap();

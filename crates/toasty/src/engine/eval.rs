@@ -7,8 +7,8 @@ pub(crate) use convert::Convert;
 mod input;
 pub(crate) use input::Input;
 
-use super::*;
-use crate::engine::ty;
+use crate::Result;
+use toasty_core::stmt::{self, ExprContext};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Func<T = stmt::Expr> {
@@ -25,7 +25,7 @@ pub(crate) struct Func<T = stmt::Expr> {
 impl<T: AsExpr> Func<T> {
     pub(crate) fn from_stmt(expr: T, args: Vec<stmt::Type>) -> Self {
         assert!(verify_expr(expr.as_expr()));
-        let ret = ty::infer_eval_expr_ty(expr.as_expr(), &args);
+        let ret = ExprContext::new_free().infer_expr_ty(expr.as_expr(), &args);
         Self { args, ret, expr }
     }
 
@@ -81,7 +81,7 @@ impl Func<stmt::Expr> {
             return None;
         }
 
-        let ret = ty::infer_eval_expr_ty(&expr, &args);
+        let ret = ExprContext::new_free().infer_expr_ty(&expr, &args);
         Some(Self::from_stmt_unchecked(expr, args, ret))
     }
 }
@@ -95,7 +95,7 @@ impl Func<&stmt::Expr> {
             return None;
         }
 
-        let ret = ty::infer_eval_expr_ty(expr, &args);
+        let ret = ExprContext::new_free().infer_expr_ty(expr, &args);
         Some(Func::from_stmt_unchecked(expr, args, ret))
     }
 }
@@ -205,7 +205,7 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
         BinaryOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
         Cast(expr) => verify_expr(&expr.expr),
         Column(_) => false,
-        Field(_) => false,
+        Reference(stmt::ExprReference::Field { .. }) => false,
         List(expr) => expr.items.iter().all(verify_expr),
         Map(expr) => verify_expr(&expr.base) && verify_expr(&expr.map),
         Project(expr) => verify_expr(&expr.base),
@@ -237,8 +237,8 @@ fn convert_and_verify_expr(expr: &mut stmt::Expr, convert: &mut impl Convert) ->
             *expr = e;
             convert_and_verify_expr(expr, convert)
         }
-        Field(e) => {
-            let Some(e) = convert.convert_expr_field(e) else {
+        Reference(expr_ref) => {
+            let Some(e) = convert.convert_expr_reference(expr_ref) else {
                 return false;
             };
             *expr = e;

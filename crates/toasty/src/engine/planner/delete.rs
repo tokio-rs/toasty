@@ -1,4 +1,5 @@
-use super::*;
+use super::{eval, plan, Context, Planner, Result};
+use toasty_core::{schema::app, stmt};
 
 impl Planner<'_> {
     pub(super) fn plan_stmt_delete(&mut self, stmt: stmt::Delete) -> Result<()> {
@@ -20,7 +21,7 @@ impl Planner<'_> {
                 // TODO: can this be unified with update?
                 let query = stmt::Query::filter(
                     rel.target,
-                    stmt::Expr::in_subquery(rel.pair, selection.clone()),
+                    stmt::Expr::in_subquery(stmt::Expr::field(rel.pair), selection.clone()),
                 );
 
                 if pair.nullable {
@@ -68,12 +69,14 @@ impl Planner<'_> {
             self.partition_stmt_delete_input(&mut stmt, &input_sources)
         };
 
+        let expr_cx = stmt::ExprContext::new_with_target(self.schema, &stmt);
+
         // Figure out which index to use for the query
-        let mut index_plan = self.plan_index_path2(table, &stmt.filter);
+        let mut index_plan = self.plan_index_path2(expr_cx, table, &stmt.filter);
 
         if index_plan.index.primary_key {
             if let Some(keys) =
-                self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
+                self.try_build_key_filter(expr_cx, index_plan.index, &index_plan.index_filter)
             {
                 self.push_write_action(plan::DeleteByKey {
                     input,

@@ -1,9 +1,9 @@
-use tests::*;
+use std::collections::HashMap;
+use std_util::assert_none;
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
-use std::collections::HashMap;
-
-async fn crud_person_self_referential(s: impl Setup) {
+async fn crud_person_self_referential(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct Person {
         #[key]
@@ -22,7 +22,7 @@ async fn crud_person_self_referential(s: impl Setup) {
         children: toasty::HasMany<Person>,
     }
 
-    let db = s.setup(models!(Person)).await;
+    let db = test.setup_db(models!(Person)).await;
 
     let p1 = Person::create().name("person 1").exec(&db).await.unwrap();
 
@@ -71,7 +71,7 @@ async fn crud_person_self_referential(s: impl Setup) {
 
     // Try preloading this time
     let p1 = Person::filter_by_id(&p1.id)
-        .include(Person::FIELDS.children)
+        .include(Person::FIELDS.children())
         .get(&db)
         .await
         .unwrap();

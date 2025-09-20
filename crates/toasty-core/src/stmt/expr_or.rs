@@ -1,5 +1,4 @@
-use super::*;
-
+use super::Expr;
 use std::ops;
 
 #[derive(Debug, Clone)]

@@ -1,6 +1,6 @@
-use super::*;
-
+use super::Simplify;
 use std::mem;
+use toasty_core::stmt;
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_and(&mut self, expr: &mut stmt::ExprAnd) -> Option<stmt::Expr> {

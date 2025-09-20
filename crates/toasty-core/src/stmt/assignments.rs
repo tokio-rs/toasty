@@ -1,4 +1,4 @@
-use super::*;
+use super::{Expr, Projection};
 
 use indexmap::{Equivalent, IndexMap};
 use std::{hash::Hash, ops};
@@ -41,6 +41,10 @@ impl Assignments {
 
     pub fn is_empty(&self) -> bool {
         self.assignments.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.assignments.len()
     }
 
     pub fn contains(&self, key: usize) -> bool {

@@ -24,7 +24,7 @@ use crate::{
 };
 use toasty_core::{
     schema::*,
-    stmt::{self, VisitMut},
+    stmt::{self},
 };
 
 use std::collections::HashMap;
@@ -100,7 +100,10 @@ impl<'a> Planner<'a> {
         if let stmt::Statement::Insert(stmt) = &stmt {
             // TODO: this isn't always true. The assert is there to help
             // debug old code.
-            assert!(matches!(stmt.returning, Some(stmt::Returning::Star)));
+            assert!(matches!(
+                stmt.returning,
+                Some(stmt::Returning::Model { .. })
+            ));
         }
 
         if let Some(output) = self.plan_stmt(&Context::default(), stmt)? {
@@ -216,7 +219,7 @@ impl<'a> Planner<'a> {
                 }
             }
             stmt::Statement::Query(stmt) => {
-                match &*stmt.body {
+                match &stmt.body {
                     stmt::ExprSet::Select(select) => match &select.source {
                         stmt::Source::Model(source) => source.via.is_none(),
                         stmt::Source::Table(_) => true,

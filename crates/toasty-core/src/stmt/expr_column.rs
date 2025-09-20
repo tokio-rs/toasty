@@ -1,21 +1,28 @@
-use super::*;
+use crate::schema::db::ColumnId;
 
+use super::Expr;
+
+/// A reference to a column in a database-level statement.
+///
+/// ExprColumn represents resolved column references after lowering from the
+/// application schema to the database schema. It uses a scope-based approach
+/// similar to ExprReference, referencing a specific column within a target
+/// at a given nesting level.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum ExprColumn {
-    /// Directly reference a column
-    Column(ColumnId),
+pub struct ExprColumn {
+    /// Query scope nesting level: 0 = current query, 1+ = higher scope queries
+    pub nesting: usize,
 
-    /// Reference a column aliased in `FROM` or equivalent clause
-    Alias {
-        /// Which query the alias is listed in
-        nesting: usize,
+    /// Index into the table references vector for this column's source relation.
+    ///
+    /// For statements with multiple tables (SELECT with JOINs), this indexes into
+    /// the `SourceTable::tables` field to identify which specific table contains
+    /// this column. For single-target statements (INSERT, UPDATE), this is
+    /// typically 0 since these operations target only one relation at a time.
+    pub table: usize,
 
-        /// The index of the alias in the `FROM` (or equivalent) clause
-        table: usize,
-
-        /// The index of the column in the table
-        column: usize,
-    },
+    /// The index of the column in the table
+    pub column: usize,
 }
 
 impl Expr {
@@ -29,17 +36,12 @@ impl Expr {
 }
 
 impl ExprColumn {
-    pub fn references(&self, column_id: ColumnId) -> bool {
-        match self {
-            Self::Column(id) => id == &column_id,
-            Self::Alias { .. } => todo!(),
-        }
-    }
-
-    pub fn try_to_column_id(&self) -> Option<ColumnId> {
-        match self {
-            Self::Column(id) => Some(*id),
-            Self::Alias { .. } => None,
+    /// Create a new ExprColumn reference to a column in the current query scope.
+    pub fn new(table: usize, column: usize) -> Self {
+        ExprColumn {
+            nesting: 0,
+            table,
+            column,
         }
     }
 }
@@ -50,26 +52,12 @@ impl From<ExprColumn> for Expr {
     }
 }
 
-impl From<&Column> for ExprColumn {
-    fn from(value: &Column) -> Self {
-        value.id.into()
-    }
-}
-
-impl From<&Column> for Expr {
-    fn from(value: &Column) -> Self {
-        value.id.into()
-    }
-}
-
 impl From<ColumnId> for ExprColumn {
     fn from(value: ColumnId) -> Self {
-        Self::Column(value)
-    }
-}
-
-impl From<ColumnId> for Expr {
-    fn from(value: ColumnId) -> Self {
-        Self::column(value)
+        ExprColumn {
+            nesting: 0,
+            table: 0,
+            column: value.index,
+        }
     }
 }

@@ -1,4 +1,0 @@
-
-model User {
-    name: string;
-}

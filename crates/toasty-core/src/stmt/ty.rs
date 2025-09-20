@@ -1,4 +1,8 @@
-use super::*;
+use super::{Id, PathFieldSet, TypeEnum, Value};
+use crate::{
+    schema::app::{FieldId, ModelId},
+    stmt, Result,
+};
 
 /// An expression type.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9,8 +13,29 @@ pub enum Type {
     /// String type
     String,
 
+    /// Signed 8-bit integer
+    I8,
+
+    /// Signed 16-bit integer
+    I16,
+
+    /// Signed 32-bit integer
+    I32,
+
     /// Signed 64-bit integer
     I64,
+
+    /// Unsigned 8-bit integer
+    U8,
+
+    /// Unsigned 16-bit integer
+    U16,
+
+    /// Unsigned 32-bit integer
+    U32,
+
+    /// Unsigned 64-bit integer
+    U64,
 
     /// An opaque type that uniquely identifies an instance of a model.
     Id(ModelId),
@@ -37,6 +62,9 @@ pub enum Type {
     Null,
 
     SparseRecord(PathFieldSet),
+
+    /// A type that could not be inferred (e.g., empty list)
+    Unknown,
 }
 
 impl Type {
@@ -81,53 +109,6 @@ impl Type {
             }
             (value, _) => todo!("value={value:#?}; ty={self:#?}"),
         })
-    }
-
-    pub fn casts_to(&self, other: &Self) -> bool {
-        match self {
-            Self::Null => true,
-            Self::List(item) => match other {
-                Self::List(other_item) => item.casts_to(other_item),
-                // A list of 1 item can be flattened when cast. Right now, we
-                // can't statically know if a list will only have 1 item, so we
-                // just say it can cast.
-                _ => item.casts_to(other),
-            },
-            Self::Record(items) => match other {
-                Self::Record(other_items) => items
-                    .iter()
-                    .zip(other_items.iter())
-                    .all(|(item, other_item)| item.casts_to(other_item)),
-                _ => false,
-            },
-            Self::Id(model) | Self::Model(model) => match other {
-                Self::Id(other_model) => model == other_model,
-                Self::Model(other_model) => model == other_model,
-                _ => false,
-            },
-            _ => self == other,
-        }
-    }
-
-    pub fn applies_binary_op(&self, op: BinaryOp) -> bool {
-        use BinaryOp::*;
-        use Type::*;
-
-        match op {
-            Eq | Ne => match self {
-                Bool | String | I64 | Id(_) | Key(_) | Model(_) | ForeignKey(_) => true,
-                Null => false,
-                List(ty) => ty.applies_binary_op(op),
-                Record(tys) => tys.iter().all(|ty| ty.applies_binary_op(op)),
-                Enum(_) | SparseRecord(_) => todo!(),
-            },
-            Ge | Gt | Le | Lt => match self {
-                I64 => true,
-                Bool | String | Id(_) | Key(_) | Model(_) | ForeignKey(_) | Null | List(_)
-                | Record(_) | Enum(_) | SparseRecord(_) => false,
-            },
-            _ => todo!("op = {:#?}", op),
-        }
     }
 }
 

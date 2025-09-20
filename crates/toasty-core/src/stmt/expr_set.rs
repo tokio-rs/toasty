@@ -1,15 +1,16 @@
-use super::*;
+use super::{substitute, Expr, ExprSetOp, Select, SourceModel, Update, Values};
+use crate::schema::db::TableId;
 
 #[derive(Debug, Clone)]
 pub enum ExprSet {
     /// A select query, possibly with a filter.
-    Select(Select),
+    Select(Box<Select>),
 
     /// A set operation (union, intersection, ...) on two queries
     SetOp(ExprSetOp),
 
     /// An update expression
-    Update(Update),
+    Update(Box<Update>),
 
     /// Explicitly listed values (as expressions)
     Values(Values),
@@ -35,7 +36,7 @@ impl ExprSet {
     #[track_caller]
     pub fn into_select(self) -> Select {
         match self {
-            Self::Select(expr) => expr,
+            Self::Select(expr) => *expr,
             _ => todo!(),
         }
     }
@@ -78,25 +79,25 @@ impl Default for ExprSet {
 
 impl From<Select> for ExprSet {
     fn from(value: Select) -> Self {
-        Self::Select(value)
+        Self::Select(Box::new(value))
     }
 }
 
 impl From<Update> for ExprSet {
     fn from(value: Update) -> Self {
-        Self::Update(value)
+        Self::Update(Box::new(value))
     }
 }
 
 impl From<TableId> for ExprSet {
     fn from(value: TableId) -> Self {
-        Self::Select(Select::from(value))
+        Self::Select(Box::new(Select::from(value)))
     }
 }
 
 impl From<SourceModel> for ExprSet {
     fn from(value: SourceModel) -> Self {
-        Self::Select(Select::from(value))
+        Self::Select(Box::new(Select::from(value)))
     }
 }
 

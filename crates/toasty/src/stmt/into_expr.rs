@@ -1,4 +1,5 @@
-use super::*;
+use super::{Expr, Value};
+use toasty_core::stmt;
 
 pub trait IntoExpr<T: ?Sized> {
     fn into_expr(self) -> Expr<T>;
@@ -24,7 +25,14 @@ macro_rules! impl_into_expr_for_copy {
 
 impl_into_expr_for_copy! {
     Bool(bool);
+    I8(i8);
+    I16(i16);
+    I32(i32);
     I64(i64);
+    U8(u8);
+    U16(u16);
+    U32(u32);
+    U64(u64);
 }
 
 impl<T: ?Sized> IntoExpr<T> for Expr<T> {

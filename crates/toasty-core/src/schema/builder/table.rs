@@ -1,4 +1,14 @@
-use super::*;
+use super::BuildSchema;
+use crate::{
+    driver,
+    schema::{
+        app::{self, FieldId, Model},
+        db::{self, ColumnId, IndexId, Table, TableId},
+        mapping::{self, Mapping},
+        Name,
+    },
+    stmt::{self},
+};
 
 struct BuildTableFromModels<'a> {
     /// Database-specific capabilities
@@ -76,7 +86,7 @@ impl BuildSchema<'_> {
 
     fn prefix_table_name(&self, name: &str) -> String {
         if let Some(prefix) = &self.builder.table_name_prefix {
-            format!("{}{}", prefix, name)
+            format!("{prefix}{name}")
         } else {
             name.to_string()
         }
@@ -497,7 +507,7 @@ impl BuildMapping<'_> {
         self.mapping.table_to_model = stmt::ExprRecord::from_vec(self.table_to_model);
         self.mapping.model_pk_to_table = if self.model_pk_to_table.len() == 1 {
             let expr = self.model_pk_to_table.into_iter().next().unwrap();
-            debug_assert!(expr.is_field() || expr.is_cast(), "expr={:#?}", expr);
+            debug_assert!(expr.is_field() || expr.is_cast(), "expr={expr:#?}");
             expr
         } else {
             stmt::ExprRecord::from_vec(self.model_pk_to_table).into()
@@ -520,7 +530,7 @@ impl BuildMapping<'_> {
 
     fn map_primitive(&mut self, field: FieldId, primitive: &app::FieldPrimitive) {
         let column = self.mapping.fields[field.index].as_ref().unwrap().column;
-        let lowering = self.encode_column(column, &primitive.ty, field);
+        let lowering = self.encode_column(column, &primitive.ty, stmt::Expr::field(field));
 
         self.mapping.fields[field.index].as_mut().unwrap().lowering = self.model_to_table.len();
 
@@ -559,6 +569,23 @@ impl BuildMapping<'_> {
         }
     }
 
+    /// Maps table columns to model field expressions during query lowering.
+    ///
+    /// Called during query planning to replace model field references with the appropriate
+    /// table column expressions. Handles type conversions between table storage and model types.
+    ///
+    /// # Type Conversions
+    /// - **Direct**: `user.name` → `SELECT user.name`
+    /// - **Enum decode**: `post.status` → `DECODE_ENUM(post.status_enum, 'bool', 1)`
+    /// - **ID cast**: `user.id` → `SELECT user.id_str::UserId`
+    ///
+    /// # Usage
+    /// The lowering process swaps field references with these generated expressions:
+    /// ```text
+    /// Field reference: post.published (bool)
+    /// Table storage: post.status_enum (enum with bool variant)
+    /// Generated expr: DECODE_ENUM(post.status_enum, 'bool', 1)
+    /// ```
     fn map_table_column_to_model(
         &mut self,
         field_id: FieldId,
@@ -567,8 +594,16 @@ impl BuildMapping<'_> {
         let column_id = self.mapping.fields[field_id.index].as_ref().unwrap().column;
         let column = self.table.column(column_id);
 
+        // NOTE: nesting and table are stubs here (though often the actual values).
+        // The engine must substitute these with the actual TableRef index in the query's TableSource.
+        let expr_column = stmt::Expr::column(stmt::ExprColumn {
+            nesting: 0,
+            table: 0,
+            column: column_id.index,
+        });
+
         match &column.ty {
-            c_ty if *c_ty == primitive.ty => stmt::Expr::column(column.id),
+            c_ty if *c_ty == primitive.ty => expr_column,
             stmt::Type::Enum(ty_enum) => {
                 let variant = ty_enum
                     .variants
@@ -580,13 +615,13 @@ impl BuildMapping<'_> {
                     .unwrap();
 
                 stmt::Expr::DecodeEnum(
-                    Box::new(stmt::Expr::column(column.id)),
+                    Box::new(expr_column),
                     primitive.ty.clone(),
                     variant.discriminant,
                 )
             }
             stmt::Type::String if primitive.ty.is_id() => {
-                stmt::Expr::cast(stmt::Expr::column(column.id), &primitive.ty)
+                stmt::Expr::cast(expr_column, &primitive.ty)
             }
             _ => todo!("column={column:#?}; primitive={primitive:#?}"),
         }
@@ -595,7 +630,14 @@ impl BuildMapping<'_> {
 
 fn stmt_ty_to_table(ty: stmt::Type) -> stmt::Type {
     match ty {
+        stmt::Type::I8 => stmt::Type::I8,
+        stmt::Type::I16 => stmt::Type::I16,
+        stmt::Type::I32 => stmt::Type::I32,
         stmt::Type::I64 => stmt::Type::I64,
+        stmt::Type::U8 => stmt::Type::U8,
+        stmt::Type::U16 => stmt::Type::U16,
+        stmt::Type::U32 => stmt::Type::U32,
+        stmt::Type::U64 => stmt::Type::U64,
         stmt::Type::String => stmt::Type::String,
         stmt::Type::Id(_) => stmt::Type::String,
         _ => todo!("{ty:#?}"),

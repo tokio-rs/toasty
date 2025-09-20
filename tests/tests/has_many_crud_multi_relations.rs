@@ -1,9 +1,9 @@
-use tests::*;
-
 use std::collections::HashMap;
+use std_util::assert_empty;
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
-async fn crud_user_todos_categories(s: impl Setup) {
+async fn crud_user_todos_categories(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -49,7 +49,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         todos: toasty::HasMany<Todo>,
     }
 
-    let db = s.setup(models!(User, Todo, Category)).await;
+    let db = test.setup_db(models!(User, Todo, Category)).await;
 
     // Create a user
     let user = User::create().name("Ann Chovey").exec(&db).await.unwrap();
@@ -164,7 +164,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
 
         for (id, actual) in actual {
             assert_eq!(expect[&id].title, actual.title);
-            let category = actual.category().get(&db).await.unwrap();
+            let category = actual.category().get(db).await.unwrap();
             assert_eq!(category.name, "Food");
         }
     }
@@ -174,7 +174,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         &expect,
         category
             .todos()
-            .query(Todo::FIELDS.user.eq(&user))
+            .query(Todo::FIELDS.user().eq(&user))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
@@ -185,7 +185,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         &db,
         &expect,
         user.todos()
-            .query(Todo::FIELDS.category.eq(&category))
+            .query(Todo::FIELDS.category().eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
@@ -196,7 +196,7 @@ async fn crud_user_todos_categories(s: impl Setup) {
         &db,
         &expect,
         Todo::filter_by_user_id(&user.id)
-            .filter(Todo::FIELDS.category.eq(&category))
+            .filter(Todo::FIELDS.category().eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),

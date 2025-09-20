@@ -1,4 +1,4 @@
-use super::*;
+use super::Value;
 
 use std::{
     collections::VecDeque,
@@ -19,7 +19,7 @@ struct Iter<I> {
     iter: I,
 }
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Default)]
 enum Buffer {
     #[default]
     Empty,
@@ -124,6 +124,21 @@ impl ValueStream {
         Ok(())
     }
 
+    /// Returns `true` if the ValueStream is fully buffered (no remaining stream)
+    pub fn is_buffered(&self) -> bool {
+        self.stream.is_none()
+    }
+
+    /// Returns a clone of only the currently buffered values
+    /// Does not consume any stream data or wait for additional values
+    pub fn buffered_to_vec(&self) -> Vec<Value> {
+        match &self.buffer {
+            Buffer::Empty => Vec::new(),
+            Buffer::One(value) => vec![value.clone()],
+            Buffer::Many(values) => values.iter().cloned().collect(),
+        }
+    }
+
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Value> {
         assert!(self.stream.is_none());
 
@@ -133,13 +148,6 @@ impl ValueStream {
             Buffer::One(v) => Box::new(Some(v).into_iter()),
             Buffer::Many(v) => Box::new(v.iter_mut()) as Box<dyn Iterator<Item = &mut Value>>,
         }
-    }
-
-    // NOTE: this method is only used for testing purposes. It should not ever be made
-    // available via the public API.
-    #[cfg(test)]
-    fn into_inner(self) -> (Buffer, Option<DynStream>) {
-        (self.buffer, self.stream)
     }
 }
 
@@ -267,17 +275,5 @@ impl Buffer {
                 values.push_back(value);
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default() {
-        let (buffer, stream) = ValueStream::default().into_inner();
-        assert!(buffer == Buffer::Empty);
-        assert!(stream.is_none());
     }
 }

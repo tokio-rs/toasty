@@ -1,13 +1,12 @@
 mod value;
 pub(crate) use value::Value;
 
-use std::sync::Arc;
-
 use postgres::{
     tls::MakeTlsConnect,
     types::{ToSql, Type},
     Column, Row, Socket,
 };
+use std::sync::Arc;
 use toasty_core::{
     driver::{Capability, Operation, Response},
     schema::db::{Schema, Table},
@@ -86,7 +85,7 @@ impl PostgreSQL {
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
+                eprintln!("connection error: {e}");
             }
         });
 
@@ -168,9 +167,9 @@ impl Driver for PostgreSQL {
     }
 
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        let sql: sql::Statement = match op {
-            Operation::Insert(op) => op.stmt.into(),
-            Operation::QuerySql(query) => query.stmt.into(),
+        let (sql, ret_tys): (sql::Statement, _) = match op {
+            Operation::Insert(op) => (op.stmt.into(), None),
+            Operation::QuerySql(query) => (query.stmt.into(), query.ret),
             op => todo!("op={:#?}", op),
         };
 
@@ -205,11 +204,11 @@ impl Driver for PostgreSQL {
                 anyhow::bail!("update condition did not match");
             }
         } else {
+            let ret_tys = ret_tys.as_ref().unwrap().clone();
             let results = rows.into_iter().map(move |row| {
                 let mut results = Vec::new();
-                for i in 0..row.len() {
-                    let column = &row.columns()[i];
-                    results.push(postgres_to_toasty(i, &row, column));
+                for (i, column) in row.columns().iter().enumerate() {
+                    results.push(postgres_to_toasty(i, &row, column, &ret_tys[i]));
                 }
 
                 Ok(ValueRecord::from_vec(results))
@@ -232,25 +231,60 @@ impl Driver for PostgreSQL {
 }
 
 /// Converts a PostgreSQL value within a row to a [`toasty_core::stmt::Value`].
-fn postgres_to_toasty(index: usize, row: &Row, column: &Column) -> stmt::Value {
+fn postgres_to_toasty(
+    index: usize,
+    row: &Row,
+    column: &Column,
+    expected_ty: &stmt::Type,
+) -> stmt::Value {
     // NOTE: unfortunately, the inner representation of the PostgreSQL type enum is not
     // accessible, so we must manually match each type like so.
     if column.type_() == &Type::TEXT || column.type_() == &Type::VARCHAR {
         row.get::<usize, Option<String>>(index)
-            .map(stmt::Value::String)
+            .map(|v| match expected_ty {
+                stmt::Type::String => stmt::Value::String(v),
+                _ => stmt::Value::String(v), // Default to string
+            })
             .unwrap_or(stmt::Value::Null)
     } else if column.type_() == &Type::BOOL {
         row.get::<usize, Option<bool>>(index)
             .map(stmt::Value::Bool)
             .unwrap_or(stmt::Value::Null)
+    } else if column.type_() == &Type::INT2 {
+        row.get::<usize, Option<i16>>(index)
+            .map(|v| match expected_ty {
+                stmt::Type::I8 => stmt::Value::I8(v as i8),
+                stmt::Type::I16 => stmt::Value::I16(v),
+                stmt::Type::U8 => stmt::Value::U8(
+                    u8::try_from(v).unwrap_or_else(|_| panic!("u8 value out of range: {v}")),
+                ),
+                stmt::Type::U16 => stmt::Value::U16(v as u16),
+                _ => panic!("unexpected type for INT2: {expected_ty:#?}"),
+            })
+            .unwrap_or(stmt::Value::Null)
     } else if column.type_() == &Type::INT4 {
         row.get::<usize, Option<i32>>(index)
-            .map(|i| i as i64)
-            .map(stmt::Value::I64)
+            .map(|v| match expected_ty {
+                stmt::Type::I32 => stmt::Value::I32(v),
+                stmt::Type::U16 => stmt::Value::U16(
+                    u16::try_from(v).unwrap_or_else(|_| panic!("u16 value out of range: {v}")),
+                ),
+                stmt::Type::U32 => stmt::Value::U32(v as u32),
+                _ => stmt::Value::I32(v), // Default fallback
+            })
             .unwrap_or(stmt::Value::Null)
     } else if column.type_() == &Type::INT8 {
         row.get::<usize, Option<i64>>(index)
-            .map(stmt::Value::from)
+            .map(|v| match expected_ty {
+                stmt::Type::I64 => stmt::Value::I64(v),
+                stmt::Type::U32 => stmt::Value::U32(
+                    u32::try_from(v).unwrap_or_else(|_| panic!("u32 value out of range: {v}")),
+                ),
+                stmt::Type::U64 => stmt::Value::U64(
+                    u64::try_from(v).unwrap_or_else(|_| panic!("u64 value out of range: {v}")),
+                ),
+                _ => stmt::Value::I64(v), // Default fallback
+            })
             .unwrap_or(stmt::Value::Null)
     } else {
         todo!(

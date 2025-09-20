@@ -7,6 +7,9 @@ pub use association::Association;
 mod cte;
 pub use cte::Cte;
 
+mod cx;
+pub use cx::{ExprContext, ExprTarget, ResolvedRef};
+
 mod delete;
 pub use delete::Delete;
 
@@ -51,9 +54,6 @@ pub use expr_concat_str::ExprConcatStr;
 
 mod expr_enum;
 pub use expr_enum::ExprEnum;
-
-mod expr_field;
-pub use expr_field::ExprField;
 
 mod expr_func;
 pub use expr_func::ExprFunc;
@@ -127,8 +127,13 @@ pub use join::{Join, JoinOp};
 mod limit;
 pub use limit::Limit;
 
+#[cfg(feature = "assert-struct")]
+mod like;
+
 mod node;
 pub use node::Node;
+
+mod num;
 
 mod offset;
 pub use offset::Offset;
@@ -166,6 +171,12 @@ pub use select::Select;
 mod source;
 pub use source::{Source, SourceModel};
 
+mod source_table;
+pub use source_table::SourceTable;
+
+mod source_table_id;
+pub use source_table_id::SourceTableId;
+
 mod sparse_record;
 pub use sparse_record::SparseRecord;
 
@@ -173,6 +184,9 @@ pub mod substitute;
 
 mod table_ref;
 pub use table_ref::TableRef;
+
+mod table_factor;
+pub use table_factor::TableFactor;
 
 mod table_with_joins;
 pub use table_with_joins::TableWithJoins;
@@ -188,6 +202,8 @@ pub use update::{Update, UpdateTarget};
 
 mod value;
 pub use value::Value;
+
+mod value_cmp;
 
 mod values;
 pub use values::Values;
@@ -210,14 +226,7 @@ pub use visit::Visit;
 mod with;
 pub use with::With;
 
-use crate::{
-    schema::{
-        app::{Field, FieldId, Model, ModelId},
-        db::{Column, ColumnId, TableId},
-    },
-    stmt, Error, Result,
-};
-
+use crate::schema::db::TableId;
 use std::fmt;
 
 #[derive(Clone)]
@@ -275,7 +284,7 @@ impl Statement {
     pub fn unwrap_delete(self) -> Delete {
         match self {
             Self::Delete(delete) => delete,
-            v => panic!("expected `Delete`, found {:#?}", v),
+            v => panic!("expected `Delete`, found {v:#?}"),
         }
     }
 
@@ -311,7 +320,7 @@ impl Statement {
     pub fn unwrap_insert(self) -> Insert {
         match self {
             Self::Insert(insert) => insert,
-            v => panic!("expected `Insert`, found {:#?}", v),
+            v => panic!("expected `Insert`, found {v:#?}"),
         }
     }
 
@@ -347,7 +356,7 @@ impl Statement {
     pub fn unwrap_query(self) -> Query {
         match self {
             Self::Query(query) => query,
-            v => panic!("expected `Query`, found {:#?}", v),
+            v => panic!("expected `Query`, found {v:#?}"),
         }
     }
 
@@ -383,7 +392,7 @@ impl Statement {
     pub fn unwrap_update(self) -> Update {
         match self {
             Self::Update(update) => update,
-            v => panic!("expected `Update`, found {:#?}", v),
+            v => panic!("expected `Update`, found {v:#?}"),
         }
     }
 }

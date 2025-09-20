@@ -1,4 +1,4 @@
-use super::*;
+use super::{Expr, ExprRecord};
 
 #[derive(Debug, Clone)]
 pub struct ExprEnum {

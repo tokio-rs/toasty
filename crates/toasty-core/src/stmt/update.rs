@@ -1,4 +1,8 @@
-use super::*;
+use super::{Assignments, Expr, Node, Query, Returning, Statement, Visit, VisitMut};
+use crate::{
+    schema::{app::ModelId, db::TableId},
+    stmt,
+};
 
 #[derive(Debug, Clone)]
 pub struct Update {
@@ -27,7 +31,7 @@ impl Statement {
 #[derive(Debug, Clone)]
 pub enum UpdateTarget {
     /// The query must return a "model" for it to be updated.
-    Query(Query),
+    Query(Box<Query>),
 
     /// Update a model
     Model(ModelId),

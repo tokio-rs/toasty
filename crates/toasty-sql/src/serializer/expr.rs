@@ -1,55 +1,74 @@
+use toasty_core::stmt::ResolvedRef;
+
 use super::{Comma, Delimited, Params, ToSql};
 
-use crate::stmt;
+use crate::{
+    serializer::{ExprContext, Ident},
+    stmt,
+};
 
 impl ToSql for &stmt::Expr {
-    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         use stmt::Expr::*;
 
         match self {
             And(expr) => {
-                fmt!(f, Delimited(&expr.operands, " AND "));
+                fmt!(cx, f, Delimited(&expr.operands, " AND "));
             }
             BinaryOp(expr) => {
                 assert!(!expr.lhs.is_value_null());
                 assert!(!expr.rhs.is_value_null());
 
-                fmt!(f, expr.lhs " " expr.op " " expr.rhs);
+                fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
             }
-            Column(stmt::ExprColumn::Column(column_id)) => {
-                let column = f.serializer.column_name(*column_id);
-                fmt!(f, column);
-            }
-            Column(stmt::ExprColumn::Alias {
-                nesting, column, ..
-            }) => {
-                let depth = f.depth - *nesting;
-                fmt!(f, "tbl_" depth ".col_" column)
+            Column(
+                expr_column @ stmt::ExprColumn {
+                    nesting,
+                    table,
+                    column,
+                },
+            ) => {
+                if f.alias {
+                    let depth = f.depth - *nesting;
+
+                    match cx.resolve_expr_column(expr_column) {
+                        ResolvedRef::Column(column) => {
+                            let name = Ident(&column.name);
+                            fmt!(cx, f, "tbl_" depth "_" table "." name)
+                        }
+                        ResolvedRef::Cte { .. } => {
+                            fmt!(cx, f, "tbl_" depth "_" table ".col_" column)
+                        }
+                    }
+                } else {
+                    let column = cx.resolve_expr_column(expr_column).expect_column();
+                    fmt!(cx, f, Ident(&column.name))
+                }
             }
             Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
-                (None, None) => fmt!(f, "COUNT(*)"),
+                (None, None) => fmt!(cx, f, "COUNT(*)"),
                 // Mysql does not support filters, so translate it to an expression
                 (None, Some(expr)) if f.serializer.is_mysql() => {
-                    fmt!(f, "COUNT(CASE WHEN " expr " THEN 1 END)")
+                    fmt!(cx, f, "COUNT(CASE WHEN " expr " THEN 1 END)")
                 }
-                (None, Some(expr)) => fmt!(f, "COUNT(*) FILTER (WHERE " expr ")"),
+                (None, Some(expr)) => fmt!(cx, f, "COUNT(*) FILTER (WHERE " expr ")"),
                 _ => todo!("func={func:#?}"),
             },
             InList(expr) => {
-                fmt!(f, expr.expr " IN " expr.list);
+                fmt!(cx, f, expr.expr " IN " expr.list);
             }
             InSubquery(expr) => {
-                fmt!(f, expr.expr " IN (" expr.query ")");
+                fmt!(cx, f, expr.expr " IN (" expr.query ")");
             }
             IsNull(expr) => {
                 if expr.negate {
-                    fmt!(f, expr.expr " IS NOT NULL");
+                    fmt!(cx, f, expr.expr " IS NOT NULL");
                 } else {
-                    fmt!(f, expr.expr " IS NULL");
+                    fmt!(cx, f, expr.expr " IS NULL");
                 }
             }
             Or(expr) => {
-                fmt!(f, Delimited(&expr.operands, " OR "));
+                fmt!(cx, f, Delimited(&expr.operands, " OR "));
             }
             Pattern(stmt::ExprPattern::BeginsWith(expr)) => {
                 let stmt::Expr::Value(pattern) = &*expr.pattern else {
@@ -60,24 +79,24 @@ impl ToSql for &stmt::Expr {
                 let pattern = format!("{pattern}%");
                 let pattern = stmt::Expr::Value(pattern.into());
 
-                fmt!(f, expr.expr " LIKE " pattern);
+                fmt!(cx, f, expr.expr " LIKE " pattern);
             }
             Record(expr) => {
                 let exprs = Comma(&expr.fields);
-                fmt!(f, "(" exprs ")");
+                fmt!(cx, f, "(" exprs ")");
             }
             Stmt(expr) => {
                 let stmt = &*expr.stmt;
-                fmt!(f, "(" stmt ")");
+                fmt!(cx, f, "(" stmt ")");
             }
-            Value(expr) => expr.to_sql(f),
+            Value(expr) => expr.to_sql(cx, f),
             _ => todo!("expr={:?}", self),
         }
     }
 }
 
 impl ToSql for &stmt::BinaryOp {
-    fn to_sql<P: Params>(self, f: &mut super::Formatter<'_, P>) {
+    fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         f.dst.push_str(match self {
             stmt::BinaryOp::Eq => "=",
             stmt::BinaryOp::Gt => ">",

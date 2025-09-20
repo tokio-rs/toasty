@@ -1,22 +1,27 @@
 mod op;
 
 use toasty_core::{
-    driver::{
-        operation::{self, Operation},
-        Capability, Driver, Response,
-    },
+    driver::{operation::Operation, Capability, Driver, Response},
     schema::{
         app,
         db::{Column, ColumnId, Schema, Table},
     },
-    stmt,
+    stmt::{self, ExprContext},
 };
 
 use anyhow::Result;
 use aws_sdk_dynamodb::{
-    error::SdkError, operation::update_item::UpdateItemError, types::*, Client,
+    error::SdkError,
+    operation::update_item::UpdateItemError,
+    types::{
+        AttributeDefinition, AttributeValue, Delete, GlobalSecondaryIndex, KeySchemaElement,
+        KeyType, KeysAndAttributes, Projection, ProjectionType, ProvisionedThroughput, Put,
+        PutRequest, ReturnValuesOnConditionCheckFailure, ScalarAttributeType, TransactWriteItem,
+        Update, WriteRequest,
+    },
+    Client,
 };
-use std::{collections::HashMap, fmt::Write, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 use url::Url;
 
 #[derive(Debug)]
@@ -49,7 +54,7 @@ impl DynamoDb {
             let mut endpoint_url = format!("http://{host}");
 
             if let Some(port) = url.port() {
-                endpoint_url.push_str(&format!(":{}", port));
+                endpoint_url.push_str(&format!(":{port}"));
             }
 
             aws_config = aws_config.endpoint_url(&endpoint_url);
@@ -128,7 +133,7 @@ fn ddb_ty(ty: &stmt::Type) -> ScalarAttributeType {
     match ty {
         Bool => N,
         String | Enum(..) => S,
-        I64 => N,
+        I8 | I16 | I32 | I64 => N,
         Id(_) => S,
         _ => todo!("ddb_ty; ty={:#?}", ty),
     }
@@ -154,7 +159,14 @@ enum V {
     Bool(bool),
     Null,
     String(String),
+    I8(i8),
+    I16(i16),
+    I32(i32),
     I64(i64),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
     Id(usize, String),
 }
 
@@ -162,14 +174,28 @@ fn ddb_val(val: &stmt::Value) -> AttributeValue {
     match val {
         stmt::Value::Bool(val) => AttributeValue::Bool(*val),
         stmt::Value::String(val) => AttributeValue::S(val.to_string()),
+        stmt::Value::I8(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::I16(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::I32(val) => AttributeValue::N(val.to_string()),
         stmt::Value::I64(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::U8(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::U16(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::U32(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::U64(val) => AttributeValue::N(val.to_string()),
         stmt::Value::Id(val) => AttributeValue::S(val.to_string()),
         stmt::Value::Enum(val) => {
             let v = match &val.fields[..] {
                 [] => V::Null,
                 [stmt::Value::Bool(v)] => V::Bool(*v),
                 [stmt::Value::String(v)] => V::String(v.to_string()),
+                [stmt::Value::I8(v)] => V::I8(*v),
+                [stmt::Value::I16(v)] => V::I16(*v),
+                [stmt::Value::I32(v)] => V::I32(*v),
                 [stmt::Value::I64(v)] => V::I64(*v),
+                [stmt::Value::U8(v)] => V::U8(*v),
+                [stmt::Value::U16(v)] => V::U16(*v),
+                [stmt::Value::U32(v)] => V::U32(*v),
+                [stmt::Value::U64(v)] => V::U64(*v),
                 [stmt::Value::Id(id)] => V::Id(id.model_id().0, id.to_string()),
                 _ => todo!("val={:#?}", val.fields),
             };
@@ -190,7 +216,14 @@ fn ddb_to_val(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
     match (ty, val) {
         (Type::Bool, Bool(val)) => stmt::Value::from(*val),
         (Type::String, S(val)) => stmt::Value::from(val.clone()),
+        (Type::I8, N(val)) => stmt::Value::from(val.parse::<i8>().unwrap()),
+        (Type::I16, N(val)) => stmt::Value::from(val.parse::<i16>().unwrap()),
+        (Type::I32, N(val)) => stmt::Value::from(val.parse::<i32>().unwrap()),
         (Type::I64, N(val)) => stmt::Value::from(val.parse::<i64>().unwrap()),
+        (Type::U8, N(val)) => stmt::Value::from(val.parse::<u8>().unwrap()),
+        (Type::U16, N(val)) => stmt::Value::from(val.parse::<u16>().unwrap()),
+        (Type::U32, N(val)) => stmt::Value::from(val.parse::<u32>().unwrap()),
+        (Type::U64, N(val)) => stmt::Value::from(val.parse::<u64>().unwrap()),
         (Type::Id(model), S(val)) => stmt::Value::from(stmt::Id::from_string(*model, val.clone())),
         (Type::Enum(..), S(val)) => {
             let (variant, rest) = val.split_once("#").unwrap();
@@ -201,7 +234,14 @@ fn ddb_to_val(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
                 V::Null => stmt::Value::Null,
                 V::String(v) => stmt::Value::String(v),
                 V::Id(model, v) => stmt::Value::Id(stmt::Id::from_string(app::ModelId(model), v)),
+                V::I8(v) => stmt::Value::I8(v),
+                V::I16(v) => stmt::Value::I16(v),
+                V::I32(v) => stmt::Value::I32(v),
                 V::I64(v) => stmt::Value::I64(v),
+                V::U8(v) => stmt::Value::U8(v),
+                V::U16(v) => stmt::Value::U16(v),
+                V::U32(v) => stmt::Value::U32(v),
+                V::U64(v) => stmt::Value::U64(v),
             };
 
             if value.is_null() {
@@ -264,15 +304,15 @@ fn item_to_record<'a, 'stmt>(
 }
 
 fn ddb_expression(
-    schema: &Schema,
+    cx: &ExprContext<'_, Schema>,
     attrs: &mut ExprAttrs,
     primary: bool,
     expr: &stmt::Expr,
 ) -> String {
     match expr {
         stmt::Expr::BinaryOp(expr_binary_op) => {
-            let lhs = ddb_expression(schema, attrs, primary, &expr_binary_op.lhs);
-            let rhs = ddb_expression(schema, attrs, primary, &expr_binary_op.rhs);
+            let lhs = ddb_expression(cx, attrs, primary, &expr_binary_op.lhs);
+            let rhs = ddb_expression(cx, attrs, primary, &expr_binary_op.rhs);
 
             match expr_binary_op.op {
                 stmt::BinaryOp::Eq => format!("{lhs} = {rhs}"),
@@ -287,8 +327,8 @@ fn ddb_expression(
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
-        stmt::Expr::Column(stmt::ExprColumn::Column(column_id)) => {
-            let column = schema.column(*column_id);
+        stmt::Expr::Column(expr_column) => {
+            let column = cx.resolve_expr_column(expr_column).expect_column();
             attrs.column(column).to_string()
         }
         stmt::Expr::Value(val) => attrs.value(val),
@@ -296,13 +336,13 @@ fn ddb_expression(
             let operands = expr_and
                 .operands
                 .iter()
-                .map(|operand| ddb_expression(schema, attrs, primary, operand))
+                .map(|operand| ddb_expression(cx, attrs, primary, operand))
                 .collect::<Vec<_>>();
             operands.join(" AND ")
         }
         stmt::Expr::Pattern(stmt::ExprPattern::BeginsWith(begins_with)) => {
-            let expr = ddb_expression(schema, attrs, primary, &begins_with.expr);
-            let substr = ddb_expression(schema, attrs, primary, &begins_with.pattern);
+            let expr = ddb_expression(cx, attrs, primary, &begins_with.expr);
+            let substr = ddb_expression(cx, attrs, primary, &begins_with.pattern);
             format!("begins_with({expr}, {substr})")
         }
         _ => todo!("FILTER = {:#?}", expr),

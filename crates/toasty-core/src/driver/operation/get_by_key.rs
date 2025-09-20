@@ -1,11 +1,11 @@
-use super::*;
+use super::Operation;
 
 use crate::{
     schema::db::{ColumnId, TableId},
     stmt,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GetByKey {
     /// Which table to get from
     pub table: TableId,

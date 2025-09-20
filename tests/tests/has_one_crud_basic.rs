@@ -1,7 +1,8 @@
-use tests::*;
+use std_util::{assert_err, assert_none};
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
-async fn crud_has_one_bi_direction_optional(s: impl Setup) {
+async fn crud_has_one_bi_direction_optional(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -29,7 +30,7 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
         bio: String,
     }
 
-    let db = s.setup(models!(User, Profile)).await;
+    let db = test.setup_db(models!(User, Profile)).await;
 
     // Create a user without a profile
     let user = User::create().name("Jane Doe").exec(&db).await.unwrap();
@@ -123,7 +124,7 @@ async fn crud_has_one_bi_direction_optional(s: impl Setup) {
     assert_none!(profile_reloaded.user_id);
 }
 
-async fn crud_has_one_required_belongs_to_optional(s: impl Setup) {
+async fn crud_has_one_required_belongs_to_optional(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -149,7 +150,7 @@ async fn crud_has_one_required_belongs_to_optional(s: impl Setup) {
         bio: String,
     }
 
-    let db = s.setup(models!(User, Profile)).await;
+    let db = test.setup_db(models!(User, Profile)).await;
 
     // Create a new user with a profile
     let user = User::create()
@@ -173,7 +174,7 @@ async fn crud_has_one_required_belongs_to_optional(s: impl Setup) {
     assert_err!(User::create().exec(&db).await);
 }
 
-async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
+async fn update_belongs_to_with_required_has_one_pair(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -199,7 +200,7 @@ async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
         bio: String,
     }
 
-    let db = s.setup(models!(User, Profile)).await;
+    let db = test.setup_db(models!(User, Profile)).await;
 
     // Create a user with a profile
     let u1 = User::create()
@@ -281,7 +282,7 @@ async fn update_belongs_to_with_required_has_one_pair(s: impl Setup) {
     */
 }
 
-async fn crud_has_one_optional_belongs_to_required(s: impl Setup) {
+async fn crud_has_one_optional_belongs_to_required(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -307,7 +308,7 @@ async fn crud_has_one_optional_belongs_to_required(s: impl Setup) {
         bio: String,
     }
 
-    let db = s.setup(models!(User, Profile)).await;
+    let db = test.setup_db(models!(User, Profile)).await;
 
     // Create a new user with a profile
     let user = User::create()
@@ -329,7 +330,7 @@ async fn crud_has_one_optional_belongs_to_required(s: impl Setup) {
 
 // TODO: implement this for proc macros
 /*
-async fn has_one_must_specify_be_uniquely_indexed(_s: impl Setup) {
+async fn has_one_must_specify_be_uniquely_indexed(_test: &mut DbTest) {
     toasty_core::schema::from_str(
         "
         model User {
@@ -357,7 +358,7 @@ async fn has_one_must_specify_be_uniquely_indexed(_s: impl Setup) {
 }
 */
 
-async fn set_has_one_by_value_in_update_query(s: impl Setup) {
+async fn set_has_one_by_value_in_update_query(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -381,7 +382,7 @@ async fn set_has_one_by_value_in_update_query(s: impl Setup) {
         user: toasty::BelongsTo<Option<User>>,
     }
 
-    let db = s.setup(models!(User, Profile)).await;
+    let db = test.setup_db(models!(User, Profile)).await;
 
     let user = User::create().exec(&db).await.unwrap();
     let profile = Profile::create().exec(&db).await.unwrap();
@@ -399,9 +400,9 @@ async fn set_has_one_by_value_in_update_query(s: impl Setup) {
     assert_eq!(profile_reload.user_id.as_ref().unwrap(), &user.id);
 }
 
-async fn unset_has_one_in_batch_update(_s: impl Setup) {}
+async fn unset_has_one_in_batch_update(_test: &mut DbTest) {}
 
-async fn unset_has_one_with_required_pair_in_pk_query_update(s: impl Setup) {
+async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -425,7 +426,7 @@ async fn unset_has_one_with_required_pair_in_pk_query_update(s: impl Setup) {
         user: toasty::BelongsTo<User>,
     }
 
-    let db = s.setup(models!(User, Profile)).await;
+    let db = test.setup_db(models!(User, Profile)).await;
 
     let user = User::create()
         .profile(Profile::create())
@@ -447,7 +448,7 @@ async fn unset_has_one_with_required_pair_in_pk_query_update(s: impl Setup) {
     assert_err!(Profile::get_by_id(&db, &profile.id).await);
 }
 
-async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) {
+async fn unset_has_one_with_required_pair_in_non_pk_query_update(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -474,7 +475,7 @@ async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) 
         user: toasty::BelongsTo<User>,
     }
 
-    let db = s.setup(models!(User, Profile)).await;
+    let db = test.setup_db(models!(User, Profile)).await;
 
     let user = User::create()
         .email("foo@example.com")
@@ -496,7 +497,7 @@ async fn unset_has_one_with_required_pair_in_non_pk_query_update(s: impl Setup) 
     assert_err!(Profile::get_by_id(&db, &profile.id).await);
 }
 
-async fn associate_has_one_by_val_on_insert(s: impl Setup) {
+async fn associate_has_one_by_val_on_insert(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -522,7 +523,7 @@ async fn associate_has_one_by_val_on_insert(s: impl Setup) {
         bio: String,
     }
 
-    let db = s.setup(models!(User, Profile)).await;
+    let db = test.setup_db(models!(User, Profile)).await;
 
     // Create a profile
     let profile = Profile::create()
@@ -540,7 +541,7 @@ async fn associate_has_one_by_val_on_insert(s: impl Setup) {
     assert_eq!(profile.bio, profile_reloaded.bio);
 }
 
-async fn associate_has_one_by_val_on_update_query_with_filter(_s: impl Setup) {
+async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut DbTest) {
     /*
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -569,7 +570,7 @@ async fn associate_has_one_by_val_on_update_query_with_filter(_s: impl Setup) {
         bio: String,
     }
 
-    let db = s.setup(models!(User, Profile)).await;
+    let db = test.setup_db(models!(User, Profile)).await;
 
     let u1 = User::create().name("user 1").exec(&db).await.unwrap();
     let p1 = Profile::create()
@@ -601,7 +602,7 @@ async fn associate_has_one_by_val_on_update_query_with_filter(_s: impl Setup) {
 
     // Getting this to work will require a big chunk of work in the planner.
     User::filter_by_id(&u1.id)
-        .filter(User::FIELDS.name.eq("anon"))
+        .filter(User::FIELDS.name().eq("anon"))
         .update()
         .profile(&p1)
         .exec(&db)

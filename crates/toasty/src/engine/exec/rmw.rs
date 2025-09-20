@@ -1,3 +1,5 @@
+use super::{plan, Exec};
+use crate::Result;
 use toasty_core::{
     driver::{
         operation::{self, Transaction},
@@ -5,10 +7,6 @@ use toasty_core::{
     },
     stmt,
 };
-
-use super::{plan, Exec};
-
-use crate::Result;
 
 impl Exec<'_> {
     pub(super) async fn action_read_modify_write(

@@ -1,4 +1,6 @@
-use super::*;
+use super::{eval, plan, Exec, Result};
+use toasty_core::stmt;
+use toasty_core::stmt::ValueStream;
 
 /// Key-value specific utilities
 impl Exec<'_> {

@@ -1,9 +1,11 @@
-use super::*;
-use app::{Field, FieldId, FieldTy, HasMany, HasOne};
+use crate::engine::simplify::Simplify;
 
-use crate::Result;
-
+use super::{Context, Planner, Result};
 use std::mem;
+use toasty_core::{
+    schema::app::{self, Field, FieldId, FieldTy, HasMany, HasOne},
+    stmt,
+};
 
 impl Planner<'_> {
     pub(super) fn plan_mut_relation_field(
@@ -95,7 +97,7 @@ impl Planner<'_> {
 
                     let scope = stmt::Query::filter(
                         field.id.model,
-                        stmt::Expr::eq(fk_field.source, value.clone()),
+                        stmt::Expr::eq(stmt::Expr::field(fk_field.source), value.clone()),
                     );
 
                     if field.nullable {
@@ -126,14 +128,17 @@ impl Planner<'_> {
 
         match stmt {
             stmt::Statement::Insert(mut insert) => {
-                if let stmt::ExprSet::Values(values) = &*insert.source.body {
+                if let stmt::ExprSet::Values(values) = &insert.source.body {
                     assert_eq!(1, values.rows.len());
                 }
 
                 // Only returning that makes sense here as that is the type that
                 // "belongs" in this field. We translate it to the key to set
                 // the FK fields in the source model.
-                assert!(matches!(insert.returning, Some(stmt::Returning::Star)));
+                assert!(matches!(
+                    insert.returning,
+                    Some(stmt::Returning::Model { .. })
+                ));
 
                 // Previous value of returning does nothing in this
                 // context
@@ -166,10 +171,7 @@ impl Planner<'_> {
                     .map(|fk_field| fk_field.target)
                     .collect();
 
-                // TODO: move this out
-                let Some(e) =
-                    simplify::lift_pk_select::lift_key_select(self.schema, &fields, &query)
-                else {
+                let Some(e) = Simplify::new(self.schema).extract_key_value(&fields, &query) else {
                     todo!("belongs_to={:#?}; stmt={:#?}", belongs_to, query);
                 };
 
@@ -198,7 +200,7 @@ impl Planner<'_> {
                         let filter = &mut scope.body.as_select_mut().filter;
                         *filter = stmt::Expr::and(
                             filter.take(),
-                            stmt::Expr::ne(field, stmt::Value::Null),
+                            stmt::Expr::ne(stmt::Expr::field(field), stmt::Value::Null),
                         );
                     }
 
@@ -299,7 +301,10 @@ impl Planner<'_> {
             let mut stmt = selection.update();
 
             // This protects against races.
-            stmt.condition = Some(stmt::Expr::in_subquery(has_many.pair, scope.clone()));
+            stmt.condition = Some(stmt::Expr::in_subquery(
+                stmt::Expr::field(has_many.pair),
+                scope.clone(),
+            ));
             stmt.assignments.set(has_many.pair, stmt::Value::Null);
             let out = self.plan_stmt(&Context::default(), stmt.into())?;
             assert!(out.is_none());
@@ -454,7 +459,10 @@ impl Planner<'_> {
     /// Translate a source model scope to a target model scope for a has_one
     /// relation.
     fn relation_pair_scope(&self, pair: FieldId, scope: stmt::Query) -> stmt::Query {
-        stmt::Query::filter(pair.model, stmt::Expr::in_subquery(pair, scope))
+        stmt::Query::filter(
+            pair.model,
+            stmt::Expr::in_subquery(stmt::Expr::field(pair), scope),
+        )
     }
 
     fn relation_step(

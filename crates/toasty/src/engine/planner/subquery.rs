@@ -1,4 +1,5 @@
-use super::*;
+use super::{plan, Context, Planner, Result};
+use toasty_core::stmt;
 
 impl Planner<'_> {
     /// Walk the statement, find subqueries, and plan them independently.

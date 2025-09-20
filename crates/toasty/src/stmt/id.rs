@@ -42,7 +42,7 @@ impl<M: Model> IntoExpr<Self> for Id<M> {
 
 impl<M: Model> IntoExpr<Id<M>> for String {
     fn into_expr(self) -> Expr<Id<M>> {
-        Expr::from_value(stmt::Id::from_string(M::ID, self).into())
+        Expr::from_value(stmt::Id::from_string(M::id(), self).into())
     }
 
     fn by_ref(&self) -> Expr<Id<M>> {
@@ -52,7 +52,7 @@ impl<M: Model> IntoExpr<Id<M>> for String {
 
 impl<M: Model> IntoExpr<Id<M>> for &str {
     fn into_expr(self) -> Expr<Id<M>> {
-        Expr::from_value(stmt::Id::from_string(M::ID, self.into()).into())
+        Expr::from_value(stmt::Id::from_string(M::id(), self.into()).into())
     }
 
     fn by_ref(&self) -> Expr<Id<M>> {
@@ -62,7 +62,7 @@ impl<M: Model> IntoExpr<Id<M>> for &str {
 
 impl<M: Model> IntoExpr<Id<M>> for &String {
     fn into_expr(self) -> Expr<Id<M>> {
-        Expr::from_value(stmt::Id::from_string(M::ID, self.into()).into())
+        Expr::from_value(stmt::Id::from_string(M::id(), self.into()).into())
     }
 
     fn by_ref(&self) -> Expr<Id<M>> {
@@ -126,5 +126,19 @@ impl<M> Eq for Id<M> {}
 impl<M> Hash for Id<M> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.inner.hash(state)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T> serde_core::Serialize for Id<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde_core::Serializer,
+    {
+        match (self.inner.as_str(), self.inner.to_int()) {
+            (Err(_), Ok(id)) => id.serialize(serializer),
+            (Ok(id), Err(_)) => id.serialize(serializer),
+            _ => unreachable!(),
+        }
     }
 }

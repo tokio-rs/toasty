@@ -1,8 +1,8 @@
-use super::*;
+use super::Operation;
 
 use crate::stmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct QuerySql {
     /// The SQL query to execute
     pub stmt: stmt::Statement,

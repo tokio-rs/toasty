@@ -6,6 +6,11 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Pr
   |
   = help: the following other types implement trait `toasty::stmt::Primitive`:
             Option<T>
+            i16
+            i32
             i64
+            i8
             std::string::String
             toasty::stmt::Id<T>
+            u16
+          and $N others

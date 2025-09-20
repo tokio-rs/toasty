@@ -1,8 +1,10 @@
-use super::*;
+use super::Operation;
+use crate::{
+    schema::db::{ColumnId, TableId},
+    stmt,
+};
 
-use crate::schema::db::{ColumnId, TableId};
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct QueryPk {
     /// Table to query
     pub table: TableId,

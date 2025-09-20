@@ -1,6 +1,7 @@
-use super::*;
-
+use super::{Delete, Expr, IntoSelect, Statement, Value};
+use crate::Model;
 use std::{fmt, marker::PhantomData};
+use toasty_core::stmt;
 
 pub struct Select<M> {
     /// How to filter the data source
@@ -36,7 +37,7 @@ impl<M: Model> Select<M> {
     }
 
     pub fn filter(expr: Expr<bool>) -> Self {
-        Self::from_untyped(stmt::Query::filter(M::ID, expr.untyped))
+        Self::from_untyped(stmt::Query::filter(M::id(), expr.untyped))
     }
 
     // TODO: why are these by value?
@@ -69,7 +70,7 @@ impl<M: Model> Select<M> {
 impl<M: Model> Select<M> {
     pub fn all() -> Self {
         let filter = stmt::Expr::Value(Value::from_bool(true));
-        Self::from_untyped(stmt::Query::filter(M::ID, filter))
+        Self::from_untyped(stmt::Query::filter(M::id(), filter))
     }
 }
 

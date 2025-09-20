@@ -14,7 +14,14 @@ impl ToValue for Value {
     fn to_value(&self) -> mysql_async::Value {
         match &self.0 {
             CoreValue::Bool(value) => value.to_value(),
+            CoreValue::I8(value) => value.to_value(),
+            CoreValue::I16(value) => value.to_value(),
+            CoreValue::I32(value) => value.to_value(),
             CoreValue::I64(value) => value.to_value(),
+            CoreValue::U8(value) => value.to_value(),
+            CoreValue::U16(value) => value.to_value(),
+            CoreValue::U32(value) => value.to_value(),
+            CoreValue::U64(value) => value.to_value(),
             CoreValue::Id(id) => id.to_string().to_value(),
             CoreValue::Null => mysql_async::Value::NULL,
             CoreValue::String(value) => value.to_value(),

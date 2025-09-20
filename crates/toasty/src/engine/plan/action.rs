@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    Associate, BatchWrite, DeleteByKey, ExecStatement, FindPkByIndex, GetByKey, Insert, QueryPk,
+    ReadModifyWrite, SetVar, UpdateByKey,
+};
+use std::fmt;
 
 pub(crate) enum Action {
     /// Associate a preloaded relation with the owner
@@ -25,7 +29,7 @@ pub(crate) enum Action {
     QueryPk(QueryPk),
 
     /// Perform an atomic operation in multiple steps
-    ReadModifyWrite(ReadModifyWrite),
+    ReadModifyWrite(Box<ReadModifyWrite>),
 
     /// Set a variable to a const
     SetVar(SetVar),

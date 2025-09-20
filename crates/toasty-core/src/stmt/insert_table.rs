@@ -1,4 +1,5 @@
-use super::*;
+use super::InsertTarget;
+use crate::schema::db::{ColumnId, TableId};
 
 #[derive(Debug, Clone)]
 pub struct InsertTable {

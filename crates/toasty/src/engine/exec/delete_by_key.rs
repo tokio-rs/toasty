@@ -1,4 +1,4 @@
-use super::*;
+use super::{operation, plan, Exec, Result};
 
 impl Exec<'_> {
     pub(super) async fn action_delete_by_key(&mut self, action: &plan::DeleteByKey) -> Result<()> {

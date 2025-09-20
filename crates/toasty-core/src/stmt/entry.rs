@@ -1,4 +1,4 @@
-use super::*;
+use super::{Expr, Value};
 
 #[derive(Debug)]
 pub enum Entry<'a> {

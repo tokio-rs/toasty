@@ -24,9 +24,6 @@ struct Expand<'a> {
 
     /// Path prefix for toasty types
     toasty: TokenStream,
-
-    /// Tokenized model identifier
-    tokenized_id: TokenStream,
 }
 
 impl Expand<'_> {
@@ -51,13 +48,11 @@ impl Expand<'_> {
 
 pub(super) fn model(model: &Model) -> TokenStream {
     let toasty = quote!(_toasty::codegen_support);
-    let tokenized_id = util::int(model.id);
 
     Expand {
         model,
         filters: Filter::build_model_filters(model),
         toasty,
-        tokenized_id,
     }
     .expand()
 }

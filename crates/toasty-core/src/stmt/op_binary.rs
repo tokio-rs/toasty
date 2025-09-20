@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone)]
 pub enum BinaryOp {
     Eq,
     Ne,
@@ -34,16 +34,14 @@ impl BinaryOp {
 
 impl fmt::Display for BinaryOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use BinaryOp::*;
-
         match self {
-            Eq => "=".fmt(f),
-            Ne => "!=".fmt(f),
-            Ge => ">=".fmt(f),
-            Gt => ">".fmt(f),
-            Le => "<=".fmt(f),
-            Lt => "<".fmt(f),
-            IsA => "is a".fmt(f),
+            BinaryOp::Eq => "=".fmt(f),
+            BinaryOp::Ne => "!=".fmt(f),
+            BinaryOp::Ge => ">=".fmt(f),
+            BinaryOp::Gt => ">".fmt(f),
+            BinaryOp::Le => "<=".fmt(f),
+            BinaryOp::Lt => "<".fmt(f),
+            BinaryOp::IsA => "is a".fmt(f),
         }
     }
 }

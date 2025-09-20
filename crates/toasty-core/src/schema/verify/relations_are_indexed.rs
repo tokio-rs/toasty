@@ -1,4 +1,5 @@
-use super::*;
+use super::Verify;
+use crate::schema::app::{self, Field, FieldId, Model};
 
 impl Verify<'_> {
     // Iterate each model and make sure there is an index path that enables

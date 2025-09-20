@@ -1,7 +1,8 @@
-use super::*;
-use app::FieldTy;
-
-use stmt::Expr;
+use super::Simplify;
+use toasty_core::{
+    schema::app::FieldTy,
+    stmt::{self, Expr},
+};
 
 impl Simplify<'_> {
     /// Recursively walk a binary expression in parallel
@@ -24,17 +25,18 @@ impl Simplify<'_> {
             }
             (stmt::Expr::Key(_), other) | (other, stmt::Expr::Key(_)) => {
                 assert!(op.is_eq());
-                assert!(self.target.is_model());
 
                 // At this point, we must be in a model context, otherwise key
                 // expressions don't make sense.
-                let ExprTarget::Model(model) = self.target else {
-                    todo!()
+                let Some(model) = self.cx.target_as_model() else {
+                    todo!();
                 };
+
                 Some(self.rewrite_root_path_expr(model, other.take()))
             }
-            (stmt::Expr::Field(expr_field), other) | (other, stmt::Expr::Field(expr_field)) => {
-                let field = self.schema.app.field(expr_field.field);
+            (stmt::Expr::Reference(expr_reference), other)
+            | (other, stmt::Expr::Reference(expr_reference)) => {
+                let field = self.cx.resolve_expr_reference(expr_reference);
 
                 match &field.ty {
                     FieldTy::Primitive(_) => None,
@@ -48,7 +50,8 @@ impl Simplify<'_> {
 
                             assert!(other.is_value_null());
 
-                            expr_field.field = fk_field.source;
+                            // Update the field reference to point to the foreign key field
+                            *expr_reference = stmt::ExprReference::field(fk_field.source);
 
                             None
                         }
@@ -57,7 +60,8 @@ impl Simplify<'_> {
                                 todo!()
                             };
 
-                            expr_field.field = fk_field.source;
+                            // Update the field reference to point to the foreign key field
+                            *expr_reference = stmt::ExprReference::field(fk_field.source);
 
                             *other = match other.take() {
                                 stmt::Expr::Record(_) => todo!(),

@@ -1,6 +1,5 @@
-use super::*;
-
-// fn partition_expr_input(expr: &mut stmt::Expr, sources: &[plan::InputSource])
+use super::{eval, plan, Planner};
+use toasty_core::stmt;
 
 struct Partitioner<'a> {
     planner: &'a Planner<'a>,
@@ -99,7 +98,7 @@ impl Planner<'_> {
             input: None,
         };
 
-        match &mut *stmt.body {
+        match &mut stmt.body {
             stmt::ExprSet::Select(select) => {
                 assert!(select.source.is_table());
                 let partition = partitioner.partition_expr(&mut select.filter);

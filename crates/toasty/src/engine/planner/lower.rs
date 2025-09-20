@@ -1,6 +1,12 @@
-use super::*;
-
-use db::{Column, Table};
+use super::{simplify, Planner};
+use toasty_core::{
+    schema::{
+        app::{self, FieldId},
+        db::{Column, Table},
+        mapping, Schema,
+    },
+    stmt::{self, VisitMut},
+};
 
 struct LowerStatement<'a> {
     schema: &'a Schema,
@@ -16,10 +22,13 @@ struct LowerStatement<'a> {
 }
 
 /// Substitute fields for columns
-struct Substitute<I>(I);
+struct Substitute<'a, I> {
+    target: &'a app::Model,
+    input: I,
+}
 
 trait Input {
-    fn resolve_field(&mut self, expr_field: &stmt::ExprField) -> stmt::Expr;
+    fn resolve_field(&mut self, field_id: FieldId) -> stmt::Expr;
 }
 
 impl<'a> LowerStatement<'a> {
@@ -55,31 +64,6 @@ impl Planner<'_> {
     }
 }
 
-fn is_eq_constrained(expr: &stmt::Expr, column: &Column) -> bool {
-    use stmt::Expr::*;
-
-    match expr {
-        And(expr) => expr.iter().any(|expr| is_eq_constrained(expr, column)),
-        Or(expr) => expr.iter().all(|expr| is_eq_constrained(expr, column)),
-        BinaryOp(expr) => {
-            if !expr.op.is_eq() {
-                return false;
-            }
-
-            match (&*expr.lhs, &*expr.rhs) {
-                (Column(lhs), _) => lhs.references(column.id),
-                (_, Column(rhs)) => rhs.references(column.id),
-                _ => false,
-            }
-        }
-        InList(expr) => match &*expr.expr {
-            Column(lhs) => lhs.references(column.id),
-            _ => todo!("expr={:#?}", expr),
-        },
-        _ => todo!("expr={:#?}", expr),
-    }
-}
-
 impl VisitMut for LowerStatement<'_> {
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
@@ -98,7 +82,7 @@ impl VisitMut for LowerStatement<'_> {
                     };
 
                     let mut lowered = self.mapping.model_to_table[field_mapping.lowering].clone();
-                    Substitute(&*i).visit_expr_mut(&mut lowered);
+                    Substitute::new(self.model, &*i).visit_expr_mut(&mut lowered);
                     assignments.set(field_mapping.column, lowered);
                 }
                 _ => {
@@ -121,8 +105,9 @@ impl VisitMut for LowerStatement<'_> {
             stmt::Expr::BinaryOp(expr) => {
                 self.lower_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
-            stmt::Expr::Field(expr) => {
-                *i = self.mapping.table_to_model[expr.field.index].clone();
+            stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
+                assert!(*nesting == 0, "TODO: handle non-z");
+                *i = self.mapping.table_to_model[*index].clone();
 
                 self.visit_expr_mut(i);
                 return;
@@ -172,7 +157,7 @@ impl VisitMut for LowerStatement<'_> {
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
-        if let stmt::Returning::Star = *i {
+        if let stmt::Returning::Model { .. } = *i {
             *i = stmt::Returning::Expr(self.mapping.table_to_model.clone().into());
         }
 
@@ -185,11 +170,14 @@ impl VisitMut for LowerStatement<'_> {
         assert!(i.returning.is_none(), "TODO; stmt={i:#?}");
 
         // Apply lowering constraint
-        self.apply_lowering_filter_constraint(&mut i.filter);
+        self.apply_lowering_filter_constraint(
+            stmt::ExprContext::new_with_target(self.schema, &i.from),
+            &mut i.filter,
+        );
     }
 
     fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert) {
-        match &mut *i.source.body {
+        match &mut i.source.body {
             stmt::ExprSet::Values(values) => {
                 for row in &mut values.rows {
                     self.lower_insert_values(row);
@@ -205,7 +193,10 @@ impl VisitMut for LowerStatement<'_> {
         stmt::visit_mut::visit_stmt_select_mut(self, i);
 
         // Apply lowering constraint
-        self.apply_lowering_filter_constraint(&mut i.filter);
+        self.apply_lowering_filter_constraint(
+            stmt::ExprContext::new_with_target(self.schema, &i.source),
+            &mut i.filter,
+        );
     }
 
     fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update) {
@@ -248,11 +239,11 @@ impl VisitMut for LowerStatement<'_> {
 }
 
 impl LowerStatement<'_> {
-    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Expr) {
+    fn apply_lowering_filter_constraint(&self, cx: stmt::ExprContext<'_>, filter: &mut stmt::Expr) {
         // TODO: we really shouldn't have to simplify here, but until
         // simplification includes overlapping predicate pruning, we have to do
         // this here.
-        simplify::simplify_expr(self.schema, simplify::ExprTarget::Const, filter);
+        simplify::simplify_expr(self.schema, filter);
 
         let mut operands = vec![];
 
@@ -267,22 +258,19 @@ impl LowerStatement<'_> {
                         todo!()
                     };
 
-                    format!("{}{}", a, b)
+                    format!("{a}{b}")
                 }
                 stmt::Expr::Value(_) => todo!(),
                 _ => continue,
             };
 
-            if is_eq_constrained(filter, column) {
+            if is_eq_constrained(&cx, filter, column) {
                 continue;
             }
 
             assert_eq!(self.mapping.columns[column.id.index], column.id);
 
-            operands.push(stmt::Expr::begins_with(
-                stmt::Expr::column(column.id),
-                pattern,
-            ));
+            operands.push(stmt::Expr::begins_with(cx.expr_column(column), pattern));
         }
 
         if operands.is_empty() {
@@ -407,7 +395,7 @@ impl LowerStatement<'_> {
 
     fn lower_insert_values(&self, expr: &mut stmt::Expr) {
         let mut lowered = self.mapping.model_to_table.clone();
-        Substitute(&mut *expr).visit_expr_record_mut(&mut lowered);
+        Substitute::new(self.model, &mut *expr).visit_expr_record_mut(&mut lowered);
         *expr = lowered.into();
     }
 
@@ -449,11 +437,48 @@ impl LowerStatement<'_> {
     }
 }
 
-impl<I: Input> VisitMut for Substitute<I> {
+fn is_eq_constrained(cx: &stmt::ExprContext<'_>, expr: &stmt::Expr, column: &Column) -> bool {
+    use stmt::Expr::*;
+
+    match expr {
+        And(expr) => expr.iter().any(|expr| is_eq_constrained(cx, expr, column)),
+        Or(expr) => expr.iter().all(|expr| is_eq_constrained(cx, expr, column)),
+        BinaryOp(expr) => {
+            if !expr.op.is_eq() {
+                return false;
+            }
+
+            match (&*expr.lhs, &*expr.rhs) {
+                (Column(lhs), _) => cx.resolve_expr_column(lhs).expect_column().id == column.id,
+                (_, Column(rhs)) => cx.resolve_expr_column(rhs).expect_column().id == column.id,
+                _ => false,
+            }
+        }
+        InList(expr) => match &*expr.expr {
+            Column(lhs) => cx.resolve_expr_column(lhs).expect_column().id == column.id,
+            _ => todo!("expr={:#?}", expr),
+        },
+        _ => todo!("expr={:#?}", expr),
+    }
+}
+
+impl<'a, I> Substitute<'a, I> {
+    fn new(target: &'a app::Model, input: I) -> Self {
+        Substitute { target, input }
+    }
+}
+
+impl<'a, I: Input> VisitMut for Substitute<'a, I> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         match i {
-            stmt::Expr::Field(expr_field) => {
-                *i = self.0.resolve_field(expr_field);
+            stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
+                assert!(*nesting == 0, "TODO: support references to parent scopes");
+
+                let field_id = FieldId {
+                    model: self.target.id,
+                    index: *index,
+                };
+                *i = self.input.resolve_field(field_id);
             }
             // Do not traverse these
             stmt::Expr::InSubquery(_) | stmt::Expr::Stmt(_) => {}
@@ -473,14 +498,14 @@ impl<I: Input> VisitMut for Substitute<I> {
 }
 
 impl Input for &mut stmt::Expr {
-    fn resolve_field(&mut self, expr_field: &stmt::ExprField) -> stmt::Expr {
-        self.entry(expr_field.field.index).to_expr()
+    fn resolve_field(&mut self, field_id: FieldId) -> stmt::Expr {
+        self.entry(field_id.index).to_expr()
     }
 }
 
 impl Input for &stmt::Assignments {
-    fn resolve_field(&mut self, expr_field: &stmt::ExprField) -> stmt::Expr {
-        let assignment = &self[expr_field.field.index];
+    fn resolve_field(&mut self, field_id: FieldId) -> stmt::Expr {
+        let assignment = &self[field_id.index];
         assert!(assignment.op.is_set());
         assignment.expr.clone()
     }

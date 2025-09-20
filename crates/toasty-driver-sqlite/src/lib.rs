@@ -1,3 +1,8 @@
+use rusqlite::Connection;
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 use toasty_core::{
     driver::{
         operation::{Operation, Transaction},
@@ -7,12 +12,6 @@ use toasty_core::{
     stmt, Result,
 };
 use toasty_sql as sql;
-
-use rusqlite::Connection;
-use std::{
-    path::Path,
-    sync::{Arc, Mutex},
-};
 use url::Url;
 
 #[derive(Debug)]
@@ -67,9 +66,9 @@ impl Driver for Sqlite {
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let connection = self.connection.lock().unwrap();
 
-        let sql: sql::Statement = match op {
-            Operation::QuerySql(op) => op.stmt.into(),
-            Operation::Insert(op) => op.stmt.into(),
+        let (sql, ret_tys): (sql::Statement, _) = match op {
+            Operation::QuerySql(op) => (op.stmt.into(), op.ret),
+            // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(Transaction::Start) => {
                 connection.execute("BEGIN", [])?;
                 return Ok(Response::from_count(0));
@@ -82,7 +81,7 @@ impl Driver for Sqlite {
                 connection.execute("ROLLBACK", [])?;
                 return Ok(Response::from_count(0));
             }
-            _ => todo!(),
+            _ => todo!("op={:#?}", op),
         };
 
         let mut params = vec![];
@@ -91,7 +90,7 @@ impl Driver for Sqlite {
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
         let width = match &sql {
-            sql::Statement::Query(stmt) => match &*stmt.body {
+            sql::Statement::Query(stmt) => match &stmt.body {
                 stmt::ExprSet::Select(stmt) => Some(stmt.returning.as_expr().as_record().len()),
                 _ => todo!(),
             },
@@ -128,6 +127,8 @@ impl Driver for Sqlite {
 
         let mut ret = vec![];
 
+        let ret_tys = &ret_tys.as_ref().unwrap();
+
         loop {
             match rows.next() {
                 Ok(Some(row)) => {
@@ -136,7 +137,7 @@ impl Driver for Sqlite {
                     let width = width.unwrap();
 
                     for index in 0..width {
-                        items.push(load(row, index));
+                        items.push(sqlite_to_toasty(row, index, &ret_tys[index]));
                     }
 
                     ret.push(stmt::ValueRecord::from_vec(items).into());
@@ -198,6 +199,7 @@ enum V {
     Bool(bool),
     Null,
     String(String),
+    I8(i8),
     I64(i64),
     Id(usize, String),
 }
@@ -210,7 +212,14 @@ fn value_from_param(value: &stmt::Value) -> rusqlite::types::ToSqlOutput<'_> {
         Bool(true) => ToSqlOutput::Owned(Value::Integer(1)),
         Bool(false) => ToSqlOutput::Owned(Value::Integer(0)),
         Id(v) => ToSqlOutput::Owned(v.to_string().into()),
+        I8(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
+        I16(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
+        I32(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
         I64(v) => ToSqlOutput::Owned(Value::Integer(*v)),
+        U8(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
+        U16(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
+        U32(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
+        U64(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
         String(v) => ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes())),
         Null => ToSqlOutput::Owned(Value::Null),
         Enum(value_enum) => {
@@ -236,14 +245,24 @@ fn value_from_param(value: &stmt::Value) -> rusqlite::types::ToSqlOutput<'_> {
     }
 }
 
-fn load(row: &rusqlite::Row, index: usize) -> stmt::Value {
+fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt::Value {
     use rusqlite::types::Value as SqlValue;
 
     let value: Option<SqlValue> = row.get(index).unwrap();
 
     match value {
         Some(SqlValue::Null) => stmt::Value::Null,
-        Some(SqlValue::Integer(value)) => stmt::Value::I64(value),
+        Some(SqlValue::Integer(value)) => match ty {
+            stmt::Type::I8 => stmt::Value::I8(value as i8),
+            stmt::Type::I16 => stmt::Value::I16(value as i16),
+            stmt::Type::I32 => stmt::Value::I32(value as i32),
+            stmt::Type::I64 => stmt::Value::I64(value),
+            stmt::Type::U8 => stmt::Value::U8(value as u8),
+            stmt::Type::U16 => stmt::Value::U16(value as u16),
+            stmt::Type::U32 => stmt::Value::U32(value as u32),
+            stmt::Type::U64 => stmt::Value::U64(value as u64),
+            _ => todo!("ty={ty:#?}"),
+        },
         Some(SqlValue::Text(value)) => stmt::Value::String(value),
         None => stmt::Value::Null,
         _ => todo!("value={value:#?}"),

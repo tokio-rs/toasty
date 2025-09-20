@@ -4,6 +4,7 @@ use toasty_core::stmt::Value;
 
 use std::fmt;
 
+#[derive(Clone)]
 pub struct HasMany<T> {
     values: Option<Vec<T>>,
 }
@@ -11,10 +12,10 @@ pub struct HasMany<T> {
 impl<T: Model> HasMany<T> {
     pub fn load(input: Value) -> crate::Result<Self> {
         match input {
-            Value::Record(record) => {
+            Value::List(items) => {
                 let mut values = vec![];
 
-                for value in record.fields {
+                for value in items {
                     let Value::Record(record) = value else {
                         panic!("unexpected input; value={value:#?}")
                     };
@@ -37,6 +38,10 @@ impl<T: Model> HasMany<T> {
             .as_ref()
             .expect("association not loaded")
             .as_slice()
+    }
+
+    pub fn is_unloaded(&self) -> bool {
+        self.values.is_none()
     }
 }
 
@@ -67,6 +72,22 @@ impl<T> Default for HasMany<T> {
 
 impl<T: fmt::Debug> fmt::Debug for HasMany<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt.debug_list().finish()
+        match self.values.as_ref() {
+            Some(t) => t.fmt(fmt),
+            None => {
+                write!(fmt, "<not loaded>")?;
+                Ok(())
+            }
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: serde_core::Serialize> serde_core::Serialize for HasMany<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde_core::Serializer,
+    {
+        self.values.serialize(serializer)
     }
 }

@@ -1,4 +1,4 @@
-use tests::*;
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
 #[derive(Debug, toasty::Model)]
@@ -10,15 +10,15 @@ struct Todo {
     title: String,
 }
 
-async fn batch_create_empty(s: impl Setup) {
-    let db = s.setup(models!(Todo)).await;
+async fn batch_create_empty(test: &mut DbTest) {
+    let db = test.setup_db(models!(Todo)).await;
 
     let res = Todo::create_many().exec(&db).await.unwrap();
     assert!(res.is_empty());
 }
 
-async fn batch_create_one(s: impl Setup) {
-    let db = s.setup(models!(Todo)).await;
+async fn batch_create_one(test: &mut DbTest) {
+    let db = test.setup_db(models!(Todo)).await;
 
     let res = Todo::create_many()
         .item(Todo::create().title("hello"))
@@ -35,8 +35,8 @@ async fn batch_create_one(s: impl Setup) {
     assert_eq!(reloaded[0].id, res[0].id);
 }
 
-async fn batch_create_many(s: impl Setup) {
-    let db = s.setup(models!(Todo)).await;
+async fn batch_create_many(test: &mut DbTest) {
+    let db = test.setup_db(models!(Todo)).await;
 
     let res = Todo::create_many()
         .item(Todo::create().title("todo 1"))
@@ -58,7 +58,7 @@ async fn batch_create_many(s: impl Setup) {
 }
 
 // TODO: is a batch supposed to be atomic? Probably not.
-async fn batch_create_fails_if_any_record_missing_fields(s: impl Setup) {
+async fn batch_create_fails_if_any_record_missing_fields(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -68,7 +68,7 @@ async fn batch_create_fails_if_any_record_missing_fields(s: impl Setup) {
         name: String,
     }
 
-    let db = s.setup(models!(User)).await;
+    let db = test.setup_db(models!(User)).await;
 
     let res = User::create_many()
         .item(User::create().email("user1@example.com").name("User 1"))
@@ -87,7 +87,7 @@ async fn batch_create_fails_if_any_record_missing_fields(s: impl Setup) {
     assert!(users.is_empty());
 }
 
-async fn batch_create_model_with_unique_field_index_all_unique(s: impl Setup) {
+async fn batch_create_model_with_unique_field_index_all_unique(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -98,7 +98,7 @@ async fn batch_create_model_with_unique_field_index_all_unique(s: impl Setup) {
         email: String,
     }
 
-    let db = s.setup(models!(User)).await;
+    let db = test.setup_db(models!(User)).await;
 
     let mut res = User::create_many()
         .item(User::create().email("user1@example.com"))
@@ -126,7 +126,7 @@ async fn batch_create_model_with_unique_field_index_all_unique(s: impl Setup) {
     }
 }
 
-async fn batch_create_model_with_unique_field_index_all_dups(s: impl Setup) {
+async fn batch_create_model_with_unique_field_index_all_dups(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -138,7 +138,7 @@ async fn batch_create_model_with_unique_field_index_all_dups(s: impl Setup) {
         email: String,
     }
 
-    let db = s.setup(models!(User)).await;
+    let db = test.setup_db(models!(User)).await;
 
     let _res = User::create_many()
         .item(User::create().email("user@example.com"))

@@ -1,4 +1,4 @@
-use super::*;
+use super::Statement;
 
 pub trait ToStatement {
     type Model;

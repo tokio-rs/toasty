@@ -1,6 +1,6 @@
 use super::TableId;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum TableRef {
     /// An aliased table (in a `FROM` statement or equivalent).
     Cte {
@@ -32,5 +32,11 @@ impl TableRef {
 impl From<TableId> for TableRef {
     fn from(value: TableId) -> Self {
         Self::Table(value)
+    }
+}
+
+impl PartialEq<TableId> for TableRef {
+    fn eq(&self, other: &TableId) -> bool {
+        self.references(*other)
     }
 }

@@ -1,4 +1,4 @@
-use super::*;
+use super::{Field, FieldId, FieldTy, Model, ModelId};
 
 use crate::Result;
 use indexmap::IndexMap;

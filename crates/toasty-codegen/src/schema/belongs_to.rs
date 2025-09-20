@@ -59,7 +59,7 @@ impl BelongsTo {
                 .ok_or_else(|| {
                     syn::Error::new_spanned(
                         &source,
-                        format!("source field `{}` not found in names", source),
+                        format!("source field `{source}` not found in names"),
                     )
                 })?;
 

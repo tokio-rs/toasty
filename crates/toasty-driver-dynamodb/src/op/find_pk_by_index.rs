@@ -1,4 +1,6 @@
-use super::*;
+use super::{ddb_expression, item_to_record, operation, stmt, DynamoDb, ExprAttrs, Result, Schema};
+use std::sync::Arc;
+use toasty_core::{driver::Response, stmt::ExprContext};
 
 impl DynamoDb {
     pub(crate) async fn exec_find_pk_by_index(
@@ -8,9 +10,10 @@ impl DynamoDb {
     ) -> Result<Response> {
         let table = schema.table(op.table);
         let index = schema.index(op.index);
+        let cx = ExprContext::new_with_target(&**schema, table);
 
         let mut expr_attrs = ExprAttrs::default();
-        let key_expression = ddb_expression(schema, &mut expr_attrs, false, &op.filter);
+        let key_expression = ddb_expression(&cx, &mut expr_attrs, false, &op.filter);
 
         let res = if index.unique {
             self.client

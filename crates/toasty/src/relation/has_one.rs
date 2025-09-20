@@ -4,6 +4,7 @@ use toasty_core::stmt::Value;
 
 use std::fmt;
 
+#[derive(Clone)]
 pub struct HasOne<T> {
     value: Option<Box<T>>,
 }
@@ -22,6 +23,10 @@ impl<T: Model> HasOne<T> {
     #[track_caller]
     pub fn get(&self) -> &T {
         self.value.as_ref().expect("association not loaded")
+    }
+
+    pub fn is_unloaded(&self) -> bool {
+        self.value.is_none()
     }
 }
 
@@ -59,5 +64,15 @@ impl<T: fmt::Debug> fmt::Debug for HasOne<T> {
                 Ok(())
             }
         }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: serde_core::Serialize> serde_core::Serialize for HasOne<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde_core::Serializer,
+    {
+        self.value.serialize(serializer)
     }
 }

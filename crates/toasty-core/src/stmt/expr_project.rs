@@ -1,4 +1,4 @@
-use super::*;
+use super::{Expr, Projection};
 
 #[derive(Debug, Clone)]
 pub struct ExprProject {

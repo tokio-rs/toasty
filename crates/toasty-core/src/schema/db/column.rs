@@ -1,4 +1,5 @@
-use super::*;
+use super::{table, TableId, Type};
+use crate::stmt;
 
 use std::fmt;
 
@@ -39,6 +40,12 @@ impl ColumnId {
             table: table::TableId::placeholder(),
             index: usize::MAX,
         }
+    }
+}
+
+impl From<&Column> for ColumnId {
+    fn from(value: &Column) -> Self {
+        value.id
     }
 }
 

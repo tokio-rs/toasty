@@ -1,4 +1,4 @@
-use super::*;
+use super::{BinaryOp, Expr};
 
 #[derive(Debug, Clone)]
 pub struct ExprBinaryOp {

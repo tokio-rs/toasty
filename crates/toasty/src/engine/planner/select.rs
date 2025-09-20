@@ -1,5 +1,8 @@
-use super::*;
-use app::{FieldTy, Model, ModelId};
+use super::{eval, plan, Context, Planner, Result};
+use toasty_core::{
+    schema::app::{self, FieldTy, Model, ModelId},
+    stmt::{self, ExprContext},
+};
 
 impl Planner<'_> {
     pub(super) fn plan_stmt_select(
@@ -11,27 +14,67 @@ impl Planner<'_> {
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.app.model(source_model.model);
 
-        let source_model = match &*stmt.body {
-            stmt::ExprSet::Select(select) => {
-                match &select.source {
-                    stmt::Source::Model(source_model) => {
-                        if !source_model.include.is_empty() {
-                            // For now, the full model must be selected
-                            assert!(matches!(select.returning, stmt::Returning::Star));
+        let (source_model, includes) = match &stmt.body {
+            stmt::ExprSet::Select(select) => match &select.source {
+                stmt::Source::Model(source_model) => {
+                    let includes = match &select.returning {
+                        stmt::Returning::Model { include } => {
+                            if !include.is_empty() {
+                                include.clone()
+                            } else {
+                                vec![]
+                            }
                         }
+                        _ => vec![],
+                    };
 
-                        source_model.clone()
-                    }
-                    _ => todo!(),
+                    (source_model.clone(), includes)
                 }
-            }
+                _ => todo!(),
+            },
             _ => todo!(),
         };
 
         self.lower_stmt_query(model, &mut stmt);
 
+        let select = stmt.body.as_select_mut();
+
         // Compute the return type
-        let project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
+        let mut project = self.partition_returning(
+            &ExprContext::new_with_target(self.schema, &select.source),
+            &mut select.returning,
+        );
+
+        // Adjust the return type to account for includes
+        if !includes.is_empty() {
+            if let stmt::Type::Record(ref mut fields) = &mut project.ret {
+                for include in &includes {
+                    let [field_idx] = &include.projection[..] else {
+                        continue;
+                    };
+                    let field = &model.fields[*field_idx];
+                    match &field.ty {
+                        app::FieldTy::HasMany(rel) => {
+                            // Replace Null with List type for HasMany fields
+                            let target_model = self.schema.app.model(rel.target);
+                            let target_record_type = self.infer_model_record_type(target_model);
+                            fields[*field_idx] = stmt::Type::list(target_record_type);
+                        }
+                        app::FieldTy::BelongsTo(rel) => {
+                            // Replace Null with Record type for BelongsTo fields
+                            let target_model = self.schema.app.model(rel.target);
+                            fields[*field_idx] = self.infer_model_record_type(target_model);
+                        }
+                        app::FieldTy::HasOne(rel) => {
+                            // Replace Null with Record type for HasOne fields
+                            let target_model = self.schema.app.model(rel.target);
+                            fields[*field_idx] = self.infer_model_record_type(target_model);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
 
         // Register a variable for the output
         let output = self
@@ -39,7 +82,7 @@ impl Planner<'_> {
             .register_var(stmt::Type::list(project.ret.clone()));
 
         // If the filter expression is false, then the result will be empty.
-        if let stmt::ExprSet::Select(select) = &*stmt.body {
+        if let stmt::ExprSet::Select(select) = &stmt.body {
             if select.filter.is_false() {
                 self.push_action(plan::SetVar {
                     var: output,
@@ -55,7 +98,7 @@ impl Planner<'_> {
             self.plan_select_kv(cx, model, output, project, stmt)
         };
 
-        for include in &source_model.include {
+        for include in &includes {
             self.plan_select_include(source_model.model, include, ret)?;
         }
 
@@ -114,13 +157,19 @@ impl Planner<'_> {
             self.partition_stmt_query_input(&mut stmt, &cx.input)
         };
 
-        let mut index_plan = match &*stmt.body {
-            stmt::ExprSet::Select(query) => self.plan_index_path2(table, &query.filter),
+        let expr_cx = stmt::ExprContext::new_with_target(self.schema, &stmt);
+
+        let mut index_plan = match &stmt.body {
+            stmt::ExprSet::Select(query) => self.plan_index_path2(expr_cx, table, &query.filter),
             _ => todo!("stmt={stmt:#?}"),
         };
 
         let keys = if index_plan.index.primary_key {
-            self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
+            self.try_build_key_filter(
+                stmt::ExprContext::new_with_target(self.schema, &stmt),
+                index_plan.index,
+                &index_plan.index_filter,
+            )
         } else {
             None
         };
@@ -145,25 +194,22 @@ impl Planner<'_> {
                         });
 
                         if !contains {
-                            todo!("returning types won't like up with projection");
-                            /*
-                            returning
-                                .fields
-                                .push(stmt::Expr::column(filter_expr.column));
-                            */
+                            todo!("returning types won't line up with projection");
                         }
                     }
                 });
             }
         }
 
+        let expr_cx = stmt::ExprContext::new_with_target(self.schema, &stmt);
+
         let columns = match &stmt.body.as_select().returning {
             stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => expr_record
                 .fields
                 .iter()
                 .map(|expr| match expr {
-                    stmt::Expr::Column(expr) => {
-                        expr.try_to_column_id().expect("not referencing column")
+                    stmt::Expr::Column(expr_column) => {
+                        expr_cx.resolve_expr_column(expr_column).expect_column().id
                     }
                     _ => todo!("stmt={stmt:#?}"),
                 })
@@ -330,7 +376,7 @@ impl Planner<'_> {
                 };
 
                 let filter = stmt::Expr::in_list(
-                    fk_field.source,
+                    stmt::Expr::field(fk_field.source),
                     stmt::Expr::map(
                         stmt::Expr::arg(0),
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.target),
@@ -360,12 +406,44 @@ impl Planner<'_> {
                 };
 
                 let filter = stmt::Expr::in_list(
-                    fk_field.target,
+                    stmt::Expr::field(fk_field.target),
                     stmt::Expr::map(
                         stmt::Expr::arg(0),
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.source),
                     ),
                 );
+                let Some(out) =
+                    self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())?
+                else {
+                    todo!()
+                };
+
+                // Associate target records with the source
+                self.push_action(plan::Associate {
+                    source: input,
+                    target: out,
+                    field: field.id,
+                });
+            }
+            FieldTy::HasOne(rel) => {
+                let pair = rel.pair(&self.schema.app);
+
+                let [fk_field] = &pair.foreign_key.fields[..] else {
+                    todo!("composite key")
+                };
+
+                let cx = Context {
+                    input: vec![plan::InputSource::Ref(input)],
+                };
+
+                let filter = stmt::Expr::in_list(
+                    stmt::Expr::field(fk_field.source),
+                    stmt::Expr::map(
+                        stmt::Expr::arg(0),
+                        stmt::Expr::project(stmt::Expr::arg(0), fk_field.target),
+                    ),
+                );
+
                 let Some(out) =
                     self.plan_stmt(&cx, stmt::Query::filter(rel.target, filter).into())?
                 else {
@@ -398,7 +476,7 @@ impl Planner<'_> {
             return;
         };
 
-        let stmt::ExprSet::Select(body) = &mut *stmt.body else {
+        let stmt::ExprSet::Select(body) = &mut stmt.body else {
             todo!("stmt={stmt:#?}");
         };
 

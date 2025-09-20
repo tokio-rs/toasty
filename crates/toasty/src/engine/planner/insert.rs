@@ -1,9 +1,9 @@
-use super::*;
-
-use crate::Result;
-use db::ColumnId;
-
+use super::{eval, plan, Insertion, Planner, Result};
 use std::collections::hash_map::Entry;
+use toasty_core::{
+    schema::{app, db::ColumnId},
+    stmt::{self, ExprContext},
+};
 
 /// Process the scope component of an insert statement.
 struct ApplyInsertScope<'a> {
@@ -17,7 +17,7 @@ impl Planner<'_> {
     ) -> Result<Option<plan::VarId>> {
         let model = self.model(stmt.target.as_model());
 
-        if let stmt::ExprSet::Values(values) = &*stmt.source.body {
+        if let stmt::ExprSet::Values(values) = &stmt.source.body {
             assert!(!values.is_empty(), "stmt={stmt:#?}");
         }
 
@@ -33,12 +33,14 @@ impl Planner<'_> {
 
         let mut output_var = None;
 
+        let cx = ExprContext::new_with_target(self.schema, &stmt.target);
+
         // First, lower the returning part of the statement and get any
         // necessary in-memory projection.
         let project = stmt
             .returning
             .as_mut()
-            .map(|returning| self.partition_returning(returning));
+            .map(|returning| self.partition_returning(&cx, returning));
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -49,8 +51,8 @@ impl Planner<'_> {
 
                 // TODO
                 match stmt.returning {
-                    Some(stmt::Returning::Star) => {
-                        assert!(matches!(existing, Some(stmt::Returning::Star)));
+                    Some(stmt::Returning::Model { .. }) => {
+                        assert!(matches!(existing, Some(stmt::Returning::Model { .. })));
                     }
                     None => {
                         assert!(existing.is_none());
@@ -87,7 +89,7 @@ impl Planner<'_> {
             }
         };
 
-        let rows = match *stmt.source.body {
+        let rows = match stmt.source.body {
             stmt::ExprSet::Values(values) => values.rows,
             _ => todo!("stmt={:#?}", stmt),
         };
@@ -116,7 +118,7 @@ impl Planner<'_> {
         model: &app::Model,
         stmt: &mut stmt::Insert,
     ) -> Result<()> {
-        let stmt::ExprSet::Values(values) = &mut *stmt.source.body else {
+        let stmt::ExprSet::Values(values) = &mut stmt.source.body else {
             todo!()
         };
 
@@ -322,7 +324,7 @@ impl Planner<'_> {
             return None;
         };
 
-        let stmt::ExprSet::Values(values) = &*stmt.source.body else {
+        let stmt::ExprSet::Values(values) = &stmt.source.body else {
             todo!("stmt={stmt:#?}");
         };
 
@@ -331,15 +333,18 @@ impl Planner<'_> {
         };
 
         struct ConstReturning<'a> {
+            cx: stmt::ExprContext<'a>,
             columns: &'a [ColumnId],
         }
 
         impl eval::Convert for ConstReturning<'_> {
             fn convert_expr_column(&mut self, stmt: &stmt::ExprColumn) -> Option<stmt::Expr> {
+                let needle = self.cx.resolve_expr_column(stmt).expect_column();
+
                 let index = self
                     .columns
                     .iter()
-                    .position(|column| stmt.references(*column))
+                    .position(|column| needle.id == *column)
                     .unwrap();
 
                 Some(stmt::Expr::arg_project(0, [index]))
@@ -358,6 +363,7 @@ impl Planner<'_> {
             returning.clone(),
             vec![args],
             ConstReturning {
+                cx: stmt::ExprContext::new_with_target(self.schema, &*stmt),
                 columns: &insert_table.columns,
             },
         )
@@ -392,11 +398,17 @@ impl ApplyInsertScope<'_> {
                 }
             }
             stmt::Expr::BinaryOp(e) if e.op.is_eq() => match (&*e.lhs, &*e.rhs) {
-                (stmt::Expr::Field(lhs), stmt::Expr::Value(rhs)) => {
-                    self.apply_eq_const(lhs.field, rhs, set);
+                (
+                    stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }),
+                    stmt::Expr::Value(rhs),
+                ) => {
+                    self.apply_eq_const(expr_ref, rhs, set);
                 }
-                (stmt::Expr::Value(lhs), stmt::Expr::Field(rhs)) => {
-                    self.apply_eq_const(rhs.field, lhs, set);
+                (
+                    stmt::Expr::Value(lhs),
+                    stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }),
+                ) => {
+                    self.apply_eq_const(expr_ref, lhs, set);
                 }
                 _ => todo!(),
             },
@@ -406,8 +418,14 @@ impl ApplyInsertScope<'_> {
         }
     }
 
-    fn apply_eq_const(&mut self, field: app::FieldId, val: &stmt::Value, set: bool) {
-        let mut existing = self.expr.entry_mut(field.index);
+    fn apply_eq_const(&mut self, expr_ref: &stmt::ExprReference, val: &stmt::Value, set: bool) {
+        let stmt::ExprReference::Field { nesting, index } = expr_ref else {
+            todo!("handle non-field reference");
+        };
+
+        assert!(*nesting == 0, "TODO: handle references to parent scopes");
+
+        let mut existing = self.expr.entry_mut(*index);
 
         if !existing.is_value_null() {
             if let stmt::EntryMut::Value(existing) = existing {

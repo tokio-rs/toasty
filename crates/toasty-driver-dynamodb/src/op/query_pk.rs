@@ -1,4 +1,6 @@
-use super::*;
+use super::{ddb_expression, item_to_record, operation, stmt, DynamoDb, ExprAttrs, Result, Schema};
+use std::sync::Arc;
+use toasty_core::{driver::Response, stmt::ExprContext};
 
 impl DynamoDb {
     pub(crate) async fn exec_query_pk(
@@ -7,14 +9,15 @@ impl DynamoDb {
         op: operation::QueryPk,
     ) -> Result<Response> {
         let table = schema.table(op.table);
+        let cx = ExprContext::new_with_target(&**schema, table);
 
         let mut expr_attrs = ExprAttrs::default();
-        let key_expression = ddb_expression(schema, &mut expr_attrs, true, &op.pk_filter);
+        let key_expression = ddb_expression(&cx, &mut expr_attrs, true, &op.pk_filter);
 
         let filter_expression = op
             .filter
             .as_ref()
-            .map(|expr| ddb_expression(schema, &mut expr_attrs, false, expr));
+            .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr));
 
         let res = self
             .client

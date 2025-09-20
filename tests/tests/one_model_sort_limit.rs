@@ -1,5 +1,4 @@
-use tests::*;
-
+use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
 #[derive(toasty::Model)]
@@ -12,19 +11,19 @@ struct Foo {
     order: i64,
 }
 
-async fn sort_asc(s: impl Setup) {
-    if !s.capability().sql {
+async fn sort_asc(test: &mut DbTest) {
+    if !test.capability().sql {
         return;
     }
 
-    let db = s.setup(models!(Foo)).await;
+    let db = test.setup_db(models!(Foo)).await;
 
     for i in 0..100 {
         Foo::create().order(i).exec(&db).await.unwrap();
     }
 
     let foos_asc: Vec<_> = Foo::all()
-        .order_by(Foo::FIELDS.order.asc())
+        .order_by(Foo::FIELDS.order().asc())
         .collect(&db)
         .await
         .unwrap();
@@ -36,7 +35,7 @@ async fn sort_asc(s: impl Setup) {
     }
 
     let foos_desc: Vec<_> = Foo::all()
-        .order_by(Foo::FIELDS.order.desc())
+        .order_by(Foo::FIELDS.order().desc())
         .collect(&db)
         .await
         .unwrap();
@@ -48,31 +47,31 @@ async fn sort_asc(s: impl Setup) {
     }
 }
 
-async fn paginate(s: impl Setup) {
-    if !s.capability().sql {
+async fn paginate(test: &mut DbTest) {
+    if !test.capability().sql {
         return;
     }
 
-    let db = s.setup(models!(Foo)).await;
+    let db = test.setup_db(models!(Foo)).await;
 
     for i in 0..100 {
         Foo::create().order(i).exec(&db).await.unwrap();
     }
 
     let foos: Vec<_> = Foo::all()
-        .order_by(Foo::FIELDS.order.desc())
+        .order_by(Foo::FIELDS.order().desc())
         .paginate(10)
         .collect(&db)
         .await
         .unwrap();
 
     assert_eq!(foos.len(), 10);
-    for (i, order) in (99..90).enumerate() {
+    for (i, order) in (90..100).rev().enumerate() {
         assert_eq!(foos[i].order, order);
     }
 
     let foos: Vec<_> = Foo::all()
-        .order_by(Foo::FIELDS.order.desc())
+        .order_by(Foo::FIELDS.order().desc())
         .paginate(10)
         .after(90)
         .collect(&db)
@@ -80,7 +79,7 @@ async fn paginate(s: impl Setup) {
         .unwrap();
 
     assert_eq!(foos.len(), 10);
-    for (i, order) in (89..80).enumerate() {
+    for (i, order) in (80..90).rev().enumerate() {
         assert_eq!(foos[i].order, order);
     }
 }

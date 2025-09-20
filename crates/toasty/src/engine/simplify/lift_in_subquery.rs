@@ -1,9 +1,11 @@
-use super::*;
-use app::{BelongsTo, FieldId, FieldTy, HasOne};
-
-use stmt::Visit;
+use super::Simplify;
+use toasty_core::{
+    schema::app::{BelongsTo, FieldId, FieldTy, HasOne},
+    stmt::{self, Visit},
+};
 
 struct LiftBelongsTo<'a> {
+    simplify: &'a Simplify<'a>,
     belongs_to: &'a BelongsTo,
     // TODO: switch to bit field set
     fk_field_matches: Vec<bool>,
@@ -22,7 +24,7 @@ impl Simplify<'_> {
             stmt::Expr::Project(_) => {
                 todo!()
             }
-            stmt::Expr::Field(expr) => self.schema.app.field(expr.field),
+            stmt::Expr::Reference(expr_reference) => self.cx.resolve_expr_reference(expr_reference),
             _ => {
                 return None;
             }
@@ -44,6 +46,35 @@ impl Simplify<'_> {
         maybe_expr
     }
 
+    /// Optimizes queries by lifting BelongsTo relation constraints out of subqueries when possible.
+    ///
+    /// This is an app-level optimization that operates on the application schema before
+    /// statements are lowered to database-specific representations.
+    ///
+    /// This method analyzes a subquery that filters a related model and determines if the query
+    /// can be rewritten to avoid the subquery by directly comparing foreign key fields.
+    ///
+    /// For example, transforms:
+    /// ```sql
+    /// -- Original: subquery filtering related records
+    /// user_id IN (SELECT id FROM users WHERE name = 'Alice')
+    ///
+    /// -- Optimized: direct foreign key comparison
+    /// user_id = 'Alice_user_id'
+    /// ```
+    ///
+    /// The optimization works by:
+    /// 1. Verifying the subquery targets the same model as the BelongsTo relation
+    /// 2. Analyzing the subquery's WHERE clause to find constraints on foreign key fields
+    /// 3. If all constraints can be lifted, rewriting them as direct field comparisons
+    /// 4. If constraints reference non-foreign-key fields, falling back to an IN subquery
+    ///
+    /// Returns `None` if the subquery cannot be optimized (wrong target model).
+    /// Returns `Some(expr)` containing either:
+    /// - Direct field comparison expressions (when optimization succeeds)
+    /// - An IN subquery expression (when partial optimization is possible)
+    ///
+    /// Currently only supports single-field foreign keys; composite keys are not yet implemented.
     fn lift_belongs_to_in_subquery(
         &self,
         belongs_to: &BelongsTo,
@@ -53,7 +84,7 @@ impl Simplify<'_> {
             return None;
         }
 
-        let filter = &query.body.as_select().filter;
+        let select = query.body.as_select();
 
         assert_eq!(
             belongs_to.foreign_key.fields.len(),
@@ -62,13 +93,14 @@ impl Simplify<'_> {
         );
 
         let mut lift = LiftBelongsTo {
+            simplify: &self.scope(&select.source),
             belongs_to,
             fk_field_matches: vec![false; belongs_to.foreign_key.fields.len()],
             operands: vec![],
             fail: false,
         };
 
-        lift.visit(filter);
+        lift.visit(&select.filter);
 
         if lift.fail {
             let [fk_fields] = &belongs_to.foreign_key.fields[..] else {
@@ -105,7 +137,7 @@ impl Simplify<'_> {
             return None;
         }
 
-        let pair = has_one.pair(&self.schema.app);
+        let pair = has_one.pair(&self.schema().app);
 
         let expr = match &pair.foreign_key.fields[..] {
             [fk_field] => stmt::Expr::field(fk_field.target),
@@ -114,7 +146,7 @@ impl Simplify<'_> {
 
         let mut subquery = query.clone();
 
-        match &mut *subquery.body {
+        match &mut subquery.body {
             stmt::ExprSet::Select(subquery) => {
                 subquery.returning = stmt::Returning::Expr(match &pair.foreign_key.fields[..] {
                     [fk_field] => stmt::Expr::field(fk_field.source),
@@ -137,9 +169,13 @@ impl Simplify<'_> {
 impl Visit for LiftBelongsTo<'_> {
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         match (&*i.lhs, &*i.rhs) {
-            (stmt::Expr::Field(expr_field), other) | (other, stmt::Expr::Field(expr_field)) => {
+            (stmt::Expr::Reference(expr_reference), other)
+            | (other, stmt::Expr::Reference(expr_reference)) => {
                 assert!(i.op.is_eq());
-                self.lift_fk_constraint(expr_field.field, other);
+
+                let field = self.simplify.cx.resolve_expr_reference(expr_reference);
+
+                self.lift_fk_constraint(field.id, other);
             }
             _ => {}
         }
@@ -154,8 +190,10 @@ impl LiftBelongsTo<'_> {
                     todo!("not handled");
                 }
 
-                self.operands
-                    .push(stmt::Expr::eq(fk_field.source, expr.clone()));
+                self.operands.push(stmt::Expr::eq(
+                    stmt::Expr::field(fk_field.source),
+                    expr.clone(),
+                ));
                 self.fk_field_matches[i] = true;
 
                 return;

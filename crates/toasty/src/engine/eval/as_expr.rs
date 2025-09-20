@@ -1,4 +1,4 @@
-use super::*;
+use toasty_core::stmt;
 
 pub(crate) trait AsExpr {
     fn as_expr(&self) -> &stmt::Expr;

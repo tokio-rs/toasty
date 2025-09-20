@@ -1,6 +1,7 @@
 //! Utilities for planning key-value operations.
 
-use super::*;
+use super::{eval, plan, IndexPlan, Planner};
+use toasty_core::stmt;
 
 impl Planner<'_> {
     pub(super) fn plan_find_pk_by_index(

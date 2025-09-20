@@ -1,8 +1,7 @@
-use super::*;
-
-use toasty_core::stmt::{Direction, OrderByExpr};
-
-use std::fmt;
+use super::{Expr, IntoExpr, IntoSelect};
+use crate::Model;
+use std::{fmt, marker::PhantomData};
+use toasty_core::stmt::{self, Direction, OrderByExpr};
 
 pub struct Path<T: ?Sized> {
     pub(super) untyped: stmt::Path,
@@ -17,22 +16,22 @@ impl<T: ?Sized> Path<T> {
         }
     }
 
-    pub const fn root() -> Self
+    pub fn root() -> Self
     where
         T: Model,
     {
         Self {
             untyped: stmt::Path {
-                root: T::ID,
+                root: T::id(),
                 projection: stmt::Projection::identity(),
             },
             _p: PhantomData,
         }
     }
 
-    pub const fn from_field_index<M: Model>(index: usize) -> Self {
+    pub fn from_field_index<M: Model>(index: usize) -> Self {
         Self {
-            untyped: stmt::Path::from_index(M::ID, index),
+            untyped: stmt::Path::from_index(M::id(), index),
             _p: PhantomData,
         }
     }

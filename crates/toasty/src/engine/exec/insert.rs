@@ -1,6 +1,4 @@
-use toasty_core::*;
-
-use super::*;
+use super::{plan, Exec, Result};
 
 impl Exec<'_> {
     // TODO: unify w/ exec_query_sql

@@ -1,6 +1,6 @@
-use super::*;
-
+use super::{operation, plan, Exec, Result};
 use crate::driver::Rows;
+use crate::engine::simplify;
 
 impl Exec<'_> {
     pub(super) async fn action_find_pk_by_index(
@@ -14,7 +14,7 @@ impl Exec<'_> {
 
             filter.substitute(&[input]);
 
-            simplify::simplify_expr(&self.db.schema, simplify::ExprTarget::Const, &mut filter);
+            simplify::simplify_expr(&self.db.schema, &mut filter);
         }
 
         let res = self

@@ -1,8 +1,10 @@
-use super::*;
+use super::Operation;
+use crate::{
+    schema::db::{IndexId, TableId},
+    stmt,
+};
 
-use crate::schema::db::{IndexId, TableId};
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FindPkByIndex {
     /// Table to query
     pub table: TableId,

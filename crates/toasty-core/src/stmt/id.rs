@@ -1,5 +1,5 @@
-use super::*;
-
+use super::{Expr, Type, Value};
+use crate::{schema::app::ModelId, stmt, Error, Result};
 use std::fmt;
 
 #[derive(Clone, Hash, Eq, PartialEq)]
@@ -55,6 +55,14 @@ impl Id {
         match &self.repr {
             Repr::Int(id) => Ok(*id),
             Repr::String(_) => anyhow::bail!("Id not an int"),
+        }
+    }
+
+    /// Return a string representation of the record identifier.
+    pub fn as_str(&self) -> Result<&str, Error> {
+        match &self.repr {
+            Repr::String(id) => Ok(id.as_str()),
+            Repr::Int(_) => anyhow::bail!("Id not a string"),
         }
     }
 

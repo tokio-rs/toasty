@@ -1,6 +1,7 @@
-use super::*;
-
+use super::{Expr, IntoSelect};
+use crate::Model;
 use std::{fmt, marker::PhantomData};
+use toasty_core::stmt;
 
 pub struct Insert<M: ?Sized> {
     pub(crate) untyped: stmt::Insert,
@@ -16,9 +17,9 @@ impl<M: Model> Insert<M> {
     pub fn blank() -> Self {
         Self {
             untyped: stmt::Insert {
-                target: stmt::InsertTarget::Model(M::ID),
+                target: stmt::InsertTarget::Model(M::id()),
                 source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(vec![]).into()]),
-                returning: Some(stmt::Returning::Star),
+                returning: Some(stmt::Returning::Model { include: vec![] }),
             },
             _p: PhantomData,
         }
@@ -36,7 +37,7 @@ impl<M: Model> Insert<M> {
     where
         S: IntoSelect<Model = M>,
     {
-        self.untyped.target = stmt::InsertTarget::Scope(scope.into_select().untyped);
+        self.untyped.target = stmt::InsertTarget::Scope(Box::new(scope.into_select().untyped));
     }
 
     pub fn set(&mut self, field: usize, expr: impl Into<stmt::Expr>) {

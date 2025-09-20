@@ -1,4 +1,4 @@
-use super::*;
+use super::{ExprBeginsWith, ExprLike};
 
 #[derive(Debug, Clone)]
 pub enum ExprPattern {

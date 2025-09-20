@@ -1,6 +1,6 @@
 use super::Operation;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Transaction {
     /// Start a transaction
     Start,

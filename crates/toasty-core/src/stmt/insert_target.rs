@@ -1,11 +1,16 @@
-use super::*;
+use super::{Expr, InsertTable, Query};
+use crate::{
+    schema::app::ModelId,
+    stmt::{ExprSet, Source},
+    Schema,
+};
 
 #[derive(Debug, Clone)]
 pub enum InsertTarget {
     /// Inserting into a scope implies that the inserted value should be
     /// included by the query after insertion. This could be a combination of
     /// setting default field values or validating existing ones.
-    Scope(Query),
+    Scope(Box<Query>),
 
     /// Insert a model
     Model(ModelId),
@@ -34,15 +39,31 @@ impl InsertTarget {
         match self {
             Self::Scope(query) => query.and(expr),
             Self::Model(model_id) => {
-                *self = Self::Scope(Query::filter(*model_id, expr));
+                *self = Self::Scope(Box::new(Query::filter(*model_id, expr)));
             }
             _ => todo!("{self:#?}"),
+        }
+    }
+
+    pub fn width(&self, schema: &Schema) -> usize {
+        match self {
+            InsertTarget::Scope(query) => match &query.body {
+                ExprSet::Select(select) => match &select.source {
+                    Source::Model(source_model) => {
+                        schema.app.model(source_model.model).fields.len()
+                    }
+                    _ => todo!("insert_target={self:#?}"),
+                },
+                _ => todo!("insert_target={self:#?}"),
+            },
+            InsertTarget::Model(model_id) => schema.app.model(model_id).fields.len(),
+            InsertTarget::Table(insert_table) => insert_table.columns.len(),
         }
     }
 }
 
 impl From<Query> for InsertTarget {
     fn from(value: Query) -> Self {
-        Self::Scope(value)
+        Self::Scope(Box::new(value))
     }
 }

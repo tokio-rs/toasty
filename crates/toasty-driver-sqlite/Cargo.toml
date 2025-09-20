@@ -9,7 +9,7 @@ toasty-core.workspace = true
 toasty-sql.workspace = true
 
 anyhow.workspace = true
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite.workspace = true
 url.workspace = true
 
 # TODO: get rid of

@@ -7,7 +7,7 @@ use quote::quote;
 impl Expand<'_> {
     pub(super) fn expand_model_schema(&self) -> TokenStream {
         let toasty = &self.toasty;
-        let id = &self.tokenized_id;
+        let model_ident = &self.model.ident;
         let name = self.expand_model_name();
         let fields = self.expand_model_fields();
         let primary_key = self.expand_primary_key();
@@ -26,7 +26,7 @@ impl Expand<'_> {
                     Type,
                 };
 
-                let id = #toasty::ModelId(#id);
+                let id = #model_ident::id();
 
                 #toasty::schema::app::Model {
                     id,
@@ -46,7 +46,7 @@ impl Expand<'_> {
 
     fn expand_model_fields(&self) -> TokenStream {
         let toasty = &self.toasty;
-        let model_id = &self.tokenized_id;
+        let model_ident = &self.model.ident;
 
         let fields = self.model.fields.iter().enumerate().map(|(index, field)| {
             let index_tokenized = util::int(index);
@@ -66,7 +66,7 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
                     field_ty = quote!(FieldTy::Primitive(FieldPrimitive {
-                        ty: <#ty as #toasty::stmt::Primitive>::TYPE,
+                        ty: <#ty as #toasty::stmt::Primitive>::ty(),
                         storage_ty: #storage_ty,
                     }));
                 }
@@ -80,7 +80,7 @@ impl Expand<'_> {
                         quote! {
                             ForeignKeyField {
                                 source: FieldId {
-                                    model: #toasty::ModelId(#model_id),
+                                    model: #model_ident::id(),
                                     index: #source,
                                 },
                                 target: <#ty as #toasty::Relation>::field_name_to_id(#target),
@@ -90,8 +90,8 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(FieldTy::BelongsTo(BelongsTo {
-                        target:  <#ty as #toasty::Relation>::Model::ID,
-                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::ID),
+                        target:  <#ty as #toasty::Relation>::Model::id(),
+                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::id()),
                         // The pair is populated at runtime.
                         pair: None,
                         foreign_key: ForeignKey {
@@ -105,8 +105,8 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(FieldTy::HasMany(HasMany {
-                        target: <#ty as #toasty::Relation>::Model::ID,
-                        expr_ty: Type::List(Box::new(Type::Model(<#ty as #toasty::Relation>::Model::ID))),
+                        target: <#ty as #toasty::Relation>::Model::id(),
+                        expr_ty: Type::List(Box::new(Type::Model(<#ty as #toasty::Relation>::Model::id()))),
                         singular: #singular_name,
                         // The pair is populated at runtime.
                         pair: FieldId {
@@ -120,8 +120,8 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
                     field_ty = quote!(FieldTy::HasOne(HasOne {
-                        target: <#ty as #toasty::Relation>::Model::ID,
-                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::ID),
+                        target: <#ty as #toasty::Relation>::Model::id(),
+                        expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::id()),
                         // The pair is populated at runtime.
                         pair: FieldId {
                             model: ModelId(usize::MAX),
@@ -141,7 +141,7 @@ impl Expand<'_> {
             quote! {
                 Field {
                     id: FieldId {
-                        model: #toasty::ModelId(#model_id),
+                        model: #model_ident::id(),
                         index: #index_tokenized,
                     },
                     name: #name.to_string(),

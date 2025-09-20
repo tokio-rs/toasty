@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    substitute, Expr, Node, Path, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut,
+};
+use crate::schema::db::TableId;
 
 #[derive(Debug, Clone)]
 pub struct Select {
@@ -17,16 +20,16 @@ pub struct Select {
 impl Select {
     pub fn new(source: impl Into<Source>, filter: impl Into<Expr>) -> Self {
         Self {
-            returning: Returning::Star,
+            returning: Returning::Model { include: vec![] },
             source: source.into(),
             filter: filter.into(),
         }
     }
 
     pub(crate) fn include(&mut self, path: impl Into<Path>) {
-        match &mut self.source {
-            Source::Model(source) => source.include.push(path.into()),
-            Source::Table(_) => panic!(),
+        match &mut self.returning {
+            Returning::Model { include } => include.push(path.into()),
+            _ => panic!("Expected Returning::Model for include operation"),
         }
     }
 
