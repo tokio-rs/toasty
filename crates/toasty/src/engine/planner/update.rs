@@ -98,8 +98,10 @@ impl Planner<'_> {
         // database evaluating the statement), then extract it here.
         self.constantize_update_returning(&mut stmt);
 
+        let cx = stmt::ExprContext::new_with_target(self.schema, &stmt.target);
+
         let output = self
-            .partition_maybe_returning(&mut stmt.returning)
+            .partition_maybe_returning(&cx, &mut stmt.returning)
             .map(|project| plan::Output {
                 var: self
                     .var_table
@@ -162,16 +164,22 @@ impl Planner<'_> {
     ) -> Option<plan::VarId> {
         let table = self.schema.table_for(model);
 
-        let mut index_plan =
-            self.plan_index_path2(table, stmt.filter.as_ref().expect("no filter specified"));
+        let mut index_plan = self.plan_index_path2(
+            stmt::ExprContext::new_with_target(self.schema, &stmt),
+            table,
+            stmt.filter.as_ref().expect("no filter specified"),
+        );
 
         assert!(!stmt.assignments.is_empty());
 
         let output_var = output.as_ref().map(|o| o.var);
 
         if index_plan.index.primary_key {
-            let Some(key) = self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
-            else {
+            let Some(key) = self.try_build_key_filter(
+                stmt::ExprContext::new_with_target(self.schema, &stmt),
+                index_plan.index,
+                &index_plan.index_filter,
+            ) else {
                 todo!("index_filter={:#?}", index_plan.index_filter);
             };
 
@@ -224,12 +232,16 @@ impl Planner<'_> {
             fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
                 stmt::visit_mut::visit_expr_mut(self, expr);
 
-                if let stmt::Expr::Column(stmt::ExprColumn::Column(column_id)) = expr {
-                    if let Some(assignment) = self.assignments.get(&column_id.index) {
-                        assert!(assignment.op.is_set());
-                        assert!(assignment.expr.is_const());
+                if let stmt::Expr::Column(expr_column) = expr {
+                    // For the transition, try to find assignment by column index
+                    // This assumes table 0, which should be accurate for UPDATE statements
+                    if expr_column.table == 0 {
+                        if let Some(assignment) = self.assignments.get(&expr_column.column) {
+                            assert!(assignment.op.is_set());
+                            assert!(assignment.expr.is_const());
 
-                        *expr = assignment.expr.clone();
+                            *expr = assignment.expr.clone();
+                        }
                     }
                 }
             }
@@ -299,12 +311,12 @@ impl Planner<'_> {
                         .into(),
                         filter: true.into(),
                         returning: stmt::Returning::Expr(stmt::Expr::eq(
-                            stmt::ExprColumn::Alias {
+                            stmt::ExprColumn {
                                 nesting: 0,
                                 table: 0,
                                 column: 0,
                             },
-                            stmt::ExprColumn::Alias {
+                            stmt::ExprColumn {
                                 nesting: 0,
                                 table: 0,
                                 column: 1,
@@ -322,13 +334,13 @@ impl Planner<'_> {
         });
 
         let mut columns = vec![
-            stmt::ExprColumn::Alias {
+            stmt::ExprColumn {
                 nesting: 0,
                 table: 0,
                 column: 0,
             }
             .into(),
-            stmt::ExprColumn::Alias {
+            stmt::ExprColumn {
                 nesting: 0,
                 table: 0,
                 column: 1,
@@ -338,7 +350,7 @@ impl Planner<'_> {
 
         for i in 0..returning_len {
             columns.push(
-                stmt::ExprColumn::Alias {
+                stmt::ExprColumn {
                     nesting: 0,
                     table: 1,
                     column: i,

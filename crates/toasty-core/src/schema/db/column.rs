@@ -43,6 +43,12 @@ impl ColumnId {
     }
 }
 
+impl From<&Column> for ColumnId {
+    fn from(value: &Column) -> Self {
+        value.id
+    }
+}
+
 impl fmt::Debug for ColumnId {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(fmt, "ColumnId({}/{})", self.table.0, self.index)

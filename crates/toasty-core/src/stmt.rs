@@ -8,7 +8,7 @@ mod cte;
 pub use cte::Cte;
 
 mod cx;
-pub use cx::{ExprContext, ExprTarget};
+pub use cx::{ExprContext, ExprTarget, ResolvedRef};
 
 mod delete;
 pub use delete::Delete;

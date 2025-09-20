@@ -1,14 +1,14 @@
-use super::{Name, Statement};
+use super::Statement;
 
 use toasty_core::{
-    schema::db::{Index, IndexOp, TableId},
+    schema::db::{Index, IndexId, IndexOp, TableId},
     stmt,
 };
 
 #[derive(Debug, Clone)]
 pub struct CreateIndex {
     /// Name of the index
-    pub name: Name,
+    pub index: IndexId,
 
     /// Which table to index
     pub on: TableId,
@@ -23,7 +23,7 @@ pub struct CreateIndex {
 impl Statement {
     pub fn create_index(index: &Index) -> Self {
         CreateIndex {
-            name: Name::from(&index.name[..]),
+            index: index.id,
             on: index.on,
             columns: index
                 .columns

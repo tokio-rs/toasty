@@ -26,7 +26,7 @@ mod value;
 
 use crate::stmt::Statement;
 
-use toasty_core::schema::db;
+use toasty_core::schema::db::{self, Index, Table};
 
 /// Serialize a statement to a SQL string
 #[derive(Debug)]
@@ -52,9 +52,14 @@ struct Formatter<'a, T> {
     /// Current query depth. This is used to determine the nesting level when
     /// generating names
     depth: usize,
+
+    /// True when table names should be aliased.
+    alias: bool,
 }
 
-impl Serializer<'_> {
+pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
+
+impl<'a> Serializer<'a> {
     pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
         let mut ret = String::new();
 
@@ -63,12 +68,23 @@ impl Serializer<'_> {
             dst: &mut ret,
             params,
             depth: 0,
+            alias: false,
         };
 
-        stmt.to_sql(&mut fmt);
+        let cx = ExprContext::new(self.schema);
+
+        stmt.to_sql(&cx, &mut fmt);
 
         ret.push(';');
         ret
+    }
+
+    fn table(&self, id: impl Into<db::TableId>) -> &'a Table {
+        self.schema.table(id.into())
+    }
+
+    fn index(&self, id: impl Into<db::IndexId>) -> &'a Index {
+        self.schema.index(id.into())
     }
 
     fn table_name(&self, id: impl Into<db::TableId>) -> Ident<&str> {

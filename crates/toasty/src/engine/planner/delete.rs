@@ -69,12 +69,14 @@ impl Planner<'_> {
             self.partition_stmt_delete_input(&mut stmt, &input_sources)
         };
 
+        let expr_cx = stmt::ExprContext::new_with_target(self.schema, &stmt);
+
         // Figure out which index to use for the query
-        let mut index_plan = self.plan_index_path2(table, &stmt.filter);
+        let mut index_plan = self.plan_index_path2(expr_cx, table, &stmt.filter);
 
         if index_plan.index.primary_key {
             if let Some(keys) =
-                self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
+                self.try_build_key_filter(expr_cx, index_plan.index, &index_plan.index_filter)
             {
                 self.push_write_action(plan::DeleteByKey {
                     input,

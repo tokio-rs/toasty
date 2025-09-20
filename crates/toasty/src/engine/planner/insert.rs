@@ -2,7 +2,7 @@ use super::{eval, plan, Insertion, Planner, Result};
 use std::collections::hash_map::Entry;
 use toasty_core::{
     schema::{app, db::ColumnId},
-    stmt,
+    stmt::{self, ExprContext},
 };
 
 /// Process the scope component of an insert statement.
@@ -33,12 +33,14 @@ impl Planner<'_> {
 
         let mut output_var = None;
 
+        let cx = ExprContext::new_with_target(self.schema, &stmt.target);
+
         // First, lower the returning part of the statement and get any
         // necessary in-memory projection.
         let project = stmt
             .returning
             .as_mut()
-            .map(|returning| self.partition_returning(returning));
+            .map(|returning| self.partition_returning(&cx, returning));
 
         let action = match self.insertions.entry(model.id) {
             Entry::Occupied(e) => {
@@ -331,15 +333,18 @@ impl Planner<'_> {
         };
 
         struct ConstReturning<'a> {
+            cx: stmt::ExprContext<'a>,
             columns: &'a [ColumnId],
         }
 
         impl eval::Convert for ConstReturning<'_> {
             fn convert_expr_column(&mut self, stmt: &stmt::ExprColumn) -> Option<stmt::Expr> {
+                let needle = self.cx.resolve_expr_column(stmt).expect_column();
+
                 let index = self
                     .columns
                     .iter()
-                    .position(|column| stmt.references(*column))
+                    .position(|column| needle.id == *column)
                     .unwrap();
 
                 Some(stmt::Expr::arg_project(0, [index]))
@@ -358,6 +363,7 @@ impl Planner<'_> {
             returning.clone(),
             vec![args],
             ConstReturning {
+                cx: stmt::ExprContext::new_with_target(self.schema, &*stmt),
                 columns: &insert_table.columns,
             },
         )

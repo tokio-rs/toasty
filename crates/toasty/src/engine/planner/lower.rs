@@ -64,31 +64,6 @@ impl Planner<'_> {
     }
 }
 
-fn is_eq_constrained(expr: &stmt::Expr, column: &Column) -> bool {
-    use stmt::Expr::*;
-
-    match expr {
-        And(expr) => expr.iter().any(|expr| is_eq_constrained(expr, column)),
-        Or(expr) => expr.iter().all(|expr| is_eq_constrained(expr, column)),
-        BinaryOp(expr) => {
-            if !expr.op.is_eq() {
-                return false;
-            }
-
-            match (&*expr.lhs, &*expr.rhs) {
-                (Column(lhs), _) => lhs.references(column.id),
-                (_, Column(rhs)) => rhs.references(column.id),
-                _ => false,
-            }
-        }
-        InList(expr) => match &*expr.expr {
-            Column(lhs) => lhs.references(column.id),
-            _ => todo!("expr={:#?}", expr),
-        },
-        _ => todo!("expr={:#?}", expr),
-    }
-}
-
 impl VisitMut for LowerStatement<'_> {
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
@@ -195,7 +170,10 @@ impl VisitMut for LowerStatement<'_> {
         assert!(i.returning.is_none(), "TODO; stmt={i:#?}");
 
         // Apply lowering constraint
-        self.apply_lowering_filter_constraint(&mut i.filter);
+        self.apply_lowering_filter_constraint(
+            stmt::ExprContext::new_with_target(self.schema, &i.from),
+            &mut i.filter,
+        );
     }
 
     fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert) {
@@ -215,7 +193,10 @@ impl VisitMut for LowerStatement<'_> {
         stmt::visit_mut::visit_stmt_select_mut(self, i);
 
         // Apply lowering constraint
-        self.apply_lowering_filter_constraint(&mut i.filter);
+        self.apply_lowering_filter_constraint(
+            stmt::ExprContext::new_with_target(self.schema, &i.source),
+            &mut i.filter,
+        );
     }
 
     fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update) {
@@ -258,7 +239,7 @@ impl VisitMut for LowerStatement<'_> {
 }
 
 impl LowerStatement<'_> {
-    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Expr) {
+    fn apply_lowering_filter_constraint(&self, cx: stmt::ExprContext<'_>, filter: &mut stmt::Expr) {
         // TODO: we really shouldn't have to simplify here, but until
         // simplification includes overlapping predicate pruning, we have to do
         // this here.
@@ -283,16 +264,13 @@ impl LowerStatement<'_> {
                 _ => continue,
             };
 
-            if is_eq_constrained(filter, column) {
+            if is_eq_constrained(&cx, filter, column) {
                 continue;
             }
 
             assert_eq!(self.mapping.columns[column.id.index], column.id);
 
-            operands.push(stmt::Expr::begins_with(
-                stmt::Expr::column(column.id),
-                pattern,
-            ));
+            operands.push(stmt::Expr::begins_with(cx.expr_column(column), pattern));
         }
 
         if operands.is_empty() {
@@ -456,6 +434,31 @@ impl LowerStatement<'_> {
             }
             _ => todo!("{value:#?}"),
         }
+    }
+}
+
+fn is_eq_constrained(cx: &stmt::ExprContext<'_>, expr: &stmt::Expr, column: &Column) -> bool {
+    use stmt::Expr::*;
+
+    match expr {
+        And(expr) => expr.iter().any(|expr| is_eq_constrained(cx, expr, column)),
+        Or(expr) => expr.iter().all(|expr| is_eq_constrained(cx, expr, column)),
+        BinaryOp(expr) => {
+            if !expr.op.is_eq() {
+                return false;
+            }
+
+            match (&*expr.lhs, &*expr.rhs) {
+                (Column(lhs), _) => cx.resolve_expr_column(lhs).expect_column().id == column.id,
+                (_, Column(rhs)) => cx.resolve_expr_column(rhs).expect_column().id == column.id,
+                _ => false,
+            }
+        }
+        InList(expr) => match &*expr.expr {
+            Column(lhs) => cx.resolve_expr_column(lhs).expect_column().id == column.id,
+            _ => todo!("expr={:#?}", expr),
+        },
+        _ => todo!("expr={:#?}", expr),
     }
 }
 

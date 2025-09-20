@@ -1,11 +1,15 @@
-use super::{ColumnDef, Name, Statement};
+use super::{ColumnDef, Statement};
 
-use toasty_core::{driver::Capability, schema::db::Table, stmt};
+use toasty_core::{
+    driver::Capability,
+    schema::db::{Table, TableId},
+    stmt,
+};
 
 #[derive(Debug, Clone)]
 pub struct CreateTable {
     /// Name of the table
-    pub name: Name,
+    pub table: TableId,
 
     /// Column definitions
     pub columns: Vec<ColumnDef>,
@@ -17,7 +21,7 @@ pub struct CreateTable {
 impl Statement {
     pub fn create_table(table: &Table, capability: &Capability) -> Self {
         CreateTable {
-            name: Name::from(&table.name[..]),
+            table: table.id,
             columns: table
                 .columns
                 .iter()

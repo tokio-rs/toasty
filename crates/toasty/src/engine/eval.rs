@@ -7,8 +7,8 @@ pub(crate) use convert::Convert;
 mod input;
 pub(crate) use input::Input;
 
-use crate::{engine::ty, Result};
-use toasty_core::stmt;
+use crate::Result;
+use toasty_core::stmt::{self, ExprContext};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Func<T = stmt::Expr> {
@@ -25,7 +25,7 @@ pub(crate) struct Func<T = stmt::Expr> {
 impl<T: AsExpr> Func<T> {
     pub(crate) fn from_stmt(expr: T, args: Vec<stmt::Type>) -> Self {
         assert!(verify_expr(expr.as_expr()));
-        let ret = ty::infer_eval_expr_ty(expr.as_expr(), &args);
+        let ret = ExprContext::new_free().infer_expr_ty(expr.as_expr(), &args);
         Self { args, ret, expr }
     }
 
@@ -81,7 +81,7 @@ impl Func<stmt::Expr> {
             return None;
         }
 
-        let ret = ty::infer_eval_expr_ty(&expr, &args);
+        let ret = ExprContext::new_free().infer_expr_ty(&expr, &args);
         Some(Self::from_stmt_unchecked(expr, args, ret))
     }
 }
@@ -95,7 +95,7 @@ impl Func<&stmt::Expr> {
             return None;
         }
 
-        let ret = ty::infer_eval_expr_ty(expr, &args);
+        let ret = ExprContext::new_free().infer_expr_ty(expr, &args);
         Some(Func::from_stmt_unchecked(expr, args, ret))
     }
 }

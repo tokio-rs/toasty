@@ -1,7 +1,7 @@
 use super::{eval, plan, Context, Planner, Result};
 use toasty_core::{
     schema::app::{self, FieldTy, Model, ModelId},
-    stmt,
+    stmt::{self, ExprContext},
 };
 
 impl Planner<'_> {
@@ -37,8 +37,13 @@ impl Planner<'_> {
 
         self.lower_stmt_query(model, &mut stmt);
 
+        let select = stmt.body.as_select_mut();
+
         // Compute the return type
-        let mut project = self.partition_returning(&mut stmt.body.as_select_mut().returning);
+        let mut project = self.partition_returning(
+            &ExprContext::new_with_target(self.schema, &select.source),
+            &mut select.returning,
+        );
 
         // Adjust the return type to account for includes
         if !includes.is_empty() {
@@ -152,13 +157,19 @@ impl Planner<'_> {
             self.partition_stmt_query_input(&mut stmt, &cx.input)
         };
 
+        let expr_cx = stmt::ExprContext::new_with_target(self.schema, &stmt);
+
         let mut index_plan = match &stmt.body {
-            stmt::ExprSet::Select(query) => self.plan_index_path2(table, &query.filter),
+            stmt::ExprSet::Select(query) => self.plan_index_path2(expr_cx, table, &query.filter),
             _ => todo!("stmt={stmt:#?}"),
         };
 
         let keys = if index_plan.index.primary_key {
-            self.try_build_key_filter(index_plan.index, &index_plan.index_filter)
+            self.try_build_key_filter(
+                stmt::ExprContext::new_with_target(self.schema, &stmt),
+                index_plan.index,
+                &index_plan.index_filter,
+            )
         } else {
             None
         };
@@ -183,25 +194,22 @@ impl Planner<'_> {
                         });
 
                         if !contains {
-                            todo!("returning types won't like up with projection");
-                            /*
-                            returning
-                                .fields
-                                .push(stmt::Expr::column(filter_expr.column));
-                            */
+                            todo!("returning types won't line up with projection");
                         }
                     }
                 });
             }
         }
 
+        let expr_cx = stmt::ExprContext::new_with_target(self.schema, &stmt);
+
         let columns = match &stmt.body.as_select().returning {
             stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => expr_record
                 .fields
                 .iter()
                 .map(|expr| match expr {
-                    stmt::Expr::Column(expr) => {
-                        expr.try_to_column_id().expect("not referencing column")
+                    stmt::Expr::Column(expr_column) => {
+                        expr_cx.resolve_expr_column(expr_column).expect_column().id
                     }
                     _ => todo!("stmt={stmt:#?}"),
                 })

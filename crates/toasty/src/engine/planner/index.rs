@@ -14,12 +14,15 @@ use toasty_core::{
  */
 
 impl<'a> Planner<'a> {
-    pub(crate) fn plan_index_path2(
+    pub(crate) fn plan_index_path2<'stmt>(
         &mut self,
+        cx: stmt::ExprContext<'stmt>,
         table: &'a Table,
-        filter: &stmt::Expr,
+        filter: &'stmt stmt::Expr,
     ) -> IndexPlan<'a> {
         let mut index_planner = IndexPlanner {
+            cx,
+            // TODO: get rid of this in favor of cx.
             table,
             filter,
             index_matches: vec![],
@@ -70,6 +73,8 @@ pub(crate) struct IndexPlan<'a> {
 }
 
 struct IndexPlanner<'a, 'stmt> {
+    cx: stmt::ExprContext<'stmt>,
+
     table: &'a Table,
 
     /// Query filter
@@ -146,7 +151,7 @@ impl IndexPlanner<'_, '_> {
                     .collect(),
             };
 
-            if !index_match.match_restriction(self.filter) {
+            if !index_match.match_restriction(&self.cx, self.filter) {
                 continue;
             }
 
@@ -176,7 +181,7 @@ impl IndexPlanner<'_, '_> {
 }
 
 impl<'stmt> IndexMatch<'_, 'stmt> {
-    fn match_restriction(&mut self, expr: &'stmt stmt::Expr) -> bool {
+    fn match_restriction(&mut self, cx: &stmt::ExprContext<'_>, expr: &'stmt stmt::Expr) -> bool {
         use stmt::Expr::*;
 
         match expr {
@@ -186,8 +191,12 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                 // Equivalent to a binary op with a `<=` operator.
                 match &*e.expr {
                     Column(expr_column) => {
-                        let m =
-                            self.match_expr_binary_op_column(expr_column, expr, stmt::BinaryOp::Le);
+                        let m = self.match_expr_binary_op_column(
+                            cx,
+                            expr_column,
+                            expr,
+                            stmt::BinaryOp::Le,
+                        );
                         assert!(m, "TODO; expr={expr:#?}");
                         m
                     }
@@ -195,24 +204,24 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                 }
             }
             BinaryOp(e) => match (&*e.lhs, &*e.rhs) {
-                (Column(lhs), Value(..)) => self.match_expr_binary_op_column(lhs, expr, e.op),
+                (Column(lhs), Value(..)) => self.match_expr_binary_op_column(cx, lhs, expr, e.op),
                 (Value(..), Column(rhs)) => {
                     let mut op = e.op;
                     op.reverse();
 
-                    self.match_expr_binary_op_column(rhs, expr, op)
+                    self.match_expr_binary_op_column(cx, rhs, expr, op)
                 }
                 _ => todo!("expr={:#?}", expr),
             },
-            InList(e) => self.match_expr_in_list(&e.expr, expr),
+            InList(e) => self.match_expr_in_list(cx, &e.expr, expr),
             IsNull(e) => match &*e.expr {
                 Column(expr_column) => {
-                    self.match_expr_binary_op_column(expr_column, expr, stmt::BinaryOp::Eq)
+                    self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Eq)
                 }
                 _ => todo!("expr={:#?}", expr),
             },
             And(and_exprs) => {
-                let matched = self.match_all_restrictions(and_exprs);
+                let matched = self.match_all_restrictions(cx, and_exprs);
 
                 if matched {
                     // Union all matched columns for each operand
@@ -244,7 +253,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                 matched
             }
             Or(or_exprs) => {
-                let matched_any_expr = self.match_all_restrictions(or_exprs);
+                let matched_any_expr = self.match_all_restrictions(cx, or_exprs);
                 let mut matched_operand = false;
 
                 // For OR expressions, we need to ensure that the index match is
@@ -279,20 +288,29 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
     /// Returns true if **any** expression in the provided list match with
     /// **any** index column.
-    fn match_all_restrictions(&mut self, exprs: &'stmt [stmt::Expr]) -> bool {
+    fn match_all_restrictions(
+        &mut self,
+        cx: &stmt::ExprContext<'_>,
+        exprs: &'stmt [stmt::Expr],
+    ) -> bool {
         let mut matched = false;
 
         for expr in exprs {
-            matched |= self.match_restriction(expr);
+            matched |= self.match_restriction(cx, expr);
         }
 
         matched
     }
 
-    fn match_expr_in_list(&mut self, lhs: &'stmt stmt::Expr, expr: &'stmt stmt::Expr) -> bool {
+    fn match_expr_in_list(
+        &mut self,
+        cx: &stmt::ExprContext<'_>,
+        lhs: &'stmt stmt::Expr,
+        expr: &'stmt stmt::Expr,
+    ) -> bool {
         match lhs {
             stmt::Expr::Column(expr_column) => {
-                self.match_expr_binary_op_column(expr_column, expr, stmt::BinaryOp::Eq)
+                self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Eq)
             }
             stmt::Expr::Record(expr_record) => {
                 let mut matched = false;
@@ -301,8 +319,12 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                     let stmt::Expr::Column(expr_column) = sub_expr else {
                         todo!()
                     };
-                    matched |=
-                        self.match_expr_binary_op_column(expr_column, sub_expr, stmt::BinaryOp::Eq);
+                    matched |= self.match_expr_binary_op_column(
+                        cx,
+                        expr_column,
+                        sub_expr,
+                        stmt::BinaryOp::Eq,
+                    );
                 }
 
                 if matched {
@@ -325,6 +347,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
     fn match_expr_binary_op_column(
         &mut self,
+        cx: &stmt::ExprContext<'_>,
         expr_column: &stmt::ExprColumn,
         expr: &'stmt stmt::Expr,
         op: stmt::BinaryOp,
@@ -333,7 +356,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
         for (i, index_column) in self.index.columns.iter().enumerate() {
             // Check that the path matches an index column
-            if !expr_column.references(index_column.column) {
+            if cx.resolve_expr_column(expr_column).expect_column().id != index_column.column {
                 continue;
             }
 
