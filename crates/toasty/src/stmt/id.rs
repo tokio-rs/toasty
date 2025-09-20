@@ -128,3 +128,17 @@ impl<M> Hash for Id<M> {
         self.inner.hash(state)
     }
 }
+
+#[cfg(feature = "serde")]
+impl<T> serde_core::Serialize for Id<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde_core::Serializer,
+    {
+        match (self.inner.as_str(), self.inner.to_int()) {
+            (Err(_), Ok(id)) => id.serialize(serializer),
+            (Ok(id), Err(_)) => id.serialize(serializer),
+            _ => unreachable!(),
+        }
+    }
+}
