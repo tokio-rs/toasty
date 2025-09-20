@@ -1,6 +1,7 @@
 use super::{sparse_record::SparseRecord, Entry, EntryPath, Id, Type, ValueEnum, ValueRecord};
+use std::hash::Hash;
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub enum Value {
     /// Boolean value
     Bool(bool),

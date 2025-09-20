@@ -1,6 +1,6 @@
 use super::{Value, ValueRecord};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ValueEnum {
     pub variant: usize,
     pub fields: ValueRecord,

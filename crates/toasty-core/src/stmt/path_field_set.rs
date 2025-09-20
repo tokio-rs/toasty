@@ -1,10 +1,32 @@
-use indexmap::IndexSet;
+use bit_set::BitSet;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct PathFieldSet {
-    // TODO: rewrite as a bitfield set
-    container: IndexSet<usize>,
+    container: BitSet<u32>,
 }
+
+pub struct PathFieldSetIter<'a> {
+    inner: bit_set::Iter<'a, u32>,
+    len: usize,
+}
+
+impl<'a> Iterator for PathFieldSetIter<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.inner.next();
+        if result.is_some() {
+            self.len -= 1;
+        }
+        result
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len, Some(self.len))
+    }
+}
+
+impl<'a> ExactSizeIterator for PathFieldSetIter<'a> {}
 
 impl PathFieldSet {
     pub fn new() -> Self {
@@ -21,11 +43,14 @@ impl PathFieldSet {
     }
 
     pub fn contains(&self, val: impl Into<usize>) -> bool {
-        self.container.contains(&val.into())
+        self.container.contains(val.into())
     }
 
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = usize> + '_ {
-        self.container.iter().map(Clone::clone)
+    pub fn iter(&self) -> PathFieldSetIter<'_> {
+        PathFieldSetIter {
+            inner: self.container.iter(),
+            len: self.container.len(),
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -39,12 +64,8 @@ impl PathFieldSet {
 
 impl FromIterator<usize> for PathFieldSet {
     fn from_iter<T: IntoIterator<Item = usize>>(iter: T) -> Self {
-        let mut ret = Self::new();
-
-        for key in iter {
-            ret.container.insert(key);
+        Self {
+            container: BitSet::from_iter(iter),
         }
-
-        ret
     }
 }
