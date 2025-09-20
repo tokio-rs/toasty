@@ -1,0 +1,35 @@
+[package]
+name = "benches"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+default = ["sqlite"]
+sqlite = ["toasty/sqlite"]
+mysql = ["toasty/mysql"]
+dynamodb = ["toasty/dynamodb"]
+postgresql = ["toasty/postgresql"]
+
+[dependencies]
+toasty.workspace = true
+toasty-core.workspace = true
+tokio.workspace = true
+criterion = "0.7.0"
+
+# Database clients for setup/teardown
+tokio-postgres.workspace = true
+mysql_async.workspace = true
+aws-config.workspace = true
+aws-sdk-dynamodb.workspace = true
+rusqlite.workspace = true
+
+# Utilities
+std-util.workspace = true
+tempfile.workspace = true
+tests = { version = "0.1.0", path = "../tests" }
+
+[[bench]]
+name = "association"
+path = "association.rs"
+harness = false
