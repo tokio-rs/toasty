@@ -16,7 +16,7 @@ impl<'a> Iterator for PathFieldSetIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let result = self.inner.next();
         if result.is_some() {
-            self.len += 1;
+            self.len -= 1;
         }
         result
     }
