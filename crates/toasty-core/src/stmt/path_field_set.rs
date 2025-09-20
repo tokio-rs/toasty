@@ -2,9 +2,31 @@ use bit_set::BitSet;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct PathFieldSet {
-    // didn't know if we wanted to use usize or the default u32
-    container: BitSet<usize>,
+    container: BitSet<u32>,
 }
+
+pub struct PathFieldSetIter<'a> {
+    inner: bit_set::Iter<'a, u32>,
+    len: usize,
+}
+
+impl<'a> Iterator for PathFieldSetIter<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.inner.next();
+        if result.is_some() {
+            self.len += 1;
+        }
+        result
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len, Some(self.len))
+    }
+}
+
+impl<'a> ExactSizeIterator for PathFieldSetIter<'a> {}
 
 impl PathFieldSet {
     pub fn new() -> Self {
@@ -24,17 +46,12 @@ impl PathFieldSet {
         self.container.contains(val.into())
     }
 
-    // was looking into this and the only way to keep this impl is to allocate an vec
-    // tho I think it defeats the purpose of bitsets memory effficiency
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = usize> + '_ {
-        let items: Vec<usize> = self.container.iter().collect();
-        items.into_iter()
+    pub fn iter(&self) -> PathFieldSetIter<'_> {
+        PathFieldSetIter {
+            inner: self.container.iter(),
+            len: self.container.len(),
+        }
     }
-
-    // was thinking of adding an functon like this to get the raw bitset iter?
-    // pub fn iter_raw(&self) -> impl Iterator<Item = usize> + '_ {
-    //     self.container.iter()
-    // }
 
     pub fn is_empty(&self) -> bool {
         self.container.is_empty()
