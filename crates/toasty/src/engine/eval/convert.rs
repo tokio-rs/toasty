@@ -5,7 +5,7 @@ pub trait Convert {
         None
     }
 
-    fn convert_expr_column(&mut self, _stmt: &stmt::ExprColumn) -> Option<stmt::Expr> {
+    fn convert_expr_column(&mut self, _stmt: &stmt::ExprReference) -> Option<stmt::Expr> {
         None
     }
 }

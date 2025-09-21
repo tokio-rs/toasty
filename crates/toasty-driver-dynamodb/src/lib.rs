@@ -6,7 +6,7 @@ use toasty_core::{
         app,
         db::{Column, ColumnId, Schema, Table},
     },
-    stmt::{self, ExprContext},
+    stmt::{self, ExprContext, ExprReference},
 };
 
 use anyhow::Result;
@@ -327,7 +327,7 @@ fn ddb_expression(
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
-        stmt::Expr::Column(expr_column) => {
+        stmt::Expr::Reference(expr_column @ ExprReference::Column { .. }) => {
             let column = cx.resolve_expr_column(expr_column).expect_column();
             attrs.column(column).to_string()
         }

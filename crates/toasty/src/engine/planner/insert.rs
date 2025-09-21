@@ -338,7 +338,7 @@ impl Planner<'_> {
         }
 
         impl eval::Convert for ConstReturning<'_> {
-            fn convert_expr_column(&mut self, stmt: &stmt::ExprColumn) -> Option<stmt::Expr> {
+            fn convert_expr_column(&mut self, stmt: &stmt::ExprReference) -> Option<stmt::Expr> {
                 let needle = self.cx.resolve_expr_column(stmt).expect_column();
 
                 let index = self

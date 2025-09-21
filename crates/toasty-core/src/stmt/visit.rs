@@ -2,7 +2,7 @@
 
 use super::{
     Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprFunc, ExprInList, ExprInSubquery,
+    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprFunc, ExprInList, ExprInSubquery,
     ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
     ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
     JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
@@ -58,9 +58,6 @@ pub trait Visit {
         visit_expr_cast(self, i);
     }
 
-    fn visit_expr_column(&mut self, i: &ExprColumn) {
-        visit_expr_column(self, i);
-    }
 
     fn visit_expr_concat(&mut self, i: &ExprConcat) {
         visit_expr_concat(self, i);
@@ -296,9 +293,6 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_cast(&mut **self, i);
     }
 
-    fn visit_expr_column(&mut self, i: &ExprColumn) {
-        Visit::visit_expr_column(&mut **self, i);
-    }
 
     fn visit_expr_concat(&mut self, i: &ExprConcat) {
         Visit::visit_expr_concat(&mut **self, i);
@@ -532,7 +526,6 @@ where
         Expr::Arg(expr) => v.visit_expr_arg(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op(expr),
         Expr::Cast(expr) => v.visit_expr_cast(expr),
-        Expr::Column(expr) => v.visit_expr_column(expr),
         Expr::Concat(expr) => v.visit_expr_concat(expr),
         Expr::Enum(expr) => v.visit_expr_enum(expr),
         Expr::InList(expr) => v.visit_expr_in_list(expr),
@@ -598,11 +591,6 @@ where
     v.visit_type(&node.ty);
 }
 
-pub fn visit_expr_column<V>(v: &mut V, node: &ExprColumn)
-where
-    V: Visit + ?Sized,
-{
-}
 
 pub fn visit_expr_concat<V>(v: &mut V, node: &ExprConcat)
 where

@@ -113,7 +113,7 @@ impl TryConvert<'_, '_> {
                     };
 
                     // The LHS of the operand is a column referencing an index field
-                    let Column(expr_column) = &*binary_op.lhs else {
+                    let stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column { .. }) = &*binary_op.lhs else {
                         return None;
                     };
 
@@ -179,7 +179,7 @@ impl TryConvert<'_, '_> {
 
     fn is_key_reference(&self, expr: &stmt::Expr) -> bool {
         match expr {
-            stmt::Expr::Column(_) if self.index.columns.len() == 1 => true,
+            stmt::Expr::Reference(stmt::ExprReference::Column { .. }) if self.index.columns.len() == 1 => true,
             stmt::Expr::Record(expr_record) if self.index.columns.len() == expr_record.len() => {
                 true
             }

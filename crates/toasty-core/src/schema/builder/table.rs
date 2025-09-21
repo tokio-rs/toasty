@@ -596,7 +596,7 @@ impl BuildMapping<'_> {
 
         // NOTE: nesting and table are stubs here (though often the actual values).
         // The engine must substitute these with the actual TableRef index in the query's TableSource.
-        let expr_column = stmt::Expr::column(stmt::ExprColumn {
+        let expr_column = stmt::Expr::column(stmt::ExprReference::Column {
             nesting: 0,
             table: 0,
             column: column_id.index,

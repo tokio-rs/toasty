@@ -21,17 +21,20 @@ impl ToSql for &stmt::Expr {
 
                 fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
             }
-            Column(
-                expr_column @ stmt::ExprColumn {
-                    nesting,
-                    table,
-                    column,
-                },
-            ) => {
+            Reference(stmt::ExprReference::Column {
+                nesting,
+                table,
+                column,
+            }) => {
+                let expr_column = stmt::ExprReference::Column {
+                    nesting: *nesting,
+                    table: *table,
+                    column: *column,
+                };
                 if f.alias {
                     let depth = f.depth - *nesting;
 
-                    match cx.resolve_expr_column(expr_column) {
+                    match cx.resolve_expr_column(&expr_column) {
                         ResolvedRef::Column(column) => {
                             let name = Ident(&column.name);
                             fmt!(cx, f, "tbl_" depth "_" table "." name)
@@ -41,7 +44,7 @@ impl ToSql for &stmt::Expr {
                         }
                     }
                 } else {
-                    let column = cx.resolve_expr_column(expr_column).expect_column();
+                    let column = cx.resolve_expr_column(&expr_column).expect_column();
                     fmt!(cx, f, Ident(&column.name))
                 }
             }

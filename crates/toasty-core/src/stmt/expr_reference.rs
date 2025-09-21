@@ -1,6 +1,6 @@
-use crate::{schema::app::FieldId, stmt::Expr};
+use crate::{schema::{app::FieldId, db::ColumnId}, stmt::Expr};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExprReference {
     /// Reference a specific field in a query's relation.
     ///
@@ -13,14 +13,26 @@ pub enum ExprReference {
         index: usize,
     },
 
-    /// Reference a column from a CTE table
-    Cte {
-        /// What level of nesting the reference is compared to the CTE being
-        /// referenced.
+    /// A reference to a column in a database-level statement.
+    ///
+    /// ExprReference::Column represents resolved column references after lowering from the
+    /// application schema to the database schema. It uses a scope-based approach
+    /// similar to ExprReference::Field, referencing a specific column within a target
+    /// at a given nesting level.
+    Column {
+        /// Query scope nesting level: 0 = current query, 1+ = higher scope queries
         nesting: usize,
 
-        /// Column index in the CTEs
-        index: usize,
+        /// Index into the table references vector for this column's source relation.
+        ///
+        /// For statements with multiple tables (SELECT with JOINs), this indexes into
+        /// the `SourceTable::tables` field to identify which specific table contains
+        /// this column. For single-target statements (INSERT, UPDATE), this is
+        /// typically 0 since these operations target only one relation at a time.
+        table: usize,
+
+        /// The index of the column in the table
+        column: usize,
     },
 }
 
@@ -45,6 +57,14 @@ impl Expr {
     pub fn is_field(&self) -> bool {
         matches!(self, Self::Reference(ExprReference::Field { .. }))
     }
+
+    pub fn column(column: impl Into<ExprReference>) -> Self {
+        column.into().into()
+    }
+
+    pub fn is_column(&self) -> bool {
+        matches!(self, Self::Reference(ExprReference::Column { .. }))
+    }
 }
 
 impl ExprReference {
@@ -52,6 +72,24 @@ impl ExprReference {
         ExprReference::Field {
             nesting: 0,
             index: field.into().index,
+        }
+    }
+
+    pub fn column(table: usize, column: usize) -> Self {
+        ExprReference::Column {
+            nesting: 0,
+            table,
+            column,
+        }
+    }
+}
+
+impl From<ColumnId> for ExprReference {
+    fn from(value: ColumnId) -> Self {
+        ExprReference::Column {
+            nesting: 0,
+            table: 0,
+            column: value.index,
         }
     }
 }

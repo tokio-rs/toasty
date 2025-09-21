@@ -190,7 +190,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
                 // Equivalent to a binary op with a `<=` operator.
                 match &*e.expr {
-                    Column(expr_column) => {
+                    stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column { .. }) => {
                         let m = self.match_expr_binary_op_column(
                             cx,
                             expr_column,
@@ -204,8 +204,8 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                 }
             }
             BinaryOp(e) => match (&*e.lhs, &*e.rhs) {
-                (Column(lhs), Value(..)) => self.match_expr_binary_op_column(cx, lhs, expr, e.op),
-                (Value(..), Column(rhs)) => {
+                (stmt::Expr::Reference(lhs @ stmt::ExprReference::Column { .. }), Value(..)) => self.match_expr_binary_op_column(cx, lhs, expr, e.op),
+                (Value(..), stmt::Expr::Reference(rhs @ stmt::ExprReference::Column { .. })) => {
                     let mut op = e.op;
                     op.reverse();
 
@@ -215,7 +215,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
             },
             InList(e) => self.match_expr_in_list(cx, &e.expr, expr),
             IsNull(e) => match &*e.expr {
-                Column(expr_column) => {
+                stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column { .. }) => {
                     self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Eq)
                 }
                 _ => todo!("expr={:#?}", expr),
@@ -309,14 +309,14 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
         expr: &'stmt stmt::Expr,
     ) -> bool {
         match lhs {
-            stmt::Expr::Column(expr_column) => {
+            stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column { .. }) => {
                 self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Eq)
             }
             stmt::Expr::Record(expr_record) => {
                 let mut matched = false;
 
                 for sub_expr in expr_record {
-                    let stmt::Expr::Column(expr_column) = sub_expr else {
+                    let stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column { .. }) = sub_expr else {
                         todo!()
                     };
                     matched |= self.match_expr_binary_op_column(
@@ -348,7 +348,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
     fn match_expr_binary_op_column(
         &mut self,
         cx: &stmt::ExprContext<'_>,
-        expr_column: &stmt::ExprColumn,
+        expr_column: &stmt::ExprReference,
         expr: &'stmt stmt::Expr,
         op: stmt::BinaryOp,
     ) -> bool {
@@ -430,13 +430,13 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                     // Normalize the expression to include the column on the LHS
                     // TODO: is this needed?
                     let expr = match (&*binary_op.lhs, &*binary_op.rhs) {
-                        (Column(_), Value(_)) => expr.clone(),
-                        (Value(value), Column(path)) => {
+                        (stmt::Expr::Reference(stmt::ExprReference::Column { .. }), Value(_)) => expr.clone(),
+                        (Value(value), stmt::Expr::Reference(column_ref @ stmt::ExprReference::Column { .. })) => {
                             let mut op = binary_op.op;
                             op.reverse();
 
                             stmt::ExprBinaryOp {
-                                lhs: Box::new(path.clone().into()),
+                                lhs: Box::new(stmt::Expr::Reference(column_ref.clone()).into()),
                                 rhs: Box::new(value.clone().into()),
                                 op,
                             }

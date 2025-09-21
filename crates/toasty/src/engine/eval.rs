@@ -204,8 +204,7 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
         And(expr_and) => expr_and.operands.iter().all(verify_expr),
         BinaryOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
         Cast(expr) => verify_expr(&expr.expr),
-        Column(_) => false,
-        Reference(stmt::ExprReference::Field { .. }) => false,
+        Reference(_) => false,
         List(expr) => expr.items.iter().all(verify_expr),
         Map(expr) => verify_expr(&expr.base) && verify_expr(&expr.map),
         Project(expr) => verify_expr(&expr.base),
@@ -230,7 +229,7 @@ fn convert_and_verify_expr(expr: &mut stmt::Expr, convert: &mut impl Convert) ->
                 && convert_and_verify_expr(&mut expr.rhs, convert)
         }
         Cast(expr) => convert_and_verify_expr(&mut expr.expr, convert),
-        Column(e) => {
+        Reference(e @ stmt::ExprReference::Column { .. }) => {
             let Some(e) = convert.convert_expr_column(e) else {
                 return false;
             };

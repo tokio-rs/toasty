@@ -4,8 +4,8 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query, Select,
-        Source, TableRef, Type, Update, UpdateTarget,
+        Delete, Expr, ExprReference, ExprSet, Insert, InsertTarget, Query, Select, Source,
+        TableRef, Type, Update, UpdateTarget,
     },
     Schema,
 };
@@ -18,12 +18,49 @@ pub struct ExprContext<'a, T = Schema> {
     target: ExprTarget<'a>,
 }
 
+/// Result of resolving an `ExprReference` to its concrete schema location.
+///
+/// When an expression references a field or column (e.g., `user.name` in a
+/// WHERE clause), the `ExprContext::resolve_expr_reference()` method returns
+/// this enum to indicate whether the reference points to an application field,
+/// physical table column, or CTE column.
+///
+/// This distinction is important for different processing stages: application
+/// fields are used during high-level query building, physical columns during
+/// SQL generation, and CTE columns require special handling with generated
+/// identifiers based on position.
 #[derive(Debug)]
 pub enum ResolvedRef<'a> {
-    /// TODO: docs
+    /// A resolved reference to a physical database column.
+    ///
+    /// Contains a reference to the actual Column struct with column metadata including
+    /// name, type, and constraints. Used when resolving ExprReference::Column expressions
+    /// that point to concrete table columns in the database schema.
+    ///
+    /// Example: Resolving `user.name` in a query returns Column with name="name",
+    /// ty=Type::String from the users table schema.
     Column(&'a Column),
 
-    /// TODO: fill this out
+    /// A resolved reference to an application-level field.
+    ///
+    /// Contains a reference to the Field struct from the application schema,
+    /// which includes field metadata like name, type, and model relationships.
+    /// Used when resolving ExprReference::Field expressions that point to
+    /// model fields before they are lowered to database columns.
+    ///
+    /// Example: Resolving `User::name` in a query returns Field with name="name"
+    /// from the User model's field definitions.
+    Field(&'a Field),
+
+    /// A resolved reference to a Common Table Expression (CTE) column.
+    ///
+    /// Contains the nesting level and column index for CTE references when resolving
+    /// ExprReference::Column expressions that point to CTE outputs rather than physical
+    /// table columns. The nesting indicates how many query levels to traverse upward,
+    /// and index identifies which column within the CTE's output.
+    ///
+    /// Example: In a WITH clause, resolving a reference to the second column of a CTE
+    /// defined 1 level up returns Cte { nesting: 1, index: 1 }.
     Cte { nesting: usize, index: usize },
 }
 
@@ -44,7 +81,9 @@ pub enum ExprTarget<'a> {
     Update(&'a UpdateTarget),
 }
 
-pub trait DbSchema {
+pub trait Resolve {
+    fn model(&self, id: ModelId) -> Option<&Model>;
+
     fn table(&self, id: TableId) -> Option<&Table>;
 }
 
@@ -97,47 +136,7 @@ impl<'a> ExprContext<'a, Schema> {
         Some(self.schema.app.model(model_id))
     }
 
-    pub fn resolve_expr_reference(&self, expr_reference: &ExprReference) -> &'a Field {
-        let ExprReference::Field { nesting, index } = expr_reference else {
-            todo!();
-        };
-
-        let mut curr = self;
-
-        // Walk up the stack
-        for _ in 0..*nesting {
-            let Some(parent) = self.parent else {
-                todo!("bug");
-            };
-
-            curr = parent;
-        }
-
-        match curr.target {
-            ExprTarget::Free => todo!("fail"),
-            ExprTarget::Model(model) => &model.fields[*index],
-            ExprTarget::Table(_) => todo!(),
-
-            ExprTarget::Source(Source::Model(source_model)) => {
-                &self.schema.app.model(source_model.model).fields[*index]
-            }
-            ExprTarget::Source(_) => todo!(),
-            ExprTarget::Insert(InsertTarget::Model(model_id)) => {
-                &self.schema.app.model(model_id).fields[*index]
-            }
-            ExprTarget::Insert(_) => todo!(),
-            ExprTarget::Update(UpdateTarget::Query(query)) => {
-                let model_id = query.body.as_select().source.as_model_id();
-                &self.schema.app.model(model_id).fields[*index]
-            }
-            ExprTarget::Update(UpdateTarget::Model(model_id)) => {
-                &self.schema.app.model(model_id).fields[*index]
-            }
-            ExprTarget::Update(UpdateTarget::Table(_)) => todo!(),
-        }
-    }
-
-    pub fn expr_column(&self, column_id: impl Into<ColumnId>) -> ExprColumn {
+    pub fn expr_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
         let column_id = column_id.into();
 
         match self.target {
@@ -166,7 +165,7 @@ impl<'a> ExprContext<'a, Schema> {
             ExprTarget::Update(_) => todo!(),
         }
 
-        ExprColumn {
+        ExprReference::Column {
             nesting: 0,
             table: 0,
             column: column_id.index,
@@ -174,11 +173,11 @@ impl<'a> ExprContext<'a, Schema> {
     }
 }
 
-impl<'a, T: DbSchema> ExprContext<'a, T> {
-    /// Resolves an ExprColumn reference to the actual database Column it
+impl<'a, T: Resolve> ExprContext<'a, T> {
+    /// Resolves an ExprReference::Column reference to the actual database Column it
     /// represents.
     ///
-    /// Given an ExprColumn (which contains table/column indices and nesting
+    /// Given an ExprReference::Column (which contains table/column indices and nesting
     /// info), returns the Column struct containing the column's name, type,
     /// constraints, and other metadata.
     ///
@@ -190,11 +189,16 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
     ///
     /// Used by SQL serialization to get column names, query planning to
     /// match index columns, and key extraction to identify column IDs.
-    pub fn resolve_expr_column(&self, expr_column: &ExprColumn) -> ResolvedRef<'a> {
+    pub fn resolve_expr_reference(&self, expr_reference: &ExprReference) -> ResolvedRef<'a> {
+        let nesting = match expr_reference {
+            ExprReference::Field { nesting, .. } => nesting,
+            ExprReference::Column { nesting, .. } => nesting,
+        };
+
         let mut curr = self;
 
         // Walk up the stack to the correct nesting level
-        for _ in 0..expr_column.nesting {
+        for _ in 0..*nesting {
             let Some(parent) = curr.parent else {
                 todo!("bug: invalid nesting level");
             };
@@ -204,57 +208,127 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
 
         match curr.target {
             ExprTarget::Free => todo!("cannot resolve column in free context"),
-            ExprTarget::Model(_) => todo!("cannot resolve column in model context"),
-            ExprTarget::Table(table) => ResolvedRef::Column(&table.columns[expr_column.column]),
-            ExprTarget::Source(Source::Table(source_table)) => {
-                // Get the table reference at the specified index
-                let table_ref = &source_table.tables[expr_column.table];
-                match table_ref {
-                    TableRef::Table(table_id) => {
-                        let Some(table) = self.schema.table(*table_id) else {
+            ExprTarget::Model(model) => match expr_reference {
+                ExprReference::Field { index, .. } => ResolvedRef::Field(&model.fields[*index]),
+                ExprReference::Column { .. } => panic!(
+                    "Cannot resolve ExprReference::Column in Model target context - use ExprReference::Field instead"
+                ),
+            },
+            ExprTarget::Table(table) => match expr_reference {
+                ExprReference::Field {.. } => panic!(
+                    "Cannot resolve ExprReference::Field in Table target context - use ExprReference::Column instead"
+                ),
+                ExprReference::Column { column, .. } => ResolvedRef::Column(&table.columns[*column]),
+            },
+            ExprTarget::Source(source) => match source {
+                Source::Model(source_model) => match expr_reference {
+                    ExprReference::Field { index, .. } => {
+                        let Some(model) = self.schema.model(source_model.model) else {
                             panic!(
-                                "Failed to resolve table with ID {:?} - table not found in schema",
-                                table_id
-                            );
+                                "Failed to resolve model with ID {:?} - model not found in schema",
+                                source_model.model
+                            )
                         };
-                        ResolvedRef::Column(&table.columns[expr_column.column])
+
+                        ResolvedRef::Field(&model.fields[*index])
                     }
-                    TableRef::Cte { nesting, index } => {
-                        // TODO: return more info
-                        ResolvedRef::Cte {
-                            nesting: expr_column.nesting + nesting,
-                            index: *index,
+                    ExprReference::Column { .. } => panic!(
+                        "Cannot resolve ExprReference::Column in Source::Model context - use ExprReference::Field instead"
+                    ),
+                },
+                Source::Table(source_table) => match expr_reference {
+                    ExprReference::Column { table, column, .. } => {
+                        // Get the table reference at the specified index
+                        let table_ref = &source_table.tables[*table];
+                        match table_ref {
+                            TableRef::Table(table_id) => {
+                                let Some(table) = self.schema.table(*table_id) else {
+                                    panic!(
+                                    "Failed to resolve table with ID {:?} - table not found in schema",
+                                    table_id
+                                );
+                                };
+                                ResolvedRef::Column(&table.columns[*column])
+                            }
+                            TableRef::Cte {
+                                nesting: cte_nesting,
+                                index,
+                            } => {
+                                // TODO: return more info
+                                ResolvedRef::Cte {
+                                    nesting: *nesting + cte_nesting,
+                                    index: *index,
+                                }
+                            }
+                        }
+                    }
+                    ExprReference::Field { .. } => panic!(
+                        "Cannot resolve ExprReference::Field in Source::Table context - use ExprReference::Column instead"
+                    ),
+                }
+            },
+            ExprTarget::Insert(insert_target) => match insert_target {
+                InsertTarget::Model(model_id) => {
+                    match expr_reference {
+                        ExprReference::Field { index, .. } => {
+                            let Some(model) = self.schema.model(*model_id) else {
+                                panic!(
+                                    "Failed to resolve model with ID {:?} for INSERT target - model not found in schema",
+                                    model_id
+                                )
+                            };
+                            ResolvedRef::Field(&model.fields[*index])
+                        }
+                        ExprReference::Column { .. } => panic!("ExprColumn should only be used with lowered InsertTarget::Table"),
+                    }
+                }
+                InsertTarget::Table(insert_table) => {
+                    match expr_reference {
+                        ExprReference::Field { .. } => panic!(
+                            "Cannot resolve ExprReference::Field in InsertTarget::Table context - use ExprReference::Column instead"
+                        ),
+                        ExprReference::Column { column, .. } => {
+                            let Some(table) = self.schema.table(insert_table.table) else {
+                                panic!("Failed to resolve table with ID {:?} for INSERT target - table not found in schema", insert_table.table);
+                            };
+                            ResolvedRef::Column(&table.columns[*column])
                         }
                     }
                 }
-            }
-            ExprTarget::Source(Source::Model(_)) => {
-                todo!("ExprColumn should only be used with lowered Source::Table")
-            }
-            ExprTarget::Insert(InsertTarget::Table(insert_table)) => {
-                let Some(table) = self.schema.table(insert_table.table) else {
-                    panic!("Failed to resolve table with ID {:?} for INSERT target - table not found in schema", insert_table.table);
-                };
-                ResolvedRef::Column(&table.columns[expr_column.column])
-            }
-            ExprTarget::Insert(InsertTarget::Model(_)) => {
-                todo!("ExprColumn should only be used with lowered InsertTarget::Table")
-            }
-            ExprTarget::Insert(InsertTarget::Scope(_)) => {
-                todo!("ExprColumn should only be used with lowered InsertTarget::Table")
-            }
-            ExprTarget::Update(UpdateTarget::Table(table_id)) => {
-                let Some(table) = self.schema.table(*table_id) else {
-                    panic!("Failed to resolve table with ID {:?} for UPDATE target - table not found in schema", table_id);
-                };
-                ResolvedRef::Column(&table.columns[expr_column.column])
-            }
-            ExprTarget::Update(UpdateTarget::Model(_)) => {
-                todo!("ExprColumn should only be used with lowered UpdateTarget::Table")
-            }
-            ExprTarget::Update(UpdateTarget::Query(_)) => {
-                todo!("ExprColumn should only be used with lowered UpdateTarget::Table")
-            }
+                InsertTarget::Scope(_) => {
+                    todo!()
+                }
+            },
+            ExprTarget::Update(update_target) => match update_target {
+                UpdateTarget::Model(model_id) => {
+                    match expr_reference {
+                        ExprReference::Field { index, .. } => {
+                            let Some(model) = self.schema.model(*model_id) else {
+                                panic!(
+                                    "Failed to resolve model with ID {:?} for UPDATE target - model not found in schema",
+                                    model_id
+                                )
+                            };
+                            ResolvedRef::Field(&model.fields[*index])
+                        }
+                        ExprReference::Column { .. } => panic!("ExprColumn should only be used with lowered UpdateTarget::Table"),
+                    }
+                }
+                UpdateTarget::Table(table_id) => {
+                    match expr_reference {
+                        ExprReference::Field { .. } => panic!(),
+                        ExprReference::Column { column, .. } => {
+                            let Some(table) = self.schema.table(*table_id) else {
+                                panic!("Failed to resolve table with ID {:?} for UPDATE target - table not found in schema", table_id);
+                            };
+                            ResolvedRef::Column(&table.columns[*column])
+                        }
+                    }
+                }
+                UpdateTarget::Query(_) => {
+                    todo!("ExprColumn should only be used with lowered UpdateTarget::Table")
+                }
+            },
         }
     }
 
@@ -264,10 +338,12 @@ impl<'a, T: DbSchema> ExprContext<'a, T> {
             Expr::And(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
-            Expr::Column(e) => match self.resolve_expr_column(e) {
-                ResolvedRef::Column(column) => column.ty.clone(),
-                _ => todo!(),
-            },
+            Expr::Reference(expr_ref @ ExprReference::Column { .. }) => {
+                match self.resolve_expr_reference(expr_ref) {
+                    ResolvedRef::Column(column) => column.ty.clone(),
+                    _ => todo!(),
+                }
+            }
             Expr::Reference(_) => todo!(),
             Expr::IsNull(_) => Type::Bool,
             Expr::Map(e) => {
@@ -320,19 +396,31 @@ impl<'a> ResolvedRef<'a> {
     }
 }
 
-impl DbSchema for Schema {
+impl Resolve for Schema {
+    fn model(&self, id: ModelId) -> Option<&Model> {
+        Some(self.app.model(id))
+    }
+
     fn table(&self, id: TableId) -> Option<&Table> {
         Some(self.db.table(id))
     }
 }
 
-impl DbSchema for db::Schema {
+impl Resolve for db::Schema {
+    fn model(&self, _id: ModelId) -> Option<&Model> {
+        None
+    }
+
     fn table(&self, id: TableId) -> Option<&Table> {
         Some(db::Schema::table(self, id))
     }
 }
 
-impl DbSchema for () {
+impl Resolve for () {
+    fn model(&self, _id: ModelId) -> Option<&Model> {
+        None
+    }
+
     fn table(&self, _: TableId) -> Option<&Table> {
         None
     }
