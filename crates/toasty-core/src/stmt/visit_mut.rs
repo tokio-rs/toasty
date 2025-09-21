@@ -2,8 +2,8 @@
 
 use super::{
     Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
-    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprFunc, ExprInList, ExprInSubquery,
-    ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
+    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull,
+    ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
     ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
     JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
     Source, SourceModel, SourceTable, SourceTableId, Statement, TableFactor, TableRef,
@@ -57,7 +57,6 @@ pub trait VisitMut {
     fn visit_expr_cast_mut(&mut self, i: &mut ExprCast) {
         visit_expr_cast_mut(self, i);
     }
-
 
     fn visit_expr_concat_mut(&mut self, i: &mut ExprConcat) {
         visit_expr_concat_mut(self, i);
@@ -292,7 +291,6 @@ impl<V: VisitMut> VisitMut for &mut V {
     fn visit_expr_cast_mut(&mut self, i: &mut ExprCast) {
         VisitMut::visit_expr_cast_mut(&mut **self, i);
     }
-
 
     fn visit_expr_concat_mut(&mut self, i: &mut ExprConcat) {
         VisitMut::visit_expr_concat_mut(&mut **self, i);
@@ -591,7 +589,6 @@ where
     v.visit_expr_mut(&mut node.expr);
     v.visit_type_mut(&mut node.ty);
 }
-
 
 pub fn visit_expr_concat_mut<V>(v: &mut V, node: &mut ExprConcat)
 where

@@ -1,4 +1,7 @@
-use crate::{schema::{app::FieldId, db::ColumnId}, stmt::Expr};
+use crate::{
+    schema::{app::FieldId, db::ColumnId},
+    stmt::Expr,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprReference {

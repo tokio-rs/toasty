@@ -338,13 +338,11 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::And(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
-            Expr::Reference(expr_ref @ ExprReference::Column { .. }) => {
-                match self.resolve_expr_reference(expr_ref) {
-                    ResolvedRef::Column(column) => column.ty.clone(),
-                    _ => todo!(),
-                }
-            }
-            Expr::Reference(_) => todo!(),
+            Expr::Reference(expr_ref) => match self.resolve_expr_reference(expr_ref) {
+                ResolvedRef::Column(column) => column.ty.clone(),
+                ResolvedRef::Field(field) => field.ty.clone(),
+                ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
+            },
             Expr::IsNull(_) => Type::Bool,
             Expr::Map(e) => {
                 let base = self.infer_expr_ty(&e.base, args);
