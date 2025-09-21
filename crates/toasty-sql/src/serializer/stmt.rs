@@ -187,7 +187,9 @@ impl ToSql for &stmt::Returning {
                     .iter()
                     .enumerate()
                     .map(|(i, expr)| match expr {
-                        stmt::Expr::Reference(stmt::ExprReference::Column { .. }) => (expr, None, None),
+                        stmt::Expr::Reference(stmt::ExprReference::Column { .. }) => {
+                            (expr, None, None)
+                        }
                         _ => (expr, Some(" AS col_"), Some(i)),
                     });
 

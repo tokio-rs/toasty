@@ -232,7 +232,10 @@ impl Planner<'_> {
             fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
                 stmt::visit_mut::visit_expr_mut(self, expr);
 
-                if let stmt::Expr::Reference(stmt::ExprReference::Column { table, column, .. }) = expr {
+                if let stmt::Expr::Reference(stmt::ExprReference::Column {
+                    table, column, ..
+                }) = expr
+                {
                     // For the transition, try to find assignment by column index
                     // This assumes table 0, which should be accurate for UPDATE statements
                     if *table == 0 {

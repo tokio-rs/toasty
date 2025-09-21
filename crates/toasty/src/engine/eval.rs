@@ -229,15 +229,8 @@ fn convert_and_verify_expr(expr: &mut stmt::Expr, convert: &mut impl Convert) ->
                 && convert_and_verify_expr(&mut expr.rhs, convert)
         }
         Cast(expr) => convert_and_verify_expr(&mut expr.expr, convert),
-        Reference(e @ stmt::ExprReference::Column { .. }) => {
-            let Some(e) = convert.convert_expr_column(e) else {
-                return false;
-            };
-            *expr = e;
-            convert_and_verify_expr(expr, convert)
-        }
-        Reference(expr_ref) => {
-            let Some(e) = convert.convert_expr_reference(expr_ref) else {
+        Reference(expr_reference) => {
+            let Some(e) = convert.convert_expr_reference(expr_reference) else {
                 return false;
             };
             *expr = e;

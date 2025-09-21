@@ -187,9 +187,13 @@ impl Planner<'_> {
                     .as_record_mut();
 
                 stmt::visit::for_each_expr(filter, |filter_expr| {
-                    if let stmt::Expr::Reference(filter_ref @ stmt::ExprReference::Column { .. }) = filter_expr {
+                    if let stmt::Expr::Reference(filter_ref @ stmt::ExprReference::Column { .. }) =
+                        filter_expr
+                    {
                         let contains = returning.fields.iter().any(|e| match e {
-                            stmt::Expr::Reference(e_ref @ stmt::ExprReference::Column { .. }) => e_ref == filter_ref,
+                            stmt::Expr::Reference(e_ref @ stmt::ExprReference::Column { .. }) => {
+                                e_ref == filter_ref
+                            }
                             _ => false,
                         });
 
@@ -208,8 +212,11 @@ impl Planner<'_> {
                 .fields
                 .iter()
                 .map(|expr| match expr {
-                    stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column { .. }) => {
-                        expr_cx.resolve_expr_column(expr_column).expect_column().id
+                    stmt::Expr::Reference(expr_column) => {
+                        expr_cx
+                            .resolve_expr_reference(expr_column)
+                            .expect_column()
+                            .id
                     }
                     _ => todo!("stmt={stmt:#?}"),
                 })
@@ -223,7 +230,7 @@ impl Planner<'_> {
                 struct Columns<'a>(&'a mut Vec<stmt::Expr>);
 
                 impl eval::Convert for Columns<'_> {
-                    fn convert_expr_column(
+                    fn convert_expr_reference(
                         &mut self,
                         stmt: &stmt::ExprReference,
                     ) -> Option<stmt::Expr> {
@@ -231,7 +238,9 @@ impl Planner<'_> {
                             .0
                             .iter()
                             .position(|expr| match expr {
-                                stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Column { .. }) => expr_ref == stmt,
+                                stmt::Expr::Reference(
+                                    expr_ref @ stmt::ExprReference::Column { .. },
+                                ) => expr_ref == stmt,
                                 _ => false,
                             })
                             .unwrap();
@@ -281,7 +290,7 @@ impl Planner<'_> {
                     struct Columns<'a>(&'a mut Vec<stmt::Expr>);
 
                     impl eval::Convert for Columns<'_> {
-                        fn convert_expr_column(
+                        fn convert_expr_reference(
                             &mut self,
                             stmt: &stmt::ExprReference,
                         ) -> Option<stmt::Expr> {
@@ -289,7 +298,9 @@ impl Planner<'_> {
                                 .0
                                 .iter()
                                 .position(|expr| match expr {
-                                    stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Column { .. }) => expr_ref == stmt,
+                                    stmt::Expr::Reference(
+                                        expr_ref @ stmt::ExprReference::Column { .. },
+                                    ) => expr_ref == stmt,
                                     _ => false,
                                 })
                                 .unwrap();

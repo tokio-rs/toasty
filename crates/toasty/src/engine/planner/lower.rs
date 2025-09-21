@@ -243,7 +243,7 @@ impl LowerStatement<'_> {
         // TODO: we really shouldn't have to simplify here, but until
         // simplification includes overlapping predicate pruning, we have to do
         // this here.
-        simplify::simplify_expr(self.schema, filter);
+        simplify::simplify_expr(cx, filter);
 
         let mut operands = vec![];
 
@@ -449,13 +449,17 @@ fn is_eq_constrained(cx: &stmt::ExprContext<'_>, expr: &stmt::Expr, column: &Col
             }
 
             match (&*expr.lhs, &*expr.rhs) {
-                (Reference(lhs @ stmt::ExprReference::Column { .. }), _) => cx.resolve_expr_column(lhs).expect_column().id == column.id,
-                (_, Reference(rhs @ stmt::ExprReference::Column { .. })) => cx.resolve_expr_column(rhs).expect_column().id == column.id,
+                (Reference(lhs), _) => {
+                    cx.resolve_expr_reference(lhs).expect_column().id == column.id
+                }
+                (_, Reference(rhs)) => {
+                    cx.resolve_expr_reference(rhs).expect_column().id == column.id
+                }
                 _ => false,
             }
         }
         InList(expr) => match &*expr.expr {
-            Reference(lhs @ stmt::ExprReference::Column { .. }) => cx.resolve_expr_column(lhs).expect_column().id == column.id,
+            Reference(lhs) => cx.resolve_expr_reference(lhs).expect_column().id == column.id,
             _ => todo!("expr={:#?}", expr),
         },
         _ => todo!("expr={:#?}", expr),

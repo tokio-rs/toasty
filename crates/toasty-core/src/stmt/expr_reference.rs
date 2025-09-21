@@ -78,6 +78,10 @@ impl ExprReference {
         }
     }
 
+    pub fn is_field(&self) -> bool {
+        matches!(self, ExprReference::Field { .. })
+    }
+
     pub fn column(table: usize, column: usize) -> Self {
         ExprReference::Column {
             nesting: 0,

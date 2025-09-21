@@ -340,7 +340,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::Cast(e) => e.ty.clone(),
             Expr::Reference(expr_ref) => match self.resolve_expr_reference(expr_ref) {
                 ResolvedRef::Column(column) => column.ty.clone(),
-                ResolvedRef::Field(field) => field.ty.clone(),
+                ResolvedRef::Field(field) => field.expr_ty().clone(),
                 ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
             },
             Expr::IsNull(_) => Type::Bool,
@@ -390,6 +390,14 @@ impl<'a> ResolvedRef<'a> {
         match self {
             ResolvedRef::Column(column) => column,
             _ => panic!("Expected ResolvedRef::Column, found {:?}", self),
+        }
+    }
+
+    #[track_caller]
+    pub fn expect_field(self) -> &'a Field {
+        match self {
+            ResolvedRef::Field(field) => field,
+            _ => panic!("Expected ResolvedRef::Field, found {:?}", self),
         }
     }
 }
