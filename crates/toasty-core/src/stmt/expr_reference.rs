@@ -57,6 +57,15 @@ impl Expr {
         ExprReference::field(field).into()
     }
 
+    /// Create a reference to a field at a specified nesting level
+    pub fn ref_field(nesting: usize, field: impl Into<FieldId>) -> Self {
+        ExprReference::Field {
+            nesting,
+            index: field.into().index,
+        }
+        .into()
+    }
+
     pub fn is_field(&self) -> bool {
         matches!(self, Self::Reference(ExprReference::Field { .. }))
     }

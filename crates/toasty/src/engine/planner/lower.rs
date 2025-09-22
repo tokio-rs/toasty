@@ -1,7 +1,7 @@
 use super::{simplify, Planner};
 use toasty_core::{
     schema::{
-        app::{self, FieldId},
+        app::{self, FieldId, Model},
         db::{Column, Table},
         mapping, Schema,
     },
@@ -9,16 +9,10 @@ use toasty_core::{
 };
 
 struct LowerStatement<'a> {
-    schema: &'a Schema,
-
-    /// The model in which the statement is contextualized.
-    model: &'a app::Model,
-
-    /// The associated table for the model.
-    table: &'a Table,
-
-    /// How to map expressions between the model and table
-    mapping: &'a mapping::Model,
+    /// The context in which the statement is being lowered.
+    ///
+    /// This will always be `Model`
+    cx: stmt::ExprContext<'a>,
 }
 
 /// Substitute fields for columns
@@ -32,34 +26,31 @@ trait Input {
 }
 
 impl<'a> LowerStatement<'a> {
-    fn from_model(schema: &'a Schema, model: &'a app::Model) -> Self {
+    fn new(schema: &'a Schema) -> Self {
         LowerStatement {
-            schema,
-            model,
-            table: schema.table_for(model),
-            mapping: schema.mapping_for(model),
+            cx: stmt::ExprContext::new(schema),
         }
     }
 }
 
 impl Planner<'_> {
-    pub(crate) fn lower_stmt_delete(&self, model: &app::Model, stmt: &mut stmt::Delete) {
-        LowerStatement::from_model(self.schema, model).visit_stmt_delete_mut(stmt);
+    pub(crate) fn lower_stmt_delete(&self, stmt: &mut stmt::Delete) {
+        LowerStatement::new(self.schema).visit_stmt_delete_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 
-    pub(crate) fn lower_stmt_query(&self, model: &app::Model, stmt: &mut stmt::Query) {
-        LowerStatement::from_model(self.schema, model).visit_stmt_query_mut(stmt);
+    pub(crate) fn lower_stmt_query(&self, stmt: &mut stmt::Query) {
+        LowerStatement::new(self.schema).visit_stmt_query_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 
-    pub(crate) fn lower_stmt_insert(&self, model: &app::Model, stmt: &mut stmt::Insert) {
-        LowerStatement::from_model(self.schema, model).visit_stmt_insert_mut(stmt);
+    pub(crate) fn lower_stmt_insert(&self, stmt: &mut stmt::Insert) {
+        LowerStatement::new(self.schema).visit_stmt_insert_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 
-    pub(crate) fn lower_stmt_update(&self, model: &app::Model, stmt: &mut stmt::Update) {
-        LowerStatement::from_model(self.schema, model).visit_stmt_update_mut(stmt);
+    pub(crate) fn lower_stmt_update(&self, stmt: &mut stmt::Update) {
+        LowerStatement::new(self.schema).visit_stmt_update_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 }
@@ -69,7 +60,7 @@ impl VisitMut for LowerStatement<'_> {
         let mut assignments = stmt::Assignments::default();
 
         for index in i.keys() {
-            let field = &self.model.fields[index];
+            let field = &self.model().fields[index];
 
             if field.primary_key {
                 todo!("updating PK not supported yet");
@@ -77,12 +68,12 @@ impl VisitMut for LowerStatement<'_> {
 
             match &field.ty {
                 app::FieldTy::Primitive(_) => {
-                    let Some(field_mapping) = &self.mapping.fields[index] else {
+                    let Some(field_mapping) = &self.mapping().fields[index] else {
                         todo!()
                     };
 
-                    let mut lowered = self.mapping.model_to_table[field_mapping.lowering].clone();
-                    Substitute::new(self.model, &*i).visit_expr_mut(&mut lowered);
+                    let mut lowered = self.mapping().model_to_table[field_mapping.lowering].clone();
+                    Substitute::new(self.model(), &*i).visit_expr_mut(&mut lowered);
                     assignments.set(field_mapping.column, lowered);
                 }
                 _ => {
@@ -107,21 +98,13 @@ impl VisitMut for LowerStatement<'_> {
             }
             stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
                 assert!(*nesting == 0, "TODO: handle non-z");
-                *i = self.mapping.table_to_model[*index].clone();
+                *i = self.mapping().table_to_model[*index].clone();
 
                 self.visit_expr_mut(i);
                 return;
             }
             stmt::Expr::InList(expr) => self.lower_expr_in_list(&mut expr.expr, &mut expr.list),
             stmt::Expr::InSubquery(expr) => {
-                let sub_model = self
-                    .schema
-                    .app
-                    .model(expr.query.body.as_select().source.as_model_id());
-
-                LowerStatement::from_model(self.schema, sub_model)
-                    .visit_stmt_query_mut(&mut expr.query);
-
                 let maybe_res = self.lower_expr_binary_op(
                     stmt::BinaryOp::Eq,
                     &mut expr.expr,
@@ -142,64 +125,92 @@ impl VisitMut for LowerStatement<'_> {
         }
     }
 
-    fn visit_expr_in_subquery_mut(&mut self, i: &mut stmt::ExprInSubquery) {
-        self.visit_expr_mut(&mut i.expr);
-    }
-
-    fn visit_expr_stmt_mut(&mut self, _i: &mut stmt::ExprStmt) {}
-
     fn visit_insert_target_mut(&mut self, i: &mut stmt::InsertTarget) {
         *i = stmt::InsertTable {
-            table: self.mapping.table,
-            columns: self.mapping.columns.clone(),
+            table: self.mapping().table,
+            columns: self.mapping().columns.clone(),
         }
         .into();
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
         if let stmt::Returning::Model { .. } = *i {
-            *i = stmt::Returning::Expr(self.mapping.table_to_model.clone().into());
+            *i = stmt::Returning::Expr(self.mapping().table_to_model.clone().into());
         }
 
         stmt::visit_mut::visit_returning_mut(self, i);
     }
 
     fn visit_stmt_delete_mut(&mut self, i: &mut stmt::Delete) {
-        stmt::visit_mut::visit_stmt_delete_mut(self, i);
+        let stmt::Source::Model(source) = &i.from else {
+            panic!("unexpected state")
+        };
+
+        let mut lower = self.scope(self.cx.schema().app.model(source.model));
+        stmt::visit_mut::visit_stmt_delete_mut(&mut lower, i);
 
         assert!(i.returning.is_none(), "TODO; stmt={i:#?}");
 
-        // Apply lowering constraint
-        self.apply_lowering_filter_constraint(
-            stmt::ExprContext::new_with_target(self.schema, &i.from),
-            &mut i.filter,
-        );
+        lower.apply_lowering_filter_constraint(&mut i.filter);
     }
 
     fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert) {
+        let model_id = i.target.as_model();
+
+        let mut lower = self.scope(self.cx.schema().app.model(model_id));
+
         match &mut i.source.body {
             stmt::ExprSet::Values(values) => {
                 for row in &mut values.rows {
-                    self.lower_insert_values(row);
+                    lower.lower_insert_values(row);
                 }
             }
             _ => todo!("stmt={i:#?}"),
         }
 
-        stmt::visit_mut::visit_stmt_insert_mut(self, i);
+        stmt::visit_mut::visit_stmt_insert_mut(&mut lower, i);
     }
 
     fn visit_stmt_select_mut(&mut self, i: &mut stmt::Select) {
         stmt::visit_mut::visit_stmt_select_mut(self, i);
+        self.apply_lowering_filter_constraint(&mut i.filter);
+    }
 
-        // Apply lowering constraint
-        self.apply_lowering_filter_constraint(
-            stmt::ExprContext::new_with_target(self.schema, &i.source),
-            &mut i.filter,
-        );
+    fn visit_stmt_query_mut(&mut self, i: &mut stmt::Query) {
+        let model_id = match &i.body {
+            stmt::ExprSet::Select(select) => {
+                let stmt::Source::Model(source) = &select.source else {
+                    panic!("unexpected state")
+                };
+
+                source.model
+            }
+            stmt::ExprSet::Update(update) => {
+                let stmt::UpdateTarget::Model(model) = &update.target else {
+                    panic!("unexpected state")
+                };
+
+                *model
+            }
+            stmt::ExprSet::Values(_) => {
+                // Values is a free context
+                let mut lower = LowerStatement {
+                    cx: self.cx.scope(stmt::ExprTarget::Free),
+                };
+                stmt::visit_mut::visit_stmt_query_mut(&mut lower, i);
+                return;
+            }
+            _ => todo!("unexpected query: {i:#?}"),
+        };
+
+        let mut lower = self.scope(self.cx.schema().app.model(model_id));
+        stmt::visit_mut::visit_stmt_query_mut(&mut lower, i);
     }
 
     fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update) {
+        let model_id = i.target.as_model_id();
+        let mut lower = self.scope(self.cx.schema().app.model(model_id));
+
         // Before lowering children, convert the "Changed" returning statement
         // to an expression referencing changed fields.
 
@@ -208,12 +219,12 @@ impl VisitMut for LowerStatement<'_> {
                 let mut fields = vec![];
 
                 for i in i.assignments.keys() {
-                    let field = &self.model.fields[i];
+                    let field = &lower.model().fields[i];
 
                     assert!(field.ty.is_primitive(), "field={field:#?}");
 
                     fields.push(stmt::Expr::field(app::FieldId {
-                        model: self.model.id,
+                        model: lower.model().id,
                         index: i,
                     }));
                 }
@@ -225,30 +236,48 @@ impl VisitMut for LowerStatement<'_> {
             }
         }
 
-        stmt::visit_mut::visit_stmt_update_mut(self, i);
+        stmt::visit_mut::visit_stmt_update_mut(&mut lower, i);
     }
 
     fn visit_source_mut(&mut self, i: &mut stmt::Source) {
         debug_assert!(i.is_model());
-        *i = stmt::Source::table(self.table.id);
+        *i = stmt::Source::table(self.table().id);
     }
 
     fn visit_update_target_mut(&mut self, i: &mut stmt::UpdateTarget) {
-        *i = stmt::UpdateTarget::table(self.table.id);
+        *i = stmt::UpdateTarget::table(self.table().id);
     }
 }
 
-impl LowerStatement<'_> {
-    fn apply_lowering_filter_constraint(&self, cx: stmt::ExprContext<'_>, filter: &mut stmt::Expr) {
+impl<'a> LowerStatement<'a> {
+    fn model(&self) -> &'a Model {
+        self.cx.target_as_model().expect("expected model")
+    }
+
+    fn table(&self) -> &'a Table {
+        self.cx.schema().table_for(self.model())
+    }
+
+    fn mapping(&self) -> &mapping::Model {
+        self.cx.schema().mapping_for(self.model())
+    }
+
+    fn scope<'child>(&'child self, target: &'a Model) -> LowerStatement<'child> {
+        LowerStatement {
+            cx: self.cx.scope(target),
+        }
+    }
+
+    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Expr) {
         // TODO: we really shouldn't have to simplify here, but until
         // simplification includes overlapping predicate pruning, we have to do
         // this here.
-        simplify::simplify_expr(cx, filter);
+        simplify::simplify_expr(self.cx, filter);
 
         let mut operands = vec![];
 
-        for column in self.table.primary_key_columns() {
-            let pattern = match &self.mapping.model_to_table[column.id.index] {
+        for column in self.table().primary_key_columns() {
+            let pattern = match &self.mapping().model_to_table[column.id.index] {
                 stmt::Expr::ConcatStr(expr) => {
                     // hax
                     let stmt::Expr::Value(stmt::Value::String(a)) = &expr.exprs[0] else {
@@ -264,13 +293,16 @@ impl LowerStatement<'_> {
                 _ => continue,
             };
 
-            if is_eq_constrained(&cx, filter, column) {
+            if self.is_eq_constrained(filter, column) {
                 continue;
             }
 
-            assert_eq!(self.mapping.columns[column.id.index], column.id);
+            assert_eq!(self.mapping().columns[column.id.index], column.id);
 
-            operands.push(stmt::Expr::begins_with(cx.expr_column(column), pattern));
+            operands.push(stmt::Expr::begins_with(
+                self.cx.expr_ref_column(column),
+                pattern,
+            ));
         }
 
         if operands.is_empty() {
@@ -285,6 +317,37 @@ impl LowerStatement<'_> {
                 operands.push(expr.take());
                 *expr = stmt::ExprAnd { operands }.into();
             }
+        }
+    }
+
+    fn is_eq_constrained(&self, expr: &stmt::Expr, column: &Column) -> bool {
+        use stmt::Expr::*;
+
+        match expr {
+            And(expr) => expr.iter().any(|expr| self.is_eq_constrained(expr, column)),
+            Or(expr) => expr.iter().all(|expr| self.is_eq_constrained(expr, column)),
+            BinaryOp(expr) => {
+                if !expr.op.is_eq() {
+                    return false;
+                }
+
+                match (&*expr.lhs, &*expr.rhs) {
+                    (Reference(lhs), _) => {
+                        self.cx.resolve_expr_reference(lhs).expect_column().id == column.id
+                    }
+                    (_, Reference(rhs)) => {
+                        self.cx.resolve_expr_reference(rhs).expect_column().id == column.id
+                    }
+                    _ => false,
+                }
+            }
+            InList(expr) => match &*expr.expr {
+                Reference(lhs) => {
+                    self.cx.resolve_expr_reference(lhs).expect_column().id == column.id
+                }
+                _ => todo!("expr={:#?}", expr),
+            },
+            _ => todo!("expr={:#?}", expr),
         }
     }
 
@@ -394,8 +457,8 @@ impl LowerStatement<'_> {
     }
 
     fn lower_insert_values(&self, expr: &mut stmt::Expr) {
-        let mut lowered = self.mapping.model_to_table.clone();
-        Substitute::new(self.model, &mut *expr).visit_expr_record_mut(&mut lowered);
+        let mut lowered = self.mapping().model_to_table.clone();
+        Substitute::new(self.model(), &mut *expr).visit_expr_record_mut(&mut lowered);
         *expr = lowered.into();
     }
 
@@ -434,35 +497,6 @@ impl LowerStatement<'_> {
             }
             _ => todo!("{value:#?}"),
         }
-    }
-}
-
-fn is_eq_constrained(cx: &stmt::ExprContext<'_>, expr: &stmt::Expr, column: &Column) -> bool {
-    use stmt::Expr::*;
-
-    match expr {
-        And(expr) => expr.iter().any(|expr| is_eq_constrained(cx, expr, column)),
-        Or(expr) => expr.iter().all(|expr| is_eq_constrained(cx, expr, column)),
-        BinaryOp(expr) => {
-            if !expr.op.is_eq() {
-                return false;
-            }
-
-            match (&*expr.lhs, &*expr.rhs) {
-                (Reference(lhs), _) => {
-                    cx.resolve_expr_reference(lhs).expect_column().id == column.id
-                }
-                (_, Reference(rhs)) => {
-                    cx.resolve_expr_reference(rhs).expect_column().id == column.id
-                }
-                _ => false,
-            }
-        }
-        InList(expr) => match &*expr.expr {
-            Reference(lhs) => cx.resolve_expr_reference(lhs).expect_column().id == column.id,
-            _ => todo!("expr={:#?}", expr),
-        },
-        _ => todo!("expr={:#?}", expr),
     }
 }
 

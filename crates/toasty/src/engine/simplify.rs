@@ -22,7 +22,7 @@ use toasty_core::{
         app::{Field, FieldId, Model, ModelId},
         *,
     },
-    stmt::{self, Expr, Node, VisitMut},
+    stmt::{self, Expr, IntoExprTarget, Node, VisitMut},
 };
 
 pub(crate) struct Simplify<'a> {
@@ -223,7 +223,7 @@ impl<'a> Simplify<'a> {
     /// targeting the provided relation.
     pub(crate) fn scope<'scope>(
         &'scope self,
-        target: impl Into<stmt::ExprTarget<'scope>>,
+        target: impl IntoExprTarget<'scope>,
     ) -> Simplify<'scope> {
         Simplify {
             cx: self.cx.scope(target),

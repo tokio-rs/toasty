@@ -92,7 +92,7 @@ impl Planner<'_> {
             self.plan_subqueries(&mut stmt)?;
         }
 
-        self.lower_stmt_update(model, &mut stmt);
+        self.lower_stmt_update(&mut stmt);
 
         // If the statement `Returning` is constant (i.e. does not depend on the
         // database evaluating the statement), then extract it here.

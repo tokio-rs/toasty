@@ -36,7 +36,7 @@ impl Planner<'_> {
         }
 
         if self.capability.sql {
-            self.plan_delete_sql(model, stmt);
+            self.plan_delete_sql(stmt);
         } else {
             self.plan_delete_kv(model, stmt)?;
         }
@@ -44,8 +44,8 @@ impl Planner<'_> {
         Ok(())
     }
 
-    fn plan_delete_sql(&mut self, model: &app::Model, mut stmt: stmt::Delete) {
-        self.lower_stmt_delete(model, &mut stmt);
+    fn plan_delete_sql(&mut self, mut stmt: stmt::Delete) {
+        self.lower_stmt_delete(&mut stmt);
 
         self.push_action(plan::ExecStatement {
             output: None,
@@ -61,7 +61,7 @@ impl Planner<'_> {
         // Subqueries are planned before lowering
         let input_sources = self.plan_subqueries(&mut stmt)?;
 
-        self.lower_stmt_delete(model, &mut stmt);
+        self.lower_stmt_delete(&mut stmt);
 
         let input = if input_sources.is_empty() {
             None
