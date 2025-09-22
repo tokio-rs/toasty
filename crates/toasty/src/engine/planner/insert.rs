@@ -25,7 +25,7 @@ impl Planner<'_> {
         // scope, check constraints, ...)
         self.preprocess_insert_values(model, &mut stmt)?;
 
-        self.lower_stmt_insert(model, &mut stmt);
+        self.lower_stmt_insert(&mut stmt);
 
         // If the statement `Returning` is constant (i.e. does not depend on the
         // database evaluating the statement), then extract it here.

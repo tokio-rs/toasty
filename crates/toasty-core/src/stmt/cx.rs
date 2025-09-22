@@ -82,8 +82,20 @@ pub enum ExprTarget<'a> {
 }
 
 pub trait Resolve {
+    fn table_for_model(&self, model: &Model) -> Option<&Table>;
+
+    /// Returns a reference to the application Model with the specified ID.
+    ///
+    /// Used during high-level query building to access model metadata such as
+    /// field definitions, relationships, and validation rules. Returns None if
+    /// the model ID is not found in the application schema.
     fn model(&self, id: ModelId) -> Option<&Model>;
 
+    /// Returns a reference to the database Table with the specified ID.
+    ///
+    /// Used during SQL generation and query execution to access table metadata
+    /// including column definitions, constraints, and indexes. Returns None if
+    /// the table ID is not found in the database schema.
     fn table(&self, id: TableId) -> Option<&Table>;
 }
 
@@ -136,16 +148,20 @@ impl<'a> ExprContext<'a, Schema> {
         Some(self.schema.app.model(model_id))
     }
 
-    pub fn expr_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
+    pub fn expr_ref_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
         let column_id = column_id.into();
 
         match self.target {
             ExprTarget::Free => {
                 panic!("Cannot create ExprColumn in free context - no table target available")
             }
-            ExprTarget::Model(_) => panic!(
-                "Cannot create ExprColumn for model target - use resolve_expr_reference instead"
-            ),
+            ExprTarget::Model(model) => {
+                let Some(table) = self.schema.table_for_model(model) else {
+                    panic!("Failed to find database table for model '{:?}' - model may not be mapped to a table", model.name)
+                };
+
+                assert_eq!(table.id, column_id.table);
+            }
             ExprTarget::Table(table) => assert_eq!(table.id, column_id.table),
             ExprTarget::Insert(_) => todo!(),
             ExprTarget::Source(source) => match source {
@@ -210,9 +226,14 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             ExprTarget::Free => todo!("cannot resolve column in free context"),
             ExprTarget::Model(model) => match expr_reference {
                 ExprReference::Field { index, .. } => ResolvedRef::Field(&model.fields[*index]),
-                ExprReference::Column { .. } => panic!(
-                    "Cannot resolve ExprReference::Column in Model target context - use ExprReference::Field instead"
-                ),
+                ExprReference::Column { table, column, ..  } => {
+                    assert_eq!(*table, 0, "TODO: is this true?");
+
+                    let Some(table) = self.schema.table_for_model(model) else {
+                        panic!("Failed to find database table for model '{:?}' - model may not be mapped to a table", model.name)
+                    };
+                    ResolvedRef::Column(&table.columns[*column])
+                }
             },
             ExprTarget::Table(table) => match expr_reference {
                 ExprReference::Field {.. } => panic!(
@@ -410,6 +431,10 @@ impl Resolve for Schema {
     fn table(&self, id: TableId) -> Option<&Table> {
         Some(self.db.table(id))
     }
+
+    fn table_for_model(&self, model: &Model) -> Option<&Table> {
+        Some(self.table_for(model))
+    }
 }
 
 impl Resolve for db::Schema {
@@ -420,6 +445,10 @@ impl Resolve for db::Schema {
     fn table(&self, id: TableId) -> Option<&Table> {
         Some(db::Schema::table(self, id))
     }
+
+    fn table_for_model(&self, _model: &Model) -> Option<&Table> {
+        None
+    }
 }
 
 impl Resolve for () {
@@ -427,7 +456,11 @@ impl Resolve for () {
         None
     }
 
-    fn table(&self, _: TableId) -> Option<&Table> {
+    fn table(&self, _id: TableId) -> Option<&Table> {
+        None
+    }
+
+    fn table_for_model(&self, _model: &Model) -> Option<&Table> {
         None
     }
 }

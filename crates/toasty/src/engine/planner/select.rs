@@ -35,7 +35,7 @@ impl Planner<'_> {
             _ => todo!(),
         };
 
-        self.lower_stmt_query(model, &mut stmt);
+        self.lower_stmt_query(&mut stmt);
 
         let select = stmt.body.as_select_mut();
 
