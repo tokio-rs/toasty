@@ -138,7 +138,7 @@ impl<'a, T> ExprContext<'a, T> {
         ExprContext {
             schema: self.schema,
             parent: Some(self),
-            target: target.into(),
+            target,
         }
     }
 }
