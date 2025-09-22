@@ -36,7 +36,14 @@ impl Simplify<'_> {
             }
             (stmt::Expr::Reference(expr_reference), other)
             | (other, stmt::Expr::Reference(expr_reference)) => {
-                let field = self.cx.resolve_expr_reference(expr_reference);
+                if !expr_reference.is_field() {
+                    return None;
+                }
+
+                let field = self
+                    .cx
+                    .resolve_expr_reference(expr_reference)
+                    .expect_field();
 
                 match &field.ty {
                     FieldTy::Primitive(_) => None,

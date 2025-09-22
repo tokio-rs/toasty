@@ -50,7 +50,7 @@ impl Simplify<'_> {
                     stmt::Expr::Reference(expr_ref) => expr_ref,
                     _ => return None,
                 };
-                let lhs_field = cx.resolve_expr_reference(expr_reference);
+                let lhs_field = cx.resolve_expr_reference(expr_reference).expect_field();
 
                 if *key_field == lhs_field.id {
                     if let stmt::Expr::Value(value) = &*expr_binary_op.rhs {

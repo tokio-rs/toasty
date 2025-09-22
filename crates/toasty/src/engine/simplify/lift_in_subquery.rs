@@ -24,7 +24,10 @@ impl Simplify<'_> {
             stmt::Expr::Project(_) => {
                 todo!()
             }
-            stmt::Expr::Reference(expr_reference) => self.cx.resolve_expr_reference(expr_reference),
+            stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) => self
+                .cx
+                .resolve_expr_reference(expr_reference)
+                .expect_field(),
             _ => {
                 return None;
             }
@@ -173,7 +176,11 @@ impl Visit for LiftBelongsTo<'_> {
             | (other, stmt::Expr::Reference(expr_reference)) => {
                 assert!(i.op.is_eq());
 
-                let field = self.simplify.cx.resolve_expr_reference(expr_reference);
+                let field = self
+                    .simplify
+                    .cx
+                    .resolve_expr_reference(expr_reference)
+                    .expect_field();
 
                 self.lift_fk_constraint(field.id, other);
             }

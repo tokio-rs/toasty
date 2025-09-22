@@ -327,8 +327,8 @@ fn ddb_expression(
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
-        stmt::Expr::Column(expr_column) => {
-            let column = cx.resolve_expr_column(expr_column).expect_column();
+        stmt::Expr::Reference(expr_reference) => {
+            let column = cx.resolve_expr_reference(expr_reference).expect_column();
             attrs.column(column).to_string()
         }
         stmt::Expr::Value(val) => attrs.value(val),

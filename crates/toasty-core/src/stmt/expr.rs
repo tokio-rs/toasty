@@ -1,8 +1,8 @@
 use super::{
     expr_reference::ExprReference, substitute, visit_mut, Entry, EntryMut, EntryPath, ExprAnd,
-    ExprArg, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc,
-    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprOr, ExprPattern,
-    ExprProject, ExprRecord, ExprStmt, ExprTy, Node, Projection, Type, Value, Visit, VisitMut,
+    ExprArg, ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc, ExprInList,
+    ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject,
+    ExprRecord, ExprStmt, ExprTy, Node, Projection, Type, Value, Visit, VisitMut,
 };
 use std::fmt;
 
@@ -19,9 +19,6 @@ pub enum Expr {
 
     /// Cast an expression to a different type
     Cast(ExprCast),
-
-    /// References a column from a table in the statement
-    Column(ExprColumn),
 
     /// Concat multiple expressions together
     /// TODO: name this something different?
@@ -314,7 +311,6 @@ impl fmt::Debug for Expr {
             Self::Arg(e) => e.fmt(f),
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),
-            Self::Column(e) => e.fmt(f),
             Self::Concat(e) => e.fmt(f),
             Self::ConcatStr(e) => e.fmt(f),
             Self::Enum(e) => e.fmt(f),

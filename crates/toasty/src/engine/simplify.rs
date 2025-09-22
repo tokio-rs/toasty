@@ -34,8 +34,8 @@ pub(crate) fn simplify_stmt<T: Node>(schema: &Schema, stmt: &mut T) {
 }
 
 // TODO: get rid of this?
-pub(crate) fn simplify_expr(schema: &Schema, expr: &mut stmt::Expr) {
-    Simplify::new(schema).visit_expr_mut(expr);
+pub(crate) fn simplify_expr(cx: stmt::ExprContext<'_>, expr: &mut stmt::Expr) {
+    Simplify { cx }.visit_expr_mut(expr);
 }
 
 impl VisitMut for Simplify<'_> {

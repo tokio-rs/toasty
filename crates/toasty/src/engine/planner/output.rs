@@ -152,7 +152,7 @@ impl Partitioner {
                 ConstStmt => Eval(stmt::Expr::cast((*expr.expr).clone(), expr.ty.clone())),
                 Eval(eval) => Eval(stmt::Expr::cast(eval, expr.ty.clone())),
             },
-            stmt::Expr::Column(_) => Stmt,
+            stmt::Expr::Reference(stmt::ExprReference::Column { .. }) => Stmt,
             stmt::Expr::Project(expr) => match self.partition_expr(cx, &expr.base) {
                 Stmt => {
                     let ty = cx.infer_expr_ty(&expr.base, &[]);

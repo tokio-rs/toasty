@@ -3,7 +3,7 @@ use tests::{prelude::*, stmt::Any};
 use toasty::stmt::Id;
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement, Value},
+    stmt::{BinaryOp, Expr, ExprReference, ExprSet, Source, Statement, Value},
 };
 
 async fn basic_crud(test: &mut DbTest) {
@@ -82,7 +82,7 @@ async fn basic_crud(test: &mut DbTest) {
                         ..
                     }),
                     filter: Expr::BinaryOp(_ {
-                        *lhs: Expr::Column(ExprColumn {
+                        *lhs: Expr::Reference(ExprReference::Column {
                             nesting: 0,
                             table: 0,
                             column: user_id_column_index,
@@ -131,7 +131,7 @@ async fn basic_crud(test: &mut DbTest) {
                 target: toasty_core::stmt::UpdateTarget::Table(user_table_id),
                 assignments: #{ 2: _ { expr: 31, .. }},
                 filter: Some(Expr::BinaryOp(_ {
-                    *lhs: Expr::Column(ExprColumn {
+                    *lhs: Expr::Reference(ExprReference::Column {
                         nesting: 0,
                         table: 0,
                         column: user_id_column_index,
@@ -183,7 +183,7 @@ async fn basic_crud(test: &mut DbTest) {
                     ..
                 }),
                 filter: Expr::BinaryOp(_ {
-                    *lhs: Expr::Column(ExprColumn {
+                    *lhs: Expr::Reference(ExprReference::Column {
                         nesting: 0,
                         table: 0,
                         column: user_id_column_index,
