@@ -9,15 +9,17 @@ impl Planner<'_> {
         let stmt = stmt::Statement::Query(stmt);
         println!("stmt={stmt:#?}");
 
-        let mut stmts = HashMap::new();
-        stmts.insert(StmtId::new(&stmt), StatementState::new());
+        let root_id = StmtId::new(&stmt);
 
         let mut state = State {
-            stmts,
+            stmts: HashMap::new(),
             scopes: vec![ScopeState {
                 stmt_id: StmtId::new(&stmt),
             }],
         };
+        state.stmts.insert(root_id, StatementState::new());
+
+        // Map the statement
         Walker {
             state: &mut state,
             scope: 0,
@@ -25,13 +27,30 @@ impl Planner<'_> {
         .visit_stmt(&stmt);
 
         if state.stmts.len() > 1 {
-            todo!("state={state:#?}");
+            // Build the execution plan...
+
+            todo!("root={root_id:#?}; state={state:#?}");
         }
 
         let stmt::Statement::Query(stmt) = stmt else {
             todo!()
         };
         stmt
+    }
+}
+
+#[derive(Debug)]
+struct Plan {
+    /// Statements to execute
+    stmts: Vec<stmt::Statement>,
+
+    /// Mapped statement
+    state: State,
+}
+
+impl Plan {
+    fn traverse(&mut self, stmt_id: StmtId) {
+        todo!()
     }
 }
 
@@ -52,10 +71,13 @@ struct StatementState {
     subs: HashSet<StmtId>,
 
     /// Maps reference expressions in the statement to other statements.
-    input: HashMap<ExprId, StmtId>,
+    input: HashMap<ExprId, Link>,
 
     /// Maps expressions in the statement's returning clause to the statements that depend on the output.
-    output: HashMap<ExprId, StmtId>,
+    output: HashMap<ExprId, Link>,
+
+    /// Other points where the source of the table is referenced
+    back_refs: HashMap<ColumnRef, BackRef>,
 }
 
 #[derive(Debug)]
@@ -63,6 +85,24 @@ struct ScopeState {
     /// Identifier of the statement in the partitioner state.
     stmt_id: StmtId,
 }
+
+#[derive(Debug)]
+struct Link {
+    stmt: StmtId,
+    kind: LinkKind,
+}
+
+#[derive(Debug)]
+enum LinkKind {
+    /// The link references the statements returning clause
+    Returning,
+
+    /// The link references a table in the source
+    Table { table: usize, column: usize },
+}
+
+#[derive(Debug)]
+struct BackRef {}
 
 struct Walker<'a> {
     /// Partitioning state
@@ -76,12 +116,24 @@ struct StmtId(usize);
 #[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
 struct ExprId(usize);
 
+/// References a column from one of the tables in the statement.
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+struct ColumnRef {
+    table: usize,
+    column: usize,
+}
+
 impl<'a> visit::Visit for Walker<'a> {
     fn visit_expr(&mut self, i: &stmt::Expr) {
         match i {
             stmt::Expr::Reference(expr_reference) => {
                 // At this point, the query should have been fully lowered
-                let stmt::ExprReference::Column { nesting, .. } = expr_reference else {
+                let stmt::ExprReference::Column {
+                    nesting,
+                    table,
+                    column,
+                } = expr_reference
+                else {
                     panic!("unexpected state: statement not lowered")
                 };
 
@@ -90,9 +142,22 @@ impl<'a> visit::Visit for Walker<'a> {
                     let stmt_id = self.stmt_id();
                     let target_id = self.state.scopes[self.scope - *nesting].stmt_id;
 
-                    self.stmt(stmt_id)
-                        .input
-                        .insert(ExprId::from_expr(i), target_id);
+                    self.stmt(stmt_id).input.insert(
+                        ExprId::from_expr(i),
+                        Link {
+                            stmt: target_id,
+                            kind: LinkKind::Table {
+                                table: *table,
+                                column: *column,
+                            },
+                        },
+                    );
+
+                    let column_ref = ColumnRef::from_expr_reference(expr_reference);
+
+                    self.stmt(target_id)
+                        .back_refs
+                        .insert(column_ref, BackRef::new());
                 }
             }
             stmt::Expr::Stmt(expr_stmt) => {
@@ -104,7 +169,13 @@ impl<'a> visit::Visit for Walker<'a> {
                 let mut stmt_state = StatementState::new();
 
                 if let Some(expr_id) = stmt_expr_id(&*expr_stmt.stmt) {
-                    stmt_state.output.insert(expr_id, self.stmt_id());
+                    stmt_state.output.insert(
+                        expr_id,
+                        Link {
+                            stmt: self.stmt_id(),
+                            kind: LinkKind::Returning,
+                        },
+                    );
                 }
 
                 self.state.stmts.insert(stmt_id, stmt_state);
@@ -135,7 +206,13 @@ impl<'a> Walker<'a> {
                 .insert(stmt_id);
         }
 
-        self.curr_stmt().input.insert(expr_id, stmt_id);
+        self.curr_stmt().input.insert(
+            expr_id,
+            Link {
+                stmt: stmt_id,
+                kind: LinkKind::Returning,
+            },
+        );
 
         self.scope(stmt_id)
     }
@@ -172,7 +249,14 @@ impl StatementState {
             subs: HashSet::new(),
             input: HashMap::new(),
             output: HashMap::new(),
+            back_refs: HashMap::new(),
         }
+    }
+}
+
+impl BackRef {
+    fn new() -> BackRef {
+        BackRef {}
     }
 }
 
@@ -196,6 +280,18 @@ impl ExprId {
             panic!()
         };
         ExprId::from_expr(expr)
+    }
+}
+
+impl ColumnRef {
+    fn from_expr_reference(expr_reference: &ExprReference) -> ColumnRef {
+        let ExprReference::Column { table, column, .. } = expr_reference else {
+            panic!()
+        };
+        ColumnRef {
+            table: *table,
+            column: *column,
+        }
     }
 }
 
