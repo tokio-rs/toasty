@@ -5,6 +5,45 @@ use toasty_core::{
 };
 
 impl Simplify<'_> {
+    pub(super) fn simplify_expr_eq_operand(&mut self, operand: &mut stmt::Expr) {
+        match operand {
+            stmt::Expr::Reference(expr_reference) if expr_reference.is_model() => {
+                let model = self
+                    .cx
+                    .resolve_expr_reference(expr_reference)
+                    .expect_model();
+
+                let [pk_field] = &model.primary_key.fields[..] else {
+                    todo!("handle composite keys");
+                };
+
+                *operand = stmt::Expr::ref_field(expr_reference.nesting(), pk_field);
+            }
+            stmt::Expr::Reference(expr_reference) if expr_reference.is_field() => {
+                let field = self
+                    .cx
+                    .resolve_expr_reference(expr_reference)
+                    .expect_field();
+
+                match &field.ty {
+                    FieldTy::Primitive(_) => {}
+                    FieldTy::HasMany(_) | FieldTy::HasOne(_) => todo!(),
+                    FieldTy::BelongsTo(rel) => {
+                        let [fk_field] = &rel.foreign_key.fields[..] else {
+                            todo!("handle composite keys");
+                        };
+
+                        let stmt::ExprReference::Field { index, .. } = expr_reference else {
+                            panic!()
+                        };
+                        *index = fk_field.source.index;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Recursively walk a binary expression in parallel
     pub(super) fn simplify_expr_binary_op(
         &mut self,
@@ -12,6 +51,11 @@ impl Simplify<'_> {
         lhs: &mut stmt::Expr,
         rhs: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
+        if op.is_eq() || op.is_ne() {
+            self.simplify_expr_eq_operand(lhs);
+            self.simplify_expr_eq_operand(rhs);
+        }
+
         match (&mut *lhs, &mut *rhs) {
             (Expr::Cast(cast), Expr::Value(val)) if cast.ty.is_id() => {
                 *lhs = cast.expr.take();
@@ -33,54 +77,6 @@ impl Simplify<'_> {
                 };
 
                 Some(self.rewrite_root_path_expr(model, other.take()))
-            }
-            (stmt::Expr::Reference(expr_reference), other)
-            | (other, stmt::Expr::Reference(expr_reference)) => {
-                if !expr_reference.is_field() {
-                    return None;
-                }
-
-                let field = self
-                    .cx
-                    .resolve_expr_reference(expr_reference)
-                    .expect_field();
-
-                match &field.ty {
-                    FieldTy::Primitive(_) => None,
-                    // TODO: Do anything here?
-                    FieldTy::HasMany(_) | FieldTy::HasOne(_) => None,
-                    FieldTy::BelongsTo(rel) => match op {
-                        stmt::BinaryOp::Ne => {
-                            let [fk_field, ..] = &rel.foreign_key.fields[..] else {
-                                todo!()
-                            };
-
-                            assert!(other.is_value_null());
-
-                            // Update the field reference to point to the foreign key field
-                            *expr_reference = stmt::ExprReference::field(fk_field.source);
-
-                            None
-                        }
-                        stmt::BinaryOp::Eq => {
-                            let [fk_field] = &rel.foreign_key.fields[..] else {
-                                todo!()
-                            };
-
-                            // Update the field reference to point to the foreign key field
-                            *expr_reference = stmt::ExprReference::field(fk_field.source);
-
-                            *other = match other.take() {
-                                stmt::Expr::Record(_) => todo!(),
-                                stmt::Expr::Stmt(stmt) => todo!("stmt={stmt:#?}"),
-                                other => other,
-                            };
-
-                            None
-                        }
-                        _ => todo!("op = {:#?}; lhs={:#?}; rhs={:#?}", op, lhs, rhs),
-                    },
-                }
             }
             _ => {
                 // For now, just make sure there are no relations in the expression

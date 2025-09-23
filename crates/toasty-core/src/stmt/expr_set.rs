@@ -1,7 +1,9 @@
+use std::fmt;
+
 use super::{substitute, Expr, ExprSetOp, Select, SourceModel, Update, Values};
 use crate::schema::db::TableId;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum ExprSet {
     /// A select query, possibly with a filter.
     Select(Box<Select>),
@@ -67,6 +69,17 @@ impl ExprSet {
             Self::SetOp(expr) => expr.substitute_ref(input),
             Self::Update(_) => todo!(),
             Self::Values(expr) => expr.substitute_ref(input),
+        }
+    }
+}
+
+impl fmt::Debug for ExprSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Select(e) => e.fmt(f),
+            Self::SetOp(e) => e.fmt(f),
+            Self::Update(e) => e.fmt(f),
+            Self::Values(e) => e.fmt(f),
         }
     }
 }

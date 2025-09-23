@@ -39,9 +39,12 @@ impl ToSql for &stmt::Expr {
                         ResolvedRef::Cte { .. } => {
                             fmt!(cx, f, "tbl_" depth "_" table ".col_" column)
                         }
-                        ResolvedRef::Field(field) => panic!(
-                            "Field references not yet implemented in SQL serializer: {field:?}"
-                        ),
+                        ResolvedRef::Model(model) => {
+                            panic!("Model references cannot be serialized to SQL; model={model:?}")
+                        }
+                        ResolvedRef::Field(field) => {
+                            panic!("Field references cannot be serialized to SQL; field={field:?}")
+                        }
                     }
                 } else {
                     let column = cx.resolve_expr_reference(expr_reference).expect_column();

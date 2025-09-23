@@ -37,6 +37,8 @@ impl Planner<'_> {
 
         self.lower_stmt_query(&mut stmt);
 
+        let mut stmt = self.partition(stmt);
+
         let select = stmt.body.as_select_mut();
 
         // Compute the return type

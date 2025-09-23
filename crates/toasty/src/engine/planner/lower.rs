@@ -1,7 +1,9 @@
+use crate::engine::simplify::Simplify;
+
 use super::{simplify, Planner};
 use toasty_core::{
     schema::{
-        app::{self, FieldId, Model},
+        app::{self, FieldId, FieldTy, Model},
         db::{Column, Table},
         mapping, Schema,
     },
@@ -97,10 +99,14 @@ impl VisitMut for LowerStatement<'_> {
                 self.lower_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
             stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
-                assert!(*nesting == 0, "TODO: handle non-z");
-                *i = self.mapping().table_to_model[*index].clone();
+                let model = self.cx.target_at(*nesting).expect_model();
+                let mapping = self.mapping_for(model);
 
+                *i = mapping
+                    .table_to_model
+                    .lower_expr_reference(*nesting, *index);
                 self.visit_expr_mut(i);
+
                 return;
             }
             stmt::Expr::InList(expr) => self.lower_expr_in_list(&mut expr.expr, &mut expr.list),
@@ -134,8 +140,18 @@ impl VisitMut for LowerStatement<'_> {
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
-        if let stmt::Returning::Model { .. } = *i {
-            *i = stmt::Returning::Expr(self.mapping().table_to_model.clone().into());
+        if let stmt::Returning::Model { include } = i {
+            // Capture the include clause as we will be using it to generate
+            // inclusion statements.
+            let include = std::mem::take(include);
+
+            let mut returning = self.mapping().table_to_model.lower_returning_model();
+
+            for path in &include {
+                self.build_include_subquery(&mut returning, path);
+            }
+
+            *i = stmt::Returning::Expr(returning);
         }
 
         stmt::visit_mut::visit_returning_mut(self, i);
@@ -180,7 +196,7 @@ impl VisitMut for LowerStatement<'_> {
         let model_id = match &i.body {
             stmt::ExprSet::Select(select) => {
                 let stmt::Source::Model(source) = &select.source else {
-                    panic!("unexpected state")
+                    panic!("unexpected state; {i:#?}")
                 };
 
                 source.model
@@ -260,6 +276,10 @@ impl<'a> LowerStatement<'a> {
 
     fn mapping(&self) -> &mapping::Model {
         self.cx.schema().mapping_for(self.model())
+    }
+
+    fn mapping_for(&self, model: &Model) -> &mapping::Model {
+        self.cx.schema().mapping_for(model)
     }
 
     fn scope<'child>(&'child self, target: &'a Model) -> LowerStatement<'child> {
@@ -497,6 +517,34 @@ impl<'a> LowerStatement<'a> {
             }
             _ => todo!("{value:#?}"),
         }
+    }
+
+    fn build_include_subquery(&mut self, returning: &mut stmt::Expr, path: &stmt::Path) {
+        let [field_index] = &path.projection[..] else {
+            todo!("Multi-step include paths not yet supported")
+        };
+
+        let field = &self.model().fields[*field_index];
+
+        let mut stmt = match &field.ty {
+            FieldTy::HasMany(rel) => stmt::Query::filter(
+                rel.target,
+                stmt::Expr::eq(stmt::Expr::ref_model(1), stmt::Expr::field(rel.pair)),
+            ),
+            // To handle single relations, we need a new query modifier that
+            // returns a single record and not a list. This matters for the type
+            // system.
+            FieldTy::BelongsTo(rel) => todo!(),
+            FieldTy::HasOne(rel) => todo!(),
+            _ => todo!(),
+        };
+
+        // Simplify the new stmt to handle relations.
+        Simplify::with_context(self.cx).visit_stmt_query_mut(&mut stmt);
+
+        returning
+            .entry_mut(*field_index)
+            .insert(stmt::Expr::stmt(stmt));
     }
 }
 
