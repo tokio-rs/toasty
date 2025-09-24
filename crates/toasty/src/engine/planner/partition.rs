@@ -1,35 +1,33 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use toasty_core::stmt::{self, visit, ExprReference, Visit};
+use indexmap::IndexMap;
+use toasty_core::stmt::{self, visit_mut, ExprReference, VisitMut};
 
 use crate::engine::planner::Planner;
 
 impl Planner<'_> {
     pub(crate) fn partition(&self, stmt: stmt::Query) -> stmt::Query {
-        let stmt = stmt::Statement::Query(stmt);
+        let mut stmt = stmt::Statement::Query(stmt);
         println!("stmt={stmt:#?}");
 
-        let root_id = StmtId::new(&stmt);
-
         let mut state = State {
-            stmts: HashMap::new(),
-            scopes: vec![ScopeState {
-                stmt_id: StmtId::new(&stmt),
-            }],
+            stmts: vec![StatementState::new()],
+            edges: HashMap::new(),
+            scopes: vec![ScopeState { stmt_id: StmtId(0) }],
         };
-        state.stmts.insert(root_id, StatementState::new());
 
         // Map the statement
         Walker {
             state: &mut state,
             scope: 0,
         }
-        .visit_stmt(&stmt);
+        .visit_stmt_mut(&mut stmt);
 
         if state.stmts.len() > 1 {
+            state.stmts[0].stmt = Some(Box::new(stmt));
             // Build the execution plan...
 
-            todo!("root={root_id:#?}; state={state:#?}");
+            todo!("state={state:#?}");
         }
 
         let stmt::Statement::Query(stmt) = stmt else {
@@ -48,8 +46,29 @@ struct Plan {
     state: State,
 }
 
+/// What do I want to do here?
+///
+/// * Walk through the statement graph and identify cycles.
+///     * Walk through *inputs*
+///     * We need to flag **edges** as visited as well.
+/// * For each node
+///     * Flag node as visited
+///     * Visit edge, mark edge as visited.
+///     * If target is visited, we have a cycle break it.
+///         * Split statement
+///             * Keep all visited edges on old statement
+///             * Move current edge + all unvisited edges to new statement
+///     * If unvisited, recurse.
+///
+/// * We actually want to treat stmt returning as some sort of hash set so we
+///   can easily modify it to add / remove items to satisfy the edges...
 impl Plan {
-    fn traverse(&mut self, stmt_id: StmtId) {
+    fn traverse(&mut self, root: StmtId) {
+        let mut deps = vec![];
+        self.traverse2(&mut deps, root);
+    }
+
+    fn traverse2(&mut self, deps: &mut Vec<StmtId>, curr: StmtId) {
         todo!()
     }
 }
@@ -58,7 +77,11 @@ impl Plan {
 struct State {
     /// Statements to be executed by the database, though they may still be
     /// broken down into multiple sub-statements.
-    stmts: HashMap<StmtId, StatementState>,
+    stmts: Vec<StatementState>,
+
+    /// Directed edges of the dependency graph between statements. From
+    /// statements that need data to the statements that provide the data.
+    edges: HashMap<(StmtId, StmtId), Edge>,
 
     /// Scope state
     scopes: Vec<ScopeState>,
@@ -67,17 +90,27 @@ struct State {
 /// Per-statement state
 #[derive(Debug)]
 struct StatementState {
-    /// List of all sub-statements
-    subs: HashSet<StmtId>,
+    /// Populated later
+    stmt: Option<Box<stmt::Statement>>,
 
-    /// Maps reference expressions in the statement to other statements.
-    input: HashMap<ExprId, Link>,
+    /// Counts the number of inputs
+    inputs: usize,
 
-    /// Maps expressions in the statement's returning clause to the statements that depend on the output.
-    output: HashMap<ExprId, Link>,
+    /// Tracks if the node is visited in graph algorithms
+    visited: bool,
+}
 
-    /// Other points where the source of the table is referenced
-    back_refs: HashMap<ColumnRef, BackRef>,
+#[derive(Debug)]
+struct Edge {
+    /// The statement's argument position for this input
+    arg: usize,
+
+    /// The expression on the target statement's relation representing the data
+    /// that is neede.
+    expr: stmt::Expr,
+
+    /// Used when traversing the graph
+    visited: bool,
 }
 
 #[derive(Debug)]
@@ -85,24 +118,6 @@ struct ScopeState {
     /// Identifier of the statement in the partitioner state.
     stmt_id: StmtId,
 }
-
-#[derive(Debug)]
-struct Link {
-    stmt: StmtId,
-    kind: LinkKind,
-}
-
-#[derive(Debug)]
-enum LinkKind {
-    /// The link references the statements returning clause
-    Returning,
-
-    /// The link references a table in the source
-    Table { table: usize, column: usize },
-}
-
-#[derive(Debug)]
-struct BackRef {}
 
 struct Walker<'a> {
     /// Partitioning state
@@ -113,18 +128,8 @@ struct Walker<'a> {
 #[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
 struct StmtId(usize);
 
-#[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
-struct ExprId(usize);
-
-/// References a column from one of the tables in the statement.
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
-struct ColumnRef {
-    table: usize,
-    column: usize,
-}
-
-impl<'a> visit::Visit for Walker<'a> {
-    fn visit_expr(&mut self, i: &stmt::Expr) {
+impl<'a> visit_mut::VisitMut for Walker<'a> {
+    fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         match i {
             stmt::Expr::Reference(expr_reference) => {
                 // At this point, the query should have been fully lowered
@@ -138,26 +143,16 @@ impl<'a> visit::Visit for Walker<'a> {
                 };
 
                 if *nesting > 0 {
-                    println!("NESTING > 0; scope={}", self.scope);
-                    let stmt_id = self.stmt_id();
+                    let stmt_id = self.curr_stmt_id();
                     let target_id = self.state.scopes[self.scope - *nesting].stmt_id;
 
-                    self.stmt(stmt_id).input.insert(
-                        ExprId::from_expr(i),
-                        Link {
-                            stmt: target_id,
-                            kind: LinkKind::Table {
-                                table: *table,
-                                column: *column,
-                            },
-                        },
-                    );
+                    let arg_id = self.curr_stmt().new_input();
 
-                    let column_ref = ColumnRef::from_expr_reference(expr_reference);
+                    let expr = std::mem::replace(i, stmt::Expr::arg(arg_id));
 
-                    self.stmt(target_id)
-                        .back_refs
-                        .insert(column_ref, BackRef::new());
+                    self.state
+                        .edges
+                        .insert((stmt_id, target_id), Edge::new(arg_id, expr));
                 }
             }
             stmt::Expr::Stmt(expr_stmt) => {
@@ -165,56 +160,41 @@ impl<'a> visit::Visit for Walker<'a> {
                 // target database. Eventually, we will need to make this smarter.
 
                 // Create a `StatementState` to track the sub-statement
-                let stmt_id = StmtId::new(&*expr_stmt.stmt);
-                let mut stmt_state = StatementState::new();
-
-                if let Some(expr_id) = stmt_expr_id(&*expr_stmt.stmt) {
-                    stmt_state.output.insert(
-                        expr_id,
-                        Link {
-                            stmt: self.stmt_id(),
-                            kind: LinkKind::Returning,
-                        },
-                    );
-                }
-
-                self.state.stmts.insert(stmt_id, stmt_state);
-
-                let expr_id = ExprId::from_expr(i);
-
-                // Create a new scope for walking the statement
-                let mut scope = self.sub_stmt(expr_id, stmt_id);
-                visit::visit_expr_stmt(&mut scope, expr_stmt);
-
+                let stmt_id = self.curr_stmt_id();
+                let target_stmt_id = self.new_stmt();
+                let mut scope = self.scope(target_stmt_id);
+                visit_mut::visit_expr_stmt_mut(&mut scope, expr_stmt);
                 self.state.scopes.pop();
+
+                // Create a new input to receive the statement
+                let arg_id = self.curr_stmt().new_input();
+                let expr = match &mut *expr_stmt.stmt {
+                    stmt::Statement::Query(query) => match &mut query.body {
+                        stmt::ExprSet::Select(select) => match &mut select.returning {
+                            stmt::Returning::Expr(expr) => expr.take(),
+                            _ => todo!("expr_stmt={expr_stmt:#?}"),
+                        },
+                        _ => todo!("expr_stmt={expr_stmt:#?}"),
+                    },
+                    _ => todo!("expr_stmt={expr_stmt:#?}"),
+                };
+
+                self.state
+                    .edges
+                    .insert((stmt_id, target_stmt_id), Edge::new(arg_id, expr));
             }
             _ => {
-                visit::visit_expr(self, i);
+                visit_mut::visit_expr_mut(self, i);
             }
         }
     }
 }
 
 impl<'a> Walker<'a> {
-    fn sub_stmt<'child>(&'child mut self, expr_id: ExprId, stmt_id: StmtId) -> Walker<'child> {
-        for scope in &self.state.scopes {
-            self.state
-                .stmts
-                .get_mut(&scope.stmt_id)
-                .unwrap()
-                .subs
-                .insert(stmt_id);
-        }
-
-        self.curr_stmt().input.insert(
-            expr_id,
-            Link {
-                stmt: stmt_id,
-                kind: LinkKind::Returning,
-            },
-        );
-
-        self.scope(stmt_id)
+    fn new_stmt(&mut self) -> StmtId {
+        let stmt_id = StmtId(self.state.stmts.len());
+        self.state.stmts.push(StatementState::new());
+        stmt_id
     }
 
     fn scope<'child>(&'child mut self, stmt_id: StmtId) -> Walker<'child> {
@@ -227,79 +207,41 @@ impl<'a> Walker<'a> {
         }
     }
 
-    fn stmt_id(&self) -> StmtId {
+    fn curr_stmt_id(&self) -> StmtId {
         self.state.scopes[self.scope].stmt_id
     }
 
     fn curr_stmt(&mut self) -> &mut StatementState {
-        self.state
-            .stmts
-            .get_mut(&self.state.scopes[self.scope].stmt_id)
-            .unwrap()
+        &mut self.state.stmts[self.state.scopes[self.scope].stmt_id.0]
     }
 
     fn stmt(&mut self, stmt_id: StmtId) -> &mut StatementState {
-        self.state.stmts.get_mut(&stmt_id).unwrap()
+        &mut self.state.stmts[stmt_id.0]
     }
 }
 
 impl StatementState {
     fn new() -> StatementState {
         StatementState {
-            subs: HashSet::new(),
-            input: HashMap::new(),
-            output: HashMap::new(),
-            back_refs: HashMap::new(),
+            stmt: None,
+            inputs: 0,
+            visited: false,
         }
     }
-}
 
-impl BackRef {
-    fn new() -> BackRef {
-        BackRef {}
+    fn new_input(&mut self) -> usize {
+        let input_id = self.inputs;
+        self.inputs += 1;
+        input_id
     }
 }
 
-impl StmtId {
-    fn new(stmt: &stmt::Statement) -> StmtId {
-        StmtId(stmt as *const stmt::Statement as _)
-    }
-}
-
-impl ExprId {
-    fn from_expr(expr: &stmt::Expr) -> ExprId {
-        ExprId(expr as *const _ as _)
-    }
-
-    fn from_expr_set(expr_set: &stmt::ExprSet) -> ExprId {
-        ExprId(expr_set as *const _ as _)
-    }
-
-    fn from_returning(returning: &stmt::Returning) -> ExprId {
-        let stmt::Returning::Expr(expr) = returning else {
-            panic!()
-        };
-        ExprId::from_expr(expr)
-    }
-}
-
-impl ColumnRef {
-    fn from_expr_reference(expr_reference: &ExprReference) -> ColumnRef {
-        let ExprReference::Column { table, column, .. } = expr_reference else {
-            panic!()
-        };
-        ColumnRef {
-            table: *table,
-            column: *column,
+impl Edge {
+    fn new(arg: usize, expr: stmt::Expr) -> Edge {
+        Edge {
+            arg,
+            expr,
+            visited: false,
         }
-    }
-}
-
-fn stmt_expr_id(stmt: &stmt::Statement) -> Option<ExprId> {
-    match stmt {
-        stmt::Statement::Query(query) => Some(ExprId::from_expr_set(&query.body)),
-        stmt::Statement::Delete(delete) => delete.returning.as_ref().map(ExprId::from_returning),
-        stmt::Statement::Insert(insert) => insert.returning.as_ref().map(ExprId::from_returning),
-        stmt::Statement::Update(update) => update.returning.as_ref().map(ExprId::from_returning),
     }
 }
