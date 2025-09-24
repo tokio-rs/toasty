@@ -43,6 +43,7 @@ impl Type {
                 // TODO: not really correct, but we are getting rid of ID types
                 // most likely.
                 stmt::Type::Id(_) => Ok(db.default_string_type.clone()),
+                stmt::Type::Enum(_) => Ok(db.default_string_type.clone()),
                 _ => anyhow::bail!("unsupported type: {ty:?}"),
             },
         }
