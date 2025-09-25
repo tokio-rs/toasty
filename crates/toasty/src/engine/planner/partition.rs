@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 use toasty_core::stmt::{self, visit_mut, ExprReference, VisitMut};
@@ -12,7 +12,6 @@ impl Planner<'_> {
 
         let mut state = State {
             stmts: vec![StatementState::new()],
-            edges: HashMap::new(),
             scopes: vec![ScopeState { stmt_id: StmtId(0) }],
         };
 
@@ -20,6 +19,7 @@ impl Planner<'_> {
         Walker {
             state: &mut state,
             scope: 0,
+            returning: false,
         }
         .visit_stmt_mut(&mut stmt);
 
@@ -79,10 +79,6 @@ struct State {
     /// broken down into multiple sub-statements.
     stmts: Vec<StatementState>,
 
-    /// Directed edges of the dependency graph between statements. From
-    /// statements that need data to the statements that provide the data.
-    edges: HashMap<(StmtId, StmtId), Edge>,
-
     /// Scope state
     scopes: Vec<ScopeState>,
 }
@@ -93,24 +89,16 @@ struct StatementState {
     /// Populated later
     stmt: Option<Box<stmt::Statement>>,
 
-    /// Counts the number of inputs
-    inputs: usize,
+    /// Statement arguments
+    args: Vec<Arg>,
 
-    /// Tracks if the node is visited in graph algorithms
-    visited: bool,
-}
+    /// Sub-statements are statements declared within the definition of the
+    /// containing statement.
+    subs: Vec<StmtId>,
 
-#[derive(Debug)]
-struct Edge {
-    /// The statement's argument position for this input
-    arg: usize,
-
-    /// The expression on the target statement's relation representing the data
-    /// that is neede.
-    expr: stmt::Expr,
-
-    /// Used when traversing the graph
-    visited: bool,
+    /// Back-refs are expressions within sub-statements that reference the
+    /// current statemetn.
+    back_refs: HashMap<StmtId, Vec<BackRef>>,
 }
 
 #[derive(Debug)]
@@ -123,6 +111,22 @@ struct Walker<'a> {
     /// Partitioning state
     state: &'a mut State,
     scope: usize,
+    returning: bool,
+}
+
+#[derive(Debug)]
+struct BackRef {
+    /// The expression
+    expr: stmt::Expr,
+}
+
+#[derive(Debug)]
+enum Arg {
+    /// A sub-statement
+    Sub(StmtId),
+
+    /// A back-reference
+    Ref { stmt_id: StmtId, index: usize },
 }
 
 #[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
@@ -146,47 +150,52 @@ impl<'a> visit_mut::VisitMut for Walker<'a> {
                     let stmt_id = self.curr_stmt_id();
                     let target_id = self.state.scopes[self.scope - *nesting].stmt_id;
 
-                    let arg_id = self.curr_stmt().new_input();
+                    // The reference is recreated assuming it is evaluated from the target context.
+                    let expr = stmt::ExprReference::Column {
+                        nesting: 0,
+                        table: *table,
+                        column: *column,
+                    }
+                    .into();
 
-                    let expr = std::mem::replace(i, stmt::Expr::arg(arg_id));
+                    let index = self.stmt(target_id).new_back_ref(stmt_id, expr);
+                    let arg_id = self.curr_stmt().new_ref_arg(target_id, index);
 
-                    self.state
-                        .edges
-                        .insert((stmt_id, target_id), Edge::new(arg_id, expr));
+                    *i = stmt::Expr::arg(arg_id);
                 }
             }
             stmt::Expr::Stmt(expr_stmt) => {
+                assert!(self.returning);
                 // For now, we assume nested sub-statements cannot be executed on the
                 // target database. Eventually, we will need to make this smarter.
 
                 // Create a `StatementState` to track the sub-statement
-                let stmt_id = self.curr_stmt_id();
-                let target_stmt_id = self.new_stmt();
-                let mut scope = self.scope(target_stmt_id);
+                let target_id = self.new_stmt();
+                let mut scope = self.scope(target_id);
                 visit_mut::visit_expr_stmt_mut(&mut scope, expr_stmt);
                 self.state.scopes.pop();
 
                 // Create a new input to receive the statement
-                let arg_id = self.curr_stmt().new_input();
-                let expr = match &mut *expr_stmt.stmt {
-                    stmt::Statement::Query(query) => match &mut query.body {
-                        stmt::ExprSet::Select(select) => match &mut select.returning {
-                            stmt::Returning::Expr(expr) => expr.take(),
-                            _ => todo!("expr_stmt={expr_stmt:#?}"),
-                        },
-                        _ => todo!("expr_stmt={expr_stmt:#?}"),
-                    },
-                    _ => todo!("expr_stmt={expr_stmt:#?}"),
-                };
+                let arg_id = self.curr_stmt().new_sub_stmt_arg(target_id);
 
-                self.state
-                    .edges
-                    .insert((stmt_id, target_stmt_id), Edge::new(arg_id, expr));
+                // Replace the sub-statement expression with a placeholder tracking the input
+                let expr = std::mem::replace(i, stmt::Expr::arg(arg_id));
+                let stmt::Expr::Stmt(expr_stmt) = expr else {
+                    panic!()
+                };
+                self.stmt(target_id).stmt = Some(expr_stmt.stmt);
             }
             _ => {
                 visit_mut::visit_expr_mut(self, i);
             }
         }
+    }
+
+    fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
+        assert!(!self.returning);
+        self.returning = true;
+        visit_mut::visit_returning_mut(self, i);
+        self.returning = false;
     }
 }
 
@@ -204,6 +213,7 @@ impl<'a> Walker<'a> {
         Walker {
             state: self.state,
             scope,
+            returning: false,
         }
     }
 
@@ -224,24 +234,29 @@ impl StatementState {
     fn new() -> StatementState {
         StatementState {
             stmt: None,
-            inputs: 0,
-            visited: false,
+            args: vec![],
+            subs: vec![],
+            back_refs: HashMap::new(),
         }
     }
 
-    fn new_input(&mut self) -> usize {
-        let input_id = self.inputs;
-        self.inputs += 1;
-        input_id
+    fn new_back_ref(&mut self, target_id: StmtId, expr: stmt::Expr) -> usize {
+        let back_refs = self.back_refs.entry(target_id).or_default();
+        let ret = back_refs.len();
+        back_refs.push(BackRef { expr });
+        ret
     }
-}
 
-impl Edge {
-    fn new(arg: usize, expr: stmt::Expr) -> Edge {
-        Edge {
-            arg,
-            expr,
-            visited: false,
-        }
+    fn new_ref_arg(&mut self, stmt_id: StmtId, index: usize) -> usize {
+        let arg_id = self.args.len();
+        self.args.push(Arg::Ref { stmt_id, index });
+        arg_id
+    }
+
+    fn new_sub_stmt_arg(&mut self, stmt_id: StmtId) -> usize {
+        self.subs.push(stmt_id);
+        let arg_id = self.args.len();
+        self.args.push(Arg::Sub(stmt_id));
+        arg_id
     }
 }
