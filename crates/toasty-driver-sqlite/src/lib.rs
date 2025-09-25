@@ -245,6 +245,23 @@ fn value_from_param(value: &stmt::Value) -> rusqlite::types::ToSqlOutput<'_> {
     }
 }
 
+fn sqlite_enum_to_value(value: &str, _ty: &stmt::Type) -> Result<stmt::Value> {
+    let Some((variant_str, fields_json)) = value.split_once("#") else {
+        todo!("value={value:#?}");
+    };
+
+    let variant = variant_str.parse::<usize>()?;
+
+    if !fields_json.eq("\"Null\"") {
+        todo!("value={value:#?}");
+    }
+
+    Ok(stmt::Value::Enum(stmt::ValueEnum {
+        variant,
+        fields: stmt::ValueRecord::default(),
+    }))
+}
+
 fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt::Value {
     use rusqlite::types::Value as SqlValue;
 
@@ -263,7 +280,10 @@ fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt:
             stmt::Type::U64 => stmt::Value::U64(value as u64),
             _ => todo!("ty={ty:#?}"),
         },
-        Some(SqlValue::Text(value)) => stmt::Value::String(value),
+        Some(SqlValue::Text(value)) => match ty {
+            stmt::Type::Enum(_) => sqlite_enum_to_value(&value, &ty).unwrap(),
+            _ => stmt::Value::String(value),
+        },
         None => stmt::Value::Null,
         _ => todo!("value={value:#?}"),
     }

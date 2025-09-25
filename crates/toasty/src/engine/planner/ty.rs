@@ -9,6 +9,18 @@ impl Planner<'_> {
     }
     */
 
+    pub(crate) fn pk_ty_for_index(&self, index: &Index) -> stmt::Type {
+        let table = self.schema.db.table(index.id.table);
+        if table.primary_key.columns.len() == 1 {
+            table.primary_key_column(0).ty.clone()
+        } else {
+            stmt::Type::Record(table.primary_key_columns()
+                .map(|id| id.ty.clone())
+                .collect(),
+            )
+        }
+    }
+
     pub(crate) fn index_key_ty(&self, index: &Index) -> stmt::Type {
         match &index.columns[..] {
             [id] => self.schema.db.column(id.column).ty.clone(),
