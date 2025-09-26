@@ -7,6 +7,7 @@ mod key;
 mod kv;
 mod lower;
 mod output;
+mod partition;
 mod relation;
 mod select;
 mod subquery;

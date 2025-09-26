@@ -31,6 +31,40 @@ impl Expr {
             _ => false,
         }
     }
+
+    #[track_caller]
+    pub fn expect_list(&self) -> &ExprList {
+        match self {
+            Self::List(list) => list,
+            _ => panic!("expected Expr::List(..) but was {self:#?}"),
+        }
+    }
+
+    #[track_caller]
+    pub fn expect_list_mut(&mut self) -> &mut ExprList {
+        match self {
+            Self::List(list) => list,
+            _ => panic!("expected Expr::List(..) but was {self:#?}"),
+        }
+    }
+
+    #[track_caller]
+    pub fn unwrap_list(self) -> ExprList {
+        match self {
+            Self::List(list) => list,
+            _ => panic!("expected Expr::List(..) but was {self:#?}"),
+        }
+    }
+}
+
+impl ExprList {
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
 }
 
 impl From<ExprList> for Expr {

@@ -28,5 +28,35 @@ pub struct Model {
     pub model_pk_to_table: stmt::Expr,
 
     /// How to map a table record to a model record
-    pub table_to_model: stmt::ExprRecord,
+    pub table_to_model: TableToModel,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct TableToModel {
+    expr: stmt::ExprRecord,
+}
+
+impl TableToModel {
+    pub fn new(expr: stmt::ExprRecord) -> TableToModel {
+        TableToModel { expr }
+    }
+
+    pub fn lower_returning_model(&self) -> stmt::Expr {
+        self.expr.clone().into()
+    }
+
+    pub fn lower_expr_reference(&self, nesting: usize, index: usize) -> stmt::Expr {
+        let mut expr = self.expr[index].clone();
+        let n = nesting;
+
+        if n > 0 {
+            stmt::visit_mut::for_each_expr_mut(&mut expr, |expr| {
+                if let stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) = expr {
+                    *nesting = n;
+                }
+            });
+        }
+
+        expr
+    }
 }

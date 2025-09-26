@@ -1,3 +1,5 @@
+use crate::stmt::ExprExists;
+
 use super::{
     expr_reference::ExprReference, substitute, visit_mut, Entry, EntryMut, EntryPath, ExprAnd,
     ExprArg, ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc, ExprInList,
@@ -29,6 +31,10 @@ pub enum Expr {
 
     /// Return an enum value
     Enum(ExprEnum),
+
+    /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
+    /// `WHERE [ NOT ] EXISTS (SELECT ...)`.
+    Exists(ExprExists),
 
     /// Function call
     Func(ExprFunc),
@@ -314,6 +320,7 @@ impl fmt::Debug for Expr {
             Self::Concat(e) => e.fmt(f),
             Self::ConcatStr(e) => e.fmt(f),
             Self::Enum(e) => e.fmt(f),
+            Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),

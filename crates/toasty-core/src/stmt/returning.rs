@@ -1,5 +1,5 @@
 use super::{Expr, Path};
-use crate::stmt;
+use crate::stmt::{self, Value};
 
 /// TODO: rename since this is also used in `Select`?
 #[derive(Debug, Clone)]
@@ -61,6 +61,15 @@ impl Returning {
             Self::Expr(expr) => expr,
             _ => todo!("self={self:#?}"),
         }
+    }
+}
+
+impl<T> From<T> for Returning
+where
+    Value: From<T>,
+{
+    fn from(value: T) -> Self {
+        Returning::Expr(Value::from(value).into())
     }
 }
 

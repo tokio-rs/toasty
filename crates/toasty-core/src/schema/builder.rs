@@ -1,6 +1,7 @@
 mod table;
 
 use super::{app, db, mapping, Result};
+use crate::schema::mapping::TableToModel;
 use crate::schema::{ColumnId, Mapping, Schema, Table, TableId};
 use crate::{driver, stmt};
 use indexmap::IndexMap;
@@ -89,7 +90,7 @@ impl Builder {
                         .collect(),
                     model_to_table: stmt::ExprRecord::default(),
                     model_pk_to_table: stmt::Expr::default(),
-                    table_to_model: stmt::ExprRecord::default(),
+                    table_to_model: TableToModel::default(),
                 },
             );
         }
