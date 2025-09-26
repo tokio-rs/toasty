@@ -2,7 +2,7 @@
 
 use super::{
     Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
-    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull,
+    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull,
     ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
     ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
     JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
@@ -64,6 +64,10 @@ pub trait VisitMut {
 
     fn visit_expr_enum_mut(&mut self, i: &mut ExprEnum) {
         visit_expr_enum_mut(self, i);
+    }
+
+    fn visit_expr_exists_mut(&mut self, i: &mut ExprExists) {
+        visit_expr_exists_mut(self, i);
     }
 
     fn visit_expr_func_mut(&mut self, i: &mut ExprFunc) {
@@ -300,6 +304,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_enum_mut(&mut **self, i);
     }
 
+    fn visit_expr_exists_mut(&mut self, i: &mut ExprExists) {
+        VisitMut::visit_expr_exists_mut(&mut **self, i);
+    }
+
     fn visit_expr_func_mut(&mut self, i: &mut ExprFunc) {
         VisitMut::visit_expr_func_mut(&mut **self, i);
     }
@@ -526,6 +534,7 @@ where
         Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
         Expr::Concat(expr) => v.visit_expr_concat_mut(expr),
         Expr::Enum(expr) => v.visit_expr_enum_mut(expr),
+        Expr::Exists(expr) => v.visit_expr_exists_mut(expr),
         Expr::Func(expr) => v.visit_expr_func_mut(expr),
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
@@ -604,6 +613,13 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_expr_record_mut(&mut node.fields);
+}
+
+pub fn visit_expr_exists_mut<V>(v: &mut V, node: &mut ExprExists)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_stmt_query_mut(&mut node.subquery);
 }
 
 pub fn visit_expr_func_mut<V>(v: &mut V, node: &mut ExprFunc)

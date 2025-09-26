@@ -188,3 +188,9 @@ impl QueryBuilder {
         self.query
     }
 }
+
+impl From<QueryBuilder> for Query {
+    fn from(value: QueryBuilder) -> Self {
+        value.build()
+    }
+}

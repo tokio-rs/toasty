@@ -2,7 +2,7 @@
 
 use super::{
     Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
-    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull,
+    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull,
     ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
     ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
     JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
@@ -64,6 +64,10 @@ pub trait Visit {
 
     fn visit_expr_enum(&mut self, i: &ExprEnum) {
         visit_expr_enum(self, i);
+    }
+
+    fn visit_expr_exists(&mut self, i: &ExprExists) {
+        visit_expr_exists(self, i);
     }
 
     fn visit_expr_func(&mut self, i: &ExprFunc) {
@@ -300,6 +304,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_enum(&mut **self, i);
     }
 
+    fn visit_expr_exists(&mut self, i: &ExprExists) {
+        Visit::visit_expr_exists(&mut **self, i);
+    }
+
     fn visit_expr_func(&mut self, i: &ExprFunc) {
         Visit::visit_expr_func(&mut **self, i);
     }
@@ -526,10 +534,13 @@ where
         Expr::Cast(expr) => v.visit_expr_cast(expr),
         Expr::Concat(expr) => v.visit_expr_concat(expr),
         Expr::Enum(expr) => v.visit_expr_enum(expr),
+        Expr::Exists(expr) => v.visit_expr_exists(expr),
+        Expr::Func(expr) => v.visit_expr_func(expr),
         Expr::InList(expr) => v.visit_expr_in_list(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
         Expr::Key(expr) => v.visit_expr_key(expr),
+        Expr::Map(expr) => v.visit_expr_map(expr),
         Expr::Or(expr) => v.visit_expr_or(expr),
         Expr::Pattern(expr) => v.visit_expr_pattern(expr),
         Expr::Project(expr) => v.visit_expr_project(expr),
@@ -546,7 +557,6 @@ where
             }
         }
         Expr::DecodeEnum(base, ..) => v.visit_expr(base),
-        _ => todo!("{node:#?}"),
     }
 }
 
@@ -603,6 +613,13 @@ where
     V: Visit + ?Sized,
 {
     v.visit_expr_record(&node.fields);
+}
+
+pub fn visit_expr_exists<V>(v: &mut V, node: &ExprExists)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_stmt_query(&node.subquery);
 }
 
 pub fn visit_expr_func<V>(v: &mut V, node: &ExprFunc)
