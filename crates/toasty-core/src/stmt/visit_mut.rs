@@ -2,8 +2,8 @@
 
 use super::{
     Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
-    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull,
-    ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
+    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList, ExprInSubquery,
+    ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
     ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
     JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
     Source, SourceModel, SourceTable, SourceTableId, Statement, TableFactor, TableRef,
@@ -731,6 +731,7 @@ where
         ExprSet::SetOp(expr) => v.visit_expr_set_op_mut(expr),
         ExprSet::Update(expr) => v.visit_stmt_update_mut(expr),
         ExprSet::Values(expr) => v.visit_values_mut(expr),
+        ExprSet::Arg(expr) => v.visit_expr_arg_mut(expr),
     }
 }
 

@@ -276,6 +276,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                                 };
                                 ResolvedRef::Column(&table.columns[*column])
                             }
+                            TableRef::Derived { .. } => todo!(),
                             TableRef::Cte {
                                 nesting: cte_nesting,
                                 index,
@@ -481,6 +482,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a ExprSet {
             ExprSet::SetOp(_) => todo!(),
             ExprSet::Update(update) => update.into_expr_target(schema),
             ExprSet::Values(_) => ExprTarget::Free,
+            ExprSet::Arg(_) => todo!(),
         }
     }
 }

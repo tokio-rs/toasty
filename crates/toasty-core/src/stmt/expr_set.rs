@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::{substitute, Expr, ExprSetOp, Select, SourceModel, Update, Values};
-use crate::schema::db::TableId;
+use crate::{schema::db::TableId, stmt::ExprArg};
 
 #[derive(Clone)]
 pub enum ExprSet {
@@ -16,6 +16,9 @@ pub enum ExprSet {
 
     /// Explicitly listed values (as expressions)
     Values(Values),
+
+    /// The expression set will be provided by an an argument
+    Arg(ExprArg),
 }
 
 impl ExprSet {
@@ -69,6 +72,7 @@ impl ExprSet {
             Self::SetOp(expr) => expr.substitute_ref(input),
             Self::Update(_) => todo!(),
             Self::Values(expr) => expr.substitute_ref(input),
+            Self::Arg(_) => todo!(),
         }
     }
 }
@@ -80,6 +84,7 @@ impl fmt::Debug for ExprSet {
             Self::SetOp(e) => e.fmt(f),
             Self::Update(e) => e.fmt(f),
             Self::Values(e) => e.fmt(f),
+            Self::Arg(e) => e.fmt(f),
         }
     }
 }

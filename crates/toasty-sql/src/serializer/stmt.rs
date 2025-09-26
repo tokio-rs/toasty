@@ -302,6 +302,7 @@ impl ToSql for &stmt::TableRef {
                 let table_name = f.serializer.table_name(table_id);
                 fmt!(cx, f, table_name);
             }
+            stmt::TableRef::Derived { .. } => todo!(),
             stmt::TableRef::Cte { nesting, index } => {
                 assert!(f.depth >= nesting, "nesting={nesting} depth={}", f.depth);
 

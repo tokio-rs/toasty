@@ -1,7 +1,10 @@
 use super::{Association, SourceTable, SourceTableId, TableFactor, TableRef, TableWithJoins};
-use crate::schema::{
-    app::{Model, ModelId},
-    db::TableId,
+use crate::{
+    schema::{
+        app::{Model, ModelId},
+        db::TableId,
+    },
+    stmt::Values,
 };
 
 #[derive(Debug, Clone)]
@@ -23,6 +26,12 @@ pub struct SourceModel {
 }
 
 impl Source {
+    /// Create a source from a table with joins, providing explicit table refs
+    pub fn table_with_joins(tables: Vec<TableRef>, from_item: TableWithJoins) -> Self {
+        let source_table = SourceTable::new(tables, from_item);
+        Self::Table(source_table)
+    }
+
     pub fn is_model(&self) -> bool {
         matches!(self, Self::Model(_))
     }
@@ -90,10 +99,8 @@ impl From<TableRef> for Source {
     }
 }
 
-impl Source {
-    /// Create a source from a table with joins, providing explicit table refs
-    pub fn table_with_joins(tables: Vec<TableRef>, from_item: TableWithJoins) -> Self {
-        let source_table = SourceTable::new(tables, from_item);
-        Self::Table(source_table)
+impl From<Values> for Source {
+    fn from(value: Values) -> Self {
+        Source::Table(SourceTable::from(value))
     }
 }

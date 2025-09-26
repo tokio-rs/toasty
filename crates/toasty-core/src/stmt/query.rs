@@ -165,7 +165,7 @@ impl QueryBuilder {
             ExprSet::Select(select) => {
                 select.filter = filter;
             }
-            _ => todo!(),
+            _ => todo!("query={self:#?}"),
         }
 
         self

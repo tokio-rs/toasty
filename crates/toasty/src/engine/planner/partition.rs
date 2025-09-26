@@ -349,6 +349,7 @@ impl Materialization {
                  */
 
             let mut subquery_filter = filter;
+            println!("filter = {subquery_filter:#?}");
 
             visit_mut::for_each_expr_mut(&mut subquery_filter, |expr| {
                 match expr {
@@ -371,10 +372,12 @@ impl Materialization {
                 }
             });
 
-            filter = stmt::Expr::exists(
-                stmt::Query::builder(stmt::Values::from(stmt::Expr::arg(0)))
-                    .filter(subquery_filter),
-            );
+            let sub_select =
+                stmt::Select::new(stmt::Values::from(stmt::Expr::arg(0)), subquery_filter);
+
+            filter = stmt::Expr::exists(stmt::Query::builder(sub_select).returning(1));
+
+            todo!("filter={filter:#?}");
         }
 
         let stmt = self.stmt_state(stmt_id);
