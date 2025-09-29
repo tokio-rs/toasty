@@ -1,6 +1,8 @@
 use super::{eval, Planner};
-use toasty_core::stmt::{self, ExprContext};
+use indexmap::IndexSet;
+use toasty_core::stmt::{self, visit_mut, ExprContext};
 
+/*
 struct Partitioner {
     // Returning statement expressions. The returning statement will be a
     // record, these are the field expressions.
@@ -21,6 +23,7 @@ enum Partition {
     /// The expr *can* be evaluated by either Toasty or the database
     ConstStmt,
 }
+*/
 
 impl Planner<'_> {
     /// Partition a returning statement between what can be handled by the
@@ -30,96 +33,35 @@ impl Planner<'_> {
         cx: &ExprContext<'_>,
         stmt: &mut stmt::Returning,
     ) -> eval::Func {
-        let ret = cx.infer_expr_ty(stmt.as_expr(), &[]);
+        let mut db = IndexSet::new();
+        let mut tys = vec![];
 
-        match stmt {
-            stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => {
-                // returning an expression record is special-cased because it
-                // might be able to be passed through to the database as an
-                // identity projection.
-                self.partition_returning_expr_record(cx, expr_record, ret)
-            }
-            stmt::Returning::Expr(expr) => self.partition_returning_expr(cx, expr, ret),
-            _ => todo!("returning={stmt:#?}"),
-        }
-    }
-
-    fn partition_returning_expr(
-        &self,
-        cx: &ExprContext<'_>,
-        stmt: &mut stmt::Expr,
-        ret: stmt::Type,
-    ) -> eval::Func {
-        use Partition::*;
-
-        let mut partitioner = Partitioner {
-            stmt: vec![],
-            ty: vec![],
+        let stmt::Returning::Expr(expr) = stmt else {
+            todo!()
         };
+        visit_mut::for_each_expr_mut(expr, |expr| {
+            match expr {
+                stmt::Expr::Reference(e) => {
+                    // Track the needed reference and replace the expression with an argument that will pull from the position.
+                    let (pos, inserted) = db.insert_full(e.clone());
 
-        match partitioner.partition_expr(cx, stmt) {
-            Stmt => {
-                todo!()
-            }
-            ConstStmt => todo!(),
-            Eval(expr) => {
-                *stmt = stmt::Expr::record_from_vec(partitioner.stmt);
-
-                let args = if partitioner.ty.is_empty() {
-                    vec![]
-                } else {
-                    vec![stmt::Type::Record(partitioner.ty)]
-                };
-
-                eval::Func::from_stmt_unchecked(expr, args, ret)
-            }
-        }
-    }
-
-    fn partition_returning_expr_record(
-        &self,
-        cx: &ExprContext<'_>,
-        stmt_record: &mut stmt::ExprRecord,
-        ret: stmt::Type,
-    ) -> eval::Func {
-        use Partition::*;
-
-        let mut partitioner = Partitioner {
-            stmt: vec![],
-            ty: vec![],
-        };
-
-        let mut eval_fields = vec![];
-        let mut identity = true;
-
-        for field in stmt_record.fields.drain(..) {
-            if let stmt::Expr::Value(value) = field {
-                identity = false;
-                eval_fields.push(stmt::Expr::Value(value));
-            } else {
-                match partitioner.partition_expr(cx, &field) {
-                    Stmt => {
-                        let ty = cx.infer_expr_ty(&field, &[]);
-                        let arg = partitioner.push_stmt_field(field, ty);
-                        eval_fields.push(arg);
+                    if inserted {
+                        tys.push(cx.infer_expr_ty(&expr, &[]));
                     }
-                    ConstStmt => todo!(),
-                    Eval(eval) => {
-                        identity = false;
-                        eval_fields.push(eval);
-                    }
+
+                    *expr = stmt::Expr::arg(pos);
                 }
+                // Subqueries should have been removed at this point
+                stmt::Expr::Stmt(_) | stmt::Expr::InSubquery(_) => todo!(),
+                _ => {}
             }
-        }
+        });
 
-        stmt_record.fields = partitioner.stmt;
+        let project = eval::Func::from_stmt(expr.clone(), tys);
 
-        if identity {
-            eval::Func::identity(ret)
-        } else {
-            let expr = stmt::Expr::record_from_vec(eval_fields);
-            eval::Func::from_stmt_unchecked(expr, vec![stmt::Type::Record(partitioner.ty)], ret)
-        }
+        *stmt = stmt::Returning::from_expr_iter(db.iter().map(stmt::Expr::from));
+
+        project
     }
 
     pub fn partition_maybe_returning(
@@ -138,6 +80,7 @@ impl Planner<'_> {
     }
 }
 
+/*
 impl Partitioner {
     fn partition_expr(&mut self, cx: &ExprContext<'_>, stmt: &stmt::Expr) -> Partition {
         use Partition::*;
@@ -236,3 +179,4 @@ impl Partition {
         matches!(self, Self::ConstStmt)
     }
 }
+*/

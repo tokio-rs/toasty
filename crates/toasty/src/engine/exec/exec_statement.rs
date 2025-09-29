@@ -40,10 +40,14 @@ impl Exec<'_> {
             // Bit of a hack
             Some(vec![stmt::Type::I64, stmt::Type::I64])
         } else {
-            output.map(|out| out.ty.clone())
+            output.and_then(|out| out.ty.clone())
         };
 
-        assert_eq!(expect_rows, ty.is_some());
+        assert_eq!(
+            expect_rows,
+            ty.is_some(),
+            "stmt={stmt:#?}; output={output:#?}"
+        );
 
         let res = self
             .db

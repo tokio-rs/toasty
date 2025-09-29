@@ -73,7 +73,7 @@ impl Planner<'_> {
             self.push_action(plan::ExecStatement {
                 input: None,
                 output: Some(plan::Output {
-                    ty: project_arg_ty.clone(),
+                    ty: Some(project_arg_ty.clone()),
                     targets: output_targets,
                 }),
                 stmt: materialization.stmt.clone().unwrap(),

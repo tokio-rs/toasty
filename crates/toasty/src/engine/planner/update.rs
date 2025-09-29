@@ -103,7 +103,7 @@ impl Planner<'_> {
         let output = self
             .partition_maybe_returning(&cx, &mut stmt.returning)
             .map(|project| {
-                plan::Output::single_target(
+                plan::Output::single_target2(
                     self.var_table
                         .register_var(stmt::Type::list(project.ret.clone())),
                     project,
