@@ -34,10 +34,7 @@ impl Planner<'_> {
 
         self.push_action(plan::FindPkByIndex {
             input,
-            output: plan::Output {
-                var: pk_by_index_out,
-                project: project_key,
-            },
+            output: plan::Output::single_target(pk_by_index_out, project_key),
             table: index_plan.index.on,
             index: index_plan.index.id,
             filter: index_plan.index_filter.take(),

@@ -3,6 +3,10 @@ use crate::driver::Rows;
 
 impl Exec<'_> {
     pub(super) async fn action_query_pk(&mut self, action: &plan::QueryPk) -> Result<()> {
+        let [output_target] = &action.output.targets[..] else {
+            todo!()
+        };
+
         let res = self
             .db
             .driver
@@ -25,11 +29,11 @@ impl Exec<'_> {
 
         let res = self.project_and_filter_output(
             rows,
-            &action.output.project,
+            &output_target.project,
             action.post_filter.as_ref(),
         );
 
-        self.vars.store(action.output.var, res);
+        self.vars.store(output_target.var, res);
 
         Ok(())
     }

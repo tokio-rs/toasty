@@ -10,6 +10,12 @@ impl Planner<'_> {
         cx: &Context,
         mut stmt: stmt::Query,
     ) -> Result<plan::VarId> {
+        // New planner
+        if self.capability.sql {
+            self.lower_stmt_query(&mut stmt);
+            return self.plan_v2_stmt_query(stmt);
+        }
+
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.app.model(source_model.model);
@@ -36,8 +42,6 @@ impl Planner<'_> {
         };
 
         self.lower_stmt_query(&mut stmt);
-
-        let mut stmt = self.partition(stmt);
 
         let select = stmt.body.as_select_mut();
 
@@ -94,49 +98,13 @@ impl Planner<'_> {
             }
         }
 
-        let ret = if self.capability.sql {
-            self.plan_select_sql(cx, output, project, stmt)
-        } else {
-            self.plan_select_kv(cx, model, output, project, stmt)
-        };
+        let ret = self.plan_select_kv(cx, model, output, project, stmt);
 
         for include in &includes {
             self.plan_select_include(source_model.model, include, ret)?;
         }
 
         Ok(ret)
-    }
-
-    fn plan_select_sql(
-        &mut self,
-        cx: &Context,
-        output: plan::VarId,
-        project: eval::Func,
-        mut stmt: stmt::Query,
-    ) -> plan::VarId {
-        self.rewrite_offset_after_as_filter(&mut stmt);
-
-        let input = if cx.input.is_empty() {
-            None
-        } else {
-            self.partition_stmt_query_input(&mut stmt, &cx.input)
-        };
-
-        if let Some(input) = &input {
-            assert!(input.project.args[0].is_list(), "{input:#?}");
-        }
-
-        self.push_action(plan::ExecStatement {
-            input,
-            output: Some(plan::Output {
-                var: output,
-                project,
-            }),
-            stmt: stmt.into(),
-            conditional_update_with_no_returning: false,
-        });
-
-        output
     }
 
     fn plan_select_kv(
@@ -274,10 +242,7 @@ impl Planner<'_> {
 
                 self.push_action(plan::GetByKey {
                     input,
-                    output: plan::Output {
-                        var: output,
-                        project,
-                    },
+                    output: plan::Output::single_target(output, project),
                     table: table.id,
                     columns,
                     keys,
@@ -325,10 +290,7 @@ impl Planner<'_> {
                 });
 
                 self.push_action(plan::QueryPk {
-                    output: plan::Output {
-                        var: output,
-                        project,
-                    },
+                    output: plan::Output::single_target(output, project),
                     table: table.id,
                     columns,
                     pk_filter: index_plan.index_filter,
@@ -346,10 +308,7 @@ impl Planner<'_> {
 
             self.push_action(plan::GetByKey {
                 input: Some(get_by_key_input),
-                output: plan::Output {
-                    var: output,
-                    project,
-                },
+                output: plan::Output::single_target(output, project),
                 table: table.id,
                 keys,
                 columns: self.schema.mapping_for(model).columns.clone(),

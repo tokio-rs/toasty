@@ -16,6 +16,13 @@ pub enum Returning {
 }
 
 impl Returning {
+    pub fn from_expr_iter<T>(items: impl IntoIterator<Item = T>) -> Self
+    where
+        T: Into<Expr>,
+    {
+        Returning::Expr(Expr::record(items))
+    }
+
     pub fn is_model(&self) -> bool {
         matches!(self, Self::Model { .. })
     }

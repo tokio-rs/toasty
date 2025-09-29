@@ -3,7 +3,7 @@ use crate::{
     stmt::Expr,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub enum ExprReference {
     /// Reference a model at a specific nesting level.
     ///
@@ -123,6 +123,18 @@ impl ExprReference {
             table,
             column,
         }
+    }
+}
+
+impl From<ExprReference> for Expr {
+    fn from(value: ExprReference) -> Self {
+        Expr::Reference(value)
+    }
+}
+
+impl From<&ExprReference> for Expr {
+    fn from(value: &ExprReference) -> Self {
+        Expr::Reference(value.clone())
     }
 }
 

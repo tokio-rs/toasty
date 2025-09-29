@@ -4,8 +4,8 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprReference, ExprSet, Insert, InsertTable, InsertTarget, Query, Select,
-        Source, SourceTable, TableRef, Type, Update, UpdateTarget,
+        Delete, Expr, ExprReference, ExprSet, Insert, InsertTable, InsertTarget, Query, Returning,
+        Select, Source, SourceTable, Statement, TableRef, Type, Update, UpdateTarget,
     },
     Schema,
 };
@@ -270,8 +270,8 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                             TableRef::Table(table_id) => {
                                 let Some(table) = self.schema.table(*table_id) else {
                                     panic!(
-                                    "Failed to resolve table with ID {:?} - table not found in schema",
-                                    table_id
+                                    "Failed to resolve table with ID {:?} - table not found in schema.",
+                                    table_id,
                                 );
                                 };
                                 ResolvedRef::Column(&table.columns[*column])
@@ -311,6 +311,44 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     ResolvedRef::Column(&table.columns[*column])
                 }
             },
+        }
+    }
+
+    pub fn infer_stmt_ty(&self, stmt: &Statement, args: &[Type]) -> Option<Type> {
+        let cx = self.scope(stmt);
+
+        match stmt {
+            Statement::Delete(stmt) => stmt
+                .returning
+                .as_ref()
+                .map(|returning| cx.infer_returning_ty(returning, args)),
+            Statement::Insert(stmt) => stmt
+                .returning
+                .as_ref()
+                .map(|returning| cx.infer_returning_ty(returning, args)),
+            Statement::Query(stmt) => Some(match &stmt.body {
+                ExprSet::Select(body) => cx.infer_returning_ty(&body.returning, args),
+                ExprSet::SetOp(body) => todo!(),
+                ExprSet::Update(body) => todo!(),
+                ExprSet::Values(body) => todo!(),
+                ExprSet::Arg(body) => todo!(),
+            }),
+            Statement::Update(stmt) => stmt
+                .returning
+                .as_ref()
+                .map(|returning| cx.infer_returning_ty(returning, args)),
+        }
+    }
+
+    pub fn infer_returning_ty(&self, returning: &Returning, args: &[Type]) -> Type {
+        match returning {
+            Returning::Model { .. } => Type::Model(
+                self.target
+                    .as_model_id()
+                    .expect("returning `Model` when not in model context"),
+            ),
+            Returning::Changed => todo!(),
+            Returning::Expr(expr) => self.infer_expr_ty(expr, args),
         }
     }
 
@@ -560,23 +598,13 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a Source {
     }
 }
 
-/*
-impl<'a> From<&'a InsertTarget> for ExprTarget<'a> {
-    fn from(value: &'a InsertTarget) -> Self {
-        ExprTarget::Insert(value)
+impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a Statement {
+    fn into_expr_target(self, schema: &'a T) -> ExprTarget<'a> {
+        match self {
+            Statement::Delete(stmt) => stmt.into_expr_target(schema),
+            Statement::Insert(stmt) => stmt.into_expr_target(schema),
+            Statement::Query(stmt) => stmt.into_expr_target(schema),
+            Statement::Update(stmt) => stmt.into_expr_target(schema),
+        }
     }
 }
-
-impl<'a> From<&'a Source> for ExprTarget<'a> {
-    fn from(value: &'a Source) -> Self {
-        ExprTarget::Source(value)
-    }
-}
-
-
-impl<'a> From<&'a UpdateTarget> for ExprTarget<'a> {
-    fn from(value: &'a UpdateTarget) -> Self {
-        ExprTarget::Update(value)
-    }
-}
-*/

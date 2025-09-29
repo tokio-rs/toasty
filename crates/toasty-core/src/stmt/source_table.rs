@@ -1,4 +1,4 @@
-use crate::stmt::{Query, SourceTableId, TableFactor, Values};
+use crate::stmt::{Query, Source, SourceTableId, TableFactor, Values};
 
 use super::{TableRef, TableWithJoins};
 
@@ -28,5 +28,11 @@ impl From<Values> for SourceTable {
                 joins: vec![],
             },
         }
+    }
+}
+
+impl From<SourceTable> for Source {
+    fn from(value: SourceTable) -> Self {
+        Source::Table(value)
     }
 }

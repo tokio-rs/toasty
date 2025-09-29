@@ -294,12 +294,6 @@ impl From<Value> for Expr {
     }
 }
 
-impl From<ExprReference> for Expr {
-    fn from(value: ExprReference) -> Self {
-        Self::Reference(value)
-    }
-}
-
 impl<E1, E2> From<(E1, E2)> for Expr
 where
     E1: Into<Self>,

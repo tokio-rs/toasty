@@ -38,8 +38,12 @@ impl Exec<'_> {
             Rows::Count(_) => todo!(),
         };
 
-        let res = self.project_and_filter_output(rows, &action.output.project, None);
-        self.vars.store(action.output.var, res);
+        // TODO: for now, there is only one possible target
+        let [output_target] = &action.output.targets[..] else {
+            todo!()
+        };
+        let res = self.project_and_filter_output(rows, &output_target.project, None);
+        self.vars.store(output_target.var, res);
 
         Ok(())
     }

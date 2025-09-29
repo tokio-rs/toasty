@@ -26,7 +26,7 @@ mod insert;
 pub(crate) use insert::Insert;
 
 mod output;
-pub(crate) use output::Output;
+pub(crate) use output::{Output, OutputTarget};
 
 mod pipeline;
 pub(crate) use pipeline::Pipeline;
