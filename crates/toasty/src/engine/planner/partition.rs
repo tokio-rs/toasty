@@ -4,13 +4,13 @@ use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit, visit_mut, VisitMut};
 use toasty_core::Schema;
 
+use crate::engine::eval;
 use crate::engine::{plan, planner::Planner};
 use crate::Result;
 
 impl Planner<'_> {
     pub(crate) fn plan_v2_stmt_query(&mut self, stmt: stmt::Query) -> Result<plan::VarId> {
         let mut stmt = stmt::Statement::Query(stmt);
-        println!("stmt={stmt:#?}");
 
         let mut walker_state = WalkerState {
             stmts: vec![StatementState::new()],
@@ -51,24 +51,43 @@ impl Planner<'_> {
         stmt_id: StmtId,
     ) -> Result<plan::VarId> {
         let stmt = &state.stmts[stmt_id.0];
-        println!("\n\nstmt={stmt:#?}");
-        for materialization_id in &stmt.materializations {
-            let materialization = &state.materializations[*materialization_id];
-            println!("materialization={materialization:#?}");
-        }
 
         // For now, assume there is only one materialization
         assert_eq!(1, stmt.materializations.len(), "TODO");
 
         for materialization in &mut state.materializations {
-            let output = self
-                .var_table
-                .register_var(stmt::Type::list(materialization.ret_ty.clone().unwrap()));
-            // materialization.output = Some(output);
-            todo!()
+            // TODO: don't clone
+            let project_arg_ty = materialization.ret_ty.as_ref().unwrap();
+            let mut output_targets = vec![];
+
+            for output in &mut materialization.output {
+                let project = eval::Func::from_stmt(output.expr.clone(), project_arg_ty.clone());
+                let ty =
+                    stmt::ExprContext::new_free().infer_expr_ty(&output.expr, &project.args[..]);
+                let var = self.var_table.register_var(stmt::Type::list(ty));
+
+                output_targets.push(plan::OutputTarget { var, project });
+                output.var = Some(var);
+            }
+
+            self.push_action(plan::ExecStatement {
+                input: None,
+                output: Some(plan::Output {
+                    ty: project_arg_ty.clone(),
+                    targets: output_targets,
+                }),
+                stmt: materialization.stmt.clone().unwrap(),
+                conditional_update_with_no_returning: false,
+            });
         }
 
-        todo!();
+        let [mid] = &stmt.materializations[..] else {
+            todo!()
+        };
+        let [output] = &state.materializations[*mid].output[..] else {
+            todo!("materializations={:#?}", state.materializations)
+        };
+        Ok(output.var.unwrap())
     }
 }
 
@@ -136,14 +155,15 @@ struct MaterializeStatement {
     /// Final query. Populated once it can be defined.
     stmt: Option<stmt::Statement>,
 
-    /// Materialization return type
-    ret_ty: Option<stmt::Type>,
+    /// Materialization return type. Because the materialization comes from the
+    /// database, it is always a vec of values.
+    ret_ty: Option<Vec<stmt::Type>>,
 }
 
 #[derive(Debug)]
 struct MaterializeOutput {
     expr: stmt::Expr,
-    output: Option<plan::VarId>,
+    var: Option<plan::VarId>,
 }
 
 struct Walker<'a> {
@@ -308,7 +328,7 @@ impl Materialization {
                 for back_ref in back_refs {
                     materialization.output.push(MaterializeOutput {
                         expr: back_ref.expr.clone(),
-                        output: None,
+                        var: None,
                     });
                 }
             }
@@ -343,7 +363,7 @@ impl Materialization {
 
         materialization.output.push(MaterializeOutput {
             expr: returning.clone(),
-            output: None,
+            var: None,
         });
     }
 
@@ -393,7 +413,6 @@ impl Materialization {
                  */
 
             let mut subquery_filter = filter;
-            println!("filter = {subquery_filter:#?}");
 
             visit_mut::for_each_expr_mut(&mut subquery_filter, |expr| {
                 match expr {
@@ -474,8 +493,14 @@ impl MaterializeStatement {
             .into(),
         );
 
-        self.ret_ty =
-            stmt::ExprContext::new(schema).infer_stmt_ty(self.stmt.as_ref().unwrap(), &[]);
+        if let Some(expr) =
+            stmt::ExprContext::new(schema).infer_stmt_ty(self.stmt.as_ref().unwrap(), &[])
+        {
+            let stmt::Type::Record(fields) = expr else {
+                todo!()
+            };
+            self.ret_ty = Some(fields);
+        }
     }
 }
 

@@ -5,7 +5,7 @@ use super::{eval, VarId};
 #[derive(Debug, Clone)]
 pub(crate) struct Output {
     /// The Toasty-level type returned by the database
-    pub ty: Type,
+    pub ty: Vec<Type>,
 
     /// What to do with the output. This may end up being fanned out to multiple
     /// variables.
@@ -24,7 +24,7 @@ pub(crate) struct OutputTarget {
 impl Output {
     pub fn single_target(var: VarId, project: eval::Func) -> Output {
         Output {
-            ty: project.ret.clone(),
+            ty: todo!(),
             targets: vec![OutputTarget { var, project }],
         }
     }

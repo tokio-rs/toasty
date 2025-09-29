@@ -40,10 +40,7 @@ impl Exec<'_> {
             // Bit of a hack
             Some(vec![stmt::Type::I64, stmt::Type::I64])
         } else {
-            output.and_then(|out| match &out.ty {
-                stmt::Type::Record(fields) => Some(fields.clone()),
-                _ => todo!(),
-            })
+            output.map(|out| out.ty.clone())
         };
 
         assert_eq!(expect_rows, ty.is_some());
@@ -109,9 +106,12 @@ impl Exec<'_> {
                 assert!(expect_rows);
 
                 while let Some(res) = rows.next().await {
-                    let input = [res?];
+                    let stmt::Value::Record(record) = res? else {
+                        todo!()
+                    };
                     for (projected, target) in &mut projected_rows {
-                        let row = target.project.eval(&input[..])?;
+                        println!("project={:#?}; input={:#?}", target.project, input);
+                        let row = target.project.eval(&record.fields[..])?;
                         projected.push(row);
                     }
                 }
