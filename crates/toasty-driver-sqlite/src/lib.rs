@@ -281,7 +281,7 @@ fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt:
             _ => todo!("ty={ty:#?}"),
         },
         Some(SqlValue::Text(value)) => match ty {
-            stmt::Type::Enum(_) => sqlite_enum_to_value(&value, &ty).unwrap(),
+            stmt::Type::Enum(_) => sqlite_enum_to_value(&value, ty).unwrap(),
             _ => stmt::Value::String(value),
         },
         None => stmt::Value::Null,

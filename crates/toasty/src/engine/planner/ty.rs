@@ -14,9 +14,11 @@ impl Planner<'_> {
         if table.primary_key.columns.len() == 1 {
             table.primary_key_column(0).ty.clone()
         } else {
-            stmt::Type::Record(table.primary_key_columns()
-                .map(|id| id.ty.clone())
-                .collect(),
+            stmt::Type::Record(
+                table
+                    .primary_key_columns()
+                    .map(|id| id.ty.clone())
+                    .collect(),
             )
         }
     }
