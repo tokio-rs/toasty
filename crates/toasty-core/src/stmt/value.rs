@@ -165,7 +165,25 @@ impl Value {
                 _ => false,
             },
             Self::String(_) => ty.is_string(),
-            _ => todo!("value={self:#?}, ty={ty:#?}"),
+            Self::Enum(value) => match ty {
+                Type::Enum(type_enum) => {
+                    if let Some(variant) = type_enum
+                        .variants
+                        .iter()
+                        .find(|v| v.discriminant == value.variant)
+                    {
+                        variant.fields.len() == value.fields.len()
+                            && value
+                                .fields
+                                .iter()
+                                .zip(variant.fields.iter())
+                                .all(|(f, fty)| f.is_a(fty))
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            },
         }
     }
 

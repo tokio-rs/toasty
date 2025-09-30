@@ -120,7 +120,9 @@ impl BuildTableFromModels<'_> {
 
         // Hax
         for column in &mut self.table.columns {
-            if let stmt::Type::Enum(_) = column.ty {
+            if column.primary_key && matches!(column.ty, stmt::Type::Enum(_)) {
+                // this is a hack to support the internal representation of primary keys
+                // having this here blocks us from using enums as primary keys
                 column.ty = stmt::Type::String;
             }
         }
@@ -640,6 +642,7 @@ fn stmt_ty_to_table(ty: stmt::Type) -> stmt::Type {
         stmt::Type::U64 => stmt::Type::U64,
         stmt::Type::String => stmt::Type::String,
         stmt::Type::Id(_) => stmt::Type::String,
+        stmt::Type::Enum(t) => stmt::Type::Enum(t),
         _ => todo!("{ty:#?}"),
     }
 }
