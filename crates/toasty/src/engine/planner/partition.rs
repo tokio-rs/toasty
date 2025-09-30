@@ -76,7 +76,7 @@ impl Planner<'_> {
                     ty: Some(project_arg_ty.clone()),
                     targets: output_targets,
                 }),
-                stmt: materialization.stmt.clone().unwrap(),
+                stmt: materialization.stmt.clone(),
                 conditional_update_with_no_returning: false,
             });
         }
@@ -138,22 +138,16 @@ struct ScopeState {
 
 #[derive(Debug)]
 struct MaterializeStatement {
+    /// Final query
+    stmt: stmt::Statement,
+
     /// Expressions to return
     output: Vec<MaterializeOutput>,
 
     returnings: IndexSet<stmt::ExprReference>,
 
-    /// Working at the table level
-    source: stmt::SourceTable,
-
-    /// Filter
-    filter: stmt::Expr,
-
     /// Materializations it depends on
     deps: HashSet<usize>,
-
-    /// Final query. Populated once it can be defined.
-    stmt: Option<stmt::Statement>,
 
     /// Materialization return type. Because the materialization comes from the
     /// database, it is always a vec of values.
@@ -374,25 +368,22 @@ impl Materialization {
     fn new_materialization(&mut self, stmt_id: StmtId) -> usize {
         let materialize_id = self.materializations.len();
 
-        let stmt = &self.stmts[stmt_id.0];
+        let stmt_state = &mut self.stmts[stmt_id.0];
+        let mut stmt = stmt_state.stmt.as_deref().unwrap().clone();
 
-        let stmt::Statement::Query(query) = &**stmt.stmt.as_ref().unwrap() else {
+        let stmt::Statement::Query(query) = &mut stmt else {
             panic!()
         };
-        let stmt::ExprSet::Select(select) = &query.body else {
+        let stmt::ExprSet::Select(select) = &mut query.body else {
             panic!()
         };
-        let (source, mut filter) = (
-            select.source.as_source_table().clone(),
-            select.filter.clone(),
-        );
 
-        for (i, arg) in stmt.args.iter().enumerate() {
-            let Arg::Ref { stmt_id, index } = arg else {
+        for (i, arg) in stmt_state.args.iter().enumerate() {
+            let Arg::Ref { .. } = arg else {
                 continue;
             };
 
-            assert_eq!(1, stmt.args.len(), "TODO: handle more complex cases");
+            assert_eq!(1, stmt_state.args.len(), "TODO: handle more complex cases");
 
             // We rewrite the filter to batch load all possible records that
             // will be needed to materialize the original statement.
@@ -412,9 +403,7 @@ impl Materialization {
             );
                  */
 
-            let mut subquery_filter = filter;
-
-            visit_mut::for_each_expr_mut(&mut subquery_filter, |expr| {
+            visit_mut::for_each_expr_mut(&mut select.filter, |expr| {
                 match expr {
                     stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
                         // We need to up the nesting to reflect that the filter is moved
@@ -436,21 +425,19 @@ impl Materialization {
             });
 
             let sub_select =
-                stmt::Select::new(stmt::Values::from(stmt::Expr::arg(0)), subquery_filter);
+                stmt::Select::new(stmt::Values::from(stmt::Expr::arg(0)), select.filter.take());
 
-            filter = stmt::Expr::exists(stmt::Query::builder(sub_select).returning(1));
+            select.filter = stmt::Expr::exists(stmt::Query::builder(sub_select).returning(1));
         }
 
-        let stmt = self.stmt_state(stmt_id);
-        stmt.materializations.push(materialize_id);
+        // let stmt = self.stmt_state(stmt_id);
+        stmt_state.materializations.push(materialize_id);
 
         self.materializations.push(MaterializeStatement {
+            stmt,
             output: vec![],
             returnings: IndexSet::new(),
-            source,
-            filter,
             deps: HashSet::new(),
-            stmt: None,
             ret_ty: None,
         });
 
@@ -475,27 +462,16 @@ impl MaterializeStatement {
             });
         }
 
-        let returning =
+        let stmt::Statement::Query(query) = &mut self.stmt else {
+            todo!()
+        };
+        let stmt::ExprSet::Select(select) = &mut query.body else {
+            todo!()
+        };
+        select.returning =
             stmt::Returning::from_expr_iter(self.returnings.iter().map(stmt::Expr::from));
 
-        self.stmt = Some(
-            stmt::Query {
-                with: None,
-                body: stmt::ExprSet::Select(Box::new(stmt::Select {
-                    returning,
-                    source: self.source.clone().into(),
-                    filter: self.filter.clone(),
-                })),
-                order_by: None,
-                limit: None,
-                locks: vec![],
-            }
-            .into(),
-        );
-
-        if let Some(expr) =
-            stmt::ExprContext::new(schema).infer_stmt_ty(self.stmt.as_ref().unwrap(), &[])
-        {
+        if let Some(expr) = stmt::ExprContext::new(schema).infer_stmt_ty(&self.stmt, &[]) {
             let stmt::Type::Record(fields) = expr else {
                 todo!()
             };

@@ -1,7 +1,10 @@
+mod paginate;
+
 use crate::engine::simplify::Simplify;
 
 use super::{simplify, Planner};
 use toasty_core::{
+    driver::Capability,
     schema::{
         app::{self, FieldId, FieldTy, Model},
         db::{Column, Table},
@@ -15,6 +18,9 @@ struct LowerStatement<'a> {
     ///
     /// This will always be `Model`
     cx: stmt::ExprContext<'a>,
+
+    /// The target database's capabilities
+    capability: &'a Capability,
 }
 
 /// Substitute fields for columns
@@ -28,31 +34,32 @@ trait Input {
 }
 
 impl<'a> LowerStatement<'a> {
-    fn new(schema: &'a Schema) -> Self {
+    fn new(schema: &'a Schema, capability: &'a Capability) -> Self {
         LowerStatement {
             cx: stmt::ExprContext::new(schema),
+            capability,
         }
     }
 }
 
 impl Planner<'_> {
     pub(crate) fn lower_stmt_delete(&self, stmt: &mut stmt::Delete) {
-        LowerStatement::new(self.schema).visit_stmt_delete_mut(stmt);
+        LowerStatement::new(self.schema, self.capability).visit_stmt_delete_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_query(&self, stmt: &mut stmt::Query) {
-        LowerStatement::new(self.schema).visit_stmt_query_mut(stmt);
+        LowerStatement::new(self.schema, self.capability).visit_stmt_query_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_insert(&self, stmt: &mut stmt::Insert) {
-        LowerStatement::new(self.schema).visit_stmt_insert_mut(stmt);
+        LowerStatement::new(self.schema, self.capability).visit_stmt_insert_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_update(&self, stmt: &mut stmt::Update) {
-        LowerStatement::new(self.schema).visit_stmt_update_mut(stmt);
+        LowerStatement::new(self.schema, self.capability).visit_stmt_update_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 }
@@ -212,6 +219,7 @@ impl VisitMut for LowerStatement<'_> {
                 // Values is a free context
                 let mut lower = LowerStatement {
                     cx: self.cx.scope(stmt::ExprTarget::Free),
+                    capability: self.capability,
                 };
                 stmt::visit_mut::visit_stmt_query_mut(&mut lower, i);
                 return;
@@ -221,6 +229,8 @@ impl VisitMut for LowerStatement<'_> {
 
         let mut lower = self.scope(self.cx.schema().app.model(model_id));
         stmt::visit_mut::visit_stmt_query_mut(&mut lower, i);
+
+        self.rewrite_offset_after_as_filter(i);
     }
 
     fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update) {
@@ -285,6 +295,7 @@ impl<'a> LowerStatement<'a> {
     fn scope<'child>(&'child self, target: &'a Model) -> LowerStatement<'child> {
         LowerStatement {
             cx: self.cx.scope(target),
+            capability: self.capability,
         }
     }
 
@@ -534,8 +545,8 @@ impl<'a> LowerStatement<'a> {
             // To handle single relations, we need a new query modifier that
             // returns a single record and not a list. This matters for the type
             // system.
-            FieldTy::BelongsTo(rel) => todo!(),
-            FieldTy::HasOne(rel) => todo!(),
+            FieldTy::BelongsTo(_rel) => todo!(),
+            FieldTy::HasOne(_rel) => todo!(),
             _ => todo!(),
         };
 
