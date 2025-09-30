@@ -59,9 +59,14 @@ pub enum Type {
     Enum(TypeEnum),
 
     /// The null type can be cast to any type.
+    ///
+    /// TODO: we should get rid of this.
     Null,
 
     SparseRecord(PathFieldSet),
+
+    /// Unit type
+    Unit,
 
     /// A type that could not be inferred (e.g., empty list)
     Unknown,
@@ -120,6 +125,6 @@ impl From<&Self> for Type {
 
 impl From<ModelId> for Type {
     fn from(value: ModelId) -> Self {
-        Self::Model(value)
+        Self::Model(value.into())
     }
 }

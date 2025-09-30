@@ -43,6 +43,11 @@ impl<'a> LowerStatement<'a> {
 }
 
 impl Planner<'_> {
+    pub(crate) fn lower_stmt(&self, stmt: &mut stmt::Statement) {
+        LowerStatement::new(self.schema, self.capability).visit_stmt_mut(stmt);
+        simplify::simplify_stmt(self.schema, stmt);
+    }
+
     pub(crate) fn lower_stmt_delete(&self, stmt: &mut stmt::Delete) {
         LowerStatement::new(self.schema, self.capability).visit_stmt_delete_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);

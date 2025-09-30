@@ -80,6 +80,5 @@ async fn crud_person_self_referential(test: &mut DbTest) {
 }
 
 tests!(
-    #[ignore]
     crud_person_self_referential,
 );

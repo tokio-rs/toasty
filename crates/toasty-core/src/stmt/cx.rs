@@ -314,29 +314,32 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
         }
     }
 
-    pub fn infer_stmt_ty(&self, stmt: &Statement, args: &[Type]) -> Option<Type> {
+    pub fn infer_stmt_ty(&self, stmt: &Statement, args: &[Type]) -> Type {
         let cx = self.scope(stmt);
 
         match stmt {
             Statement::Delete(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| cx.infer_returning_ty(returning, args)),
+                .map(|returning| Type::list(cx.infer_returning_ty(returning, args)))
+                .unwrap_or(Type::Unit),
             Statement::Insert(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| cx.infer_returning_ty(returning, args)),
-            Statement::Query(stmt) => Some(match &stmt.body {
-                ExprSet::Select(body) => cx.infer_returning_ty(&body.returning, args),
+                .map(|returning| Type::list(cx.infer_returning_ty(returning, args)))
+                .unwrap_or(Type::Unit),
+            Statement::Query(stmt) => match &stmt.body {
+                ExprSet::Select(body) => Type::list(cx.infer_returning_ty(&body.returning, args)),
                 ExprSet::SetOp(body) => todo!(),
                 ExprSet::Update(body) => todo!(),
                 ExprSet::Values(body) => todo!(),
                 ExprSet::Arg(body) => todo!(),
-            }),
+            },
             Statement::Update(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| cx.infer_returning_ty(returning, args)),
+                .map(|returning| Type::list(cx.infer_returning_ty(returning, args)))
+                .unwrap_or(Type::Unit),
         }
     }
 

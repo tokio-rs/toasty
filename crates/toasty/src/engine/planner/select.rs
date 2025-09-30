@@ -12,8 +12,17 @@ impl Planner<'_> {
     ) -> Result<plan::VarId> {
         // New planner
         if self.capability.sql {
-            self.lower_stmt_query(&mut stmt);
-            return self.plan_v2_stmt_query(stmt);
+            let mut stmt = stmt::Statement::Query(stmt);
+
+            // Register a variable for the result of the query
+            let ret = self.var_table.register_var(self.infer_ty(&stmt, &[]));
+
+            // Lower the statement
+            self.lower_stmt(&mut stmt);
+
+            self.plan_v2_stmt_query(stmt, ret);
+
+            return Ok(ret);
         }
 
         // TODO: don't clone?

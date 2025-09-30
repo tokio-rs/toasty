@@ -13,6 +13,7 @@ impl Planner<'_> {
             GetByKey(action) => self.verify_get_by_key(action),
             Insert(action) => self.verify_insert(action),
             QueryPk(action) => self.verify_query_pk(action),
+            Project(action) => self.verify_project(action),
             ReadModifyWrite(action) => self.verify_read_modify_write(action),
             SetVar(action) => self.verify_set_var(action),
             UpdateByKey(action) => self.verify_update_by_key(action),
@@ -52,6 +53,8 @@ impl Planner<'_> {
     fn verify_read_modify_write(&self, _action: &plan::ReadModifyWrite) {}
 
     fn verify_set_var(&self, _action: &plan::SetVar) {}
+
+    fn verify_project(&self, _action: &plan::Project) {}
 
     fn verify_update_by_key(&self, _action: &plan::UpdateByKey) {}
 }

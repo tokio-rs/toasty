@@ -31,6 +31,9 @@ pub(crate) use output::{Output, OutputTarget};
 mod pipeline;
 pub(crate) use pipeline::Pipeline;
 
+mod project;
+pub(crate) use project::Project;
+
 mod query_pk;
 pub(crate) use query_pk::QueryPk;
 

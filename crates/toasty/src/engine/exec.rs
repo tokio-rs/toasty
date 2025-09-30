@@ -8,6 +8,7 @@ mod insert;
 mod kv;
 mod query_pk;
 mod rmw;
+mod project;
 mod update_by_key;
 
 mod var_store;
@@ -61,6 +62,7 @@ impl Exec<'_> {
             Action::Insert(action) => self.action_insert(action).await,
             Action::QueryPk(action) => self.action_query_pk(action).await,
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
+            Action::Project(action) => self.action_project(action).await,
             Action::SetVar(action) => {
                 self.vars
                     .store(action.var, ValueStream::from_vec(action.value.clone()));

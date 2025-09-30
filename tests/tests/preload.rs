@@ -432,14 +432,9 @@ async fn combined_has_many_and_has_one_preload(test: &mut DbTest) {
 }
 
 tests!(
-    #[ignore]
     basic_has_many_and_belongs_to_preload,
-    #[ignore]
     multiple_includes_same_model,
-    #[ignore]
     basic_has_one_and_belongs_to_preload,
-    #[ignore]
     multiple_includes_with_has_one,
-    #[ignore]
     combined_has_many_and_has_one_preload
 );

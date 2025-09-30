@@ -1,3 +1,5 @@
+use crate::engine::plan::project::Project;
+
 use super::{
     Associate, BatchWrite, DeleteByKey, ExecStatement, FindPkByIndex, GetByKey, Insert, QueryPk,
     ReadModifyWrite, SetVar, UpdateByKey,
@@ -25,6 +27,10 @@ pub(crate) enum Action {
     /// Insert a record
     Insert(Insert),
 
+    /// Take the contents of a variable and project it one or more times to a
+    /// specified variable.
+    Project(Project),
+
     /// Query records by primary key
     QueryPk(QueryPk),
 
@@ -50,6 +56,7 @@ impl fmt::Debug for Action {
             Self::Insert(a) => a.fmt(f),
             Self::QueryPk(a) => a.fmt(f),
             Self::ReadModifyWrite(a) => a.fmt(f),
+            Self::Project(a) => a.fmt(f),
             Self::SetVar(a) => a.fmt(f),
             Self::UpdateByKey(a) => a.fmt(f),
         }

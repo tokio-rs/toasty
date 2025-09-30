@@ -4,9 +4,8 @@ use super::{eval, VarId};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Output {
-    /// The Toasty-level type returned by the database. When `None`, then number
-    /// of rows impacted is returned.
-    pub ty: Option<Vec<Type>>,
+    /// The Toasty-level type returned by the database. When `Type::Unit`, the database is not returning any rows
+    pub ty: Type,
 
     /// What to do with the output. This may end up being fanned out to multiple
     /// variables.
@@ -34,9 +33,9 @@ impl Output {
     pub fn single_target2(var: VarId, project: eval::Func) -> Output {
         Output {
             ty: if project.args.is_empty() {
-                None
+                Type::Unit
             } else {
-                Some(project.args.clone())
+                Type::Record(project.args.clone())
             },
             targets: vec![OutputTarget { var, project }],
         }

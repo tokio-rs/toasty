@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
+use std::usize;
 
 use indexmap::IndexSet;
-use toasty_core::stmt::{self, visit, visit_mut, VisitMut};
+use toasty_core::stmt::{self, visit_mut, VisitMut};
 use toasty_core::Schema;
 
 use crate::engine::eval;
@@ -9,9 +10,7 @@ use crate::engine::{plan, planner::Planner};
 use crate::Result;
 
 impl Planner<'_> {
-    pub(crate) fn plan_v2_stmt_query(&mut self, stmt: stmt::Query) -> Result<plan::VarId> {
-        let mut stmt = stmt::Statement::Query(stmt);
-
+    pub(crate) fn plan_v2_stmt_query(&mut self, mut stmt: stmt::Statement, dst: plan::VarId) {
         let mut walker_state = WalkerState {
             stmts: vec![StatementState::new()],
             scopes: vec![ScopeState { stmt_id: StmtId(0) }],
@@ -42,18 +41,16 @@ impl Planner<'_> {
 
         // Now that materializations have been planed, we can plan the execution
         // of the statements.
-        self.plan_v2_stmt_execution(&mut materialization, StmtId(0))
+        self.plan_v2_stmt_execution(&mut materialization, StmtId(0), dst);
     }
 
     fn plan_v2_stmt_execution(
         &mut self,
         state: &mut Materialization,
         stmt_id: StmtId,
-    ) -> Result<plan::VarId> {
-        let stmt = &state.stmts[stmt_id.0];
-
-        // For now, assume there is only one materialization
-        assert_eq!(1, stmt.materializations.len(), "TODO");
+        dst: plan::VarId,
+    ) {
+        let stmt_state = &state.stmts[stmt_id.0];
 
         for materialization in &mut state.materializations {
             // TODO: don't clone
@@ -73,7 +70,7 @@ impl Planner<'_> {
             self.push_action(plan::ExecStatement {
                 input: None,
                 output: Some(plan::Output {
-                    ty: Some(project_arg_ty.clone()),
+                    ty: stmt::Type::Record(project_arg_ty.clone()),
                     targets: output_targets,
                 }),
                 stmt: materialization.stmt.clone(),
@@ -81,13 +78,38 @@ impl Planner<'_> {
             });
         }
 
-        let [mid] = &stmt.materializations[..] else {
-            todo!()
+        let mid = stmt_state.materialization;
+        let [output] = &state.materializations[mid].output[..] else {
+            todo!(
+                "materializations={:#?}; stmt={stmt_state:#?}",
+                state.materializations,
+            );
         };
-        let [output] = &state.materializations[*mid].output[..] else {
-            todo!("materializations={:#?}", state.materializations)
+        let output_var = output.var.unwrap();
+        let stmt::Type::List(output_ty) = self.var_table.ty(output_var).clone() else { todo!() };
+        let output_ty = *output_ty;
+        let project = eval::Func::from_stmt(stmt_state.project.clone().unwrap(), vec![output_ty.clone()]);
+
+        self.push_action(plan::Project {
+            input: output_var,
+            output: plan::Output {
+                ty: output_ty,
+                targets: vec![plan::OutputTarget {
+                    var: dst,
+                    project,
+                }],
+            },
+        });
+
+        /*
+        let [output] = &state.materializations[mid].output[..] else {
+            todo!(
+                "materializations={:#?}; stmt={stmt_state:#?}",
+                state.materializations,
+            );
         };
         Ok(output.var.unwrap())
+        */
     }
 }
 
@@ -124,10 +146,12 @@ struct StatementState {
 
     /// Back-refs are expressions within sub-statements that reference the
     /// current statemetn.
-    back_refs: HashMap<StmtId, Vec<BackRef>>,
+    back_refs: HashMap<StmtId, BackRef>,
 
     /// Materialization
-    materializations: Vec<usize>,
+    materialization: usize,
+
+    project: Option<stmt::Expr>,
 }
 
 #[derive(Debug)]
@@ -167,10 +191,13 @@ struct Walker<'a> {
     returning: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct BackRef {
     /// The expression
-    expr: stmt::Expr,
+    exprs: IndexSet<stmt::ExprReference>,
+
+    /// The index in the materialization's outputs
+    output: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -223,6 +250,8 @@ impl<'a> visit_mut::VisitMut for Walker<'a> {
                 assert!(self.returning);
                 // For now, we assume nested sub-statements cannot be executed on the
                 // target database. Eventually, we will need to make this smarter.
+
+                println!("expr_stmt={expr_stmt:#?}");
 
                 // Create a `StatementState` to track the sub-statement
                 let target_id = self.new_stmt();
@@ -303,43 +332,7 @@ impl<'a> Walker<'a> {
 ///   can easily modify it to add / remove items to satisfy the edges...
 impl Materialization {
     fn plan_materialization(&mut self, stmt_id: StmtId) {
-        let mut materialization_id = None;
-
-        if !self.stmt_state(stmt_id).back_refs.is_empty() {
-            // Essentially, we only handle one level for now
-            assert!(
-                self.stmt_state(stmt_id)
-                    .args
-                    .iter()
-                    .all(|a| matches!(a, Arg::Sub(..))),
-                "TODO"
-            );
-
-            let mid = self.new_materialization(stmt_id);
-            let materialization = &mut self.materializations[mid];
-
-            for back_refs in self.stmts[stmt_id.0].back_refs.values() {
-                for back_ref in back_refs {
-                    materialization.output.push(MaterializeOutput {
-                        expr: back_ref.expr.clone(),
-                        var: None,
-                    });
-                }
-            }
-
-            materialization_id = Some(mid);
-        }
-
-        // Plan materialization for all sub-statements.
-        let subs = self.stmt_state(stmt_id).subs.clone();
-
-        for sub in subs {
-            self.plan_materialization(sub);
-        }
-
-        if materialization_id.is_none() {
-            materialization_id = Some(self.new_materialization(stmt_id));
-        }
+        let mid = self.new_materialization(stmt_id);
 
         let stmt = &**self.stmts[stmt_id.0].stmt.as_ref().unwrap();
         let stmt::Statement::Query(query) = stmt else {
@@ -352,13 +345,82 @@ impl Materialization {
             panic!();
         };
 
-        let mid = materialization_id.unwrap();
         let materialization = &mut self.materializations[mid];
 
+        // TODO: be smarter about the materialized record we request here. There
+        // are plenty fo opportunities to avoid unnecessary vec clones
+        // throughout the engine.
+        let mut materialized_expr = vec![];
+        let mut refs = IndexSet::new();
+
+        let mut project = returning.clone();
+
+        visit_mut::for_each_expr_mut(&mut project, |expr| {
+            match expr {
+                stmt::Expr::Reference(expr_reference) => {
+                    let (index, inserted) = refs.insert_full(expr_reference.clone());
+
+                    if inserted {
+                        materialized_expr.push(expr.clone());
+                    }
+
+                    // First argument is for the primary materialization. Other
+                    // arguments are for sub-statement materializations.
+                    *expr = stmt::Expr::arg_project(0, [index]);
+                }
+                stmt::Expr::Arg(_expr_arg) => {
+                    // These are sub-statements that we have to pull from other locations.
+
+                    // This is a placeholder, it will result in a panic if we
+                    // forget to deal with it.
+                    *expr = stmt::Expr::arg(1);
+                }
+                _ => {}
+            }
+        });
+
+        if !self.stmts[stmt_id.0].back_refs.is_empty() {
+            // Essentially, we only handle one level for now
+            assert!(
+                self.stmts[stmt_id.0]
+                    .args
+                    .iter()
+                    .all(|a| matches!(a, Arg::Sub(..))),
+                "TODO"
+            );
+
+            for back_ref in self.stmts[stmt_id.0].back_refs.values_mut() {
+                assert_eq!(back_ref.exprs.len(), 1, "TODO");
+
+                back_ref.output = Some(materialization.output.len());
+
+                // Compute the record needed for this back ref
+                let mut exprs = vec![];
+
+                for expr_reference in &back_ref.exprs {
+                    exprs.push(expr_reference.clone().into());
+                }
+
+                materialization.output.push(MaterializeOutput {
+                    expr: stmt::Expr::record_from_vec(exprs),
+                    var: None,
+                });
+            }
+        }
+
         materialization.output.push(MaterializeOutput {
-            expr: returning.clone(),
+            expr: stmt::Expr::record_from_vec(materialized_expr),
             var: None,
         });
+
+        // Plan materialization for all sub-statements.
+        let stmt_state = self.stmt_state(stmt_id);
+        stmt_state.project = Some(project);
+        let subs = stmt_state.subs.clone();
+
+        for sub in subs {
+            self.plan_materialization(sub);
+        }
     }
 
     fn stmt_state(&mut self, stmt_id: StmtId) -> &mut StatementState {
@@ -430,8 +492,7 @@ impl Materialization {
             select.filter = stmt::Expr::exists(stmt::Query::builder(sub_select).returning(1));
         }
 
-        // let stmt = self.stmt_state(stmt_id);
-        stmt_state.materializations.push(materialize_id);
+        stmt_state.materialization = materialize_id;
 
         self.materializations.push(MaterializeStatement {
             stmt,
@@ -471,11 +532,13 @@ impl MaterializeStatement {
         select.returning =
             stmt::Returning::from_expr_iter(self.returnings.iter().map(stmt::Expr::from));
 
-        if let Some(expr) = stmt::ExprContext::new(schema).infer_stmt_ty(&self.stmt, &[]) {
-            let stmt::Type::Record(fields) = expr else {
-                todo!()
-            };
-            self.ret_ty = Some(fields);
+        match stmt::ExprContext::new(schema).infer_stmt_ty(&self.stmt, &[]) {
+            stmt::Type::List(ty) => match *ty {
+                stmt::Type::Record(fields) => self.ret_ty = Some(fields),
+                _ => todo!(),
+            }
+            stmt::Type::Unit => {}
+            _ => todo!(),
         }
     }
 }
@@ -487,14 +550,14 @@ impl StatementState {
             args: vec![],
             subs: vec![],
             back_refs: HashMap::new(),
-            materializations: vec![],
+            materialization: usize::MAX,
+            project: None,
         }
     }
 
-    fn new_back_ref(&mut self, target_id: StmtId, expr: stmt::Expr) -> usize {
-        let back_refs = self.back_refs.entry(target_id).or_default();
-        let ret = back_refs.len();
-        back_refs.push(BackRef { expr });
+    fn new_back_ref(&mut self, target_id: StmtId, expr: stmt::ExprReference) -> usize {
+        let back_ref = self.back_refs.entry(target_id).or_default();
+        let (ret, _) = back_ref.exprs.insert_full(expr);
         ret
     }
 
