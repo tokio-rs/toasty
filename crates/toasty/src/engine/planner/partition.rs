@@ -86,18 +86,18 @@ impl Planner<'_> {
             );
         };
         let output_var = output.var.unwrap();
-        let stmt::Type::List(output_ty) = self.var_table.ty(output_var).clone() else { todo!() };
+        let stmt::Type::List(output_ty) = self.var_table.ty(output_var).clone() else {
+            todo!()
+        };
         let output_ty = *output_ty;
-        let project = eval::Func::from_stmt(stmt_state.project.clone().unwrap(), vec![output_ty.clone()]);
+        let project =
+            eval::Func::from_stmt(stmt_state.project.clone().unwrap(), vec![output_ty.clone()]);
 
         self.push_action(plan::Project {
             input: output_var,
             output: plan::Output {
                 ty: output_ty,
-                targets: vec![plan::OutputTarget {
-                    var: dst,
-                    project,
-                }],
+                targets: vec![plan::OutputTarget { var: dst, project }],
             },
         });
 
@@ -536,7 +536,7 @@ impl MaterializeStatement {
             stmt::Type::List(ty) => match *ty {
                 stmt::Type::Record(fields) => self.ret_ty = Some(fields),
                 _ => todo!(),
-            }
+            },
             stmt::Type::Unit => {}
             _ => todo!(),
         }

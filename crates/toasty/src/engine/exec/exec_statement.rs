@@ -40,12 +40,10 @@ impl Exec<'_> {
             // Bit of a hack
             Some(vec![stmt::Type::I64, stmt::Type::I64])
         } else {
-            output.and_then(|out| {
-                match out.ty.clone() {
-                    stmt::Type::Unit => None,
-                    stmt::Type::Record(fields) => Some(fields),
-                    _ => todo!(),
-                }
+            output.and_then(|out| match out.ty.clone() {
+                stmt::Type::Unit => None,
+                stmt::Type::Record(fields) => Some(fields),
+                _ => todo!(),
             })
         };
 

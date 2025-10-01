@@ -6,9 +6,9 @@ mod find_pk_by_index;
 mod get_by_key;
 mod insert;
 mod kv;
+mod project;
 mod query_pk;
 mod rmw;
-mod project;
 mod update_by_key;
 
 mod var_store;
