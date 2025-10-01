@@ -7,8 +7,44 @@ use toasty_core::Schema;
 
 use crate::engine::eval;
 use crate::engine::{plan, planner::Planner};
-use crate::Result;
 
+/// Strategy for handling eager-loading of structurally-nested sub-statements
+///
+/// 1) Take a statement with nested sub-statements
+/// 2) Break it down into an optimal sequence of materializations.
+///     - Materializations load all the necessary records without any of the
+///       final structure.
+/// 3) Perform a nested-merge. This is a multi-step process.
+///     - At each level, the "root materialization" should have all the
+///       necessary fields for the merge qualification.
+///     - Index the nested records, if necessary. For example, if the merge
+///       qualification is an equality, create a hash map on the relevant
+///       fields.
+///     - For each root record, build the sub-statement result for the root
+///       record by filtering the materialized nested records using the index /
+///       merge qualification.
+///     - Store the result of that record's sub-statement result as the input
+///       referenced in the root statement's returning clause.
+///         - Remember, earlier in the planning process we replaced the
+///           statement in the returning clause with an ExprArg.
+///     - Now we can use the projection extracted from the returning clause,
+///       apply the materialized root record and the materialized nested records
+///       for that level to get the final result.
+/// 4) This nested-merge is represented as a new action type. The planner needs
+///    to be able to describe the NestedMerge action.
+///     - Materializations are stored in variables, they are referenced by the
+///       NestedMerge action
+///     - The NestedMerge needs the qualifications to perform the filter of the
+///       materialization for the nested statement based on a single record from
+///       the root statement.
+///         - How should this merge qualification be represented? An Expr? If
+///           so, how is the hash index used?
+///     - The NestedMerge needs to know which argument to put the filtered
+///       records in
+///     - The NestedMerge needs to do the final projection.
+/// 5) Deep nested merges are done recursively, from inside out. The planner can
+///    create one NestedMerge action for each level, storing the result in a
+///    variable. The next level pulls the input from that variable.
 impl Planner<'_> {
     pub(crate) fn plan_v2_stmt_query(&mut self, mut stmt: stmt::Statement, dst: plan::VarId) {
         let mut walker_state = WalkerState {
