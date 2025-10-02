@@ -58,7 +58,7 @@ pub(crate) struct NestedLevel {
 }
 
 /// How to filter nested records for a parent record
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum MergeQualification {
     /// Equality on specific columns (uses hash index)
     ///

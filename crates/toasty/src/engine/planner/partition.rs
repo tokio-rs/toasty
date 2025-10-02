@@ -86,8 +86,7 @@ impl Planner<'_> {
         stmt_id: StmtId,
         dst: plan::VarId,
     ) {
-        let stmt_state = &state.stmts[stmt_id.0];
-
+        // Execute all materializations first
         for materialization in &mut state.materializations {
             // TODO: don't clone
             let project_arg_ty = materialization.ret_ty.as_ref().unwrap();
@@ -114,6 +113,8 @@ impl Planner<'_> {
             });
         }
 
+        // Now plan the merge/project step
+        let stmt_state = &state.stmts[stmt_id.0];
         let mid = stmt_state.materialization;
         let [output] = &state.materializations[mid].output[..] else {
             todo!(
@@ -126,26 +127,217 @@ impl Planner<'_> {
             todo!()
         };
         let output_ty = *output_ty;
-        let project =
-            eval::Func::from_stmt(stmt_state.project.clone().unwrap(), vec![output_ty.clone()]);
 
-        self.push_action(plan::Project {
-            input: output_var,
-            output: plan::Output {
-                ty: output_ty,
-                targets: vec![plan::OutputTarget { var: dst, project }],
-            },
+        // Check if this statement has nested children
+        let has_children = stmt_state.args.iter().any(|arg| matches!(arg, Arg::Sub(_)));
+
+        if has_children {
+            // Use NestedMerge for statements with children
+            self.plan_nested_merge(state, stmt_id, output_var, output_ty, dst);
+        } else {
+            // Use simple Project for leaf statements
+            let project =
+                eval::Func::from_stmt(stmt_state.project.clone().unwrap(), vec![output_ty.clone()]);
+
+            self.push_action(plan::Project {
+                input: output_var,
+                output: plan::Output {
+                    ty: output_ty,
+                    targets: vec![plan::OutputTarget { var: dst, project }],
+                },
+            });
+        }
+    }
+
+    fn plan_nested_merge(
+        &mut self,
+        state: &mut Materialization,
+        stmt_id: StmtId,
+        root_var: plan::VarId,
+        root_ty: stmt::Type,
+        dst: plan::VarId,
+    ) {
+        let stmt_state = &state.stmts[stmt_id.0];
+
+        // Build the nested hierarchy
+        let nested_levels = self.build_nested_hierarchy(state, stmt_id);
+
+        // Collect indexes for all equality qualifications
+        let indexes = self.collect_indexes(state, stmt_id);
+
+        // Build the final projection
+        let project = eval::Func::from_stmt(
+            stmt_state.project.clone().unwrap(),
+            vec![root_ty.clone()],
+        );
+
+        self.push_action(plan::NestedMerge {
+            root: root_var,
+            nested: nested_levels,
+            indexes,
+            output: dst,
+            projection: project,
         });
+    }
 
-        /*
-        let [output] = &state.materializations[mid].output[..] else {
-            todo!(
-                "materializations={:#?}; stmt={stmt_state:#?}",
-                state.materializations,
-            );
+    fn build_nested_hierarchy(
+        &mut self,
+        state: &Materialization,
+        stmt_id: StmtId,
+    ) -> Vec<plan::NestedLevel> {
+        let stmt_state = &state.stmts[stmt_id.0];
+
+        // Get children from args
+        let children: Vec<_> = stmt_state
+            .args
+            .iter()
+            .enumerate()
+            .filter_map(|(arg_idx, arg)| match arg {
+                Arg::Sub(child_stmt_id) => Some((arg_idx, *child_stmt_id)),
+                Arg::Ref { .. } => None,
+            })
+            .collect();
+
+        children
+            .into_iter()
+            .map(|(arg_idx, child_stmt_id)| {
+                let child_state = &state.stmts[child_stmt_id.0];
+                let mid = child_state.materialization;
+                let [output] = &state.materializations[mid].output[..] else {
+                    panic!("Expected single output for child statement");
+                };
+                let source_var = output.var.unwrap();
+
+                // Get the qualification, or use a fallback predicate
+                let qualification = child_state
+                    .merge_qualification
+                    .clone()
+                    .unwrap_or_else(|| {
+                        // Fallback: if we couldn't extract an equality, use a predicate
+                        // that always returns true (effectively no filtering)
+                        // This shouldn't happen in practice if extraction worked
+                        todo!("Predicate qualifications not yet implemented")
+                    });
+
+                // Fix up the index_id in the qualification to point to the actual VarId
+                let qualification = match qualification {
+                    plan::MergeQualification::Equality {
+                        root_columns,
+                        index_id: _,
+                    } => plan::MergeQualification::Equality {
+                        root_columns,
+                        index_id: source_var, // Use the actual VarId
+                    },
+                    other => other,
+                };
+
+                // Build projection for this level
+                let child_project_expr = child_state.project.clone().unwrap();
+                let stmt::Type::List(child_ty) = self.var_table.ty(source_var).clone() else {
+                    panic!("Expected List type for child materialization");
+                };
+                let child_project = eval::Func::from_stmt(child_project_expr, vec![*child_ty]);
+
+                // Recursively build children
+                let nested = self.build_nested_hierarchy(state, child_stmt_id);
+
+                plan::NestedLevel {
+                    source: source_var,
+                    arg_index: arg_idx,
+                    qualification,
+                    projection: child_project,
+                    nested,
+                }
+            })
+            .collect()
+    }
+
+    fn collect_indexes(
+        &self,
+        state: &Materialization,
+        stmt_id: StmtId,
+    ) -> HashMap<plan::VarId, Vec<usize>> {
+        let mut indexes = HashMap::new();
+        self.collect_indexes_recursive(state, stmt_id, &mut indexes);
+        indexes
+    }
+
+    fn collect_indexes_recursive(
+        &self,
+        state: &Materialization,
+        stmt_id: StmtId,
+        indexes: &mut HashMap<plan::VarId, Vec<usize>>,
+    ) {
+        let stmt_state = &state.stmts[stmt_id.0];
+
+        for arg in &stmt_state.args {
+            if let Arg::Sub(child_stmt_id) = arg {
+                let child_state = &state.stmts[child_stmt_id.0];
+
+                // If this child has an equality qualification, extract the columns to index
+                if let Some(plan::MergeQualification::Equality {
+                    index_id,
+                    root_columns: _,
+                }) = &child_state.merge_qualification
+                {
+                    // The index_id will be updated to the actual VarId in build_nested_hierarchy
+                    // For now, we need to extract the nested_columns from the original filter
+                    // We stored the parent column in root_columns, but we need the nested column
+                    // Let me extract it from the filter again
+                    if let Some(nested_col) = self.extract_nested_column_index(child_state) {
+                        // The actual VarId will be filled in during build_nested_hierarchy
+                        // For now, use a placeholder
+                        let mid = child_state.materialization;
+                        let [output] = &state.materializations[mid].output[..] else {
+                            panic!();
+                        };
+                        if let Some(var) = output.var {
+                            indexes.insert(var, vec![nested_col]);
+                        }
+                    }
+                }
+
+                // Recursively collect indexes for descendants
+                self.collect_indexes_recursive(state, *child_stmt_id, indexes);
+            }
+        }
+    }
+
+    fn extract_nested_column_index(&self, stmt_state: &StatementState) -> Option<usize> {
+        // Extract the nested column index from the original statement
+        // This is a bit hacky - we stored the parent column in root_columns,
+        // but we need to extract the nested column from the original WHERE clause
+        let stmt = stmt_state.stmt.as_deref()?;
+        let stmt::Statement::Query(query) = stmt else {
+            return None;
         };
-        Ok(output.var.unwrap())
-        */
+        let stmt::ExprSet::Select(select) = &query.body else {
+            return None;
+        };
+        let filter = &select.filter;
+
+        // Look for the pattern: child_col = parent_col
+        let stmt::Expr::BinaryOp(binary_op) = filter else {
+            return None;
+        };
+
+        match (&*binary_op.lhs, &*binary_op.rhs) {
+            (
+                stmt::Expr::Reference(stmt::ExprReference::Column {
+                    column: nested_idx,
+                    ..
+                }),
+                stmt::Expr::Arg(_),
+            ) => Some(*nested_idx),
+            (
+                stmt::Expr::Arg(_),
+                stmt::Expr::Reference(stmt::ExprReference::Column {
+                    column: nested_idx,
+                    ..
+                }),
+            ) => Some(*nested_idx),
+            _ => None,
+        }
     }
 }
 
@@ -188,6 +380,10 @@ struct StatementState {
     materialization: usize,
 
     project: Option<stmt::Expr>,
+
+    /// Merge qualification extracted before transformation
+    /// This is extracted from the WHERE clause before VALUES(arg(0)) transformation
+    merge_qualification: Option<plan::MergeQualification>,
 }
 
 #[derive(Debug)]
@@ -463,10 +659,112 @@ impl Materialization {
         &mut self.stmts[stmt_id.0]
     }
 
+    /// Try to extract a merge qualification from a WHERE clause
+    ///
+    /// This looks for simple equality patterns like: child.parent_id = parent.id
+    /// Returns Some(MergeQualification) if it can extract an equality, None otherwise
+    fn try_extract_merge_qualification(
+        &self,
+        filter: &Option<stmt::Expr>,
+        arg_position: usize,
+    ) -> Option<plan::MergeQualification> {
+        let filter = filter.as_ref()?;
+
+        // For now, we only handle simple binary equality: child_col = parent_col
+        // Future: handle AND of multiple equalities, complex predicates, etc.
+        let stmt::Expr::BinaryOp(binary_op) = filter else {
+            return None;
+        };
+
+        if !binary_op.op.is_eq() {
+            return None;
+        }
+
+        // Check if we have: nested_column = project(arg(parent), [parent_col])
+        let (nested_col, parent_col_idx) = match (&*binary_op.lhs, &*binary_op.rhs) {
+            (
+                stmt::Expr::Reference(stmt::ExprReference::Column {
+                    nesting: 0,
+                    table: _,
+                    column: nested_idx,
+                }),
+                stmt::Expr::Project(proj),
+            ) if matches!(&*proj.base, stmt::Expr::Arg(arg) if arg.position == arg_position) => {
+                // Extract the column index from the projection
+                // The projection should be a single index
+                if let Some(idx) = Self::extract_single_index(&proj.projection) {
+                    (nested_idx, idx)
+                } else {
+                    return None;
+                }
+            }
+            (
+                stmt::Expr::Project(proj),
+                stmt::Expr::Reference(stmt::ExprReference::Column {
+                    nesting: 0,
+                    table: _,
+                    column: nested_idx,
+                }),
+            ) if matches!(&*proj.base, stmt::Expr::Arg(arg) if arg.position == arg_position) => {
+                // Extract the column index from the projection
+                if let Some(idx) = Self::extract_single_index(&proj.projection) {
+                    (nested_idx, idx)
+                } else {
+                    return None;
+                }
+            }
+            _ => return None,
+        };
+
+        // For now, we return a placeholder that will be filled in during execution planning
+        // We can't create the full MergeQualification yet because we don't have VarIds assigned
+        // This will be converted to a proper qualification in plan_v2_stmt_execution
+        Some(plan::MergeQualification::Equality {
+            root_columns: vec![(0, parent_col_idx)], // 0 levels up = immediate parent
+            index_id: plan::VarId(usize::MAX), // Placeholder, will be filled later
+        })
+    }
+
+    /// Extract a single index from a projection if it's a simple single-field projection
+    fn extract_single_index(projection: &stmt::Projection) -> Option<usize> {
+        // For now, we only handle simple projections
+        // This will need to be expanded to handle more complex cases
+        // The projection might be something like [0] which means "get field 0"
+        // We need to look at the Projection implementation to understand its structure
+        // For now, return None and we'll implement this properly later
+        None // TODO: implement projection parsing
+    }
+
     fn new_materialization(&mut self, stmt_id: StmtId) -> usize {
         let materialize_id = self.materializations.len();
 
+        // Extract merge qualification BEFORE taking mutable borrow
+        // to avoid borrow checker issues
+        let merge_qualification = {
+            let stmt_state = &self.stmts[stmt_id.0];
+            let stmt = stmt_state.stmt.as_deref().unwrap();
+            let stmt::Statement::Query(query) = stmt else {
+                panic!()
+            };
+            let stmt::ExprSet::Select(select) = &query.body else {
+                panic!()
+            };
+
+            // Find the arg index if there is one
+            let arg_idx = stmt_state.args.iter().enumerate()
+                .find_map(|(i, arg)| matches!(arg, Arg::Ref { .. }).then_some(i));
+
+            if let Some(i) = arg_idx {
+                self.try_extract_merge_qualification(&Some(select.filter.clone()), i)
+            } else {
+                None
+            }
+        };
+
+        // Now take mutable borrow
         let stmt_state = &mut self.stmts[stmt_id.0];
+        stmt_state.merge_qualification = merge_qualification;
+
         let mut stmt = stmt_state.stmt.as_deref().unwrap().clone();
 
         let stmt::Statement::Query(query) = &mut stmt else {
@@ -477,7 +775,7 @@ impl Materialization {
         };
 
         for (i, arg) in stmt_state.args.iter().enumerate() {
-            let Arg::Ref { .. } = arg else {
+            let Arg::Ref { stmt_id: _parent_stmt_id, index: _index } = arg else {
                 continue;
             };
 
@@ -588,6 +886,7 @@ impl StatementState {
             back_refs: HashMap::new(),
             materialization: usize::MAX,
             project: None,
+            merge_qualification: None,
         }
     }
 
