@@ -92,58 +92,100 @@ Introduce new action types in the execution pipeline:
 
 /// A nested merge operation that associates child records with parent records
 ///
-/// A single NestedMerge can handle multiple nested collections at the same level.
-/// For example, if User has both `posts` and `comments`, and both are eagerly loaded,
-/// one NestedMerge will filter both collections and bind them to their respective
-/// ExprArgs before applying the projection.
+/// A single NestedMerge handles the ENTIRE nesting hierarchy for a root statement,
+/// not just one level. This allows nested qualifications to reference any ancestor
+/// in the context stack.
+///
+/// Example: User -> Posts -> Tags where Tags references both Post and User
+/// The NestedMerge for Users contains the full hierarchy:
+///   - Posts (references User)
+///     - Tags (references Post AND User)
+///
+/// Execution is outside-in with ancestor context:
+///   For each User:
+///     For each Post belonging to this User:
+///       For each Tag belonging to this Post AND this User:
+///         Add Tag to Post
+///     Add Post to User
 pub(crate) struct NestedMerge {
     /// Root materialization variable (parent records)
     root: VarId,
 
-    /// Nested collections to merge into the root
-    /// Each entry corresponds to a child statement that needs to be merged
-    nested: Vec<NestedCollection>,
+    /// Nested hierarchy - children and their descendants
+    /// Multiple entries at this level = siblings (e.g., User has Posts AND Comments)
+    nested: Vec<NestedLevel>,
+
+    /// Indexes to build upfront before execution
+    /// Map from VarId (source data) to columns to index by
+    /// Built during planning, used during execution
+    indexes: HashMap<VarId, Vec<usize>>,
 
     /// Output variable (projected result with nested structure)
     output: VarId,
 
-    /// Projection to apply after filtering all nested collections
+    /// Final projection to apply at root level
     /// Args: [root_record, filtered_collection_0, filtered_collection_1, ...]
     /// The filtered collections are bound to ExprArgs in the returning clause
-    /// This comes from the returning clause
     projection: eval::Func,
 }
 
-pub(crate) struct NestedCollection {
-    /// Variable containing the nested records to filter
+/// A single level in the nesting hierarchy
+///
+/// Each level represents one child relationship and contains:
+/// - How to load the child data
+/// - How to filter it for each parent (can reference ANY ancestor)
+/// - How to project it (may include ExprArgs for its own children)
+/// - Its own children (recursive nesting)
+pub(crate) struct NestedLevel {
+    /// Source data (from child's ExecStatement)
     source: VarId,
 
-    /// Which ExprArg in the projection corresponds to this collection
-    /// After filtering, the results will be passed as this argument to the projection
+    /// Which ExprArg in parent's projection this binds to
     arg_index: usize,
 
-    /// How to filter nested records for each root record
-    /// The qualification determines the indexing strategy:
-    /// - Equality: Build hash index on nested_columns
-    /// - Predicate: No index, evaluate predicate for each pair
+    /// How to filter nested records for each parent record
+    /// Can reference ANY ancestor in the context stack, not just immediate parent
     qualification: MergeQualification,
+
+    /// Projection for this level (before passing to parent)
+    /// Contains ExprArgs for this level's children
+    projection: eval::Func,
+
+    /// This level's children (recursive nesting)
+    /// Empty for leaf nodes
+    nested: Vec<NestedLevel>,
 }
 
 pub(crate) enum MergeQualification {
     /// Equality on specific columns (uses hash index)
-    /// root_record[root_columns] == nested_record[nested_columns]
     ///
-    /// Execution: Build hash index on nested records keyed by nested_columns,
-    /// then lookup using root_columns for each root record.
+    /// root_columns can reference ANY ancestor in the context stack.
+    /// Each entry is (levels_up, column_index):
+    ///   - levels_up: 0 = immediate parent, 1 = grandparent, 2 = great-grandparent, etc.
+    ///   - column_index: which column from that ancestor record
+    ///
+    /// Example: Tags referencing both Post and User
+    ///   root_columns: [(0, 0), (1, 0)]  // Post.id (0 up), User.id (1 up)
+    ///   index_id: VarId for Tags data (indexes HashMap will have entry for this VarId)
+    ///
+    /// During planning: The nested_columns are collected and stored in NestedMerge.indexes
+    /// During execution: Use the pre-built index from NestedMerge.indexes[index_id]
     Equality {
-        root_columns: Vec<usize>,
-        nested_columns: Vec<usize>,
+        /// Which ancestor levels and columns to extract for the lookup key
+        /// Vec<(levels_up, column_index)>
+        root_columns: Vec<(usize, usize)>,
+
+        /// Which VarId's index to use (references NestedMerge.indexes)
+        index_id: VarId,
     },
 
     /// General predicate evaluation (uses nested loop)
-    /// Args: [root_record, nested_record] -> bool
+    /// Args: [ancestor_stack..., nested_record] -> bool
     ///
-    /// Execution: For each root record, evaluate predicate against all
+    /// The ancestor stack contains all ancestors from root to immediate parent:
+    /// [root, child, grandchild, ..., immediate_parent, nested_record]
+    ///
+    /// Execution: For each parent record, evaluate predicate against all
     /// nested records. No indexing.
     Predicate(eval::Func),
 
@@ -278,12 +320,17 @@ enum Operation {
     },
 
     /// Nested merge operation - combines parent and child materializations
+    /// Handles the ENTIRE nesting hierarchy, not just one level
     NestedMerge {
         /// Root data source
         root: DataRef,
 
-        /// Nested collections to merge
-        nested: Vec<NestedCollection>,
+        /// Nested hierarchy - children and their descendants
+        nested: Vec<NestedLevel>,
+
+        /// Indexes to build upfront: Map from DataRef to columns to index by
+        /// Collected during planning from equality qualifications
+        indexes: HashMap<DataRef, Vec<usize>>,
 
         /// Projection expression (contains ExprArgs for nested collections)
         projection: stmt::Expr,
@@ -315,15 +362,37 @@ struct DataRef {
     slot: OutputSlot,
 }
 
-struct NestedCollection {
-    /// Source data (from child node's output)
+/// A level in the nesting hierarchy (graph representation, before VarId assignment)
+struct NestedLevel {
+    /// Source data (from child's ExecStatement)
     source: DataRef,
 
-    /// Which ExprArg in the projection corresponds to this collection
+    /// Which ExprArg in parent's projection this binds to
     arg_index: usize,
 
-    /// How to filter nested records for each root record
+    /// How to filter nested records for each parent record
+    /// Can reference ANY ancestor in the context stack
     qualification: MergeQualification,
+
+    /// Projection for this level (before passing to parent)
+    /// Contains ExprArgs for this level's children
+    projection: stmt::Expr,
+
+    /// This level's children (recursive nesting)
+    nested: Vec<NestedLevel>,
+}
+
+pub(crate) enum MergeQualification {
+    /// Equality on specific columns
+    /// root_columns reference ancestors: Vec<(levels_up, column_index)>
+    /// index_ref identifies which index to use from NestedMerge.indexes
+    Equality {
+        root_columns: Vec<(usize, usize)>,
+        index_ref: DataRef,  // References NestedMerge.indexes[index_ref]
+    },
+
+    /// General predicate: Args = [ancestor_stack..., nested_record] -> bool
+    Predicate(eval::Func),
 }
 
 // Example: User query with has_many Todos
@@ -658,6 +727,78 @@ impl Planner<'_> {
         let stmt_state = &self.stmts[stmt_id.0];
         let exec_node_id = stmt_state.exec_node.unwrap();
 
+        // Collect indexes needed for equality qualifications
+        let mut indexes = HashMap::new();
+        self.collect_indexes(stmt_id, &merge_qualifications, &mut indexes);
+
+        // Build the entire nested hierarchy for this statement
+        // This recursively builds NestedLevel for all descendants
+        let nested_levels = self.build_nested_hierarchy(
+            stmt_id,
+            &merge_qualifications,
+            0,  // Current nesting depth (for calculating levels_up)
+        );
+
+        // Collect all dependencies: this statement's exec + all descendant execs
+        let mut dependencies = vec![exec_node_id];
+        self.collect_all_exec_dependencies(stmt_id, &mut dependencies);
+
+        let merge_node_id = graph.nodes.len();
+        graph.nodes.push(MaterializationNode {
+            id: merge_node_id,
+            operation: Operation::NestedMerge {
+                root: DataRef {
+                    node: exec_node_id,
+                    slot: 0,  // First output is full records
+                },
+                nested: nested_levels,
+                indexes,  // Indexes to build upfront
+                projection: stmt_state.projection.clone(),
+            },
+            dependencies,
+        });
+
+        // Record this as the output node for this statement
+        self.stmts[stmt_id.0].output_node = Some(merge_node_id);
+    }
+
+    fn collect_indexes(
+        &self,
+        stmt_id: StmtId,
+        merge_qualifications: &HashMap<StmtId, MergeQualification>,
+        indexes: &mut HashMap<DataRef, Vec<usize>>,
+    ) {
+        let stmt_state = &self.stmts[stmt_id.0];
+
+        // Get children from StatementState args
+        for arg in &stmt_state.args {
+            if let Arg::Sub(child_stmt_id) = arg {
+                // If this child has an equality qualification, extract the columns to index
+                if let Some(qual) = merge_qualifications.get(child_stmt_id) {
+                    if let MergeQualification::Equality { nested_columns, .. } = qual {
+                        let child_exec_node = self.stmts[child_stmt_id.0].exec_node.unwrap();
+                        let data_ref = DataRef {
+                            node: child_exec_node,
+                            slot: 0,
+                        };
+                        indexes.insert(data_ref, nested_columns.clone());
+                    }
+                }
+
+                // Recursively collect indexes for descendants
+                self.collect_indexes(*child_stmt_id, merge_qualifications, indexes);
+            }
+        }
+    }
+
+    fn build_nested_hierarchy(
+        &mut self,
+        stmt_id: StmtId,
+        merge_qualifications: &HashMap<StmtId, MergeQualification>,
+        current_depth: usize,
+    ) -> Vec<NestedLevel> {
+        let stmt_state = &self.stmts[stmt_id.0];
+
         // Get children from StatementState args
         let children: Vec<_> = stmt_state.args.iter()
             .enumerate()
@@ -669,46 +810,41 @@ impl Planner<'_> {
             })
             .collect();
 
-        // Build nested collections for all children
-        let mut nested_collections = Vec::new();
-        let mut dependencies = vec![exec_node_id];  // Always depends on its own ExecStatement
+        children.into_iter().map(|(arg_idx, child_stmt_id)| {
+            let child_exec_node = self.stmts[child_stmt_id.0].exec_node.unwrap();
 
-        for (arg_idx, child_stmt_id) in children {
-            // Get the child's output node (its NestedMerge or Project)
-            let child_output_node_id = self.stmts[child_stmt_id.0].output_node.unwrap();
+            // Recursively build this child's hierarchy
+            let child_nested = self.build_nested_hierarchy(
+                child_stmt_id,
+                merge_qualifications,
+                current_depth + 1,
+            );
 
-            // Get the pre-extracted qualification (before VALUES transformation)
-            let qualification = merge_qualifications[&child_stmt_id].clone();
-
-            nested_collections.push(NestedCollection {
+            NestedLevel {
                 source: DataRef {
-                    node: child_output_node_id,
-                    slot: 0,  // Output nodes have single output
-                },
-                arg_index: arg_idx,
-                qualification,
-            });
-
-            // Add dependency on child's output node
-            dependencies.push(child_output_node_id);
-        }
-
-        let merge_node_id = graph.nodes.len();
-        graph.nodes.push(MaterializationNode {
-            id: merge_node_id,
-            operation: Operation::NestedMerge {
-                root: DataRef {
-                    node: exec_node_id,
+                    node: child_exec_node,
                     slot: 0,  // First output is full records
                 },
-                nested: nested_collections,
-                projection: stmt_state.projection.clone(),
-            },
-            dependencies,
-        });
+                arg_index: arg_idx,
+                qualification: merge_qualifications[&child_stmt_id].clone(),
+                projection: self.stmts[child_stmt_id.0].projection.clone(),
+                nested: child_nested,
+            }
+        }).collect()
+    }
 
-        // Record this as the output node for this statement
-        self.stmts[stmt_id.0].output_node = Some(merge_node_id);
+    fn collect_all_exec_dependencies(&self, stmt_id: StmtId, dependencies: &mut Vec<NodeId>) {
+        let stmt_state = &self.stmts[stmt_id.0];
+
+        for arg in &stmt_state.args {
+            if let Arg::Sub(child_stmt_id) = arg {
+                let child_exec_node = self.stmts[child_stmt_id.0].exec_node.unwrap();
+                dependencies.push(child_exec_node);
+
+                // Recursively collect child's dependencies
+                self.collect_all_exec_dependencies(*child_stmt_id, dependencies);
+            }
+        }
     }
 
     fn try_extract_equality(&self, query: &stmt::Statement) -> Option<EqualityCondition> {
@@ -937,118 +1073,187 @@ Original statement structure (before partitioning):
 Step 1: Partition into statements
 During partitioning, nested sub-statements are replaced with ExprArg references:
 
-  - Stmt0: SELECT * FROM users WHERE ...
+  - Stmt0 (Users): SELECT * FROM users WHERE ...
     RETURNING { id: users.id, name: users.name, posts: ExprArg(0) }
-    children: [(arg_index: 0, Stmt1)]
+    args: [Sub(Stmt1)]
+    subs: [Stmt1]
 
-  - Stmt1: SELECT * FROM posts WHERE EXISTS (SELECT 1 FROM [Stmt0] WHERE posts.user_id = users.id)
+  - Stmt1 (Posts): SELECT * FROM posts WHERE posts.user_id = users.id
     RETURNING { id: posts.id, title: posts.title, tags: ExprArg(0) }
-    children: [(arg_index: 0, Stmt2)]
+    args: [Ref(Stmt0, user_id), Sub(Stmt2)]
+    subs: [Stmt2]
 
-  - Stmt2: SELECT * FROM tags WHERE EXISTS (SELECT 1 FROM [Stmt1] WHERE tags.post_id = posts.id)
+  - Stmt2 (Tags): SELECT * FROM tags WHERE tags.post_id = posts.id
     RETURNING { id: tags.id, name: tags.name }
-    children: []
+    args: [Ref(Stmt1, post_id)]
+    subs: []
 
-Step 2: Build graph nodes (inside-out)
-The graph structure combines database queries and post-processing operations:
+Step 2: Extract merge qualifications (BEFORE transformation)
+At this point, correlation conditions are in original form, easy to parse:
 
-  Graph nodes (created in inside-out order):
+  Stmt1 (Posts): WHERE posts.user_id = users.id
+    → Extract: Equality { root_columns: [(0, 0)], nested_columns: [1] }
+    → Meaning: Post.user_id (col 1) matches User.id (0 levels up, col 0)
 
-  Node 0: ExecStatement (Tags query)
-    stmt: SELECT * FROM tags WHERE EXISTS (...)
-    input_var: Some(var_1_ids)  // From posts exec
-    outputs: [
-      Output { var: var_2_full, expr: { id: tags.id, name: tags.name } }
-    ]
-    dependencies: []  // Will be set to [Node 2] after parent is built
+  Stmt2 (Tags): WHERE tags.post_id = posts.id
+    → Extract: Equality { root_columns: [(0, 0)], nested_columns: [1] }
+    → Meaning: Tag.post_id (col 1) matches Post.id (0 levels up, col 0)
 
-  Node 1: NestedMerge (Tags projection - leaf)
-    root: var_2_full
-    nested: []
-    output: var_3
-    projection: Func([tags_record] -> { id: tags.id, name: tags.name })
-    dependencies: [0]  // Depends on Node 0 (Tags exec)
+Step 3: Build graph nodes (inside-out for ExecStatements)
 
-  Node 2: ExecStatement (Posts query)
-    stmt: SELECT * FROM posts WHERE EXISTS (...)
-    input_var: Some(var_0_ids)  // From users exec
-    outputs: [
-      Output { var: var_4_full, expr: { id: posts.id, title: posts.title } },
-      Output { var: var_1_ids, expr: posts.id }  // For tags query arg(0)
-    ]
-    dependencies: []  // Will be set to [Node 4] after parent is built
+  Node 0: ExecStatement (Tags)
+    stmt: SELECT * FROM tags WHERE ...  // Original, not yet transformed
+    input: None  // Will be set to DataRef{node:2, slot:1} after transformation
+    outputs: []  // Will be populated during transformation
+    dependencies: []  // Will be set to [2] after transformation
 
-  Node 3: NestedMerge (Merge tags into posts)
-    root: var_4_full
+  Node 1: Project (Tags - leaf, no children)
+    input: DataRef { node: 0, slot: 0 }  // Tags exec, first output
+    projection: { id: tags.id, name: tags.name }
+    dependencies: [0]
+
+  Node 2: ExecStatement (Posts)
+    stmt: SELECT * FROM posts WHERE ...  // Original, not yet transformed
+    input: None  // Will be set to DataRef{node:4, slot:1} after transformation
+    outputs: []  // Will be populated during transformation
+    dependencies: []  // Will be set to [4] after transformation
+
+  Node 3: NestedMerge (Posts - has Tags as child)
+    root: DataRef { node: 2, slot: 0 }  // Posts exec, first output
     nested: [
-      NestedCollection {
-        source: var_3,  // From Node 1 (projected tags)
+      NestedLevel {
+        source: DataRef { node: 0, slot: 0 },  // Tags exec output
         arg_index: 0,
-        qualification: Equality { root_columns: [0], nested_columns: [1] }
+        qualification: Equality { root_columns: [(0, 0)], nested_columns: [1] },
+        projection: { id: tags.id, name: tags.name },
+        nested: [],  // Tags has no children
       }
     ]
-    output: var_5
-    projection: Func([post_record, filtered_tags] -> { id, title, tags })
-    dependencies: [1, 2]  // Depends on Node 1 (tags merge) and Node 2 (posts exec)
+    projection: { id: posts.id, title: posts.title, tags: ExprArg(0) }
+    dependencies: [0, 2]  // Needs both Tags exec and Posts exec
 
-  Node 4: ExecStatement (Users query)
-    stmt: SELECT * FROM users WHERE users.active = true
-    input_var: None  // Root query
-    outputs: [
-      Output { var: var_6_full, expr: { id: users.id, name: users.name } },
-      Output { var: var_0_ids, expr: users.id }  // For posts query arg(0)
-    ]
-    dependencies: []  // No dependencies
+  Node 4: ExecStatement (Users)
+    stmt: SELECT * FROM users WHERE ...  // Original
+    input: None  // Root query
+    outputs: []  // Will be populated during transformation
+    dependencies: []
 
-  Node 5: NestedMerge (Merge posts into users)
-    root: var_6_full
+  Node 5: NestedMerge (Users - has Posts as child, which has Tags as grandchild)
+    root: DataRef { node: 4, slot: 0 }  // Users exec, first output
     nested: [
-      NestedCollection {
-        source: var_5,  // From Node 3 (posts with tags)
+      NestedLevel {
+        source: DataRef { node: 2, slot: 0 },  // Posts exec output
         arg_index: 0,
-        qualification: Equality { root_columns: [0], nested_columns: [1] }
+        qualification: Equality { root_columns: [(0, 0)], nested_columns: [1] },
+        projection: { id: posts.id, title: posts.title, tags: ExprArg(0) },
+        nested: [
+          NestedLevel {
+            source: DataRef { node: 0, slot: 0 },  // Tags exec output
+            arg_index: 0,
+            qualification: Equality { root_columns: [(0, 0)], nested_columns: [1] },
+            projection: { id: tags.id, name: tags.name },
+            nested: [],
+          }
+        ],
       }
     ]
-    output: var_7
-    projection: Func([user_record, filtered_posts] -> { id, name, posts })
-    dependencies: [3, 4]  // Depends on Node 3 (posts merge) and Node 4 (users exec)
+    projection: { id: users.id, name: users.name, posts: ExprArg(0) }
+    dependencies: [0, 2, 4]  // Needs Tags, Posts, and Users execs
 
   Node 6: Project (Final output)
-    input: var_7
-    output: dst
-    dependencies: [5]  // Depends on Node 5 (users merge)
+    input: DataRef { node: 5, slot: 0 }
+    projection: identity
+    dependencies: [5]
 
-Step 3: Fix dependencies after all nodes are built
-After building nodes inside-out, update ExecStatement dependencies:
-  Node 0.dependencies = [2]  // Tags exec depends on posts exec (for var_1_ids)
-  Node 2.dependencies = [4]  // Posts exec depends on users exec (for var_0_ids)
+Step 4: Transform queries to VALUES(arg(0)) pattern
+Now we transform the queries and populate outputs:
 
-Step 4: Compute execution order
+  Node 0 (Tags):
+    stmt: SELECT * FROM tags WHERE EXISTS (
+            SELECT 1 FROM VALUES(?) WHERE tags.post_id = column[0]
+          )
+    input: DataRef { node: 2, slot: 1 }  // Posts join columns
+    outputs: [
+      { id: tags.id, name: tags.name }  // Slot 0
+    ]
+    dependencies: [2]
+
+  Node 2 (Posts):
+    stmt: SELECT * FROM posts WHERE EXISTS (
+            SELECT 1 FROM VALUES(?) WHERE posts.user_id = column[0]
+          )
+    input: DataRef { node: 4, slot: 1 }  // Users join columns
+    outputs: [
+      { id: posts.id, user_id: posts.user_id, title: posts.title },  // Slot 0 - full records
+      posts.id,  // Slot 1 - join columns for Tags
+    ]
+    dependencies: [4]
+
+  Node 4 (Users):
+    stmt: SELECT * FROM users WHERE users.active = true  // No transformation for root
+    input: None
+    outputs: [
+      { id: users.id, name: users.name },  // Slot 0 - full records
+      users.id,  // Slot 1 - join columns for Posts
+    ]
+    dependencies: []
+
+Step 5: Compute execution order
   Topological sort: [4, 2, 0, 1, 3, 5, 6]
 
   Execution sequence:
-    4: ExecStatement(Users) -> [var_6_full, var_0_ids]
-    2: ExecStatement(Posts, arg: var_0_ids) -> [var_4_full, var_1_ids]
-    0: ExecStatement(Tags, arg: var_1_ids) -> [var_2_full]
-    1: NestedMerge(Tags projection) -> var_3
-    3: NestedMerge(Merge tags into posts) -> var_5
-    5: NestedMerge(Merge posts into users) -> var_7
-    6: Project(var_7) -> dst
+    4: ExecStatement(Users) → outputs to DataRef{4,0} and DataRef{4,1}
+    2: ExecStatement(Posts, input=DataRef{4,1}) → outputs to DataRef{2,0} and DataRef{2,1}
+    0: ExecStatement(Tags, input=DataRef{2,1}) → outputs to DataRef{0,0}
+    1: Project(DataRef{0,0}) → leaf projection (no merging)
+    3: NestedMerge(Posts) → hierarchical merge (but Posts has no merge, just Tags does)
+    5: NestedMerge(Users) → hierarchical merge of entire tree
+    6: Project(final) → output to dst
+
+Step 6: Assign VarIds based on liveness
+  After topological sort, liveness analysis determines:
+    DataRef{4,0} → var_0  (users full records)
+    DataRef{4,1} → var_1  (users join columns, freed after Posts exec)
+    DataRef{2,0} → var_1  (REUSED! posts full records)
+    DataRef{2,1} → var_2  (posts join columns, freed after Tags exec)
+    DataRef{0,0} → var_2  (REUSED! tags full records)
+    ... etc
 
 StatementState tracking:
   Stmt0 (Users): exec_node=4, output_node=5
   Stmt1 (Posts): exec_node=2, output_node=3
   Stmt2 (Tags): exec_node=0, output_node=1
 
-Key efficiency gains:
-- **Single unified graph** contains all operations (queries + merges + projections)
-- **Dependencies are explicit** in the graph structure
-- **Single query produces multiple outputs** (full records + join columns)
-- **Child queries receive projected parent results** as runtime args
-- **StatementState stores node IDs** for O(1) lookups (no hash maps needed)
+Key design points:
+- **ExecStatement nodes built inside-out** (Tags → Posts → Users)
+- **Output nodes reference entire hierarchy** (Users' NestedMerge contains the full Posts→Tags tree)
+- **Qualifications extracted before transformation** (easier to parse)
+- **Graph uses DataRef** (no VarIds yet)
+- **VarIds assigned after liveness analysis** (allows reuse)
 ```
 
 ### 3. Execution Phase
+
+**Key Design: Hierarchical NestedMerge with Ancestor Context and Pre-Planned Indexes**
+
+A single `NestedMerge` operation handles the ENTIRE nesting hierarchy for a root statement, not just one level. This is necessary because:
+
+1. **Deep qualifications**: Tags can reference both Posts AND Users (e.g., `tags.post_id = posts.id AND tags.user_id = users.id`)
+2. **Ancestor context required**: When filtering Tags, we need access to both the Post record AND the User record
+3. **Outside-in execution**: Process User, then for each User process Posts, then for each Post process Tags
+4. **Pre-planned indexing**: During planning, we determine which indexes are needed and store this in `NestedMerge.indexes`. During execution, we build all indexes ONCE upfront before iteration, then reference them via `qualification.index_id`. This avoids rebuilding indexes for each parent record.
+
+**Algorithm:**
+```
+For each User:
+  context_stack = [User]
+  For each Post WHERE post.user_id = User.id:
+    context_stack = [User, Post]
+    For each Tag WHERE tag.post_id = Post.id AND tag.user_id = User.id:
+      // Can access both Post and User from context_stack
+      Add Tag to Post
+    Add Post to User
+```
 
 In `engine/exec/nested_merge.rs` (new file):
 
@@ -1061,63 +1266,192 @@ impl Exec<'_> {
         // Load root materialization
         let root_records = self.vars.load(action.root).collect().await?;
 
-        // Load all nested collections and build indices
-        let mut collections = Vec::with_capacity(action.nested.len());
+        // Load all data needed for nested levels
+        let mut all_data = HashMap::new();
+        self.load_nested_data(&action.nested, &mut all_data).await?;
 
-        for nested_collection in &action.nested {
-            let records = self.vars.load(nested_collection.source).collect().await?;
-
-            // Build index based on qualification type
-            let index = match &nested_collection.qualification {
-                MergeQualification::Equality { nested_columns, .. } => {
-                    Some(self.build_hash_index(&records, nested_columns)?)
-                }
-                MergeQualification::Predicate(_) => None,
-            };
-
-            collections.push(LoadedCollection {
-                records,
-                index,
-                arg_index: nested_collection.arg_index,
-                qualification: &nested_collection.qualification,
-            });
+        // Build all indexes upfront using the pre-planned index specifications
+        let mut all_indexes = HashMap::new();
+        for (var_id, index_columns) in &action.indexes {
+            let data = all_data.get(var_id)
+                .expect("Data should be loaded for all indexed VarIds");
+            let index = self.build_hash_index(data, index_columns)?;
+            all_indexes.insert(*var_id, index);
         }
 
-        // Process each root record
-        let mut results = Vec::with_capacity(root_records.len());
-
-        for root_record in root_records {
-            // Filter all nested collections for this root record
-            // Build arguments array: [root_record, filtered_0, filtered_1, ...]
-            let mut projection_args = vec![root_record.clone()];
-
-            // Collections may not be in arg_index order, so build a sparse array
-            let max_arg = collections.iter().map(|c| c.arg_index).max().unwrap_or(0);
-            let mut filtered_collections = vec![stmt::Value::Null; max_arg + 1];
-
-            for collection in &collections {
-                let filtered = self.filter_nested_for_root(
-                    &root_record,
-                    &collection.records,
-                    collection.qualification,
-                    collection.index.as_ref(),
-                )?;
-
-                filtered_collections[collection.arg_index] = stmt::Value::List(filtered);
-            }
-
-            // Append filtered collections to projection args
-            projection_args.extend(filtered_collections);
-
-            // Apply projection: [root_record, filtered_0, filtered_1, ...] -> final_record
-            let projected = action.projection.eval(&projection_args)?;
-
-            results.push(projected);
-        }
+        // Execute the hierarchical nested merge with pre-built indexes
+        let results = self.execute_nested_levels(
+            root_records,
+            &action.nested,
+            &action.projection,
+            &[],  // Empty ancestor stack for root level
+            &all_data,
+            &all_indexes,
+        ).await?;
 
         // Store output
         self.vars.store(action.output, ValueStream::from_vec(results));
         Ok(())
+    }
+
+    /// Load all data from nested tree
+    async fn load_nested_data(
+        &self,
+        nested_levels: &[plan::NestedLevel],
+        all_data: &mut HashMap<VarId, Vec<stmt::Value>>,
+    ) -> Result<()> {
+        for level in nested_levels {
+            if !all_data.contains_key(&level.source) {
+                let data = self.vars.load(level.source).collect().await?;
+                all_data.insert(level.source, data);
+            }
+
+            if !level.nested.is_empty() {
+                self.load_nested_data(&level.nested, all_data).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Recursively execute nested merges at all levels
+    ///
+    /// This processes one level of nesting, then recursively processes children.
+    /// Execution is outside-in to provide ancestor context.
+    /// All data and indexes are pre-loaded to avoid rebuilding during iteration.
+    async fn execute_nested_levels(
+        &self,
+        parent_records: Vec<stmt::Value>,
+        nested_levels: &[plan::NestedLevel],
+        projection: &eval::Func,
+        ancestor_stack: &[stmt::Value],
+        all_data: &HashMap<VarId, Vec<stmt::Value>>,
+        all_indexes: &HashMap<VarId, HashMap<CompositeKey, Vec<stmt::Value>>>,
+    ) -> Result<Vec<stmt::Value>> {
+        // Prepare loaded data for this level
+        let mut loaded_levels = Vec::with_capacity(nested_levels.len());
+
+        for level in nested_levels {
+            let nested_data = all_data.get(&level.source)
+                .expect("Data should be loaded for all VarIds");
+
+            loaded_levels.push(LoadedNestedLevel {
+                data: nested_data,
+                level_info: level,
+            });
+        }
+
+        // Process each parent record
+        let mut results = Vec::with_capacity(parent_records.len());
+
+        for parent_record in parent_records {
+            // Build ancestor context stack: [grandparents..., parent]
+            let mut context_stack = ancestor_stack.to_vec();
+            context_stack.push(parent_record.clone());
+
+            // Filter and process all nested collections for this parent
+            let mut filtered_collections = Vec::new();
+
+            for loaded_level in &loaded_levels {
+                // Filter using ancestor context
+                let filtered = self.filter_hierarchical(
+                    &loaded_level.data,
+                    &context_stack,
+                    &loaded_level.level_info.qualification,
+                    all_indexes,
+                )?;
+
+                // If this level has children, recursively merge them
+                let processed = if !loaded_level.level_info.nested.is_empty() {
+                    self.execute_nested_levels(
+                        filtered,
+                        &loaded_level.level_info.nested,
+                        &loaded_level.level_info.projection,
+                        &context_stack,  // Pass down ancestor context
+                        all_data,        // Pass through pre-loaded data
+                        all_indexes,     // Pass through pre-built indexes
+                    ).await?
+                } else {
+                    // Leaf level - just apply projection to each record
+                    filtered.iter()
+                        .map(|rec| loaded_level.level_info.projection.eval(&[rec.clone()]))
+                        .collect::<Result<Vec<_>>>()?
+                };
+
+                filtered_collections.push(stmt::Value::List(processed));
+            }
+
+            // Apply projection at this level: [parent_record, filtered_0, filtered_1, ...]
+            // Collections may not be in arg_index order, so build a sparse array
+            let max_arg = loaded_levels.iter()
+                .map(|l| l.level_info.arg_index)
+                .max()
+                .unwrap_or(0);
+            let mut projection_args = vec![stmt::Value::Null; max_arg + 2];  // +1 for parent, +1 for 0-indexing
+            projection_args[0] = parent_record;
+
+            for (loaded_level, filtered) in loaded_levels.iter().zip(filtered_collections) {
+                projection_args[loaded_level.level_info.arg_index + 1] = filtered;
+            }
+
+            let projected = projection.eval(&projection_args)?;
+            results.push(projected);
+        }
+
+        Ok(results)
+    }
+
+    /// Filter nested records using ancestor context
+    ///
+    /// The qualification can reference ANY ancestor in the context stack,
+    /// not just the immediate parent.
+    fn filter_hierarchical(
+        &self,
+        nested_records: &[stmt::Value],
+        ancestor_stack: &[stmt::Value],  // [root, child, grandchild, ..., parent]
+        qualification: &MergeQualification,
+        all_indexes: &HashMap<VarId, HashMap<CompositeKey, Vec<stmt::Value>>>,
+    ) -> Result<Vec<stmt::Value>> {
+        match qualification {
+            MergeQualification::Equality { root_columns, index_id } => {
+                // Build composite key from ancestor stack
+                // root_columns = [(levels_up, col_idx), ...]
+                let mut key_values = Vec::new();
+
+                for (levels_up, col_idx) in root_columns {
+                    // levels_up: 0 = immediate parent, 1 = grandparent, etc.
+                    let ancestor_idx = ancestor_stack.len() - 1 - levels_up;
+                    let ancestor_record = ancestor_stack[ancestor_idx].expect_record();
+                    key_values.push(ancestor_record[*col_idx].clone());
+                }
+
+                let key = CompositeKey(key_values);
+
+                // Lookup in pre-built index using index_id
+                let index = all_indexes.get(index_id)
+                    .expect("Hash index should exist for Equality qualification");
+
+                Ok(index
+                    .get(&key)
+                    .cloned()
+                    .unwrap_or_default())
+            }
+            MergeQualification::Predicate(predicate) => {
+                // Evaluate predicate for each nested record
+                // Args: [ancestor_stack..., nested_record] -> bool
+                let mut matches = Vec::new();
+
+                for nested_record in nested_records {
+                    let mut args = ancestor_stack.to_vec();
+                    args.push(nested_record.clone());
+
+                    if predicate.eval_bool(&args)? {
+                        matches.push(nested_record.clone());
+                    }
+                }
+
+                Ok(matches)
+            }
+        }
     }
 
     fn build_hash_index(
@@ -1139,41 +1473,6 @@ impl Exec<'_> {
         Ok(index)
     }
 
-    fn filter_nested_for_root(
-        &self,
-        root_record: &stmt::Value,
-        nested_records: &[stmt::Value],
-        qualification: &MergeQualification,
-        index: Option<&HashMap<CompositeKey, Vec<stmt::Value>>>,
-    ) -> Result<Vec<stmt::Value>> {
-        match qualification {
-            MergeQualification::Equality { root_columns, .. } => {
-                // Use hash index (should always be present for Equality)
-                let hash_index = index.expect("Hash index should exist for Equality qualification");
-                let root_rec = root_record.expect_record();
-                let key = self.extract_key(root_rec, root_columns)?;
-
-                Ok(hash_index
-                    .get(&key)
-                    .map(|v| v.clone())
-                    .unwrap_or_else(Vec::new))
-            }
-            MergeQualification::Predicate(predicate) => {
-                // Evaluate predicate for each nested record
-                let mut matches = Vec::new();
-
-                for nested_record in nested_records {
-                    // Args: [root_record, nested_record] -> bool
-                    if predicate.eval_bool(&[root_record.clone(), nested_record.clone()])? {
-                        matches.push(nested_record.clone());
-                    }
-                }
-
-                Ok(matches)
-            }
-        }
-    }
-
     fn extract_key(
         &self,
         record: &stmt::ValueRecord,
@@ -1187,12 +1486,10 @@ impl Exec<'_> {
     }
 }
 
-// Helper struct for loaded nested collections
-struct LoadedCollection<'a> {
-    records: Vec<stmt::Value>,
-    index: Option<HashMap<CompositeKey, Vec<stmt::Value>>>,
-    arg_index: usize,
-    qualification: &'a MergeQualification,
+// Helper struct for loaded nested levels
+struct LoadedNestedLevel<'a> {
+    data: &'a Vec<stmt::Value>,
+    level_info: &'a plan::NestedLevel,
 }
 
 // Composite key type for multi-column equality
@@ -1200,179 +1497,391 @@ struct LoadedCollection<'a> {
 struct CompositeKey(Vec<stmt::Value>);
 ```
 
-### 3.1 Example: Executing User -> Posts -> Tags
+### 3.1 Example: Executing User -> Posts -> Tags (Hierarchical)
 
-Pseudocode for execution:
+This example shows the **hierarchical execution** where a single NestedMerge operation handles the entire nesting tree.
 
 ```
-Given plan from section 2.1:
-  1. ExecStatement(Users) -> var_0
-  2. ExecStatement(Posts) -> var_1
-  3. ExecStatement(Tags) -> var_2
-  4. NestedMerge(Project Tags) -> var_3
-  5. NestedMerge(Merge Tags into Posts) -> var_4
-  6. NestedMerge(Merge Posts into Users) -> var_5
+Given plan from section 2.3:
+  1. ExecStatement(Users) -> [var_0_full, var_0_ids]
+  2. ExecStatement(Posts, input=var_0_ids) -> [var_1_full, var_1_ids]
+  3. ExecStatement(Tags, input=var_1_ids) -> [var_2_full]
+  4. Project(Tags) -> var_3  // Leaf projection
+  5. NestedMerge(Users - entire hierarchy) -> var_4
+  6. Project(final) -> dst
 
 Execution trace:
 
-Step 1-3: Execute materialization queries
-  var_0 = [
-    { id: 1, name: "Alice" },  // Raw user materialization
-    { id: 2, name: "Bob" },
-  ]
+Step 1-3: Execute materialization queries (batch-load all data)
+  var_0_full = [User{id:1, name:"Alice"}, User{id:2, name:"Bob"}]
+  var_1_full = [Post{id:10, user_id:1}, Post{id:11, user_id:1}, Post{id:12, user_id:2}]
+  var_2_full = [Tag{id:100, post_id:10}, Tag{id:101, post_id:10}, Tag{id:102, post_id:12}]
 
-  var_1 = [
-    { id: 10, user_id: 1, title: "Post1" },  // Raw post materialization
-    { id: 11, user_id: 1, title: "Post2" },
-    { id: 12, user_id: 2, title: "Post3" },
-  ]
+Step 4: Project(Tags) - Simple leaf projection
+  var_3 = var_2_full.map(|tag| { id: tag.id, name: tag.name })
+  var_3 = [Tag{id:100, name:"rust"}, Tag{id:101, name:"async"}, Tag{id:102, name:"perf"}]
 
-  var_2 = [
-    { id: 100, post_id: 10, name: "rust" },  // Raw tag materialization
-    { id: 101, post_id: 10, name: "async" },
-    { id: 102, post_id: 12, name: "performance" },
-  ]
+Step 5: NestedMerge(Users - ENTIRE HIERARCHY)
+  This is a SINGLE operation that handles the full nesting tree!
 
-Step 4: NestedMerge(Project Tags) - Leaf node projection
   action = NestedMerge {
-    root: var_2,
-    nested: var_2,  // Unused
-    qualification: Predicate(always_true),  // No filtering for leaf
-    projection: Func([tag_record, _] -> { id: tag.id, name: tag.name }),
-  }
-
-  Execution:
-    For each tag in var_2:
-      - No filtering (predicate always true)
-      - Apply projection to each tag
-
-    Result:
-      var_3 = [
-        { id: 100, name: "rust" },
-        { id: 101, name: "async" },
-        { id: 102, name: "performance" },
-      ]
-
-Step 5: NestedMerge(Merge Tags into Posts)
-  action = NestedMerge {
-    root: var_1,  // Posts materialization
-    nested: var_3,  // Projected tags
-    qualification: Equality {
-      root_columns: [0],     // posts.id
-      nested_columns: [1],   // tags.post_id (from WHERE clause correlation)
+    root: var_0_full,
+    nested: [
+      NestedLevel {  // Posts level
+        source: var_1_full,
+        arg_index: 0,
+        qualification: Equality {
+          root_columns: [(0, 0)],  // User.id (0 levels up)
+          index_id: var_1_full,    // Use index for var_1_full
+        },
+        projection: { id: posts.id, title: posts.title, tags: ExprArg(0) },
+        nested: [
+          NestedLevel {  // Tags level (nested under Posts)
+            source: var_2_full,
+            arg_index: 0,
+            qualification: Equality {
+              root_columns: [(0, 0)],  // Post.id (0 levels up = parent)
+              index_id: var_2_full,    // Use index for var_2_full
+            },
+            projection: { id: tags.id, name: tags.name },
+            nested: [],
+          }
+        ],
+      }
+    ],
+    indexes: {
+      var_1_full: [1],  // Index Posts by column 1 (user_id)
+      var_2_full: [1],  // Index Tags by column 1 (post_id)
     },
-    projection: Func([post_record, filtered_tags] -> {
-      id: post.id,
-      title: post.title,
-      tags: filtered_tags  // Binds to ExprArg(0) in returning clause
-    }),
+    projection: { id: users.id, name: users.name, posts: ExprArg(0) },
   }
 
-  Execution:
-    1. Build hash index on Tags (var_3) keyed by tags.post_id:
-       (Equality qualification → automatically uses hash index)
-       index = {
-         10 -> [Tag{id:100, name:"rust"}, Tag{id:101, name:"async"}],
-         12 -> [Tag{id:102, name:"performance"}],
+  Execution (hierarchical, outside-in with upfront indexing):
+
+  1. Load all data from nested tree:
+     all_data = {
+       var_1_full: [Post{id:10, user_id:1}, Post{id:11, user_id:1}, Post{id:12, user_id:2}],
+       var_2_full: [Tag{id:100, post_id:10}, Tag{id:101, post_id:10}, Tag{id:102, post_id:12}],
+     }
+
+  2. Build ALL indexes upfront using action.indexes specification:
+     all_indexes = {
+       var_1_full: {  // Posts indexed by column 1 (user_id)
+         1 -> [Post{10}, Post{11}],
+         2 -> [Post{12}],
+       },
+       var_2_full: {  // Tags indexed by column 1 (post_id)
+         10 -> [Tag{100}, Tag{101}],
+         12 -> [Tag{102}],
+       },
+     }
+
+     Note: These indexes are built ONCE using the pre-planned specifications.
+     The qualification.index_id tells us which index to use during filtering.
+
+  4. Process each User (OUTSIDE-IN with context, reusing indexes):
+
+     User{id:1, name:"Alice"}:
+       context_stack = [User{1}]
+
+       // Filter Posts for this User using PRE-BUILT index
+       filtered_posts = all_indexes[var_1_full][1] = [Post{10}, Post{11}]
+
+       // Process each Post with its Tags
+       processed_posts = []
+       For each Post{10, user_id:1} in filtered_posts:
+         context_stack = [User{1}, Post{10}]
+
+         // Filter Tags using PRE-BUILT index
+         // (In this example, Tags only reference Post, but they COULD reference User too!)
+         filtered_tags = all_indexes[var_2_full][10] = [Tag{100}, Tag{101}]
+
+         // No children under Tags, so just apply projection
+         projected_tags = [
+           { id: 100, name: "rust" },
+           { id: 101, name: "async" },
+         ]
+
+         // Apply Posts projection with filtered tags
+         processed_post = {
+           id: 10,
+           title: "Post1",
+           tags: projected_tags,
+         }
+         processed_posts.push(processed_post)
+
+       For each Post{11, user_id:1} in filtered_posts:
+         context_stack = [User{1}, Post{11}]
+         filtered_tags = all_indexes[var_2_full][11] = []  // Reusing index
+         processed_post = { id: 11, title: "Post2", tags: [] }
+         processed_posts.push(processed_post)
+
+       // Apply User projection with processed posts
+       user_result = {
+         id: 1,
+         name: "Alice",
+         posts: processed_posts,
        }
 
-    2. For each post in var_1:
-       Post{id:10, user_id:1, title:"Post1"}:
-         - Extract root_key = post.id = 10
-         - Lookup in index: filtered_tags = [Tag{100}, Tag{101}]
-         - Apply projection([post_record, filtered_tags]) ->
-           { id: 10, title: "Post1", tags: [Tag{100}, Tag{101}] }
+     User{id:2, name:"Bob"}:
+       context_stack = [User{2}]
+       filtered_posts = all_indexes[var_1_full][2] = [Post{12}]  // Reusing index
 
-       Post{id:11, user_id:1, title:"Post2"}:
-         - Extract root_key = 11
-         - Lookup in index: filtered_tags = []
-         - Apply projection([post_record, []]) ->
-           { id: 11, title: "Post2", tags: [] }
+       For each Post{12, user_id:2}:
+         context_stack = [User{2}, Post{12}]
+         filtered_tags = all_indexes[var_2_full][12] = [Tag{102}]  // Reusing index
+         projected_tags = [{ id: 102, name: "perf" }]
+         processed_post = { id: 12, title: "Post3", tags: projected_tags }
 
-       Post{id:12, user_id:2, title:"Post3"}:
-         - Extract root_key = 12
-         - Lookup in index: filtered_tags = [Tag{102}]
-         - Apply projection([post_record, filtered_tags]) ->
+       user_result = {
+         id: 2,
+         name: "Bob",
+         posts: [{ id: 12, title: "Post3", tags: [Tag{102}] }],
+       }
+
+  6. Final result:
+     var_4 = [
+       {
+         id: 1,
+         name: "Alice",
+         posts: [
+           { id: 10, title: "Post1", tags: [Tag{100}, Tag{101}] },
+           { id: 11, title: "Post2", tags: [] },
+         ]
+       },
+       {
+         id: 2,
+         name: "Bob",
+         posts: [
            { id: 12, title: "Post3", tags: [Tag{102}] }
+         ]
+       },
+     ]
 
-    3. Store result:
-       var_4 = [
-         { id: 10, title: "Post1", tags: [Tag{100}, Tag{101}] },
-         { id: 11, title: "Post2", tags: [] },
-         { id: 12, title: "Post3", tags: [Tag{102}] },
-       ]
-
-    4. Drop index (free memory)
-
-Step 6: NestedMerge(Merge Posts into Users)
-  action = NestedMerge {
-    root: var_0,  // Users materialization
-    nested: var_4,  // Posts-with-Tags
-    qualification: Equality {
-      root_columns: [0],     // users.id
-      nested_columns: [1],   // posts.user_id (from WHERE clause correlation)
-    },
-    projection: Func([user_record, filtered_posts] -> {
-      id: user.id,
-      name: user.name,
-      posts: filtered_posts  // Binds to ExprArg(0) in returning clause
-    }),
-  }
-
-  Execution:
-    1. Build hash index on Posts-with-Tags (var_4) keyed by posts.user_id:
-       (Equality qualification → automatically uses hash index)
-       index = {
-         1 -> [Post{id:10, tags:[...]}, Post{id:11, tags:[]}],
-         2 -> [Post{id:12, tags:[...]}],
-       }
-
-    2. For each user in var_0:
-       User{id:1, name:"Alice"}:
-         - Extract root_key = user.id = 1
-         - Lookup in index: filtered_posts = [Post{10}, Post{11}]
-         - Apply projection([user_record, filtered_posts]) ->
-           { id: 1, name: "Alice", posts: [Post{10, ...}, Post{11, ...}] }
-
-       User{id:2, name:"Bob"}:
-         - Extract root_key = 2
-         - Lookup in index: filtered_posts = [Post{12}]
-         - Apply projection([user_record, filtered_posts]) ->
-           { id: 2, name: "Bob", posts: [Post{12, ...}] }
-
-    3. Store result:
-       var_5 = [
-         {
-           id: 1,
-           name: "Alice",
-           posts: [
-             { id: 10, title: "Post1", tags: [Tag{100}, Tag{101}] },
-             { id: 11, title: "Post2", tags: [] },
-           ]
-         },
-         {
-           id: 2,
-           name: "Bob",
-           posts: [
-             { id: 12, title: "Post3", tags: [Tag{102}] }
-           ]
-         },
-       ]
-
-    4. Drop index (free memory)
-
-Final: Project var_5 to destination
+Step 6: Project(final) -> dst
 ```
 
 **Key Points:**
-- Each merge processes one root record at a time
-- Filtered nested records are passed as arguments to the projection function
-- The projection function evaluates the returning clause with ExprArgs bound to filtered records
-- Indices are built once and used for all root records (amortized cost)
-- Inside-out execution ensures child records are fully projected before being merged into parents
-- A single NestedMerge can handle multiple collections at the same level
+- **Single NestedMerge handles entire tree**: Not separate merges for Tags→Posts and Posts→Users
+- **Outside-in execution with context**: Process User, then for each User process Posts, then for each Post process Tags
+- **Context stack grows**: [] → [User] → [User, Post]
+- **CRITICAL OPTIMIZATION - Indexes planned at planning time**: During planning, `collect_indexes()` traverses the nested tree and builds the `indexes: HashMap<VarId, Vec<usize>>` containing which columns to index for each VarId. During execution, these indexes are built ONCE upfront using the pre-planned specifications, then reused throughout iteration. The tags_index is built ONE time and then reused for ALL Posts across ALL Users. Without this optimization, the tags_index would be rebuilt for every User (2 times in this example), which would be wasteful.
+- **Index references in qualifications**: Each `Equality` qualification has an `index_id: VarId` that references the pre-built index to use
+- **Hierarchical structure in the operation**: Posts.nested contains Tags level
+- **Deep qualifications possible**: Tags could reference User via `root_columns: [(1, 0)]` (1 level up = grandparent)
 
-### 3.2 Example: User with Multiple Collections (Posts AND Comments)
+### 3.2 Example: User with Multiple Sibling Collections (Posts AND Addresses)
+
+This example shows multiple collections at the **same level** - User has both Posts and Addresses as direct children.
+
+**Query:** `User.include(posts, addresses)`
+
+**Structure:**
+```
+User
+├── Posts (sibling 1)
+└── Addresses (sibling 2)
+```
+
+**Planning:**
+```rust
+NestedMerge {
+    root: users_data,
+    nested: [
+        // Sibling 1: Posts
+        NestedLevel {
+            source: posts_data,
+            arg_index: 0,  // ExprArg(0) in User projection
+            qualification: Equality {
+                root_columns: [(0, 0)],  // User.id
+                nested_columns: [1],      // Post.user_id
+            },
+            projection: { id: posts.id, title: posts.title },
+            nested: [],  // No children
+        },
+        // Sibling 2: Addresses
+        NestedLevel {
+            source: addresses_data,
+            arg_index: 1,  // ExprArg(1) in User projection
+            qualification: Equality {
+                root_columns: [(0, 0)],  // User.id
+                nested_columns: [1],      // Address.user_id
+            },
+            projection: { id: addresses.id, street: addresses.street },
+            nested: [],  // No children
+        },
+    ],
+    projection: {
+        id: users.id,
+        name: users.name,
+        posts: ExprArg(0),     // Bound to filtered posts
+        addresses: ExprArg(1),  // Bound to filtered addresses
+    },
+}
+```
+
+**Execution:**
+```rust
+// Materialization phase (batch-load all data)
+users = [User{id:1, name:"Alice"}, User{id:2, name:"Bob"}]
+posts = [Post{id:10, user_id:1}, Post{id:11, user_id:1}, Post{id:12, user_id:2}]
+addresses = [Address{id:20, user_id:1}, Address{id:21, user_id:2}]
+
+// Build indexes for both sibling collections
+posts_index = {
+    1 -> [Post{id:10}, Post{id:11}],
+    2 -> [Post{id:12}],
+}
+
+addresses_index = {
+    1 -> [Address{id:20}],
+    2 -> [Address{id:21}],
+}
+
+// Execute nested merge
+For each User:
+    context_stack = [User]
+
+    // Filter BOTH sibling collections using the same context
+    filtered_posts = posts_index[User.id]
+    filtered_addresses = addresses_index[User.id]
+
+    // Apply projection with BOTH collections
+    projection_args = [User, filtered_posts, filtered_addresses]
+    result = projection.eval(projection_args)
+
+Results:
+[
+    {
+        id: 1,
+        name: "Alice",
+        posts: [Post{id:10}, Post{id:11}],
+        addresses: [Address{id:20}],
+    },
+    {
+        id: 2,
+        name: "Bob",
+        posts: [Post{id:12}],
+        addresses: [Address{id:21}],
+    },
+]
+```
+
+**Key Points:**
+- **Multiple siblings processed together**: Both Posts and Addresses are loaded, indexed, and filtered for each User
+- **Same context for all siblings**: All siblings at the same level use the same ancestor context
+- **Different arg_index**: Each sibling binds to a different ExprArg in the parent's projection
+- **Independent qualifications**: Each sibling can have different qualification logic
+
+### 3.3 Example: Deep Nesting with Multiple Siblings
+
+Now consider: `User.include(posts.include(tags, comments), addresses)`
+
+**Structure:**
+```
+User
+├── Posts
+│   ├── Tags
+│   └── Comments
+└── Addresses
+```
+
+**Planning:**
+```rust
+NestedMerge {
+    root: users_data,
+    nested: [
+        // Sibling 1: Posts (has children)
+        NestedLevel {
+            source: posts_data,
+            arg_index: 0,
+            qualification: Equality { root_columns: [(0, 0)], nested_columns: [1] },
+            projection: {
+                id: posts.id,
+                title: posts.title,
+                tags: ExprArg(0),      // Post's child 1
+                comments: ExprArg(1),   // Post's child 2
+            },
+            nested: [
+                // Posts' child 1: Tags
+                NestedLevel {
+                    source: tags_data,
+                    arg_index: 0,
+                    qualification: Equality {
+                        root_columns: [(0, 0)],  // Post.id (0 levels up)
+                        nested_columns: [1],      // Tag.post_id
+                    },
+                    projection: { id: tags.id, name: tags.name },
+                    nested: [],
+                },
+                // Posts' child 2: Comments
+                NestedLevel {
+                    source: comments_data,
+                    arg_index: 1,
+                    qualification: Equality {
+                        root_columns: [(0, 0)],  // Post.id (0 levels up)
+                        nested_columns: [1],      // Comment.post_id
+                    },
+                    projection: { id: comments.id, text: comments.text },
+                    nested: [],
+                },
+            ],
+        },
+        // Sibling 2: Addresses (no children)
+        NestedLevel {
+            source: addresses_data,
+            arg_index: 1,
+            qualification: Equality { root_columns: [(0, 0)], nested_columns: [1] },
+            projection: { id: addresses.id, street: addresses.street },
+            nested: [],
+        },
+    ],
+    projection: {
+        id: users.id,
+        name: users.name,
+        posts: ExprArg(0),
+        addresses: ExprArg(1),
+    },
+}
+```
+
+**Execution:**
+```
+For each User:
+    context_stack = [User]
+
+    // Process sibling 1: Posts (has children)
+    filtered_posts = posts_index[User.id]
+
+    For each Post in filtered_posts:
+        context_stack = [User, Post]
+
+        // Process Post's children (Tags and Comments)
+        filtered_tags = tags_index[Post.id]
+        filtered_comments = comments_index[Post.id]
+
+        // Project Post with its children
+        post_result = post_projection.eval([Post, filtered_tags, filtered_comments])
+
+    processed_posts = [post_result for each Post]
+
+    // Process sibling 2: Addresses (no children)
+    filtered_addresses = addresses_index[User.id]
+    processed_addresses = [address_projection.eval([addr]) for addr in filtered_addresses]
+
+    // Project User with both sibling collections
+    user_result = user_projection.eval([User, processed_posts, processed_addresses])
+```
+
+**Key Points:**
+- **Nested siblings**: Posts has its own sibling children (Tags and Comments)
+- **Different depths**: Tags/Comments are at depth 2, Addresses is at depth 1
+- **Context grows recursively**: User → [User, Post] for Tags/Comments
+- **Each level processes all its siblings**: Posts processes both Tags and Comments together
+
+### 3.4 Example: User with Multiple Collections (Posts AND Comments)
+
+**DEPRECATED - This example was replaced by 3.2 and 3.3 above**
 
 ```
 Given query: User.include(posts, comments)
