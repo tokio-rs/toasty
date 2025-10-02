@@ -12,6 +12,7 @@ impl Planner<'_> {
             FindPkByIndex(action) => self.verify_find_pk_by_index(action),
             GetByKey(action) => self.verify_get_by_key(action),
             Insert(action) => self.verify_insert(action),
+            NestedMerge(action) => self.verify_nested_merge(action),
             QueryPk(action) => self.verify_query_pk(action),
             Project(action) => self.verify_project(action),
             ReadModifyWrite(action) => self.verify_read_modify_write(action),
@@ -45,6 +46,8 @@ impl Planner<'_> {
     fn verify_get_by_key(&self, _action: &plan::GetByKey) {}
 
     fn verify_insert(&self, _action: &plan::Insert) {}
+
+    fn verify_nested_merge(&self, _action: &plan::NestedMerge) {}
 
     fn verify_query_pk(&self, _action: &plan::QueryPk) {}
 

@@ -6,6 +6,7 @@ mod find_pk_by_index;
 mod get_by_key;
 mod insert;
 mod kv;
+mod nested_merge;
 mod project;
 mod query_pk;
 mod rmw;
@@ -60,6 +61,7 @@ impl Exec<'_> {
             Action::FindPkByIndex(action) => self.action_find_pk_by_index(action).await,
             Action::GetByKey(action) => self.action_get_by_key(action).await,
             Action::Insert(action) => self.action_insert(action).await,
+            Action::NestedMerge(action) => self.action_nested_merge(action).await,
             Action::QueryPk(action) => self.action_query_pk(action).await,
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
             Action::Project(action) => self.action_project(action).await,

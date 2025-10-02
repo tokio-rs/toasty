@@ -25,6 +25,9 @@ pub(crate) use input::{Input, InputSource};
 mod insert;
 pub(crate) use insert::Insert;
 
+mod nested_merge;
+pub(crate) use nested_merge::{MergeQualification, NestedLevel, NestedMerge};
+
 mod output;
 pub(crate) use output::{Output, OutputTarget};
 
