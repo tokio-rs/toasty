@@ -73,9 +73,15 @@ For recursive nesting (User -> Posts -> Tags), we use an **inside-out** approach
 
 ## Design Proposal: Nested Merge Plan
 
-### Core Idea: Join-Like Merge Operations
+### Core Idea: Per-Record Filtering and Projection
 
-Instead of treating association as a special case, model it as a **nested merge** operation similar to joins, but producing nested structures instead of flat tuples.
+Instead of treating association as a special case, model it as a **nested merge** operation that:
+1. Takes materialized root records and materialized nested records
+2. For each root record, filters the nested materialization using merge qualifications
+3. Stores the filtered nested records as the ExprArg input (referenced in returning clause)
+4. Projects the final result using the returning clause projection
+
+This produces nested structures by processing each root record individually.
 
 ### 1. Plan Representation
 
@@ -85,273 +91,568 @@ Introduce new action types in the execution pipeline:
 // In engine/plan/mod.rs
 
 /// A nested merge operation that associates child records with parent records
+///
+/// A single NestedMerge can handle multiple nested collections at the same level.
+/// For example, if User has both `posts` and `comments`, and both are eagerly loaded,
+/// one NestedMerge will filter both collections and bind them to their respective
+/// ExprArgs before applying the projection.
 pub(crate) struct NestedMerge {
-    /// Source variable (parent records)
-    source: VarId,
+    /// Root materialization variable (parent records)
+    root: VarId,
 
-    /// Target variable (child records to merge in)
-    target: VarId,
+    /// Nested collections to merge into the root
+    /// Each entry corresponds to a child statement that needs to be merged
+    nested: Vec<NestedCollection>,
 
-    /// Output variable (source with nested target)
+    /// Output variable (projected result with nested structure)
     output: VarId,
 
-    /// Field index in source record to populate
-    field_index: usize,  // Index into the record's fields
-
-    /// Merge strategy and configuration
-    strategy: MergeStrategy,
-
-    /// Cardinality of the association
-    cardinality: MergeCardinality,
+    /// Projection to apply after filtering all nested collections
+    /// Args: [root_record, filtered_collection_0, filtered_collection_1, ...]
+    /// The filtered collections are bound to ExprArgs in the returning clause
+    /// This comes from the returning clause
+    projection: eval::Func,
 }
 
-pub(crate) enum MergeStrategy {
-    /// Build hash index on target, probe with source
-    HashMerge {
-        /// Columns in source to use as join keys (e.g., [user.id])
-        source_keys: Vec<usize>,  // Column indices in source record
+pub(crate) struct NestedCollection {
+    /// Variable containing the nested records to filter
+    source: VarId,
 
-        /// Columns in target to use as join keys (e.g., [todo.user_id])
-        target_keys: Vec<usize>,  // Column indices in target record
+    /// Which ExprArg in the projection corresponds to this collection
+    /// After filtering, the results will be passed as this argument to the projection
+    arg_index: usize,
 
-        /// Optional additional filter predicate
-        filter: Option<eval::Func>,
-    },
-
-    /// Nested loop merge (for small datasets or complex predicates)
-    NestedLoopMerge {
-        /// Predicate to evaluate for each source/target pair
-        /// Args: [source_record, target_record] -> bool
-        predicate: eval::Func,
-    },
-
-    /// Merge sorted inputs (when both sides are pre-sorted)
-    SortMerge {
-        /// Source sort keys
-        source_keys: Vec<usize>,
-
-        /// Target sort keys
-        target_keys: Vec<usize>,
-
-        /// Sort direction (all ASC for now)
-        direction: Vec<Direction>,
-    },
+    /// How to filter nested records for each root record
+    /// The qualification determines the indexing strategy:
+    /// - Equality: Build hash index on nested_columns
+    /// - Predicate: No index, evaluate predicate for each pair
+    qualification: MergeQualification,
 }
 
-pub(crate) enum MergeCardinality {
-    /// 1:1 relationship (BelongsTo, HasOne)
-    /// Target field receives single record or null
-    One,
+pub(crate) enum MergeQualification {
+    /// Equality on specific columns (uses hash index)
+    /// root_record[root_columns] == nested_record[nested_columns]
+    ///
+    /// Execution: Build hash index on nested records keyed by nested_columns,
+    /// then lookup using root_columns for each root record.
+    Equality {
+        root_columns: Vec<usize>,
+        nested_columns: Vec<usize>,
+    },
 
-    /// 1:N relationship (HasMany)
-    /// Target field receives list of records
-    Many,
+    /// General predicate evaluation (uses nested loop)
+    /// Args: [root_record, nested_record] -> bool
+    ///
+    /// Execution: For each root record, evaluate predicate against all
+    /// nested records. No indexing.
+    Predicate(eval::Func),
+
+    /// Future: More specialized patterns that enable different index strategies
+    // SortedRange { ... },  // Could use binary search if pre-sorted
+    // Prefix { ... },       // Could use trie/prefix index
 }
 ```
 
 ### 2. Planning Phase - Building the Merge DAG
 
+#### 2.0 Query Transformation for Materializations
+
+Before planning merges, the partitioned statements must be **transformed** to batch-load ALL records that will appear in the final graph, not just those matching a specific parent record.
+
+**Original nested statement** (correlated to parent):
+```sql
+-- In context of a specific user
+SELECT * FROM posts WHERE posts.user_id = ?user_id
+```
+
+**Transformed materialization query** (loads all relevant posts):
+```sql
+-- Batch-loads all posts for ANY user that matched the root query
+SELECT posts.*
+FROM posts
+WHERE EXISTS (
+  SELECT 1
+  FROM VALUES(?)  -- Runtime arg: projected results from parent query (e.g., list of user IDs)
+  WHERE posts.user_id = column[0]  -- Correlation: match against the VALUES
+  AND [other filter conditions from original query]
+)
+```
+
+**Key implementation details** (from `partition.rs:525-528`):
+1. The parent query results are **projected** to include only the necessary join columns (e.g., just `user.id`)
+2. These projected values are passed as a **runtime argument** (`arg(0)`) to the child query
+3. The child query selects `FROM VALUES(arg(0))` in the EXISTS subquery
+4. The correlation condition compares child columns to `column[0]` (the VALUES)
+
+This is **more efficient** than embedding the full parent query:
+- Parent query executes once, results are materialized
+- Child query receives a simple list of values (e.g., `[1, 2, 3]`)
+- Database can optimize the VALUES lookup
+
+```rust
+// From partition.rs:525-528
+let sub_select = stmt::Select::new(
+    stmt::Values::from(stmt::Expr::arg(0)),  // FROM VALUES(arg(0))
+    select.filter.take()
+);
+select.filter = stmt::Expr::exists(stmt::Query::builder(sub_select).returning(1));
+```
+
+**Key insight**: The materialization queries are **batch operations** - they load **exactly** the records that will appear in the final result graph, loading them all at once rather than per-parent. The association of which child records belong to which parent happens later during the NestedMerge execution.
+
+**Three-Phase Execution**:
+
+1. **Materialization Phase**: Execute queries in dependency order
+   - Root query: `SELECT * FROM users WHERE users.active = true`
+   - Returns: `[User{id:1}, User{id:2}]`
+
+2. **Projection Phase**: Extract join columns for child queries
+   - Project: `users.map(|u| u.id)` → `[1, 2]`
+   - Child query: `SELECT * FROM posts WHERE EXISTS (SELECT 1 FROM VALUES([1,2]) WHERE posts.user_id = column[0])`
+   - Returns: `[Post{id:10, user_id:1}, Post{id:11, user_id:1}, Post{id:12, user_id:2}]`
+
+3. **Merge Phase**: Filter materialized records per parent in-memory
+   - For User{id:1}: Filter posts where `post.user_id == 1` → `[Post{10}, Post{11}]`
+   - For User{id:2}: Filter posts where `post.user_id == 2` → `[Post{12}]`
+   - Efficient: Uses in-memory hash indexes built once
+
+**Key efficiency gains**:
+- Materialization queries receive **projected parent results** (just IDs), not full parent query
+- Uses `VALUES(?)` with runtime args, not embedded subqueries
+- Database sees: `WHERE EXISTS (SELECT 1 FROM VALUES([1,2]) ...)` instead of full parent query
+- The correlation condition serves dual purposes:
+  - In materialization: Batch-load using `VALUES([1,2])`
+  - In merge: Filter per-parent using hash index
+
+#### 2.1 Materialization Graph Construction
+
 In `engine/planner/partition.rs`, after materializations are computed:
 
 ```rust
-/// Represents the dependency graph of nested merges
-struct MergeGraph {
-    /// All materializations (stmt_id -> materialization info)
-    materializations: HashMap<StmtId, MaterializationInfo>,
+/// Represents the dependency graph of all operations needed to execute a query
+///
+/// This graph structure is general enough to support future operation types beyond
+/// NestedMerge (e.g., Union, PolymorphicMerge, Aggregate), though currently only
+/// ExecStatement, NestedMerge, and Project are implemented.
+struct MaterializationGraph {
+    /// All operations (database queries and post-processing) in execution order
+    nodes: Vec<MaterializationNode>,
 
-    /// Merge operations to perform
-    merges: Vec<MergeNode>,
-
-    /// Topologically sorted merge order (inside-out)
-    execution_order: Vec<usize>,  // Indices into `merges`
+    /// Topologically sorted execution order (inside-out)
+    execution_order: Vec<NodeId>,
 }
 
-struct MergeNode {
-    /// Unique ID for this merge operation
-    id: usize,
+type NodeId = usize;
 
-    /// The merge action to execute
-    action: plan::NestedMerge,
+struct MaterializationNode {
+    /// Unique ID for this node
+    id: NodeId,
 
-    /// Merge operations that must complete before this one
-    /// (because they modify the target we're merging)
-    dependencies: Vec<usize>,  // Indices into MergeGraph::merges
+    /// The operation to execute
+    operation: Operation,
+
+    /// Nodes that must complete before this one
+    /// (because they produce variables we need as input)
+    dependencies: Vec<NodeId>,
 }
 
-struct MaterializationInfo {
-    /// The database query to execute
-    query: stmt::Statement,
+enum Operation {
+    /// Execute a database query
+    ExecStatement {
+        /// The database query to execute
+        stmt: stmt::Statement,
 
-    /// Variable where results will be stored
-    output_var: VarId,
+        /// Input variable containing parent's projected join columns
+        /// None for root query, Some(var_id) for child queries
+        input_var: Option<VarId>,
 
-    /// Nested substatements that depend on this materialization
-    children: Vec<(usize, StmtId)>,  // (field_index, child_stmt_id)
+        /// Output projections from the query
+        /// A single query can produce multiple outputs, each with its own variable and projection
+        /// Example: One output for the full materialized records, another for just join columns
+        outputs: Vec<Output>,
+    },
+
+    /// Nested merge operation - combines parent and child materializations
+    NestedMerge(plan::NestedMerge),
+
+    /// Projection operation - transforms records (including final output projection)
+    Project(plan::Project),
+
+    // Future operation types:
+    // Union(plan::Union),
+    // PolymorphicMerge(plan::PolymorphicMerge),
+    // Aggregate(plan::Aggregate),
+}
+
+struct Output {
+    /// Variable where this projected output is stored
+    var: VarId,
+
+    /// Expression to project from the raw query results
+    expr: stmt::Expr,
+}
+
+// Example: User query with has_many Todos
+//
+// Two nodes created for the Users statement:
+//
+// Node 0: ExecStatement
+//   stmt: SELECT * FROM users WHERE users.active = true
+//   input_var: None  (root query)
+//   outputs: [
+//     Output { var: var_0_full, expr: { id: users.id, name: users.name, email: users.email } },
+//     Output { var: var_0_ids, expr: users.id },
+//   ]
+//   Purpose: Load user records and extract join columns for child queries
+//
+// Node 1: NestedMerge
+//   root: var_0_full
+//   nested: [NestedCollection { source: var_todos, ... }]
+//   output: var_1
+//   Purpose: Merge todos into users
+//
+// StatementState for Users:
+//   exec_node: 0   (points to the ExecStatement node)
+//   output_node: 1 (points to the NestedMerge node that produces final output)
+//
+// This separation allows:
+// - Child queries to reference exec_node to get join column vars (var_0_ids)
+// - Parent merges to reference output_node to get final merged results (var_1)
+
+/// Information about partitioned statements
+/// This comes from the partitioning phase, before materialization planning
+struct StatementState {
+    /// The statement (with nested sub-statements replaced by ExprArg)
+    stmt: stmt::Statement,
+
+    /// Arguments to this statement
+    args: Vec<Arg>,
+
+    /// Sub-statements (children) of this statement
+    subs: Vec<StmtId>,
+
+    /// Node ID of the ExecStatement that executes this statement's query
+    /// Used to find input_var for child queries
+    exec_node: Option<NodeId>,
+
+    /// Node ID of the final operation that produces this statement's output
+    /// (Usually a NestedMerge, or the ExecStatement itself for leaf statements)
+    /// Used as source for parent merges
+    output_node: Option<NodeId>,
+
+    /// The projection to apply after merging (contains ExprArgs for children)
+    projection: stmt::Expr,
+}
+
+enum Arg {
+    /// A sub-statement argument (ExprArg that will be filled by child results)
+    Sub(StmtId),
+
+    /// A back-reference argument (ExprArg that references parent fields)
+    Ref { stmt_id: StmtId, index: usize },
 }
 
 impl Planner<'_> {
     pub(crate) fn plan_v2_stmt_query(&mut self, mut stmt: stmt::Statement, dst: plan::VarId) {
         // ... existing code to partition into statements ...
+        // During partitioning, sub-statements in returning are replaced with ExprArg
 
-        // Build materialization graph
-        let mut graph = MergeGraph::new();
+        // Build materialization graph structure (queries not yet transformed)
+        let mut graph = MaterializationGraph::new();
         self.build_materialization_graph(&mut graph, StmtId(0));
 
-        // Execute materializations (can parallelize independent ones)
-        for mat_id in graph.materialization_order() {
-            let mat = &graph.materializations[&mat_id];
-            self.push_action(plan::ExecStatement {
-                input: None,
-                output: Some(plan::Output {
+        // TRANSFORMATION STEP: Transform queries to use VALUES(arg(0)) pattern
+        // and compute multiple outputs for each materialization
+        self.compute_materializations(&mut graph);
+
+        // Add final projection node to graph (output to destination variable)
+        let root_output_node = self.stmts[0].output_node.unwrap();
+        let final_var = match &graph.nodes[root_output_node].operation {
+            Operation::NestedMerge(merge) => merge.output,
+            Operation::ExecStatement { outputs, .. } => outputs[0].var,
+            _ => unreachable!(),
+        };
+
+        let final_node_id = graph.nodes.len();
+        graph.nodes.push(MaterializationNode {
+            id: final_node_id,
+            operation: Operation::Project(plan::Project {
+                input: final_var,
+                output: plan::Output {
                     ty: /* ... */,
-                    targets: vec![plan::OutputTarget {
-                        var: mat.output_var,
-                        project: /* ... */,
-                    }],
+                    targets: vec![plan::OutputTarget { var: dst, project: None }],
+                },
+            }),
+            dependencies: vec![root_output_node],
+        });
+
+        // Compute execution order for all nodes
+        graph.compute_execution_order();
+
+        // Execute all operations in topological order
+        for node_id in &graph.execution_order {
+            let node = &graph.nodes[*node_id];
+            match &node.operation {
+                Operation::ExecStatement { stmt, input_var, outputs } => {
+                    let mut output_targets = Vec::new();
+                    for output in outputs {
+                        output_targets.push(plan::OutputTarget {
+                            var: output.var,
+                            project: self.build_projection(&output.expr, /* types */),
+                        });
+                    }
+
+                    self.push_action(plan::ExecStatement {
+                        input: input_var.map(|var| plan::Input { var }),
+                        output: Some(plan::Output {
+                            ty: /* materialized record type */,
+                            targets: output_targets,
+                        }),
+                        stmt: stmt.clone(),
+                        conditional_update_with_no_returning: false,
+                    });
+                }
+                Operation::NestedMerge(merge) => {
+                    self.push_action(merge.clone());
+                }
+                Operation::Project(project) => {
+                    self.push_action(project.clone());
+                }
+            }
+        }
+    }
+
+    fn build_materialization_graph(&mut self, graph: &mut MaterializationGraph, stmt_id: StmtId) {
+        // Recursively build nodes for all children first (inside-out)
+        let child_stmt_ids = self.stmts[stmt_id.0].subs.clone();
+        for child_stmt_id in &child_stmt_ids {
+            self.build_materialization_graph(graph, *child_stmt_id);
+        }
+
+        // Create ExecStatement node for this statement
+        let exec_node_id = graph.nodes.len();
+        graph.nodes.push(MaterializationNode {
+            id: exec_node_id,
+            operation: Operation::ExecStatement {
+                stmt: self.stmts[stmt_id.0].stmt.clone(),  // Will be transformed later
+                input_var: None,  // Will be set later based on parent
+                outputs: vec![],  // Will be populated by compute_materializations()
+            },
+            dependencies: vec![],  // Will be set later based on parent exec node
+        });
+        self.stmts[stmt_id.0].exec_node = Some(exec_node_id);
+
+        // Create NestedMerge node for this statement (if it has children or needs projection)
+        self.plan_merge_for_stmt(graph, stmt_id);
+    }
+
+    fn compute_materializations(&mut self, graph: &mut MaterializationGraph) {
+        // Transform queries and compute outputs for all ExecStatement nodes
+        for stmt_id in 0..self.stmts.len() {
+            let stmt_state = &self.stmts[stmt_id];
+            let exec_node_id = stmt_state.exec_node.unwrap();
+            let node = &mut graph.nodes[exec_node_id];
+
+            let Operation::ExecStatement { stmt, input_var, outputs } = &mut node.operation else {
+                unreachable!()
+            };
+
+            // TRANSFORMATION STEP: Rewrite the query to use VALUES(arg(0)) pattern
+            // This is where we apply the EXISTS subquery transformation
+            if let Some(parent_stmt_id) = self.find_parent_stmt(StmtId(stmt_id)) {
+                let parent_exec_node_id = self.stmts[parent_stmt_id.0].exec_node.unwrap();
+
+                // Transform child query to use VALUES(arg(0)) in EXISTS clause
+                self.transform_to_values_pattern(stmt, &self.stmts[stmt_id]);
+
+                // Set input_var to parent's join column output
+                let parent_exec_node = &graph.nodes[parent_exec_node_id];
+                let Operation::ExecStatement { outputs: parent_outputs, .. } = &parent_exec_node.operation else {
+                    unreachable!()
+                };
+                *input_var = Some(parent_outputs[1].var);  // Second output is join columns
+
+                // Add dependency on parent's ExecStatement
+                node.dependencies.push(parent_exec_node_id);
+            }
+
+            // Build multiple outputs from this materialization
+            // Example: One for full records, one for join columns
+            *outputs = self.compute_outputs(stmt, &self.stmts[stmt_id]);
+        }
+    }
+
+    fn transform_to_values_pattern(
+        &mut self,
+        query: &mut stmt::Statement,
+        stmt_state: &StatementState,
+    ) {
+        // Transform: FROM table WHERE parent_correlation
+        // Into: FROM table WHERE EXISTS (SELECT 1 FROM VALUES(arg(0)) WHERE correlation)
+
+        let stmt::Statement::Query(stmt_query) = query else { return };
+        let stmt::ExprSet::Select(select) = &mut stmt_query.body else { return };
+
+        for (arg_idx, arg) in stmt_state.args.iter().enumerate() {
+            let Arg::Ref { .. } = arg else { continue };
+
+            // Build the VALUES(arg(0)) subquery
+            let sub_select = stmt::Select::new(
+                stmt::Values::from(stmt::Expr::arg(0)),  // FROM VALUES(arg(0))
+                select.filter.take()  // Move filter into EXISTS
+            );
+
+            // Replace filter with EXISTS subquery
+            select.filter = stmt::Expr::exists(
+                stmt::Query::builder(sub_select).returning(1)
+            );
+        }
+    }
+
+    fn plan_merge_for_stmt(
+        &mut self,
+        graph: &mut MaterializationGraph,
+        stmt_id: StmtId,
+    ) {
+        let stmt_state = &self.stmts[stmt_id.0];
+
+        // Get children from StatementState args
+        let children: Vec<_> = stmt_state.args.iter()
+            .enumerate()
+            .filter_map(|(arg_idx, arg)| {
+                match arg {
+                    Arg::Sub(child_stmt_id) => Some((arg_idx, *child_stmt_id)),
+                    Arg::Ref { .. } => None,
+                }
+            })
+            .collect();
+
+        let merge_node_id = graph.nodes.len();
+        let output_var = self.var_table.register_var(/* projected type */);
+
+        let exec_node_id = stmt_state.exec_node.unwrap();
+
+        if children.is_empty() {
+            // Leaf node - no merges needed, just need to project materialization
+            let projection = self.build_projection(&stmt_state.projection, /* types */);
+
+            graph.nodes.push(MaterializationNode {
+                id: merge_node_id,
+                operation: Operation::NestedMerge(plan::NestedMerge {
+                    root: /* Will be set after compute_materializations(), use exec outputs[0] */,
+                    nested: vec![],  // No nested collections for leaf
+                    output: output_var,
+                    projection,
                 }),
-                stmt: mat.query.clone(),
-                conditional_update_with_no_returning: false,
+                dependencies: vec![exec_node_id],  // Depends on its own ExecStatement
+            });
+        } else {
+            // Non-leaf node: create ONE operation that handles ALL children
+            let mut nested_collections = Vec::new();
+            let mut dependencies = vec![exec_node_id];  // Always depends on its own ExecStatement
+
+            // Gather all nested collections from StatementState
+            for (arg_idx, child_stmt_id) in children {
+                // Get the child's output node (its NestedMerge)
+                let child_output_node_id = self.stmts[child_stmt_id.0].output_node.unwrap();
+
+                // Extract merge qualification from the nested statement's WHERE clause
+                let qualification = self.extract_merge_qualification(stmt_id, child_stmt_id);
+
+                nested_collections.push(plan::NestedCollection {
+                    source: /* Will be filled from child's output after nodes are built */,
+                    arg_index: arg_idx,  // ExprArg position from StatementState.args
+                    qualification,
+                });
+
+                // Add dependency on child's output node
+                dependencies.push(child_output_node_id);
+            }
+
+            // Build projection function from StatementState.projection
+            let projection = self.build_merge_projection(&stmt_state.projection, /* types */);
+
+            graph.nodes.push(MaterializationNode {
+                id: merge_node_id,
+                operation: Operation::NestedMerge(plan::NestedMerge {
+                    root: /* Will be set after compute_materializations(), use exec outputs[0] */,
+                    nested: nested_collections,
+                    output: output_var,
+                    projection,
+                }),
+                dependencies,
             });
         }
 
-        // Execute merges in topological order (inside-out)
-        for merge_idx in &graph.execution_order {
-            let merge_node = &graph.merges[*merge_idx];
-            self.push_action(merge_node.action.clone());
-        }
-
-        // Final projection to output
-        let final_var = graph.final_output_var();
-        self.push_action(plan::Project {
-            input: final_var,
-            output: plan::Output {
-                ty: /* ... */,
-                targets: vec![plan::OutputTarget { var: dst, /* ... */ }],
-            },
-        });
+        // Record this as the output node for this statement
+        self.stmts[stmt_id.0].output_node = Some(merge_node_id);
     }
 
-    fn build_materialization_graph(&mut self, graph: &mut MergeGraph, stmt_id: StmtId) {
-        let stmt_state = &self.stmts[stmt_id.0];
-
-        // Create materialization for this statement
-        let output_var = self.var_table.register_var(/* ... */);
-        graph.materializations.insert(stmt_id, MaterializationInfo {
-            query: stmt_state.stmt.clone(),
-            output_var,
-            children: vec![],
-        });
-
-        // Recursively build materializations for children
-        for (field_idx, child_stmt_id) in &stmt_state.children {
-            self.build_materialization_graph(graph, *child_stmt_id);
-
-            graph.materializations.get_mut(&stmt_id).unwrap()
-                .children.push((*field_idx, *child_stmt_id));
-        }
-
-        // Create merge nodes for all children
-        for (field_idx, child_stmt_id) in &stmt_state.children {
-            self.build_merge_nodes(graph, stmt_id, *field_idx, *child_stmt_id);
-        }
-    }
-
-    fn build_merge_nodes(
-        &mut self,
-        graph: &mut MergeGraph,
-        parent_stmt: StmtId,
-        field_idx: usize,
-        child_stmt: StmtId,
-    ) {
-        // Analyze the join condition
-        let join_analysis = self.analyze_join_condition(parent_stmt, child_stmt);
-
-        // Determine source and target variables
-        // For inside-out nesting:
-        // - If child has no children: source = child_mat, target = child_mat
-        // - If child has children: source = child_with_grandchildren, target = child_mat
-        let (source_var, dependencies) = self.resolve_source_var(graph, child_stmt);
-        let target_var = graph.materializations[&child_stmt].output_var;
-
-        let merge_id = graph.merges.len();
-        let output_var = self.var_table.register_var(/* ... */);
-
-        let strategy = self.choose_merge_strategy(&join_analysis);
-
-        graph.merges.push(MergeNode {
-            id: merge_id,
-            action: plan::NestedMerge {
-                source: source_var,
-                target: target_var,
-                output: output_var,
-                field_index: field_idx,
-                strategy,
-                cardinality: join_analysis.cardinality,
-            },
-            dependencies,
-        });
-    }
-
-    fn resolve_source_var(
+    fn extract_merge_qualification(
         &self,
-        graph: &MergeGraph,
-        stmt_id: StmtId,
-    ) -> (VarId, Vec<usize>) {
-        let children = &graph.materializations[&stmt_id].children;
+        parent_stmt: StmtId,
+        child_stmt: StmtId,
+    ) -> MergeQualification {
+        // Look at the child statement's WHERE clause
+        // It should contain the correlation condition (e.g., posts.user_id = users.id)
+        // This was added during partitioning when creating the EXISTS subquery
+        //
+        // IMPORTANT: The correlation condition appears in TWO places:
+        // 1. In the materialization query's EXISTS clause (for batch loading)
+        // 2. We extract it here to use during the merge (for per-record filtering)
+        //
+        // Example: For posts materialized with EXISTS(...WHERE posts.user_id = users.id...)
+        // We extract: root_columns=[0] (users.id), nested_columns=[1] (posts.user_id)
 
-        if children.is_empty() {
-            // Leaf node - source is just the materialization
-            (graph.materializations[&stmt_id].output_var, vec![])
+        let child_query = &self.stmts[child_stmt.0].stmt;
+
+        // Try to extract equality condition on columns from the correlation
+        if let Some(equality) = self.try_extract_equality(child_query) {
+            // Use equality qualification -> will use hash index
+            MergeQualification::Equality {
+                root_columns: equality.parent_columns,
+                nested_columns: equality.child_columns,
+            }
         } else {
-            // Has children - source is the result of merging all children
-            // Find the last merge that produced this stmt with all its children
-            let merge_idx = graph.merges.iter()
-                .enumerate()
-                .rev()
-                .find(|(_, m)| {
-                    // Find merge where source is this stmt
-                    m.action.source == graph.materializations[&stmt_id].output_var
-                })
-                .map(|(idx, _)| idx)
-                .expect("Children should have been merged already");
-
-            (graph.merges[merge_idx].action.output, vec![merge_idx])
+            // Fall back to general predicate -> will use nested loop
+            // Build an Expr that evaluates the correlation condition
+            let predicate = self.build_correlation_predicate(parent_stmt, child_stmt);
+            MergeQualification::Predicate(predicate)
         }
     }
 
-    fn choose_merge_strategy(&self, analysis: &JoinAnalysis) -> MergeStrategy {
-        // Simple heuristic (can be sophisticated later)
-        if analysis.is_equality_join() && analysis.estimated_target_rows > 10 {
-            MergeStrategy::HashMerge {
-                source_keys: analysis.source_columns.clone(),
-                target_keys: analysis.target_columns.clone(),
-                filter: analysis.additional_filter.clone(),
-            }
-        } else {
-            MergeStrategy::NestedLoopMerge {
-                predicate: analysis.to_predicate(),
-            }
-        }
+    fn build_merge_projection(
+        &self,
+        returning: &[stmt::Expr],
+        nested_arg_index: usize,
+        /* types */
+    ) -> eval::Func {
+        // Build a function that:
+        // Args: [root_record, filtered_nested_records]
+        // - Binds ExprArg[nested_arg_index] to filtered_nested_records
+        // - Evaluates the returning clause projection
+        // Returns: projected record
+
+        todo!("Build projection function from returning clause")
     }
 }
 
-impl MergeGraph {
+impl MaterializationGraph {
     fn new() -> Self {
         Self {
-            materializations: HashMap::new(),
-            merges: vec![],
+            nodes: vec![],
             execution_order: vec![],
         }
     }
 
-    /// Compute topological sort of merges (inside-out)
+    /// Compute topological sort of all nodes (inside-out execution)
     fn compute_execution_order(&mut self) {
         // Kahn's algorithm for topological sort
-        let mut in_degree: Vec<usize> = self.merges.iter()
-            .map(|m| m.dependencies.len())
+        let mut in_degree: Vec<usize> = self.nodes.iter()
+            .map(|node| node.dependencies.len())
             .collect();
 
-        let mut queue: Vec<usize> = in_degree.iter()
+        let mut queue: Vec<NodeId> = in_degree.iter()
             .enumerate()
             .filter(|(_, &d)| d == 0)
             .map(|(idx, _)| idx)
@@ -359,12 +660,12 @@ impl MergeGraph {
 
         self.execution_order.clear();
 
-        while let Some(merge_idx) = queue.pop() {
-            self.execution_order.push(merge_idx);
+        while let Some(node_id) = queue.pop() {
+            self.execution_order.push(node_id);
 
-            // Find merges that depend on this one
-            for (idx, merge) in self.merges.iter().enumerate() {
-                if merge.dependencies.contains(&merge_idx) {
+            // Find nodes that depend on this one
+            for (idx, node) in self.nodes.iter().enumerate() {
+                if node.dependencies.contains(&node_id) {
                     in_degree[idx] -= 1;
                     if in_degree[idx] == 0 {
                         queue.push(idx);
@@ -373,37 +674,8 @@ impl MergeGraph {
             }
         }
 
-        assert_eq!(self.execution_order.len(), self.merges.len(), "Cycle in merge graph");
+        assert_eq!(self.execution_order.len(), self.nodes.len(), "Cycle in materialization graph");
     }
-
-    fn materialization_order(&self) -> Vec<StmtId> {
-        // Can be parallelized, but for now just return all of them
-        self.materializations.keys().cloned().collect()
-    }
-
-    fn final_output_var(&self) -> VarId {
-        // The output of the last merge is the final result
-        self.merges[*self.execution_order.last().unwrap()].action.output
-    }
-}
-
-struct JoinAnalysis {
-    // Join condition columns (indices into records)
-    source_columns: Vec<usize>,
-    target_columns: Vec<usize>,
-
-    // Join type
-    is_equality: bool,
-
-    // Additional filter beyond join keys
-    additional_filter: Option<eval::Func>,
-
-    // Cardinality
-    cardinality: MergeCardinality,
-
-    // Statistics for strategy choice
-    estimated_source_rows: usize,
-    estimated_target_rows: usize,
 }
 ```
 
@@ -414,49 +686,132 @@ Pseudocode for building the execution plan:
 ```
 Given query: User.include(posts.include(tags))
 
+Original statement structure (before partitioning):
+  SELECT * FROM users
+  RETURNING {
+    id: users.id,
+    name: users.name,
+    posts: (SELECT * FROM posts WHERE posts.user_id = users.id
+            RETURNING {
+              id: posts.id,
+              title: posts.title,
+              tags: (SELECT * FROM tags WHERE tags.post_id = posts.id
+                     RETURNING { id: tags.id, name: tags.name })
+            })
+  }
+
 Step 1: Partition into statements
+During partitioning, nested sub-statements are replaced with ExprArg references:
+
   - Stmt0: SELECT * FROM users WHERE ...
+    RETURNING { id: users.id, name: users.name, posts: ExprArg(0) }
+    children: [(arg_index: 0, Stmt1)]
+
   - Stmt1: SELECT * FROM posts WHERE EXISTS (SELECT 1 FROM [Stmt0] WHERE posts.user_id = users.id)
+    RETURNING { id: posts.id, title: posts.title, tags: ExprArg(0) }
+    children: [(arg_index: 0, Stmt2)]
+
   - Stmt2: SELECT * FROM tags WHERE EXISTS (SELECT 1 FROM [Stmt1] WHERE tags.post_id = posts.id)
+    RETURNING { id: tags.id, name: tags.name }
+    children: []
 
-Step 2: Build materialization graph
-  Materializations:
-    - Mat0 (Stmt0): Users -> var_0
-    - Mat1 (Stmt1): Posts -> var_1
-    - Mat2 (Stmt2): Tags -> var_2
+Step 2: Build graph nodes (inside-out)
+The graph structure combines database queries and post-processing operations:
 
-  Children:
-    - Stmt0.children = [(field_idx: 5, Stmt1)]  // posts field
-    - Stmt1.children = [(field_idx: 3, Stmt2)]  // tags field
-    - Stmt2.children = []
+  Graph nodes (created in inside-out order):
 
-Step 3: Build merge nodes (inside-out)
-  Merge0: Tags into Posts
-    - source: var_1 (Posts materialization)
-    - target: var_2 (Tags materialization)
-    - output: var_3 (Posts-with-Tags)
-    - field_index: 3 (posts.tags)
-    - strategy: HashMerge { source_keys: [0], target_keys: [1], ... }
-    - dependencies: []
+  Node 0: ExecStatement (Tags query)
+    stmt: SELECT * FROM tags WHERE EXISTS (...)
+    input_var: Some(var_1_ids)  // From posts exec
+    outputs: [
+      Output { var: var_2_full, expr: { id: tags.id, name: tags.name } }
+    ]
+    dependencies: []  // Will be set to [Node 2] after parent is built
 
-  Merge1: Posts-with-Tags into Users
-    - source: var_3 (Posts-with-Tags from Merge0)
-    - target: var_3 (reuse same var, it's the complete Posts now)
-    - output: var_4 (Users-with-Posts-with-Tags)
-    - field_index: 5 (users.posts)
-    - strategy: HashMerge { source_keys: [0], target_keys: [2], ... }
-    - dependencies: [0]  // Must run after Merge0
+  Node 1: NestedMerge (Tags projection - leaf)
+    root: var_2_full
+    nested: []
+    output: var_3
+    projection: Func([tags_record] -> { id: tags.id, name: tags.name })
+    dependencies: [0]  // Depends on Node 0 (Tags exec)
+
+  Node 2: ExecStatement (Posts query)
+    stmt: SELECT * FROM posts WHERE EXISTS (...)
+    input_var: Some(var_0_ids)  // From users exec
+    outputs: [
+      Output { var: var_4_full, expr: { id: posts.id, title: posts.title } },
+      Output { var: var_1_ids, expr: posts.id }  // For tags query arg(0)
+    ]
+    dependencies: []  // Will be set to [Node 4] after parent is built
+
+  Node 3: NestedMerge (Merge tags into posts)
+    root: var_4_full
+    nested: [
+      NestedCollection {
+        source: var_3,  // From Node 1 (projected tags)
+        arg_index: 0,
+        qualification: Equality { root_columns: [0], nested_columns: [1] }
+      }
+    ]
+    output: var_5
+    projection: Func([post_record, filtered_tags] -> { id, title, tags })
+    dependencies: [1, 2]  // Depends on Node 1 (tags merge) and Node 2 (posts exec)
+
+  Node 4: ExecStatement (Users query)
+    stmt: SELECT * FROM users WHERE users.active = true
+    input_var: None  // Root query
+    outputs: [
+      Output { var: var_6_full, expr: { id: users.id, name: users.name } },
+      Output { var: var_0_ids, expr: users.id }  // For posts query arg(0)
+    ]
+    dependencies: []  // No dependencies
+
+  Node 5: NestedMerge (Merge posts into users)
+    root: var_6_full
+    nested: [
+      NestedCollection {
+        source: var_5,  // From Node 3 (posts with tags)
+        arg_index: 0,
+        qualification: Equality { root_columns: [0], nested_columns: [1] }
+      }
+    ]
+    output: var_7
+    projection: Func([user_record, filtered_posts] -> { id, name, posts })
+    dependencies: [3, 4]  // Depends on Node 3 (posts merge) and Node 4 (users exec)
+
+  Node 6: Project (Final output)
+    input: var_7
+    output: dst
+    dependencies: [5]  // Depends on Node 5 (users merge)
+
+Step 3: Fix dependencies after all nodes are built
+After building nodes inside-out, update ExecStatement dependencies:
+  Node 0.dependencies = [2]  // Tags exec depends on posts exec (for var_1_ids)
+  Node 2.dependencies = [4]  // Posts exec depends on users exec (for var_0_ids)
 
 Step 4: Compute execution order
-  Topological sort: [0, 1]
+  Topological sort: [4, 2, 0, 1, 3, 5, 6]
 
-Step 5: Generate plan
-  1. ExecStatement(query=Stmt0) -> var_0
-  2. ExecStatement(query=Stmt1) -> var_1
-  3. ExecStatement(query=Stmt2) -> var_2
-  4. NestedMerge(Merge0) -> var_3
-  5. NestedMerge(Merge1) -> var_4
-  6. Project(var_4) -> dst
+  Execution sequence:
+    4: ExecStatement(Users) -> [var_6_full, var_0_ids]
+    2: ExecStatement(Posts, arg: var_0_ids) -> [var_4_full, var_1_ids]
+    0: ExecStatement(Tags, arg: var_1_ids) -> [var_2_full]
+    1: NestedMerge(Tags projection) -> var_3
+    3: NestedMerge(Merge tags into posts) -> var_5
+    5: NestedMerge(Merge posts into users) -> var_7
+    6: Project(var_7) -> dst
+
+StatementState tracking:
+  Stmt0 (Users): exec_node=4, output_node=5
+  Stmt1 (Posts): exec_node=2, output_node=3
+  Stmt2 (Tags): exec_node=0, output_node=1
+
+Key efficiency gains:
+- **Single unified graph** contains all operations (queries + merges + projections)
+- **Dependencies are explicit** in the graph structure
+- **Single query produces multiple outputs** (full records + join columns)
+- **Child queries receive projected parent results** as runtime args
+- **StatementState stores node IDs** for O(1) lookups (no hash maps needed)
 ```
 
 ### 3. Execution Phase
@@ -469,88 +824,65 @@ impl Exec<'_> {
         &mut self,
         action: &plan::NestedMerge
     ) -> Result<()> {
-        let mut source = self.vars.load(action.source).collect().await?;
-        let target = self.vars.load(action.target).collect().await?;
+        // Load root materialization
+        let root_records = self.vars.load(action.root).collect().await?;
 
-        match &action.strategy {
-            MergeStrategy::HashMerge { source_keys, target_keys, filter } => {
-                self.exec_hash_merge(
-                    &mut source,
-                    &target,
-                    action.field_index,
-                    source_keys,
-                    target_keys,
-                    filter.as_ref(),
-                    &action.cardinality,
-                ).await?
-            }
-            MergeStrategy::NestedLoopMerge { predicate } => {
-                self.exec_nested_loop_merge(
-                    &mut source,
-                    &target,
-                    action.field_index,
-                    predicate,
-                    &action.cardinality,
-                ).await?
-            }
-            MergeStrategy::SortMerge { .. } => {
-                todo!("Sort merge - future optimization")
-            }
-        }
+        // Load all nested collections and build indices
+        let mut collections = Vec::with_capacity(action.nested.len());
 
-        self.vars.store(action.output, ValueStream::from_vec(source));
-        Ok(())
-    }
+        for nested_collection in &action.nested {
+            let records = self.vars.load(nested_collection.source).collect().await?;
 
-    async fn exec_hash_merge(
-        &mut self,
-        source: &mut Vec<stmt::Value>,
-        target: &[stmt::Value],
-        field_index: usize,
-        source_keys: &[usize],
-        target_keys: &[usize],
-        filter: Option<&eval::Func>,
-        cardinality: &MergeCardinality,
-    ) -> Result<()> {
-        // Build hash index on target
-        let target_index = self.build_hash_index(target, target_keys)?;
-
-        // Probe with source
-        for source_item in source {
-            let source_record = source_item.expect_record_mut();
-            let key = self.extract_key(source_record, source_keys)?;
-
-            // Lookup matching target records
-            let matches = target_index.get(&key).map(|v| &**v).unwrap_or(&[]);
-
-            // Apply optional filter
-            let filtered_matches: Vec<_> = if let Some(filter) = filter {
-                matches.iter()
-                    .filter(|&&target_record| {
-                        filter.eval_bool(&[source_item.clone(), target_record.clone()])
-                            .unwrap_or(false)
-                    })
-                    .collect()
-            } else {
-                matches.iter().collect()
+            // Build index based on qualification type
+            let index = match &nested_collection.qualification {
+                MergeQualification::Equality { nested_columns, .. } => {
+                    Some(self.build_hash_index(&records, nested_columns)?)
+                }
+                MergeQualification::Predicate(_) => None,
             };
 
-            // Populate field based on cardinality
-            match cardinality {
-                MergeCardinality::One => {
-                    source_record[field_index] = filtered_matches
-                        .first()
-                        .map(|&r| r.clone())
-                        .unwrap_or(stmt::Value::Null);
-                }
-                MergeCardinality::Many => {
-                    source_record[field_index] = stmt::Value::List(
-                        filtered_matches.into_iter().cloned().collect()
-                    );
-                }
-            }
+            collections.push(LoadedCollection {
+                records,
+                index,
+                arg_index: nested_collection.arg_index,
+                qualification: &nested_collection.qualification,
+            });
         }
 
+        // Process each root record
+        let mut results = Vec::with_capacity(root_records.len());
+
+        for root_record in root_records {
+            // Filter all nested collections for this root record
+            // Build arguments array: [root_record, filtered_0, filtered_1, ...]
+            let mut projection_args = vec![root_record.clone()];
+
+            // Collections may not be in arg_index order, so build a sparse array
+            let max_arg = collections.iter().map(|c| c.arg_index).max().unwrap_or(0);
+            let mut filtered_collections = vec![stmt::Value::Null; max_arg + 1];
+
+            for collection in &collections {
+                let filtered = self.filter_nested_for_root(
+                    &root_record,
+                    &collection.records,
+                    collection.qualification,
+                    collection.index.as_ref(),
+                )?;
+
+                filtered_collections[collection.arg_index] = stmt::Value::List(filtered);
+            }
+
+            // Append filtered collections to projection args
+            projection_args.extend(filtered_collections);
+
+            // Apply projection: [root_record, filtered_0, filtered_1, ...] -> final_record
+            let projected = action.projection.eval(&projection_args)?;
+
+            results.push(projected);
+        }
+
+        // Store output
+        self.vars.store(action.output, ValueStream::from_vec(results));
         Ok(())
     }
 
@@ -564,10 +896,48 @@ impl Exec<'_> {
         for record in records {
             let record_inner = record.expect_record();
             let key = self.extract_key(record_inner, key_columns)?;
-            index.entry(key).or_insert_with(Vec::new).push(record.clone());
+            index
+                .entry(key)
+                .or_insert_with(Vec::new)
+                .push(record.clone());
         }
 
         Ok(index)
+    }
+
+    fn filter_nested_for_root(
+        &self,
+        root_record: &stmt::Value,
+        nested_records: &[stmt::Value],
+        qualification: &MergeQualification,
+        index: Option<&HashMap<CompositeKey, Vec<stmt::Value>>>,
+    ) -> Result<Vec<stmt::Value>> {
+        match qualification {
+            MergeQualification::Equality { root_columns, .. } => {
+                // Use hash index (should always be present for Equality)
+                let hash_index = index.expect("Hash index should exist for Equality qualification");
+                let root_rec = root_record.expect_record();
+                let key = self.extract_key(root_rec, root_columns)?;
+
+                Ok(hash_index
+                    .get(&key)
+                    .map(|v| v.clone())
+                    .unwrap_or_else(Vec::new))
+            }
+            MergeQualification::Predicate(predicate) => {
+                // Evaluate predicate for each nested record
+                let mut matches = Vec::new();
+
+                for nested_record in nested_records {
+                    // Args: [root_record, nested_record] -> bool
+                    if predicate.eval_bool(&[root_record.clone(), nested_record.clone()])? {
+                        matches.push(nested_record.clone());
+                    }
+                }
+
+                Ok(matches)
+            }
+        }
     }
 
     fn extract_key(
@@ -581,51 +951,17 @@ impl Exec<'_> {
             .collect();
         Ok(CompositeKey(values))
     }
-
-    async fn exec_nested_loop_merge(
-        &mut self,
-        source: &mut Vec<stmt::Value>,
-        target: &[stmt::Value],
-        field_index: usize,
-        predicate: &eval::Func,
-        cardinality: &MergeCardinality,
-    ) -> Result<()> {
-        // Simple nested loop - can optimize later with runtime heuristics
-        for source_item in source {
-            let source_record = source_item.expect_record_mut();
-            let mut matches = Vec::new();
-
-            for target_item in target {
-                // Evaluate predicate(source, target)
-                if predicate.eval_bool(&[source_item.clone(), target_item.clone()])? {
-                    matches.push(target_item.clone());
-
-                    // Early exit for One cardinality
-                    if matches!(cardinality, MergeCardinality::One) {
-                        break;
-                    }
-                }
-            }
-
-            // Populate field
-            match cardinality {
-                MergeCardinality::One => {
-                    source_record[field_index] = matches
-                        .into_iter()
-                        .next()
-                        .unwrap_or(stmt::Value::Null);
-                }
-                MergeCardinality::Many => {
-                    source_record[field_index] = stmt::Value::List(matches);
-                }
-            }
-        }
-
-        Ok(())
-    }
 }
 
-// Composite key type for multi-column joins
+// Helper struct for loaded nested collections
+struct LoadedCollection<'a> {
+    records: Vec<stmt::Value>,
+    index: Option<HashMap<CompositeKey, Vec<stmt::Value>>>,
+    arg_index: usize,
+    qualification: &'a MergeQualification,
+}
+
+// Composite key type for multi-column equality
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct CompositeKey(Vec<stmt::Value>);
 ```
@@ -639,115 +975,230 @@ Given plan from section 2.1:
   1. ExecStatement(Users) -> var_0
   2. ExecStatement(Posts) -> var_1
   3. ExecStatement(Tags) -> var_2
-  4. NestedMerge(Tags into Posts) -> var_3
-  5. NestedMerge(Posts into Users) -> var_4
+  4. NestedMerge(Project Tags) -> var_3
+  5. NestedMerge(Merge Tags into Posts) -> var_4
+  6. NestedMerge(Merge Posts into Users) -> var_5
 
 Execution trace:
 
-Step 1: Execute materialization queries
+Step 1-3: Execute materialization queries
   var_0 = [
-    User { id: 1, name: "Alice", posts: NULL },
-    User { id: 2, name: "Bob", posts: NULL },
+    { id: 1, name: "Alice" },  // Raw user materialization
+    { id: 2, name: "Bob" },
   ]
 
   var_1 = [
-    Post { id: 10, user_id: 1, title: "Post1", tags: NULL },
-    Post { id: 11, user_id: 1, title: "Post2", tags: NULL },
-    Post { id: 12, user_id: 2, title: "Post3", tags: NULL },
+    { id: 10, user_id: 1, title: "Post1" },  // Raw post materialization
+    { id: 11, user_id: 1, title: "Post2" },
+    { id: 12, user_id: 2, title: "Post3" },
   ]
 
   var_2 = [
-    Tag { id: 100, post_id: 10, name: "rust" },
-    Tag { id: 101, post_id: 10, name: "async" },
-    Tag { id: 102, post_id: 12, name: "performance" },
+    { id: 100, post_id: 10, name: "rust" },  // Raw tag materialization
+    { id: 101, post_id: 10, name: "async" },
+    { id: 102, post_id: 12, name: "performance" },
   ]
 
-Step 4: NestedMerge(Tags into Posts)
+Step 4: NestedMerge(Project Tags) - Leaf node projection
   action = NestedMerge {
-    source: var_1,
-    target: var_2,
-    field_index: 3,  // posts.tags field
-    strategy: HashMerge {
-      source_keys: [0],  // post.id
-      target_keys: [1],  // tag.post_id
-    },
-    cardinality: Many,
+    root: var_2,
+    nested: var_2,  // Unused
+    qualification: Predicate(always_true),  // No filtering for leaf
+    projection: Func([tag_record, _] -> { id: tag.id, name: tag.name }),
   }
 
   Execution:
-    1. Build hash index on Tags keyed by post_id:
+    For each tag in var_2:
+      - No filtering (predicate always true)
+      - Apply projection to each tag
+
+    Result:
+      var_3 = [
+        { id: 100, name: "rust" },
+        { id: 101, name: "async" },
+        { id: 102, name: "performance" },
+      ]
+
+Step 5: NestedMerge(Merge Tags into Posts)
+  action = NestedMerge {
+    root: var_1,  // Posts materialization
+    nested: var_3,  // Projected tags
+    qualification: Equality {
+      root_columns: [0],     // posts.id
+      nested_columns: [1],   // tags.post_id (from WHERE clause correlation)
+    },
+    projection: Func([post_record, filtered_tags] -> {
+      id: post.id,
+      title: post.title,
+      tags: filtered_tags  // Binds to ExprArg(0) in returning clause
+    }),
+  }
+
+  Execution:
+    1. Build hash index on Tags (var_3) keyed by tags.post_id:
+       (Equality qualification → automatically uses hash index)
        index = {
-         10 -> [Tag{id:100}, Tag{id:101}],
-         12 -> [Tag{id:102}],
+         10 -> [Tag{id:100, name:"rust"}, Tag{id:101, name:"async"}],
+         12 -> [Tag{id:102, name:"performance"}],
        }
 
-    2. Probe with Posts:
-       For Post{id:10}: key=10, matches=[Tag{100}, Tag{101}]
-         -> posts[0][3] = List([Tag{100}, Tag{101}])
+    2. For each post in var_1:
+       Post{id:10, user_id:1, title:"Post1"}:
+         - Extract root_key = post.id = 10
+         - Lookup in index: filtered_tags = [Tag{100}, Tag{101}]
+         - Apply projection([post_record, filtered_tags]) ->
+           { id: 10, title: "Post1", tags: [Tag{100}, Tag{101}] }
 
-       For Post{id:11}: key=11, matches=[]
-         -> posts[1][3] = List([])
+       Post{id:11, user_id:1, title:"Post2"}:
+         - Extract root_key = 11
+         - Lookup in index: filtered_tags = []
+         - Apply projection([post_record, []]) ->
+           { id: 11, title: "Post2", tags: [] }
 
-       For Post{id:12}: key=12, matches=[Tag{102}]
-         -> posts[2][3] = List([Tag{102}])
+       Post{id:12, user_id:2, title:"Post3"}:
+         - Extract root_key = 12
+         - Lookup in index: filtered_tags = [Tag{102}]
+         - Apply projection([post_record, filtered_tags]) ->
+           { id: 12, title: "Post3", tags: [Tag{102}] }
 
     3. Store result:
-       var_3 = [
-         Post { id: 10, user_id: 1, title: "Post1", tags: [Tag{100}, Tag{101}] },
-         Post { id: 11, user_id: 1, title: "Post2", tags: [] },
-         Post { id: 12, user_id: 2, title: "Post3", tags: [Tag{102}] },
+       var_4 = [
+         { id: 10, title: "Post1", tags: [Tag{100}, Tag{101}] },
+         { id: 11, title: "Post2", tags: [] },
+         { id: 12, title: "Post3", tags: [Tag{102}] },
        ]
 
     4. Drop index (free memory)
 
-Step 5: NestedMerge(Posts-with-Tags into Users)
+Step 6: NestedMerge(Merge Posts into Users)
   action = NestedMerge {
-    source: var_0,
-    target: var_3,  // Posts-with-Tags
-    field_index: 5,  // users.posts field
-    strategy: HashMerge {
-      source_keys: [0],  // user.id
-      target_keys: [1],  // post.user_id
+    root: var_0,  // Users materialization
+    nested: var_4,  // Posts-with-Tags
+    qualification: Equality {
+      root_columns: [0],     // users.id
+      nested_columns: [1],   // posts.user_id (from WHERE clause correlation)
     },
-    cardinality: Many,
+    projection: Func([user_record, filtered_posts] -> {
+      id: user.id,
+      name: user.name,
+      posts: filtered_posts  // Binds to ExprArg(0) in returning clause
+    }),
   }
 
   Execution:
-    1. Build hash index on Posts-with-Tags keyed by user_id:
+    1. Build hash index on Posts-with-Tags (var_4) keyed by posts.user_id:
+       (Equality qualification → automatically uses hash index)
        index = {
          1 -> [Post{id:10, tags:[...]}, Post{id:11, tags:[]}],
          2 -> [Post{id:12, tags:[...]}],
        }
 
-    2. Probe with Users:
-       For User{id:1}: key=1, matches=[Post{10}, Post{11}]
-         -> users[0][5] = List([Post{10, tags:[...]}, Post{11, tags:[]}])
+    2. For each user in var_0:
+       User{id:1, name:"Alice"}:
+         - Extract root_key = user.id = 1
+         - Lookup in index: filtered_posts = [Post{10}, Post{11}]
+         - Apply projection([user_record, filtered_posts]) ->
+           { id: 1, name: "Alice", posts: [Post{10, ...}, Post{11, ...}] }
 
-       For User{id:2}: key=2, matches=[Post{12}]
-         -> users[1][5] = List([Post{12, tags:[...]}])
+       User{id:2, name:"Bob"}:
+         - Extract root_key = 2
+         - Lookup in index: filtered_posts = [Post{12}]
+         - Apply projection([user_record, filtered_posts]) ->
+           { id: 2, name: "Bob", posts: [Post{12, ...}] }
 
     3. Store result:
-       var_4 = [
-         User {
+       var_5 = [
+         {
            id: 1,
            name: "Alice",
            posts: [
-             Post { id: 10, title: "Post1", tags: [Tag{100}, Tag{101}] },
-             Post { id: 11, title: "Post2", tags: [] },
+             { id: 10, title: "Post1", tags: [Tag{100}, Tag{101}] },
+             { id: 11, title: "Post2", tags: [] },
            ]
          },
-         User {
+         {
            id: 2,
            name: "Bob",
            posts: [
-             Post { id: 12, title: "Post3", tags: [Tag{102}] }
+             { id: 12, title: "Post3", tags: [Tag{102}] }
            ]
          },
        ]
 
     4. Drop index (free memory)
 
-Final: Project var_4 to destination
+Final: Project var_5 to destination
+```
+
+**Key Points:**
+- Each merge processes one root record at a time
+- Filtered nested records are passed as arguments to the projection function
+- The projection function evaluates the returning clause with ExprArgs bound to filtered records
+- Indices are built once and used for all root records (amortized cost)
+- Inside-out execution ensures child records are fully projected before being merged into parents
+- A single NestedMerge can handle multiple collections at the same level
+
+### 3.2 Example: User with Multiple Collections (Posts AND Comments)
+
+```
+Given query: User.include(posts, comments)
+
+Materializations:
+  var_0 = [User{id:1}, User{id:2}]
+  var_1 = [Post{id:10, user_id:1}, Post{id:11, user_id:1}]
+  var_2 = [Comment{id:20, user_id:1}, Comment{id:21, user_id:2}]
+
+After leaf projections:
+  var_3 = [Post{id:10, title:"..."}, Post{id:11, title:"..."}]  // Projected posts
+  var_4 = [Comment{id:20, text:"..."}, Comment{id:21, text:"..."}]  // Projected comments
+
+NestedMerge for Users (merges BOTH posts and comments):
+  action = NestedMerge {
+    root: var_0,
+    nested: [
+      NestedCollection {
+        source: var_3,  // Projected posts
+        arg_index: 0,   // ExprArg(0) in returning clause
+        qualification: Equality { root_columns: [0], nested_columns: [1] }  // user.id == post.user_id
+      },
+      NestedCollection {
+        source: var_4,  // Projected comments
+        arg_index: 1,   // ExprArg(1) in returning clause
+        qualification: Equality { root_columns: [0], nested_columns: [1] }  // user.id == comment.user_id
+      },
+    ],
+    projection: Func([user_record, filtered_posts, filtered_comments] -> {
+      id: user.id,
+      name: user.name,
+      posts: filtered_posts,      // Binds ExprArg(0)
+      comments: filtered_comments  // Binds ExprArg(1)
+    }),
+  }
+
+Execution:
+  1. Build hash index on posts keyed by user_id:
+     posts_index = { 1 -> [Post{10}, Post{11}] }
+
+  2. Build hash index on comments keyed by user_id:
+     comments_index = { 1 -> [Comment{20}], 2 -> [Comment{21}] }
+
+  3. For User{id:1}:
+     - Lookup posts: posts_index[1] = [Post{10}, Post{11}]
+     - Lookup comments: comments_index[1] = [Comment{20}]
+     - Apply projection([User{1}, [Post{10}, Post{11}], [Comment{20}]]) ->
+       { id: 1, name: "Alice", posts: [...], comments: [...] }
+
+  4. For User{id:2}:
+     - Lookup posts: posts_index[2] = []
+     - Lookup comments: comments_index[2] = [Comment{21}]
+     - Apply projection([User{2}, [], [Comment{21}]]) ->
+       { id: 2, name: "Bob", posts: [], comments: [...] }
+
+Result:
+  var_5 = [
+    { id: 1, name: "Alice", posts: [Post{10}, Post{11}], comments: [Comment{20}] },
+    { id: 2, name: "Bob", posts: [], comments: [Comment{21}] },
+  ]
 ```
 
 ### 4. Runtime Adaptivity (Future Enhancement)
