@@ -231,11 +231,15 @@ In `engine/planner/partition.rs`, after materializations are computed:
 ```rust
 /// Represents the dependency graph of all operations needed to execute a query
 ///
-/// This graph structure is general enough to support future operation types beyond
-/// NestedMerge (e.g., Union, PolymorphicMerge, Aggregate), though currently only
-/// ExecStatement, NestedMerge, and Project are implemented.
+/// This graph is built WITHOUT assigning VarIds. VarIds are assigned later when
+/// converting the graph to the execution plan, allowing for variable reuse based
+/// on liveness analysis.
+///
+/// The graph tracks data flow using abstract "slots" (OutputSlot, InputSlot) that
+/// reference specific outputs from specific nodes. When converting to a plan, these
+/// slots are mapped to concrete VarIds.
 struct MaterializationGraph {
-    /// All operations (database queries and post-processing) in execution order
+    /// All operations (database queries and post-processing)
     nodes: Vec<MaterializationNode>,
 
     /// Topologically sorted execution order (inside-out)
@@ -243,6 +247,7 @@ struct MaterializationGraph {
 }
 
 type NodeId = usize;
+type OutputSlot = usize;  // Index into a node's outputs array
 
 struct MaterializationNode {
     /// Unique ID for this node
@@ -252,7 +257,7 @@ struct MaterializationNode {
     operation: Operation,
 
     /// Nodes that must complete before this one
-    /// (because they produce variables we need as input)
+    /// (because they produce data we need as input)
     dependencies: Vec<NodeId>,
 }
 
@@ -262,53 +267,88 @@ enum Operation {
         /// The database query to execute
         stmt: stmt::Statement,
 
-        /// Input variable containing parent's projected join columns
-        /// None for root query, Some(var_id) for child queries
-        input_var: Option<VarId>,
+        /// Input from another node's output
+        /// None for root query, Some for child queries
+        input: Option<DataRef>,
 
-        /// Output projections from the query
-        /// A single query can produce multiple outputs, each with its own variable and projection
-        /// Example: One output for the full materialized records, another for just join columns
-        outputs: Vec<Output>,
+        /// Output projection expressions
+        /// A single query can produce multiple outputs (each gets its own slot)
+        /// Example: [full_record_expr, join_columns_expr]
+        outputs: Vec<stmt::Expr>,
     },
 
     /// Nested merge operation - combines parent and child materializations
-    NestedMerge(plan::NestedMerge),
+    NestedMerge {
+        /// Root data source
+        root: DataRef,
 
-    /// Projection operation - transforms records (including final output projection)
-    Project(plan::Project),
+        /// Nested collections to merge
+        nested: Vec<NestedCollection>,
+
+        /// Projection expression (contains ExprArgs for nested collections)
+        projection: stmt::Expr,
+    },
+
+    /// Projection operation - transforms records
+    Project {
+        /// Input data source
+        input: DataRef,
+
+        /// Projection expression
+        projection: stmt::Expr,
+    },
 
     // Future operation types:
-    // Union(plan::Union),
-    // PolymorphicMerge(plan::PolymorphicMerge),
-    // Aggregate(plan::Aggregate),
+    // Union { sources: Vec<DataRef> },
+    // PolymorphicMerge { ... },
+    // Aggregate { ... },
 }
 
-struct Output {
-    /// Variable where this projected output is stored
-    var: VarId,
+/// Reference to data produced by a node
+/// VarId is NOT assigned yet - this is abstract data flow tracking
+#[derive(Debug, Clone, Copy)]
+struct DataRef {
+    /// Which node produces this data
+    node: NodeId,
 
-    /// Expression to project from the raw query results
-    expr: stmt::Expr,
+    /// Which output slot from that node (nodes can have multiple outputs)
+    slot: OutputSlot,
+}
+
+struct NestedCollection {
+    /// Source data (from child node's output)
+    source: DataRef,
+
+    /// Which ExprArg in the projection corresponds to this collection
+    arg_index: usize,
+
+    /// How to filter nested records for each root record
+    qualification: MergeQualification,
 }
 
 // Example: User query with has_many Todos
 //
-// Two nodes created for the Users statement:
+// Two nodes created for the Users statement (VarIds NOT yet assigned):
 //
 // Node 0: ExecStatement
 //   stmt: SELECT * FROM users WHERE users.active = true
-//   input_var: None  (root query)
+//   input: None  (root query)
 //   outputs: [
-//     Output { var: var_0_full, expr: { id: users.id, name: users.name, email: users.email } },
-//     Output { var: var_0_ids, expr: users.id },
+//     { id: users.id, name: users.name, email: users.email },  // Slot 0 - full records
+//     users.id,  // Slot 1 - join columns for child queries
 //   ]
 //   Purpose: Load user records and extract join columns for child queries
 //
 // Node 1: NestedMerge
-//   root: var_0_full
-//   nested: [NestedCollection { source: var_todos, ... }]
-//   output: var_1
+//   root: DataRef { node: 0, slot: 0 }  // References Node 0's first output (full records)
+//   nested: [
+//     NestedCollection {
+//       source: DataRef { node: 3, slot: 0 },  // References todos merge output
+//       arg_index: 0,
+//       qualification: Equality { ... }
+//     }
+//   ]
+//   projection: { id: users.id, name: users.name, todos: ExprArg(0) }
 //   Purpose: Merge todos into users
 //
 // StatementState for Users:
@@ -316,8 +356,14 @@ struct Output {
 //   output_node: 1 (points to the NestedMerge node that produces final output)
 //
 // This separation allows:
-// - Child queries to reference exec_node to get join column vars (var_0_ids)
-// - Parent merges to reference output_node to get final merged results (var_1)
+// - Child queries reference exec_node to get join column DataRef (node: 0, slot: 1)
+// - Parent merges reference output_node to get final merged DataRef (node: 1, slot: 0)
+//
+// VarId assignment happens LATER when converting graph to execution plan:
+// - Liveness analysis determines when data is last used
+// - VarIds are reused for non-overlapping data
+// - DataRef { node: 0, slot: 0 } might become var_0
+// - DataRef { node: 0, slot: 1 } might ALSO become var_0 if first output is no longer needed
 
 /// Information about partitioned statements
 /// This comes from the partitioning phase, before materialization planning
@@ -326,7 +372,7 @@ struct StatementState {
     stmt: stmt::Statement,
 
     /// Arguments to this statement
-    args: Vec<Arg>,
+    args: Vec<Arg>, 
 
     /// Sub-statements (children) of this statement
     subs: Vec<StmtId>,
@@ -357,53 +403,52 @@ impl Planner<'_> {
         // ... existing code to partition into statements ...
         // During partitioning, sub-statements in returning are replaced with ExprArg
 
-        // Build materialization graph structure (queries not yet transformed)
+        // PHASE 1: Build materialization graph (NO VarIds assigned yet)
         let mut graph = MaterializationGraph::new();
         self.build_materialization_graph(&mut graph, StmtId(0));
 
-        // TRANSFORMATION STEP: Transform queries to use VALUES(arg(0)) pattern
-        // and compute multiple outputs for each materialization
+        // PHASE 2: Transform queries to use VALUES(arg(0)) pattern
         self.compute_materializations(&mut graph);
 
-        // Add final projection node to graph (output to destination variable)
+        // PHASE 3: Add final projection node to graph
         let root_output_node = self.stmts[0].output_node.unwrap();
-        let final_var = match &graph.nodes[root_output_node].operation {
-            Operation::NestedMerge(merge) => merge.output,
-            Operation::ExecStatement { outputs, .. } => outputs[0].var,
-            _ => unreachable!(),
-        };
+        let final_input = DataRef { node: root_output_node, slot: 0 };
 
         let final_node_id = graph.nodes.len();
         graph.nodes.push(MaterializationNode {
             id: final_node_id,
-            operation: Operation::Project(plan::Project {
-                input: final_var,
-                output: plan::Output {
-                    ty: /* ... */,
-                    targets: vec![plan::OutputTarget { var: dst, project: None }],
-                },
-            }),
+            operation: Operation::Project {
+                input: final_input,
+                projection: stmt::Expr::project_identity(),  // Just pass through
+            },
             dependencies: vec![root_output_node],
         });
 
-        // Compute execution order for all nodes
+        // PHASE 4: Compute execution order for all nodes
         graph.compute_execution_order();
 
-        // Execute all operations in topological order
+        // PHASE 5: Assign VarIds based on liveness analysis
+        let var_assignments = self.assign_vars_to_graph(&graph);
+
+        // PHASE 6: Convert graph to execution plan actions
         for node_id in &graph.execution_order {
             let node = &graph.nodes[*node_id];
             match &node.operation {
-                Operation::ExecStatement { stmt, input_var, outputs } => {
+                Operation::ExecStatement { stmt, input, outputs } => {
                     let mut output_targets = Vec::new();
-                    for output in outputs {
+                    for (slot, output_expr) in outputs.iter().enumerate() {
+                        let data_ref = DataRef { node: *node_id, slot };
+                        let var = var_assignments[&data_ref];
                         output_targets.push(plan::OutputTarget {
-                            var: output.var,
-                            project: self.build_projection(&output.expr, /* types */),
+                            var,
+                            project: self.build_projection(output_expr, /* types */),
                         });
                     }
 
                     self.push_action(plan::ExecStatement {
-                        input: input_var.map(|var| plan::Input { var }),
+                        input: input.map(|data_ref| plan::Input {
+                            var: var_assignments[&data_ref],
+                        }),
                         output: Some(plan::Output {
                             ty: /* materialized record type */,
                             targets: output_targets,
@@ -412,11 +457,32 @@ impl Planner<'_> {
                         conditional_update_with_no_returning: false,
                     });
                 }
-                Operation::NestedMerge(merge) => {
-                    self.push_action(merge.clone());
+                Operation::NestedMerge { root, nested, projection } => {
+                    let nested_collections: Vec<_> = nested.iter().map(|nc| {
+                        plan::NestedCollection {
+                            source: var_assignments[&nc.source],
+                            arg_index: nc.arg_index,
+                            qualification: nc.qualification.clone(),
+                        }
+                    }).collect();
+
+                    let output_var = var_assignments[&DataRef { node: *node_id, slot: 0 }];
+
+                    self.push_action(plan::NestedMerge {
+                        root: var_assignments[root],
+                        nested: nested_collections,
+                        output: output_var,
+                        projection: self.build_projection(projection, /* types */),
+                    });
                 }
-                Operation::Project(project) => {
-                    self.push_action(project.clone());
+                Operation::Project { input, projection } => {
+                    self.push_action(plan::Project {
+                        input: var_assignments[input],
+                        output: plan::Output {
+                            ty: /* ... */,
+                            targets: vec![plan::OutputTarget { var: dst, project: None }],
+                        },
+                    });
                 }
             }
         }
@@ -435,15 +501,28 @@ impl Planner<'_> {
             id: exec_node_id,
             operation: Operation::ExecStatement {
                 stmt: self.stmts[stmt_id.0].stmt.clone(),  // Will be transformed later
-                input_var: None,  // Will be set later based on parent
+                input: None,  // Will be set later based on parent
                 outputs: vec![],  // Will be populated by compute_materializations()
             },
             dependencies: vec![],  // Will be set later based on parent exec node
         });
         self.stmts[stmt_id.0].exec_node = Some(exec_node_id);
 
-        // Create NestedMerge node for this statement (if it has children or needs projection)
-        self.plan_merge_for_stmt(graph, stmt_id);
+        // Check if this statement has children (nested statements)
+        let has_children = self.stmts[stmt_id.0].args.iter().any(|arg| matches!(arg, Arg::Sub(_)));
+
+        if has_children {
+            // IMPORTANT: Extract merge qualifications BEFORE transforming the statement
+            // At this point, the correlation condition is still in original form (e.g., posts.user_id = users.id)
+            // After transformation, it becomes EXISTS (SELECT 1 FROM VALUES(?) WHERE ...) which is harder to parse
+            let merge_qualifications = self.extract_merge_qualifications_for_stmt(stmt_id);
+
+            // Create NestedMerge node to combine children with this statement's results
+            self.plan_merge_for_stmt(graph, stmt_id, merge_qualifications);
+        } else {
+            // Leaf statement - just project the exec results, no merging needed
+            self.plan_project_for_stmt(graph, stmt_id);
+        }
     }
 
     fn compute_materializations(&mut self, graph: &mut MaterializationGraph) {
@@ -453,24 +532,22 @@ impl Planner<'_> {
             let exec_node_id = stmt_state.exec_node.unwrap();
             let node = &mut graph.nodes[exec_node_id];
 
-            let Operation::ExecStatement { stmt, input_var, outputs } = &mut node.operation else {
+            let Operation::ExecStatement { stmt, input, outputs } = &mut node.operation else {
                 unreachable!()
             };
 
             // TRANSFORMATION STEP: Rewrite the query to use VALUES(arg(0)) pattern
-            // This is where we apply the EXISTS subquery transformation
             if let Some(parent_stmt_id) = self.find_parent_stmt(StmtId(stmt_id)) {
                 let parent_exec_node_id = self.stmts[parent_stmt_id.0].exec_node.unwrap();
 
                 // Transform child query to use VALUES(arg(0)) in EXISTS clause
                 self.transform_to_values_pattern(stmt, &self.stmts[stmt_id]);
 
-                // Set input_var to parent's join column output
-                let parent_exec_node = &graph.nodes[parent_exec_node_id];
-                let Operation::ExecStatement { outputs: parent_outputs, .. } = &parent_exec_node.operation else {
-                    unreachable!()
-                };
-                *input_var = Some(parent_outputs[1].var);  // Second output is join columns
+                // Set input to parent's join column output (slot 1)
+                *input = Some(DataRef {
+                    node: parent_exec_node_id,
+                    slot: 1,  // Second output is join columns
+                });
 
                 // Add dependency on parent's ExecStatement
                 node.dependencies.push(parent_exec_node_id);
@@ -509,12 +586,77 @@ impl Planner<'_> {
         }
     }
 
-    fn plan_merge_for_stmt(
+    fn extract_merge_qualifications_for_stmt(
+        &self,
+        stmt_id: StmtId,
+    ) -> HashMap<StmtId, MergeQualification> {
+        let mut qualifications = HashMap::new();
+
+        // Get all child statements
+        let stmt_state = &self.stmts[stmt_id.0];
+        let children: Vec<StmtId> = stmt_state.args.iter()
+            .filter_map(|arg| match arg {
+                Arg::Sub(child_stmt_id) => Some(*child_stmt_id),
+                Arg::Ref { .. } => None,
+            })
+            .collect();
+
+        // Extract qualification for each child from its ORIGINAL WHERE clause
+        // (before VALUES(?) transformation)
+        for child_stmt_id in children {
+            let child_query = &self.stmts[child_stmt_id.0].stmt;
+
+            // Try to extract equality condition on columns from the correlation
+            if let Some(equality) = self.try_extract_equality(child_query) {
+                // Use equality qualification -> will use hash index
+                qualifications.insert(child_stmt_id, MergeQualification::Equality {
+                    root_columns: equality.parent_columns,
+                    nested_columns: equality.child_columns,
+                });
+            } else {
+                // Fall back to general predicate -> will use nested loop
+                // Build an Expr that evaluates the correlation condition
+                let predicate = self.build_correlation_predicate(stmt_id, child_stmt_id);
+                qualifications.insert(child_stmt_id, MergeQualification::Predicate(predicate));
+            }
+        }
+
+        qualifications
+    }
+
+    fn plan_project_for_stmt(
         &mut self,
         graph: &mut MaterializationGraph,
         stmt_id: StmtId,
     ) {
         let stmt_state = &self.stmts[stmt_id.0];
+        let exec_node_id = stmt_state.exec_node.unwrap();
+
+        let project_node_id = graph.nodes.len();
+        graph.nodes.push(MaterializationNode {
+            id: project_node_id,
+            operation: Operation::Project {
+                input: DataRef {
+                    node: exec_node_id,
+                    slot: 0,  // First output is full records
+                },
+                projection: stmt_state.projection.clone(),
+            },
+            dependencies: vec![exec_node_id],  // Depends on its own ExecStatement
+        });
+
+        // Record this as the output node for this statement
+        self.stmts[stmt_id.0].output_node = Some(project_node_id);
+    }
+
+    fn plan_merge_for_stmt(
+        &mut self,
+        graph: &mut MaterializationGraph,
+        stmt_id: StmtId,
+        merge_qualifications: HashMap<StmtId, MergeQualification>,
+    ) {
+        let stmt_state = &self.stmts[stmt_id.0];
+        let exec_node_id = stmt_state.exec_node.unwrap();
 
         // Get children from StatementState args
         let children: Vec<_> = stmt_state.args.iter()
@@ -527,99 +669,75 @@ impl Planner<'_> {
             })
             .collect();
 
-        let merge_node_id = graph.nodes.len();
-        let output_var = self.var_table.register_var(/* projected type */);
+        // Build nested collections for all children
+        let mut nested_collections = Vec::new();
+        let mut dependencies = vec![exec_node_id];  // Always depends on its own ExecStatement
 
-        let exec_node_id = stmt_state.exec_node.unwrap();
+        for (arg_idx, child_stmt_id) in children {
+            // Get the child's output node (its NestedMerge or Project)
+            let child_output_node_id = self.stmts[child_stmt_id.0].output_node.unwrap();
 
-        if children.is_empty() {
-            // Leaf node - no merges needed, just need to project materialization
-            let projection = self.build_projection(&stmt_state.projection, /* types */);
+            // Get the pre-extracted qualification (before VALUES transformation)
+            let qualification = merge_qualifications[&child_stmt_id].clone();
 
-            graph.nodes.push(MaterializationNode {
-                id: merge_node_id,
-                operation: Operation::NestedMerge(plan::NestedMerge {
-                    root: /* Will be set after compute_materializations(), use exec outputs[0] */,
-                    nested: vec![],  // No nested collections for leaf
-                    output: output_var,
-                    projection,
-                }),
-                dependencies: vec![exec_node_id],  // Depends on its own ExecStatement
+            nested_collections.push(NestedCollection {
+                source: DataRef {
+                    node: child_output_node_id,
+                    slot: 0,  // Output nodes have single output
+                },
+                arg_index: arg_idx,
+                qualification,
             });
-        } else {
-            // Non-leaf node: create ONE operation that handles ALL children
-            let mut nested_collections = Vec::new();
-            let mut dependencies = vec![exec_node_id];  // Always depends on its own ExecStatement
 
-            // Gather all nested collections from StatementState
-            for (arg_idx, child_stmt_id) in children {
-                // Get the child's output node (its NestedMerge)
-                let child_output_node_id = self.stmts[child_stmt_id.0].output_node.unwrap();
-
-                // Extract merge qualification from the nested statement's WHERE clause
-                let qualification = self.extract_merge_qualification(stmt_id, child_stmt_id);
-
-                nested_collections.push(plan::NestedCollection {
-                    source: /* Will be filled from child's output after nodes are built */,
-                    arg_index: arg_idx,  // ExprArg position from StatementState.args
-                    qualification,
-                });
-
-                // Add dependency on child's output node
-                dependencies.push(child_output_node_id);
-            }
-
-            // Build projection function from StatementState.projection
-            let projection = self.build_merge_projection(&stmt_state.projection, /* types */);
-
-            graph.nodes.push(MaterializationNode {
-                id: merge_node_id,
-                operation: Operation::NestedMerge(plan::NestedMerge {
-                    root: /* Will be set after compute_materializations(), use exec outputs[0] */,
-                    nested: nested_collections,
-                    output: output_var,
-                    projection,
-                }),
-                dependencies,
-            });
+            // Add dependency on child's output node
+            dependencies.push(child_output_node_id);
         }
+
+        let merge_node_id = graph.nodes.len();
+        graph.nodes.push(MaterializationNode {
+            id: merge_node_id,
+            operation: Operation::NestedMerge {
+                root: DataRef {
+                    node: exec_node_id,
+                    slot: 0,  // First output is full records
+                },
+                nested: nested_collections,
+                projection: stmt_state.projection.clone(),
+            },
+            dependencies,
+        });
 
         // Record this as the output node for this statement
         self.stmts[stmt_id.0].output_node = Some(merge_node_id);
     }
 
-    fn extract_merge_qualification(
+    fn try_extract_equality(&self, query: &stmt::Statement) -> Option<EqualityCondition> {
+        // Parse the WHERE clause to find equality conditions like:
+        // posts.user_id = users.id
+        //
+        // Returns column indices for both sides of the equality
+        // Example: posts.user_id = users.id
+        //   parent_columns: [0]  (users.id column index)
+        //   nested_columns: [1]  (posts.user_id column index)
+
+        todo!("Parse WHERE clause to extract equality condition")
+    }
+
+    fn build_correlation_predicate(
         &self,
         parent_stmt: StmtId,
         child_stmt: StmtId,
-    ) -> MergeQualification {
-        // Look at the child statement's WHERE clause
-        // It should contain the correlation condition (e.g., posts.user_id = users.id)
-        // This was added during partitioning when creating the EXISTS subquery
-        //
-        // IMPORTANT: The correlation condition appears in TWO places:
-        // 1. In the materialization query's EXISTS clause (for batch loading)
-        // 2. We extract it here to use during the merge (for per-record filtering)
-        //
-        // Example: For posts materialized with EXISTS(...WHERE posts.user_id = users.id...)
-        // We extract: root_columns=[0] (users.id), nested_columns=[1] (posts.user_id)
+    ) -> eval::Func {
+        // Build a function that evaluates the correlation condition
+        // Args: [parent_record, child_record] -> bool
 
-        let child_query = &self.stmts[child_stmt.0].stmt;
-
-        // Try to extract equality condition on columns from the correlation
-        if let Some(equality) = self.try_extract_equality(child_query) {
-            // Use equality qualification -> will use hash index
-            MergeQualification::Equality {
-                root_columns: equality.parent_columns,
-                nested_columns: equality.child_columns,
-            }
-        } else {
-            // Fall back to general predicate -> will use nested loop
-            // Build an Expr that evaluates the correlation condition
-            let predicate = self.build_correlation_predicate(parent_stmt, child_stmt);
-            MergeQualification::Predicate(predicate)
-        }
+        todo!("Build predicate function from WHERE clause")
     }
+
+struct EqualityCondition {
+    parent_columns: Vec<usize>,
+    child_columns: Vec<usize>,
+}
 
     fn build_merge_projection(
         &self,
@@ -634,6 +752,108 @@ impl Planner<'_> {
         // Returns: projected record
 
         todo!("Build projection function from returning clause")
+    }
+
+    /// Assign VarIds to all DataRefs in the graph based on liveness analysis
+    ///
+    /// This allows variable reuse: if DataRef A is last used before DataRef B is produced,
+    /// they can share the same VarId.
+    fn assign_vars_to_graph(&mut self, graph: &MaterializationGraph) -> HashMap<DataRef, VarId> {
+        let mut assignments = HashMap::new();
+        let mut next_var = 0;
+
+        // Track which variables are currently "live" (still needed)
+        // Maps VarId -> set of DataRefs using that VarId
+        let mut live_vars: HashMap<VarId, HashSet<DataRef>> = HashMap::new();
+
+        // Compute liveness information: for each DataRef, find its last use
+        let mut last_use: HashMap<DataRef, NodeId> = HashMap::new();
+
+        for (node_id, node) in graph.nodes.iter().enumerate() {
+            // Mark all inputs as used at this node
+            match &node.operation {
+                Operation::ExecStatement { input, .. } => {
+                    if let Some(data_ref) = input {
+                        last_use.insert(*data_ref, node_id);
+                    }
+                }
+                Operation::NestedMerge { root, nested, .. } => {
+                    last_use.insert(*root, node_id);
+                    for nc in nested {
+                        last_use.insert(nc.source, node_id);
+                    }
+                }
+                Operation::Project { input, .. } => {
+                    last_use.insert(*input, node_id);
+                }
+            }
+        }
+
+        // Process nodes in execution order, assigning VarIds
+        for &node_id in &graph.execution_order {
+            let node = &graph.nodes[node_id];
+
+            // Free variables that are no longer needed after this node
+            let mut vars_to_free = Vec::new();
+            for (var_id, data_refs) in &live_vars {
+                for data_ref in data_refs {
+                    if last_use.get(data_ref) == Some(&node_id) {
+                        vars_to_free.push(*var_id);
+                        break;
+                    }
+                }
+            }
+            for var_id in vars_to_free {
+                live_vars.remove(&var_id);
+            }
+
+            // Assign VarIds to this node's outputs
+            match &node.operation {
+                Operation::ExecStatement { outputs, .. } => {
+                    for slot in 0..outputs.len() {
+                        let data_ref = DataRef { node: node_id, slot };
+
+                        // Try to reuse a free variable
+                        let var = if let Some(free_var) = live_vars.iter()
+                            .find(|(_, refs)| refs.is_empty())
+                            .map(|(v, _)| *v)
+                        {
+                            free_var
+                        } else {
+                            // Allocate new variable
+                            let var = VarId(next_var);
+                            next_var += 1;
+                            var
+                        };
+
+                        assignments.insert(data_ref, var);
+                        live_vars.entry(var).or_insert_with(HashSet::new).insert(data_ref);
+                    }
+                }
+                Operation::NestedMerge { .. } | Operation::Project { .. } => {
+                    // Single output
+                    let data_ref = DataRef { node: node_id, slot: 0 };
+
+                    // Try to reuse a free variable
+                    let var = if let Some(free_var) = live_vars.iter()
+                        .find(|(_, refs)| refs.is_empty())
+                        .map(|(v, _)| *v)
+                    {
+                        free_var
+                    } else {
+                        // Allocate new variable
+                        let var = VarId(next_var);
+                        next_var += 1;
+                        var
+                    };
+
+                    assignments.insert(data_ref, var);
+                    live_vars.entry(var).or_insert_with(HashSet::new).insert(data_ref);
+                }
+            }
+        }
+
+        assignments
     }
 }
 
@@ -679,7 +899,21 @@ impl MaterializationGraph {
 }
 ```
 
-### 2.1 Example: Planning User -> Posts -> Tags
+### 2.2 Key Design Decision: Late VarId Assignment
+
+**VarIds are NOT assigned during graph construction.** Instead:
+
+1. **Graph construction** uses abstract `DataRef { node, slot }` to track data flow
+2. **Liveness analysis** determines when each DataRef is last used
+3. **VarId assignment** happens when converting graph to execution plan, allowing reuse
+
+**Benefits:**
+- Variables can be reused when data is no longer needed
+- Reduces memory pressure during execution
+- Clean separation: graph is pure data flow, VarIds are execution detail
+- Example: If `DataRef { node: 0, slot: 0 }` is last used before `DataRef { node: 1, slot: 0 }` is produced, they can share the same VarId
+
+### 2.3 Example: Planning User -> Posts -> Tags
 
 Pseudocode for building the execution plan:
 
