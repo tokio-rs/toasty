@@ -23,10 +23,11 @@ toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-sqlite = { workspace = true, optional = true }
 serde_core = { version = "1.0.221", optional = true }
 
+by_address.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
 tokio-stream.workspace = true
 uuid.workspace = true
 indexmap.workspace = true
-by_address.workspace = true
+tokio.workspace = true
 url.workspace = true

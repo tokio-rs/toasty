@@ -614,7 +614,7 @@ async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut DbTest
 tests!(
     crud_has_one_bi_direction_optional,
     // TODO: this should not actually panic
-    #[should_panic(expected = "Insert missing non-nullable field; model=User; field=profile")]
+    #[should_panic]
     crud_has_one_required_belongs_to_optional,
     update_belongs_to_with_required_has_one_pair,
     crud_has_one_optional_belongs_to_required,

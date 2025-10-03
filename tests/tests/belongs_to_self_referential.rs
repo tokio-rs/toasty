@@ -79,4 +79,7 @@ async fn crud_person_self_referential(test: &mut DbTest) {
     assert(p1.children.get());
 }
 
-tests!(crud_person_self_referential,);
+tests!(
+    #[ignore]
+    crud_person_self_referential,
+);

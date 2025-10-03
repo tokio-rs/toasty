@@ -1,7 +1,11 @@
 mod builder;
 pub use builder::Builder;
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
+};
 
-use crate::{driver::Driver, engine, stmt, Cursor, Model, Result, Statement};
+use crate::{driver::Driver, stmt, Cursor, Model, Result, Statement};
 
 use toasty_core::{stmt::ValueStream, Schema};
 
@@ -9,6 +13,20 @@ use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Db {
+    pub(crate) inner: DbInner,
+
+    /// Handle to send statements to be executed
+    pub(crate) in_tx: mpsc::UnboundedSender<(
+        toasty_core::stmt::Statement,
+        oneshot::Sender<Result<ValueStream>>,
+    )>,
+
+    /// Handle to task driving the query engine
+    pub(crate) join_handle: JoinHandle<()>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DbInner {
     /// Handle to the underlying database driver.
     pub(crate) driver: Arc<dyn Driver>,
 
@@ -24,7 +42,7 @@ impl Db {
     /// Execute a query, returning all matching records
     pub async fn all<M: Model>(&self, query: stmt::Select<M>) -> Result<Cursor<M>> {
         let records = self.exec(query.into()).await?;
-        Ok(Cursor::new(self.schema.clone(), records))
+        Ok(Cursor::new(self.inner.schema.clone(), records))
     }
 
     pub async fn first<M: Model>(&self, query: stmt::Select<M>) -> Result<Option<M>> {
@@ -53,14 +71,13 @@ impl Db {
 
     /// Execute a statement
     pub async fn exec<M: Model>(&self, statement: Statement<M>) -> Result<ValueStream> {
-        // Create a plan to execute the statement
-        let mut res = engine::exec(self, statement.untyped).await?;
+        let (tx, rx) = oneshot::channel();
 
-        // If the execution is lazy, force it to begin.
-        res.tap().await?;
+        // Send the statement to the execution engine
+        self.in_tx.send((statement.untyped, tx)).unwrap();
 
         // Return the typed result
-        Ok(res)
+        rx.await.unwrap()
     }
 
     /// Execute a statement, assume only one record is returned
@@ -84,17 +101,24 @@ impl Db {
     pub async fn exec_insert_one<M: Model>(&self, stmt: stmt::Insert<M>) -> Result<M> {
         // Execute the statement and return the result
         let records = self.exec(stmt.into()).await?;
-        let mut cursor = Cursor::new(self.schema.clone(), records);
+        let mut cursor = Cursor::new(self.inner.schema.clone(), records);
 
         cursor.next().await.unwrap()
     }
 
     /// TODO: remove
     pub async fn reset_db(&self) -> Result<()> {
-        self.driver.reset_db(&self.schema.db).await
+        self.inner.driver.reset_db(&self.inner.schema.db).await
     }
 
     pub fn schema(&self) -> &Schema {
-        &self.schema
+        &self.inner.schema
+    }
+}
+
+impl Drop for Db {
+    fn drop(&mut self) {
+        // TODO: make this less aggressive
+        self.join_handle.abort();
     }
 }
