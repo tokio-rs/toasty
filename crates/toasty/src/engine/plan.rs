@@ -29,7 +29,7 @@ mod insert;
 pub(crate) use insert::Insert;
 
 mod nested_merge;
-pub(crate) use nested_merge::{MergeQualification, NestedLevel, NestedMerge};
+pub(crate) use nested_merge::{MergeQualification, NestedChild, NestedLevel, NestedMerge};
 
 mod output;
 pub(crate) use output::Output;

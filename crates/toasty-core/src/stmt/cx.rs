@@ -361,12 +361,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::And(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
-            Expr::Reference(expr_ref) => match self.resolve_expr_reference(expr_ref) {
-                ResolvedRef::Model(model) => Type::Model(model.id),
-                ResolvedRef::Column(column) => column.ty.clone(),
-                ResolvedRef::Field(field) => field.expr_ty().clone(),
-                ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
-            },
+            Expr::Reference(expr_ref) => self.infer_expr_reference_ty(expr_ref),
             Expr::IsNull(_) => Type::Bool,
             Expr::Map(e) => {
                 let base = self.infer_expr_ty(&e.base, args);
@@ -396,6 +391,15 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             // -- hax
             Expr::DecodeEnum(_, ty, _) => ty.clone(),
             _ => todo!("{expr:#?}"),
+        }
+    }
+
+    pub fn infer_expr_reference_ty(&self, expr_reference: &ExprReference) -> Type {
+        match self.resolve_expr_reference(expr_reference) {
+            ResolvedRef::Model(model) => Type::Model(model.id),
+            ResolvedRef::Column(column) => column.ty.clone(),
+            ResolvedRef::Field(field) => field.expr_ty().clone(),
+            ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
         }
     }
 }

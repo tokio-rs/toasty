@@ -1,10 +1,14 @@
 use std::cell::{Cell, OnceCell};
 
 use indexmap::IndexSet;
-use toasty_core::stmt::{self, visit_mut};
+use toasty_core::{
+    stmt::{self, visit_mut, ExprReference},
+    Schema,
+};
 
 use crate::engine::{
-    plan,
+    eval,
+    plan::{self, NestedLevel},
     planner::partition::{Arg, StatementState, StmtId},
 };
 
@@ -55,11 +59,23 @@ pub(crate) enum MaterializationKind {
 
 #[derive(Debug)]
 struct PlanMaterialization<'a> {
+    schema: &'a Schema,
+
     /// Root statement and all nested statements.
     stmts: &'a [StatementState],
 
     /// Graph of operations needed to materialize the statement, in-progress
     graph: MaterializationGraph,
+}
+
+#[derive(Debug)]
+struct PlanNestedMerge<'a> {
+    schema: &'a Schema,
+    stmts: &'a [StatementState],
+    graph: &'a mut MaterializationGraph,
+    inputs: IndexSet<NodeId>,
+    /// Statement stack, used to infer expression types
+    stack: Vec<StmtId>,
 }
 
 impl super::Planner<'_> {
@@ -69,6 +85,7 @@ impl super::Planner<'_> {
         root: StmtId,
     ) -> MaterializationGraph {
         let mut plan_materialization = PlanMaterialization {
+            schema: self.schema,
             stmts,
             graph: MaterializationGraph::new(),
         };
@@ -247,6 +264,9 @@ impl PlanMaterialization<'_> {
             back_ref.node_id.set(Some(project_node_id));
         }
 
+        // Track the selection for later use.
+        stmt_state.exec_statement_selection.set(columns).unwrap();
+
         // Plan each child
         for arg in &stmt_state.args {
             let Arg::Sub { stmt_id, .. } = arg else {
@@ -275,9 +295,22 @@ impl PlanMaterialization<'_> {
         let stmt_state = &self.stmts[stmt_id.0];
 
         for arg in &stmt_state.args {
-            if matches!(arg, Arg::Sub { .. }) {
-                todo!("IMPLEMENT NESTED MERGE");
-            }
+            let Arg::Sub {
+                stmt_id: nested_id, ..
+            } = arg
+            else {
+                continue;
+            };
+
+            let mut nested_merge = PlanNestedMerge {
+                schema: self.schema,
+                stmts: self.stmts,
+                graph: &mut self.graph,
+                inputs: IndexSet::new(),
+                stack: vec![stmt_id],
+            };
+            nested_merge.plan_nested_level(*nested_id, 1);
+            todo!("nested_merge={:#?}", nested_merge);
         }
     }
 
@@ -329,5 +362,115 @@ impl From<MaterializationKind> for MaterializationNode {
             var: Cell::new(None),
             visited: Cell::new(false),
         }
+    }
+}
+
+impl PlanNestedMerge<'_> {
+    fn plan_nested_level(&mut self, stmt_id: StmtId, depth: usize) -> NestedLevel {
+        self.stack.push(stmt_id);
+
+        let stmt_state = &self.stmts[stmt_id.0];
+        let selection = stmt_state.exec_statement_selection.get().unwrap();
+
+        // First, track the batch-load as a required input for the nested merge
+        let (source, _) = self
+            .inputs
+            .insert_full(stmt_state.exec_statement.get().unwrap());
+
+        let select = stmt_state
+            .stmt
+            .as_deref()
+            .unwrap()
+            .as_query()
+            .unwrap()
+            .body
+            .as_select();
+
+        // Now, extract the qualification. For now, we will just re-run the
+        // entire where clause, but that can be improved later.
+        let mut filter = select.filter.clone();
+
+        visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
+            stmt::Expr::Arg(expr_arg) => {
+                let Arg::Ref { nesting, index, .. } = &stmt_state.args[expr_arg.position] else {
+                    todo!()
+                };
+
+                debug_assert!(*nesting > 0);
+
+                *expr = stmt::Expr::arg_project(depth - *nesting, [*index]);
+            }
+            stmt::Expr::Reference(expr_reference) => {
+                let index = selection.get_index_of(expr_reference).unwrap();
+                *expr = stmt::Expr::arg_project(depth, [index]);
+            }
+            _ => {}
+        });
+
+        let filter_arg_tys = self.build_filter_arg_tys();
+        let filter = eval::Func::from_stmt(filter, filter_arg_tys);
+
+        let nested = vec![];
+
+        // Map the returning clause to projection expression
+        let mut projection = select.returning.as_expr().clone();
+
+        visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
+            stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
+                Arg::Sub { stmt_id, .. } => {
+                    let nested_level = self.plan_nested_level(*stmt_id, depth + 1);
+                    todo!("nested_level={nested_level:#?}");
+                }
+                Arg::Ref { .. } => todo!(),
+            },
+            stmt::Expr::Reference(expr_reference) => {
+                let index = selection.get_index_of(expr_reference).unwrap();
+                *expr = stmt::Expr::arg_project(depth, [index]);
+            }
+            _ => {}
+        });
+
+        let projection_arg_tys = self.build_projection_arg_tys(&nested);
+        let projection = eval::Func::from_stmt(projection, projection_arg_tys);
+
+        self.stack.pop();
+
+        NestedLevel {
+            source,
+            qualification: plan::MergeQualification::Predicate(filter),
+            projection,
+            nested,
+        }
+    }
+
+    fn build_filter_arg_tys(&self) -> Vec<stmt::Type> {
+        self.stack
+            .iter()
+            .map(|stmt_id| self.build_exec_statement_ty_for(*stmt_id))
+            .collect()
+    }
+
+    fn build_projection_arg_tys(&self, nested_children: &[plan::NestedChild]) -> Vec<stmt::Type> {
+        let curr = self.stack.last().unwrap();
+        let mut ret = vec![self.build_exec_statement_ty_for(*curr)];
+
+        for nested in nested_children {
+            ret.push(nested.level.projection.ret.clone());
+        }
+
+        ret
+    }
+
+    fn build_exec_statement_ty_for(&self, stmt_id: StmtId) -> stmt::Type {
+        let stmt_state = &self.stmts[stmt_id.0];
+        let cx = stmt::ExprContext::new(self.schema);
+
+        let mut fields = vec![];
+
+        for expr_reference in stmt_state.exec_statement_selection.get().unwrap() {
+            fields.push(cx.infer_expr_reference_ty(expr_reference));
+        }
+
+        stmt::Type::Record(fields)
     }
 }

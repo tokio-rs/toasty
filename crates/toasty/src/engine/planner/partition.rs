@@ -1,11 +1,11 @@
 mod materialization;
 
-use std::cell::Cell;
-use std::collections::{HashMap, HashSet};
+use std::cell::{Cell, OnceCell};
+use std::collections::HashMap;
 use std::usize;
 
 use indexmap::IndexSet;
-use toasty_core::stmt::{self, visit_mut, VisitMut};
+use toasty_core::stmt::{self, ExprRecord, ExprReference, VisitMut, visit_mut};
 
 use crate::engine::eval;
 use crate::engine::planner::partition::materialization::MaterializationKind;
@@ -74,7 +74,7 @@ impl Planner<'_> {
             let node = &materialization_graph.nodes[*node_id];
 
             match &node.kind {
-                MaterializationKind::ExecStatement { inputs, stmt } => {
+                MaterializationKind::ExecStatement { inputs, stmt, .. } => {
                     let mut input_args = vec![];
                     let mut input_vars = vec![];
 
@@ -162,6 +162,9 @@ struct StatementState {
     /// Index of the ExecStatement materialization node for this statement.
     exec_statement: Cell<Option<usize>>,
 
+    /// Columns selected by exec_statement
+    exec_statement_selection: OnceCell<IndexSet<ExprReference>>,
+
     /// Index of the node that computes the final result for the statement
     output: Cell<Option<usize>>,
 }
@@ -204,6 +207,10 @@ enum Arg {
     Ref {
         /// The statement providing the data for the reference
         stmt_id: StmtId,
+
+        /// The nesting level
+        nesting: usize,
+
         /// The index of the column within the set of columns selected
         index: usize,
 
@@ -243,7 +250,7 @@ impl<'a> visit_mut::VisitMut for Walker<'a> {
                     .into();
 
                     let index = self.stmt(target_id).new_back_ref(stmt_id, expr);
-                    let arg_id = self.curr_stmt().new_ref_arg(target_id, index);
+                    let arg_id = self.curr_stmt().new_ref_arg(target_id, *nesting, index);
 
                     // Using ExprArg as a placeholder. It will be rewritten
                     // later.
@@ -326,6 +333,7 @@ impl StatementState {
             subs: vec![],
             back_refs: HashMap::new(),
             exec_statement: Cell::new(None),
+            exec_statement_selection: OnceCell::new(),
             output: Cell::new(None),
         }
     }
@@ -336,10 +344,11 @@ impl StatementState {
         ret
     }
 
-    fn new_ref_arg(&mut self, stmt_id: StmtId, index: usize) -> usize {
+    fn new_ref_arg(&mut self, stmt_id: StmtId, nesting: usize, index: usize) -> usize {
         let arg_id = self.args.len();
         self.args.push(Arg::Ref {
             stmt_id,
+            nesting,
             index,
             input: Cell::new(None),
         });

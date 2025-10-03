@@ -3,30 +3,26 @@ use std::collections::HashMap;
 
 /// Nested merge operation - combines parent and child materializations
 ///
-/// Handles the ENTIRE nesting hierarchy for a root statement, not just one level.
-/// This is necessary because deeply nested statements can reference data from any
-/// ancestor in the hierarchy.
+/// The nested merge algorithm is recursive.
+/// * First, we need to get the batch-loaded records for all statements.
+/// * Then, starting at the root we:
+///     * Iterate over each record.
+///         * The record is not the final projection, it may include extra fields.
+///     * For each nested stmt, filter records for the curent row
+///     * Perform a recursive nested merge.
+///     * Take the results of of the recursive nested merge
+///     * project the curent row
+///     * Store in vec to return.
 #[derive(Debug)]
 pub(crate) struct NestedMerge {
-    /// Root materialization variable (parent records)
-    pub root: VarId,
+    /// Input sources. NestedLevel will reference their inputs by index in this vec.
+    pub(crate) inputs: Vec<VarId>,
 
-    /// Nested hierarchy - children and their descendants
-    /// Multiple entries at this level = siblings (e.g., User has Posts AND Comments)
-    pub nested: Vec<NestedLevel>,
+    /// Output variable, where to store the merged values
+    pub(crate) output: VarId,
 
-    /// Indexes to build upfront before execution
-    /// Map from VarId (source data) to columns to index by
-    /// Built during planning, used during execution
-    pub indexes: HashMap<VarId, Vec<usize>>,
-
-    /// Output variable (projected result with nested structure)
-    pub output: VarId,
-
-    /// Final projection to apply at root level
-    /// Args: [root_record, filtered_collection_0, filtered_collection_1, ...]
-    /// The filtered collections are bound to ExprArgs in the returning clause
-    pub projection: eval::Func,
+    /// The root level
+    pub(crate) root: NestedLevel,
 }
 
 /// A single level in the nesting hierarchy
@@ -38,23 +34,29 @@ pub(crate) struct NestedMerge {
 /// - Its own children (recursive nesting)
 #[derive(Debug)]
 pub(crate) struct NestedLevel {
-    /// Source data (from child's ExecStatement)
-    pub source: VarId,
+    /// Input for this level as an index in `NestedMerge::inputs`
+    pub(crate) source: usize,
 
-    /// Which ExprArg in parent's projection this binds to
-    pub arg_index: usize,
+    /// How to filter `source` records before performing the projection
+    pub(crate) qualification: MergeQualification,
 
-    /// How to filter nested records for each parent record
-    /// Can reference ANY ancestor in the context stack, not just immediate parent
-    pub qualification: MergeQualification,
-
-    /// Projection for this level (before passing to parent)
-    /// Contains ExprArgs for this level's children
-    pub projection: eval::Func,
+    /// Projection for this level (before passing to parent) Argument 0 is the
+    /// row for the current level, all other arguments are the results of the
+    /// recursive nested merge.
+    pub(crate) projection: eval::Func,
 
     /// This level's children (recursive nesting)
     /// Empty for leaf nodes
-    pub nested: Vec<NestedLevel>,
+    pub(crate) nested: Vec<NestedChild>,
+}
+
+#[derive(Debug)]
+pub(crate) struct NestedChild {
+    /// The nested level for this child
+    pub(crate) level: NestedLevel,
+
+    /// How to filter rows to match the parent request
+    pub(crate) qualification: MergeQualification,
 }
 
 /// How to filter nested records for a parent record
