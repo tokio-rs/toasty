@@ -1,6 +1,6 @@
 use crate::engine::plan::VarId;
 
-use super::{stmt, Action, Input, Output};
+use super::{stmt, Action};
 
 #[derive(Debug)]
 pub(crate) struct ExecStatement2 {
@@ -8,14 +8,18 @@ pub(crate) struct ExecStatement2 {
     pub input: Vec<VarId>,
 
     /// How to handle output
-    pub output: Option<VarId>,
+    pub output: Option<ExecStatementOutput>,
 
     /// The query to execute. This may require input to generate the query.
     pub stmt: stmt::Statement,
+}
 
-    /// HAX: this should be handled more generically, but for now, lets just get
-    /// it working.
-    pub conditional_update_with_no_returning: bool,
+#[derive(Debug)]
+pub(crate) struct ExecStatementOutput {
+    /// Databases always return rows as a vec of values. This specifies the type
+    /// of each value.
+    pub ty: Vec<stmt::Type>,
+    pub var: VarId,
 }
 
 impl From<ExecStatement2> for Action {

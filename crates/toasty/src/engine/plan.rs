@@ -14,7 +14,7 @@ mod exec_statement;
 pub(crate) use exec_statement::ExecStatement;
 
 mod exec_statement2;
-pub(crate) use exec_statement2::ExecStatement2;
+pub(crate) use exec_statement2::{ExecStatement2, ExecStatementOutput};
 
 mod find_pk_by_index;
 pub(crate) use find_pk_by_index::FindPkByIndex;
@@ -32,7 +32,7 @@ mod nested_merge;
 pub(crate) use nested_merge::{MergeQualification, NestedLevel, NestedMerge};
 
 mod output;
-pub(crate) use output::{Output, OutputTarget};
+pub(crate) use output::Output;
 
 mod pipeline;
 pub(crate) use pipeline::Pipeline;

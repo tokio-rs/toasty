@@ -6,7 +6,6 @@ use std::usize;
 
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit_mut, VisitMut};
-use toasty_core::Schema;
 
 use crate::engine::eval;
 use crate::engine::planner::partition::materialization::MaterializationKind;
@@ -87,14 +86,20 @@ impl Planner<'_> {
                     }
 
                     let ty = self.infer_ty(stmt, &input_args);
+                    let ty_fields = match &ty {
+                        stmt::Type::List(ty_rows) => match &**ty_rows {
+                            stmt::Type::Record(ty_fields) => ty_fields.clone(),
+                            _ => todo!(),
+                        },
+                        _ => todo!(),
+                    };
                     let var = self.var_table.register_var(ty);
                     node.var.set(Some(var));
 
                     self.push_action(plan::ExecStatement2 {
                         input: input_vars,
-                        output: Some(var),
+                        output: Some(plan::ExecStatementOutput { ty: ty_fields, var }),
                         stmt: stmt.clone(),
-                        conditional_update_with_no_returning: false,
                     });
                 }
                 MaterializationKind::Project { input, projection } => {
