@@ -6,6 +6,7 @@ use toasty_core::stmt::ValueStream;
 
 impl Exec<'_> {
     pub(super) async fn action_project(&mut self, action: &plan::Project) -> Result<()> {
+        /*
         // Load the input variable
         let mut input_stream = self.vars.dup(action.input).await?;
 
@@ -39,5 +40,7 @@ impl Exec<'_> {
         }
 
         Ok(())
+        */
+        todo!()
     }
 }

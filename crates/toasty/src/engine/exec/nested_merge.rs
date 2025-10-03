@@ -35,7 +35,8 @@ impl Exec<'_> {
             .await?;
 
         // Store output
-        self.vars.store(action.output, ValueStream::from_vec(results));
+        self.vars
+            .store(action.output, ValueStream::from_vec(results));
         Ok(())
     }
 
@@ -75,81 +76,81 @@ impl Exec<'_> {
         all_indexes: &'a HashMap<plan::VarId, HashMap<CompositeKey, Vec<stmt::Value>>>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<stmt::Value>>> + 'a>> {
         Box::pin(async move {
-        // Prepare loaded data for this level
-        let mut loaded_levels = Vec::with_capacity(nested_levels.len());
+            // Prepare loaded data for this level
+            let mut loaded_levels = Vec::with_capacity(nested_levels.len());
 
-        for level in nested_levels {
-            let nested_data = all_data
-                .get(&level.source)
-                .expect("Data should be loaded for all VarIds");
+            for level in nested_levels {
+                let nested_data = all_data
+                    .get(&level.source)
+                    .expect("Data should be loaded for all VarIds");
 
-            loaded_levels.push(LoadedNestedLevel {
-                data: nested_data,
-                level_info: level,
-            });
-        }
-
-        // Process each parent record
-        let mut results = Vec::with_capacity(parent_records.len());
-
-        for parent_record in parent_records {
-            // Build ancestor context stack: [grandparents..., parent]
-            let mut context_stack = ancestor_stack.to_vec();
-            context_stack.push(parent_record.clone());
-
-            // Filter and process all nested collections for this parent
-            let mut filtered_collections = Vec::new();
-
-            for loaded_level in &loaded_levels {
-                // Filter using ancestor context
-                let filtered = self.filter_hierarchical(
-                    loaded_level.data,
-                    &context_stack,
-                    &loaded_level.level_info.qualification,
-                    all_indexes,
-                )?;
-
-                // If this level has children, recursively merge them
-                let processed = if !loaded_level.level_info.nested.is_empty() {
-                    self.execute_nested_levels(
-                        filtered,
-                        &loaded_level.level_info.nested,
-                        &loaded_level.level_info.projection,
-                        &context_stack, // Pass down ancestor context
-                        all_data,       // Pass through pre-loaded data
-                        all_indexes,    // Pass through pre-built indexes
-                    )
-                    .await?
-                } else {
-                    // Leaf level - just apply projection to each record
-                    filtered
-                        .iter()
-                        .map(|rec| loaded_level.level_info.projection.eval(&[rec.clone()]))
-                        .collect::<Result<Vec<_>>>()?
-                };
-
-                filtered_collections.push(stmt::Value::List(processed));
+                loaded_levels.push(LoadedNestedLevel {
+                    data: nested_data,
+                    level_info: level,
+                });
             }
 
-            // Apply projection at this level: [parent_record, filtered_0, filtered_1, ...]
-            // Collections may not be in arg_index order, so build a sparse array
-            let max_arg = loaded_levels
-                .iter()
-                .map(|l| l.level_info.arg_index)
-                .max()
-                .unwrap_or(0);
-            let mut projection_args = vec![stmt::Value::Null; max_arg + 2]; // +1 for parent, +1 for 0-indexing
-            projection_args[0] = parent_record;
+            // Process each parent record
+            let mut results = Vec::with_capacity(parent_records.len());
 
-            for (loaded_level, filtered) in loaded_levels.iter().zip(filtered_collections) {
-                projection_args[loaded_level.level_info.arg_index + 1] = filtered;
+            for parent_record in parent_records {
+                // Build ancestor context stack: [grandparents..., parent]
+                let mut context_stack = ancestor_stack.to_vec();
+                context_stack.push(parent_record.clone());
+
+                // Filter and process all nested collections for this parent
+                let mut filtered_collections = Vec::new();
+
+                for loaded_level in &loaded_levels {
+                    // Filter using ancestor context
+                    let filtered = self.filter_hierarchical(
+                        loaded_level.data,
+                        &context_stack,
+                        &loaded_level.level_info.qualification,
+                        all_indexes,
+                    )?;
+
+                    // If this level has children, recursively merge them
+                    let processed = if !loaded_level.level_info.nested.is_empty() {
+                        self.execute_nested_levels(
+                            filtered,
+                            &loaded_level.level_info.nested,
+                            &loaded_level.level_info.projection,
+                            &context_stack, // Pass down ancestor context
+                            all_data,       // Pass through pre-loaded data
+                            all_indexes,    // Pass through pre-built indexes
+                        )
+                        .await?
+                    } else {
+                        // Leaf level - just apply projection to each record
+                        filtered
+                            .iter()
+                            .map(|rec| loaded_level.level_info.projection.eval(&[rec.clone()]))
+                            .collect::<Result<Vec<_>>>()?
+                    };
+
+                    filtered_collections.push(stmt::Value::List(processed));
+                }
+
+                // Apply projection at this level: [parent_record, filtered_0, filtered_1, ...]
+                // Collections may not be in arg_index order, so build a sparse array
+                let max_arg = loaded_levels
+                    .iter()
+                    .map(|l| l.level_info.arg_index)
+                    .max()
+                    .unwrap_or(0);
+                let mut projection_args = vec![stmt::Value::Null; max_arg + 2]; // +1 for parent, +1 for 0-indexing
+                projection_args[0] = parent_record;
+
+                for (loaded_level, filtered) in loaded_levels.iter().zip(filtered_collections) {
+                    projection_args[loaded_level.level_info.arg_index + 1] = filtered;
+                }
+
+                let projected = projection.eval(&projection_args[..])?;
+                results.push(projected);
             }
 
-            let projected = projection.eval(&projection_args[..])?;
-            results.push(projected);
-        }
-
-        Ok(results)
+            Ok(results)
         })
     }
 
@@ -227,11 +228,7 @@ impl Exec<'_> {
         Ok(index)
     }
 
-    fn extract_key(
-        &self,
-        record: &stmt::ValueRecord,
-        columns: &[usize],
-    ) -> Result<CompositeKey> {
+    fn extract_key(&self, record: &stmt::ValueRecord, columns: &[usize]) -> Result<CompositeKey> {
         let values: Vec<_> = columns
             .iter()
             .map(|&col_idx| record[col_idx].clone())

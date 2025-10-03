@@ -1,3 +1,6 @@
+mod materialization;
+
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::usize;
 
@@ -6,7 +9,9 @@ use toasty_core::stmt::{self, visit_mut, VisitMut};
 use toasty_core::Schema;
 
 use crate::engine::eval;
+use crate::engine::planner::partition::materialization::MaterializationKind;
 use crate::engine::{plan, planner::Planner};
+use crate::Result;
 
 /// Strategy for handling eager-loading of structurally-nested sub-statements
 ///
@@ -46,7 +51,7 @@ use crate::engine::{plan, planner::Planner};
 ///    create one NestedMerge action for each level, storing the result in a
 ///    variable. The next level pulls the input from that variable.
 impl Planner<'_> {
-    pub(crate) fn plan_v2_stmt_query(&mut self, mut stmt: stmt::Statement, dst: plan::VarId) {
+    pub(crate) fn plan_v2_stmt_query(&mut self, mut stmt: stmt::Statement) -> Result<plan::VarId> {
         let mut walker_state = WalkerState {
             stmts: vec![StatementState::new()],
             scopes: vec![ScopeState { stmt_id: StmtId(0) }],
@@ -61,283 +66,80 @@ impl Planner<'_> {
         .visit_stmt_mut(&mut stmt);
 
         walker_state.stmts[0].stmt = Some(Box::new(stmt));
+
         // Build the execution plan...
+        let materialization_graph = self.plan_materializations(&walker_state.stmts, StmtId(0));
 
-        let mut materialization = Materialization {
-            stmts: walker_state.stmts,
-            materializations: vec![],
-        };
-        materialization.plan_materialization(StmtId(0));
+        // Build the execution plan
+        for node_id in &materialization_graph.execution_order {
+            let node = &materialization_graph.nodes[*node_id];
 
-        // All the materializations have been found, but returns have not been
-        // computed. Compute all the returns now.
-        for materialization in &mut materialization.materializations {
-            materialization.compute_query(self.schema);
-        }
+            match &node.kind {
+                MaterializationKind::ExecStatement { inputs, stmt } => {
+                    let mut input_args = vec![];
+                    let mut input_vars = vec![];
 
-        // Now that materializations have been planed, we can plan the execution
-        // of the statements.
-        self.plan_v2_stmt_execution(&mut materialization, StmtId(0), dst);
-    }
+                    for input in inputs {
+                        let var = materialization_graph.nodes[*input].var.get().unwrap();
 
-    fn plan_v2_stmt_execution(
-        &mut self,
-        state: &mut Materialization,
-        stmt_id: StmtId,
-        dst: plan::VarId,
-    ) {
-        // Execute all materializations first
-        for materialization in &mut state.materializations {
-            // TODO: don't clone
-            let project_arg_ty = materialization.ret_ty.as_ref().unwrap();
-            let mut output_targets = vec![];
-
-            for output in &mut materialization.output {
-                let project = eval::Func::from_stmt(output.expr.clone(), project_arg_ty.clone());
-                let ty =
-                    stmt::ExprContext::new_free().infer_expr_ty(&output.expr, &project.args[..]);
-                let var = self.var_table.register_var(stmt::Type::list(ty));
-
-                output_targets.push(plan::OutputTarget { var, project });
-                output.var = Some(var);
-            }
-
-            self.push_action(plan::ExecStatement {
-                input: None,
-                output: Some(plan::Output {
-                    ty: stmt::Type::Record(project_arg_ty.clone()),
-                    targets: output_targets,
-                }),
-                stmt: materialization.stmt.clone(),
-                conditional_update_with_no_returning: false,
-            });
-        }
-
-        // Now plan the merge/project step
-        let stmt_state = &state.stmts[stmt_id.0];
-        let mid = stmt_state.materialization;
-        let [output] = &state.materializations[mid].output[..] else {
-            todo!(
-                "materializations={:#?}; stmt={stmt_state:#?}",
-                state.materializations,
-            );
-        };
-        let output_var = output.var.unwrap();
-        let stmt::Type::List(output_ty) = self.var_table.ty(output_var).clone() else {
-            todo!()
-        };
-        let output_ty = *output_ty;
-
-        // Check if this statement has nested children
-        let has_children = stmt_state.args.iter().any(|arg| matches!(arg, Arg::Sub(_)));
-
-        if has_children {
-            // Use NestedMerge for statements with children
-            self.plan_nested_merge(state, stmt_id, output_var, output_ty, dst);
-        } else {
-            // Use simple Project for leaf statements
-            let project =
-                eval::Func::from_stmt(stmt_state.project.clone().unwrap(), vec![output_ty.clone()]);
-
-            self.push_action(plan::Project {
-                input: output_var,
-                output: plan::Output {
-                    ty: output_ty,
-                    targets: vec![plan::OutputTarget { var: dst, project }],
-                },
-            });
-        }
-    }
-
-    fn plan_nested_merge(
-        &mut self,
-        state: &mut Materialization,
-        stmt_id: StmtId,
-        root_var: plan::VarId,
-        root_ty: stmt::Type,
-        dst: plan::VarId,
-    ) {
-        let stmt_state = &state.stmts[stmt_id.0];
-
-        // Build the nested hierarchy
-        let nested_levels = self.build_nested_hierarchy(state, stmt_id);
-
-        // Collect indexes for all equality qualifications
-        let indexes = self.collect_indexes(state, stmt_id);
-
-        // Build the final projection
-        let project = eval::Func::from_stmt(
-            stmt_state.project.clone().unwrap(),
-            vec![root_ty.clone()],
-        );
-
-        self.push_action(plan::NestedMerge {
-            root: root_var,
-            nested: nested_levels,
-            indexes,
-            output: dst,
-            projection: project,
-        });
-    }
-
-    fn build_nested_hierarchy(
-        &mut self,
-        state: &Materialization,
-        stmt_id: StmtId,
-    ) -> Vec<plan::NestedLevel> {
-        let stmt_state = &state.stmts[stmt_id.0];
-
-        // Get children from args
-        let children: Vec<_> = stmt_state
-            .args
-            .iter()
-            .enumerate()
-            .filter_map(|(arg_idx, arg)| match arg {
-                Arg::Sub(child_stmt_id) => Some((arg_idx, *child_stmt_id)),
-                Arg::Ref { .. } => None,
-            })
-            .collect();
-
-        children
-            .into_iter()
-            .map(|(arg_idx, child_stmt_id)| {
-                let child_state = &state.stmts[child_stmt_id.0];
-                let mid = child_state.materialization;
-                let [output] = &state.materializations[mid].output[..] else {
-                    panic!("Expected single output for child statement");
-                };
-                let source_var = output.var.unwrap();
-
-                // Get the qualification, or use a fallback predicate
-                let qualification = child_state
-                    .merge_qualification
-                    .clone()
-                    .unwrap_or_else(|| {
-                        // Fallback: if we couldn't extract an equality, use a predicate
-                        // that always returns true (effectively no filtering)
-                        // This shouldn't happen in practice if extraction worked
-                        todo!("Predicate qualifications not yet implemented")
-                    });
-
-                // Fix up the index_id in the qualification to point to the actual VarId
-                let qualification = match qualification {
-                    plan::MergeQualification::Equality {
-                        root_columns,
-                        index_id: _,
-                    } => plan::MergeQualification::Equality {
-                        root_columns,
-                        index_id: source_var, // Use the actual VarId
-                    },
-                    other => other,
-                };
-
-                // Build projection for this level
-                let child_project_expr = child_state.project.clone().unwrap();
-                let stmt::Type::List(child_ty) = self.var_table.ty(source_var).clone() else {
-                    panic!("Expected List type for child materialization");
-                };
-                let child_project = eval::Func::from_stmt(child_project_expr, vec![*child_ty]);
-
-                // Recursively build children
-                let nested = self.build_nested_hierarchy(state, child_stmt_id);
-
-                plan::NestedLevel {
-                    source: source_var,
-                    arg_index: arg_idx,
-                    qualification,
-                    projection: child_project,
-                    nested,
-                }
-            })
-            .collect()
-    }
-
-    fn collect_indexes(
-        &self,
-        state: &Materialization,
-        stmt_id: StmtId,
-    ) -> HashMap<plan::VarId, Vec<usize>> {
-        let mut indexes = HashMap::new();
-        self.collect_indexes_recursive(state, stmt_id, &mut indexes);
-        indexes
-    }
-
-    fn collect_indexes_recursive(
-        &self,
-        state: &Materialization,
-        stmt_id: StmtId,
-        indexes: &mut HashMap<plan::VarId, Vec<usize>>,
-    ) {
-        let stmt_state = &state.stmts[stmt_id.0];
-
-        for arg in &stmt_state.args {
-            if let Arg::Sub(child_stmt_id) = arg {
-                let child_state = &state.stmts[child_stmt_id.0];
-
-                // If this child has an equality qualification, extract the columns to index
-                if let Some(plan::MergeQualification::Equality {
-                    index_id,
-                    root_columns: _,
-                }) = &child_state.merge_qualification
-                {
-                    // The index_id will be updated to the actual VarId in build_nested_hierarchy
-                    // For now, we need to extract the nested_columns from the original filter
-                    // We stored the parent column in root_columns, but we need the nested column
-                    // Let me extract it from the filter again
-                    if let Some(nested_col) = self.extract_nested_column_index(child_state) {
-                        // The actual VarId will be filled in during build_nested_hierarchy
-                        // For now, use a placeholder
-                        let mid = child_state.materialization;
-                        let [output] = &state.materializations[mid].output[..] else {
-                            panic!();
-                        };
-                        if let Some(var) = output.var {
-                            indexes.insert(var, vec![nested_col]);
-                        }
+                        input_args.push(self.var_table.ty(var).clone());
+                        input_vars.push(var);
                     }
-                }
 
-                // Recursively collect indexes for descendants
-                self.collect_indexes_recursive(state, *child_stmt_id, indexes);
+                    let args: Vec<_> = inputs
+                        .iter()
+                        .map(|node_id| {
+                            let var = materialization_graph.nodes[*node_id].var.get().unwrap();
+                            self.var_table.ty(var).clone()
+                        })
+                        .collect();
+
+                    let ty = self.infer_ty(stmt, &args);
+                    let var = self.var_table.register_var(ty);
+                    node.var.set(Some(var));
+
+                    self.push_action(plan::ExecStatement2 {
+                        input: input_vars,
+                        output: Some(var),
+                        stmt: stmt.clone(),
+                        conditional_update_with_no_returning: false,
+                    });
+                }
+                MaterializationKind::Project { inputs, projection } => {
+                    let mut input_args = vec![];
+                    let mut input_vars = vec![];
+
+                    for input in inputs {
+                        let var = materialization_graph.nodes[*input].var.get().unwrap();
+
+                        input_args.push(self.var_table.ty(var).clone());
+                        input_vars.push(var);
+                    }
+
+                    let args: Vec<_> = inputs
+                        .iter()
+                        .map(|node_id| {
+                            let var = materialization_graph.nodes[*node_id].var.get().unwrap();
+                            self.var_table.ty(var).clone()
+                        })
+                        .collect();
+
+                    let projection = eval::Func::from_stmt(projection.clone(), args);
+                    let var = self.var_table.register_var(projection.ret.clone());
+                    node.var.set(Some(var));
+
+                    self.push_action(plan::Project {
+                        input: input_vars,
+                        output: var,
+                        projection,
+                    });
+                }
             }
         }
-    }
 
-    fn extract_nested_column_index(&self, stmt_state: &StatementState) -> Option<usize> {
-        // Extract the nested column index from the original statement
-        // This is a bit hacky - we stored the parent column in root_columns,
-        // but we need to extract the nested column from the original WHERE clause
-        let stmt = stmt_state.stmt.as_deref()?;
-        let stmt::Statement::Query(query) = stmt else {
-            return None;
-        };
-        let stmt::ExprSet::Select(select) = &query.body else {
-            return None;
-        };
-        let filter = &select.filter;
-
-        // Look for the pattern: child_col = parent_col
-        let stmt::Expr::BinaryOp(binary_op) = filter else {
-            return None;
-        };
-
-        match (&*binary_op.lhs, &*binary_op.rhs) {
-            (
-                stmt::Expr::Reference(stmt::ExprReference::Column {
-                    column: nested_idx,
-                    ..
-                }),
-                stmt::Expr::Arg(_),
-            ) => Some(*nested_idx),
-            (
-                stmt::Expr::Arg(_),
-                stmt::Expr::Reference(stmt::ExprReference::Column {
-                    column: nested_idx,
-                    ..
-                }),
-            ) => Some(*nested_idx),
-            _ => None,
-        }
+        let mid = walker_state.stmts[0].output.get().unwrap();
+        let output = materialization_graph.nodes[mid].var.get().unwrap();
+        Ok(output)
     }
 }
 
@@ -375,6 +177,12 @@ struct StatementState {
     /// Back-refs are expressions within sub-statements that reference the
     /// current statemetn.
     back_refs: HashMap<StmtId, BackRef>,
+
+    /// Index of the ExecStatement materialization node for this statement.
+    exec_statement: Cell<Option<usize>>,
+
+    /// Index of the node that computes the final result for the statement
+    output: Cell<Option<usize>>,
 
     /// Materialization
     materialization: usize,
@@ -428,17 +236,33 @@ struct BackRef {
     /// The expression
     exprs: IndexSet<stmt::ExprReference>,
 
-    /// The index in the materialization's outputs
+    /// The projection node representing the output needed for this back-ref
     output: Option<usize>,
 }
 
 #[derive(Debug)]
 enum Arg {
     /// A sub-statement
-    Sub(StmtId),
+    Sub {
+        /// The statement ID providing the input
+        stmt_id: StmtId,
+
+        /// The index in the materialization node's inputs list. This is set
+        /// when planning materialization.
+        input: Cell<Option<usize>>,
+    },
 
     /// A back-reference
-    Ref { stmt_id: StmtId, index: usize },
+    Ref {
+        /// The statement providing the data for the reference
+        stmt_id: StmtId,
+        /// The index of the column within the set of columns selected
+        index: usize,
+
+        /// The index in the materialization node's inputs list. This is set
+        /// when planning materialization.
+        input: Cell<Option<usize>>,
+    },
 }
 
 #[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
@@ -617,7 +441,7 @@ impl Materialization {
                 self.stmts[stmt_id.0]
                     .args
                     .iter()
-                    .all(|a| matches!(a, Arg::Sub(..))),
+                    .all(|a| matches!(a, Arg::Sub { .. })),
                 "TODO"
             );
 
@@ -721,7 +545,7 @@ impl Materialization {
         // This will be converted to a proper qualification in plan_v2_stmt_execution
         Some(plan::MergeQualification::Equality {
             root_columns: vec![(0, parent_col_idx)], // 0 levels up = immediate parent
-            index_id: plan::VarId(usize::MAX), // Placeholder, will be filled later
+            index_id: plan::VarId(usize::MAX),       // Placeholder, will be filled later
         })
     }
 
@@ -751,7 +575,10 @@ impl Materialization {
             };
 
             // Find the arg index if there is one
-            let arg_idx = stmt_state.args.iter().enumerate()
+            let arg_idx = stmt_state
+                .args
+                .iter()
+                .enumerate()
                 .find_map(|(i, arg)| matches!(arg, Arg::Ref { .. }).then_some(i));
 
             if let Some(i) = arg_idx {
@@ -775,7 +602,12 @@ impl Materialization {
         };
 
         for (i, arg) in stmt_state.args.iter().enumerate() {
-            let Arg::Ref { stmt_id: _parent_stmt_id, index: _index } = arg else {
+            let Arg::Ref {
+                stmt_id: _parent_stmt_id,
+                index: _index,
+                ..
+            } = arg
+            else {
                 continue;
             };
 
@@ -887,6 +719,8 @@ impl StatementState {
             materialization: usize::MAX,
             project: None,
             merge_qualification: None,
+            exec_statement: Cell::new(None),
+            output: Cell::new(None),
         }
     }
 
@@ -898,14 +732,21 @@ impl StatementState {
 
     fn new_ref_arg(&mut self, stmt_id: StmtId, index: usize) -> usize {
         let arg_id = self.args.len();
-        self.args.push(Arg::Ref { stmt_id, index });
+        self.args.push(Arg::Ref {
+            stmt_id,
+            index,
+            input: Cell::new(None),
+        });
         arg_id
     }
 
     fn new_sub_stmt_arg(&mut self, stmt_id: StmtId) -> usize {
         self.subs.push(stmt_id);
         let arg_id = self.args.len();
-        self.args.push(Arg::Sub(stmt_id));
+        self.args.push(Arg::Sub {
+            stmt_id,
+            input: Cell::new(None),
+        });
         arg_id
     }
 }

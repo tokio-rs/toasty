@@ -2,6 +2,7 @@ mod associate;
 mod batch_write;
 mod delete_by_key;
 mod exec_statement;
+mod exec_statement2;
 mod find_pk_by_index;
 mod get_by_key;
 mod insert;
@@ -58,6 +59,7 @@ impl Exec<'_> {
             Action::BatchWrite(action) => self.action_batch_write(action).await,
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,
             Action::ExecStatement(action) => self.action_exec_statement(action).await,
+            Action::ExecStatement2(action) => self.action_exec_statement2(action).await,
             Action::FindPkByIndex(action) => self.action_find_pk_by_index(action).await,
             Action::GetByKey(action) => self.action_get_by_key(action).await,
             Action::Insert(action) => self.action_insert(action).await,

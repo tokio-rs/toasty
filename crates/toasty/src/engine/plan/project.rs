@@ -1,12 +1,18 @@
-use crate::engine::plan::{Action, Output, VarId};
+use crate::engine::{
+    eval,
+    plan::{Action, Output, VarId},
+};
 
 #[derive(Debug)]
 pub(crate) struct Project {
     /// Source of the input
-    pub(crate) input: VarId,
+    pub(crate) input: Vec<VarId>,
 
-    /// How to project the input, and where to store it.
-    pub(crate) output: Output,
+    /// Where to store the output
+    pub(crate) output: VarId,
+
+    /// How to project it before storing
+    pub(crate) projection: eval::Func,
 }
 
 impl From<Project> for Action {

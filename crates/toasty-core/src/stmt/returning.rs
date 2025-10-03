@@ -1,5 +1,5 @@
 use super::{Expr, Path};
-use crate::stmt::{self, Value};
+use crate::stmt::{self, Node, Value};
 
 /// TODO: rename since this is also used in `Select`?
 #[derive(Debug, Clone)]
@@ -89,5 +89,18 @@ impl From<Expr> for Returning {
 impl From<Vec<Expr>> for Returning {
     fn from(value: Vec<Expr>) -> Self {
         stmt::Returning::Expr(stmt::Expr::record_from_vec(value))
+    }
+}
+
+impl Node for Returning {
+    fn visit<V: stmt::Visit>(&self, mut visit: V)
+    where
+        Self: Sized,
+    {
+        visit.visit_returning(self);
+    }
+
+    fn visit_mut<V: stmt::VisitMut>(&mut self, mut visit: V) {
+        visit.visit_returning_mut(self);
     }
 }

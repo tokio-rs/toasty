@@ -13,6 +13,9 @@ pub(crate) use delete_by_key::DeleteByKey;
 mod exec_statement;
 pub(crate) use exec_statement::ExecStatement;
 
+mod exec_statement2;
+pub(crate) use exec_statement2::ExecStatement2;
+
 mod find_pk_by_index;
 pub(crate) use find_pk_by_index::FindPkByIndex;
 

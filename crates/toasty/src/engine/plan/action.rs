@@ -1,4 +1,4 @@
-use crate::engine::plan::project::Project;
+use crate::engine::plan::{exec_statement2::ExecStatement2, project::Project};
 
 use super::{
     Associate, BatchWrite, DeleteByKey, ExecStatement, FindPkByIndex, GetByKey, Insert,
@@ -18,6 +18,9 @@ pub(crate) enum Action {
 
     /// Execute a statement
     ExecStatement(ExecStatement),
+
+    /// Execute a statement
+    ExecStatement2(ExecStatement2),
 
     FindPkByIndex(FindPkByIndex),
 
@@ -55,6 +58,7 @@ impl fmt::Debug for Action {
             Self::BatchWrite(a) => a.fmt(f),
             Self::DeleteByKey(a) => a.fmt(f),
             Self::ExecStatement(a) => a.fmt(f),
+            Self::ExecStatement2(a) => a.fmt(f),
             Self::FindPkByIndex(a) => a.fmt(f),
             Self::GetByKey(a) => a.fmt(f),
             Self::Insert(a) => a.fmt(f),
