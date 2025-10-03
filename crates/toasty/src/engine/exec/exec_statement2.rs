@@ -8,6 +8,8 @@ impl Exec<'_> {
         &mut self,
         action: &plan::ExecStatement2,
     ) -> Result<()> {
+        todo!("action={action:#?}");
+        /*
         self.exec_statement2(
             action.stmt.clone(),
             action.input.as_ref(),
@@ -15,6 +17,7 @@ impl Exec<'_> {
             action.conditional_update_with_no_returning,
         )
         .await
+        */
     }
 
     pub(super) async fn exec_statement2(
@@ -24,6 +27,7 @@ impl Exec<'_> {
         output: Option<&plan::VarId>,
         conditional_update_with_no_returning: bool,
     ) -> Result<()> {
+        todo!();
         /*
         if let Some(input) = input {
             let input = self.collect_input(input).await?;
@@ -132,6 +136,5 @@ impl Exec<'_> {
 
         Ok(())
         */
-        todo!()
     }
 }

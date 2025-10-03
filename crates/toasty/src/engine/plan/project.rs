@@ -6,7 +6,7 @@ use crate::engine::{
 #[derive(Debug)]
 pub(crate) struct Project {
     /// Source of the input
-    pub(crate) input: Vec<VarId>,
+    pub(crate) input: VarId,
 
     /// Where to store the output
     pub(crate) output: VarId,

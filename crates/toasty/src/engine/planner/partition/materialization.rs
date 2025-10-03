@@ -45,8 +45,8 @@ pub(crate) enum MaterializationKind {
 
     /// Projection operation - transforms records
     Project {
-        /// Inputs required to perform the projection
-        inputs: IndexSet<NodeId>,
+        /// Input required to perform the projection
+        input: NodeId,
 
         /// Projection expression
         projection: stmt::Expr,
@@ -114,7 +114,7 @@ impl PlanMaterialization<'_> {
             match expr {
                 stmt::Expr::Reference(expr_reference) => {
                     let (index, _) = columns.insert_full(expr_reference.clone());
-                    *expr = stmt::Expr::arg(index);
+                    *expr = stmt::Expr::arg_project(0, [index]);
                 }
                 stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
                     Arg::Ref { .. } => {
@@ -139,6 +139,13 @@ impl PlanMaterialization<'_> {
                 _ => {}
             }
         });
+
+        // For each back ref, include the needed columns
+        for back_ref in stmt_state.back_refs.values() {
+            for expr in &back_ref.exprs {
+                columns.insert(expr.clone());
+            }
+        }
 
         // If there are any ref args, then the statement needs to be rewritten
         // to batch load all records for a NestedMerge operation .
@@ -206,6 +213,12 @@ impl PlanMaterialization<'_> {
             select.filter = stmt::Expr::exists(stmt::Query::builder(sub_select).returning(1));
         }
 
+        select.returning = stmt::Returning::Expr(stmt::Expr::record(
+            columns
+                .iter()
+                .map(|expr_reference| stmt::Expr::from(expr_reference.clone())),
+        ));
+
         // Create the exec statement materialization node.
         let exec_stmt_node_id = self.graph.nodes.len();
         self.graph
@@ -214,6 +227,25 @@ impl PlanMaterialization<'_> {
 
         // Track the exec statement materialization node.
         stmt_state.exec_statement.set(Some(exec_stmt_node_id));
+
+        // Now, for each back ref, we need to project the expression to what the
+        // next statement expects.
+        for back_ref in stmt_state.back_refs.values() {
+            let projection = stmt::Expr::record(back_ref.exprs.iter().map(|expr_reference| {
+                let index = columns.get_index_of(expr_reference).unwrap();
+                stmt::Expr::arg_project(0, [index])
+            }));
+
+            let project_node_id = self.graph.nodes.len();
+            self.graph.nodes.push(
+                MaterializationKind::Project {
+                    input: exec_stmt_node_id,
+                    projection,
+                }
+                .into(),
+            );
+            back_ref.node_id.set(Some(project_node_id));
+        }
 
         // Plan each child
         for arg in &stmt_state.args {
@@ -231,7 +263,7 @@ impl PlanMaterialization<'_> {
         let project_node_id = self.graph.nodes.len();
         self.graph.nodes.push(
             MaterializationKind::Project {
-                inputs: [exec_stmt_node_id].into(),
+                input: exec_stmt_node_id,
                 projection: returning,
             }
             .into(),
@@ -258,15 +290,21 @@ impl PlanMaterialization<'_> {
         while let Some(node_id) = stack.pop() {
             self.graph.execution_order.push(node_id);
 
-            let inputs = match &self.graph.nodes[node_id].kind {
-                MaterializationKind::ExecStatement { inputs, .. } => inputs,
-                MaterializationKind::Project { inputs, .. } => inputs,
-            };
+            fn visit(graph: &MaterializationGraph, stack: &mut Vec<NodeId>, node_id: NodeId) {
+                if !graph.nodes[node_id].visited.get() {
+                    graph.nodes[node_id].visited.set(true);
+                    stack.push(node_id);
+                }
+            }
 
-            for &input_id in inputs {
-                if !self.graph.nodes[input_id].visited.get() {
-                    self.graph.nodes[input_id].visited.set(true);
-                    stack.push(input_id);
+            match &self.graph.nodes[node_id].kind {
+                MaterializationKind::ExecStatement { inputs, .. } => {
+                    for &input_id in inputs {
+                        visit(&self.graph, &mut stack, input_id);
+                    }
+                }
+                MaterializationKind::Project { input, .. } => {
+                    visit(&self.graph, &mut stack, *input);
                 }
             }
         }
