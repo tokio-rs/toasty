@@ -993,7 +993,11 @@ pub fn visit_table_ref_mut<V>(v: &mut V, node: &mut TableRef)
 where
     V: VisitMut + ?Sized,
 {
-    // TableRef is just identifiers, no traversal needed
+    match node {
+        TableRef::Cte { .. } => {}
+        TableRef::Derived { subquery } => v.visit_stmt_query_mut(subquery),
+        TableRef::Table(_) => {}
+    }
 }
 
 pub fn visit_table_with_joins_mut<V>(v: &mut V, node: &mut TableWithJoins)
