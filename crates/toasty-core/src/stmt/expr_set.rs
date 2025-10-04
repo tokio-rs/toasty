@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::{substitute, Expr, ExprSetOp, Select, SourceModel, Update, Values};
+use super::{Expr, ExprSetOp, Select, SourceModel, Update, Values};
 use crate::{schema::db::TableId, stmt::ExprArg};
 
 #[derive(Clone)]
@@ -63,16 +63,6 @@ impl ExprSet {
         match self {
             Self::Values(expr) => expr,
             _ => todo!(),
-        }
-    }
-
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        match self {
-            Self::Select(expr) => expr.substitute_ref(input),
-            Self::SetOp(expr) => expr.substitute_ref(input),
-            Self::Update(_) => todo!(),
-            Self::Values(expr) => expr.substitute_ref(input),
-            Self::Arg(_) => todo!(),
         }
     }
 }

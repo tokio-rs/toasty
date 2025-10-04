@@ -50,7 +50,7 @@ impl Model {
         self.fields.iter_mut().find(|field| field.name == name)
     }
 
-    pub fn find_by_id(&self, mut input: impl stmt::substitute::Input) -> stmt::Query {
+    pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {
         let filter = match &self.primary_key.fields[..] {
             [pk_field] => stmt::Expr::eq(stmt::Expr::field(pk_field), input.resolve_arg(&0.into())),
             pk_fields => stmt::Expr::and_from_vec(

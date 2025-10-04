@@ -330,10 +330,10 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 .unwrap_or(Type::Unit),
             Statement::Query(stmt) => match &stmt.body {
                 ExprSet::Select(body) => Type::list(cx.infer_returning_ty(&body.returning, args)),
-                ExprSet::SetOp(body) => todo!(),
-                ExprSet::Update(body) => todo!(),
-                ExprSet::Values(body) => todo!(),
-                ExprSet::Arg(body) => todo!(),
+                ExprSet::SetOp(_body) => todo!(),
+                ExprSet::Update(_body) => todo!(),
+                ExprSet::Values(_body) => todo!(),
+                ExprSet::Arg(_body) => todo!(),
             },
             Statement::Update(stmt) => stmt
                 .returning

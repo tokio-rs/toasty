@@ -1,6 +1,6 @@
 use super::{
-    substitute, Delete, Expr, ExprSet, ExprSetOp, Limit, Node, OrderBy, Path, Returning, Select,
-    SetOp, Source, Statement, Update, UpdateTarget, Values, Visit, VisitMut, With,
+    Delete, Expr, ExprSet, ExprSetOp, Limit, Node, OrderBy, Path, Returning, Select, SetOp, Source,
+    Statement, Update, UpdateTarget, Values, Visit, VisitMut, With,
 };
 use crate::stmt;
 
@@ -124,10 +124,6 @@ impl Query {
             ExprSet::Select(body) => body.include(path),
             _ => todo!(),
         }
-    }
-
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        self.body.substitute_ref(input);
     }
 }
 
