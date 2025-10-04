@@ -96,7 +96,7 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, "(" stmt ")");
             }
             Value(expr) => expr.to_sql(cx, f),
-            _ => todo!("expr={:?}", self),
+            _ => todo!("expr={:#?}", self),
         }
     }
 }

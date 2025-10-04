@@ -13,7 +13,7 @@ use std::collections::HashMap;
 ///     * Take the results of of the recursive nested merge
 ///     * project the curent row
 ///     * Store in vec to return.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct NestedMerge {
     /// Input sources. NestedLevel will reference their inputs by index in this vec.
     pub(crate) inputs: Vec<VarId>,
@@ -32,13 +32,10 @@ pub(crate) struct NestedMerge {
 /// - How to filter it for each parent (can reference ANY ancestor)
 /// - How to project it (may include ExprArgs for its own children)
 /// - Its own children (recursive nesting)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct NestedLevel {
     /// Input for this level as an index in `NestedMerge::inputs`
     pub(crate) source: usize,
-
-    /// How to filter `source` records before performing the projection
-    pub(crate) qualification: MergeQualification,
 
     /// Projection for this level (before passing to parent) Argument 0 is the
     /// row for the current level, all other arguments are the results of the
@@ -50,7 +47,7 @@ pub(crate) struct NestedLevel {
     pub(crate) nested: Vec<NestedChild>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct NestedChild {
     /// The nested level for this child
     pub(crate) level: NestedLevel,
@@ -93,15 +90,6 @@ pub(crate) enum MergeQualification {
     /// Execution: For each parent record, evaluate predicate against all
     /// nested records. No indexing.
     Predicate(eval::Func),
-}
-
-impl Action {
-    pub(crate) fn into_nested_merge(self) -> NestedMerge {
-        match self {
-            Self::NestedMerge(action) => action,
-            _ => panic!(),
-        }
-    }
 }
 
 impl From<NestedMerge> for Action {

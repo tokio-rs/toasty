@@ -1,7 +1,6 @@
 use super::{operation, plan, Exec, Result};
 use crate::driver::Rows;
 use toasty_core::stmt;
-use toasty_core::stmt::ValueStream;
 
 impl Exec<'_> {
     pub(super) async fn action_exec_statement2(
@@ -19,6 +18,7 @@ impl Exec<'_> {
                 let values = self.vars.load(*var_id).collect().await?;
                 input_values.push(stmt::Value::List(values));
             }
+            println!("SUBSTITUTE; stmt={stmt:#?}; input={input_values:#?}");
             stmt.substitute(&input_values);
         }
 

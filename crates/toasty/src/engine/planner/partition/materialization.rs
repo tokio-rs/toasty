@@ -8,7 +8,7 @@ use toasty_core::{
 
 use crate::engine::{
     eval,
-    plan::{self, NestedLevel},
+    plan::{self, NestedLevel, NestedMerge},
     planner::partition::{Arg, StatementState, StmtId},
 };
 
@@ -45,6 +45,14 @@ pub(crate) enum MaterializationKind {
 
         /// The database query to execute
         stmt: stmt::Statement,
+    },
+
+    /// Execute a nested merge
+    NestedMerge {
+        inputs: IndexSet<NodeId>,
+
+        /// The root nested merge level
+        root: plan::NestedLevel,
     },
 
     /// Projection operation - transforms records
@@ -169,13 +177,22 @@ impl PlanMaterialization<'_> {
         let mut ref_source = None;
 
         for arg in &self.stmts[stmt_id.0].args {
-            let Arg::Ref { stmt_id, input, .. } = arg else {
+            let Arg::Ref {
+                stmt_id: target_id,
+                input,
+                ..
+            } = arg
+            else {
                 continue;
             };
 
             assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
 
-            let node_id = self.stmts[stmt_id.0].exec_statement.get().unwrap();
+            // Find the back-ref for this arg
+            let node_id = self.stmts[target_id.0].back_refs[&stmt_id]
+                .node_id
+                .get()
+                .unwrap();
             let (index, _) = inputs.insert_full(node_id);
             ref_source = Some(stmt::Values::from(stmt::Expr::arg(index)));
             input.set(Some(0));
@@ -277,41 +294,47 @@ impl PlanMaterialization<'_> {
         }
 
         // Plans a NestedMerge if one is needed
-        self.plan_nested_merge(stmt_id);
+        let output_node_id = if let Some(materialize_nested_merge) = self.plan_nested_merge(stmt_id)
+        {
+            let materialize_nested_merge_id = self.graph.nodes.len();
+            self.graph.nodes.push(materialize_nested_merge);
+            materialize_nested_merge_id
+        } else {
+            // Plan the final projection to handle the returning clause.
+            let project_node_id = self.graph.nodes.len();
+            self.graph.nodes.push(
+                MaterializationKind::Project {
+                    input: exec_stmt_node_id,
+                    projection: returning,
+                }
+                .into(),
+            );
+            project_node_id
+        };
 
-        // Plan the final projection to handle the returning clause.
-        let project_node_id = self.graph.nodes.len();
-        self.graph.nodes.push(
-            MaterializationKind::Project {
-                input: exec_stmt_node_id,
-                projection: returning,
-            }
-            .into(),
-        );
-        stmt_state.output.set(Some(project_node_id));
+        stmt_state.output.set(Some(output_node_id));
     }
 
-    fn plan_nested_merge(&mut self, stmt_id: StmtId) {
+    fn plan_nested_merge(&mut self, stmt_id: StmtId) -> Option<MaterializationNode> {
         let stmt_state = &self.stmts[stmt_id.0];
 
-        for arg in &stmt_state.args {
-            let Arg::Sub {
-                stmt_id: nested_id, ..
-            } = arg
-            else {
-                continue;
-            };
-
-            let mut nested_merge = PlanNestedMerge {
-                schema: self.schema,
-                stmts: self.stmts,
-                graph: &mut self.graph,
-                inputs: IndexSet::new(),
-                stack: vec![stmt_id],
-            };
-            nested_merge.plan_nested_level(*nested_id, 1);
-            todo!("nested_merge={:#?}", nested_merge);
+        // Return if there is no nested merge to do
+        let need_nested_merge = stmt_state
+            .args
+            .iter()
+            .any(|arg| matches!(arg, Arg::Sub { .. }));
+        if !need_nested_merge {
+            return None;
         }
+
+        let mut planner = PlanNestedMerge {
+            schema: self.schema,
+            stmts: self.stmts,
+            graph: &mut self.graph,
+            inputs: IndexSet::new(),
+            stack: vec![stmt_id],
+        };
+        Some(planner.plan_nested_merge(stmt_id))
     }
 
     fn compute_execution_order(&mut self, exit: NodeId) {
@@ -332,6 +355,11 @@ impl PlanMaterialization<'_> {
 
             match &self.graph.nodes[node_id].kind {
                 MaterializationKind::ExecStatement { inputs, .. } => {
+                    for &input_id in inputs {
+                        visit(&self.graph, &mut stack, input_id);
+                    }
+                }
+                MaterializationKind::NestedMerge { inputs, .. } => {
                     for &input_id in inputs {
                         visit(&self.graph, &mut stack, input_id);
                     }
@@ -366,16 +394,24 @@ impl From<MaterializationKind> for MaterializationNode {
 }
 
 impl PlanNestedMerge<'_> {
-    fn plan_nested_level(&mut self, stmt_id: StmtId, depth: usize) -> NestedLevel {
+    fn plan_nested_merge(mut self, root: StmtId) -> MaterializationNode {
+        self.stack.push(root);
+        let root = self.plan_nested_level(root, 0);
+        self.stack.pop();
+
+        MaterializationKind::NestedMerge {
+            inputs: self.inputs,
+            root,
+        }
+        .into()
+    }
+
+    fn plan_nested_child(&mut self, stmt_id: StmtId, depth: usize) -> plan::NestedChild {
         self.stack.push(stmt_id);
 
+        let level = self.plan_nested_level(stmt_id, depth);
         let stmt_state = &self.stmts[stmt_id.0];
         let selection = stmt_state.exec_statement_selection.get().unwrap();
-
-        // First, track the batch-load as a required input for the nested merge
-        let (source, _) = self
-            .inputs
-            .insert_full(stmt_state.exec_statement.get().unwrap());
 
         let select = stmt_state
             .stmt
@@ -386,7 +422,7 @@ impl PlanNestedMerge<'_> {
             .body
             .as_select();
 
-        // Now, extract the qualification. For now, we will just re-run the
+        // Extract the qualification. For now, we will just re-run the
         // entire where clause, but that can be improved later.
         let mut filter = select.filter.clone();
 
@@ -410,7 +446,35 @@ impl PlanNestedMerge<'_> {
         let filter_arg_tys = self.build_filter_arg_tys();
         let filter = eval::Func::from_stmt(filter, filter_arg_tys);
 
-        let nested = vec![];
+        let ret = plan::NestedChild {
+            level,
+            qualification: plan::MergeQualification::Predicate(filter),
+        };
+
+        self.stack.pop();
+
+        ret
+    }
+
+    fn plan_nested_level(&mut self, stmt_id: StmtId, depth: usize) -> NestedLevel {
+        let stmt_state = &self.stmts[stmt_id.0];
+        let selection = stmt_state.exec_statement_selection.get().unwrap();
+
+        // First, track the batch-load as a required input for the nested merge
+        let (source, _) = self
+            .inputs
+            .insert_full(stmt_state.exec_statement.get().unwrap());
+
+        let select = stmt_state
+            .stmt
+            .as_deref()
+            .unwrap()
+            .as_query()
+            .unwrap()
+            .body
+            .as_select();
+
+        let mut nested = vec![];
 
         // Map the returning clause to projection expression
         let mut projection = select.returning.as_expr().clone();
@@ -418,14 +482,18 @@ impl PlanNestedMerge<'_> {
         visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
             stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
                 Arg::Sub { stmt_id, .. } => {
-                    let nested_level = self.plan_nested_level(*stmt_id, depth + 1);
-                    todo!("nested_level={nested_level:#?}");
+                    let nested_child = self.plan_nested_child(*stmt_id, depth + 1);
+                    nested.push(nested_child);
+
+                    // Taking the
+                    *expr = stmt::Expr::arg(nested.len());
                 }
                 Arg::Ref { .. } => todo!(),
             },
             stmt::Expr::Reference(expr_reference) => {
+                debug_assert_eq!(0, expr_reference.nesting());
                 let index = selection.get_index_of(expr_reference).unwrap();
-                *expr = stmt::Expr::arg_project(depth, [index]);
+                *expr = stmt::Expr::arg_project(0, [index]);
             }
             _ => {}
         });
@@ -433,11 +501,8 @@ impl PlanNestedMerge<'_> {
         let projection_arg_tys = self.build_projection_arg_tys(&nested);
         let projection = eval::Func::from_stmt(projection, projection_arg_tys);
 
-        self.stack.pop();
-
         NestedLevel {
             source,
-            qualification: plan::MergeQualification::Predicate(filter),
             projection,
             nested,
         }
@@ -463,7 +528,8 @@ impl PlanNestedMerge<'_> {
 
     fn build_exec_statement_ty_for(&self, stmt_id: StmtId) -> stmt::Type {
         let stmt_state = &self.stmts[stmt_id.0];
-        let cx = stmt::ExprContext::new(self.schema);
+        let cx =
+            stmt::ExprContext::new_with_target(self.schema, stmt_state.stmt.as_deref().unwrap());
 
         let mut fields = vec![];
 

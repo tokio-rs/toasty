@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::usize;
 
 use indexmap::IndexSet;
-use toasty_core::stmt::{self, ExprRecord, ExprReference, VisitMut, visit_mut};
+use toasty_core::stmt::{self, visit_mut, ExprRecord, ExprReference, VisitMut};
 
 use crate::engine::eval;
 use crate::engine::planner::partition::materialization::MaterializationKind;
@@ -102,6 +102,25 @@ impl Planner<'_> {
                         stmt: stmt.clone(),
                     });
                 }
+                MaterializationKind::NestedMerge { inputs, root, .. } => {
+                    let mut input_vars = vec![];
+
+                    for input in inputs {
+                        let var = materialization_graph.nodes[*input].var.get().unwrap();
+                        input_vars.push(var);
+                    }
+
+                    let output = self
+                        .var_table
+                        .register_var(stmt::Type::list(root.projection.ret.clone()));
+                    node.var.set(Some(output));
+
+                    self.push_action(plan::NestedMerge {
+                        inputs: input_vars,
+                        output,
+                        root: root.clone(),
+                    });
+                }
                 MaterializationKind::Project { input, projection } => {
                     let input_var = materialization_graph.nodes[*input].var.get().unwrap();
                     let stmt::Type::List(input_ty) = self.var_table.ty(input_var).clone() else {
@@ -110,7 +129,6 @@ impl Planner<'_> {
 
                     let input_args = vec![*input_ty];
 
-                    println!("projection={projection:#?}; args={input_args:#?}");
                     let projection = eval::Func::from_stmt(projection.clone(), input_args);
                     let var = self
                         .var_table
@@ -261,8 +279,6 @@ impl<'a> visit_mut::VisitMut for Walker<'a> {
                 assert!(self.returning);
                 // For now, we assume nested sub-statements cannot be executed on the
                 // target database. Eventually, we will need to make this smarter.
-
-                println!("expr_stmt={expr_stmt:#?}");
 
                 // Create a `StatementState` to track the sub-statement
                 let target_id = self.new_stmt();
