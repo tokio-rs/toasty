@@ -273,6 +273,7 @@ impl ToSql for &stmt::SourceTable {
                 let alias = TableAlias {
                     depth: f.depth,
                     table: *table_id,
+                    table_ref: None,
                 };
 
                 fmt!(cx, f, table_ref " AS " alias);
@@ -287,6 +288,7 @@ impl ToSql for &stmt::SourceTable {
                     let alias = TableAlias {
                         depth: f.depth,
                         table: join.table,
+                        table_ref: Some(join_table_ref),
                     };
                     fmt!(cx, f, " LEFT JOIN " join_table_ref " AS " alias " ON " expr);
                 }
@@ -297,14 +299,14 @@ impl ToSql for &stmt::SourceTable {
 
 impl ToSql for &stmt::TableRef {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        match *self {
+        match self {
             stmt::TableRef::Table(table_id) => {
-                let table_name = f.serializer.table_name(table_id);
+                let table_name = f.serializer.table_name(*table_id);
                 fmt!(cx, f, table_name);
             }
-            stmt::TableRef::Derived { .. } => todo!(),
+            stmt::TableRef::Derived(table_derived) => fmt!(cx, f, table_derived),
             stmt::TableRef::Cte { nesting, index } => {
-                assert!(f.depth >= nesting, "nesting={nesting} depth={}", f.depth);
+                assert!(f.depth >= *nesting, "nesting={nesting} depth={}", f.depth);
 
                 let depth = f.depth - nesting;
                 fmt!(cx, f, "cte_" depth "_" index);
@@ -313,14 +315,30 @@ impl ToSql for &stmt::TableRef {
     }
 }
 
-struct TableAlias {
-    depth: usize,
-    table: SourceTableId,
+impl ToSql for &stmt::TableDerived {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        fmt!(cx, f, "(" self.subquery ")");
+    }
 }
 
-impl ToSql for &TableAlias {
+struct TableAlias<'a> {
+    depth: usize,
+    table: SourceTableId,
+    table_ref: Option<&'a stmt::TableRef>,
+}
+
+impl ToSql for &TableAlias<'_> {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         fmt!(cx, f, "tbl_" self.depth "_" self.table.0);
+
+        if let Some(table_ref) = self.table_ref {
+            let stmt::TableRef::Derived(table_derived) = table_ref else {
+                todo!()
+            };
+            let width = query_width(&table_derived.subquery);
+            let cols = Comma((0..width).map(|i| format!("col_{}", i)));
+            fmt!(cx, f, "(" cols ")");
+        }
     }
 }
 
@@ -370,6 +388,7 @@ impl ToSql for &stmt::UpdateTarget {
                 let alias = TableAlias {
                     depth: f.depth,
                     table: SourceTableId(0),
+                    table_ref: None,
                 };
 
                 fmt!(cx, f, table_name " AS " alias);
@@ -385,4 +404,36 @@ impl ToSql for &stmt::Values {
 
         fmt!(cx, f, "VALUES " rows)
     }
+}
+
+fn query_width(query: &stmt::Query) -> usize {
+    expr_set_width(&query.body)
+}
+
+fn expr_set_width(expr_set: &stmt::ExprSet) -> usize {
+    match expr_set {
+        stmt::ExprSet::Select(select) => returning_width(&select.returning),
+        stmt::ExprSet::SetOp(expr_set_op) => expr_set_width(&expr_set_op.operands[0]),
+        stmt::ExprSet::Update(update) => {
+            update.returning.as_ref().map(returning_width).unwrap_or(0)
+        }
+        stmt::ExprSet::Values(values) => {
+            let [row, ..] = &values.rows[..] else {
+                panic!("at least one row expected")
+            };
+            let stmt::Expr::Record(expr_record) = row else {
+                panic!("Values should only have ExprRecord at this point")
+            };
+            expr_record.len()
+        }
+        stmt::ExprSet::Arg(_) => panic!("there should not be any more args at this point"),
+    }
+}
+
+fn returning_width(returning: &stmt::Returning) -> usize {
+    let stmt::Returning::Expr(stmt::Expr::Record(expr_record)) = &returning else {
+        panic!("Returning should only be an ExprRecord at this point")
+    };
+
+    expr_record.len()
 }
