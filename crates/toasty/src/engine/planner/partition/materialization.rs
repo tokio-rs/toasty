@@ -243,30 +243,13 @@ impl PlanMaterialization<'_> {
                 }
             });
 
-            /*
-                        pub struct Select {
-                /// The projection part of a SQL query.
-                pub returning: Returning,
-
-                /// The `FROM` part of a SQL query. For model-level, this is the model being
-                /// selected with any "includes". For table-level, this is the table with
-                /// joins.
-                pub source: Source,
-
-                /// Query filter
-                pub filter: Expr,
-            }
-                */
-
-            /*
             let sub_query = stmt::Select {
                 returning: stmt::Returning::Expr(stmt::Expr::record([1])),
+                source: stmt::Source::from(ref_source),
+                filter: select.filter.take(),
+            };
 
-            }
-
-            let sub_select = stmt::Select::new(ref_source, select.filter.take());
-            select.filter = stmt::Expr::exists(stmt::Query::builder(sub_select).returning(1));
-            */
+            select.filter = stmt::Expr::exists(sub_query);
         }
 
         select.returning = stmt::Returning::Expr(stmt::Expr::record(

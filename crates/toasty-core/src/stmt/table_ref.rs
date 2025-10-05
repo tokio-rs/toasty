@@ -1,4 +1,4 @@
-use crate::stmt::TableDerived;
+use crate::stmt::{ExprArg, TableDerived};
 
 use super::TableId;
 
@@ -19,6 +19,10 @@ pub enum TableRef {
 
     /// A defined table from the schema
     Table(TableId),
+
+    /// The table ref will be provided at a later time (and will become a
+    /// derived table)
+    Arg(ExprArg),
 }
 
 impl TableRef {
@@ -27,6 +31,7 @@ impl TableRef {
             Self::Cte { .. } => false,
             Self::Derived { .. } => false,
             Self::Table(id) => id == &table_id,
+            Self::Arg { .. } => todo!(),
         }
     }
 
@@ -38,6 +43,12 @@ impl TableRef {
 impl From<TableId> for TableRef {
     fn from(value: TableId) -> Self {
         Self::Table(value)
+    }
+}
+
+impl From<ExprArg> for TableRef {
+    fn from(value: ExprArg) -> Self {
+        TableRef::Arg(value)
     }
 }
 

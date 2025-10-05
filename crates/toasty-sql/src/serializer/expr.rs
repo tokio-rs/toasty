@@ -1,6 +1,6 @@
 use toasty_core::stmt::ResolvedRef;
 
-use super::{Comma, Delimited, Params, ToSql};
+use super::{ColumnAlias, Comma, Delimited, Params, ToSql};
 
 use crate::{
     serializer::{ExprContext, Ident},
@@ -86,7 +86,7 @@ impl ToSql for &stmt::Expr {
                             fmt!(cx, f, "tbl_" depth "_" table "." name)
                         }
                         ResolvedRef::Cte { .. } | ResolvedRef::Derived { .. } => {
-                            fmt!(cx, f, "tbl_" depth "_" table ".col_" column)
+                            fmt!(cx, f, "tbl_" depth "_" table "." ColumnAlias(*column))
                         }
                         ResolvedRef::Model(model) => {
                             panic!("Model references cannot be serialized to SQL; model={model:?}")

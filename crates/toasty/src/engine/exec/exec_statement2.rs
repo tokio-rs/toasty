@@ -18,7 +18,6 @@ impl Exec<'_> {
                 let values = self.vars.load(*var_id).collect().await?;
                 input_values.push(stmt::Value::List(values));
             }
-            println!("SUBSTITUTE; stmt={stmt:#?}; input={input_values:#?}");
             stmt.substitute(&input_values);
         }
 

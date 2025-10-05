@@ -1,4 +1,4 @@
-use crate::stmt::{Query, Source, SourceTableId, TableFactor, Values};
+use crate::stmt::{ExprArg, Query, Source, SourceTableId, TableFactor, Values};
 
 use super::{TableDerived, TableRef, TableWithJoins};
 
@@ -17,12 +17,10 @@ impl SourceTable {
     }
 }
 
-impl From<Values> for SourceTable {
-    fn from(value: Values) -> Self {
+impl From<ExprArg> for SourceTable {
+    fn from(value: ExprArg) -> Self {
         SourceTable {
-            tables: vec![TableRef::Derived(TableDerived {
-                subquery: Box::new(Query::new(value)),
-            })],
+            tables: vec![TableRef::Arg(value)],
             from_item: TableWithJoins {
                 relation: TableFactor::Table(SourceTableId(0)),
                 joins: vec![],

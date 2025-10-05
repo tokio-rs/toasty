@@ -303,6 +303,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                                     index: *index,
                                 }
                             }
+                            TableRef::Arg(_) => todo!(),
                         }
                     }
                     ExprReference::Model { .. } => panic!(

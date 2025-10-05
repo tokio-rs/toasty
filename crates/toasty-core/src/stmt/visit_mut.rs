@@ -1012,6 +1012,7 @@ where
         TableRef::Cte { .. } => {}
         TableRef::Derived(table_derived) => v.visit_table_derived_mut(table_derived),
         TableRef::Table(_) => {}
+        TableRef::Arg(expr_arg) => v.visit_expr_arg_mut(expr_arg),
     }
 }
 

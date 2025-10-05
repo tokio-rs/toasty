@@ -1,6 +1,6 @@
 use std::mem;
 
-use super::{Comma, Delimited, Ident, Params, ToSql};
+use super::{ColumnAlias, Comma, Delimited, Ident, Params, ToSql};
 
 use crate::{serializer::ExprContext, stmt};
 use toasty_core::{schema::db, stmt::SourceTableId};
@@ -190,7 +190,7 @@ impl ToSql for &stmt::Returning {
                         stmt::Expr::Reference(stmt::ExprReference::Column { .. }) => {
                             (expr, None, None)
                         }
-                        _ => (expr, Some(" AS col_"), Some(i)),
+                        _ => (expr, Some(" AS "), Some(ColumnAlias(i))),
                     });
 
                 fmt!(cx, f, Comma(fields));
@@ -273,7 +273,6 @@ impl ToSql for &stmt::SourceTable {
                 let alias = TableAlias {
                     depth: f.depth,
                     table: *table_id,
-                    table_ref: Some(table_ref),
                 };
 
                 fmt!(cx, f, table_ref " AS " alias);
@@ -288,7 +287,6 @@ impl ToSql for &stmt::SourceTable {
                     let alias = TableAlias {
                         depth: f.depth,
                         table: join.table,
-                        table_ref: Some(join_table_ref),
                     };
                     fmt!(cx, f, " LEFT JOIN " join_table_ref " AS " alias " ON " expr);
                 }
@@ -311,6 +309,7 @@ impl ToSql for &stmt::TableRef {
                 let depth = f.depth - nesting;
                 fmt!(cx, f, "cte_" depth "_" index);
             }
+            stmt::TableRef::Arg(..) => panic!("unexpected TableRef argument"),
         }
     }
 }
@@ -325,21 +324,14 @@ impl ToSql for &stmt::TableDerived {
     }
 }
 
-struct TableAlias<'a> {
+struct TableAlias {
     depth: usize,
     table: SourceTableId,
-    table_ref: Option<&'a stmt::TableRef>,
 }
 
-impl ToSql for &TableAlias<'_> {
+impl ToSql for &TableAlias {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         fmt!(cx, f, "tbl_" self.depth "_" self.table.0);
-
-        if let Some(stmt::TableRef::Derived(table_derived)) = self.table_ref {
-            let width = query_width(&table_derived.subquery);
-            let cols = Comma((0..width).map(|i| format!("col_{}", i)));
-            fmt!(cx, f, "(" cols ")");
-        }
     }
 }
 
@@ -389,7 +381,6 @@ impl ToSql for &stmt::UpdateTarget {
                 let alias = TableAlias {
                     depth: f.depth,
                     table: SourceTableId(0),
-                    table_ref: None,
                 };
 
                 fmt!(cx, f, table_name " AS " alias);
@@ -422,10 +413,11 @@ fn expr_set_width(expr_set: &stmt::ExprSet) -> usize {
             let [row, ..] = &values.rows[..] else {
                 panic!("at least one row expected")
             };
-            let stmt::Expr::Record(expr_record) = row else {
-                panic!("Values should only have ExprRecord at this point")
-            };
-            expr_record.len()
+            match row {
+                stmt::Expr::Record(expr_record) => expr_record.len(),
+                stmt::Expr::Value(stmt::Value::Record(value_record)) => value_record.len(),
+                _ => panic!("unexpected `Values` expression; expr={row:#?}"),
+            }
         }
         stmt::ExprSet::Arg(_) => panic!("there should not be any more args at this point"),
     }

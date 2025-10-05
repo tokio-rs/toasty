@@ -4,7 +4,7 @@ use crate::{
         app::{Model, ModelId},
         db::TableId,
     },
-    stmt::Values,
+    stmt::{ExprArg, Values},
 };
 
 #[derive(Debug, Clone)]
@@ -99,8 +99,8 @@ impl From<TableRef> for Source {
     }
 }
 
-impl From<Values> for Source {
-    fn from(value: Values) -> Self {
+impl From<ExprArg> for Source {
+    fn from(value: ExprArg) -> Self {
         Source::Table(SourceTable::from(value))
     }
 }

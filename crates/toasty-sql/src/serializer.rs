@@ -2,6 +2,9 @@
 mod fmt;
 use fmt::ToSql;
 
+mod column;
+use column::ColumnAlias;
+
 mod cte;
 
 mod delim;

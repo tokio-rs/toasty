@@ -1,4 +1,4 @@
-use crate::stmt::visit_mut;
+use crate::stmt::{visit_mut, ExprSet, Query, TableDerived, TableRef, Values};
 
 use super::{Expr, ExprArg, Value};
 
@@ -35,6 +35,33 @@ where
         // Substitute after recurring.
         if let Expr::Arg(expr_arg) = expr {
             *expr = self.input.resolve_arg(expr_arg);
+        }
+    }
+
+    fn visit_table_ref_mut(&mut self, i: &mut TableRef) {
+        if let TableRef::Arg(expr_arg) = i {
+            let rows = match self.input.resolve_arg(expr_arg) {
+                Expr::List(expr_list) => expr_list.items,
+                Expr::Value(Value::List(value_list)) => {
+                    // TODO: this conversion is not ideal
+                    value_list.into_iter().map(Expr::from).collect()
+                }
+                substitution => panic!(
+                    "unexpected substitution; table_ref={i:#?}; substitution={substitution:#?}"
+                ),
+            };
+
+            *i = TableRef::Derived(TableDerived {
+                subquery: Box::new(Query {
+                    with: None,
+                    body: ExprSet::Values(Values { rows }),
+                    order_by: None,
+                    limit: None,
+                    locks: vec![],
+                }),
+            });
+        } else {
+            visit_mut::visit_table_ref_mut(self, i);
         }
     }
 }
