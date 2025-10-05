@@ -6,7 +6,7 @@ use super::{
     ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
     ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
     JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
-    Source, SourceModel, SourceTable, SourceTableId, Statement, TableFactor, TableRef,
+    Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
     TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
@@ -216,6 +216,10 @@ pub trait Visit {
 
     fn visit_stmt_update(&mut self, i: &Update) {
         visit_stmt_update(self, i);
+    }
+
+    fn visit_table_derived(&mut self, i: &TableDerived) {
+        visit_table_derived(self, i);
     }
 
     fn visit_table_ref(&mut self, i: &TableRef) {
@@ -454,6 +458,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_stmt_update(&mut self, i: &Update) {
         Visit::visit_stmt_update(&mut **self, i);
+    }
+
+    fn visit_table_derived(&mut self, i: &TableDerived) {
+        Visit::visit_table_derived(&mut **self, i);
     }
 
     fn visit_table_ref(&mut self, i: &TableRef) {
@@ -987,11 +995,22 @@ where
     }
 }
 
+pub fn visit_table_derived<V>(v: &mut V, node: &TableDerived)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_stmt_query(&node.subquery);
+}
+
 pub fn visit_table_ref<V>(v: &mut V, node: &TableRef)
 where
     V: Visit + ?Sized,
 {
-    // TableRef is just identifiers, no traversal needed
+    match node {
+        TableRef::Cte { .. } => {}
+        TableRef::Derived(table_derived) => v.visit_table_derived(table_derived),
+        TableRef::Table(_) => {}
+    }
 }
 
 pub fn visit_table_with_joins<V>(v: &mut V, node: &TableWithJoins)

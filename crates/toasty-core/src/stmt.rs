@@ -184,6 +184,9 @@ mod substitute;
 pub use substitute::Input;
 use substitute::Substitute;
 
+mod table_derived;
+pub use table_derived::TableDerived;
+
 mod table_ref;
 pub use table_ref::TableRef;
 

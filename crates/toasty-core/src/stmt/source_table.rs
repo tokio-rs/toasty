@@ -1,6 +1,6 @@
 use crate::stmt::{Query, Source, SourceTableId, TableFactor, Values};
 
-use super::{TableRef, TableWithJoins};
+use super::{TableDerived, TableRef, TableWithJoins};
 
 #[derive(Debug, Clone)]
 pub struct SourceTable {
@@ -20,9 +20,9 @@ impl SourceTable {
 impl From<Values> for SourceTable {
     fn from(value: Values) -> Self {
         SourceTable {
-            tables: vec![TableRef::Derived {
+            tables: vec![TableRef::Derived(TableDerived {
                 subquery: Box::new(Query::new(value)),
-            }],
+            })],
             from_item: TableWithJoins {
                 relation: TableFactor::Table(SourceTableId(0)),
                 joins: vec![],

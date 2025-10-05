@@ -6,7 +6,7 @@ use super::{
     ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
     ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
     JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
-    Source, SourceModel, SourceTable, SourceTableId, Statement, TableFactor, TableRef,
+    Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
     TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
@@ -216,6 +216,10 @@ pub trait VisitMut {
 
     fn visit_stmt_update_mut(&mut self, i: &mut Update) {
         visit_stmt_update_mut(self, i);
+    }
+
+    fn visit_table_derived_mut(&mut self, i: &mut TableDerived) {
+        visit_table_derived_mut(self, i);
     }
 
     fn visit_table_ref_mut(&mut self, i: &mut TableRef) {
@@ -454,6 +458,10 @@ impl<V: VisitMut> VisitMut for &mut V {
 
     fn visit_stmt_update_mut(&mut self, i: &mut Update) {
         VisitMut::visit_stmt_update_mut(&mut **self, i);
+    }
+
+    fn visit_table_derived_mut(&mut self, i: &mut TableDerived) {
+        VisitMut::visit_table_derived_mut(&mut **self, i);
     }
 
     fn visit_table_ref_mut(&mut self, i: &mut TableRef) {
@@ -989,13 +997,20 @@ where
     }
 }
 
+pub fn visit_table_derived_mut<V>(v: &mut V, node: &mut TableDerived)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_stmt_query_mut(&mut node.subquery);
+}
+
 pub fn visit_table_ref_mut<V>(v: &mut V, node: &mut TableRef)
 where
     V: VisitMut + ?Sized,
 {
     match node {
         TableRef::Cte { .. } => {}
-        TableRef::Derived { subquery } => v.visit_stmt_query_mut(subquery),
+        TableRef::Derived(table_derived) => v.visit_table_derived_mut(table_derived),
         TableRef::Table(_) => {}
     }
 }

@@ -65,6 +65,16 @@ pub enum ResolvedRef<'a> {
     /// Example: In a WITH clause, resolving a reference to the second column of a CTE
     /// defined 1 level up returns Cte { nesting: 1, index: 1 }.
     Cte { nesting: usize, index: usize },
+
+    /// A resolved reference to a derived table (subquery in FROM clause) column.
+    ///
+    /// Contains the nesting level and column index for derived table references when
+    /// resolving ExprReference::Column expressions that point to derived table outputs.
+    /// Similar to CTEs, derived tables use col_<index> naming for their columns.
+    ///
+    /// Example: Resolving a reference to the first column of a derived table at the
+    /// current nesting level returns Derived { nesting: 0, index: 0 }.
+    Derived { nesting: usize, index: usize },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -276,7 +286,13 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                                 };
                                 ResolvedRef::Column(&table.columns[*column])
                             }
-                            TableRef::Derived { .. } => todo!(),
+                            TableRef::Derived { .. } => {
+                                // Derived tables use col_<index> naming like CTEs
+                                ResolvedRef::Derived {
+                                    nesting: *nesting,
+                                    index: *column,
+                                }
+                            }
                             TableRef::Cte {
                                 nesting: cte_nesting,
                                 index,
@@ -400,6 +416,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             ResolvedRef::Column(column) => column.ty.clone(),
             ResolvedRef::Field(field) => field.expr_ty().clone(),
             ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
+            ResolvedRef::Derived { .. } => todo!("type inference for derived table columns not implemented"),
         }
     }
 }

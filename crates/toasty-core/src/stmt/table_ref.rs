@@ -1,4 +1,4 @@
-use crate::stmt::Query;
+use crate::stmt::TableDerived;
 
 use super::TableId;
 
@@ -15,7 +15,7 @@ pub enum TableRef {
     },
 
     /// A table derived from a query
-    Derived { subquery: Box<Query> },
+    Derived(TableDerived),
 
     /// A defined table from the schema
     Table(TableId),
@@ -25,7 +25,7 @@ impl TableRef {
     pub fn references(&self, table_id: TableId) -> bool {
         match self {
             Self::Cte { .. } => false,
-            Self::Derived { .. } => todo!(),
+            Self::Derived { .. } => false,
             Self::Table(id) => id == &table_id,
         }
     }
