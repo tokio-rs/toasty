@@ -273,7 +273,7 @@ impl ToSql for &stmt::SourceTable {
                 let alias = TableAlias {
                     depth: f.depth,
                     table: *table_id,
-                    table_ref: None,
+                    table_ref: Some(table_ref),
                 };
 
                 fmt!(cx, f, table_ref " AS " alias);
@@ -317,7 +317,11 @@ impl ToSql for &stmt::TableRef {
 
 impl ToSql for &stmt::TableDerived {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        debug_assert!(f.alias);
+
+        f.depth += 1;
         fmt!(cx, f, "(" self.subquery ")");
+        f.depth -= 1;
     }
 }
 
@@ -331,10 +335,7 @@ impl ToSql for &TableAlias<'_> {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         fmt!(cx, f, "tbl_" self.depth "_" self.table.0);
 
-        if let Some(table_ref) = self.table_ref {
-            let stmt::TableRef::Derived(table_derived) = table_ref else {
-                todo!()
-            };
+        if let Some(stmt::TableRef::Derived(table_derived)) = self.table_ref {
             let width = query_width(&table_derived.subquery);
             let cols = Comma((0..width).map(|i| format!("col_{}", i)));
             fmt!(cx, f, "(" cols ")");

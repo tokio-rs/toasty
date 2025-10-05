@@ -416,7 +416,9 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             ResolvedRef::Column(column) => column.ty.clone(),
             ResolvedRef::Field(field) => field.expr_ty().clone(),
             ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
-            ResolvedRef::Derived { .. } => todo!("type inference for derived table columns not implemented"),
+            ResolvedRef::Derived { .. } => {
+                todo!("type inference for derived table columns not implemented")
+            }
         }
     }
 }

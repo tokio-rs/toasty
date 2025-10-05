@@ -22,11 +22,13 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
             }
             Exists(expr) => {
+                f.depth += 1;
                 if expr.negated {
                     fmt!(cx, f, "NOT EXISTS (" expr.subquery ")");
                 } else {
                     fmt!(cx, f, "EXISTS (" expr.subquery ")");
                 }
+                f.depth -= 1;
             }
             Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
                 (None, None) => fmt!(cx, f, "COUNT(*)"),

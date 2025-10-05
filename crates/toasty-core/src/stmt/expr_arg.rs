@@ -19,6 +19,12 @@ impl Expr {
     }
 }
 
+impl ExprArg {
+    pub fn new(position: usize) -> ExprArg {
+        ExprArg { position }
+    }
+}
+
 impl From<usize> for ExprArg {
     fn from(value: usize) -> Self {
         Self { position: value }

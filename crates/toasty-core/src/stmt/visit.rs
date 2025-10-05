@@ -6,8 +6,8 @@ use super::{
     ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
     ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
     JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
-    Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
-    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
+    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait Visit {
