@@ -346,7 +346,13 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 .map(|returning| Type::list(cx.infer_returning_ty(returning, args)))
                 .unwrap_or(Type::Unit),
             Statement::Query(stmt) => match &stmt.body {
-                ExprSet::Select(body) => Type::list(cx.infer_returning_ty(&body.returning, args)),
+                ExprSet::Select(body) => {
+                    if stmt.single {
+                        cx.infer_returning_ty(&body.returning, args)
+                    } else {
+                        Type::list(cx.infer_returning_ty(&body.returning, args))
+                    }
+                }
                 ExprSet::SetOp(_body) => todo!(),
                 ExprSet::Update(_body) => todo!(),
                 ExprSet::Values(_body) => todo!(),

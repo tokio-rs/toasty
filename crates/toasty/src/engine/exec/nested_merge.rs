@@ -70,7 +70,17 @@ impl Exec<'_> {
                 )?);
             }
 
-            nested.push(stmt::Value::List(nested_rows_projected));
+            nested.push(if nested_child.single {
+                assert!(nested_rows_projected.len() <= 1, "TODO: error handling");
+
+                if let Some(row) = nested_rows_projected.into_iter().next() {
+                    row
+                } else {
+                    stmt::Value::Null
+                }
+            } else {
+                stmt::Value::List(nested_rows_projected)
+            });
         }
 
         // Project the row with the nested data as arguments.

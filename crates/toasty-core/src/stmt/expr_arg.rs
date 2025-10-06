@@ -1,7 +1,7 @@
 use super::Expr;
 use crate::stmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct ExprArg {
     pub position: usize,
 }

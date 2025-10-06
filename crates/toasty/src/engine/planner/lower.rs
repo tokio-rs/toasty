@@ -573,7 +573,10 @@ impl<'a> LowerStatement<'a> {
                     target_pk = stmt::Expr::record_from_vec(target_pk_fields);
                 }
 
-                stmt::Query::filter(rel.target, stmt::Expr::eq(source_fk, target_pk))
+                let mut query =
+                    stmt::Query::filter(rel.target, stmt::Expr::eq(source_fk, target_pk));
+                query.single = true;
+                query
             }
             FieldTy::HasOne(_rel) => todo!(),
             _ => todo!(),

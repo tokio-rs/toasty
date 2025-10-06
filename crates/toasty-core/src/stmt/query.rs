@@ -13,6 +13,11 @@ pub struct Query {
     /// other types of queries depending on database support.
     pub body: ExprSet,
 
+    /// When `true`, the Query returns a *single* record vs. a list. Note, that
+    /// this is different from `LIMIT 1` as there should only ever be 1 possible
+    /// result. Also, the return type becomes `Record` instead of `List`.
+    pub single: bool,
+
     /// ORDER BY
     pub order_by: Option<OrderBy>,
 
@@ -39,6 +44,7 @@ impl Query {
         Self {
             with: None,
             body: body.into(),
+            single: false,
             order_by: None,
             limit: None,
             locks: vec![],
@@ -63,6 +69,7 @@ impl Query {
         Self {
             with: None,
             body: ExprSet::Values(values.into()),
+            single: false,
             order_by: None,
             limit: None,
             locks: vec![],

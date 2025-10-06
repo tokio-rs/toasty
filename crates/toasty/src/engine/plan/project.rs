@@ -1,6 +1,6 @@
 use crate::engine::{
     eval,
-    plan::{Action, Output, VarId},
+    plan::{Action, VarId},
 };
 
 #[derive(Debug)]

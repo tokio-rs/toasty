@@ -119,6 +119,11 @@ impl PlanMaterialization<'_> {
         let stmt::Statement::Query(query) = &mut stmt else {
             panic!()
         };
+
+        // Tracks if the query is a single query
+        let single = query.single;
+        query.single = false;
+
         let stmt::ExprSet::Select(select) = &mut query.body else {
             panic!()
         };
@@ -309,6 +314,11 @@ impl PlanMaterialization<'_> {
             self.graph.nodes.push(materialize_nested_merge);
             materialize_nested_merge_id
         } else {
+            debug_assert!(
+                !single || ref_source.is_some(),
+                "TODO: single queries not supported here"
+            );
+
             // Plan the final projection to handle the returning clause.
             let project_node_id = self.graph.nodes.len();
             self.graph.nodes.push(
@@ -422,14 +432,8 @@ impl PlanNestedMerge<'_> {
         let stmt_state = &self.stmts[stmt_id.0];
         let selection = stmt_state.exec_statement_selection.get().unwrap();
 
-        let select = stmt_state
-            .stmt
-            .as_deref()
-            .unwrap()
-            .as_query()
-            .unwrap()
-            .body
-            .as_select();
+        let query = stmt_state.stmt.as_deref().unwrap().as_query().unwrap();
+        let select = query.body.as_select();
 
         // Extract the qualification. For now, we will just re-run the
         // entire where clause, but that can be improved later.
@@ -484,6 +488,7 @@ impl PlanNestedMerge<'_> {
         let ret = plan::NestedChild {
             level,
             qualification: plan::MergeQualification::Predicate(filter),
+            single: query.single,
         };
 
         self.stack.pop();
@@ -555,7 +560,11 @@ impl PlanNestedMerge<'_> {
         let mut ret = vec![self.build_exec_statement_ty_for(*curr)];
 
         for nested in nested_children {
-            ret.push(stmt::Type::list(nested.level.projection.ret.clone()));
+            ret.push(if nested.single {
+                nested.level.projection.ret.clone()
+            } else {
+                stmt::Type::list(nested.level.projection.ret.clone())
+            });
         }
 
         ret

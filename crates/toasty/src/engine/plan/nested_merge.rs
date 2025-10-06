@@ -53,6 +53,9 @@ pub(crate) struct NestedChild {
 
     /// How to filter rows to match the parent request
     pub(crate) qualification: MergeQualification,
+
+    /// True if single value
+    pub(crate) single: bool,
 }
 
 /// How to filter nested records for a parent record

@@ -75,6 +75,16 @@ impl Planner<'_> {
 
             match &node.kind {
                 MaterializationKind::ExecStatement { inputs, stmt, .. } => {
+                    debug_assert!(
+                        {
+                            match &stmt {
+                                stmt::Statement::Query(query) => !query.single,
+                                _ => true,
+                            }
+                        },
+                        "as of now, no database can execute single queries"
+                    );
+
                     let mut input_args = vec![];
                     let mut input_vars = vec![];
 
@@ -86,12 +96,13 @@ impl Planner<'_> {
                     }
 
                     let ty = self.infer_ty(stmt, &input_args);
+
                     let ty_fields = match &ty {
                         stmt::Type::List(ty_rows) => match &**ty_rows {
                             stmt::Type::Record(ty_fields) => ty_fields.clone(),
-                            _ => todo!(),
+                            _ => todo!("ty={ty:#?}"),
                         },
-                        _ => todo!(),
+                        _ => todo!("ty={ty:#?}"),
                     };
                     let var = self.var_table.register_var(ty);
                     node.var.set(Some(var));
