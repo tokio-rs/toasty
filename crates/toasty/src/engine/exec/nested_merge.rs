@@ -1,11 +1,8 @@
+use crate::engine::eval;
+
 use super::{plan, Exec, Result};
 use toasty_core::stmt;
 use toasty_core::stmt::ValueStream;
-
-struct RowStack<'a> {
-    parent: Option<&'a RowStack<'a>>,
-    row: &'a stmt::Value,
-}
 
 impl Exec<'_> {
     pub(super) async fn action_nested_merge(&mut self, action: &plan::NestedMerge) -> Result<()> {
@@ -24,7 +21,7 @@ impl Exec<'_> {
 
         // Iterate over each record to perform the nested merge
         for row in root_rows {
-            let stack = RowStack { parent: None, row };
+            let stack = RowStack { parent: None, row, position: 0 };
             merged_rows.push(self.materialize_nested_row(&stack, &action.root, &input)?);
         }
 
@@ -37,7 +34,7 @@ impl Exec<'_> {
 
     fn materialize_nested_row(
         &self,
-        row: &RowStack<'_>,
+        row_stack: &RowStack<'_>,
         level: &plan::NestedLevel,
         input: &[Vec<stmt::Value>],
     ) -> Result<stmt::Value> {
@@ -47,41 +44,98 @@ impl Exec<'_> {
         for nested_child in &level.nested {
             // Find the batch-loaded input
             let nested_input = &input[nested_child.level.source];
+            let mut nested_rows_projected = vec![];
 
             for nested_row in nested_input {
                 let nested_stack = RowStack {
-                    parent: Some(row),
+                    parent: Some(row_stack),
                     row: nested_row,
+                    position: row_stack.position + 1,
                 };
 
                 // Filter the input
-                if !self.eval_merge_qualification(&nested_child.qualification, &nested_stack) {
+                if !self.eval_merge_qualification(&nested_child.qualification, &nested_stack)? {
                     continue;
                 }
 
                 // Recurse nested merge and track the result
-                nested.push(self.materialize_nested_row(
+                nested_rows_projected.push(self.materialize_nested_row(
                     &nested_stack,
                     &nested_child.level,
                     input,
                 )?);
             }
+
+            nested.push(stmt::Value::List(nested_rows_projected));
         }
 
-        // Now build the row by performing the projection with the collected data
-        todo!("projection={:#?}", level.projection);
+        // Project the row with the nested data as arguments.
+        let eval_input = RowAndNested {
+            row: &row_stack.row,
+            nested: &nested[..],
+
+        };
+
+        level.projection.eval(&eval_input)
     }
 
     fn eval_merge_qualification(
         &self,
         qual: &plan::MergeQualification,
         row: &RowStack<'_>,
-    ) -> bool {
+    ) -> Result<bool> {
         match qual {
             plan::MergeQualification::Predicate(func) => {
-                assert_eq!(2, func.args.len());
-                todo!("qual={qual:#?}");
+                func.eval_bool(row)
             }
         }
+    }
+}
+
+#[derive(Debug)]
+struct RowStack<'a> {
+    parent: Option<&'a RowStack<'a>>,
+    row: &'a stmt::Value,
+    /// Matches `position` from ExprArg
+    position: usize,
+}
+
+#[derive(Debug)]
+struct RowAndNested<'a> {
+    row: &'a stmt::Value,
+    nested: &'a [stmt::Value],
+}
+
+impl eval::Input for &RowStack<'_> {
+    fn resolve_arg(&mut self, expr_arg: &stmt::ExprArg, projection: &stmt::Projection) -> stmt::Value {
+        let mut current: &RowStack<'_> = *self;
+
+        // Find the stack level that corresponds with the argument.
+        loop {
+            if current.position == expr_arg.position {
+                break;
+            }
+
+            let Some(parent) = current.parent else { todo!() };
+            current = parent;
+        }
+
+        // Get the value and apply projection
+        current
+            .row
+            .entry(projection)
+            .to_value()
+    }
+}
+
+impl eval::Input for &RowAndNested<'_> {
+    fn resolve_arg(&mut self, expr_arg: &stmt::ExprArg, projection: &stmt::Projection) -> stmt::Value {
+        let base = if expr_arg.position == 0 {
+            self.row
+        } else {
+            &self.nested[expr_arg.position - 1]
+        };
+
+        base.entry(projection).to_value()
     }
 }

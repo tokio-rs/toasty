@@ -332,12 +332,12 @@ impl PlanMaterialization<'_> {
             return None;
         }
 
-        let mut planner = PlanNestedMerge {
+        let planner = PlanNestedMerge {
             schema: self.schema,
             stmts: self.stmts,
             graph: &mut self.graph,
             inputs: IndexSet::new(),
-            stack: vec![stmt_id],
+            stack: vec![],
         };
         Some(planner.plan_nested_merge(stmt_id))
     }
@@ -400,7 +400,6 @@ impl From<MaterializationKind> for MaterializationNode {
 
 impl PlanNestedMerge<'_> {
     fn plan_nested_merge(mut self, root: StmtId) -> MaterializationNode {
-        assert_ne!(self.stack.get(0), Some(&root));
         self.stack.push(root);
         let root = self.plan_nested_level(root, 0);
         self.stack.pop();
@@ -413,7 +412,6 @@ impl PlanNestedMerge<'_> {
     }
 
     fn plan_nested_child(&mut self, stmt_id: StmtId, depth: usize) -> plan::NestedChild {
-        assert_ne!(self.stack.get(0), Some(&stmt_id));
         self.stack.push(stmt_id);
 
         let level = self.plan_nested_level(stmt_id, depth);
@@ -516,7 +514,6 @@ impl PlanNestedMerge<'_> {
     }
 
     fn build_filter_arg_tys(&self) -> Vec<stmt::Type> {
-        assert!(self.stack.len() <= 2, "stack={:#?}", self.stack);
         self.stack
             .iter()
             .map(|stmt_id| self.build_exec_statement_ty_for(*stmt_id))
@@ -528,7 +525,7 @@ impl PlanNestedMerge<'_> {
         let mut ret = vec![self.build_exec_statement_ty_for(*curr)];
 
         for nested in nested_children {
-            ret.push(nested.level.projection.ret.clone());
+            ret.push(stmt::Type::list(nested.level.projection.ret.clone()));
         }
 
         ret
