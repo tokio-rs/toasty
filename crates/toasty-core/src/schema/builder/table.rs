@@ -531,7 +531,7 @@ impl BuildMapping<'_> {
 
     fn map_primitive(&mut self, field: FieldId, primitive: &app::FieldPrimitive) {
         let column = self.mapping.fields[field.index].as_ref().unwrap().column;
-        let lowering = self.encode_column(column, &primitive.ty, stmt::Expr::field(field));
+        let lowering = self.encode_column(column, &primitive.ty, stmt::Expr::ref_self_field(field));
 
         self.mapping.fields[field.index].as_mut().unwrap().lowering = self.model_to_table.len();
 

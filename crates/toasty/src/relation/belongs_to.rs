@@ -16,7 +16,7 @@ impl<T: Model> BelongsTo<T> {
             Value::Record(record) => Self {
                 value: Some(Box::new(T::load(record)?)),
             },
-            _ => todo!(),
+            _ => todo!("expected `Value::Record`; actual={input:#?}"),
         })
     }
 

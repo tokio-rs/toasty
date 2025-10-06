@@ -352,7 +352,7 @@ impl Planner<'_> {
                 };
 
                 let filter = stmt::Expr::in_list(
-                    stmt::Expr::field(fk_field.source),
+                    stmt::Expr::ref_self_field(fk_field.source),
                     stmt::Expr::map(
                         stmt::Expr::arg(0),
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.target),
@@ -382,7 +382,7 @@ impl Planner<'_> {
                 };
 
                 let filter = stmt::Expr::in_list(
-                    stmt::Expr::field(fk_field.target),
+                    stmt::Expr::ref_self_field(fk_field.target),
                     stmt::Expr::map(
                         stmt::Expr::arg(0),
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.source),
@@ -413,7 +413,7 @@ impl Planner<'_> {
                 };
 
                 let filter = stmt::Expr::in_list(
-                    stmt::Expr::field(fk_field.source),
+                    stmt::Expr::ref_self_field(fk_field.source),
                     stmt::Expr::map(
                         stmt::Expr::arg(0),
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.target),

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::usize;
 
 use indexmap::IndexSet;
-use toasty_core::stmt::{self, visit_mut, ExprRecord, ExprReference, VisitMut};
+use toasty_core::stmt::{self, visit_mut, ExprReference, VisitMut};
 
 use crate::engine::eval;
 use crate::engine::planner::partition::materialization::MaterializationKind;
@@ -229,8 +229,9 @@ enum Arg {
         /// The nesting level
         nesting: usize,
 
-        /// The index of the column within the set of columns selected
-        index: usize,
+        /// The index of the column within the set of columns included during
+        /// the batch-load query.
+        batch_load_index: usize,
 
         /// The index in the materialization node's inputs list. This is set
         /// when planning materialization.
@@ -267,8 +268,10 @@ impl<'a> visit_mut::VisitMut for Walker<'a> {
                     }
                     .into();
 
-                    let index = self.stmt(target_id).new_back_ref(stmt_id, expr);
-                    let arg_id = self.curr_stmt().new_ref_arg(target_id, *nesting, index);
+                    let batch_load_index = self.stmt(target_id).new_back_ref(stmt_id, expr);
+                    let arg_id =
+                        self.curr_stmt()
+                            .new_ref_arg(target_id, *nesting, batch_load_index);
 
                     // Using ExprArg as a placeholder. It will be rewritten
                     // later.
@@ -360,12 +363,12 @@ impl StatementState {
         ret
     }
 
-    fn new_ref_arg(&mut self, stmt_id: StmtId, nesting: usize, index: usize) -> usize {
+    fn new_ref_arg(&mut self, stmt_id: StmtId, nesting: usize, batch_load_index: usize) -> usize {
         let arg_id = self.args.len();
         self.args.push(Arg::Ref {
             stmt_id,
             nesting,
-            index,
+            batch_load_index,
             input: Cell::new(None),
         });
         arg_id

@@ -226,7 +226,11 @@ impl PlanMaterialization<'_> {
                         *nesting += 1;
                     }
                     stmt::Expr::Arg(expr_arg) => {
-                        let Arg::Ref { input, index, .. } = &stmt_state.args[expr_arg.position]
+                        let Arg::Ref {
+                            input,
+                            batch_load_index: index,
+                            ..
+                        } = &stmt_state.args[expr_arg.position]
                         else {
                             todo!()
                         };
@@ -433,13 +437,39 @@ impl PlanNestedMerge<'_> {
 
         visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
             stmt::Expr::Arg(expr_arg) => {
-                let Arg::Ref { nesting, index, .. } = &stmt_state.args[expr_arg.position] else {
+                let Arg::Ref {
+                    nesting,
+                    stmt_id: target_id,
+                    batch_load_index,
+                    ..
+                } = &stmt_state.args[expr_arg.position]
+                else {
                     todo!()
                 };
 
                 debug_assert!(*nesting > 0);
 
-                *expr = stmt::Expr::arg_project(depth - *nesting, [*index]);
+                // This is a bit of a roundabout way to get the data. We may
+                // want to find a better way to track the info for more direct
+                // access.
+                let target_stmt = &self.stmts[target_id.0];
+                // The ExprReference based on the target's "self"
+                let target_expr_reference =
+                    &target_stmt.back_refs[&stmt_id].exprs[*batch_load_index];
+
+                let target_exec_statement_index = target_stmt
+                    .exec_statement_selection
+                    .get()
+                    .unwrap()
+                    .get_index_of(target_expr_reference)
+                    .unwrap();
+
+                let _ = self.stmts[target_id.0]
+                    .exec_statement_selection
+                    .get()
+                    .unwrap();
+
+                *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
             }
             stmt::Expr::Reference(expr_reference) => {
                 let index = selection.get_index_of(expr_reference).unwrap();

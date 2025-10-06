@@ -254,7 +254,7 @@ impl VisitMut for LowerStatement<'_> {
 
                     assert!(field.ty.is_primitive(), "field={field:#?}");
 
-                    fields.push(stmt::Expr::field(app::FieldId {
+                    fields.push(stmt::Expr::ref_self_field(app::FieldId {
                         model: lower.model().id,
                         index: i,
                     }));
@@ -545,12 +545,36 @@ impl<'a> LowerStatement<'a> {
         let mut stmt = match &field.ty {
             FieldTy::HasMany(rel) => stmt::Query::filter(
                 rel.target,
-                stmt::Expr::eq(stmt::Expr::ref_model(1), stmt::Expr::field(rel.pair)),
+                stmt::Expr::eq(
+                    stmt::Expr::ref_model(1),
+                    stmt::Expr::ref_self_field(rel.pair),
+                ),
             ),
             // To handle single relations, we need a new query modifier that
             // returns a single record and not a list. This matters for the type
             // system.
-            FieldTy::BelongsTo(_rel) => todo!(),
+            FieldTy::BelongsTo(rel) => {
+                let source_fk;
+                let target_pk;
+
+                if let [fk_field] = &rel.foreign_key.fields[..] {
+                    source_fk = stmt::Expr::ref_parent_field(fk_field.source);
+                    target_pk = stmt::Expr::ref_self_field(fk_field.target);
+                } else {
+                    let mut source_fk_fields = vec![];
+                    let mut target_pk_fields = vec![];
+
+                    for fk_field in &rel.foreign_key.fields {
+                        source_fk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
+                        target_pk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
+                    }
+
+                    source_fk = stmt::Expr::record_from_vec(source_fk_fields);
+                    target_pk = stmt::Expr::record_from_vec(target_pk_fields);
+                }
+
+                stmt::Query::filter(rel.target, stmt::Expr::eq(source_fk, target_pk))
+            }
             FieldTy::HasOne(_rel) => todo!(),
             _ => todo!(),
         };

@@ -62,7 +62,7 @@ impl Expr {
     ///
     /// An `Expr::Reference` containing an `ExprReference::Field` that points to
     /// the specified field in the current query's relation.
-    pub fn field(field: impl Into<FieldId>) -> Self {
+    pub fn ref_self_field(field: impl Into<FieldId>) -> Self {
         ExprReference::field(field).into()
     }
 
@@ -70,6 +70,15 @@ impl Expr {
     pub fn ref_field(nesting: usize, field: impl Into<FieldId>) -> Self {
         ExprReference::Field {
             nesting,
+            index: field.into().index,
+        }
+        .into()
+    }
+
+    /// Create a reference to a field one level up
+    pub fn ref_parent_field(field: impl Into<FieldId>) -> Self {
+        ExprReference::Field {
+            nesting: 1,
             index: field.into().index,
         }
         .into()
