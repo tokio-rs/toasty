@@ -88,8 +88,13 @@ impl Expr {
         matches!(self, Self::Reference(ExprReference::Field { .. }))
     }
 
+    /// Create a model reference to the parent model
+    pub fn ref_parent_model() -> Self {
+        Self::ref_ancestor_model(1)
+    }
+
     /// Create a model reference to the specified nesting level
-    pub fn ref_model(nesting: usize) -> Self {
+    pub fn ref_ancestor_model(nesting: usize) -> Self {
         ExprReference::Model { nesting }.into()
     }
 

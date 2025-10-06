@@ -546,7 +546,7 @@ impl<'a> LowerStatement<'a> {
             FieldTy::HasMany(rel) => stmt::Query::filter(
                 rel.target,
                 stmt::Expr::eq(
-                    stmt::Expr::ref_model(1),
+                    stmt::Expr::ref_parent_model(),
                     stmt::Expr::ref_self_field(rel.pair),
                 ),
             ),
@@ -578,7 +578,17 @@ impl<'a> LowerStatement<'a> {
                 query.single = true;
                 query
             }
-            FieldTy::HasOne(_rel) => todo!(),
+            FieldTy::HasOne(rel) => {
+                let mut query = stmt::Query::filter(
+                    rel.target,
+                    stmt::Expr::eq(
+                        stmt::Expr::ref_parent_model(),
+                        stmt::Expr::ref_self_field(rel.pair),
+                    ),
+                );
+                query.single = true;
+                query
+            }
             _ => todo!(),
         };
 
