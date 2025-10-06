@@ -1,5 +1,4 @@
-use super::{eval, stmt, Action, VarId};
-use std::collections::HashMap;
+use super::{eval, Action, VarId};
 
 /// Nested merge operation - combines parent and child materializations
 ///
@@ -59,28 +58,6 @@ pub(crate) struct NestedChild {
 /// How to filter nested records for a parent record
 #[derive(Debug, Clone)]
 pub(crate) enum MergeQualification {
-    /// Equality on specific columns (uses hash index)
-    ///
-    /// root_columns can reference ANY ancestor in the context stack.
-    /// Each entry is (levels_up, column_index):
-    ///   - levels_up: 0 = immediate parent, 1 = grandparent, 2 = great-grandparent, etc.
-    ///   - column_index: which column from that ancestor record
-    ///
-    /// Example: Tags referencing both Post and User
-    ///   root_columns: [(0, 0), (1, 0)]  // Post.id (0 up), User.id (1 up)
-    ///   index_id: VarId for Tags data (indexes HashMap will have entry for this VarId)
-    ///
-    /// During planning: The nested_columns are collected and stored in NestedMerge.indexes
-    /// During execution: Use the pre-built index from NestedMerge.indexes[index_id]
-    Equality {
-        /// Which ancestor levels and columns to extract for the lookup key
-        /// Vec<(levels_up, column_index)>
-        root_columns: Vec<(usize, usize)>,
-
-        /// Which VarId's index to use (references NestedMerge.indexes)
-        index_id: VarId,
-    },
-
     /// General predicate evaluation (uses nested loop)
     /// Args: [ancestor_stack..., nested_record] -> bool
     ///
