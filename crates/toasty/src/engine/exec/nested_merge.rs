@@ -21,7 +21,11 @@ impl Exec<'_> {
 
         // Iterate over each record to perform the nested merge
         for row in root_rows {
-            let stack = RowStack { parent: None, row, position: 0 };
+            let stack = RowStack {
+                parent: None,
+                row,
+                position: 0,
+            };
             merged_rows.push(self.materialize_nested_row(&stack, &action.root, &input)?);
         }
 
@@ -73,7 +77,6 @@ impl Exec<'_> {
         let eval_input = RowAndNested {
             row: &row_stack.row,
             nested: &nested[..],
-
         };
 
         level.projection.eval(&eval_input)
@@ -85,9 +88,7 @@ impl Exec<'_> {
         row: &RowStack<'_>,
     ) -> Result<bool> {
         match qual {
-            plan::MergeQualification::Predicate(func) => {
-                func.eval_bool(row)
-            }
+            plan::MergeQualification::Predicate(func) => func.eval_bool(row),
         }
     }
 }
@@ -107,7 +108,11 @@ struct RowAndNested<'a> {
 }
 
 impl eval::Input for &RowStack<'_> {
-    fn resolve_arg(&mut self, expr_arg: &stmt::ExprArg, projection: &stmt::Projection) -> stmt::Value {
+    fn resolve_arg(
+        &mut self,
+        expr_arg: &stmt::ExprArg,
+        projection: &stmt::Projection,
+    ) -> stmt::Value {
         let mut current: &RowStack<'_> = *self;
 
         // Find the stack level that corresponds with the argument.
@@ -116,20 +121,23 @@ impl eval::Input for &RowStack<'_> {
                 break;
             }
 
-            let Some(parent) = current.parent else { todo!() };
+            let Some(parent) = current.parent else {
+                todo!()
+            };
             current = parent;
         }
 
         // Get the value and apply projection
-        current
-            .row
-            .entry(projection)
-            .to_value()
+        current.row.entry(projection).to_value()
     }
 }
 
 impl eval::Input for &RowAndNested<'_> {
-    fn resolve_arg(&mut self, expr_arg: &stmt::ExprArg, projection: &stmt::Projection) -> stmt::Value {
+    fn resolve_arg(
+        &mut self,
+        expr_arg: &stmt::ExprArg,
+        projection: &stmt::Projection,
+    ) -> stmt::Value {
         let base = if expr_arg.position == 0 {
             self.row
         } else {
