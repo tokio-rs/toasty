@@ -2,7 +2,7 @@ use postgres::types::{accepts, private::BytesMut, to_sql_checked, IsNull, ToSql,
 use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
-pub struct Value(CoreValue);
+pub struct Value(pub(crate) CoreValue);
 
 impl From<CoreValue> for Value {
     fn from(value: CoreValue) -> Self {
@@ -63,7 +63,7 @@ impl ToSql for Value {
                     value.to_sql(ty, out)
                 }
                 Type::INT8 => value.to_sql(ty, out),
-                _ => todo!(),
+                _ => todo!("ty={ty:#?}"),
             },
             stmt::Value::U8(value) => match *ty {
                 Type::INT2 => {
@@ -107,7 +107,7 @@ impl ToSql for Value {
                     if *value > i64::MAX as u64 {
                         return Err(Box::new(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
-                            format!("u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT", 
+                            format!("u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT",
                                 value, i64::MAX)
                         )));
                     }
