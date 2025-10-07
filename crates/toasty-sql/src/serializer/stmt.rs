@@ -93,9 +93,15 @@ impl ToSql for &stmt::Insert {
             .as_ref()
             .map(|returning| ("RETURNING ", returning));
 
+        // Set flag to indicate we're in INSERT context (VALUES shouldn't use ROW())
+        let prev_in_insert = f.in_insert;
+        f.in_insert = true;
+
         fmt!(
             &cx, f, "INSERT INTO " self.target " " self.source returning
         );
+
+        f.in_insert = prev_in_insert;
     }
 }
 
@@ -392,8 +398,14 @@ impl ToSql for &stmt::UpdateTarget {
 
 impl ToSql for &stmt::Values {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let rows = Comma(self.rows.iter());
-
-        fmt!(cx, f, "VALUES " rows)
+        // MySQL requires ROW() keyword for table value constructors when used
+        // in subqueries, but NOT in INSERT statements
+        if f.serializer.is_mysql() && !f.in_insert {
+            let rows = Comma(self.rows.iter().map(|row| ("ROW(", row, ")")));
+            fmt!(cx, f, "VALUES " rows)
+        } else {
+            let rows = Comma(self.rows.iter());
+            fmt!(cx, f, "VALUES " rows)
+        }
     }
 }
