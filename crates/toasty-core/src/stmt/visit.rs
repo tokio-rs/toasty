@@ -739,7 +739,6 @@ where
         ExprSet::SetOp(expr) => v.visit_expr_set_op(expr),
         ExprSet::Update(expr) => v.visit_stmt_update(expr),
         ExprSet::Values(expr) => v.visit_values(expr),
-        ExprSet::Arg(expr) => v.visit_expr_arg(expr),
     }
 }
 

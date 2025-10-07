@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::{Expr, ExprSetOp, Select, SourceModel, Update, Values};
-use crate::{schema::db::TableId, stmt::ExprArg};
+use crate::schema::db::TableId;
 
 #[derive(Clone)]
 pub enum ExprSet {
@@ -16,9 +16,6 @@ pub enum ExprSet {
 
     /// Explicitly listed values (as expressions)
     Values(Values),
-
-    /// The expression set will be provided by an an argument
-    Arg(ExprArg),
 }
 
 impl ExprSet {
@@ -74,7 +71,6 @@ impl fmt::Debug for ExprSet {
             Self::SetOp(e) => e.fmt(f),
             Self::Update(e) => e.fmt(f),
             Self::Values(e) => e.fmt(f),
-            Self::Arg(e) => e.fmt(f),
         }
     }
 }
