@@ -9,7 +9,7 @@ use toasty_core::{
 use crate::engine::{
     eval,
     plan::{self, NestedLevel},
-    planner::partition::{Arg, StatementState, StmtId},
+    planner::ng::{Arg, StatementInfo, StmtId},
 };
 
 #[derive(Debug)]
@@ -70,7 +70,7 @@ struct PlanMaterialization<'a> {
     schema: &'a Schema,
 
     /// Root statement and all nested statements.
-    stmts: &'a [StatementState],
+    stmts: &'a [StatementInfo],
 
     /// Graph of operations needed to materialize the statement, in-progress
     graph: MaterializationGraph,
@@ -79,7 +79,7 @@ struct PlanMaterialization<'a> {
 #[derive(Debug)]
 struct PlanNestedMerge<'a> {
     schema: &'a Schema,
-    stmts: &'a [StatementState],
+    stmts: &'a [StatementInfo],
     inputs: IndexSet<NodeId>,
     /// Statement stack, used to infer expression types
     stack: Vec<StmtId>,
@@ -88,7 +88,7 @@ struct PlanNestedMerge<'a> {
 impl super::Planner<'_> {
     pub(super) fn plan_materializations(
         &self,
-        stmts: &[StatementState],
+        stmts: &[StatementInfo],
         root: StmtId,
     ) -> MaterializationGraph {
         let mut plan_materialization = PlanMaterialization {
