@@ -23,11 +23,8 @@ pub(crate) struct OutputTarget {
 
 impl Output {
     #[track_caller]
-    pub fn single_target(var: VarId, project: eval::Func) -> Output {
-        Output {
-            ty: todo!("update call to use single_target2"),
-            targets: vec![OutputTarget { var, project }],
-        }
+    pub fn single_target(_var: VarId, _project: eval::Func) -> Output {
+        todo!("update call to use single_target2")
     }
 
     pub fn single_target2(var: VarId, project: eval::Func) -> Output {

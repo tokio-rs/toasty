@@ -397,36 +397,3 @@ impl ToSql for &stmt::Values {
         fmt!(cx, f, "VALUES " rows)
     }
 }
-
-fn query_width(query: &stmt::Query) -> usize {
-    expr_set_width(&query.body)
-}
-
-fn expr_set_width(expr_set: &stmt::ExprSet) -> usize {
-    match expr_set {
-        stmt::ExprSet::Select(select) => returning_width(&select.returning),
-        stmt::ExprSet::SetOp(expr_set_op) => expr_set_width(&expr_set_op.operands[0]),
-        stmt::ExprSet::Update(update) => {
-            update.returning.as_ref().map(returning_width).unwrap_or(0)
-        }
-        stmt::ExprSet::Values(values) => {
-            let [row, ..] = &values.rows[..] else {
-                panic!("at least one row expected")
-            };
-            match row {
-                stmt::Expr::Record(expr_record) => expr_record.len(),
-                stmt::Expr::Value(stmt::Value::Record(value_record)) => value_record.len(),
-                _ => panic!("unexpected `Values` expression; expr={row:#?}"),
-            }
-        }
-        stmt::ExprSet::Arg(_) => panic!("there should not be any more args at this point"),
-    }
-}
-
-fn returning_width(returning: &stmt::Returning) -> usize {
-    let stmt::Returning::Expr(stmt::Expr::Record(expr_record)) = &returning else {
-        panic!("Returning should only be an ExprRecord at this point")
-    };
-
-    expr_record.len()
-}

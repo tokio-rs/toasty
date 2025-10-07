@@ -1,14 +1,14 @@
-use std::cell::{Cell, OnceCell};
+use std::cell::Cell;
 
 use indexmap::IndexSet;
 use toasty_core::{
-    stmt::{self, visit_mut, ExprReference},
+    stmt::{self, visit_mut},
     Schema,
 };
 
 use crate::engine::{
     eval,
-    plan::{self, NestedLevel, NestedMerge},
+    plan::{self, NestedLevel},
     planner::partition::{Arg, StatementState, StmtId},
 };
 
@@ -80,7 +80,6 @@ struct PlanMaterialization<'a> {
 struct PlanNestedMerge<'a> {
     schema: &'a Schema,
     stmts: &'a [StatementState],
-    graph: &'a mut MaterializationGraph,
     inputs: IndexSet<NodeId>,
     /// Statement stack, used to infer expression types
     stack: Vec<StmtId>,
@@ -349,7 +348,6 @@ impl PlanMaterialization<'_> {
         let planner = PlanNestedMerge {
             schema: self.schema,
             stmts: self.stmts,
-            graph: &mut self.graph,
             inputs: IndexSet::new(),
             stack: vec![],
         };

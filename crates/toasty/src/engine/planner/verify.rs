@@ -9,7 +9,7 @@ impl Planner<'_> {
             BatchWrite(action) => self.verify_batch_write(action),
             DeleteByKey(action) => self.verify_delete_by_key(action),
             ExecStatement(action) => self.verify_exec_statement(action),
-            ExecStatement2(action) => {}
+            ExecStatement2(_action) => {}
             FindPkByIndex(action) => self.verify_find_pk_by_index(action),
             GetByKey(action) => self.verify_get_by_key(action),
             Insert(action) => self.verify_insert(action),

@@ -1,6 +1,6 @@
-use crate::stmt::{ExprArg, Query, Source, SourceTableId, TableFactor, Values};
+use crate::stmt::{ExprArg, Source, SourceTableId, TableFactor};
 
-use super::{TableDerived, TableRef, TableWithJoins};
+use super::{TableRef, TableWithJoins};
 
 #[derive(Debug, Clone)]
 pub struct SourceTable {

@@ -4,7 +4,7 @@ use crate::{
         app::{Model, ModelId},
         db::TableId,
     },
-    stmt::{ExprArg, Values},
+    stmt::ExprArg,
 };
 
 #[derive(Debug, Clone)]
