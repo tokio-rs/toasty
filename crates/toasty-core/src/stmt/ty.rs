@@ -125,6 +125,6 @@ impl From<&Self> for Type {
 
 impl From<ModelId> for Type {
     fn from(value: ModelId) -> Self {
-        Self::Model(value.into())
+        Self::Model(value)
     }
 }

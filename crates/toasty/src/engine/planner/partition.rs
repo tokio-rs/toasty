@@ -2,7 +2,6 @@ mod materialization;
 
 use std::cell::{Cell, OnceCell};
 use std::collections::HashMap;
-use std::usize;
 
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit_mut, ExprReference, VisitMut};
@@ -276,8 +275,7 @@ impl<'a> visit_mut::VisitMut for Walker<'a> {
                         nesting: 0,
                         table: *table,
                         column: *column,
-                    }
-                    .into();
+                    };
 
                     let batch_load_index = self.stmt(target_id).new_back_ref(stmt_id, expr);
                     let arg_id =

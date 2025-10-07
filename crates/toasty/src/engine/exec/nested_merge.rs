@@ -85,7 +85,7 @@ impl Exec<'_> {
 
         // Project the row with the nested data as arguments.
         let eval_input = RowAndNested {
-            row: &row_stack.row,
+            row: row_stack.row,
             nested: &nested[..],
         };
 
@@ -123,7 +123,7 @@ impl eval::Input for &RowStack<'_> {
         expr_arg: &stmt::ExprArg,
         projection: &stmt::Projection,
     ) -> stmt::Value {
-        let mut current: &RowStack<'_> = *self;
+        let mut current: &RowStack<'_> = self;
 
         // Find the stack level that corresponds with the argument.
         loop {
