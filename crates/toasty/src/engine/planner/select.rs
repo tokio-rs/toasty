@@ -24,17 +24,11 @@ impl Planner<'_> {
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.app.model(source_model.model);
 
-        let (source_model, includes) = match &stmt.body {
-            stmt::ExprSet::Select(select) => match &select.source {
+        let (source_model, includes) = match &mut stmt.body {
+            stmt::ExprSet::Select(select) => match &mut select.source {
                 stmt::Source::Model(source_model) => {
-                    let includes = match &select.returning {
-                        stmt::Returning::Model { include } => {
-                            if !include.is_empty() {
-                                include.clone()
-                            } else {
-                                vec![]
-                            }
-                        }
+                    let includes = match &mut select.returning {
+                        stmt::Returning::Model { include } => std::mem::take(include),
                         _ => vec![],
                     };
 

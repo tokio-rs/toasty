@@ -536,6 +536,11 @@ impl<'a> LowerStatement<'a> {
     }
 
     fn build_include_subquery(&mut self, returning: &mut stmt::Expr, path: &stmt::Path) {
+        debug_assert!(
+            self.capability.sql,
+            "TODO: only supported by SQL planning for now"
+        );
+
         let [field_index] = &path.projection[..] else {
             todo!("Multi-step include paths not yet supported")
         };

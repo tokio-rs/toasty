@@ -26,7 +26,8 @@ impl Planner<'_> {
                         tys.push(cx.infer_expr_ty(expr, &[]));
                     }
 
-                    *expr = stmt::Expr::arg(pos);
+                    // Project field `pos` from Arg(0), which will be the record returned by the DB
+                    *expr = stmt::Expr::arg_project(0, [pos]);
                 }
                 // Subqueries should have been removed at this point
                 stmt::Expr::Stmt(_) | stmt::Expr::InSubquery(_) => todo!(),
@@ -34,7 +35,13 @@ impl Planner<'_> {
             }
         });
 
-        let project = eval::Func::from_stmt(expr.clone(), tys);
+        // Wrap types in a Record - the function receives a single Record argument from the DB
+        let args = if tys.is_empty() {
+            vec![]
+        } else {
+            vec![stmt::Type::Record(tys)]
+        };
+        let project = eval::Func::from_stmt(expr.clone(), args);
 
         *stmt = stmt::Returning::from_expr_iter(db.iter().map(stmt::Expr::from));
 
