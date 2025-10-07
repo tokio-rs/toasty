@@ -18,10 +18,7 @@ impl Exec<'_> {
 
         if keys.is_empty() {
             if let Some(output) = &action.output {
-                let [output_target] = &output.targets[..] else {
-                    todo!()
-                };
-                self.vars.store(output_target.var, ValueStream::default());
+                self.vars.store(output.var, ValueStream::default());
             }
         } else {
             let op = operation::UpdateByKey {
@@ -41,12 +38,9 @@ impl Exec<'_> {
                     let Some(output) = &action.output else {
                         todo!("action={action:#?}");
                     };
-                    let [output_target] = &output.targets[..] else {
-                        todo!()
-                    };
 
-                    let res = self.project_and_filter_output(rows, &output_target.project, None);
-                    self.vars.store(output_target.var, res);
+                    let res = self.project_and_filter_output(rows, &output.project, None);
+                    self.vars.store(output.var, res);
                 }
                 Rows::Count(_) => {
                     debug_assert!(action.output.is_none());

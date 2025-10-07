@@ -8,10 +8,6 @@ impl Exec<'_> {
             .eval_keys_maybe_using_input(&action.keys, &action.input)
             .await?;
 
-        let [output_target] = &action.output.targets[..] else {
-            todo!()
-        };
-
         let res = if keys.is_empty() {
             ValueStream::default()
         } else {
@@ -29,12 +25,12 @@ impl Exec<'_> {
 
             self.project_and_filter_output(
                 rows,
-                &output_target.project,
+                &action.output.project,
                 action.post_filter.as_ref(),
             )
         };
 
-        self.vars.store(output_target.var, res);
+        self.vars.store(action.output.var, res);
         Ok(())
     }
 }

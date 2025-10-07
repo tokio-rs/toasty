@@ -102,12 +102,11 @@ impl Planner<'_> {
 
         let output = self
             .partition_maybe_returning(&cx, &mut stmt.returning)
-            .map(|project| {
-                plan::Output::single_target2(
-                    self.var_table
-                        .register_var(stmt::Type::list(project.ret.clone())),
-                    project,
-                )
+            .map(|project| plan::Output {
+                var: self
+                    .var_table
+                    .register_var(stmt::Type::list(project.ret.clone())),
+                project,
             });
 
         Ok(if self.capability.sql {
@@ -122,12 +121,7 @@ impl Planner<'_> {
         stmt: stmt::Update,
         output: Option<plan::Output>,
     ) -> Option<plan::VarId> {
-        let output_var = output.as_ref().map(|o| {
-            let [output_target] = &o.targets[..] else {
-                todo!()
-            };
-            output_target.var
-        });
+        let output_var = output.as_ref().map(|o| o.var);
 
         // SQL does not support update conditions, so we need to rewrite the
         // statement. This is a bit tricky because the best strategy for
@@ -178,12 +172,7 @@ impl Planner<'_> {
 
         assert!(!stmt.assignments.is_empty());
 
-        let output_var = output.as_ref().map(|o| {
-            let [output_target] = &o.targets[..] else {
-                todo!()
-            };
-            output_target.var
-        });
+        let output_var = output.as_ref().map(|o| o.var);
 
         if index_plan.index.primary_key {
             let Some(key) = self.try_build_key_filter(

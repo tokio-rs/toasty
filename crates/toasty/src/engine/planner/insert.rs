@@ -78,7 +78,7 @@ impl Planner<'_> {
 
                 if let Some(project) = project {
                     let var = self.var_table.register_var(project.ret.clone());
-                    plan.output = Some(plan::Output::single_target(var, project));
+                    plan.output = Some(plan::Output { var, project });
                     output_var = Some(var);
                 }
 

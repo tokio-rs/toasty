@@ -246,7 +246,10 @@ impl Planner<'_> {
 
                 self.push_action(plan::GetByKey {
                     input,
-                    output: plan::Output::single_target(output, project),
+                    output: plan::Output {
+                        var: output,
+                        project,
+                    },
                     table: table.id,
                     columns,
                     keys,
@@ -294,7 +297,10 @@ impl Planner<'_> {
                 });
 
                 self.push_action(plan::QueryPk {
-                    output: plan::Output::single_target(output, project),
+                    output: plan::Output {
+                        var: output,
+                        project,
+                    },
                     table: table.id,
                     columns,
                     pk_filter: index_plan.index_filter,
@@ -312,7 +318,10 @@ impl Planner<'_> {
 
             self.push_action(plan::GetByKey {
                 input: Some(get_by_key_input),
-                output: plan::Output::single_target(output, project),
+                output: plan::Output {
+                    var: output,
+                    project,
+                },
                 table: table.id,
                 keys,
                 columns: self.schema.mapping_for(model).columns.clone(),

@@ -40,18 +40,14 @@ impl Exec<'_> {
             // Bit of a hack
             Some(vec![stmt::Type::I64, stmt::Type::I64])
         } else {
-            output.and_then(|out| match out.ty.clone() {
-                stmt::Type::Unit => None,
-                stmt::Type::Record(fields) => Some(fields),
+            output.and_then(|out| match &out.project.args[..] {
+                [stmt::Type::Record(fields), ..] => Some(fields.clone()),
+                [] => None,
                 _ => todo!(),
             })
         };
 
-        assert_eq!(
-            expect_rows,
-            ty.is_some(),
-            "stmt={stmt:#?}; output={output:#?}"
-        );
+        assert_eq!(expect_rows, ty.is_some());
 
         let res = self
             .db
@@ -62,7 +58,7 @@ impl Exec<'_> {
             )
             .await?;
 
-        let Some(output) = output else {
+        let Some(out) = output else {
             if conditional_update_with_no_returning {
                 let Rows::Values(rows) = res.rows else {
                     return Err(anyhow::anyhow!(
@@ -91,43 +87,31 @@ impl Exec<'_> {
             }
         };
 
-        // TODO: come up with a more advanced execution task manager to avoid
-        // having to eagerly buffer everything.
-        let mut projected_rows = vec![];
+        // TODO: don't clone
+        let project = out.project.clone();
 
-        for target in &output.targets {
-            // Stub out a vec for each output target
-            projected_rows.push((vec![], target));
-        }
-
-        match res.rows {
+        let res = match res.rows {
             Rows::Count(count) => {
                 assert!(!expect_rows);
-                for _ in 0..count {
-                    for (projected, target) in &mut projected_rows {
-                        let row = target.project.eval_const();
-                        projected.push(row);
+                ValueStream::from_stream(async_stream::try_stream! {
+                    for _ in 0..count {
+                        let row = project.eval_const();
+                        yield row;
                     }
-                }
+                })
             }
-            Rows::Values(mut rows) => {
+            Rows::Values(rows) => {
                 assert!(expect_rows);
-
-                while let Some(res) = rows.next().await {
-                    let stmt::Value::Record(record) = res? else {
-                        todo!()
-                    };
-                    for (projected, target) in &mut projected_rows {
-                        let row = target.project.eval(&record.fields[..])?;
-                        projected.push(row);
+                ValueStream::from_stream(async_stream::try_stream! {
+                    for await value in rows {
+                        let value = value?;
+                        yield project.eval(&[value])?;
                     }
-                }
+                })
             }
-        }
+        };
 
-        for (rows, target) in projected_rows {
-            self.vars.store(target.var, ValueStream::from_vec(rows));
-        }
+        self.vars.store(out.var, res);
 
         Ok(())
     }
