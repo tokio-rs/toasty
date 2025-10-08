@@ -29,5 +29,6 @@ async-stream.workspace = true
 tokio-stream.workspace = true
 uuid.workspace = true
 indexmap.workspace = true
+index_vec.workspace = true
 tokio.workspace = true
 url.workspace = true

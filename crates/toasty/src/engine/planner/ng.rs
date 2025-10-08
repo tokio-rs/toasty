@@ -1,11 +1,12 @@
 mod decompose;
+
+mod info;
+
+use info::{Arg, StatementInfoStore, StmtId};
+
 mod materialize;
 
-use std::cell::{Cell, OnceCell};
-use std::collections::HashMap;
-
-use indexmap::IndexSet;
-use toasty_core::stmt::{self, ExprReference};
+use toasty_core::stmt;
 
 use crate::engine::eval;
 use crate::engine::planner::ng::materialize::MaterializationKind;
@@ -109,12 +110,28 @@ use crate::Result;
 ///                         v
 ///                    [final result]
 /// ```
+struct PlannerNg<'a, 'b> {
+    store: StatementInfoStore,
+    old: &'a mut Planner<'b>,
+}
+
 impl Planner<'_> {
     pub(crate) fn plan_v2_stmt_query(&mut self, stmt: stmt::Statement) -> Result<plan::VarId> {
-        let stmts = decompose::decompose(stmt);
+        PlannerNg {
+            store: StatementInfoStore::new(),
+            old: self,
+        }
+        .plan_statement(stmt)
+    }
+}
+
+impl PlannerNg<'_, '_> {
+    fn plan_statement(&mut self, stmt: stmt::Statement) -> Result<plan::VarId> {
+        // let store = decompose::decompose(stmt);
+        self.decompose(stmt);
 
         // Build the execution plan...
-        let materialization_graph = self.plan_materializations(&stmts, StmtId(0));
+        let materialization_graph = self.plan_materializations();
 
         // Build the execution plan
         for node_id in &materialization_graph.execution_order {
@@ -138,11 +155,11 @@ impl Planner<'_> {
                     for input in inputs {
                         let var = materialization_graph.nodes[*input].var.get().unwrap();
 
-                        input_args.push(self.var_table.ty(var).clone());
+                        input_args.push(self.old.var_table.ty(var).clone());
                         input_vars.push(var);
                     }
 
-                    let ty = self.infer_ty(stmt, &input_args);
+                    let ty = self.old.infer_ty(stmt, &input_args);
 
                     let ty_fields = match &ty {
                         stmt::Type::List(ty_rows) => match &**ty_rows {
@@ -151,10 +168,10 @@ impl Planner<'_> {
                         },
                         _ => todo!("ty={ty:#?}"),
                     };
-                    let var = self.var_table.register_var(ty);
+                    let var = self.old.var_table.register_var(ty);
                     node.var.set(Some(var));
 
-                    self.push_action(plan::ExecStatement2 {
+                    self.old.push_action(plan::ExecStatement2 {
                         input: input_vars,
                         output: Some(plan::ExecStatementOutput { ty: ty_fields, var }),
                         stmt: stmt.clone(),
@@ -169,11 +186,12 @@ impl Planner<'_> {
                     }
 
                     let output = self
+                        .old
                         .var_table
                         .register_var(stmt::Type::list(root.projection.ret.clone()));
                     node.var.set(Some(output));
 
-                    self.push_action(plan::NestedMerge {
+                    self.old.push_action(plan::NestedMerge {
                         inputs: input_vars,
                         output,
                         root: root.clone(),
@@ -181,7 +199,8 @@ impl Planner<'_> {
                 }
                 MaterializationKind::Project { input, projection } => {
                     let input_var = materialization_graph.nodes[*input].var.get().unwrap();
-                    let stmt::Type::List(input_ty) = self.var_table.ty(input_var).clone() else {
+                    let stmt::Type::List(input_ty) = self.old.var_table.ty(input_var).clone()
+                    else {
                         todo!()
                     };
 
@@ -189,11 +208,12 @@ impl Planner<'_> {
 
                     let projection = eval::Func::from_stmt(projection.clone(), input_args);
                     let var = self
+                        .old
                         .var_table
                         .register_var(stmt::Type::list(projection.ret.clone()));
                     node.var.set(Some(var));
 
-                    self.push_action(plan::Project {
+                    self.old.push_action(plan::Project {
                         input: input_var,
                         output: var,
                         projection,
@@ -202,118 +222,8 @@ impl Planner<'_> {
             }
         }
 
-        let mid = stmts[0].output.get().unwrap();
+        let mid = self.store.root().output.get().unwrap();
         let output = materialization_graph.nodes[mid].var.get().unwrap();
         Ok(output)
-    }
-}
-
-/// Per-statement state
-#[derive(Debug)]
-struct StatementInfo {
-    /// Populated later
-    stmt: Option<Box<stmt::Statement>>,
-
-    /// Statement arguments
-    args: Vec<Arg>,
-
-    /// Sub-statements are statements declared within the definition of the
-    /// containing statement.
-    subs: Vec<StmtId>,
-
-    /// Back-refs are expressions within sub-statements that reference the
-    /// current statemetn.
-    back_refs: HashMap<StmtId, BackRef>,
-
-    /// Index of the ExecStatement materialization node for this statement.
-    exec_statement: Cell<Option<usize>>,
-
-    /// Columns selected by exec_statement
-    exec_statement_selection: OnceCell<IndexSet<ExprReference>>,
-
-    /// Index of the node that computes the final result for the statement
-    output: Cell<Option<usize>>,
-}
-
-#[derive(Debug, Default)]
-struct BackRef {
-    /// The expression
-    exprs: IndexSet<stmt::ExprReference>,
-
-    /// Projection materialization node ID
-    node_id: Cell<Option<usize>>,
-}
-
-#[derive(Debug)]
-enum Arg {
-    /// A sub-statement
-    Sub {
-        /// The statement ID providing the input
-        stmt_id: StmtId,
-
-        /// The index in the materialization node's inputs list. This is set
-        /// when planning materialization.
-        input: Cell<Option<usize>>,
-    },
-
-    /// A back-reference
-    Ref {
-        /// The statement providing the data for the reference
-        stmt_id: StmtId,
-
-        /// The nesting level
-        nesting: usize,
-
-        /// The index of the column within the set of columns included during
-        /// the batch-load query.
-        batch_load_index: usize,
-
-        /// The index in the materialization node's inputs list. This is set
-        /// when planning materialization.
-        input: Cell<Option<usize>>,
-    },
-}
-
-#[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
-struct StmtId(usize);
-
-impl StatementInfo {
-    fn new() -> StatementInfo {
-        StatementInfo {
-            stmt: None,
-            args: vec![],
-            subs: vec![],
-            back_refs: HashMap::new(),
-            exec_statement: Cell::new(None),
-            exec_statement_selection: OnceCell::new(),
-            output: Cell::new(None),
-        }
-    }
-
-    fn new_back_ref(&mut self, target_id: StmtId, expr: stmt::ExprReference) -> usize {
-        let back_ref = self.back_refs.entry(target_id).or_default();
-        let (ret, _) = back_ref.exprs.insert_full(expr);
-        ret
-    }
-
-    fn new_ref_arg(&mut self, stmt_id: StmtId, nesting: usize, batch_load_index: usize) -> usize {
-        let arg_id = self.args.len();
-        self.args.push(Arg::Ref {
-            stmt_id,
-            nesting,
-            batch_load_index,
-            input: Cell::new(None),
-        });
-        arg_id
-    }
-
-    fn new_sub_stmt_arg(&mut self, stmt_id: StmtId) -> usize {
-        self.subs.push(stmt_id);
-        let arg_id = self.args.len();
-        self.args.push(Arg::Sub {
-            stmt_id,
-            input: Cell::new(None),
-        });
-        arg_id
     }
 }

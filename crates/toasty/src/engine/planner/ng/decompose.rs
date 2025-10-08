@@ -1,82 +1,71 @@
+use std::cell::Cell;
+
 use toasty_core::stmt::{self, visit_mut, VisitMut};
 
-use crate::engine::planner::ng::{StatementInfo, StmtId};
+use crate::engine::planner::ng::{Arg, StatementInfoStore, StmtId};
 
-pub(crate) fn decompose(mut stmt: stmt::Statement) -> Vec<StatementInfo> {
-    let mut walker_state = WalkerState {
-        stmts: vec![StatementInfo::new()],
-        scopes: vec![ScopeState { stmt_id: StmtId(0) }],
-    };
+impl super::PlannerNg<'_, '_> {
+    pub(crate) fn decompose(&mut self, mut stmt: stmt::Statement) {
+        let root_id = self.store.root_id();
 
-    // Map the statement
-    Walker {
-        state: &mut walker_state,
-        scope: 0,
-        returning: false,
+        let mut state = State {
+            store: &mut self.store,
+            scopes: vec![Scope { stmt_id: root_id }],
+        };
+
+        // Map the statement
+        Decompose {
+            state: &mut state,
+            scope_id: 0,
+            returning: false,
+        }
+        .visit_stmt_mut(&mut stmt);
+
+        self.store.root_mut().stmt = Some(Box::new(stmt));
     }
-    .visit_stmt_mut(&mut stmt);
-
-    walker_state.stmts[0].stmt = Some(Box::new(stmt));
-
-    walker_state.stmts
 }
 
-struct Walker<'a> {
+struct Decompose<'a, 'b> {
     /// Partitioning state
-    state: &'a mut WalkerState,
-    scope: usize,
+    state: &'a mut State<'b>,
+    scope_id: usize,
     returning: bool,
 }
 
 #[derive(Debug)]
-struct WalkerState {
+struct State<'a> {
     /// Statements to be executed by the database, though they may still be
     /// broken down into multiple sub-statements.
-    stmts: Vec<StatementInfo>,
+    store: &'a mut StatementInfoStore,
 
     /// Scope state
-    scopes: Vec<ScopeState>,
+    scopes: Vec<Scope>,
 }
 
 #[derive(Debug)]
-struct ScopeState {
+struct Scope {
     /// Identifier of the statement in the partitioner state.
     stmt_id: StmtId,
 }
 
-impl<'a> visit_mut::VisitMut for Walker<'a> {
+impl visit_mut::VisitMut for Decompose<'_, '_> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         match i {
             stmt::Expr::Reference(expr_reference) => {
                 // At this point, the query should have been fully lowered
-                let stmt::ExprReference::Column {
-                    nesting,
-                    table,
-                    column,
-                } = expr_reference
-                else {
+                let stmt::ExprReference::Column { nesting, .. } = expr_reference else {
                     panic!("unexpected state: statement not lowered")
                 };
 
                 if *nesting > 0 {
-                    let stmt_id = self.curr_stmt_id();
-                    let target_id = self.state.scopes[self.scope - *nesting].stmt_id;
+                    let source_id = self.scope_stmt_id();
+                    let target_id = self.resolve_stmt_id(*nesting);
 
-                    // The reference is recreated assuming it is evaluated from the target context.
-                    let expr = stmt::ExprReference::Column {
-                        nesting: 0,
-                        table: *table,
-                        column: *column,
-                    };
-
-                    let batch_load_index = self.stmt(target_id).new_back_ref(stmt_id, expr);
-                    let arg_id =
-                        self.curr_stmt()
-                            .new_ref_arg(target_id, *nesting, batch_load_index);
+                    let position = self.state.new_ref(source_id, target_id, *expr_reference);
 
                     // Using ExprArg as a placeholder. It will be rewritten
                     // later.
-                    *i = stmt::Expr::arg(arg_id);
+                    *i = stmt::Expr::arg(position);
                 }
             }
             stmt::Expr::Stmt(expr_stmt) => {
@@ -84,21 +73,15 @@ impl<'a> visit_mut::VisitMut for Walker<'a> {
                 // For now, we assume nested sub-statements cannot be executed on the
                 // target database. Eventually, we will need to make this smarter.
 
-                // Create a `StatementState` to track the sub-statement
-                let target_id = self.new_stmt();
-                let mut scope = self.scope(target_id);
-                visit_mut::visit_expr_stmt_mut(&mut scope, expr_stmt);
-                self.state.scopes.pop();
+                let source_id = self.scope_stmt_id();
+                let target_id = self.state.store.new_statement_info();
 
-                // Create a new input to receive the statement
-                let arg_id = self.curr_stmt().new_sub_stmt_arg(target_id);
+                self.scope(target_id, |child| {
+                    visit_mut::visit_expr_stmt_mut(child, expr_stmt);
+                });
 
-                // Replace the sub-statement expression with a placeholder tracking the input
-                let expr = std::mem::replace(i, stmt::Expr::arg(arg_id));
-                let stmt::Expr::Stmt(expr_stmt) = expr else {
-                    panic!()
-                };
-                self.stmt(target_id).stmt = Some(expr_stmt.stmt);
+                let position = self.state.new_sub_statement(source_id, target_id, i.take());
+                *i = stmt::Expr::arg(position);
             }
             _ => {
                 visit_mut::visit_expr_mut(self, i);
@@ -114,33 +97,103 @@ impl<'a> visit_mut::VisitMut for Walker<'a> {
     }
 }
 
-impl<'a> Walker<'a> {
-    fn new_stmt(&mut self) -> StmtId {
-        let stmt_id = StmtId(self.state.stmts.len());
-        self.state.stmts.push(StatementInfo::new());
-        stmt_id
+impl Decompose<'_, '_> {
+    /// Returns the `StmtId` for the Statement at the **current** scope.
+    fn scope_stmt_id(&self) -> StmtId {
+        self.state.scopes[self.scope_id].stmt_id
     }
 
-    fn scope<'child>(&'child mut self, stmt_id: StmtId) -> Walker<'child> {
-        let scope = self.state.scopes.len();
-        self.state.scopes.push(ScopeState { stmt_id });
+    /// Get the StmtId for the specified nesting level
+    fn resolve_stmt_id(&self, nesting: usize) -> StmtId {
+        self.state.scopes[self.scope_id - nesting].stmt_id
+    }
 
-        Walker {
+    fn scope(&mut self, stmt_id: StmtId, f: impl FnOnce(&mut Decompose<'_, '_>)) {
+        let scope_id = self.state.scopes.len();
+        self.state.scopes.push(Scope { stmt_id });
+
+        let mut child = Decompose {
             state: self.state,
-            scope,
-            returning: false,
-        }
+            scope_id,
+            returning: self.returning,
+        };
+
+        f(&mut child);
+
+        self.state.scopes.pop();
+    }
+}
+
+impl State<'_> {
+    /// Create a new sub-statement. Returns the argument position
+    fn new_sub_statement(
+        &mut self,
+        source_id: StmtId,
+        target_id: StmtId,
+        expr: stmt::Expr,
+    ) -> usize {
+        let source = &mut self.store[source_id];
+        let arg = source.args.len();
+        source.args.push(Arg::Sub {
+            stmt_id: target_id,
+            input: Cell::new(None),
+        });
+
+        let stmt::Expr::Stmt(expr_stmt) = expr else {
+            panic!()
+        };
+        self.store[target_id].stmt = Some(expr_stmt.stmt);
+
+        arg
     }
 
-    fn curr_stmt_id(&self) -> StmtId {
-        self.state.scopes[self.scope].stmt_id
-    }
+    /// Returns the ArgId for the new reference
+    fn new_ref(
+        &mut self,
+        source_id: StmtId,
+        target_id: StmtId,
+        mut expr: stmt::ExprReference,
+    ) -> usize {
+        // First, get the nesting so we can resolve the target statmeent
+        let nesting = expr.nesting();
 
-    fn curr_stmt(&mut self) -> &mut StatementInfo {
-        &mut self.state.stmts[self.state.scopes[self.scope].stmt_id.0]
-    }
+        // We only track references that point to statements being executed by
+        // separate materializations. References within the same materialization
+        // are handled by the target database.
+        debug_assert!(nesting != 0);
 
-    fn stmt(&mut self, stmt_id: StmtId) -> &mut StatementInfo {
-        &mut self.state.stmts[stmt_id.0]
+        // Set the nesting to zero as the stored ExprReference will be used from
+        // the context of the *target* statement.
+        let stmt::ExprReference::Column { nesting: n, .. } = &mut expr else {
+            panic!()
+        };
+        *n = 0;
+
+        let target = &mut self.store[target_id];
+
+        // The `batch_load_index` is the index for this reference in the row
+        // returned from the target statement's ExecStatement operation. This
+        // ExecStatement operation batch loads all records needed to materialize
+        // the full root statement.
+        let (batch_load_index, _) = target
+            .back_refs
+            .entry(source_id)
+            .or_default()
+            .exprs
+            .insert_full(expr);
+
+        // Create an argument for inputing the expr reference's materialized
+        // value into the statement.
+        let source = &mut self.store[source_id];
+        let arg = source.args.len();
+
+        source.args.push(Arg::Ref {
+            stmt_id: target_id,
+            nesting,
+            batch_load_index,
+            input: Cell::new(None),
+        });
+
+        arg
     }
 }

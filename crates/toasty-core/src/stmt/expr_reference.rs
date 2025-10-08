@@ -3,7 +3,7 @@ use crate::{
     stmt::Expr,
 };
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum ExprReference {
     /// Reference a model at a specific nesting level.
     ///
