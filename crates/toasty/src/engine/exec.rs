@@ -79,7 +79,6 @@ impl Exec<'_> {
     async fn collect_input(&mut self, input: &plan::Input) -> Result<stmt::Value> {
         let value_stream = match input.source {
             plan::InputSource::Value(var_id) => self.vars.load(var_id),
-            plan::InputSource::Ref(var_id) => self.vars.dup(var_id).await?,
         };
 
         let mut values = stmt::Value::List(value_stream.collect().await?);

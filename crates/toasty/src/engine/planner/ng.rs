@@ -138,11 +138,11 @@ impl PlannerNg<'_, '_> {
         self.decompose(stmt);
 
         // Build the execution plan...
-        let materialization_graph = self.plan_materializations();
+        self.plan_materializations();
 
         // Build the execution plan
-        for node_id in &materialization_graph.execution_order {
-            let node = &materialization_graph[node_id];
+        for node_id in &self.graph.execution_order {
+            let node = &self.graph[node_id];
 
             match &node.kind {
                 MaterializationKind::ExecStatement { inputs, stmt, .. } => {
@@ -160,7 +160,7 @@ impl PlannerNg<'_, '_> {
                     let mut input_vars = vec![];
 
                     for input in inputs {
-                        let var = materialization_graph[input].var.get().unwrap();
+                        let var = self.graph[input].var.get().unwrap();
 
                         input_args.push(self.old.var_table.ty(var).clone());
                         input_vars.push(var);
@@ -188,7 +188,7 @@ impl PlannerNg<'_, '_> {
                     let mut input_vars = vec![];
 
                     for input in inputs {
-                        let var = materialization_graph[input].var.get().unwrap();
+                        let var = self.graph[input].var.get().unwrap();
                         input_vars.push(var);
                     }
 
@@ -205,7 +205,7 @@ impl PlannerNg<'_, '_> {
                     });
                 }
                 MaterializationKind::Project { input, projection } => {
-                    let input_var = materialization_graph[input].var.get().unwrap();
+                    let input_var = self.graph[input].var.get().unwrap();
                     let stmt::Type::List(input_ty) = self.old.var_table.ty(input_var).clone()
                     else {
                         todo!()
@@ -230,7 +230,7 @@ impl PlannerNg<'_, '_> {
         }
 
         let mid = self.store.root().output.get().unwrap();
-        let output = materialization_graph[mid].var.get().unwrap();
+        let output = self.graph[mid].var.get().unwrap();
         Ok(output)
     }
 }

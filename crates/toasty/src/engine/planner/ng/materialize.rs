@@ -76,7 +76,7 @@ struct PlanMaterialization<'a> {
     store: &'a StatementInfoStore,
 
     /// Graph of operations needed to materialize the statement, in-progress
-    graph: MaterializationGraph,
+    graph: &'a mut MaterializationGraph,
 }
 
 #[derive(Debug)]
@@ -89,18 +89,17 @@ struct PlanNestedMerge<'a> {
 }
 
 impl super::PlannerNg<'_, '_> {
-    pub(super) fn plan_materializations(&self) -> MaterializationGraph {
+    pub(super) fn plan_materializations(&mut self) {
         let mut plan_materialization = PlanMaterialization {
             schema: self.old.schema,
             store: &self.store,
-            graph: MaterializationGraph::new(),
+            graph: &mut self.graph,
         };
         plan_materialization.build_graph();
 
         let exit = self.store.root().output.get().unwrap();
 
         plan_materialization.compute_execution_order(exit);
-        plan_materialization.graph
     }
 }
 
