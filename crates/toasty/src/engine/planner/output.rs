@@ -20,7 +20,7 @@ impl Planner<'_> {
             match expr {
                 stmt::Expr::Reference(e) => {
                     // Track the needed reference and replace the expression with an argument that will pull from the position.
-                    let (pos, inserted) = db.insert_full(e.clone());
+                    let (pos, inserted) = db.insert_full(*e);
 
                     if inserted {
                         tys.push(cx.infer_expr_ty(expr, &[]));

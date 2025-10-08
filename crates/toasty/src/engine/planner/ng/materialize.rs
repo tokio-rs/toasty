@@ -139,7 +139,7 @@ impl PlanMaterialization<'_> {
         visit_mut::for_each_expr_mut(&mut returning, |expr| {
             match expr {
                 stmt::Expr::Reference(expr_reference) => {
-                    let (index, _) = columns.insert_full(expr_reference.clone());
+                    let (index, _) = columns.insert_full(*expr_reference);
                     *expr = stmt::Expr::arg_project(0, [index]);
                 }
                 stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
@@ -169,7 +169,7 @@ impl PlanMaterialization<'_> {
         // For each back ref, include the needed columns
         for back_ref in stmt_state.back_refs.values() {
             for expr in &back_ref.exprs {
-                columns.insert(expr.clone());
+                columns.insert(*expr);
             }
         }
 
@@ -260,7 +260,7 @@ impl PlanMaterialization<'_> {
         select.returning = stmt::Returning::Expr(stmt::Expr::record(
             columns
                 .iter()
-                .map(|expr_reference| stmt::Expr::from(expr_reference.clone())),
+                .map(|expr_reference| stmt::Expr::from(*expr_reference)),
         ));
 
         // Create the exec statement materialization node.

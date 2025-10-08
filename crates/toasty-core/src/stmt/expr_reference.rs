@@ -148,7 +148,7 @@ impl From<ExprReference> for Expr {
 
 impl From<&ExprReference> for Expr {
     fn from(value: &ExprReference) -> Self {
-        Expr::Reference(value.clone())
+        Expr::Reference(*value)
     }
 }
 
