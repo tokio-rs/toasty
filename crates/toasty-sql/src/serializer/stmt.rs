@@ -1,6 +1,6 @@
 use std::mem;
 
-use super::{Comma, Delimited, Ident, Params, ToSql};
+use super::{ColumnAlias, Comma, Delimited, Ident, Params, ToSql};
 
 use crate::{serializer::ExprContext, stmt};
 use toasty_core::{schema::db, stmt::SourceTableId};
@@ -93,9 +93,15 @@ impl ToSql for &stmt::Insert {
             .as_ref()
             .map(|returning| ("RETURNING ", returning));
 
+        // Set flag to indicate we're in INSERT context (VALUES shouldn't use ROW())
+        let prev_in_insert = f.in_insert;
+        f.in_insert = true;
+
         fmt!(
             &cx, f, "INSERT INTO " self.target " " self.source returning
         );
+
+        f.in_insert = prev_in_insert;
     }
 }
 
@@ -190,7 +196,7 @@ impl ToSql for &stmt::Returning {
                         stmt::Expr::Reference(stmt::ExprReference::Column { .. }) => {
                             (expr, None, None)
                         }
-                        _ => (expr, Some(" AS col_"), Some(i)),
+                        _ => (expr, Some(" AS "), Some(ColumnAlias(i))),
                     });
 
                 fmt!(cx, f, Comma(fields));
@@ -297,18 +303,30 @@ impl ToSql for &stmt::SourceTable {
 
 impl ToSql for &stmt::TableRef {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        match *self {
+        match self {
             stmt::TableRef::Table(table_id) => {
-                let table_name = f.serializer.table_name(table_id);
+                let table_name = f.serializer.table_name(*table_id);
                 fmt!(cx, f, table_name);
             }
+            stmt::TableRef::Derived(table_derived) => fmt!(cx, f, table_derived),
             stmt::TableRef::Cte { nesting, index } => {
-                assert!(f.depth >= nesting, "nesting={nesting} depth={}", f.depth);
+                assert!(f.depth >= *nesting, "nesting={nesting} depth={}", f.depth);
 
                 let depth = f.depth - nesting;
                 fmt!(cx, f, "cte_" depth "_" index);
             }
+            stmt::TableRef::Arg(..) => panic!("unexpected TableRef argument"),
         }
+    }
+}
+
+impl ToSql for &stmt::TableDerived {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        debug_assert!(f.alias);
+
+        f.depth += 1;
+        fmt!(cx, f, "(" self.subquery ")");
+        f.depth -= 1;
     }
 }
 
@@ -380,8 +398,14 @@ impl ToSql for &stmt::UpdateTarget {
 
 impl ToSql for &stmt::Values {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let rows = Comma(self.rows.iter());
-
-        fmt!(cx, f, "VALUES " rows)
+        // MySQL requires ROW() keyword for table value constructors when used
+        // in subqueries, but NOT in INSERT statements
+        if f.serializer.is_mysql() && !f.in_insert {
+            let rows = Comma(self.rows.iter().map(|row| ("ROW(", row, ")")));
+            fmt!(cx, f, "VALUES " rows)
+        } else {
+            let rows = Comma(self.rows.iter());
+            fmt!(cx, f, "VALUES " rows)
+        }
     }
 }

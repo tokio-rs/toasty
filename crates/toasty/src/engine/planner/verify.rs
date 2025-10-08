@@ -9,10 +9,13 @@ impl Planner<'_> {
             BatchWrite(action) => self.verify_batch_write(action),
             DeleteByKey(action) => self.verify_delete_by_key(action),
             ExecStatement(action) => self.verify_exec_statement(action),
+            ExecStatement2(_action) => {}
             FindPkByIndex(action) => self.verify_find_pk_by_index(action),
             GetByKey(action) => self.verify_get_by_key(action),
             Insert(action) => self.verify_insert(action),
+            NestedMerge(action) => self.verify_nested_merge(action),
             QueryPk(action) => self.verify_query_pk(action),
+            Project(action) => self.verify_project(action),
             ReadModifyWrite(action) => self.verify_read_modify_write(action),
             SetVar(action) => self.verify_set_var(action),
             UpdateByKey(action) => self.verify_update_by_key(action),
@@ -45,6 +48,8 @@ impl Planner<'_> {
 
     fn verify_insert(&self, _action: &plan::Insert) {}
 
+    fn verify_nested_merge(&self, _action: &plan::NestedMerge) {}
+
     fn verify_query_pk(&self, _action: &plan::QueryPk) {}
 
     fn verify_exec_statement(&self, _action: &plan::ExecStatement) {}
@@ -52,6 +57,8 @@ impl Planner<'_> {
     fn verify_read_modify_write(&self, _action: &plan::ReadModifyWrite) {}
 
     fn verify_set_var(&self, _action: &plan::SetVar) {}
+
+    fn verify_project(&self, _action: &plan::Project) {}
 
     fn verify_update_by_key(&self, _action: &plan::UpdateByKey) {}
 }

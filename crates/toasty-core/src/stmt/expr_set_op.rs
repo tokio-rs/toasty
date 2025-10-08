@@ -1,4 +1,4 @@
-use super::{substitute, ExprSet, SetOp};
+use super::{ExprSet, SetOp};
 
 #[derive(Debug, Clone)]
 pub struct ExprSetOp {
@@ -9,11 +9,5 @@ pub struct ExprSetOp {
 impl ExprSetOp {
     pub fn is_union(&self) -> bool {
         matches!(self.op, SetOp::Union)
-    }
-
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        for operand in &mut self.operands {
-            operand.substitute_ref(input);
-        }
     }
 }

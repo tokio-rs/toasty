@@ -445,7 +445,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                             op.reverse();
 
                             stmt::ExprBinaryOp {
-                                lhs: Box::new(stmt::Expr::Reference(column_ref.clone())),
+                                lhs: Box::new(stmt::Expr::Reference(*column_ref)),
                                 rhs: Box::new(value.clone().into()),
                                 op,
                             }

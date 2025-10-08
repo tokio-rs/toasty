@@ -10,21 +10,25 @@ impl Planner<'_> {
         cx: &Context,
         mut stmt: stmt::Query,
     ) -> Result<plan::VarId> {
+        // New planner
+        if self.capability.sql {
+            let mut stmt = stmt::Statement::Query(stmt);
+
+            // Lower the statement
+            self.lower_stmt(&mut stmt);
+
+            return self.plan_v2_stmt_query(stmt);
+        }
+
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.app.model(source_model.model);
 
-        let (source_model, includes) = match &stmt.body {
-            stmt::ExprSet::Select(select) => match &select.source {
+        let (source_model, includes) = match &mut stmt.body {
+            stmt::ExprSet::Select(select) => match &mut select.source {
                 stmt::Source::Model(source_model) => {
-                    let includes = match &select.returning {
-                        stmt::Returning::Model { include } => {
-                            if !include.is_empty() {
-                                include.clone()
-                            } else {
-                                vec![]
-                            }
-                        }
+                    let includes = match &mut select.returning {
+                        stmt::Returning::Model { include } => std::mem::take(include),
                         _ => vec![],
                     };
 
@@ -92,49 +96,13 @@ impl Planner<'_> {
             }
         }
 
-        let ret = if self.capability.sql {
-            self.plan_select_sql(cx, output, project, stmt)
-        } else {
-            self.plan_select_kv(cx, model, output, project, stmt)
-        };
+        let ret = self.plan_select_kv(cx, model, output, project, stmt);
 
         for include in &includes {
             self.plan_select_include(source_model.model, include, ret)?;
         }
 
         Ok(ret)
-    }
-
-    fn plan_select_sql(
-        &mut self,
-        cx: &Context,
-        output: plan::VarId,
-        project: eval::Func,
-        mut stmt: stmt::Query,
-    ) -> plan::VarId {
-        self.rewrite_offset_after_as_filter(&mut stmt);
-
-        let input = if cx.input.is_empty() {
-            None
-        } else {
-            self.partition_stmt_query_input(&mut stmt, &cx.input)
-        };
-
-        if let Some(input) = &input {
-            assert!(input.project.args[0].is_list(), "{input:#?}");
-        }
-
-        self.push_action(plan::ExecStatement {
-            input,
-            output: Some(plan::Output {
-                var: output,
-                project,
-            }),
-            stmt: stmt.into(),
-            conditional_update_with_no_returning: false,
-        });
-
-        output
     }
 
     fn plan_select_kv(
@@ -387,7 +355,7 @@ impl Planner<'_> {
                 };
 
                 let filter = stmt::Expr::in_list(
-                    stmt::Expr::field(fk_field.source),
+                    stmt::Expr::ref_self_field(fk_field.source),
                     stmt::Expr::map(
                         stmt::Expr::arg(0),
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.target),
@@ -417,7 +385,7 @@ impl Planner<'_> {
                 };
 
                 let filter = stmt::Expr::in_list(
-                    stmt::Expr::field(fk_field.target),
+                    stmt::Expr::ref_self_field(fk_field.target),
                     stmt::Expr::map(
                         stmt::Expr::arg(0),
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.source),
@@ -448,7 +416,7 @@ impl Planner<'_> {
                 };
 
                 let filter = stmt::Expr::in_list(
-                    stmt::Expr::field(fk_field.source),
+                    stmt::Expr::ref_self_field(fk_field.source),
                     stmt::Expr::map(
                         stmt::Expr::arg(0),
                         stmt::Expr::project(stmt::Expr::arg(0), fk_field.target),
@@ -472,55 +440,5 @@ impl Planner<'_> {
         }
 
         Ok(())
-    }
-
-    fn rewrite_offset_after_as_filter(&self, stmt: &mut stmt::Query) {
-        let Some(limit) = &mut stmt.limit else {
-            return;
-        };
-
-        let Some(stmt::Offset::After(offset)) = limit.offset.take() else {
-            return;
-        };
-
-        let Some(order_by) = &mut stmt.order_by else {
-            return;
-        };
-
-        let stmt::ExprSet::Select(body) = &mut stmt.body else {
-            todo!("stmt={stmt:#?}");
-        };
-
-        match offset {
-            stmt::Expr::Value(stmt::Value::Record(_)) => {
-                todo!()
-            }
-            stmt::Expr::Value(value) => {
-                let expr =
-                    self.rewrite_offset_after_field_as_filter(&order_by.exprs[0], value, true);
-                if body.filter.is_true() {
-                    body.filter = expr;
-                } else {
-                    body.filter = stmt::Expr::and(body.filter.take(), expr);
-                }
-            }
-            _ => todo!(),
-        }
-    }
-
-    fn rewrite_offset_after_field_as_filter(
-        &self,
-        order_by: &stmt::OrderByExpr,
-        value: stmt::Value,
-        last: bool,
-    ) -> stmt::Expr {
-        let op = match (order_by.order, last) {
-            (Some(stmt::Direction::Desc), true) => stmt::BinaryOp::Lt,
-            (Some(stmt::Direction::Desc), false) => stmt::BinaryOp::Le,
-            (_, true) => stmt::BinaryOp::Gt,
-            (_, false) => stmt::BinaryOp::Ge,
-        };
-
-        stmt::Expr::binary_op(order_by.expr.clone(), op, value)
     }
 }

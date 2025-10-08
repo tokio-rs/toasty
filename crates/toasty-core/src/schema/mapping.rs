@@ -2,7 +2,7 @@ mod field;
 pub use field::Field;
 
 mod model;
-pub use model::Model;
+pub use model::{Model, TableToModel};
 
 use super::app::ModelId;
 use indexmap::IndexMap;

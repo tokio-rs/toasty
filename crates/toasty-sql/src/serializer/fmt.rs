@@ -20,6 +20,12 @@ impl ToSql for &str {
     }
 }
 
+impl ToSql for String {
+    fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
+        f.dst.push_str(&self);
+    }
+}
+
 impl<T: ToSql> ToSql for Option<T> {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut Formatter<'_, P>) {
         if let Some(inner) = self {

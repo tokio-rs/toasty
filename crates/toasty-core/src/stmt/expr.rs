@@ -1,8 +1,10 @@
+use crate::stmt::{ExprExists, Input};
+
 use super::{
-    expr_reference::ExprReference, substitute, visit_mut, Entry, EntryMut, EntryPath, ExprAnd,
-    ExprArg, ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject,
-    ExprRecord, ExprStmt, ExprTy, Node, Projection, Type, Value, Visit, VisitMut,
+    expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprArg, ExprBinaryOp,
+    ExprCast, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc, ExprInList, ExprInSubquery,
+    ExprIsNull, ExprKey, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord, ExprStmt,
+    ExprTy, Node, Projection, Substitute, Type, Value, Visit, VisitMut,
 };
 use std::fmt;
 
@@ -29,6 +31,10 @@ pub enum Expr {
 
     /// Return an enum value
     Enum(ExprEnum),
+
+    /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
+    /// `WHERE [ NOT ] EXISTS (SELECT ...)`.
+    Exists(ExprExists),
 
     /// Function call
     Func(ExprFunc),
@@ -194,37 +200,8 @@ impl Expr {
         std::mem::replace(self, Self::Value(Value::Null))
     }
 
-    pub fn substitute(&mut self, mut input: impl substitute::Input) {
-        self.substitute_ref(&mut input);
-    }
-
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        struct Substitute<'a, I>(&'a mut I);
-
-        impl<I> VisitMut for Substitute<'_, I>
-        where
-            I: substitute::Input,
-        {
-            fn visit_expr_mut(&mut self, expr: &mut Expr) {
-                match expr {
-                    Expr::Map(expr_map) => {
-                        // Only recurse into the base expression as arguments
-                        // reference the base.
-                        self.visit_expr_mut(&mut expr_map.base);
-                    }
-                    _ => {
-                        visit_mut::visit_expr_mut(self, expr);
-                    }
-                }
-
-                // Substitute after recurring.
-                if let Expr::Arg(expr_arg) = expr {
-                    *expr = self.0.resolve_arg(expr_arg);
-                }
-            }
-        }
-
-        Substitute(input).visit_expr_mut(self);
+    pub fn substitute(&mut self, input: impl Input) {
+        Substitute::new(input).visit_expr_mut(self);
     }
 }
 
@@ -288,12 +265,6 @@ impl From<Value> for Expr {
     }
 }
 
-impl From<ExprReference> for Expr {
-    fn from(value: ExprReference) -> Self {
-        Self::Reference(value)
-    }
-}
-
 impl<E1, E2> From<(E1, E2)> for Expr
 where
     E1: Into<Self>,
@@ -314,6 +285,7 @@ impl fmt::Debug for Expr {
             Self::Concat(e) => e.fmt(f),
             Self::ConcatStr(e) => e.fmt(f),
             Self::Enum(e) => e.fmt(f),
+            Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),

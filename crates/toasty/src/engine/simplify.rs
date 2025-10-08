@@ -202,9 +202,11 @@ impl VisitMut for Simplify<'_> {
 
 impl<'a> Simplify<'a> {
     pub(crate) fn new(schema: &'a Schema) -> Self {
-        Simplify {
-            cx: stmt::ExprContext::new(schema),
-        }
+        Simplify::with_context(stmt::ExprContext::new(schema))
+    }
+
+    pub(crate) fn with_context(cx: stmt::ExprContext<'a>) -> Self {
+        Simplify { cx }
     }
 
     fn schema(&self) -> &'a Schema {

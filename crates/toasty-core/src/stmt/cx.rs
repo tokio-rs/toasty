@@ -4,8 +4,8 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprReference, ExprSet, Insert, InsertTable, InsertTarget, Query, Select,
-        Source, SourceTable, TableRef, Type, Update, UpdateTarget,
+        Delete, Expr, ExprReference, ExprSet, Insert, InsertTable, InsertTarget, Query, Returning,
+        Select, Source, SourceTable, Statement, TableRef, Type, Update, UpdateTarget,
     },
     Schema,
 };
@@ -52,6 +52,9 @@ pub enum ResolvedRef<'a> {
     /// from the User model's field definitions.
     Field(&'a Field),
 
+    /// A resolved reference to a model
+    Model(&'a Model),
+
     /// A resolved reference to a Common Table Expression (CTE) column.
     ///
     /// Contains the nesting level and column index for CTE references when resolving
@@ -62,6 +65,16 @@ pub enum ResolvedRef<'a> {
     /// Example: In a WITH clause, resolving a reference to the second column of a CTE
     /// defined 1 level up returns Cte { nesting: 1, index: 1 }.
     Cte { nesting: usize, index: usize },
+
+    /// A resolved reference to a derived table (subquery in FROM clause) column.
+    ///
+    /// Contains the nesting level and column index for derived table references when
+    /// resolving ExprReference::Column expressions that point to derived table outputs.
+    /// Similar to CTEs, derived tables use col_<index> naming for their columns.
+    ///
+    /// Example: Resolving a reference to the first column of a derived table at the
+    /// current nesting level returns Derived { nesting: 0, index: 0 }.
+    Derived { nesting: usize, index: usize },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -127,6 +140,22 @@ impl<'a, T> ExprContext<'a, T> {
 
     pub fn target(&self) -> ExprTarget<'a> {
         self.target
+    }
+
+    /// Return the target at a specific nesting
+    pub fn target_at(&self, nesting: usize) -> &ExprTarget<'a> {
+        let mut curr = self;
+
+        // Walk up the stack to the correct nesting level
+        for _ in 0..nesting {
+            let Some(parent) = curr.parent else {
+                todo!("bug: invalid nesting level");
+            };
+
+            curr = parent;
+        }
+
+        &curr.target
     }
 
     pub fn scope<'child>(
@@ -212,24 +241,17 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     /// match index columns, and key extraction to identify column IDs.
     pub fn resolve_expr_reference(&self, expr_reference: &ExprReference) -> ResolvedRef<'a> {
         let nesting = match expr_reference {
+            ExprReference::Model { nesting } => nesting,
             ExprReference::Field { nesting, .. } => nesting,
             ExprReference::Column { nesting, .. } => nesting,
         };
 
-        let mut curr = self;
+        let target = self.target_at(*nesting);
 
-        // Walk up the stack to the correct nesting level
-        for _ in 0..*nesting {
-            let Some(parent) = curr.parent else {
-                todo!("bug: invalid nesting level");
-            };
-
-            curr = parent;
-        }
-
-        match curr.target {
+        match target {
             ExprTarget::Free => todo!("cannot resolve column in free context"),
             ExprTarget::Model(model) => match expr_reference {
+                ExprReference::Model { .. } => ResolvedRef::Model(model),
                 ExprReference::Field { index, .. } => ResolvedRef::Field(&model.fields[*index]),
                 ExprReference::Column { table, column, ..  } => {
                     assert_eq!(*table, 0, "TODO: is this true?");
@@ -241,6 +263,9 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 }
             },
             ExprTarget::Table(table) => match expr_reference {
+                ExprReference::Model { .. } => panic!(
+                    "Cannot resolve ExprReference::Model in Table target context"
+                ),
                 ExprReference::Field {.. } => panic!(
                     "Cannot resolve ExprReference::Field in Table target context - use ExprReference::Column instead"
                 ),
@@ -255,11 +280,18 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                             TableRef::Table(table_id) => {
                                 let Some(table) = self.schema.table(*table_id) else {
                                     panic!(
-                                    "Failed to resolve table with ID {:?} - table not found in schema",
-                                    table_id
+                                    "Failed to resolve table with ID {:?} - table not found in schema.",
+                                    table_id,
                                 );
                                 };
                                 ResolvedRef::Column(&table.columns[*column])
+                            }
+                            TableRef::Derived { .. } => {
+                                // Derived tables use col_<index> naming like CTEs
+                                ResolvedRef::Derived {
+                                    nesting: *nesting,
+                                    index: *column,
+                                }
                             }
                             TableRef::Cte {
                                 nesting: cte_nesting,
@@ -271,14 +303,21 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                                     index: *index,
                                 }
                             }
+                            TableRef::Arg(_) => todo!(),
                         }
                     }
+                    ExprReference::Model { .. } => panic!(
+                        "Cannot resolve ExprReference::Model in Source::Table context"
+                    ),
                     ExprReference::Field { .. } => panic!(
                         "Cannot resolve ExprReference::Field in Source::Table context - use ExprReference::Column instead"
                     ),
                 }
             }
             ExprTarget::Insert(insert_table) => match expr_reference {
+                ExprReference::Model { .. } => panic!(
+                    "Cannot resolve ExprReference::Model in InsertTarget::Table context"
+                ),
                 ExprReference::Field { .. } => panic!(
                     "Cannot resolve ExprReference::Field in InsertTarget::Table context - use ExprReference::Column instead"
                 ),
@@ -292,17 +331,59 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
         }
     }
 
+    pub fn infer_stmt_ty(&self, stmt: &Statement, args: &[Type]) -> Type {
+        let cx = self.scope(stmt);
+
+        match stmt {
+            Statement::Delete(stmt) => stmt
+                .returning
+                .as_ref()
+                .map(|returning| Type::list(cx.infer_returning_ty(returning, args)))
+                .unwrap_or(Type::Unit),
+            Statement::Insert(stmt) => stmt
+                .returning
+                .as_ref()
+                .map(|returning| Type::list(cx.infer_returning_ty(returning, args)))
+                .unwrap_or(Type::Unit),
+            Statement::Query(stmt) => match &stmt.body {
+                ExprSet::Select(body) => {
+                    if stmt.single {
+                        cx.infer_returning_ty(&body.returning, args)
+                    } else {
+                        Type::list(cx.infer_returning_ty(&body.returning, args))
+                    }
+                }
+                ExprSet::SetOp(_body) => todo!(),
+                ExprSet::Update(_body) => todo!(),
+                ExprSet::Values(_body) => todo!(),
+            },
+            Statement::Update(stmt) => stmt
+                .returning
+                .as_ref()
+                .map(|returning| Type::list(cx.infer_returning_ty(returning, args)))
+                .unwrap_or(Type::Unit),
+        }
+    }
+
+    pub fn infer_returning_ty(&self, returning: &Returning, args: &[Type]) -> Type {
+        match returning {
+            Returning::Model { .. } => Type::Model(
+                self.target
+                    .as_model_id()
+                    .expect("returning `Model` when not in model context"),
+            ),
+            Returning::Changed => todo!(),
+            Returning::Expr(expr) => self.infer_expr_ty(expr, args),
+        }
+    }
+
     pub fn infer_expr_ty(&self, expr: &Expr, args: &[Type]) -> Type {
         match expr {
             Expr::Arg(e) => args[e.position].clone(),
             Expr::And(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
-            Expr::Reference(expr_ref) => match self.resolve_expr_reference(expr_ref) {
-                ResolvedRef::Column(column) => column.ty.clone(),
-                ResolvedRef::Field(field) => field.expr_ty().clone(),
-                ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
-            },
+            Expr::Reference(expr_ref) => self.infer_expr_reference_ty(expr_ref),
             Expr::IsNull(_) => Type::Bool,
             Expr::Map(e) => {
                 let base = self.infer_expr_ty(&e.base, args);
@@ -334,6 +415,18 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             _ => todo!("{expr:#?}"),
         }
     }
+
+    pub fn infer_expr_reference_ty(&self, expr_reference: &ExprReference) -> Type {
+        match self.resolve_expr_reference(expr_reference) {
+            ResolvedRef::Model(model) => Type::Model(model.id),
+            ResolvedRef::Column(column) => column.ty.clone(),
+            ResolvedRef::Field(field) => field.expr_ty().clone(),
+            ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
+            ResolvedRef::Derived { .. } => {
+                todo!("type inference for derived table columns not implemented")
+            }
+        }
+    }
 }
 
 impl<'a, T> Clone for ExprContext<'a, T> {
@@ -358,6 +451,14 @@ impl<'a> ResolvedRef<'a> {
         match self {
             ResolvedRef::Field(field) => field,
             _ => panic!("Expected ResolvedRef::Field, found {:?}", self),
+        }
+    }
+
+    #[track_caller]
+    pub fn expect_model(self) -> &'a Model {
+        match self {
+            ResolvedRef::Model(model) => model,
+            _ => panic!("Expected ResolvedRef::Model, found {:?}", self),
         }
     }
 }
@@ -405,6 +506,13 @@ impl Resolve for () {
 }
 
 impl<'a> ExprTarget<'a> {
+    pub fn expect_model(self) -> &'a Model {
+        match self {
+            ExprTarget::Model(model) => model,
+            _ => panic!("expected ExprTarget::Model; was {self:?}"),
+        }
+    }
+
     pub fn as_model_id(self) -> Option<ModelId> {
         Some(match self {
             ExprTarget::Model(model) => model.id,
@@ -521,23 +629,13 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a Source {
     }
 }
 
-/*
-impl<'a> From<&'a InsertTarget> for ExprTarget<'a> {
-    fn from(value: &'a InsertTarget) -> Self {
-        ExprTarget::Insert(value)
+impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a Statement {
+    fn into_expr_target(self, schema: &'a T) -> ExprTarget<'a> {
+        match self {
+            Statement::Delete(stmt) => stmt.into_expr_target(schema),
+            Statement::Insert(stmt) => stmt.into_expr_target(schema),
+            Statement::Query(stmt) => stmt.into_expr_target(schema),
+            Statement::Update(stmt) => stmt.into_expr_target(schema),
+        }
     }
 }
-
-impl<'a> From<&'a Source> for ExprTarget<'a> {
-    fn from(value: &'a Source) -> Self {
-        ExprTarget::Source(value)
-    }
-}
-
-
-impl<'a> From<&'a UpdateTarget> for ExprTarget<'a> {
-    fn from(value: &'a UpdateTarget) -> Self {
-        ExprTarget::Update(value)
-    }
-}
-*/

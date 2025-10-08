@@ -3,8 +3,13 @@ use crate::{
     stmt::Expr,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum ExprReference {
+    /// Reference a model at a specific nesting level.
+    ///
+    /// This is roughly referencing the full record instead of a specific field.
+    Model { nesting: usize },
+
     /// Reference a specific field in a query's relation.
     ///
     /// For Query/Delete statements, the relation is the Source.
@@ -40,6 +45,10 @@ pub enum ExprReference {
 }
 
 impl Expr {
+    pub fn is_expr_reference(&self) -> bool {
+        matches!(self, Expr::Reference(..))
+    }
+
     /// Creates an expression that references a field in the current query.
     ///
     /// This creates an `ExprReference::Field` with `nesting = 0`, meaning it
@@ -53,7 +62,7 @@ impl Expr {
     ///
     /// An `Expr::Reference` containing an `ExprReference::Field` that points to
     /// the specified field in the current query's relation.
-    pub fn field(field: impl Into<FieldId>) -> Self {
+    pub fn ref_self_field(field: impl Into<FieldId>) -> Self {
         ExprReference::field(field).into()
     }
 
@@ -66,8 +75,27 @@ impl Expr {
         .into()
     }
 
+    /// Create a reference to a field one level up
+    pub fn ref_parent_field(field: impl Into<FieldId>) -> Self {
+        ExprReference::Field {
+            nesting: 1,
+            index: field.into().index,
+        }
+        .into()
+    }
+
     pub fn is_field(&self) -> bool {
         matches!(self, Self::Reference(ExprReference::Field { .. }))
+    }
+
+    /// Create a model reference to the parent model
+    pub fn ref_parent_model() -> Self {
+        Self::ref_ancestor_model(1)
+    }
+
+    /// Create a model reference to the specified nesting level
+    pub fn ref_ancestor_model(nesting: usize) -> Self {
+        ExprReference::Model { nesting }.into()
     }
 
     pub fn column(column: impl Into<ExprReference>) -> Self {
@@ -80,6 +108,14 @@ impl Expr {
 }
 
 impl ExprReference {
+    pub fn nesting(&self) -> usize {
+        match self {
+            ExprReference::Model { nesting } => *nesting,
+            ExprReference::Field { nesting, .. } => *nesting,
+            ExprReference::Column { nesting, .. } => *nesting,
+        }
+    }
+
     pub fn field(field: impl Into<FieldId>) -> Self {
         ExprReference::Field {
             nesting: 0,
@@ -91,12 +127,28 @@ impl ExprReference {
         matches!(self, ExprReference::Field { .. })
     }
 
+    pub fn is_model(&self) -> bool {
+        matches!(self, ExprReference::Model { .. })
+    }
+
     pub fn column(table: usize, column: usize) -> Self {
         ExprReference::Column {
             nesting: 0,
             table,
             column,
         }
+    }
+}
+
+impl From<ExprReference> for Expr {
+    fn from(value: ExprReference) -> Self {
+        Expr::Reference(value)
+    }
+}
+
+impl From<&ExprReference> for Expr {
+    fn from(value: &ExprReference) -> Self {
+        Expr::Reference(*value)
     }
 }
 

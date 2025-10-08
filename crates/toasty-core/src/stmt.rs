@@ -52,6 +52,9 @@ pub use expr_concat_str::ExprConcatStr;
 mod expr_enum;
 pub use expr_enum::ExprEnum;
 
+mod expr_exists;
+pub use expr_exists::ExprExists;
+
 mod expr_func;
 pub use expr_func::ExprFunc;
 
@@ -177,7 +180,12 @@ pub use source_table_id::SourceTableId;
 mod sparse_record;
 pub use sparse_record::SparseRecord;
 
-pub mod substitute;
+mod substitute;
+pub use substitute::Input;
+use substitute::Substitute;
+
+mod table_derived;
+pub use table_derived::TableDerived;
 
 mod table_ref;
 pub use table_ref::TableRef;
@@ -242,11 +250,8 @@ pub enum Statement {
 }
 
 impl Statement {
-    pub fn substitute(&mut self, mut input: impl substitute::Input) {
-        match self {
-            Self::Query(stmt) => stmt.substitute_ref(&mut input),
-            _ => todo!("stmt={self:#?}"),
-        }
+    pub fn substitute(&mut self, input: impl substitute::Input) {
+        Substitute::new(input).visit_stmt_mut(self);
     }
 
     /// Attempts to return a reference to an inner [`Delete`].

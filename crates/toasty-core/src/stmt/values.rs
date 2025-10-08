@@ -1,4 +1,4 @@
-use super::{substitute, Expr, ExprSet, Query};
+use super::{Expr, ExprSet, Query};
 
 /// Set of values to insert
 #[derive(Debug, Default, Clone)]
@@ -13,12 +13,6 @@ impl Values {
 
     pub fn is_empty(&self) -> bool {
         self.rows.is_empty()
-    }
-
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        for row in &mut self.rows {
-            row.substitute_ref(input);
-        }
     }
 }
 

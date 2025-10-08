@@ -2,12 +2,12 @@
 
 use super::{
     Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
-    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull,
-    ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
+    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList, ExprInSubquery,
+    ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
     ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
     JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
-    Source, SourceModel, SourceTable, SourceTableId, Statement, TableFactor, TableRef,
-    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
+    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait VisitMut {
@@ -64,6 +64,10 @@ pub trait VisitMut {
 
     fn visit_expr_enum_mut(&mut self, i: &mut ExprEnum) {
         visit_expr_enum_mut(self, i);
+    }
+
+    fn visit_expr_exists_mut(&mut self, i: &mut ExprExists) {
+        visit_expr_exists_mut(self, i);
     }
 
     fn visit_expr_func_mut(&mut self, i: &mut ExprFunc) {
@@ -214,6 +218,10 @@ pub trait VisitMut {
         visit_stmt_update_mut(self, i);
     }
 
+    fn visit_table_derived_mut(&mut self, i: &mut TableDerived) {
+        visit_table_derived_mut(self, i);
+    }
+
     fn visit_table_ref_mut(&mut self, i: &mut TableRef) {
         visit_table_ref_mut(self, i);
     }
@@ -298,6 +306,10 @@ impl<V: VisitMut> VisitMut for &mut V {
 
     fn visit_expr_enum_mut(&mut self, i: &mut ExprEnum) {
         VisitMut::visit_expr_enum_mut(&mut **self, i);
+    }
+
+    fn visit_expr_exists_mut(&mut self, i: &mut ExprExists) {
+        VisitMut::visit_expr_exists_mut(&mut **self, i);
     }
 
     fn visit_expr_func_mut(&mut self, i: &mut ExprFunc) {
@@ -448,6 +460,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_stmt_update_mut(&mut **self, i);
     }
 
+    fn visit_table_derived_mut(&mut self, i: &mut TableDerived) {
+        VisitMut::visit_table_derived_mut(&mut **self, i);
+    }
+
     fn visit_table_ref_mut(&mut self, i: &mut TableRef) {
         VisitMut::visit_table_ref_mut(&mut **self, i);
     }
@@ -526,6 +542,7 @@ where
         Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
         Expr::Concat(expr) => v.visit_expr_concat_mut(expr),
         Expr::Enum(expr) => v.visit_expr_enum_mut(expr),
+        Expr::Exists(expr) => v.visit_expr_exists_mut(expr),
         Expr::Func(expr) => v.visit_expr_func_mut(expr),
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
@@ -604,6 +621,13 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_expr_record_mut(&mut node.fields);
+}
+
+pub fn visit_expr_exists_mut<V>(v: &mut V, node: &mut ExprExists)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_stmt_query_mut(&mut node.subquery);
 }
 
 pub fn visit_expr_func_mut<V>(v: &mut V, node: &mut ExprFunc)
@@ -972,11 +996,23 @@ where
     }
 }
 
+pub fn visit_table_derived_mut<V>(v: &mut V, node: &mut TableDerived)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_stmt_query_mut(&mut node.subquery);
+}
+
 pub fn visit_table_ref_mut<V>(v: &mut V, node: &mut TableRef)
 where
     V: VisitMut + ?Sized,
 {
-    // TableRef is just identifiers, no traversal needed
+    match node {
+        TableRef::Cte { .. } => {}
+        TableRef::Derived(table_derived) => v.visit_table_derived_mut(table_derived),
+        TableRef::Table(_) => {}
+        TableRef::Arg(expr_arg) => v.visit_expr_arg_mut(expr_arg),
+    }
 }
 
 pub fn visit_table_with_joins_mut<V>(v: &mut V, node: &mut TableWithJoins)

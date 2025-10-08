@@ -1,6 +1,6 @@
 use super::{
-    substitute, Delete, Expr, ExprSet, ExprSetOp, Limit, Node, OrderBy, Path, Returning, Select,
-    SetOp, Source, Statement, Update, UpdateTarget, Values, Visit, VisitMut, With,
+    Delete, Expr, ExprSet, ExprSetOp, Limit, Node, OrderBy, Path, Returning, Select, SetOp, Source,
+    Statement, Update, UpdateTarget, Values, Visit, VisitMut, With,
 };
 use crate::stmt;
 
@@ -12,6 +12,11 @@ pub struct Query {
     /// The body of the query. Either `SELECT`, `UNION`, `VALUES`, or possibly
     /// other types of queries depending on database support.
     pub body: ExprSet,
+
+    /// When `true`, the Query returns a *single* record vs. a list. Note, that
+    /// this is different from `LIMIT 1` as there should only ever be 1 possible
+    /// result. Also, the return type becomes `Record` instead of `List`.
+    pub single: bool,
 
     /// ORDER BY
     pub order_by: Option<OrderBy>,
@@ -39,6 +44,7 @@ impl Query {
         Self {
             with: None,
             body: body.into(),
+            single: false,
             order_by: None,
             limit: None,
             locks: vec![],
@@ -63,6 +69,7 @@ impl Query {
         Self {
             with: None,
             body: ExprSet::Values(values.into()),
+            single: false,
             order_by: None,
             limit: None,
             locks: vec![],
@@ -125,10 +132,6 @@ impl Query {
             _ => todo!(),
         }
     }
-
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        self.body.substitute_ref(input);
-    }
 }
 
 impl From<Query> for Statement {
@@ -165,7 +168,7 @@ impl QueryBuilder {
             ExprSet::Select(select) => {
                 select.filter = filter;
             }
-            _ => todo!(),
+            _ => todo!("query={self:#?}"),
         }
 
         self
@@ -186,5 +189,11 @@ impl QueryBuilder {
 
     pub fn build(self) -> Query {
         self.query
+    }
+}
+
+impl From<QueryBuilder> for Query {
+    fn from(value: QueryBuilder) -> Self {
+        value.build()
     }
 }

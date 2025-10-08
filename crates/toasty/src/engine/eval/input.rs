@@ -63,7 +63,7 @@ impl<I: Input> Input for TypedInput<'_, I> {
                 };
             }
 
-            assert!(value.is_a(ty), "value={value:#?}; ty={ty:#?};");
+            assert!(value.is_a(ty), "resolved input did not match requested argument type; input={value:#?}; ty={ty:#?};");
         }
 
         value

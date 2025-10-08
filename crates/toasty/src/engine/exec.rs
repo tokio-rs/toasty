@@ -2,10 +2,13 @@ mod associate;
 mod batch_write;
 mod delete_by_key;
 mod exec_statement;
+mod exec_statement2;
 mod find_pk_by_index;
 mod get_by_key;
 mod insert;
 mod kv;
+mod nested_merge;
+mod project;
 mod query_pk;
 mod rmw;
 mod update_by_key;
@@ -19,18 +22,18 @@ use crate::{
         eval,
         plan::{self, Action},
     },
-    Db, Result,
+    DbInner, Result,
 };
 use toasty_core::stmt;
 use toasty_core::stmt::ValueStream;
 
 struct Exec<'a> {
-    db: &'a Db,
+    db: &'a DbInner,
     vars: VarStore,
 }
 
 pub(crate) async fn exec(
-    db: &Db,
+    db: &DbInner,
     pipeline: &plan::Pipeline,
     vars: VarStore,
 ) -> Result<ValueStream> {
@@ -56,11 +59,14 @@ impl Exec<'_> {
             Action::BatchWrite(action) => self.action_batch_write(action).await,
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,
             Action::ExecStatement(action) => self.action_exec_statement(action).await,
+            Action::ExecStatement2(action) => self.action_exec_statement2(action).await,
             Action::FindPkByIndex(action) => self.action_find_pk_by_index(action).await,
             Action::GetByKey(action) => self.action_get_by_key(action).await,
             Action::Insert(action) => self.action_insert(action).await,
+            Action::NestedMerge(action) => self.action_nested_merge(action).await,
             Action::QueryPk(action) => self.action_query_pk(action).await,
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
+            Action::Project(action) => self.action_project(action).await,
             Action::SetVar(action) => {
                 self.vars
                     .store(action.var, ValueStream::from_vec(action.value.clone()));

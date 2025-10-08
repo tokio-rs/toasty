@@ -43,7 +43,7 @@ impl Simplify<'_> {
                 _ => todo!("expr={expr:#?}"),
             }
 
-            *expr.expr = stmt::Expr::field(pk.id());
+            *expr.expr = stmt::Expr::ref_self_field(pk.id());
         }
     }
 

@@ -1,6 +1,4 @@
-use super::{
-    substitute, Expr, Node, Path, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut,
-};
+use super::{Expr, Node, Path, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut};
 use crate::schema::db::TableId;
 
 #[derive(Debug, Clone)]
@@ -47,10 +45,6 @@ impl Select {
         } else {
             self.filter = Expr::or(self.filter.take(), expr);
         }
-    }
-
-    pub(crate) fn substitute_ref(&mut self, input: &mut impl substitute::Input) {
-        self.filter.substitute_ref(input);
     }
 }
 

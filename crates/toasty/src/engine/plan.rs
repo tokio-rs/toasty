@@ -13,6 +13,9 @@ pub(crate) use delete_by_key::DeleteByKey;
 mod exec_statement;
 pub(crate) use exec_statement::ExecStatement;
 
+mod exec_statement2;
+pub(crate) use exec_statement2::{ExecStatement2, ExecStatementOutput};
+
 mod find_pk_by_index;
 pub(crate) use find_pk_by_index::FindPkByIndex;
 
@@ -25,11 +28,17 @@ pub(crate) use input::{Input, InputSource};
 mod insert;
 pub(crate) use insert::Insert;
 
+mod nested_merge;
+pub(crate) use nested_merge::{MergeQualification, NestedChild, NestedLevel, NestedMerge};
+
 mod output;
 pub(crate) use output::Output;
 
 mod pipeline;
 pub(crate) use pipeline::Pipeline;
+
+mod project;
+pub(crate) use project::Project;
 
 mod query_pk;
 pub(crate) use query_pk::QueryPk;

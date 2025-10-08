@@ -1,7 +1,12 @@
+mod paginate;
+
+use crate::engine::simplify::Simplify;
+
 use super::{simplify, Planner};
 use toasty_core::{
+    driver::Capability,
     schema::{
-        app::{self, FieldId, Model},
+        app::{self, FieldId, FieldTy, Model},
         db::{Column, Table},
         mapping, Schema,
     },
@@ -13,6 +18,9 @@ struct LowerStatement<'a> {
     ///
     /// This will always be `Model`
     cx: stmt::ExprContext<'a>,
+
+    /// The target database's capabilities
+    capability: &'a Capability,
 }
 
 /// Substitute fields for columns
@@ -26,31 +34,37 @@ trait Input {
 }
 
 impl<'a> LowerStatement<'a> {
-    fn new(schema: &'a Schema) -> Self {
+    fn new(schema: &'a Schema, capability: &'a Capability) -> Self {
         LowerStatement {
             cx: stmt::ExprContext::new(schema),
+            capability,
         }
     }
 }
 
 impl Planner<'_> {
+    pub(crate) fn lower_stmt(&self, stmt: &mut stmt::Statement) {
+        LowerStatement::new(self.schema, self.capability).visit_stmt_mut(stmt);
+        simplify::simplify_stmt(self.schema, stmt);
+    }
+
     pub(crate) fn lower_stmt_delete(&self, stmt: &mut stmt::Delete) {
-        LowerStatement::new(self.schema).visit_stmt_delete_mut(stmt);
+        LowerStatement::new(self.schema, self.capability).visit_stmt_delete_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_query(&self, stmt: &mut stmt::Query) {
-        LowerStatement::new(self.schema).visit_stmt_query_mut(stmt);
+        LowerStatement::new(self.schema, self.capability).visit_stmt_query_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_insert(&self, stmt: &mut stmt::Insert) {
-        LowerStatement::new(self.schema).visit_stmt_insert_mut(stmt);
+        LowerStatement::new(self.schema, self.capability).visit_stmt_insert_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_update(&self, stmt: &mut stmt::Update) {
-        LowerStatement::new(self.schema).visit_stmt_update_mut(stmt);
+        LowerStatement::new(self.schema, self.capability).visit_stmt_update_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
     }
 }
@@ -97,10 +111,14 @@ impl VisitMut for LowerStatement<'_> {
                 self.lower_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
             stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
-                assert!(*nesting == 0, "TODO: handle non-z");
-                *i = self.mapping().table_to_model[*index].clone();
+                let model = self.cx.target_at(*nesting).expect_model();
+                let mapping = self.mapping_for(model);
 
+                *i = mapping
+                    .table_to_model
+                    .lower_expr_reference(*nesting, *index);
                 self.visit_expr_mut(i);
+
                 return;
             }
             stmt::Expr::InList(expr) => self.lower_expr_in_list(&mut expr.expr, &mut expr.list),
@@ -134,8 +152,18 @@ impl VisitMut for LowerStatement<'_> {
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
-        if let stmt::Returning::Model { .. } = *i {
-            *i = stmt::Returning::Expr(self.mapping().table_to_model.clone().into());
+        if let stmt::Returning::Model { include } = i {
+            // Capture the include clause as we will be using it to generate
+            // inclusion statements.
+            let include = std::mem::take(include);
+
+            let mut returning = self.mapping().table_to_model.lower_returning_model();
+
+            for path in &include {
+                self.build_include_subquery(&mut returning, path);
+            }
+
+            *i = stmt::Returning::Expr(returning);
         }
 
         stmt::visit_mut::visit_returning_mut(self, i);
@@ -180,7 +208,7 @@ impl VisitMut for LowerStatement<'_> {
         let model_id = match &i.body {
             stmt::ExprSet::Select(select) => {
                 let stmt::Source::Model(source) = &select.source else {
-                    panic!("unexpected state")
+                    panic!("unexpected state; {i:#?}")
                 };
 
                 source.model
@@ -196,6 +224,7 @@ impl VisitMut for LowerStatement<'_> {
                 // Values is a free context
                 let mut lower = LowerStatement {
                     cx: self.cx.scope(stmt::ExprTarget::Free),
+                    capability: self.capability,
                 };
                 stmt::visit_mut::visit_stmt_query_mut(&mut lower, i);
                 return;
@@ -205,6 +234,8 @@ impl VisitMut for LowerStatement<'_> {
 
         let mut lower = self.scope(self.cx.schema().app.model(model_id));
         stmt::visit_mut::visit_stmt_query_mut(&mut lower, i);
+
+        self.rewrite_offset_after_as_filter(i);
     }
 
     fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update) {
@@ -223,7 +254,7 @@ impl VisitMut for LowerStatement<'_> {
 
                     assert!(field.ty.is_primitive(), "field={field:#?}");
 
-                    fields.push(stmt::Expr::field(app::FieldId {
+                    fields.push(stmt::Expr::ref_self_field(app::FieldId {
                         model: lower.model().id,
                         index: i,
                     }));
@@ -262,9 +293,14 @@ impl<'a> LowerStatement<'a> {
         self.cx.schema().mapping_for(self.model())
     }
 
+    fn mapping_for(&self, model: &Model) -> &mapping::Model {
+        self.cx.schema().mapping_for(model)
+    }
+
     fn scope<'child>(&'child self, target: &'a Model) -> LowerStatement<'child> {
         LowerStatement {
             cx: self.cx.scope(target),
+            capability: self.capability,
         }
     }
 
@@ -497,6 +533,76 @@ impl<'a> LowerStatement<'a> {
             }
             _ => todo!("{value:#?}"),
         }
+    }
+
+    fn build_include_subquery(&mut self, returning: &mut stmt::Expr, path: &stmt::Path) {
+        debug_assert!(
+            self.capability.sql,
+            "TODO: only supported by SQL planning for now"
+        );
+
+        let [field_index] = &path.projection[..] else {
+            todo!("Multi-step include paths not yet supported")
+        };
+
+        let field = &self.model().fields[*field_index];
+
+        let mut stmt = match &field.ty {
+            FieldTy::HasMany(rel) => stmt::Query::filter(
+                rel.target,
+                stmt::Expr::eq(
+                    stmt::Expr::ref_parent_model(),
+                    stmt::Expr::ref_self_field(rel.pair),
+                ),
+            ),
+            // To handle single relations, we need a new query modifier that
+            // returns a single record and not a list. This matters for the type
+            // system.
+            FieldTy::BelongsTo(rel) => {
+                let source_fk;
+                let target_pk;
+
+                if let [fk_field] = &rel.foreign_key.fields[..] {
+                    source_fk = stmt::Expr::ref_parent_field(fk_field.source);
+                    target_pk = stmt::Expr::ref_self_field(fk_field.target);
+                } else {
+                    let mut source_fk_fields = vec![];
+                    let mut target_pk_fields = vec![];
+
+                    for fk_field in &rel.foreign_key.fields {
+                        source_fk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
+                        target_pk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
+                    }
+
+                    source_fk = stmt::Expr::record_from_vec(source_fk_fields);
+                    target_pk = stmt::Expr::record_from_vec(target_pk_fields);
+                }
+
+                let mut query =
+                    stmt::Query::filter(rel.target, stmt::Expr::eq(source_fk, target_pk));
+                query.single = true;
+                query
+            }
+            FieldTy::HasOne(rel) => {
+                let mut query = stmt::Query::filter(
+                    rel.target,
+                    stmt::Expr::eq(
+                        stmt::Expr::ref_parent_model(),
+                        stmt::Expr::ref_self_field(rel.pair),
+                    ),
+                );
+                query.single = true;
+                query
+            }
+            _ => todo!(),
+        };
+
+        // Simplify the new stmt to handle relations.
+        Simplify::with_context(self.cx).visit_stmt_query_mut(&mut stmt);
+
+        returning
+            .entry_mut(*field_index)
+            .insert(stmt::Expr::stmt(stmt));
     }
 }
 

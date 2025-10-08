@@ -1,6 +1,6 @@
 use toasty_core::stmt::ResolvedRef;
 
-use super::{Comma, Delimited, Params, ToSql};
+use super::{ColumnAlias, Comma, Delimited, Params, ToSql};
 
 use crate::{
     serializer::{ExprContext, Ident},
@@ -21,32 +21,14 @@ impl ToSql for &stmt::Expr {
 
                 fmt!(cx, f, expr.lhs " " expr.op " " expr.rhs);
             }
-            Reference(
-                expr_reference @ stmt::ExprReference::Column {
-                    nesting,
-                    table,
-                    column,
-                },
-            ) => {
-                if f.alias {
-                    let depth = f.depth - *nesting;
-
-                    match cx.resolve_expr_reference(expr_reference) {
-                        ResolvedRef::Column(column) => {
-                            let name = Ident(&column.name);
-                            fmt!(cx, f, "tbl_" depth "_" table "." name)
-                        }
-                        ResolvedRef::Cte { .. } => {
-                            fmt!(cx, f, "tbl_" depth "_" table ".col_" column)
-                        }
-                        ResolvedRef::Field(field) => panic!(
-                            "Field references not yet implemented in SQL serializer: {field:?}"
-                        ),
-                    }
+            Exists(expr) => {
+                f.depth += 1;
+                if expr.negated {
+                    fmt!(cx, f, "NOT EXISTS (" expr.subquery ")");
                 } else {
-                    let column = cx.resolve_expr_reference(expr_reference).expect_column();
-                    fmt!(cx, f, Ident(&column.name))
+                    fmt!(cx, f, "EXISTS (" expr.subquery ")");
                 }
+                f.depth -= 1;
             }
             Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
                 (None, None) => fmt!(cx, f, "COUNT(*)"),
@@ -88,12 +70,42 @@ impl ToSql for &stmt::Expr {
                 let exprs = Comma(&expr.fields);
                 fmt!(cx, f, "(" exprs ")");
             }
+            Reference(
+                expr_reference @ stmt::ExprReference::Column {
+                    nesting,
+                    table,
+                    column,
+                },
+            ) => {
+                if f.alias {
+                    let depth = f.depth - *nesting;
+
+                    match cx.resolve_expr_reference(expr_reference) {
+                        ResolvedRef::Column(column) => {
+                            let name = Ident(&column.name);
+                            fmt!(cx, f, "tbl_" depth "_" table "." name)
+                        }
+                        ResolvedRef::Cte { .. } | ResolvedRef::Derived { .. } => {
+                            fmt!(cx, f, "tbl_" depth "_" table "." ColumnAlias(*column))
+                        }
+                        ResolvedRef::Model(model) => {
+                            panic!("Model references cannot be serialized to SQL; model={model:?}")
+                        }
+                        ResolvedRef::Field(field) => {
+                            panic!("Field references cannot be serialized to SQL; field={field:?}")
+                        }
+                    }
+                } else {
+                    let column = cx.resolve_expr_reference(expr_reference).expect_column();
+                    fmt!(cx, f, Ident(&column.name))
+                }
+            }
             Stmt(expr) => {
                 let stmt = &*expr.stmt;
                 fmt!(cx, f, "(" stmt ")");
             }
             Value(expr) => expr.to_sql(cx, f),
-            _ => todo!("expr={:?}", self),
+            _ => todo!("expr={:#?}", self),
         }
     }
 }

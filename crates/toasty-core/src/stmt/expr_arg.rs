@@ -1,7 +1,7 @@
 use super::Expr;
 use crate::stmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct ExprArg {
     pub position: usize,
 }
@@ -16,6 +16,12 @@ impl Expr {
         projection: impl Into<stmt::Projection>,
     ) -> Self {
         Self::project(Self::arg(expr_arg), projection)
+    }
+}
+
+impl ExprArg {
+    pub fn new(position: usize) -> ExprArg {
+        ExprArg { position }
     }
 }
 

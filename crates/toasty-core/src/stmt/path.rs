@@ -58,7 +58,7 @@ impl Path {
         match self.projection.as_slice() {
             [] => Expr::key(self.root),
             [field, project @ ..] => {
-                let mut ret = Expr::field(FieldId {
+                let mut ret = Expr::ref_self_field(FieldId {
                     model: self.root,
                     index: *field,
                 });

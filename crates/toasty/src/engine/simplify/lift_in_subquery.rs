@@ -112,10 +112,10 @@ impl Simplify<'_> {
             let mut subquery = query.clone();
 
             subquery.body.as_select_mut().returning =
-                stmt::Returning::Expr(stmt::Expr::field(fk_fields.target));
+                stmt::Returning::Expr(stmt::Expr::ref_self_field(fk_fields.target));
 
             Some(stmt::Expr::in_subquery(
-                stmt::Expr::field(fk_fields.source),
+                stmt::Expr::ref_self_field(fk_fields.source),
                 subquery,
             ))
         } else {
@@ -143,7 +143,7 @@ impl Simplify<'_> {
         let pair = has_one.pair(&self.schema().app);
 
         let expr = match &pair.foreign_key.fields[..] {
-            [fk_field] => stmt::Expr::field(fk_field.target),
+            [fk_field] => stmt::Expr::ref_self_field(fk_field.target),
             _ => todo!("composite"),
         };
 
@@ -152,7 +152,7 @@ impl Simplify<'_> {
         match &mut subquery.body {
             stmt::ExprSet::Select(subquery) => {
                 subquery.returning = stmt::Returning::Expr(match &pair.foreign_key.fields[..] {
-                    [fk_field] => stmt::Expr::field(fk_field.source),
+                    [fk_field] => stmt::Expr::ref_self_field(fk_field.source),
                     _ => todo!("composite key"),
                 });
             }
@@ -198,7 +198,7 @@ impl LiftBelongsTo<'_> {
                 }
 
                 self.operands.push(stmt::Expr::eq(
-                    stmt::Expr::field(fk_field.source),
+                    stmt::Expr::ref_self_field(fk_field.source),
                     expr.clone(),
                 ));
                 self.fk_field_matches[i] = true;

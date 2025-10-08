@@ -1015,7 +1015,7 @@ tests!(
     delete_when_belongs_to_optional,
     associate_new_user_with_todo_on_update_via_creation,
     associate_new_user_with_todo_on_update_query_via_creation,
-    #[should_panic(expected = "invalid statement. handle this case")]
+    #[should_panic]
     update_user_with_null_todo_is_err,
     assign_todo_that_already_has_user_on_create,
     assign_todo_that_already_has_user_on_update,

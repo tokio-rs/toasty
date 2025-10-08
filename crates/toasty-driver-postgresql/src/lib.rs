@@ -180,18 +180,26 @@ impl Driver for PostgreSQL {
 
         let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
 
-        let args = params
-            .iter()
-            .map(|param| param as &(dyn ToSql + Sync))
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-
         if width.is_none() {
+            let args = params
+                .iter()
+                .map(|param| param as &(dyn ToSql + Sync))
+                .collect::<Vec<_>>();
             let count = self.client.execute(&sql_as_str, &args).await?;
             return Ok(Response::from_count(count));
         }
 
-        let rows = self.client.query(&sql_as_str, &args).await?;
+        let args = params
+            .iter()
+            .map(|param| {
+                (
+                    param as &(dyn ToSql + Sync),
+                    postgres_ty_for_value(&param.0),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let rows = self.client.query_typed(&sql_as_str, &args).await?;
 
         if width.is_none() {
             let [row] = &rows[..] else { todo!() };
@@ -291,5 +299,23 @@ fn postgres_to_toasty(
             "implement PostgreSQL to toasty conversion for `{:#?}`",
             column.type_()
         );
+    }
+}
+
+fn postgres_ty_for_value(value: &stmt::Value) -> Type {
+    match value {
+        stmt::Value::Bool(_) => Type::BOOL,
+        stmt::Value::I8(_) => Type::INT2,
+        stmt::Value::I16(_) => Type::INT2,
+        stmt::Value::I32(_) => Type::INT4,
+        stmt::Value::I64(_) => Type::INT8,
+        stmt::Value::U8(_) => Type::INT2,
+        stmt::Value::U16(_) => Type::INT4,
+        stmt::Value::U32(_) => Type::INT8,
+        stmt::Value::U64(_) => Type::INT8,
+        stmt::Value::Id(_) => Type::TEXT,
+        stmt::Value::String(_) => Type::TEXT,
+        stmt::Value::Null => Type::TEXT, // Default for NULL values
+        _ => todo!("postgres_ty_for_value: {value:#?}"),
     }
 }

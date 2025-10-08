@@ -97,7 +97,7 @@ impl Planner<'_> {
 
                     let scope = stmt::Query::filter(
                         field.id.model,
-                        stmt::Expr::eq(stmt::Expr::field(fk_field.source), value.clone()),
+                        stmt::Expr::eq(stmt::Expr::ref_self_field(fk_field.source), value.clone()),
                     );
 
                     if field.nullable {
@@ -143,7 +143,9 @@ impl Planner<'_> {
                 // Previous value of returning does nothing in this
                 // context
                 insert.returning = Some(match &belongs_to.foreign_key.fields[..] {
-                    [fk_field] => stmt::Returning::Expr(stmt::Expr::field(fk_field.target)),
+                    [fk_field] => {
+                        stmt::Returning::Expr(stmt::Expr::ref_self_field(fk_field.target))
+                    }
                     _ => {
                         todo!("composite keys");
                     }
@@ -200,7 +202,7 @@ impl Planner<'_> {
                         let filter = &mut scope.body.as_select_mut().filter;
                         *filter = stmt::Expr::and(
                             filter.take(),
-                            stmt::Expr::ne(stmt::Expr::field(field), stmt::Value::Null),
+                            stmt::Expr::ne(stmt::Expr::ref_self_field(field), stmt::Value::Null),
                         );
                     }
 
@@ -302,7 +304,7 @@ impl Planner<'_> {
 
             // This protects against races.
             stmt.condition = Some(stmt::Expr::in_subquery(
-                stmt::Expr::field(has_many.pair),
+                stmt::Expr::ref_self_field(has_many.pair),
                 scope.clone(),
             ));
             stmt.assignments.set(has_many.pair, stmt::Value::Null);
@@ -461,7 +463,7 @@ impl Planner<'_> {
     fn relation_pair_scope(&self, pair: FieldId, scope: stmt::Query) -> stmt::Query {
         stmt::Query::filter(
             pair.model,
-            stmt::Expr::in_subquery(stmt::Expr::field(pair), scope),
+            stmt::Expr::in_subquery(stmt::Expr::ref_self_field(pair), scope),
         )
     }
 

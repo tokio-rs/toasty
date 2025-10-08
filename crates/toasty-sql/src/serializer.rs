@@ -2,6 +2,9 @@
 mod fmt;
 use fmt::ToSql;
 
+mod column;
+use column::ColumnAlias;
+
 mod cte;
 
 mod delim;
@@ -55,6 +58,9 @@ struct Formatter<'a, T> {
 
     /// True when table names should be aliased.
     alias: bool,
+
+    /// True when serializing VALUES in an INSERT statement context
+    in_insert: bool,
 }
 
 pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
@@ -69,6 +75,7 @@ impl<'a> Serializer<'a> {
             params,
             depth: 0,
             alias: false,
+            in_insert: false,
         };
 
         let cx = ExprContext::new(self.schema);

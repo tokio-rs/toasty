@@ -8,10 +8,10 @@ mod planner;
 mod simplify;
 mod verify;
 
-use crate::{Db, Result};
+use crate::{DbInner, Result};
 use toasty_core::stmt::{Statement, ValueStream};
 
-pub(crate) async fn exec(db: &Db, stmt: Statement) -> Result<ValueStream> {
+pub(crate) async fn exec(db: &DbInner, stmt: Statement) -> Result<ValueStream> {
     if cfg!(debug_assertions) {
         verify::apply(&db.schema, &stmt);
     }

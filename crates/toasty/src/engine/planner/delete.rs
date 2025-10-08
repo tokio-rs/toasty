@@ -21,7 +21,10 @@ impl Planner<'_> {
                 // TODO: can this be unified with update?
                 let query = stmt::Query::filter(
                     rel.target,
-                    stmt::Expr::in_subquery(stmt::Expr::field(rel.pair), selection.clone()),
+                    stmt::Expr::in_subquery(
+                        stmt::Expr::ref_self_field(rel.pair),
+                        selection.clone(),
+                    ),
                 );
 
                 if pair.nullable {

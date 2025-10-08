@@ -4,7 +4,7 @@ use crate::{
     schema::{
         app::{self, FieldId, Model},
         db::{self, ColumnId, IndexId, Table, TableId},
-        mapping::{self, Mapping},
+        mapping::{self, Mapping, TableToModel},
         Name,
     },
     stmt::{self},
@@ -504,7 +504,8 @@ impl BuildMapping<'_> {
 
         self.mapping.columns = self.lowering_columns;
         self.mapping.model_to_table = stmt::ExprRecord::from_vec(self.model_to_table);
-        self.mapping.table_to_model = stmt::ExprRecord::from_vec(self.table_to_model);
+        self.mapping.table_to_model =
+            TableToModel::new(stmt::ExprRecord::from_vec(self.table_to_model));
         self.mapping.model_pk_to_table = if self.model_pk_to_table.len() == 1 {
             let expr = self.model_pk_to_table.into_iter().next().unwrap();
             debug_assert!(expr.is_field() || expr.is_cast(), "expr={expr:#?}");
@@ -530,7 +531,7 @@ impl BuildMapping<'_> {
 
     fn map_primitive(&mut self, field: FieldId, primitive: &app::FieldPrimitive) {
         let column = self.mapping.fields[field.index].as_ref().unwrap().column;
-        let lowering = self.encode_column(column, &primitive.ty, stmt::Expr::field(field));
+        let lowering = self.encode_column(column, &primitive.ty, stmt::Expr::ref_self_field(field));
 
         self.mapping.fields[field.index].as_mut().unwrap().lowering = self.model_to_table.len();
 
