@@ -115,7 +115,8 @@ impl Decompose<'_, '_> {
         let mut child = Decompose {
             state: self.state,
             scope_id,
-            returning: self.returning,
+            // Always reset `returning` as we are entering a new statement.
+            returning: false,
         };
 
         f(&mut child);
