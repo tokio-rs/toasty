@@ -5,11 +5,11 @@ mod info;
 use info::{Arg, StatementInfoStore, StmtId};
 
 mod materialize;
+use materialize::{MaterializationGraph, MaterializationKind, NodeId};
 
 use toasty_core::stmt;
 
 use crate::engine::eval;
-use crate::engine::planner::ng::materialize::MaterializationKind;
 use crate::engine::{plan, planner::Planner};
 use crate::Result;
 
@@ -111,7 +111,14 @@ use crate::Result;
 ///                    [final result]
 /// ```
 struct PlannerNg<'a, 'b> {
+    /// Stores decomposed statement info
     store: StatementInfoStore,
+
+    /// Graph of materialization steps to execute the original statement being
+    /// planned.
+    graph: MaterializationGraph,
+
+    /// TEMP: handle to the original planner (this will go away).
     old: &'a mut Planner<'b>,
 }
 
@@ -119,6 +126,7 @@ impl Planner<'_> {
     pub(crate) fn plan_v2_stmt_query(&mut self, stmt: stmt::Statement) -> Result<plan::VarId> {
         PlannerNg {
             store: StatementInfoStore::new(),
+            graph: MaterializationGraph::new(),
             old: self,
         }
         .plan_statement(stmt)
@@ -127,7 +135,6 @@ impl Planner<'_> {
 
 impl PlannerNg<'_, '_> {
     fn plan_statement(&mut self, stmt: stmt::Statement) -> Result<plan::VarId> {
-        // let store = decompose::decompose(stmt);
         self.decompose(stmt);
 
         // Build the execution plan...
@@ -135,7 +142,7 @@ impl PlannerNg<'_, '_> {
 
         // Build the execution plan
         for node_id in &materialization_graph.execution_order {
-            let node = &materialization_graph.nodes[*node_id];
+            let node = &materialization_graph[node_id];
 
             match &node.kind {
                 MaterializationKind::ExecStatement { inputs, stmt, .. } => {
@@ -153,7 +160,7 @@ impl PlannerNg<'_, '_> {
                     let mut input_vars = vec![];
 
                     for input in inputs {
-                        let var = materialization_graph.nodes[*input].var.get().unwrap();
+                        let var = materialization_graph[input].var.get().unwrap();
 
                         input_args.push(self.old.var_table.ty(var).clone());
                         input_vars.push(var);
@@ -181,7 +188,7 @@ impl PlannerNg<'_, '_> {
                     let mut input_vars = vec![];
 
                     for input in inputs {
-                        let var = materialization_graph.nodes[*input].var.get().unwrap();
+                        let var = materialization_graph[input].var.get().unwrap();
                         input_vars.push(var);
                     }
 
@@ -198,7 +205,7 @@ impl PlannerNg<'_, '_> {
                     });
                 }
                 MaterializationKind::Project { input, projection } => {
-                    let input_var = materialization_graph.nodes[*input].var.get().unwrap();
+                    let input_var = materialization_graph[input].var.get().unwrap();
                     let stmt::Type::List(input_ty) = self.old.var_table.ty(input_var).clone()
                     else {
                         todo!()
@@ -223,7 +230,7 @@ impl PlannerNg<'_, '_> {
         }
 
         let mid = self.store.root().output.get().unwrap();
-        let output = materialization_graph.nodes[mid].var.get().unwrap();
+        let output = materialization_graph[mid].var.get().unwrap();
         Ok(output)
     }
 }

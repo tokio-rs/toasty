@@ -1,6 +1,6 @@
 use crate::engine::simplify::Simplify;
 
-use super::{Context, Planner, Result};
+use super::{Planner, Result};
 use std::mem;
 use toasty_core::{
     schema::app::{self, Field, FieldId, FieldTy, HasMany, HasOne},
@@ -103,7 +103,7 @@ impl Planner<'_> {
                     if field.nullable {
                         let mut stmt = scope.update();
                         stmt.assignments.set(field.id, stmt::Value::Null);
-                        planner.plan_stmt(&Context::default(), stmt.into())?;
+                        planner.plan_stmt(stmt.into())?;
                     } else {
                         todo!("delete any models with the association currently being set");
                     }
@@ -151,7 +151,7 @@ impl Planner<'_> {
                     }
                 });
 
-                let insertion_output = self.plan_stmt(&Context::default(), insert.into())?.unwrap();
+                let insertion_output = self.plan_stmt(insert.into())?.unwrap();
 
                 // An optimization that always holds for now. In the
                 // future, this will not be the case. The
@@ -207,7 +207,7 @@ impl Planner<'_> {
                     }
 
                     let delete = planner.relation_pair_scope(pair.id, scope).delete();
-                    planner.plan_stmt(&Context::default(), delete.into())?;
+                    planner.plan_stmt(delete.into())?;
                 }
             }
 
@@ -279,7 +279,7 @@ impl Planner<'_> {
 
             stmt.assignments
                 .set(has_many.pair, stmt::Expr::stmt(scope.clone()));
-            let out = self.plan_stmt(&Context::default(), stmt.into())?;
+            let out = self.plan_stmt(stmt.into())?;
             assert!(out.is_none());
         }
 
@@ -308,10 +308,10 @@ impl Planner<'_> {
                 scope.clone(),
             ));
             stmt.assignments.set(has_many.pair, stmt::Value::Null);
-            let out = self.plan_stmt(&Context::default(), stmt.into())?;
+            let out = self.plan_stmt(stmt.into())?;
             assert!(out.is_none());
         } else {
-            let out = self.plan_stmt(&Context::default(), selection.delete().into())?;
+            let out = self.plan_stmt(selection.delete().into())?;
             assert!(out.is_none());
         }
 
@@ -373,10 +373,10 @@ impl Planner<'_> {
             // TODO: unify w/ has_many ops?
             let mut stmt = pair_scope.update();
             stmt.assignments.set(has_one.pair, stmt::Value::Null);
-            let out = self.plan_stmt(&Context::default(), stmt.into())?;
+            let out = self.plan_stmt(stmt.into())?;
             assert!(out.is_none());
         } else {
-            let out = self.plan_stmt(&Context::default(), pair_scope.delete().into())?;
+            let out = self.plan_stmt(pair_scope.delete().into())?;
             assert!(out.is_none());
         }
 
@@ -405,7 +405,7 @@ impl Planner<'_> {
         stmt.assignments
             .set(has_one.pair, stmt::Expr::stmt(scope.clone()));
 
-        let out = self.plan_stmt(&Context::default(), stmt.into())?;
+        let out = self.plan_stmt(stmt.into())?;
         assert!(out.is_none());
         Ok(())
     }
@@ -425,7 +425,7 @@ impl Planner<'_> {
             .relation_pair_scope(has_many.pair, scope.clone())
             .into();
 
-        let out = self.plan_stmt(&Context::default(), stmt.into())?;
+        let out = self.plan_stmt(stmt.into())?;
         assert!(out.is_none());
         Ok(())
     }
@@ -453,7 +453,7 @@ impl Planner<'_> {
                 .filter,
         );
 
-        let out = self.plan_stmt(&Context::default(), stmt.into())?;
+        let out = self.plan_stmt(stmt.into())?;
         assert!(out.is_none());
         Ok(())
     }

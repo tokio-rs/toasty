@@ -1,4 +1,4 @@
-use super::{eval, plan, Context, Planner, Result};
+use super::{eval, plan, Planner, Result};
 use toasty_core::{schema::app, stmt};
 
 impl Planner<'_> {
@@ -31,9 +31,9 @@ impl Planner<'_> {
                     let mut update = query.update();
                     update.assignments.set(pair.id, stmt::Value::Null);
 
-                    self.plan_stmt(&Context::default(), update.into())?;
+                    self.plan_stmt(update.into())?;
                 } else {
-                    self.plan_stmt(&Context::default(), query.delete().into())?;
+                    self.plan_stmt(query.delete().into())?;
                 }
             }
         }

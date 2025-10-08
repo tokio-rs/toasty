@@ -62,13 +62,6 @@ struct Planner<'a> {
     relations: Vec<app::FieldId>,
 }
 
-#[derive(Debug, Default)]
-struct Context {
-    /// If the statement references any arguments (`stmt::ExprArg`), this
-    /// informs the planner how to access those arguments.
-    input: Vec<plan::InputSource>,
-}
-
 #[derive(Debug)]
 struct Insertion {
     /// Insert plan entry
@@ -107,18 +100,14 @@ impl<'a> Planner<'a> {
             ));
         }
 
-        if let Some(output) = self.plan_stmt(&Context::default(), stmt)? {
+        if let Some(output) = self.plan_stmt(stmt)? {
             self.returning = Some(output);
         }
 
         Ok(())
     }
 
-    fn plan_stmt(
-        &mut self,
-        cx: &Context,
-        mut stmt: stmt::Statement,
-    ) -> Result<Option<plan::VarId>> {
+    fn plan_stmt(&mut self, mut stmt: stmt::Statement) -> Result<Option<plan::VarId>> {
         self.simplify_stmt(&mut stmt);
 
         Ok(match stmt {
@@ -127,7 +116,7 @@ impl<'a> Planner<'a> {
                 None
             }
             stmt::Statement::Insert(stmt) => self.plan_stmt_insert(stmt)?,
-            stmt::Statement::Query(stmt) => Some(self.plan_stmt_select(cx, stmt)?),
+            stmt::Statement::Query(stmt) => Some(self.plan_stmt_select(stmt)?),
             stmt::Statement::Update(stmt) => self.plan_stmt_update(stmt)?,
         })
     }

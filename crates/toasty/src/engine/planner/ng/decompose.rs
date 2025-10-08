@@ -1,6 +1,9 @@
 use std::cell::Cell;
 
-use toasty_core::stmt::{self, visit_mut, VisitMut};
+use toasty_core::{
+    driver::Capability,
+    stmt::{self, visit_mut, VisitMut},
+};
 
 use crate::engine::planner::ng::{Arg, StatementInfoStore, StmtId};
 
@@ -11,6 +14,7 @@ impl super::PlannerNg<'_, '_> {
         let mut state = State {
             store: &mut self.store,
             scopes: vec![Scope { stmt_id: root_id }],
+            capability: self.old.capability,
         };
 
         // Map the statement
@@ -40,6 +44,9 @@ struct State<'a> {
 
     /// Scope state
     scopes: Vec<Scope>,
+
+    /// Database capability
+    capability: &'a Capability,
 }
 
 #[derive(Debug)]
@@ -94,6 +101,23 @@ impl visit_mut::VisitMut for Decompose<'_, '_> {
         self.returning = true;
         visit_mut::visit_returning_mut(self, i);
         self.returning = false;
+    }
+
+    fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
+        if !self.state.capability.sql {
+            assert!(stmt.order_by.is_none(), "TODO: implement ordering for KV");
+            assert!(stmt.limit.is_none(), "TODO: implement limit for KV");
+        }
+
+        visit_mut::visit_stmt_query_mut(self, stmt);
+    }
+
+    fn visit_expr_in_subquery_mut(&mut self, i: &mut stmt::ExprInSubquery) {
+        if !self.state.capability.sql {
+            todo!("implement IN <subquery> expressions for KV");
+        }
+
+        visit_mut::visit_expr_in_subquery_mut(self, i);
     }
 }
 

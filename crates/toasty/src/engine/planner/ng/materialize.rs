@@ -1,5 +1,6 @@
-use std::cell::Cell;
+use std::{cell::Cell, ops};
 
+use index_vec::IndexVec;
 use indexmap::IndexSet;
 use toasty_core::{
     stmt::{self, visit_mut},
@@ -15,7 +16,7 @@ use crate::engine::{
 #[derive(Debug)]
 pub(crate) struct MaterializationGraph {
     /// Nodes in the graph
-    pub(crate) nodes: Vec<MaterializationNode>,
+    pub(crate) store: IndexVec<NodeId, MaterializationNode>,
 
     /// Order of execution
     pub(crate) execution_order: Vec<NodeId>,
@@ -33,7 +34,9 @@ pub(crate) struct MaterializationNode {
     visited: Cell<bool>,
 }
 
-type NodeId = usize;
+index_vec::define_index_type! {
+    pub(crate) struct NodeId = u32;
+}
 
 /// Materialization operation
 #[derive(Debug)]
@@ -194,6 +197,7 @@ impl PlanMaterialization<'_> {
                 .node_id
                 .get()
                 .unwrap();
+
             let (index, _) = inputs.insert_full(node_id);
             ref_source = Some(stmt::ExprArg::new(index));
             input.set(Some(0));
@@ -264,10 +268,9 @@ impl PlanMaterialization<'_> {
         ));
 
         // Create the exec statement materialization node.
-        let exec_stmt_node_id = self.graph.nodes.len();
-        self.graph
-            .nodes
-            .push(MaterializationKind::ExecStatement { inputs, stmt }.into());
+        let exec_stmt_node_id = self
+            .graph
+            .insert(MaterializationKind::ExecStatement { inputs, stmt });
 
         // Track the exec statement materialization node.
         stmt_state.exec_statement.set(Some(exec_stmt_node_id));
@@ -280,14 +283,10 @@ impl PlanMaterialization<'_> {
                 stmt::Expr::arg_project(0, [index])
             }));
 
-            let project_node_id = self.graph.nodes.len();
-            self.graph.nodes.push(
-                MaterializationKind::Project {
-                    input: exec_stmt_node_id,
-                    projection,
-                }
-                .into(),
-            );
+            let project_node_id = self.graph.insert(MaterializationKind::Project {
+                input: exec_stmt_node_id,
+                projection,
+            });
             back_ref.node_id.set(Some(project_node_id));
         }
 
@@ -306,9 +305,7 @@ impl PlanMaterialization<'_> {
         // Plans a NestedMerge if one is needed
         let output_node_id = if let Some(materialize_nested_merge) = self.plan_nested_merge(stmt_id)
         {
-            let materialize_nested_merge_id = self.graph.nodes.len();
-            self.graph.nodes.push(materialize_nested_merge);
-            materialize_nested_merge_id
+            self.graph.insert(materialize_nested_merge)
         } else {
             debug_assert!(
                 !single || ref_source.is_some(),
@@ -316,15 +313,10 @@ impl PlanMaterialization<'_> {
             );
 
             // Plan the final projection to handle the returning clause.
-            let project_node_id = self.graph.nodes.len();
-            self.graph.nodes.push(
-                MaterializationKind::Project {
-                    input: exec_stmt_node_id,
-                    projection: returning,
-                }
-                .into(),
-            );
-            project_node_id
+            self.graph.insert(MaterializationKind::Project {
+                input: exec_stmt_node_id,
+                projection: returning,
+            })
         };
 
         stmt_state.output.set(Some(output_node_id));
@@ -355,19 +347,19 @@ impl PlanMaterialization<'_> {
         debug_assert!(self.graph.execution_order.is_empty());
         // Backward traversal to mark reachable nodes
         let mut stack = vec![exit];
-        self.graph.nodes[exit].visited.set(true);
+        self.graph[exit].visited.set(true);
 
         while let Some(node_id) = stack.pop() {
             self.graph.execution_order.push(node_id);
 
             fn visit(graph: &MaterializationGraph, stack: &mut Vec<NodeId>, node_id: NodeId) {
-                if !graph.nodes[node_id].visited.get() {
-                    graph.nodes[node_id].visited.set(true);
+                if !graph[node_id].visited.get() {
+                    graph[node_id].visited.set(true);
                     stack.push(node_id);
                 }
             }
 
-            match &self.graph.nodes[node_id].kind {
+            match &self.graph[node_id].kind {
                 MaterializationKind::ExecStatement { inputs, .. } => {
                     for &input_id in inputs {
                         visit(&self.graph, &mut stack, input_id);
@@ -389,11 +381,44 @@ impl PlanMaterialization<'_> {
 }
 
 impl MaterializationGraph {
-    fn new() -> MaterializationGraph {
+    pub(super) fn new() -> MaterializationGraph {
         MaterializationGraph {
-            nodes: vec![],
+            store: IndexVec::new(),
             execution_order: vec![],
         }
+    }
+
+    /// Insert a node into the graph
+    pub(super) fn insert(&mut self, node: impl Into<MaterializationNode>) -> NodeId {
+        self.store.push(node.into())
+    }
+}
+
+impl ops::Index<NodeId> for MaterializationGraph {
+    type Output = MaterializationNode;
+
+    fn index(&self, index: NodeId) -> &Self::Output {
+        self.store.index(index)
+    }
+}
+
+impl ops::IndexMut<NodeId> for MaterializationGraph {
+    fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
+        self.store.index_mut(index)
+    }
+}
+
+impl ops::Index<&NodeId> for MaterializationGraph {
+    type Output = MaterializationNode;
+
+    fn index(&self, index: &NodeId) -> &Self::Output {
+        self.store.index(*index)
+    }
+}
+
+impl ops::IndexMut<&NodeId> for MaterializationGraph {
+    fn index_mut(&mut self, index: &NodeId) -> &mut Self::Output {
+        self.store.index_mut(*index)
     }
 }
 

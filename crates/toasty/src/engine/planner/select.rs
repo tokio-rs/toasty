@@ -1,25 +1,17 @@
-use super::{eval, plan, Context, Planner, Result};
-use toasty_core::{
-    schema::app::{self, FieldTy, Model, ModelId},
-    stmt::{self, ExprContext},
-};
+use super::{plan, Planner, Result};
+use toasty_core::stmt;
 
 impl Planner<'_> {
-    pub(super) fn plan_stmt_select(
-        &mut self,
-        cx: &Context,
-        mut stmt: stmt::Query,
-    ) -> Result<plan::VarId> {
+    pub(super) fn plan_stmt_select(&mut self, stmt: stmt::Query) -> Result<plan::VarId> {
         // New planner
-        if self.capability.sql {
-            let mut stmt = stmt::Statement::Query(stmt);
+        let mut stmt = stmt::Statement::Query(stmt);
 
-            // Lower the statement
-            self.lower_stmt(&mut stmt);
+        // Lower the statement
+        self.lower_stmt(&mut stmt);
 
-            return self.plan_v2_stmt_query(stmt);
-        }
+        return self.plan_v2_stmt_query(stmt);
 
+        /*
         // TODO: don't clone?
         let source_model = stmt.body.as_select().source.as_model().clone();
         let model = self.schema.app.model(source_model.model);
@@ -103,8 +95,10 @@ impl Planner<'_> {
         }
 
         Ok(ret)
+        */
     }
 
+    /*
     fn plan_select_kv(
         &mut self,
         cx: &Context,
@@ -441,4 +435,5 @@ impl Planner<'_> {
 
         Ok(())
     }
+    */
 }

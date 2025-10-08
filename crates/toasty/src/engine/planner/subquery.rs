@@ -1,4 +1,4 @@
-use super::{plan, Context, Planner, Result};
+use super::{plan, Planner, Result};
 use toasty_core::stmt;
 
 impl Planner<'_> {
@@ -26,7 +26,7 @@ impl Planner<'_> {
                 let arg = stmt::Expr::arg(sources.len());
                 *expr = stmt::Expr::in_list(base, arg);
 
-                match self.plan_stmt_select(&Context::default(), query) {
+                match self.plan_stmt_select(query) {
                     Ok(output) => {
                         sources.push(plan::InputSource::Value(output));
                     }

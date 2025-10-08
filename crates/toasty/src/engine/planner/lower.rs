@@ -53,11 +53,6 @@ impl Planner<'_> {
         simplify::simplify_stmt(self.schema, stmt);
     }
 
-    pub(crate) fn lower_stmt_query(&self, stmt: &mut stmt::Query) {
-        LowerStatement::new(self.schema, self.capability).visit_stmt_query_mut(stmt);
-        simplify::simplify_stmt(self.schema, stmt);
-    }
-
     pub(crate) fn lower_stmt_insert(&self, stmt: &mut stmt::Insert) {
         LowerStatement::new(self.schema, self.capability).visit_stmt_insert_mut(stmt);
         simplify::simplify_stmt(self.schema, stmt);
