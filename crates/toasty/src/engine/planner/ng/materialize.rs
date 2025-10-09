@@ -4,15 +4,12 @@ use std::{cell::Cell, ops};
 
 use index_vec::IndexVec;
 use indexmap::IndexSet;
-use toasty_core::{
-    driver::Capability,
-    stmt::{self, visit_mut},
-    Schema,
-};
+use toasty_core::stmt::{self, visit_mut};
 
 use crate::engine::{
     plan,
     planner::ng::{Arg, StatementInfoStore, StmtId},
+    Engine,
 };
 
 #[derive(Debug)]
@@ -82,9 +79,7 @@ pub(crate) struct MaterializeProject {
 
 #[derive(Debug)]
 struct MaterializePlanner<'a> {
-    schema: &'a Schema,
-
-    capability: &'a Capability,
+    engine: &'a Engine,
 
     /// Root statement and all nested statements.
     store: &'a StatementInfoStore,
@@ -96,8 +91,7 @@ struct MaterializePlanner<'a> {
 impl super::PlannerNg<'_, '_> {
     pub(super) fn plan_materializations(&mut self) {
         MaterializePlanner {
-            schema: &self.old.engine.schema,
-            capability: self.old.engine.driver.capability(),
+            engine: self.old.engine,
             store: &self.store,
             graph: &mut self.graph,
         }
@@ -192,7 +186,10 @@ impl MaterializePlanner<'_> {
                 continue;
             };
 
-            assert!(self.capability.sql, "TODO: only supported on sql right now");
+            assert!(
+                self.engine.capability().sql,
+                "TODO: only supported on sql right now"
+            );
             assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
 
             // Find the back-ref for this arg
@@ -270,12 +267,15 @@ impl MaterializePlanner<'_> {
                 .map(|expr_reference| stmt::Expr::from(*expr_reference)),
         ));
 
-        let exec_stmt_node_id = if !self.capability.sql {
-            todo!()
-        } else {
+        let exec_stmt_node_id = if self.engine.capability().sql {
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
             self.graph.insert(MaterializeExecStatement { inputs, stmt })
+        } else {
+            // Without SQL capability, we have to plan the materialization of
+            // the statement based on available indices.
+            let index_plan = self.engine.plan_index_path2(&stmt);
+            todo!("index_plan={index_plan:#?}");
         };
 
         // Track the exec statement materialization node.

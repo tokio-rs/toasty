@@ -1,18 +1,16 @@
 use indexmap::IndexSet;
-use toasty_core::{
-    stmt::{self, visit_mut},
-    Schema,
-};
+use toasty_core::stmt::{self, visit_mut};
 
 use crate::engine::{
     eval,
     plan::{self, NestedLevel},
     planner::ng::{materialize::MaterializeNestedMerge, Arg, NodeId, StatementInfoStore, StmtId},
+    Engine,
 };
 
 #[derive(Debug)]
 struct NestedMergePlanner<'a> {
-    schema: &'a Schema,
+    engine: &'a Engine,
     store: &'a StatementInfoStore,
     inputs: IndexSet<NodeId>,
     /// Statement stack, used to infer expression types
@@ -33,7 +31,7 @@ impl super::MaterializePlanner<'_> {
         }
 
         let nested_merge_planner = NestedMergePlanner {
-            schema: self.schema,
+            engine: self.engine,
             store: &mut self.store,
             inputs: IndexSet::new(),
             stack: vec![],
@@ -205,8 +203,10 @@ impl NestedMergePlanner<'_> {
 
     fn build_exec_statement_ty_for(&self, stmt_id: StmtId) -> stmt::Type {
         let stmt_state = &self.store[stmt_id];
-        let cx =
-            stmt::ExprContext::new_with_target(self.schema, stmt_state.stmt.as_deref().unwrap());
+        let cx = stmt::ExprContext::new_with_target(
+            &*self.engine.schema,
+            stmt_state.stmt.as_deref().unwrap(),
+        );
 
         let mut fields = vec![];
 

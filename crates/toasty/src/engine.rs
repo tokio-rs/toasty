@@ -15,7 +15,7 @@ mod verify;
 use crate::Result;
 use toasty_core::{
     driver::Capability,
-    stmt::{Statement, ValueStream},
+    stmt::{self, Statement, ValueStream},
     Driver, Schema,
 };
 
@@ -48,5 +48,10 @@ impl Engine {
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
         self.exec_plan(&plan.pipeline, plan.vars).await
+    }
+
+    /// Returns a new ExprContext
+    fn expr_cx(&self) -> stmt::ExprContext<'_> {
+        stmt::ExprContext::new(&self.schema)
     }
 }
