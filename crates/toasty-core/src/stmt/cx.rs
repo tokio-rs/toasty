@@ -4,8 +4,8 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprReference, ExprSet, Insert, InsertTable, InsertTarget, Query, Returning,
-        Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, Update, UpdateTarget,
+        Delete, Expr, ExprReference, ExprSet, Insert, InsertTarget, Query, Returning, Select,
+        Source, SourceTable, Statement, TableFactor, TableRef, Type, Update, UpdateTarget,
     },
     Schema,
 };
@@ -91,7 +91,6 @@ pub enum ExprTarget<'a> {
     Table(&'a Table),
 
     // Reference statement targets directly
-    Insert(&'a InsertTable),
     Source(&'a SourceTable),
 }
 
@@ -273,20 +272,6 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     ),
                 }
             }
-            ExprTarget::Insert(insert_table) => match expr_reference {
-                ExprReference::Model { .. } => panic!(
-                    "Cannot resolve ExprReference::Model in InsertTarget::Table context"
-                ),
-                ExprReference::Field { .. } => panic!(
-                    "Cannot resolve ExprReference::Field in InsertTarget::Table context - use ExprReference::Column instead"
-                ),
-                ExprReference::Column { column, .. } => {
-                    let Some(table) = self.schema.table(insert_table.table) else {
-                        panic!("Failed to resolve table with ID {:?} for INSERT target - table not found in schema", insert_table.table);
-                    };
-                    ResolvedRef::Column(&table.columns[*column])
-                }
-            },
         }
     }
 
@@ -409,7 +394,6 @@ impl<'a> ExprContext<'a, Schema> {
                 assert_eq!(table.id, column_id.table);
             }
             ExprTarget::Table(table) => assert_eq!(table.id, column_id.table),
-            ExprTarget::Insert(_) => todo!(),
             ExprTarget::Source(source_table) => {
                 let [TableRef::Table(table_id)] = source_table.tables[..] else {
                     panic!(
@@ -544,10 +528,6 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for ExprTarget<'a> {
                     self
                 }
             }
-            ExprTarget::Insert(insert_table) => {
-                let table = schema.table(insert_table.table).unwrap();
-                ExprTarget::Table(table)
-            }
             _ => self,
         }
     }
@@ -617,7 +597,8 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a InsertTarget {
                 ExprTarget::Model(model)
             }
             InsertTarget::Table(insert_table) => {
-                ExprTarget::Insert(insert_table).into_expr_target(schema)
+                let table = schema.table(insert_table.table).unwrap();
+                ExprTarget::Table(table)
             }
         }
     }
