@@ -5,7 +5,7 @@ mod info;
 use info::{Arg, StatementInfoStore, StmtId};
 
 mod materialize;
-use materialize::{MaterializationGraph, MaterializationKind, NodeId};
+use materialize::{MaterializeGraph, MaterializeKind, NodeId};
 
 use toasty_core::stmt;
 
@@ -116,7 +116,7 @@ struct PlannerNg<'a, 'b> {
 
     /// Graph of materialization steps to execute the original statement being
     /// planned.
-    graph: MaterializationGraph,
+    graph: MaterializeGraph,
 
     /// TEMP: handle to the original planner (this will go away).
     old: &'a mut Planner<'b>,
@@ -126,7 +126,7 @@ impl Planner<'_> {
     pub(crate) fn plan_v2_stmt_query(&mut self, stmt: stmt::Statement) -> Result<plan::VarId> {
         PlannerNg {
             store: StatementInfoStore::new(),
-            graph: MaterializationGraph::new(),
+            graph: MaterializeGraph::new(),
             old: self,
         }
         .plan_statement(stmt)
@@ -145,10 +145,10 @@ impl PlannerNg<'_, '_> {
             let node = &self.graph[node_id];
 
             match &node.kind {
-                MaterializationKind::ExecStatement { inputs, stmt, .. } => {
+                MaterializeKind::ExecStatement(materialize_exec_statement) => {
                     debug_assert!(
                         {
-                            match &stmt {
+                            match &materialize_exec_statement.stmt {
                                 stmt::Statement::Query(query) => !query.single,
                                 _ => true,
                             }
@@ -159,14 +159,16 @@ impl PlannerNg<'_, '_> {
                     let mut input_args = vec![];
                     let mut input_vars = vec![];
 
-                    for input in inputs {
+                    for input in &materialize_exec_statement.inputs {
                         let var = self.graph[input].var.get().unwrap();
 
                         input_args.push(self.old.var_table.ty(var).clone());
                         input_vars.push(var);
                     }
 
-                    let ty = self.old.infer_ty(stmt, &input_args);
+                    let ty = self
+                        .old
+                        .infer_ty(&materialize_exec_statement.stmt, &input_args);
 
                     let ty_fields = match &ty {
                         stmt::Type::List(ty_rows) => match &**ty_rows {
@@ -181,31 +183,30 @@ impl PlannerNg<'_, '_> {
                     self.old.push_action(plan::ExecStatement2 {
                         input: input_vars,
                         output: Some(plan::ExecStatementOutput { ty: ty_fields, var }),
-                        stmt: stmt.clone(),
+                        stmt: materialize_exec_statement.stmt.clone(),
                     });
                 }
-                MaterializationKind::NestedMerge { inputs, root, .. } => {
+                MaterializeKind::NestedMerge(materialize_nested_merge) => {
                     let mut input_vars = vec![];
 
-                    for input in inputs {
+                    for input in &materialize_nested_merge.inputs {
                         let var = self.graph[input].var.get().unwrap();
                         input_vars.push(var);
                     }
 
-                    let output = self
-                        .old
-                        .var_table
-                        .register_var(stmt::Type::list(root.projection.ret.clone()));
+                    let output = self.old.var_table.register_var(stmt::Type::list(
+                        materialize_nested_merge.root.projection.ret.clone(),
+                    ));
                     node.var.set(Some(output));
 
                     self.old.push_action(plan::NestedMerge {
                         inputs: input_vars,
                         output,
-                        root: root.clone(),
+                        root: materialize_nested_merge.root.clone(),
                     });
                 }
-                MaterializationKind::Project { input, projection } => {
-                    let input_var = self.graph[input].var.get().unwrap();
+                MaterializeKind::Project(materialize_project) => {
+                    let input_var = self.graph[materialize_project.input].var.get().unwrap();
                     let stmt::Type::List(input_ty) = self.old.var_table.ty(input_var).clone()
                     else {
                         todo!()
@@ -213,7 +214,8 @@ impl PlannerNg<'_, '_> {
 
                     let input_args = vec![*input_ty];
 
-                    let projection = eval::Func::from_stmt(projection.clone(), input_args);
+                    let projection =
+                        eval::Func::from_stmt(materialize_project.projection.clone(), input_args);
                     let var = self
                         .old
                         .var_table
