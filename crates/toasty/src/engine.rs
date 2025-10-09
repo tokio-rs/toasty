@@ -1,6 +1,8 @@
 mod eval;
 mod exec;
 
+mod index;
+
 mod plan;
 use std::sync::Arc;
 

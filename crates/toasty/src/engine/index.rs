@@ -1,5 +1,4 @@
-use super::Planner;
-use crate::driver::Capability;
+use crate::{driver::Capability, engine::Engine};
 use by_address::ByAddress;
 use std::collections::{hash_map, HashMap};
 use toasty_core::{
@@ -13,9 +12,9 @@ use toasty_core::{
 3) If no index path matches full restriction, and there are ORs, try multiple paths.
  */
 
-impl<'a> Planner<'a> {
-    pub(crate) fn plan_index_path2<'stmt>(
-        &mut self,
+impl Engine {
+    pub(crate) fn plan_index_path<'a, 'stmt>(
+        &self,
         cx: stmt::ExprContext<'stmt>,
         table: &'a Table,
         filter: &'stmt stmt::Expr,

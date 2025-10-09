@@ -75,7 +75,7 @@ impl Planner<'_> {
         let expr_cx = stmt::ExprContext::new_with_target(self.schema(), &stmt);
 
         // Figure out which index to use for the query
-        let mut index_plan = self.plan_index_path2(expr_cx, table, &stmt.filter);
+        let mut index_plan = self.engine.plan_index_path(expr_cx, table, &stmt.filter);
 
         if index_plan.index.primary_key {
             if let Some(keys) =

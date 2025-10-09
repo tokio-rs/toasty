@@ -1,6 +1,8 @@
 //! Utilities for planning key-value operations.
 
-use super::{eval, plan, IndexPlan, Planner};
+use crate::engine::index::IndexPlan;
+
+use super::{eval, plan, Planner};
 use toasty_core::stmt;
 
 impl Planner<'_> {

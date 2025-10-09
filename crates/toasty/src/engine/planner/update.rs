@@ -164,7 +164,7 @@ impl Planner<'_> {
     ) -> Option<plan::VarId> {
         let table = self.schema().table_for(model);
 
-        let mut index_plan = self.plan_index_path2(
+        let mut index_plan = self.engine.plan_index_path(
             stmt::ExprContext::new_with_target(self.schema(), &stmt),
             table,
             stmt.filter.as_ref().expect("no filter specified"),

@@ -1,6 +1,4 @@
 mod delete;
-mod index;
-use index::IndexPlan;
 mod input;
 mod insert;
 mod key;
