@@ -4,10 +4,10 @@ use crate::driver::Rows;
 impl Exec<'_> {
     pub(super) async fn action_query_pk(&mut self, action: &plan::QueryPk) -> Result<()> {
         let res = self
-            .db
+            .engine
             .driver
             .exec(
-                &self.db.schema.db,
+                &self.engine.schema.db,
                 operation::QueryPk {
                     table: action.table,
                     select: action.columns.clone(),

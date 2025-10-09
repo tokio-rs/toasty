@@ -16,14 +16,14 @@ impl Exec<'_> {
 
             filter.substitute(&[input]);
 
-            simplify::simplify_expr(stmt::ExprContext::new(&self.db.schema), &mut filter);
+            simplify::simplify_expr(stmt::ExprContext::new(&*self.engine.schema), &mut filter);
         }
 
         let res = self
-            .db
+            .engine
             .driver
             .exec(
-                &self.db.schema.db,
+                &self.engine.schema.db,
                 operation::FindPkByIndex {
                     table: action.table,
                     index: action.index,

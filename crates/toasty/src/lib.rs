@@ -6,7 +6,6 @@ pub use cursor::Cursor;
 
 pub mod db;
 pub use db::Db;
-use db::DbInner;
 
 // TODO: move to `db` module
 pub mod driver;

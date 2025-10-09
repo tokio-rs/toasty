@@ -32,7 +32,7 @@ impl<'a> Planner<'a> {
         let index_path = index_planner.plan_index_path();
 
         let mut cx = PartitionCtx {
-            capability: self.capability,
+            capability: self.capability(),
             apply_result_filter_on_results: false,
         };
 

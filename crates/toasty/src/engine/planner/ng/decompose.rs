@@ -5,7 +5,10 @@ use toasty_core::{
     stmt::{self, visit_mut, VisitMut},
 };
 
-use crate::engine::planner::ng::{Arg, StatementInfoStore, StmtId};
+use crate::engine::{
+    planner::ng::{Arg, StatementInfoStore, StmtId},
+    Engine,
+};
 
 impl super::PlannerNg<'_, '_> {
     pub(crate) fn decompose(&mut self, mut stmt: stmt::Statement) {
@@ -14,7 +17,7 @@ impl super::PlannerNg<'_, '_> {
         let mut state = State {
             store: &mut self.store,
             scopes: vec![Scope { stmt_id: root_id }],
-            capability: self.old.capability,
+            engine: self.old.engine,
         };
 
         // Map the statement
@@ -38,15 +41,15 @@ struct Decompose<'a, 'b> {
 
 #[derive(Debug)]
 struct State<'a> {
+    /// Database engine handle
+    engine: &'a Engine,
+
     /// Statements to be executed by the database, though they may still be
     /// broken down into multiple sub-statements.
     store: &'a mut StatementInfoStore,
 
     /// Scope state
     scopes: Vec<Scope>,
-
-    /// Database capability
-    capability: &'a Capability,
 }
 
 #[derive(Debug)]
@@ -104,7 +107,7 @@ impl visit_mut::VisitMut for Decompose<'_, '_> {
     }
 
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
-        if !self.state.capability.sql {
+        if !self.state.capability().sql {
             assert!(stmt.order_by.is_none(), "TODO: implement ordering for KV");
             assert!(stmt.limit.is_none(), "TODO: implement limit for KV");
         }
@@ -113,7 +116,7 @@ impl visit_mut::VisitMut for Decompose<'_, '_> {
     }
 
     fn visit_expr_in_subquery_mut(&mut self, i: &mut stmt::ExprInSubquery) {
-        if !self.state.capability.sql {
+        if !self.state.capability().sql {
             todo!("implement IN <subquery> expressions for KV");
         }
 
@@ -150,6 +153,10 @@ impl Decompose<'_, '_> {
 }
 
 impl State<'_> {
+    fn capability(&self) -> &Capability {
+        self.engine.capability()
+    }
+
     /// Create a new sub-statement. Returns the argument position
     fn new_sub_statement(
         &mut self,

@@ -31,7 +31,11 @@ impl Exec<'_> {
             }
         };
 
-        let res = self.db.driver.exec(&self.db.schema.db, op.into()).await?;
+        let res = self
+            .engine
+            .driver
+            .exec(&self.engine.schema.db, op.into())
+            .await?;
 
         if let Some(output) = &action.output {
             match res.rows {

@@ -8,7 +8,7 @@ impl Exec<'_> {
         let mut source = self.vars.load(action.source).collect().await?;
         let target = self.vars.load(action.target).collect().await?;
 
-        match &self.db.schema.app.field(action.field).ty {
+        match &self.engine.schema.app.field(action.field).ty {
             FieldTy::BelongsTo(rel) => {
                 let [fk_field] = &rel.foreign_key.fields[..] else {
                     todo!("composite keys")
@@ -32,7 +32,7 @@ impl Exec<'_> {
                 }
             }
             FieldTy::HasMany(rel) => {
-                let pair = rel.pair(&self.db.schema.app);
+                let pair = rel.pair(&self.engine.schema.app);
 
                 let [fk_field] = &pair.foreign_key.fields[..] else {
                     todo!("composite keys")
@@ -60,7 +60,7 @@ impl Exec<'_> {
                 }
             }
             FieldTy::HasOne(rel) => {
-                let pair = rel.pair(&self.db.schema.app);
+                let pair = rel.pair(&self.engine.schema.app);
 
                 let [fk_field] = &pair.foreign_key.fields[..] else {
                     todo!("composite keys")

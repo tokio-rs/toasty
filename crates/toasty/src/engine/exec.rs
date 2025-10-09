@@ -21,23 +21,26 @@ use crate::{
     engine::{
         eval,
         plan::{self, Action},
+        Engine,
     },
-    DbInner, Result,
+    Result,
 };
 use toasty_core::stmt;
 use toasty_core::stmt::ValueStream;
 
 struct Exec<'a> {
-    db: &'a DbInner,
+    engine: &'a Engine,
     vars: VarStore,
 }
 
-pub(crate) async fn exec(
-    db: &DbInner,
-    pipeline: &plan::Pipeline,
-    vars: VarStore,
-) -> Result<ValueStream> {
-    Exec { db, vars }.exec_pipeline(pipeline).await
+impl Engine {
+    pub(crate) async fn exec_plan(
+        &self,
+        pipeline: &plan::Pipeline,
+        vars: VarStore,
+    ) -> Result<ValueStream> {
+        Exec { engine: self, vars }.exec_pipeline(pipeline).await
+    }
 }
 
 impl Exec<'_> {

@@ -16,7 +16,7 @@ impl Planner<'_> {
                     self.relations.pop();
                 }
             } else if let Some(rel) = field.ty.as_has_many() {
-                let pair = self.schema.app.field(rel.pair);
+                let pair = self.schema().app.field(rel.pair);
 
                 // TODO: can this be unified with update?
                 let query = stmt::Query::filter(
@@ -38,7 +38,7 @@ impl Planner<'_> {
             }
         }
 
-        if self.capability.sql {
+        if self.capability().sql {
             self.plan_delete_sql(stmt);
         } else {
             self.plan_delete_kv(model, stmt)?;
@@ -59,7 +59,7 @@ impl Planner<'_> {
     }
 
     fn plan_delete_kv(&mut self, model: &app::Model, mut stmt: stmt::Delete) -> Result<()> {
-        let table = self.schema.table_for(model);
+        let table = self.schema().table_for(model);
 
         // Subqueries are planned before lowering
         let input_sources = self.plan_subqueries(&mut stmt)?;
@@ -72,7 +72,7 @@ impl Planner<'_> {
             self.partition_stmt_delete_input(&mut stmt, &input_sources)
         };
 
-        let expr_cx = stmt::ExprContext::new_with_target(self.schema, &stmt);
+        let expr_cx = stmt::ExprContext::new_with_target(self.schema(), &stmt);
 
         // Figure out which index to use for the query
         let mut index_plan = self.plan_index_path2(expr_cx, table, &stmt.filter);

@@ -15,7 +15,11 @@ impl Exec<'_> {
                 filter: action.filter.clone(),
             };
 
-            let res = self.db.driver.exec(&self.db.schema.db, op.into()).await?;
+            let res = self
+                .engine
+                .driver
+                .exec(&self.engine.schema.db, op.into())
+                .await?;
             assert!(res.rows.is_count(), "TODO");
         }
 

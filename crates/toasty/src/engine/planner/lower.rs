@@ -1,6 +1,6 @@
 mod paginate;
 
-use crate::engine::simplify::Simplify;
+use crate::engine::{simplify::Simplify, Engine};
 
 use super::{simplify, Planner};
 use toasty_core::{
@@ -8,7 +8,7 @@ use toasty_core::{
     schema::{
         app::{self, FieldId, FieldTy, Model},
         db::{Column, Table},
-        mapping, Schema,
+        mapping,
     },
     stmt::{self, VisitMut},
 };
@@ -34,33 +34,33 @@ trait Input {
 }
 
 impl<'a> LowerStatement<'a> {
-    fn new(schema: &'a Schema, capability: &'a Capability) -> Self {
+    fn new(engine: &'a Engine) -> Self {
         LowerStatement {
-            cx: stmt::ExprContext::new(schema),
-            capability,
+            cx: stmt::ExprContext::new(&*engine.schema),
+            capability: engine.capability(),
         }
     }
 }
 
 impl Planner<'_> {
     pub(crate) fn lower_stmt(&self, stmt: &mut stmt::Statement) {
-        LowerStatement::new(self.schema, self.capability).visit_stmt_mut(stmt);
-        simplify::simplify_stmt(self.schema, stmt);
+        LowerStatement::new(self.engine).visit_stmt_mut(stmt);
+        simplify::simplify_stmt(&self.engine.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_delete(&self, stmt: &mut stmt::Delete) {
-        LowerStatement::new(self.schema, self.capability).visit_stmt_delete_mut(stmt);
-        simplify::simplify_stmt(self.schema, stmt);
+        LowerStatement::new(self.engine).visit_stmt_delete_mut(stmt);
+        simplify::simplify_stmt(&self.engine.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_insert(&self, stmt: &mut stmt::Insert) {
-        LowerStatement::new(self.schema, self.capability).visit_stmt_insert_mut(stmt);
-        simplify::simplify_stmt(self.schema, stmt);
+        LowerStatement::new(self.engine).visit_stmt_insert_mut(stmt);
+        simplify::simplify_stmt(&self.engine.schema, stmt);
     }
 
     pub(crate) fn lower_stmt_update(&self, stmt: &mut stmt::Update) {
-        LowerStatement::new(self.schema, self.capability).visit_stmt_update_mut(stmt);
-        simplify::simplify_stmt(self.schema, stmt);
+        LowerStatement::new(self.engine).visit_stmt_update_mut(stmt);
+        simplify::simplify_stmt(&self.engine.schema, stmt);
     }
 }
 

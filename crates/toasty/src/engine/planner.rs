@@ -19,11 +19,11 @@ mod var;
 use var::VarTable;
 
 use crate::{
-    driver::Capability,
-    engine::{eval, plan, simplify, Plan},
+    engine::{eval, plan, simplify, Engine, Plan},
     Result,
 };
 use toasty_core::{
+    driver::Capability,
     schema::*,
     stmt::{self},
 };
@@ -34,11 +34,8 @@ use super::exec;
 
 #[derive(Debug)]
 struct Planner<'a> {
-    /// Database schema
-    schema: &'a Schema,
-
-    /// Database capabilities
-    capability: &'a Capability,
+    /// Handle to the schema & driver capabilities.
+    engine: &'a Engine,
 
     /// Table of record stream slots. Used to figure out where to store outputs
     /// of actions.
@@ -68,27 +65,32 @@ struct Insertion {
     action: usize,
 }
 
-pub(crate) fn apply(
-    capability: &Capability,
-    schema: &Schema,
-    stmt: stmt::Statement,
-) -> Result<Plan> {
-    let mut planner = Planner {
-        capability,
-        schema,
-        var_table: VarTable::default(),
-        actions: vec![],
-        write_actions: vec![],
-        returning: None,
-        insertions: HashMap::new(),
-        relations: Vec::new(),
-    };
+impl Engine {
+    pub(crate) fn plan(&self, stmt: stmt::Statement) -> Result<Plan> {
+        let mut planner = Planner {
+            engine: self,
+            var_table: VarTable::default(),
+            actions: vec![],
+            write_actions: vec![],
+            returning: None,
+            insertions: HashMap::new(),
+            relations: Vec::new(),
+        };
 
-    planner.plan_stmt_root(stmt)?;
-    planner.build()
+        planner.plan_stmt_root(stmt)?;
+        planner.build()
+    }
 }
 
 impl<'a> Planner<'a> {
+    fn schema(&self) -> &'a Schema {
+        &self.engine.schema
+    }
+
+    fn capability(&self) -> &'a Capability {
+        self.engine.capability()
+    }
+
     /// Entry point to plan the root statement.
     fn plan_stmt_root(&mut self, stmt: stmt::Statement) -> Result<()> {
         if let stmt::Statement::Insert(stmt) = &stmt {
@@ -185,11 +187,11 @@ impl<'a> Planner<'a> {
     }
 
     fn model(&self, id: impl Into<app::ModelId>) -> &'a app::Model {
-        self.schema.app.model(id)
+        self.engine.schema.app.model(id)
     }
 
     fn simplify_stmt(&self, stmt: &mut stmt::Statement) {
-        simplify::simplify_stmt(self.schema, stmt);
+        simplify::simplify_stmt(&self.engine.schema, stmt);
 
         // Make sure `via` associations is simplified
         debug_assert!(match stmt {

@@ -3,6 +3,8 @@ use toasty_core::{
     stmt::{self, Statement, Visit},
 };
 
+use crate::engine::Engine;
+
 struct Verify<'a> {
     schema: &'a Schema,
 }
@@ -12,8 +14,13 @@ struct VerifyExpr<'a> {
     model: ModelId,
 }
 
-pub(crate) fn apply(schema: &Schema, stmt: &Statement) {
-    Verify { schema }.visit(stmt);
+impl Engine {
+    pub(crate) fn verify(&self, stmt: &Statement) {
+        Verify {
+            schema: &self.schema,
+        }
+        .visit(stmt);
+    }
 }
 
 impl stmt::Visit for Verify<'_> {

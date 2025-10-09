@@ -31,7 +31,11 @@ impl Exec<'_> {
                 returning: action.output.is_some(),
             };
 
-            let res = self.db.driver.exec(&self.db.schema.db, op.into()).await?;
+            let res = self
+                .engine
+                .driver
+                .exec(&self.engine.schema.db, op.into())
+                .await?;
 
             match res.rows {
                 Rows::Values(rows) => {

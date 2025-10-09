@@ -1,11 +1,11 @@
 mod materialize_nested_merge;
-mod materialize_query;
 
 use std::{cell::Cell, ops};
 
 use index_vec::IndexVec;
 use indexmap::IndexSet;
 use toasty_core::{
+    driver::Capability,
     stmt::{self, visit_mut},
     Schema,
 };
@@ -84,6 +84,8 @@ pub(crate) struct MaterializeProject {
 struct MaterializePlanner<'a> {
     schema: &'a Schema,
 
+    capability: &'a Capability,
+
     /// Root statement and all nested statements.
     store: &'a StatementInfoStore,
 
@@ -94,16 +96,17 @@ struct MaterializePlanner<'a> {
 impl super::PlannerNg<'_, '_> {
     pub(super) fn plan_materializations(&mut self) {
         MaterializePlanner {
-            schema: self.old.schema,
+            schema: &self.old.engine.schema,
+            capability: self.old.engine.driver.capability(),
             store: &self.store,
             graph: &mut self.graph,
         }
-        .plan_materialization();
+        .plan_materialize();
     }
 }
 
 impl MaterializePlanner<'_> {
-    fn plan_materialization(&mut self) {
+    fn plan_materialize(&mut self) {
         let root_id = self.store.root_id();
         self.plan_materialize_statement(root_id);
 
@@ -148,8 +151,6 @@ impl MaterializePlanner<'_> {
                 }
                 stmt::Expr::Arg(expr_arg) => match &stmt_info.args[expr_arg.position] {
                     Arg::Ref { .. } => {
-                        // let (index, _) = inputs.insert_full(*stmt_id);
-                        // *input = Some(index);
                         todo!("refs in returning is not yet supported");
                     }
                     Arg::Sub { stmt_id, input } => {
@@ -191,6 +192,7 @@ impl MaterializePlanner<'_> {
                 continue;
             };
 
+            assert!(self.capability.sql, "TODO: only supported on sql right now");
             assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
 
             // Find the back-ref for this arg
@@ -268,8 +270,13 @@ impl MaterializePlanner<'_> {
                 .map(|expr_reference| stmt::Expr::from(*expr_reference)),
         ));
 
-        // Create the exec statement materialization node.
-        let exec_stmt_node_id = self.graph.insert(MaterializeExecStatement { inputs, stmt });
+        let exec_stmt_node_id = if !self.capability.sql {
+            todo!()
+        } else {
+            // With SQL capability, we can just punt the details of execution to
+            // the database's query planner.
+            self.graph.insert(MaterializeExecStatement { inputs, stmt })
+        };
 
         // Track the exec statement materialization node.
         stmt_info.exec_statement.set(Some(exec_stmt_node_id));
