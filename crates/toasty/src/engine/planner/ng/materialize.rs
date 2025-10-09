@@ -43,6 +43,9 @@ index_vec::define_index_type! {
 /// Materialization operation
 #[derive(Debug)]
 pub(crate) enum MaterializeKind {
+    /// A constant value
+    Const(MaterializeConst),
+
     /// Execute a database query
     ExecStatement(MaterializeExecStatement),
 
@@ -57,6 +60,12 @@ pub(crate) enum MaterializeKind {
 
     /// Projection operation - transforms records
     Project(MaterializeProject),
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeConst {
+    pub(crate) value: Vec<stmt::Value>,
+    pub(crate) ty: stmt::Type,
 }
 
 #[derive(Debug)]
@@ -160,6 +169,9 @@ impl MaterializePlanner<'_> {
         let stmt::ExprSet::Select(select) = &mut query.body else {
             panic!()
         };
+
+        let filter_is_false = select.filter.is_false();
+
         let stmt::Returning::Expr(returning) = &mut select.returning else {
             panic!()
         };
@@ -227,6 +239,7 @@ impl MaterializePlanner<'_> {
                 "TODO: only supported on sql right now"
             );
             assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
+            assert!(!filter_is_false, "TODO: handle const false filters");
 
             // Find the back-ref for this arg
             let node_id = self.store[target_id].back_refs[&stmt_id]
@@ -297,7 +310,13 @@ impl MaterializePlanner<'_> {
             select.filter = stmt::Expr::exists(sub_query);
         }
 
-        let exec_stmt_node_id = if self.engine.capability().sql {
+        let exec_stmt_node_id = if filter_is_false {
+            // Don't bother querying and just return false
+            self.graph.insert(MaterializeConst {
+                value: vec![],
+                ty: self.engine.infer_record_list_ty(&stmt, &columns),
+            })
+        } else if self.engine.capability().sql {
             select.returning = stmt::Returning::Expr(stmt::Expr::record(
                 columns
                     .iter()
@@ -334,16 +353,11 @@ impl MaterializePlanner<'_> {
                     });
                 }
 
-                let cx = self.engine.expr_cx_for(&stmt);
-                let field_tys = columns
-                    .iter()
-                    .map(|expr_reference| cx.infer_expr_reference_ty(expr_reference))
-                    .collect();
-                let ty = stmt::Type::list(stmt::Type::Record(field_tys));
+                let ty = self.engine.infer_record_list_ty(&stmt, &columns);
 
                 node_id = Some(self.graph.insert(MaterializeGetByKey {
                     inputs,
-                    table: cx.target().expect_table().id,
+                    table: self.engine.resolve_table_for(&stmt).id,
                     // TODO: don't clone
                     columns: columns.clone(),
                     keys,
@@ -426,6 +440,7 @@ impl MaterializePlanner<'_> {
             }
 
             match &self.graph[node_id].kind {
+                MaterializeKind::Const(_) => {}
                 MaterializeKind::ExecStatement(materialize_exec_statement) => {
                     for &input_id in &materialize_exec_statement.inputs {
                         visit(&self.graph, &mut stack, input_id);
@@ -480,7 +495,8 @@ impl MaterializeGraph {
 impl MaterializeNode {
     pub(super) fn ty(&self) -> &stmt::Type {
         match &self.kind {
-            MaterializeKind::GetByKey(get_by_key) => &get_by_key.ty,
+            MaterializeKind::Const(materialize_const) => &materialize_const.ty,
+            MaterializeKind::GetByKey(materialize_get_by_key) => &materialize_get_by_key.ty,
             _ => todo!("node={self:#?}"),
         }
     }
@@ -515,6 +531,12 @@ impl ops::Index<&NodeId> for MaterializeGraph {
 impl ops::IndexMut<&NodeId> for MaterializeGraph {
     fn index_mut(&mut self, index: &NodeId) -> &mut Self::Output {
         self.store.index_mut(*index)
+    }
+}
+
+impl From<MaterializeConst> for MaterializeNode {
+    fn from(value: MaterializeConst) -> Self {
+        MaterializeKind::Const(value).into()
     }
 }
 

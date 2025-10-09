@@ -14,6 +14,7 @@ use crate::Result;
 use std::sync::Arc;
 use toasty_core::{
     driver::Capability,
+    schema::db::Table,
     stmt::{self, Statement, ValueStream},
     Driver, Schema,
 };
@@ -57,5 +58,10 @@ impl Engine {
     /// Returns a new ExprContext for a specific target
     fn expr_cx_for<'a>(&'a self, target: impl stmt::IntoExprTarget<'a>) -> stmt::ExprContext<'a> {
         stmt::ExprContext::new_with_target(&self.schema, target)
+    }
+
+    // TODO: where should this util go?
+    fn resolve_table_for<'a>(&'a self, target: impl stmt::IntoExprTarget<'a>) -> &'a Table {
+        self.expr_cx_for(target).target().expect_table()
     }
 }

@@ -146,6 +146,17 @@ impl PlannerNg<'_, '_> {
             let node = &self.graph[node_id];
 
             match &node.kind {
+                MaterializeKind::Const(materialize_const) => {
+                    // TODO: we probably want to optimize this using const folding
+
+                    let var = self.old.var_table.register_var(node.ty().clone());
+                    node.var.set(Some(var));
+
+                    self.old.push_action(plan::SetVar {
+                        var,
+                        value: materialize_const.value.clone(),
+                    });
+                }
                 MaterializeKind::ExecStatement(materialize_exec_statement) => {
                     debug_assert!(
                         {
