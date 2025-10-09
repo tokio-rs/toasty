@@ -1,11 +1,12 @@
-use super::{eval, Planner};
+use super::eval;
+use crate::engine::Engine;
 use toasty_core::{schema::db::Index, stmt};
 
 /// Try to convert an index filter expression to a key expression
 struct TryConvert<'a, 'stmt> {
     cx: stmt::ExprContext<'stmt>,
 
-    planner: &'a Planner<'a>,
+    engine: &'a Engine,
 
     /// Index being keyed on
     index: &'a Index,
@@ -14,7 +15,7 @@ struct TryConvert<'a, 'stmt> {
     args: Vec<stmt::Type>,
 }
 
-impl Planner<'_> {
+impl Engine {
     /// Attempts to optimize a WHERE clause filter into a direct primary key lookup.
     ///
     /// This function analyzes filter expressions to detect when they're actually specifying
@@ -43,7 +44,7 @@ impl Planner<'_> {
     ) -> Option<eval::Func> {
         let mut conv = TryConvert {
             cx,
-            planner: self,
+            engine: self,
             index,
             args: vec![],
         };
@@ -61,6 +62,17 @@ impl Planner<'_> {
 
             eval::Func::from_stmt_unchecked(expr, conv.args, stmt::Type::list(key_ty))
         })
+    }
+
+    pub(crate) fn try_build_key_filter2(
+        &self,
+        index: &Index,
+        stmt: &stmt::Statement,
+    ) -> Option<eval::Func> {
+        let cx = self.expr_cx_for(stmt);
+        let expr = stmt.as_filter().unwrap_or_else(|| todo!("stmt={stmt:#?}"));
+
+        self.try_build_key_filter(cx, index, expr)
     }
 }
 
@@ -169,7 +181,7 @@ impl TryConvert<'_, '_> {
         match expr {
             stmt::Expr::Arg(_) => {
                 self.args
-                    .push(stmt::Type::list(self.planner.index_key_ty(self.index)));
+                    .push(stmt::Type::list(self.engine.index_key_ty(self.index)));
                 expr.clone()
             }
             stmt::Expr::Value(_) => expr.clone(),

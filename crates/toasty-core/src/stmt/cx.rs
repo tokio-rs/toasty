@@ -490,6 +490,7 @@ impl Resolve for () {
 }
 
 impl<'a> ExprTarget<'a> {
+    #[track_caller]
     pub fn expect_model(self) -> &'a Model {
         match self {
             ExprTarget::Model(model) => model,
@@ -502,6 +503,14 @@ impl<'a> ExprTarget<'a> {
             ExprTarget::Model(model) => model.id,
             _ => return None,
         })
+    }
+
+    #[track_caller]
+    pub fn expect_table(self) -> &'a Table {
+        match self {
+            ExprTarget::Table(table) => table,
+            _ => panic!("expected ExprTarget::Table; was {self:#?}"),
+        }
     }
 }
 

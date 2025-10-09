@@ -7,6 +7,7 @@ use info::{Arg, StatementInfoStore, StmtId};
 mod materialize;
 use materialize::{MaterializeGraph, MaterializeKind, NodeId};
 
+use toasty_core::schema::db::ColumnId;
 use toasty_core::stmt;
 
 use crate::engine::eval;
@@ -168,6 +169,7 @@ impl PlannerNg<'_, '_> {
 
                     let ty = self
                         .old
+                        .engine
                         .infer_ty(&materialize_exec_statement.stmt, &input_args);
 
                     let ty_fields = match &ty {
@@ -184,6 +186,62 @@ impl PlannerNg<'_, '_> {
                         input: input_vars,
                         output: Some(plan::ExecStatementOutput { ty: ty_fields, var }),
                         stmt: materialize_exec_statement.stmt.clone(),
+                    });
+                }
+                MaterializeKind::Filter(materialize_filter) => {
+                    todo!("materialize_filter={materialize_filter:#?}");
+                }
+                MaterializeKind::GetByKey(materialize_get_by_key) => {
+                    let var = self.old.var_table.register_var(node.ty().clone());
+                    node.var.set(Some(var));
+
+                    let output = plan::Output {
+                        var,
+                        project: eval::Func::identity(node.ty().clone()),
+                    };
+
+                    // Only one input supported for now!
+                    let mut input = None;
+
+                    for &i in &materialize_get_by_key.inputs {
+                        assert!(input.is_none(), "TODO");
+
+                        let node = &self.graph[i];
+                        input = Some(plan::Input {
+                            source: plan::InputSource::Value(node.var_id()),
+                            project: eval::Func::identity(node.ty().clone()),
+                        });
+                    }
+
+                    let columns = materialize_get_by_key
+                        .columns
+                        .iter()
+                        .map(|expr_reference| {
+                            let stmt::ExprReference::Column {
+                                nesting,
+                                table,
+                                column,
+                            } = expr_reference
+                            else {
+                                todo!()
+                            };
+                            debug_assert_eq!(*nesting, 0);
+                            debug_assert_eq!(*table, 0);
+
+                            ColumnId {
+                                table: materialize_get_by_key.table,
+                                index: *column,
+                            }
+                        })
+                        .collect();
+
+                    self.old.push_action(plan::GetByKey {
+                        input,
+                        output,
+                        table: materialize_get_by_key.table,
+                        keys: materialize_get_by_key.keys.clone(),
+                        columns,
+                        post_filter: None,
                     });
                 }
                 MaterializeKind::NestedMerge(materialize_nested_merge) => {

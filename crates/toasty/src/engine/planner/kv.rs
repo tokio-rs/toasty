@@ -11,7 +11,7 @@ impl Planner<'_> {
         index_plan: &mut IndexPlan<'_>,
         input: Option<plan::Input>,
     ) -> plan::Input {
-        let key_ty = self.index_key_ty(index_plan.index);
+        let key_ty = self.engine.index_key_ty(index_plan.index);
         let pk_by_index_out = self
             .var_table
             .register_var(stmt::Type::list(key_ty.clone()));

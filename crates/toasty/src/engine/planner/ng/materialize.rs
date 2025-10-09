@@ -4,10 +4,13 @@ use std::{cell::Cell, ops};
 
 use index_vec::IndexVec;
 use indexmap::IndexSet;
-use toasty_core::stmt::{self, visit_mut};
+use toasty_core::{
+    schema::db::{ColumnId, TableId},
+    stmt::{self, visit_mut},
+};
 
 use crate::engine::{
-    plan,
+    eval, plan,
     planner::ng::{Arg, StatementInfoStore, StmtId},
     Engine,
 };
@@ -43,6 +46,12 @@ pub(crate) enum MaterializeKind {
     /// Execute a database query
     ExecStatement(MaterializeExecStatement),
 
+    /// Filter results
+    Filter(MaterializeFilter),
+
+    /// Get records by primary key
+    GetByKey(MaterializeGetByKey),
+
     /// Execute a nested merge
     NestedMerge(MaterializeNestedMerge),
 
@@ -57,6 +66,33 @@ pub(crate) struct MaterializeExecStatement {
 
     /// The database query to execute
     pub(crate) stmt: stmt::Statement,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeFilter {
+    /// Input needed to reify the statement
+    pub(crate) input: NodeId,
+
+    /// Filter
+    pub(crate) filter: eval::Func,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeGetByKey {
+    /// Inputs needed to reify the operation
+    pub(crate) inputs: IndexSet<NodeId>,
+
+    /// The table to get keys from
+    pub(crate) table: TableId,
+
+    /// Columns to get
+    pub(crate) columns: IndexSet<stmt::ExprReference>,
+
+    /// Keys to get
+    pub(crate) keys: eval::Func,
+
+    /// Return type
+    pub(crate) ty: stmt::Type,
 }
 
 #[derive(Debug)]
@@ -261,13 +297,13 @@ impl MaterializePlanner<'_> {
             select.filter = stmt::Expr::exists(sub_query);
         }
 
-        select.returning = stmt::Returning::Expr(stmt::Expr::record(
-            columns
-                .iter()
-                .map(|expr_reference| stmt::Expr::from(*expr_reference)),
-        ));
-
         let exec_stmt_node_id = if self.engine.capability().sql {
+            select.returning = stmt::Returning::Expr(stmt::Expr::record(
+                columns
+                    .iter()
+                    .map(|expr_reference| stmt::Expr::from(*expr_reference)),
+            ));
+
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
             self.graph.insert(MaterializeExecStatement { inputs, stmt })
@@ -275,7 +311,53 @@ impl MaterializePlanner<'_> {
             // Without SQL capability, we have to plan the materialization of
             // the statement based on available indices.
             let index_plan = self.engine.plan_index_path2(&stmt);
-            todo!("index_plan={index_plan:#?}");
+
+            let mut node_id = None;
+
+            // TODO: handle non-PK indexes
+            assert!(index_plan.index.primary_key);
+
+            if let Some(keys) = self.engine.try_build_key_filter2(index_plan.index, &stmt) {
+                // If there is a result filter, we will need to evaluate it
+                // *after* fetching the rows, so we need to make sure that any
+                // column referenced in the filter is fetched.
+                let mut result_filter = index_plan.result_filter.clone();
+
+                if let Some(result_filter) = &mut result_filter {
+                    visit_mut::for_each_expr_mut(result_filter, |expr| match expr {
+                        stmt::Expr::Reference(expr_reference) => {
+                            let (index, _) = columns.insert_full(*expr_reference);
+                            *expr = stmt::Expr::arg_project(0, [index]);
+                        }
+                        stmt::Expr::Arg(_) => todo!("expr={expr:#?}"),
+                        _ => {}
+                    });
+                }
+
+                let cx = self.engine.expr_cx_for(&stmt);
+                let field_tys = columns
+                    .iter()
+                    .map(|expr_reference| cx.infer_expr_reference_ty(expr_reference))
+                    .collect();
+                let ty = stmt::Type::list(stmt::Type::Record(field_tys));
+
+                node_id = Some(self.graph.insert(MaterializeGetByKey {
+                    inputs,
+                    table: cx.target().expect_table().id,
+                    // TODO: don't clone
+                    columns: columns.clone(),
+                    keys,
+                    ty,
+                }));
+
+                // If there is a result filter, we need to apply a filter step on the returned rows.
+
+                if let Some(result_filter) = result_filter {
+                    todo!("result_filter={result_filter:#?}");
+                }
+            }
+
+            node_id.expect("bug")
         };
 
         // Track the exec statement materialization node.
@@ -349,6 +431,14 @@ impl MaterializePlanner<'_> {
                         visit(&self.graph, &mut stack, input_id);
                     }
                 }
+                MaterializeKind::Filter(materialize_filter) => {
+                    visit(&self.graph, &mut stack, materialize_filter.input);
+                }
+                MaterializeKind::GetByKey(materialize_get_by_key) => {
+                    for &input_id in &materialize_get_by_key.inputs {
+                        visit(&self.graph, &mut stack, input_id);
+                    }
+                }
                 MaterializeKind::NestedMerge(materialize_nested_merge) => {
                     for &input_id in &materialize_nested_merge.inputs {
                         visit(&self.graph, &mut stack, input_id);
@@ -375,6 +465,28 @@ impl MaterializeGraph {
     /// Insert a node into the graph
     pub(super) fn insert(&mut self, node: impl Into<MaterializeNode>) -> NodeId {
         self.store.push(node.into())
+    }
+
+    /// Returns the type the node evaluates to
+    pub(super) fn ty(&self, node_id: NodeId) -> &stmt::Type {
+        self.store[node_id].ty()
+    }
+
+    pub(super) fn var_id(&self, node_id: NodeId) -> plan::VarId {
+        self.store[node_id].var_id()
+    }
+}
+
+impl MaterializeNode {
+    pub(super) fn ty(&self) -> &stmt::Type {
+        match &self.kind {
+            MaterializeKind::GetByKey(get_by_key) => &get_by_key.ty,
+            _ => todo!("node={self:#?}"),
+        }
+    }
+
+    pub(super) fn var_id(&self) -> plan::VarId {
+        self.var.get().unwrap()
     }
 }
 
@@ -409,6 +521,18 @@ impl ops::IndexMut<&NodeId> for MaterializeGraph {
 impl From<MaterializeExecStatement> for MaterializeNode {
     fn from(value: MaterializeExecStatement) -> Self {
         MaterializeKind::ExecStatement(value).into()
+    }
+}
+
+impl From<MaterializeFilter> for MaterializeNode {
+    fn from(value: MaterializeFilter) -> Self {
+        MaterializeKind::Filter(value).into()
+    }
+}
+
+impl From<MaterializeGetByKey> for MaterializeNode {
+    fn from(value: MaterializeGetByKey) -> Self {
+        MaterializeKind::GetByKey(value).into()
     }
 }
 

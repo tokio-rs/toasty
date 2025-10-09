@@ -254,6 +254,18 @@ impl Statement {
         Substitute::new(input).visit_stmt_mut(self);
     }
 
+    pub fn as_filter(&self) -> Option<&Expr> {
+        match self {
+            Statement::Query(query) => match &query.body {
+                ExprSet::Select(select) => Some(&select.filter),
+                _ => None,
+            },
+            Statement::Update(update) => update.filter.as_ref(),
+            Statement::Delete(delete) => Some(&delete.filter),
+            _ => None,
+        }
+    }
+
     /// Attempts to return a reference to an inner [`Delete`].
     ///
     /// * If `self` is a [`Statement::Delete`], a reference to the inner [`Delete`] is

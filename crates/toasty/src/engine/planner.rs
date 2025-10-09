@@ -1,7 +1,6 @@
 mod delete;
 mod input;
 mod insert;
-mod key;
 mod kv;
 mod lower;
 mod ng;
@@ -9,7 +8,6 @@ mod output;
 mod relation;
 mod select;
 mod subquery;
-mod ty;
 mod update;
 mod verify;
 

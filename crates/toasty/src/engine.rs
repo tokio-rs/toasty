@@ -1,18 +1,17 @@
-mod eval;
-mod exec;
-
-mod index;
-
 mod plan;
-use std::sync::Arc;
-
 use plan::Plan;
 
+mod eval;
+mod exec;
+mod index;
+mod kv;
 mod planner;
 mod simplify;
+mod ty;
 mod verify;
 
 use crate::Result;
+use std::sync::Arc;
 use toasty_core::{
     driver::Capability,
     stmt::{self, Statement, ValueStream},
@@ -53,5 +52,10 @@ impl Engine {
     /// Returns a new ExprContext
     fn expr_cx(&self) -> stmt::ExprContext<'_> {
         stmt::ExprContext::new(&self.schema)
+    }
+
+    /// Returns a new ExprContext for a specific target
+    fn expr_cx_for<'a>(&'a self, target: impl stmt::IntoExprTarget<'a>) -> stmt::ExprContext<'a> {
+        stmt::ExprContext::new_with_target(&self.schema, target)
     }
 }

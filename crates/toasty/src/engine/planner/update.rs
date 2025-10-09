@@ -175,7 +175,7 @@ impl Planner<'_> {
         let output_var = output.as_ref().map(|o| o.var);
 
         if index_plan.index.primary_key {
-            let Some(key) = self.try_build_key_filter(
+            let Some(key) = self.engine.try_build_key_filter(
                 stmt::ExprContext::new_with_target(self.schema(), &stmt),
                 index_plan.index,
                 &index_plan.index_filter,

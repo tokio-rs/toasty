@@ -78,9 +78,11 @@ impl Planner<'_> {
         let mut index_plan = self.engine.plan_index_path(expr_cx, table, &stmt.filter);
 
         if index_plan.index.primary_key {
-            if let Some(keys) =
-                self.try_build_key_filter(expr_cx, index_plan.index, &index_plan.index_filter)
-            {
+            if let Some(keys) = self.engine.try_build_key_filter(
+                expr_cx,
+                index_plan.index,
+                &index_plan.index_filter,
+            ) {
                 self.push_write_action(plan::DeleteByKey {
                     input,
                     table: table.id,
