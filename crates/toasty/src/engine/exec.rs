@@ -20,7 +20,7 @@ use crate::{
     driver::operation,
     engine::{
         eval,
-        plan::{self, Action},
+        plan::{self, Action, VarId},
         Engine,
     },
     Result,
@@ -64,7 +64,9 @@ impl Exec<'_> {
             Action::ExecStatement(action) => self.action_exec_statement(action).await,
             Action::ExecStatement2(action) => self.action_exec_statement2(action).await,
             Action::FindPkByIndex(action) => self.action_find_pk_by_index(action).await,
+            Action::FindPkByIndex2(action) => self.action_find_pk_by_index2(action).await,
             Action::GetByKey(action) => self.action_get_by_key(action).await,
+            Action::GetByKey2(action) => self.action_get_by_key2(action).await,
             Action::Insert(action) => self.action_insert(action).await,
             Action::NestedMerge(action) => self.action_nested_merge(action).await,
             Action::QueryPk(action) => self.action_query_pk(action).await,
@@ -91,5 +93,16 @@ impl Exec<'_> {
         }
 
         Ok(values)
+    }
+
+    async fn collect_input2(&mut self, input: &[VarId]) -> Result<Vec<stmt::Value>> {
+        let mut ret = Vec::new();
+
+        for var_id in input {
+            let values = self.vars.load(*var_id).collect().await?;
+            ret.push(stmt::Value::List(values));
+        }
+
+        Ok(ret)
     }
 }

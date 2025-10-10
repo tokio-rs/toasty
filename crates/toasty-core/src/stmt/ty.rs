@@ -77,6 +77,14 @@ impl Type {
         Self::List(Box::new(ty.into()))
     }
 
+    #[track_caller]
+    pub fn expect_list_ref(&self) -> &Type {
+        match self {
+            stmt::Type::List(items) => &**items,
+            _ => todo!("expected stmt::Type::List; actual={self:#?}"),
+        }
+    }
+
     pub fn is_bool(&self) -> bool {
         matches!(self, Self::Bool)
     }

@@ -120,8 +120,6 @@ impl<'a> Planner<'a> {
     }
 
     fn build(mut self) -> Result<Plan> {
-        let vars = exec::VarStore::new();
-
         match self.write_actions.len() {
             // Nothing to do here
             0 => {}
@@ -139,7 +137,7 @@ impl<'a> Planner<'a> {
         }
 
         Ok(Plan {
-            vars,
+            vars: exec::VarStore::new(self.var_table.into_vec()),
             pipeline: plan::Pipeline {
                 actions: self.actions,
                 returning: self.returning,

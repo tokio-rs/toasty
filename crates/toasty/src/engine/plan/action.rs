@@ -1,4 +1,6 @@
-use crate::engine::plan::{exec_statement2::ExecStatement2, project::Project};
+use crate::engine::plan::{
+    exec_statement2::ExecStatement2, project::Project, FindPkByIndex2, GetByKey2,
+};
 
 use super::{
     Associate, BatchWrite, DeleteByKey, ExecStatement, FindPkByIndex, GetByKey, Insert,
@@ -23,9 +25,11 @@ pub(crate) enum Action {
     ExecStatement2(ExecStatement2),
 
     FindPkByIndex(FindPkByIndex),
+    FindPkByIndex2(FindPkByIndex2),
 
     /// Execute `Operation::GetByKey` using key input
     GetByKey(GetByKey),
+    GetByKey2(GetByKey2),
 
     /// Insert a record
     Insert(Insert),
@@ -60,7 +64,9 @@ impl fmt::Debug for Action {
             Self::ExecStatement(a) => a.fmt(f),
             Self::ExecStatement2(a) => a.fmt(f),
             Self::FindPkByIndex(a) => a.fmt(f),
+            Self::FindPkByIndex2(a) => a.fmt(f),
             Self::GetByKey(a) => a.fmt(f),
+            Self::GetByKey2(a) => a.fmt(f),
             Self::Insert(a) => a.fmt(f),
             Self::NestedMerge(a) => a.fmt(f),
             Self::QueryPk(a) => a.fmt(f),

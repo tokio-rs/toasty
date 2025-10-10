@@ -17,10 +17,10 @@ mod exec_statement2;
 pub(crate) use exec_statement2::{ExecStatement2, ExecStatementOutput};
 
 mod find_pk_by_index;
-pub(crate) use find_pk_by_index::FindPkByIndex;
+pub(crate) use find_pk_by_index::{FindPkByIndex, FindPkByIndex2};
 
 mod get_by_key;
-pub(crate) use get_by_key::GetByKey;
+pub(crate) use get_by_key::{GetByKey, GetByKey2};
 
 mod input;
 pub(crate) use input::{Input, InputSource};

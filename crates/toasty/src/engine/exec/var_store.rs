@@ -1,14 +1,15 @@
 use super::plan;
-use toasty_core::stmt::ValueStream;
+use toasty_core::stmt::{self, ValueStream};
 
 #[derive(Debug)]
 pub(crate) struct VarStore {
     slots: Vec<Option<ValueStream>>,
+    tys: Vec<stmt::Type>,
 }
 
 impl VarStore {
-    pub(crate) fn new() -> Self {
-        Self { slots: vec![] }
+    pub(crate) fn new(tys: Vec<stmt::Type>) -> Self {
+        Self { slots: vec![], tys }
     }
 
     pub(crate) fn load(&mut self, var: plan::VarId) -> ValueStream {
@@ -27,11 +28,15 @@ impl VarStore {
         stream.dup().await
     }
 
+    #[track_caller]
     pub(crate) fn store(&mut self, var: plan::VarId, stream: ValueStream) {
         while self.slots.len() <= var.0 {
             self.slots.push(None);
         }
 
-        self.slots[var.0] = Some(stream);
+        let stmt::Type::List(item_tys) = &self.tys[var.0] else {
+            todo!()
+        };
+        self.slots[var.0] = Some(stream.typed((**item_tys).clone()));
     }
 }

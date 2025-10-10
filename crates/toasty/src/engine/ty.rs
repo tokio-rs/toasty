@@ -17,6 +17,15 @@ impl Engine {
         }
     }
 
+    pub(crate) fn index_key_record_ty(&self, index: &Index) -> stmt::Type {
+        let field_tys = index
+            .columns
+            .iter()
+            .map(|id| self.schema.db.column(id.column).ty.clone())
+            .collect();
+        stmt::Type::Record(field_tys)
+    }
+
     /// Returns `Type::List(Type::Record(field_tys))` where each `field_ty` is
     /// inferred from the corresponding expression in `record`.
     pub(crate) fn infer_record_list_ty<'a, T>(&self, cx: &stmt::Statement, record: T) -> stmt::Type

@@ -202,27 +202,33 @@ impl PlannerNg<'_, '_> {
                 MaterializeKind::Filter(materialize_filter) => {
                     todo!("materialize_filter={materialize_filter:#?}");
                 }
+                MaterializeKind::FindPkByIndex(materialize_find_pk_by_index) => {
+                    let input = materialize_find_pk_by_index
+                        .inputs
+                        .iter()
+                        .map(|node_id| self.graph.var_id(*node_id))
+                        .collect();
+
+                    let output = self.old.var_table.register_var(node.ty().clone());
+                    node.var.set(Some(output));
+
+                    self.old.push_action(plan::FindPkByIndex2 {
+                        input,
+                        output,
+                        table: materialize_find_pk_by_index.table,
+                        index: materialize_find_pk_by_index.index,
+                        filter: materialize_find_pk_by_index.filter.clone(),
+                    });
+                }
                 MaterializeKind::GetByKey(materialize_get_by_key) => {
-                    let var = self.old.var_table.register_var(node.ty().clone());
-                    node.var.set(Some(var));
+                    let input = materialize_get_by_key
+                        .inputs
+                        .iter()
+                        .map(|node_id| self.graph.var_id(*node_id))
+                        .collect();
 
-                    let output = plan::Output {
-                        var,
-                        project: eval::Func::identity(node.ty().clone()),
-                    };
-
-                    // Only one input supported for now!
-                    let mut input = None;
-
-                    for &i in &materialize_get_by_key.inputs {
-                        assert!(input.is_none(), "TODO");
-
-                        let node = &self.graph[i];
-                        input = Some(plan::Input {
-                            source: plan::InputSource::Value(node.var_id()),
-                            project: eval::Func::identity(node.ty().clone()),
-                        });
-                    }
+                    let output = self.old.var_table.register_var(node.ty().clone());
+                    node.var.set(Some(output));
 
                     let columns = materialize_get_by_key
                         .columns
@@ -246,7 +252,7 @@ impl PlannerNg<'_, '_> {
                         })
                         .collect();
 
-                    self.old.push_action(plan::GetByKey {
+                    self.old.push_action(plan::GetByKey2 {
                         input,
                         output,
                         table: materialize_get_by_key.table,

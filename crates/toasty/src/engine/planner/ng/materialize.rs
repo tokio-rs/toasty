@@ -3,10 +3,10 @@ mod materialize_nested_merge;
 use std::{cell::Cell, ops};
 
 use index_vec::IndexVec;
-use indexmap::IndexSet;
+use indexmap::{indexset, IndexSet};
 use toasty_core::{
-    schema::db::{ColumnId, TableId},
-    stmt::{self, visit_mut},
+    schema::db::{IndexId, TableId},
+    stmt::{self, visit, visit_mut},
 };
 
 use crate::engine::{
@@ -52,6 +52,9 @@ pub(crate) enum MaterializeKind {
     /// Filter results
     Filter(MaterializeFilter),
 
+    /// Find primary keys by index
+    FindPkByIndex(MaterializeFindPkByIndex),
+
     /// Get records by primary key
     GetByKey(MaterializeGetByKey),
 
@@ -84,6 +87,15 @@ pub(crate) struct MaterializeFilter {
 
     /// Filter
     pub(crate) filter: eval::Func,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeFindPkByIndex {
+    pub(crate) inputs: IndexSet<NodeId>,
+    pub(crate) table: TableId,
+    pub(crate) index: IndexId,
+    pub(crate) filter: stmt::Expr,
+    pub(crate) ty: stmt::Type,
 }
 
 #[derive(Debug)]
@@ -329,49 +341,78 @@ impl MaterializePlanner<'_> {
         } else {
             // Without SQL capability, we have to plan the materialization of
             // the statement based on available indices.
-            let index_plan = self.engine.plan_index_path2(&stmt);
+            let mut index_plan = self.engine.plan_index_path2(&stmt);
+            let table_id = self.engine.resolve_table_for(&stmt).id;
 
-            let mut node_id = None;
+            // If there is a result filter, we will need to evaluate it
+            // *after* fetching the rows, so we need to make sure that any
+            // column referenced in the filter is fetched.
+            let mut result_filter = index_plan.result_filter.clone();
 
-            // TODO: handle non-PK indexes
-            assert!(index_plan.index.primary_key);
-
-            if let Some(keys) = self.engine.try_build_key_filter2(index_plan.index, &stmt) {
-                // If there is a result filter, we will need to evaluate it
-                // *after* fetching the rows, so we need to make sure that any
-                // column referenced in the filter is fetched.
-                let mut result_filter = index_plan.result_filter.clone();
-
-                if let Some(result_filter) = &mut result_filter {
-                    visit_mut::for_each_expr_mut(result_filter, |expr| match expr {
-                        stmt::Expr::Reference(expr_reference) => {
-                            let (index, _) = columns.insert_full(*expr_reference);
-                            *expr = stmt::Expr::arg_project(0, [index]);
-                        }
-                        stmt::Expr::Arg(_) => todo!("expr={expr:#?}"),
-                        _ => {}
-                    });
-                }
-
-                let ty = self.engine.infer_record_list_ty(&stmt, &columns);
-
-                node_id = Some(self.graph.insert(MaterializeGetByKey {
-                    inputs,
-                    table: self.engine.resolve_table_for(&stmt).id,
-                    // TODO: don't clone
-                    columns: columns.clone(),
-                    keys,
-                    ty,
-                }));
-
-                // If there is a result filter, we need to apply a filter step on the returned rows.
-
-                if let Some(result_filter) = result_filter {
-                    todo!("result_filter={result_filter:#?}");
-                }
+            if let Some(result_filter) = &mut result_filter {
+                visit_mut::for_each_expr_mut(result_filter, |expr| match expr {
+                    stmt::Expr::Reference(expr_reference) => {
+                        let (index, _) = columns.insert_full(*expr_reference);
+                        *expr = stmt::Expr::arg_project(0, [index]);
+                    }
+                    stmt::Expr::Arg(_) => todo!("expr={expr:#?}"),
+                    _ => {}
+                });
             }
 
-            node_id.expect("bug")
+            // Type of the final record.
+            let ty = self.engine.infer_record_list_ty(&stmt, &columns);
+
+            let node_id = if index_plan.index.primary_key {
+                if let Some(keys) = self.engine.try_build_key_filter2(index_plan.index, &stmt) {
+                    self.graph.insert(MaterializeGetByKey {
+                        inputs,
+                        table: table_id,
+                        // TODO: don't clone
+                        columns: columns.clone(),
+                        keys,
+                        ty,
+                    })
+                } else {
+                    todo!()
+                }
+            } else {
+                assert!(index_plan.post_filter.is_none(), "TODO");
+
+                // Args not supportd yet...
+                visit::for_each_expr(&index_plan.index_filter, |expr| {
+                    assert!(!expr.is_arg(), "TODO");
+                });
+
+                let find_pk_by_index_record_ty = self.engine.index_key_record_ty(index_plan.index);
+
+                let find_pk_by_index = self.graph.insert(MaterializeFindPkByIndex {
+                    inputs,
+                    table: index_plan.index.on,
+                    index: index_plan.index.id,
+                    filter: index_plan.index_filter.take(),
+                    ty: stmt::Type::list(find_pk_by_index_record_ty.clone()),
+                });
+
+                // Use the result of the find by PK to load keys
+                self.graph.insert(MaterializeGetByKey {
+                    inputs: indexset![find_pk_by_index],
+                    table: table_id,
+                    columns: columns.clone(),
+                    keys: eval::Func::from_stmt(
+                        stmt::Expr::arg(0),
+                        vec![find_pk_by_index_record_ty],
+                    ),
+                    ty,
+                })
+            };
+
+            // If there is a result filter, we need to apply a filter step on the returned rows.
+            if let Some(result_filter) = result_filter {
+                todo!("result_filter={result_filter:#?}");
+            }
+
+            node_id
         };
 
         // Track the exec statement materialization node.
@@ -449,6 +490,11 @@ impl MaterializePlanner<'_> {
                 MaterializeKind::Filter(materialize_filter) => {
                     visit(&self.graph, &mut stack, materialize_filter.input);
                 }
+                MaterializeKind::FindPkByIndex(materialize_find_pk_by_index) => {
+                    for &input in &materialize_find_pk_by_index.inputs {
+                        visit(&self.graph, &mut stack, input);
+                    }
+                }
                 MaterializeKind::GetByKey(materialize_get_by_key) => {
                     for &input_id in &materialize_get_by_key.inputs {
                         visit(&self.graph, &mut stack, input_id);
@@ -495,8 +541,9 @@ impl MaterializeGraph {
 impl MaterializeNode {
     pub(super) fn ty(&self) -> &stmt::Type {
         match &self.kind {
-            MaterializeKind::Const(materialize_const) => &materialize_const.ty,
-            MaterializeKind::GetByKey(materialize_get_by_key) => &materialize_get_by_key.ty,
+            MaterializeKind::Const(kind) => &kind.ty,
+            MaterializeKind::FindPkByIndex(kind) => &kind.ty,
+            MaterializeKind::GetByKey(kind) => &kind.ty,
             _ => todo!("node={self:#?}"),
         }
     }
@@ -549,6 +596,12 @@ impl From<MaterializeExecStatement> for MaterializeNode {
 impl From<MaterializeFilter> for MaterializeNode {
     fn from(value: MaterializeFilter) -> Self {
         MaterializeKind::Filter(value).into()
+    }
+}
+
+impl From<MaterializeFindPkByIndex> for MaterializeNode {
+    fn from(value: MaterializeFindPkByIndex) -> Self {
+        MaterializeKind::FindPkByIndex(value).into()
     }
 }
 
