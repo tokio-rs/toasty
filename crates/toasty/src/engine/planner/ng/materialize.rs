@@ -100,17 +100,15 @@ pub(crate) struct MaterializeFindPkByIndex {
 
 #[derive(Debug)]
 pub(crate) struct MaterializeGetByKey {
-    /// Inputs needed to reify the operation
-    pub(crate) inputs: IndexSet<NodeId>,
+    /// Keys are always specified as an input, whether const or a set of
+    /// dependent materializations and transformations.
+    pub(crate) input: NodeId,
 
     /// The table to get keys from
     pub(crate) table: TableId,
 
     /// Columns to get
     pub(crate) columns: IndexSet<stmt::ExprReference>,
-
-    /// Keys to get
-    pub(crate) keys: eval::Func,
 
     /// Return type
     pub(crate) ty: stmt::Type,
@@ -324,10 +322,7 @@ impl MaterializePlanner<'_> {
 
         let exec_stmt_node_id = if filter_is_false {
             // Don't bother querying and just return false
-            self.graph.insert(MaterializeConst {
-                value: vec![],
-                ty: self.engine.infer_record_list_ty(&stmt, &columns),
-            })
+            self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
         } else if self.engine.capability().sql {
             select.returning = stmt::Returning::Expr(stmt::Expr::record(
                 columns
@@ -363,16 +358,15 @@ impl MaterializePlanner<'_> {
             // Type of the final record.
             let ty = self.engine.infer_record_list_ty(&stmt, &columns);
 
-            let node_id = if index_plan.index.primary_key {
+            // Type of the index key. Value for single index keys, record for
+            // composite.
+            let index_key_ty = stmt::Type::list(self.engine.index_key_record_ty(index_plan.index));
+
+            let get_by_key_input = if index_plan.index.primary_key {
+                // TODO: I'm not sure if calling try_build_key_filter is the
+                // right way to do this anymore, but it works for now?
                 if let Some(keys) = self.engine.try_build_key_filter2(index_plan.index, &stmt) {
-                    self.graph.insert(MaterializeGetByKey {
-                        inputs,
-                        table: table_id,
-                        // TODO: don't clone
-                        columns: columns.clone(),
-                        keys,
-                        ty,
-                    })
+                    self.insert_const(keys.eval_const(), index_key_ty)
                 } else {
                     todo!()
                 }
@@ -384,28 +378,21 @@ impl MaterializePlanner<'_> {
                     assert!(!expr.is_arg(), "TODO");
                 });
 
-                let find_pk_by_index_record_ty = self.engine.index_key_record_ty(index_plan.index);
-
-                let find_pk_by_index = self.graph.insert(MaterializeFindPkByIndex {
+                self.graph.insert(MaterializeFindPkByIndex {
                     inputs,
                     table: index_plan.index.on,
                     index: index_plan.index.id,
                     filter: index_plan.index_filter.take(),
-                    ty: stmt::Type::list(find_pk_by_index_record_ty.clone()),
-                });
-
-                // Use the result of the find by PK to load keys
-                self.graph.insert(MaterializeGetByKey {
-                    inputs: indexset![find_pk_by_index],
-                    table: table_id,
-                    columns: columns.clone(),
-                    keys: eval::Func::from_stmt(
-                        stmt::Expr::arg(0),
-                        vec![find_pk_by_index_record_ty],
-                    ),
-                    ty,
+                    ty: index_key_ty,
                 })
             };
+
+            let node_id = self.graph.insert(MaterializeGetByKey {
+                input: get_by_key_input,
+                table: table_id,
+                columns: columns.clone(),
+                ty,
+            });
 
             // If there is a result filter, we need to apply a filter step on the returned rows.
             if let Some(result_filter) = result_filter {
@@ -496,9 +483,7 @@ impl MaterializePlanner<'_> {
                     }
                 }
                 MaterializeKind::GetByKey(materialize_get_by_key) => {
-                    for &input_id in &materialize_get_by_key.inputs {
-                        visit(&self.graph, &mut stack, input_id);
-                    }
+                    visit(&self.graph, &mut stack, materialize_get_by_key.input);
                 }
                 MaterializeKind::NestedMerge(materialize_nested_merge) => {
                     for &input_id in &materialize_nested_merge.inputs {
@@ -512,6 +497,26 @@ impl MaterializePlanner<'_> {
         }
 
         self.graph.execution_order.reverse();
+    }
+
+    #[track_caller]
+    fn insert_const(&mut self, value: impl Into<stmt::Value>, ty: stmt::Type) -> NodeId {
+        let value = value.into();
+
+        // Type check
+        debug_assert!(
+            ty.is_list(),
+            "const types must be of type `stmt::Type::List`"
+        );
+        debug_assert!(
+            value.is_a(&ty),
+            "const type mismatch; expected={ty:#?}; actual={value:#?}",
+        );
+
+        self.graph.insert(MaterializeConst {
+            value: value.unwrap_list(),
+            ty,
+        })
     }
 }
 

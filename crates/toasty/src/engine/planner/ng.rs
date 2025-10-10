@@ -221,11 +221,7 @@ impl PlannerNg<'_, '_> {
                     });
                 }
                 MaterializeKind::GetByKey(materialize_get_by_key) => {
-                    let input = materialize_get_by_key
-                        .inputs
-                        .iter()
-                        .map(|node_id| self.graph.var_id(*node_id))
-                        .collect();
+                    let input = self.graph.var_id(materialize_get_by_key.input);
 
                     let output = self.old.var_table.register_var(node.ty().clone());
                     node.var.set(Some(output));
@@ -256,7 +252,6 @@ impl PlannerNg<'_, '_> {
                         input,
                         output,
                         table: materialize_get_by_key.table,
-                        keys: materialize_get_by_key.keys.clone(),
                         columns,
                         post_filter: None,
                     });

@@ -40,10 +40,7 @@ impl Exec<'_> {
     }
 
     pub(super) async fn action_get_by_key2(&mut self, action: &plan::GetByKey2) -> Result<()> {
-        let keys = self.eval_using_input2(&action.keys, &action.input).await?;
-        let stmt::Value::List(keys) = keys else {
-            todo!()
-        };
+        let keys = self.vars.load(action.input).collect().await?;
 
         let res = if keys.is_empty() {
             ValueStream::default()

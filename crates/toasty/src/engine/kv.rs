@@ -13,6 +13,10 @@ struct TryConvert<'a, 'stmt> {
 
     /// Eval function arguments
     args: Vec<stmt::Type>,
+
+    /// `true` if singleton keys should be records.
+    /// TODO: delete this once migration to new planner is done.
+    singleton_as_record: bool,
 }
 
 impl Engine {
@@ -47,6 +51,7 @@ impl Engine {
             engine: self,
             index,
             args: vec![],
+            singleton_as_record: false,
         };
 
         conv.try_convert(expr).map(|expr| {
@@ -64,6 +69,8 @@ impl Engine {
         })
     }
 
+    /// Keys are always returned as a list of records. Singleton keys are a
+    /// record with one field.
     pub(crate) fn try_build_key_filter2(
         &self,
         index: &Index,
@@ -72,7 +79,27 @@ impl Engine {
         let cx = self.expr_cx_for(stmt);
         let expr = stmt.as_filter().unwrap_or_else(|| todo!("stmt={stmt:#?}"));
 
-        self.try_build_key_filter(cx, index, expr)
+        let mut conv = TryConvert {
+            cx,
+            engine: self,
+            index,
+            args: vec![],
+            singleton_as_record: true,
+        };
+
+        conv.try_convert(expr).map(|expr| {
+            let expr = match expr {
+                expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
+                stmt::Expr::Value(value) => stmt::Expr::Value(stmt::Value::List(vec![value])),
+                expr @ stmt::Expr::Record(_) => stmt::Expr::list_from_vec(vec![expr]),
+                expr @ stmt::Expr::Arg(_) => expr,
+                expr => todo!("expr={expr:#?}"),
+            };
+
+            let key_ty = self.index_key_ty(index);
+
+            eval::Func::from_stmt_unchecked(expr, conv.args, stmt::Type::list(key_ty))
+        })
     }
 }
 
@@ -87,7 +114,7 @@ impl TryConvert<'_, '_> {
                     if self.index.columns.len() > 1 {
                         None
                     } else {
-                        Some(self.key_expr_to_eval(&e.rhs))
+                        Some(stmt::Expr::record([self.key_expr_to_eval(&e.rhs)]))
                     }
                 } else {
                     todo!("expr = {:#?}", expr);

@@ -30,17 +30,14 @@ pub(crate) struct GetByKey {
 /// Get a model by key
 #[derive(Debug)]
 pub(crate) struct GetByKey2 {
-    /// Where to get arguments for this action.
-    pub input: Vec<VarId>,
+    /// Where to get the keys to load
+    pub input: VarId,
 
     /// Where to store the result
     pub output: VarId,
 
     /// Table to query
     pub table: TableId,
-
-    /// Keys to get
-    pub keys: eval::Func,
 
     /// Columns to get
     pub columns: Vec<ColumnId>,
