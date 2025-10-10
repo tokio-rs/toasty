@@ -200,7 +200,17 @@ impl PlannerNg<'_, '_> {
                     });
                 }
                 MaterializeKind::Filter(materialize_filter) => {
-                    todo!("materialize_filter={materialize_filter:#?}");
+                    let input = self.graph.var_id(materialize_filter.input);
+                    let ty = node.ty().clone();
+
+                    let var = self.old.var_table.register_var(ty);
+                    node.var.set(Some(var));
+
+                    self.old.push_action(plan::Filter {
+                        input,
+                        output: var,
+                        filter: materialize_filter.filter.clone(),
+                    });
                 }
                 MaterializeKind::FindPkByIndex(materialize_find_pk_by_index) => {
                     let input = materialize_find_pk_by_index
@@ -253,7 +263,6 @@ impl PlannerNg<'_, '_> {
                         output,
                         table: materialize_get_by_key.table,
                         columns,
-                        post_filter: None,
                     });
                 }
                 MaterializeKind::NestedMerge(materialize_nested_merge) => {
@@ -296,6 +305,40 @@ impl PlannerNg<'_, '_> {
                         input: input_var,
                         output: var,
                         projection,
+                    });
+                }
+                MaterializeKind::QueryPk(materialize_query_pk) => {
+                    let output = self.old.var_table.register_var(node.ty().clone());
+                    node.var.set(Some(output));
+
+                    let columns = materialize_query_pk
+                        .columns
+                        .iter()
+                        .map(|expr_reference| {
+                            let stmt::ExprReference::Column {
+                                nesting,
+                                table,
+                                column,
+                            } = expr_reference
+                            else {
+                                todo!()
+                            };
+                            debug_assert_eq!(*nesting, 0);
+                            debug_assert_eq!(*table, 0);
+
+                            ColumnId {
+                                table: materialize_query_pk.table,
+                                index: *column,
+                            }
+                        })
+                        .collect();
+
+                    self.old.push_action(plan::QueryPk2 {
+                        output,
+                        table: materialize_query_pk.table,
+                        columns,
+                        pk_filter: materialize_query_pk.pk_filter.clone(),
+                        row_filter: materialize_query_pk.row_filter.clone(),
                     });
                 }
             }

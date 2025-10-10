@@ -9,7 +9,6 @@ impl Exec<'_> {
         &mut self,
         action: &plan::FindPkByIndex,
     ) -> Result<()> {
-        println!("action_get_by_key={action:#?}");
         let mut filter = action.filter.clone();
 
         if let Some(input) = &action.input {

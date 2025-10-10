@@ -41,10 +41,6 @@ pub(crate) struct GetByKey2 {
 
     /// Columns to get
     pub columns: Vec<ColumnId>,
-
-    /// Additional filtering done on the result before returning it to the
-    /// caller.
-    pub post_filter: Option<eval::Func>,
 }
 
 impl From<GetByKey> for Action {

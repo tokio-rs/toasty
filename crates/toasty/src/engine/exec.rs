@@ -3,6 +3,7 @@ mod batch_write;
 mod delete_by_key;
 mod exec_statement;
 mod exec_statement2;
+mod filter;
 mod find_pk_by_index;
 mod get_by_key;
 mod insert;
@@ -63,6 +64,7 @@ impl Exec<'_> {
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,
             Action::ExecStatement(action) => self.action_exec_statement(action).await,
             Action::ExecStatement2(action) => self.action_exec_statement2(action).await,
+            Action::Filter(action) => self.action_filter(action).await,
             Action::FindPkByIndex(action) => self.action_find_pk_by_index(action).await,
             Action::FindPkByIndex2(action) => self.action_find_pk_by_index2(action).await,
             Action::GetByKey(action) => self.action_get_by_key(action).await,
@@ -70,6 +72,7 @@ impl Exec<'_> {
             Action::Insert(action) => self.action_insert(action).await,
             Action::NestedMerge(action) => self.action_nested_merge(action).await,
             Action::QueryPk(action) => self.action_query_pk(action).await,
+            Action::QueryPk2(action) => self.action_query_pk2(action).await,
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
             Action::Project(action) => self.action_project(action).await,
             Action::SetVar(action) => {

@@ -1,5 +1,5 @@
 use crate::engine::plan::{
-    exec_statement2::ExecStatement2, project::Project, FindPkByIndex2, GetByKey2,
+    exec_statement2::ExecStatement2, project::Project, Filter, FindPkByIndex2, GetByKey2, QueryPk2,
 };
 
 use super::{
@@ -24,6 +24,9 @@ pub(crate) enum Action {
     /// Execute a statement
     ExecStatement2(ExecStatement2),
 
+    /// Filter a value stream
+    Filter(Filter),
+
     FindPkByIndex(FindPkByIndex),
     FindPkByIndex2(FindPkByIndex2),
 
@@ -44,6 +47,7 @@ pub(crate) enum Action {
 
     /// Query records by primary key
     QueryPk(QueryPk),
+    QueryPk2(QueryPk2),
 
     /// Perform an atomic operation in multiple steps
     ReadModifyWrite(Box<ReadModifyWrite>),
@@ -63,6 +67,7 @@ impl fmt::Debug for Action {
             Self::DeleteByKey(a) => a.fmt(f),
             Self::ExecStatement(a) => a.fmt(f),
             Self::ExecStatement2(a) => a.fmt(f),
+            Self::Filter(a) => a.fmt(f),
             Self::FindPkByIndex(a) => a.fmt(f),
             Self::FindPkByIndex2(a) => a.fmt(f),
             Self::GetByKey(a) => a.fmt(f),
@@ -70,6 +75,7 @@ impl fmt::Debug for Action {
             Self::Insert(a) => a.fmt(f),
             Self::NestedMerge(a) => a.fmt(f),
             Self::QueryPk(a) => a.fmt(f),
+            Self::QueryPk2(a) => a.fmt(f),
             Self::ReadModifyWrite(a) => a.fmt(f),
             Self::Project(a) => a.fmt(f),
             Self::SetVar(a) => a.fmt(f),

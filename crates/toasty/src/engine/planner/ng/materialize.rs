@@ -3,7 +3,7 @@ mod materialize_nested_merge;
 use std::{cell::Cell, ops};
 
 use index_vec::IndexVec;
-use indexmap::{indexset, IndexSet};
+use indexmap::IndexSet;
 use toasty_core::{
     schema::db::{IndexId, TableId},
     stmt::{self, visit, visit_mut},
@@ -63,6 +63,8 @@ pub(crate) enum MaterializeKind {
 
     /// Projection operation - transforms records
     Project(MaterializeProject),
+
+    QueryPk(MaterializeQueryPk),
 }
 
 #[derive(Debug)]
@@ -87,6 +89,9 @@ pub(crate) struct MaterializeFilter {
 
     /// Filter
     pub(crate) filter: eval::Func,
+
+    /// Row type
+    pub(crate) ty: stmt::Type,
 }
 
 #[derive(Debug)]
@@ -130,6 +135,22 @@ pub(crate) struct MaterializeProject {
 
     /// Projection expression
     pub(crate) projection: stmt::Expr,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeQueryPk {
+    pub(crate) table: TableId,
+
+    /// Columns to get
+    pub(crate) columns: IndexSet<stmt::ExprReference>,
+
+    /// How to filter the index
+    pub(crate) pk_filter: stmt::Expr,
+
+    /// Additional filter to pass to the database
+    pub(crate) row_filter: Option<stmt::Expr>,
+
+    pub(crate) ty: stmt::Type,
 }
 
 #[derive(Debug)]
@@ -339,13 +360,39 @@ impl MaterializePlanner<'_> {
             let mut index_plan = self.engine.plan_index_path2(&stmt);
             let table_id = self.engine.resolve_table_for(&stmt).id;
 
-            // If there is a result filter, we will need to evaluate it
-            // *after* fetching the rows, so we need to make sure that any
-            // column referenced in the filter is fetched.
-            let mut result_filter = index_plan.result_filter.clone();
+            // If the query can be reduced to fetching rows using a set of
+            // primary-key keys, then `pk_keys` will be set to `Some(<keys>)`.
+            let mut pk_keys = None;
 
-            if let Some(result_filter) = &mut result_filter {
-                visit_mut::for_each_expr_mut(result_filter, |expr| match expr {
+            // The post-filter is an expression that filters out returned rows
+            // in-memory. To process this filter, Toasty needs to make sure that
+            // any column referenced in the filter is included when fetching
+            // data.
+            let mut post_filter = index_plan.post_filter.clone();
+
+            if index_plan.index.primary_key {
+                // If using the primary key to find rows, try to convert the
+                // filter expression to a set of primary-key keys.
+                //
+                // TODO: move this to the index planner?
+                pk_keys = self.engine.try_build_key_filter2(index_plan.index, &stmt);
+            };
+
+            // If fetching rows using GetByKey, some databases do not support
+            // applying additional filters to the rows before returning results.
+            // In this case, the result_filter needs to be applied in-memory.
+            if pk_keys.is_some() || !index_plan.index.primary_key {
+                if let Some(result_filter) = index_plan.result_filter.take() {
+                    post_filter = Some(match post_filter {
+                        Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
+                        None => result_filter,
+                    });
+                }
+            }
+
+            // Make sure we are including columns needed to apply the post filter
+            if let Some(post_filter) = &mut post_filter {
+                visit_mut::for_each_expr_mut(post_filter, |expr| match expr {
                     stmt::Expr::Reference(expr_reference) => {
                         let (index, _) = columns.insert_full(*expr_reference);
                         *expr = stmt::Expr::arg_project(0, [index]);
@@ -362,13 +409,28 @@ impl MaterializePlanner<'_> {
             // composite.
             let index_key_ty = stmt::Type::list(self.engine.index_key_record_ty(index_plan.index));
 
-            let get_by_key_input = if index_plan.index.primary_key {
+            let mut node_id = if index_plan.index.primary_key {
                 // TODO: I'm not sure if calling try_build_key_filter is the
                 // right way to do this anymore, but it works for now?
                 if let Some(keys) = self.engine.try_build_key_filter2(index_plan.index, &stmt) {
-                    self.insert_const(keys.eval_const(), index_key_ty)
+                    let get_by_key_input = self.insert_const(keys.eval_const(), index_key_ty);
+
+                    self.graph.insert(MaterializeGetByKey {
+                        input: get_by_key_input,
+                        table: table_id,
+                        columns: columns.clone(),
+                        ty: ty.clone(),
+                    })
                 } else {
-                    todo!()
+                    assert!(inputs.is_empty(), "TODO");
+
+                    self.graph.insert(MaterializeQueryPk {
+                        table: table_id,
+                        columns: columns.clone(),
+                        pk_filter: index_plan.index_filter,
+                        row_filter: index_plan.result_filter,
+                        ty: ty.clone(),
+                    })
                 }
             } else {
                 assert!(index_plan.post_filter.is_none(), "TODO");
@@ -378,25 +440,30 @@ impl MaterializePlanner<'_> {
                     assert!(!expr.is_arg(), "TODO");
                 });
 
-                self.graph.insert(MaterializeFindPkByIndex {
+                let get_by_key_input = self.graph.insert(MaterializeFindPkByIndex {
                     inputs,
                     table: index_plan.index.on,
                     index: index_plan.index.id,
                     filter: index_plan.index_filter.take(),
                     ty: index_key_ty,
+                });
+
+                self.graph.insert(MaterializeGetByKey {
+                    input: get_by_key_input,
+                    table: table_id,
+                    columns: columns.clone(),
+                    ty: ty.clone(),
                 })
             };
 
-            let node_id = self.graph.insert(MaterializeGetByKey {
-                input: get_by_key_input,
-                table: table_id,
-                columns: columns.clone(),
-                ty,
-            });
-
-            // If there is a result filter, we need to apply a filter step on the returned rows.
-            if let Some(result_filter) = result_filter {
-                todo!("result_filter={result_filter:#?}");
+            // If there is a post filter, we need to apply a filter step on the returned rows.
+            if let Some(post_filter) = post_filter {
+                let item_ty = ty.unwrap_list_ref();
+                node_id = self.graph.insert(MaterializeFilter {
+                    input: node_id,
+                    filter: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
+                    ty,
+                });
             }
 
             node_id
@@ -493,6 +560,8 @@ impl MaterializePlanner<'_> {
                 MaterializeKind::Project(materialize_project) => {
                     visit(&self.graph, &mut stack, materialize_project.input);
                 }
+                // As of now, QueryPk has no inputs
+                MaterializeKind::QueryPk(_materialize_query_pk) => {}
             }
         }
 
@@ -533,11 +602,6 @@ impl MaterializeGraph {
         self.store.push(node.into())
     }
 
-    /// Returns the type the node evaluates to
-    pub(super) fn ty(&self, node_id: NodeId) -> &stmt::Type {
-        self.store[node_id].ty()
-    }
-
     pub(super) fn var_id(&self, node_id: NodeId) -> plan::VarId {
         self.store[node_id].var_id()
     }
@@ -547,8 +611,10 @@ impl MaterializeNode {
     pub(super) fn ty(&self) -> &stmt::Type {
         match &self.kind {
             MaterializeKind::Const(kind) => &kind.ty,
+            MaterializeKind::Filter(kind) => &kind.ty,
             MaterializeKind::FindPkByIndex(kind) => &kind.ty,
             MaterializeKind::GetByKey(kind) => &kind.ty,
+            MaterializeKind::QueryPk(kind) => &kind.ty,
             _ => todo!("node={self:#?}"),
         }
     }
@@ -625,6 +691,12 @@ impl From<MaterializeNestedMerge> for MaterializeNode {
 impl From<MaterializeProject> for MaterializeNode {
     fn from(value: MaterializeProject) -> Self {
         MaterializeKind::Project(value).into()
+    }
+}
+
+impl From<MaterializeQueryPk> for MaterializeNode {
+    fn from(value: MaterializeQueryPk) -> Self {
+        MaterializeKind::QueryPk(value).into()
     }
 }
 

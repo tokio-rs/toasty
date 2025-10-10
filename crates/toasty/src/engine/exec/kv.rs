@@ -4,15 +4,6 @@ use toasty_core::stmt::ValueStream;
 
 /// Key-value specific utilities
 impl Exec<'_> {
-    pub(super) async fn eval_using_input2(
-        &mut self,
-        func: &eval::Func,
-        input: &[plan::VarId],
-    ) -> Result<stmt::Value> {
-        let input = self.collect_input2(input).await?;
-        func.eval(&input[..])
-    }
-
     pub(super) async fn eval_using_input(
         &mut self,
         func: &eval::Func,
