@@ -211,7 +211,21 @@ impl TryConvert<'_, '_> {
                     .push(stmt::Type::list(self.engine.index_key_ty(self.index)));
                 expr.clone()
             }
-            stmt::Expr::Value(_) => expr.clone(),
+            stmt::Expr::Value(stmt::Value::List(items)) => {
+                let mut ret = vec![];
+
+                for item in items {
+                    ret.push(match item {
+                        record @ stmt::Value::Record(_) => record.clone(),
+                        value if self.singleton_as_record => {
+                            stmt::Value::record_from_vec(vec![value.clone()])
+                        }
+                        value => value.clone(),
+                    });
+                }
+
+                stmt::Expr::Value(ret.into())
+            }
             _ => todo!("expr={:#?}", expr),
         }
     }
