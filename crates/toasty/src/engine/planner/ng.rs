@@ -124,7 +124,7 @@ struct PlannerNg<'a, 'b> {
 }
 
 impl Planner<'_> {
-    pub(crate) fn plan_v2_stmt_query(&mut self, stmt: stmt::Statement) -> Result<plan::VarId> {
+    pub(crate) fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<plan::VarId> {
         PlannerNg {
             store: StatementInfoStore::new(),
             graph: MaterializeGraph::new(),
