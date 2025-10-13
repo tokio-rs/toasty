@@ -1,6 +1,6 @@
 use super::{Expr, Insert, Statement};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprStmt {
     pub stmt: Box<Statement>,
 }

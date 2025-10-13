@@ -3,7 +3,7 @@ use std::fmt;
 use super::{Expr, ExprSetOp, Select, SourceModel, Update, Values};
 use crate::schema::db::TableId;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum ExprSet {
     /// A select query, possibly with a filter.
     Select(Box<Select>),

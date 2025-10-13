@@ -1,6 +1,6 @@
 use super::Expr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprMap {
     /// Expression to map
     pub base: Box<Expr>,

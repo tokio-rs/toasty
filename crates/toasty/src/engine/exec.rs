@@ -12,6 +12,7 @@ mod nested_merge;
 mod project;
 mod query_pk;
 mod rmw;
+mod set_var;
 mod update_by_key;
 
 mod var_store;
@@ -80,6 +81,7 @@ impl Exec<'_> {
                     .store(action.var, ValueStream::from_vec(action.value.clone()));
                 Ok(())
             }
+            Action::SetVar2(action) => self.action_set_var2(action),
             Action::UpdateByKey(action) => self.action_update_by_key(action).await,
         }
     }
@@ -102,7 +104,7 @@ impl Exec<'_> {
         let mut ret = Vec::new();
 
         for var_id in input {
-            let values = self.vars.load(*var_id).collect().await?;
+            let values = self.vars.load_count(*var_id).await?.collect().await?;
             ret.push(stmt::Value::List(values));
         }
 

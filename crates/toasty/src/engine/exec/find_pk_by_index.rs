@@ -52,10 +52,20 @@ impl Exec<'_> {
 
         // Collect input values and substitute into the statement
         if !action.input.is_empty() {
+            // Only one input supported so far
+            assert!(action.input.len() == 1, "TODO");
             let input = self.collect_input2(&action.input).await?;
-            filter.substitute(&input);
 
+            let [stmt::Value::List(items)] = &input[..] else {
+                todo!()
+            };
+            assert_eq!(items.len(), 1, "TODO");
+
+            filter.substitute([&items[0]]);
+
+            let before = filter.clone();
             simplify::simplify_expr(self.engine.expr_cx(), &mut filter);
+            debug_assert_eq!(before, filter);
         }
 
         let res = self
@@ -77,7 +87,8 @@ impl Exec<'_> {
             Rows::Count(_) => todo!(),
         };
 
-        self.vars.store(action.output, rows);
+        self.vars
+            .store_counted(action.output.var, action.output.num_uses, rows);
 
         Ok(())
     }

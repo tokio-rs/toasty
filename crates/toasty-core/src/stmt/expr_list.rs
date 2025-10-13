@@ -1,6 +1,6 @@
 use super::{Expr, Value};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprList {
     pub items: Vec<Expr>,
 }

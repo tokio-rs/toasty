@@ -234,7 +234,7 @@ pub use with::With;
 use crate::schema::db::TableId;
 use std::fmt;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Statement {
     /// Delete one or more existing records
     Delete(Delete),

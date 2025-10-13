@@ -55,7 +55,8 @@ impl Exec<'_> {
             _ => todo!("res={res:#?}"),
         };
 
-        self.vars.store(action.output, rows);
+        self.vars
+            .store_counted(action.output.var, action.output.num_uses, rows);
         Ok(())
     }
 }

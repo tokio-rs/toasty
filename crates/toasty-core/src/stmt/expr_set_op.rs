@@ -1,6 +1,6 @@
 use super::{ExprSet, SetOp};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprSetOp {
     pub op: SetOp,
     pub operands: Vec<ExprSet>,

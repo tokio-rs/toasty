@@ -1,7 +1,7 @@
 use super::InsertTarget;
 use crate::schema::db::{ColumnId, TableId};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InsertTable {
     /// Table identifier to insert into
     pub table: TableId,

@@ -1,5 +1,6 @@
 use crate::engine::plan::{
     exec_statement2::ExecStatement2, project::Project, Filter, FindPkByIndex2, GetByKey2, QueryPk2,
+    SetVar2,
 };
 
 use super::{
@@ -54,6 +55,7 @@ pub(crate) enum Action {
 
     /// Set a variable to a const
     SetVar(SetVar),
+    SetVar2(SetVar2),
 
     /// Update a record by the primary key
     UpdateByKey(UpdateByKey),
@@ -79,6 +81,7 @@ impl fmt::Debug for Action {
             Self::ReadModifyWrite(a) => a.fmt(f),
             Self::Project(a) => a.fmt(f),
             Self::SetVar(a) => a.fmt(f),
+            Self::SetVar2(a) => a.fmt(f),
             Self::UpdateByKey(a) => a.fmt(f),
         }
     }

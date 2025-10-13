@@ -1,6 +1,6 @@
 use super::{Expr, ExprRecord};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprEnum {
     pub variant: usize,
     pub fields: ExprRecord,

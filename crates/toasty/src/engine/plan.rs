@@ -35,7 +35,7 @@ mod nested_merge;
 pub(crate) use nested_merge::{MergeQualification, NestedChild, NestedLevel, NestedMerge};
 
 mod output;
-pub(crate) use output::Output;
+pub(crate) use output::{Output, Output2};
 
 mod pipeline;
 pub(crate) use pipeline::Pipeline;
@@ -50,7 +50,7 @@ mod rmw;
 pub(crate) use rmw::ReadModifyWrite;
 
 mod set_var;
-pub(crate) use set_var::{SetVar, VarId};
+pub(crate) use set_var::{SetVar, SetVar2, VarId};
 
 mod update_by_key;
 pub(crate) use update_by_key::UpdateByKey;

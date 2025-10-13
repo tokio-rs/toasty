@@ -1,6 +1,6 @@
 use super::{Join, TableFactor};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TableWithJoins {
     /// The table relation
     pub relation: TableFactor,

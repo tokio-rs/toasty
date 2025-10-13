@@ -15,7 +15,7 @@ impl Exec<'_> {
         if !action.input.is_empty() {
             let mut input_values = Vec::new();
             for var_id in &action.input {
-                let values = self.vars.load(*var_id).collect().await?;
+                let values = self.vars.load_count(*var_id).await?.collect().await?;
                 input_values.push(stmt::Value::List(values));
             }
             stmt.substitute(&input_values);
@@ -43,7 +43,8 @@ impl Exec<'_> {
                     todo!()
                 }
                 Rows::Values(rows) => {
-                    self.vars.store(output.var, rows);
+                    self.vars
+                        .store_counted(output.output.var, output.output.num_uses, rows);
                 }
             }
         } else {

@@ -1,9 +1,17 @@
+use crate::engine::plan::Output2;
+
 use super::{stmt, Action};
 
 #[derive(Debug)]
 pub(crate) struct SetVar {
     pub var: VarId,
     pub value: Vec<stmt::Value>,
+}
+
+#[derive(Debug)]
+pub(crate) struct SetVar2 {
+    pub value: Vec<stmt::Value>,
+    pub output: Output2,
 }
 
 /// Identifies a pipeline variable slot
@@ -22,5 +30,11 @@ impl Action {
 impl From<SetVar> for Action {
     fn from(src: SetVar) -> Self {
         Self::SetVar(src)
+    }
+}
+
+impl From<SetVar2> for Action {
+    fn from(value: SetVar2) -> Self {
+        Self::SetVar2(value)
     }
 }

@@ -3,7 +3,7 @@ use crate::stmt;
 
 use std::{fmt, ops};
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 pub struct ExprRecord {
     pub fields: Vec<Expr>,
 }

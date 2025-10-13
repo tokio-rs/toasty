@@ -5,7 +5,7 @@ use crate::{
     Schema,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum InsertTarget {
     /// Inserting into a scope implies that the inserted value should be
     /// included by the query after insertion. This could be a combination of

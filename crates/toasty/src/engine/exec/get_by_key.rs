@@ -39,7 +39,7 @@ impl Exec<'_> {
     }
 
     pub(super) async fn action_get_by_key2(&mut self, action: &plan::GetByKey2) -> Result<()> {
-        let keys = self.vars.load(action.input).collect().await?;
+        let keys = self.vars.load_count(action.input).await?.collect().await?;
 
         let res = if keys.is_empty() {
             ValueStream::default()
@@ -62,7 +62,8 @@ impl Exec<'_> {
             }
         };
 
-        self.vars.store(action.output, res);
+        self.vars
+            .store_counted(action.output.var, action.output.num_uses, res);
         Ok(())
     }
 }

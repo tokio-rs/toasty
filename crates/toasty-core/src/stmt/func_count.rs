@@ -1,6 +1,6 @@
 use super::{Expr, ExprFunc};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FuncCount {
     /// When `None`, it means `count(*)` Otherwise, count the number of rows for
     /// which the expression does not evaluate to `NULL`

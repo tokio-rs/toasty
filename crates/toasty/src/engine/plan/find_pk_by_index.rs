@@ -1,4 +1,4 @@
-use crate::engine::plan::VarId;
+use crate::engine::plan::{Output2, VarId};
 
 use super::{stmt, Action, Input, Output};
 use toasty_core::schema::db::{IndexId, TableId};
@@ -29,7 +29,7 @@ pub(crate) struct FindPkByIndex2 {
     pub input: Vec<VarId>,
 
     /// Where to store the output
-    pub output: VarId,
+    pub output: Output2,
 
     /// Table to query
     pub table: TableId,

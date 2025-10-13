@@ -7,7 +7,7 @@ use toasty_core::stmt::ValueStream;
 impl Exec<'_> {
     pub(super) async fn action_filter(&mut self, action: &plan::Filter) -> Result<()> {
         // Load the input variable
-        let mut input_stream = self.vars.load(action.input);
+        let mut input_stream = self.vars.load_count(action.input).await?;
 
         // TODO: come up with a more advanced execution task manager to avoid
         // having to eagerly buffer everything.
@@ -24,8 +24,11 @@ impl Exec<'_> {
         }
 
         // Store the projected stream to the output variable
-        self.vars
-            .store(action.output, ValueStream::from_vec(filtered_rows));
+        self.vars.store_counted(
+            action.output.var,
+            action.output.num_uses,
+            ValueStream::from_vec(filtered_rows),
+        );
 
         Ok(())
     }

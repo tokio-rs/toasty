@@ -1,6 +1,6 @@
 use super::{Expr, Type};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprCast {
     /// Expression to cast
     pub expr: Box<Expr>,

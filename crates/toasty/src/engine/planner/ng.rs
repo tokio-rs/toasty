@@ -141,9 +141,14 @@ impl PlannerNg<'_, '_> {
         // Build the execution plan...
         self.plan_materializations();
 
+        let mid = self.store.root().output.get().unwrap();
+        let node = &self.graph[mid];
+        node.num_uses.set(node.num_uses.get() + 1);
+
         // Build the execution plan
         for node_id in &self.graph.execution_order {
             let node = &self.graph[node_id];
+            let num_uses = node.num_uses.get();
 
             match &node.kind {
                 MaterializeKind::Const(materialize_const) => {
@@ -152,8 +157,8 @@ impl PlannerNg<'_, '_> {
                     let var = self.old.var_table.register_var(node.ty().clone());
                     node.var.set(Some(var));
 
-                    self.old.push_action(plan::SetVar {
-                        var,
+                    self.old.push_action(plan::SetVar2 {
+                        output: plan::Output2 { var, num_uses },
                         value: materialize_const.value.clone(),
                     });
                 }
@@ -195,7 +200,10 @@ impl PlannerNg<'_, '_> {
 
                     self.old.push_action(plan::ExecStatement2 {
                         input: input_vars,
-                        output: Some(plan::ExecStatementOutput { ty: ty_fields, var }),
+                        output: Some(plan::ExecStatementOutput {
+                            ty: ty_fields,
+                            output: plan::Output2 { var, num_uses },
+                        }),
                         stmt: materialize_exec_statement.stmt.clone(),
                     });
                 }
@@ -208,7 +216,7 @@ impl PlannerNg<'_, '_> {
 
                     self.old.push_action(plan::Filter {
                         input,
-                        output: var,
+                        output: plan::Output2 { var, num_uses },
                         filter: materialize_filter.filter.clone(),
                     });
                 }
@@ -224,7 +232,10 @@ impl PlannerNg<'_, '_> {
 
                     self.old.push_action(plan::FindPkByIndex2 {
                         input,
-                        output,
+                        output: plan::Output2 {
+                            var: output,
+                            num_uses,
+                        },
                         table: materialize_find_pk_by_index.table,
                         index: materialize_find_pk_by_index.index,
                         filter: materialize_find_pk_by_index.filter.clone(),
@@ -260,7 +271,10 @@ impl PlannerNg<'_, '_> {
 
                     self.old.push_action(plan::GetByKey2 {
                         input,
-                        output,
+                        output: plan::Output2 {
+                            var: output,
+                            num_uses,
+                        },
                         table: materialize_get_by_key.table,
                         columns,
                     });
@@ -280,7 +294,10 @@ impl PlannerNg<'_, '_> {
 
                     self.old.push_action(plan::NestedMerge {
                         inputs: input_vars,
-                        output,
+                        output: plan::Output2 {
+                            var: output,
+                            num_uses,
+                        },
                         root: materialize_nested_merge.root.clone(),
                     });
                 }
@@ -303,7 +320,7 @@ impl PlannerNg<'_, '_> {
 
                     self.old.push_action(plan::Project {
                         input: input_var,
-                        output: var,
+                        output: plan::Output2 { var, num_uses },
                         projection,
                     });
                 }
@@ -334,7 +351,10 @@ impl PlannerNg<'_, '_> {
                         .collect();
 
                     self.old.push_action(plan::QueryPk2 {
-                        output,
+                        output: plan::Output2 {
+                            var: output,
+                            num_uses,
+                        },
                         table: materialize_query_pk.table,
                         columns,
                         pk_filter: materialize_query_pk.pk_filter.clone(),
@@ -346,6 +366,7 @@ impl PlannerNg<'_, '_> {
 
         let mid = self.store.root().output.get().unwrap();
         let output = self.graph[mid].var.get().unwrap();
+
         Ok(output)
     }
 }

@@ -228,10 +228,14 @@ impl<'stmt> IndexMatch<'stmt> {
                 }
             }
             BinaryOp(e) => match (&*e.lhs, &*e.rhs) {
-                (stmt::Expr::Reference(lhs @ stmt::ExprReference::Column { .. }), Value(..)) => {
+                (stmt::Expr::Reference(lhs @ stmt::ExprReference::Column { .. }), rhs) => {
+                    assert!(
+                        !rhs.is_expr_reference(),
+                        "TODO: handle ExprReference on both sides"
+                    );
                     self.match_expr_binary_op_column(cx, lhs, expr, e.op)
                 }
-                (Value(..), stmt::Expr::Reference(rhs @ stmt::ExprReference::Column { .. })) => {
+                (_, stmt::Expr::Reference(rhs @ stmt::ExprReference::Column { .. })) => {
                     let mut op = e.op;
                     op.reverse();
 
@@ -458,11 +462,11 @@ impl<'stmt> IndexMatch<'stmt> {
                     // Normalize the expression to include the column on the LHS
                     // TODO: is this needed?
                     let expr = match (&*binary_op.lhs, &*binary_op.rhs) {
-                        (stmt::Expr::Reference(stmt::ExprReference::Column { .. }), Value(_)) => {
+                        (stmt::Expr::Reference(stmt::ExprReference::Column { .. }), _) => {
                             expr.clone()
                         }
                         (
-                            Value(value),
+                            lhs,
                             stmt::Expr::Reference(column_ref @ stmt::ExprReference::Column { .. }),
                         ) => {
                             let mut op = binary_op.op;
@@ -470,7 +474,7 @@ impl<'stmt> IndexMatch<'stmt> {
 
                             stmt::ExprBinaryOp {
                                 lhs: Box::new(stmt::Expr::Reference(*column_ref)),
-                                rhs: Box::new(value.clone().into()),
+                                rhs: Box::new(lhs.clone()),
                                 op,
                             }
                             .into()

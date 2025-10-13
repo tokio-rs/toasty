@@ -32,6 +32,9 @@ pub(crate) struct MaterializeNode {
     /// Variable where the output is stored
     pub(crate) var: Cell<Option<plan::VarId>>,
 
+    /// Number of nodes that use this one as input.
+    pub(crate) num_uses: Cell<usize>,
+
     /// Used for topo-sort
     visited: Cell<bool>,
 }
@@ -265,10 +268,6 @@ impl MaterializePlanner<'_> {
                 continue;
             };
 
-            assert!(
-                self.engine.capability().sql,
-                "TODO: only supported on sql right now"
-            );
             assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
             assert!(!filter_is_false, "TODO: handle const false filters");
 
@@ -283,36 +282,70 @@ impl MaterializePlanner<'_> {
             input.set(Some(0));
         }
 
-        // Rewrite the filter to batch load all possible records that
-        // will be needed to materialize the original statement.
+        // If targeting SQL, leverage the SQL query engine to handle most of the rewrite details.
+
         if let Some(ref_source) = ref_source {
-            /*
-            -- Step 1: Store filtered users
-            CREATE TEMP TABLE temp_users AS
-            SELECT * FROM users WHERE users.active = true;
+            if self.engine.capability().sql {
+                /*
+                -- Step 1: Store filtered users
+                CREATE TEMP TABLE temp_users AS
+                SELECT * FROM users WHERE users.active = true;
 
-            -- Step 2: Fetch all potentially matching todos
-            SELECT todos.*
-            FROM todos
-            WHERE EXISTS (
-              SELECT 1 FROM temp_users u
-              WHERE todos.user_id = u.id
-              AND todos.created_at > u.created_at
-              AND todos.priority > 3
-            );
-                 */
+                -- Step 2: Fetch all potentially matching todos
+                SELECT todos.*
+                FROM todos
+                WHERE EXISTS (
+                  SELECT 1 FROM temp_users u
+                  WHERE todos.user_id = u.id
+                  AND todos.created_at > u.created_at
+                  AND todos.priority > 3
+                );
+                     */
 
-            visit_mut::for_each_expr_mut(&mut select.filter, |expr| {
-                match expr {
+                visit_mut::for_each_expr_mut(&mut select.filter, |expr| {
+                    match expr {
+                        stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
+                            debug_assert_eq!(0, *nesting);
+                            // We need to up the nesting to reflect that the filter is moved
+                            // one level deeper.
+                            *nesting += 1;
+                        }
+                        stmt::Expr::Arg(expr_arg) => {
+                            let Arg::Ref {
+                                input,
+                                batch_load_index: index,
+                                ..
+                            } = &stmt_info.args[expr_arg.position]
+                            else {
+                                todo!()
+                            };
+
+                            // Rewrite reference the new `FROM`.
+                            *expr = stmt::ExprReference::Column {
+                                nesting: 0,
+                                table: input.get().unwrap(),
+                                column: *index,
+                            }
+                            .into();
+                        }
+                        _ => {}
+                    }
+                });
+
+                let sub_query = stmt::Select {
+                    returning: stmt::Returning::Expr(stmt::Expr::record([1])),
+                    source: stmt::Source::from(ref_source),
+                    filter: select.filter.take(),
+                };
+
+                select.filter = stmt::Expr::exists(sub_query);
+            } else {
+                visit_mut::for_each_expr_mut(&mut select.filter, |expr| match expr {
                     stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
                         debug_assert_eq!(0, *nesting);
-                        // We need to up the nesting to reflect that the filter is moved
-                        // one level deeper.
-                        *nesting += 1;
                     }
                     stmt::Expr::Arg(expr_arg) => {
                         let Arg::Ref {
-                            input,
                             batch_load_index: index,
                             ..
                         } = &stmt_info.args[expr_arg.position]
@@ -320,25 +353,11 @@ impl MaterializePlanner<'_> {
                             todo!()
                         };
 
-                        // Rewrite reference the new `FROM`.
-                        *expr = stmt::ExprReference::Column {
-                            nesting: 0,
-                            table: input.get().unwrap(),
-                            column: *index,
-                        }
-                        .into();
+                        *expr = stmt::Expr::arg_project(0, [*index]);
                     }
                     _ => {}
-                }
-            });
-
-            let sub_query = stmt::Select {
-                returning: stmt::Returning::Expr(stmt::Expr::record([1])),
-                source: stmt::Source::from(ref_source),
-                filter: select.filter.take(),
-            };
-
-            select.filter = stmt::Expr::exists(sub_query);
+                });
+            }
         }
 
         let exec_stmt_node_id = if filter_is_false {
@@ -413,6 +432,8 @@ impl MaterializePlanner<'_> {
                 // TODO: I'm not sure if calling try_build_key_filter is the
                 // right way to do this anymore, but it works for now?
                 if let Some(keys) = self.engine.try_build_key_filter2(index_plan.index, &stmt) {
+                    assert!(ref_source.is_none(), "TODO; keys={keys:#?}");
+
                     let get_by_key_input = self.insert_const(keys.eval_const(), index_key_ty);
 
                     self.graph.insert(MaterializeGetByKey {
@@ -423,6 +444,7 @@ impl MaterializePlanner<'_> {
                     })
                 } else {
                     assert!(inputs.is_empty(), "TODO");
+                    assert!(ref_source.is_none(), "TODO");
 
                     self.graph.insert(MaterializeQueryPk {
                         table: table_id,
@@ -434,10 +456,14 @@ impl MaterializePlanner<'_> {
                 }
             } else {
                 assert!(index_plan.post_filter.is_none(), "TODO");
+                assert!(inputs.len() <= 1, "TODO: inputs={inputs:#?}");
 
                 // Args not supportd yet...
                 visit::for_each_expr(&index_plan.index_filter, |expr| {
-                    assert!(!expr.is_arg(), "TODO");
+                    if let stmt::Expr::Arg(expr_arg) = expr {
+                        debug_assert_eq!(0, expr_arg.position, "TODO; index_plan={index_plan:#?}");
+                        debug_assert_eq!(Some(expr_arg), ref_source.as_ref());
+                    }
                 });
 
                 let get_by_key_input = self.graph.insert(MaterializeFindPkByIndex {
@@ -528,8 +554,13 @@ impl MaterializePlanner<'_> {
             self.graph.execution_order.push(node_id);
 
             fn visit(graph: &MaterializeGraph, stack: &mut Vec<NodeId>, node_id: NodeId) {
-                if !graph[node_id].visited.get() {
-                    graph[node_id].visited.set(true);
+                let node = &graph[node_id];
+
+                // Increment use count
+                node.num_uses.set(node.num_uses.get() + 1);
+
+                if !node.visited.get() {
+                    node.visited.set(true);
                     stack.push(node_id);
                 }
             }
@@ -705,6 +736,7 @@ impl From<MaterializeKind> for MaterializeNode {
         MaterializeNode {
             kind: value,
             var: Cell::new(None),
+            num_uses: Cell::new(0),
             visited: Cell::new(false),
         }
     }

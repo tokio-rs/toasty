@@ -1,7 +1,7 @@
 use super::{Expr, Node, Query, Returning, Source, Statement, Visit, VisitMut};
 use crate::stmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Delete {
     /// Source of data to delete from
     pub from: Source,

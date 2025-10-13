@@ -1,4 +1,4 @@
-use crate::engine::plan::VarId;
+use crate::engine::plan::{Output2, VarId};
 
 use super::{eval, Action, Input, Output};
 
@@ -34,7 +34,7 @@ pub(crate) struct GetByKey2 {
     pub input: VarId,
 
     /// Where to store the result
-    pub output: VarId,
+    pub output: Output2,
 
     /// Table to query
     pub table: TableId,

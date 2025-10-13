@@ -54,7 +54,7 @@ impl Model {
         let filter = match &self.primary_key.fields[..] {
             [pk_field] => stmt::Expr::eq(
                 stmt::Expr::ref_self_field(pk_field),
-                input.resolve_arg(&0.into()),
+                input.resolve_arg_as_expr(&0.into()),
             ),
             pk_fields => stmt::Expr::and_from_vec(
                 pk_fields
@@ -63,7 +63,7 @@ impl Model {
                     .map(|(i, pk_field)| {
                         stmt::Expr::eq(
                             stmt::Expr::ref_self_field(pk_field),
-                            input.resolve_arg(&i.into()),
+                            input.resolve_arg_as_expr(&i.into()),
                         )
                     })
                     .collect(),

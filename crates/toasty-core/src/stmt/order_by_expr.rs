@@ -1,6 +1,6 @@
 use super::{Direction, Expr};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OrderByExpr {
     /// The expression
     pub expr: Expr,

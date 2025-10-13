@@ -4,7 +4,7 @@ use super::{
 };
 use crate::stmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Query {
     /// Any CTEs
     pub with: Option<With>,
@@ -28,7 +28,7 @@ pub struct Query {
     pub locks: Vec<Lock>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Lock {
     Update,
     Share,
