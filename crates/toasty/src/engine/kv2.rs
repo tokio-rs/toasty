@@ -52,6 +52,7 @@ impl Engine {
             if conv.args.is_empty() {
                 // Extract constant
                 let expr = match expr {
+                    expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
                     expr @ stmt::Expr::Record(_) => stmt::Expr::list_from_vec(vec![expr]),
                     /*
                     expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
@@ -174,12 +175,9 @@ impl TryConvert<'_, '_> {
         expr.clone()
     }
 
-    fn key_list_expr_to_eval(&mut self, _expr: &stmt::Expr) -> stmt::Expr {
-        /*
+    fn key_list_expr_to_eval(&mut self, expr: &stmt::Expr) -> stmt::Expr {
         match expr {
             stmt::Expr::Arg(_) => {
-                self.args
-                    .push(stmt::Type::list(self.engine.index_key_ty(self.index)));
                 expr.clone()
             }
             stmt::Expr::Value(stmt::Value::List(items)) => {
@@ -196,8 +194,6 @@ impl TryConvert<'_, '_> {
             }
             _ => todo!("expr={:#?}", expr),
         }
-        */
-        todo!()
     }
 
     fn is_key_reference(&self, expr: &stmt::Expr) -> bool {
