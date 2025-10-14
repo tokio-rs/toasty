@@ -25,7 +25,7 @@ impl Planner<'_> {
                 .ty
                 .clone()]);
 
-            eval::Func::from_stmt_unchecked(
+            eval::Func::from_stmt_typed(
                 stmt::Expr::arg_project(0, [0]),
                 vec![arg_ty],
                 key_ty.clone(),

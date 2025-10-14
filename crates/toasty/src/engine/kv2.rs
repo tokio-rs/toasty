@@ -6,8 +6,6 @@ use toasty_core::{schema::db::Index, stmt};
 struct TryConvert<'a, 'stmt> {
     cx: stmt::ExprContext<'stmt>,
 
-    engine: &'a Engine,
-
     /// Index being keyed on
     index: &'a Index,
 
@@ -36,31 +34,42 @@ impl Engine {
     ///
     /// Returns `Some(eval::Func)` if the filter can be converted to key lookups, `None` if
     /// the query requires a full scan with filtering.
-    pub(crate) fn try_build_key_filter(
+    pub(crate) fn try_build_key_filter2(
         &self,
         cx: stmt::ExprContext<'_>,
         index: &Index,
         expr: &stmt::Expr,
+        // Build the key filter as a projection of input
+        args: Vec<stmt::Type>,
     ) -> Option<eval::Func> {
         let mut conv = TryConvert {
             cx,
-            engine: self,
             index,
-            args: vec![],
+            args,
         };
 
         conv.try_convert(expr).map(|expr| {
-            let expr = match expr {
-                expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
-                stmt::Expr::Value(value) => stmt::Expr::Value(stmt::Value::List(vec![value])),
-                expr @ stmt::Expr::Record(_) => stmt::Expr::list_from_vec(vec![expr]),
-                expr @ stmt::Expr::Arg(_) => expr,
-                expr => todo!("expr={expr:#?}"),
-            };
+            if conv.args.is_empty() {
+                // Extract constant
+                let expr = match expr {
+                    expr @ stmt::Expr::Record(_) => stmt::Expr::list_from_vec(vec![expr]),
+                    /*
+                    expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
+                    stmt::Expr::Value(value) => stmt::Expr::Value(stmt::Value::List(vec![value])),
+                    expr @ stmt::Expr::Arg(_) => expr,
+                    */
+                    expr => todo!("expr={expr:#?}"),
+                };
 
-            let key_ty = self.index_key_ty(index);
-
-            eval::Func::from_stmt_typed(expr, conv.args, stmt::Type::list(key_ty))
+                // We can't always infer here (e.g. empty list)
+                let ty = stmt::Type::list(self.index_key_record_ty(index));
+                eval::Func::from_stmt_typed(expr, conv.args, ty)
+            } else {
+                assert!(expr.is_record(), "TODO; expr={expr:#?}");
+                let project = eval::Func::from_stmt(expr, conv.args);
+                debug_assert_eq!(project.ret, self.index_key_record_ty(index));
+                project
+            }
         })
     }
 }
@@ -165,7 +174,8 @@ impl TryConvert<'_, '_> {
         expr.clone()
     }
 
-    fn key_list_expr_to_eval(&mut self, expr: &stmt::Expr) -> stmt::Expr {
+    fn key_list_expr_to_eval(&mut self, _expr: &stmt::Expr) -> stmt::Expr {
+        /*
         match expr {
             stmt::Expr::Arg(_) => {
                 self.args
@@ -178,7 +188,7 @@ impl TryConvert<'_, '_> {
                 for item in items {
                     ret.push(match item {
                         record @ stmt::Value::Record(_) => record.clone(),
-                        value => value.clone(),
+                        value => stmt::Value::record_from_vec(vec![value.clone()]),
                     });
                 }
 
@@ -186,6 +196,8 @@ impl TryConvert<'_, '_> {
             }
             _ => todo!("expr={:#?}", expr),
         }
+        */
+        todo!()
     }
 
     fn is_key_reference(&self, expr: &stmt::Expr) -> bool {

@@ -10,7 +10,6 @@ use materialize::{MaterializeGraph, MaterializeKind, NodeId};
 use toasty_core::schema::db::ColumnId;
 use toasty_core::stmt;
 
-use crate::engine::eval;
 use crate::engine::{plan, planner::Planner};
 use crate::Result;
 
@@ -303,25 +302,17 @@ impl PlannerNg<'_, '_> {
                 }
                 MaterializeKind::Project(materialize_project) => {
                     let input_var = self.graph[materialize_project.input].var.get().unwrap();
-                    let stmt::Type::List(input_ty) = self.old.var_table.ty(input_var).clone()
-                    else {
-                        todo!()
-                    };
 
-                    let input_args = vec![*input_ty];
-
-                    let projection =
-                        eval::Func::from_stmt(materialize_project.projection.clone(), input_args);
                     let var = self
                         .old
                         .var_table
-                        .register_var(stmt::Type::list(projection.ret.clone()));
+                        .register_var(stmt::Type::list(materialize_project.projection.ret.clone()));
                     node.var.set(Some(var));
 
                     self.old.push_action(plan::Project {
                         input: input_var,
                         output: plan::Output2 { var, num_uses },
-                        projection,
+                        projection: materialize_project.projection.clone(),
                     });
                 }
                 MaterializeKind::QueryPk(materialize_query_pk) => {

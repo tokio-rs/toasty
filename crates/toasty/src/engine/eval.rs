@@ -29,7 +29,7 @@ impl<T: AsExpr> Func<T> {
         Self { args, ret, expr }
     }
 
-    pub(crate) fn from_stmt_unchecked(expr: T, args: Vec<stmt::Type>, ret: stmt::Type) -> Self {
+    pub(crate) fn from_stmt_typed(expr: T, args: Vec<stmt::Type>, ret: stmt::Type) -> Self {
         Self { args, ret, expr }
     }
 
@@ -82,7 +82,7 @@ impl Func<stmt::Expr> {
         }
 
         let ret = ExprContext::new_free().infer_expr_ty(&expr, &args);
-        Some(Self::from_stmt_unchecked(expr, args, ret))
+        Some(Self::from_stmt_typed(expr, args, ret))
     }
 }
 
@@ -96,7 +96,7 @@ impl Func<&stmt::Expr> {
         }
 
         let ret = ExprContext::new_free().infer_expr_ty(expr, &args);
-        Some(Func::from_stmt_unchecked(expr, args, ret))
+        Some(Func::from_stmt_typed(expr, args, ret))
     }
 }
 

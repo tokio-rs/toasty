@@ -3,7 +3,7 @@ use tests::{prelude::*, stmt::Any};
 use toasty::stmt::Id;
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{BinaryOp, Expr, ExprReference, ExprSet, Source, Statement, Value},
+    stmt::{BinaryOp, Expr, ExprReference, ExprSet, Source, Statement},
 };
 
 async fn basic_crud(test: &mut DbTest) {
@@ -101,8 +101,7 @@ async fn basic_crud(test: &mut DbTest) {
     } else {
         assert_struct!(op, Operation::GetByKey(_ {
             table: user_table_id,
-            keys: [ == user_id ],
-            keys[0]: Value::String(_),
+            keys: [=~ (&user_id,)],
             select.len(): 3,
             ..
         }));
@@ -148,7 +147,7 @@ async fn basic_crud(test: &mut DbTest) {
         assert_struct!(op, Operation::UpdateByKey(_ {
             table: user_table_id,
             filter: None,
-            keys: [== user_id],
+            keys: [=~ (&user_id,)],
             assignments: #{ 2: _ { expr: 31, .. }},
             ..
         }));
@@ -200,7 +199,7 @@ async fn basic_crud(test: &mut DbTest) {
         assert_struct!(op, Operation::DeleteByKey(_ {
             table: user_table_id,
             filter: None,
-            keys: [== user_id],
+            keys: [=~ (&user_id,)],
             ..
         }));
     }

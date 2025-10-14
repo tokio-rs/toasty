@@ -137,7 +137,9 @@ pub(crate) struct MaterializeProject {
     pub(crate) input: NodeId,
 
     /// Projection expression
-    pub(crate) projection: stmt::Expr,
+    pub(crate) projection: eval::Func,
+
+    pub(crate) ty: stmt::Type,
 }
 
 #[derive(Debug)]
@@ -340,6 +342,7 @@ impl MaterializePlanner<'_> {
 
                 select.filter = stmt::Expr::exists(sub_query);
             } else {
+                println!("filter={:#?}", select.filter);
                 visit_mut::for_each_expr_mut(&mut select.filter, |expr| match expr {
                     stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
                         debug_assert_eq!(0, *nesting);
@@ -390,6 +393,14 @@ impl MaterializePlanner<'_> {
             let mut post_filter = index_plan.post_filter.clone();
 
             if index_plan.index.primary_key {
+                let pk_keys_project_args = if ref_source.is_some() {
+                    assert_eq!(inputs.len(), 1, "TODO");
+                    let ty = self.graph[inputs[0]].ty();
+                    vec![ty.unwrap_list_ref().clone()]
+                } else {
+                    vec![]
+                };
+
                 // If using the primary key to find rows, try to convert the
                 // filter expression to a set of primary-key keys.
                 //
@@ -399,6 +410,7 @@ impl MaterializePlanner<'_> {
                     cx,
                     index_plan.index,
                     &index_plan.index_filter,
+                    pk_keys_project_args,
                 );
             };
 
@@ -437,9 +449,22 @@ impl MaterializePlanner<'_> {
                 // TODO: I'm not sure if calling try_build_key_filter is the
                 // right way to do this anymore, but it works for now?
                 if let Some(keys) = pk_keys {
-                    assert!(ref_source.is_none(), "TODO; keys={keys:#?}");
-
-                    let get_by_key_input = self.insert_const(keys.eval_const(), index_key_ty);
+                    let get_by_key_input = if ref_source.is_none() {
+                        self.insert_const(keys.eval_const(), index_key_ty)
+                    } else {
+                        if keys.is_identity() {
+                            debug_assert_eq!(1, inputs.len(), "TODO");
+                            inputs[0]
+                        } else {
+                            let ty = stmt::Type::list(keys.ret.clone());
+                            // Gotta project
+                            self.graph.insert(MaterializeProject {
+                                input: inputs[0],
+                                projection: keys,
+                                ty,
+                            })
+                        }
+                    };
 
                     self.graph.insert(MaterializeGetByKey {
                         input: get_by_key_input,
@@ -511,9 +536,14 @@ impl MaterializePlanner<'_> {
                 stmt::Expr::arg_project(0, [index])
             }));
 
+            let arg_ty = self.graph[exec_stmt_node_id].ty().unwrap_list_ref().clone();
+            let projection = eval::Func::from_stmt(projection, vec![arg_ty]);
+            let ty = stmt::Type::list(projection.ret.clone());
+
             let project_node_id = self.graph.insert(MaterializeProject {
                 input: exec_stmt_node_id,
                 projection,
+                ty,
             });
             back_ref.node_id.set(Some(project_node_id));
         }
@@ -539,10 +569,15 @@ impl MaterializePlanner<'_> {
                 "TODO: single queries not supported here"
             );
 
+            let arg_ty = self.graph[exec_stmt_node_id].ty().unwrap_list_ref().clone();
+            let projection = eval::Func::from_stmt(returning, vec![arg_ty]);
+            let ty = stmt::Type::list(projection.ret.clone());
+
             // Plan the final projection to handle the returning clause.
             self.graph.insert(MaterializeProject {
                 input: exec_stmt_node_id,
-                projection: returning,
+                projection,
+                ty,
             })
         };
 
@@ -651,6 +686,7 @@ impl MaterializeNode {
             MaterializeKind::FindPkByIndex(kind) => &kind.ty,
             MaterializeKind::GetByKey(kind) => &kind.ty,
             MaterializeKind::QueryPk(kind) => &kind.ty,
+            MaterializeKind::Project(kind) => &kind.ty,
             _ => todo!("node={self:#?}"),
         }
     }

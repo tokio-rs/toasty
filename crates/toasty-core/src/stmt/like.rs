@@ -79,6 +79,12 @@ impl Like<String> for Value {
     }
 }
 
+impl Like<&String> for Value {
+    fn like(&self, pattern: &&String) -> bool {
+        self.like(&**pattern)
+    }
+}
+
 /// Macro to generate Like implementations for tuple patterns using Alice's pattern
 ///
 /// Based on: https://users.rust-lang.org/t/macro-to-impl-trait-for-tuple/79165/2
@@ -185,7 +191,7 @@ impl Like<String> for Expr {
     }
 }
 
-/// Like implementation for Expr and &str (delegates to PartialEq)  
+/// Like implementation for Expr and &str (delegates to PartialEq)
 impl Like<&str> for Expr {
     fn like(&self, pattern: &&str) -> bool {
         self == *pattern
