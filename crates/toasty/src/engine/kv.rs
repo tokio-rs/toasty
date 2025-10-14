@@ -73,12 +73,10 @@ impl Engine {
     /// record with one field.
     pub(crate) fn try_build_key_filter2(
         &self,
+        cx: stmt::ExprContext<'_>,
         index: &Index,
-        stmt: &stmt::Statement,
+        expr: &stmt::Expr,
     ) -> Option<eval::Func> {
-        let cx = self.expr_cx_for(stmt);
-        let expr = stmt.as_filter().unwrap_or_else(|| todo!("stmt={stmt:#?}"));
-
         let mut conv = TryConvert {
             cx,
             engine: self,

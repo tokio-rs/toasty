@@ -394,7 +394,12 @@ impl MaterializePlanner<'_> {
                 // filter expression to a set of primary-key keys.
                 //
                 // TODO: move this to the index planner?
-                pk_keys = self.engine.try_build_key_filter2(index_plan.index, &stmt);
+                let cx = self.engine.expr_cx_for(&stmt);
+                pk_keys = self.engine.try_build_key_filter2(
+                    cx,
+                    index_plan.index,
+                    &index_plan.index_filter,
+                );
             };
 
             // If fetching rows using GetByKey, some databases do not support
@@ -431,7 +436,7 @@ impl MaterializePlanner<'_> {
             let mut node_id = if index_plan.index.primary_key {
                 // TODO: I'm not sure if calling try_build_key_filter is the
                 // right way to do this anymore, but it works for now?
-                if let Some(keys) = self.engine.try_build_key_filter2(index_plan.index, &stmt) {
+                if let Some(keys) = pk_keys {
                     assert!(ref_source.is_none(), "TODO; keys={keys:#?}");
 
                     let get_by_key_input = self.insert_const(keys.eval_const(), index_key_ty);
