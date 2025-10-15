@@ -1,6 +1,6 @@
 use super::{
-    Delete, Expr, ExprSet, ExprSetOp, Limit, Node, OrderBy, Path, Returning, Select, SetOp, Source,
-    Statement, Update, UpdateTarget, Values, Visit, VisitMut, With,
+    Delete, ExprSet, Limit, Node, OrderBy, Path, Returning, Select, Source, Statement, Update,
+    UpdateTarget, Values, Visit, VisitMut, With,
 };
 use crate::stmt::{self, Filter};
 
@@ -104,7 +104,7 @@ impl Query {
     }
 
     pub fn add_filter(&mut self, filter: impl Into<Filter>) {
-        self.body.as_select_mut().and(expr);
+        self.body.as_select_mut_unwrap().add_filter(filter);
     }
 
     /*

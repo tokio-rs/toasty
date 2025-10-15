@@ -38,8 +38,10 @@ impl Engine {
         &'a self,
         cx: stmt::ExprContext<'stmt>,
         table: &'stmt Table,
-        filter: &'stmt stmt::Expr,
+        filter: &'stmt stmt::Filter,
     ) -> IndexPlan<'a> {
+        let filter = filter.expr.as_ref().expect("TODO");
+
         let mut index_planner = IndexPlanner {
             cx,
             // TODO: get rid of this in favor of cx.

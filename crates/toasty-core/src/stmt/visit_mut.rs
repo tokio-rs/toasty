@@ -4,9 +4,9 @@ use super::{
     Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
     ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList, ExprInSubquery,
     ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
-    ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
-    JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
-    Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
+    ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, Filter, FuncCount, Insert, InsertTarget,
+    Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
+    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
     TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
@@ -136,6 +136,10 @@ pub trait VisitMut {
 
     fn visit_expr_pattern_mut(&mut self, i: &mut ExprPattern) {
         visit_expr_pattern_mut(self, i);
+    }
+
+    fn visit_filter_mut(&mut self, i: &mut Filter) {
+        visit_filter_mut(self, i);
     }
 
     fn visit_expr_project_mut(&mut self, i: &mut ExprProject) {
@@ -378,6 +382,10 @@ impl<V: VisitMut> VisitMut for &mut V {
 
     fn visit_expr_pattern_mut(&mut self, i: &mut ExprPattern) {
         VisitMut::visit_expr_pattern_mut(&mut **self, i);
+    }
+
+    fn visit_filter_mut(&mut self, i: &mut Filter) {
+        VisitMut::visit_filter_mut(&mut **self, i);
     }
 
     fn visit_expr_project_mut(&mut self, i: &mut ExprProject) {
@@ -783,6 +791,15 @@ where
     v.visit_projection_mut(&mut node.projection);
 }
 
+pub fn visit_filter_mut<V>(v: &mut V, node: &mut Filter)
+where
+    V: VisitMut + ?Sized,
+{
+    if let Some(expr) = &mut node.expr {
+        v.visit_expr_mut(expr);
+    }
+}
+
 pub fn visit_insert_target_mut<V>(v: &mut V, node: &mut InsertTarget)
 where
     V: VisitMut + ?Sized,
@@ -929,7 +946,7 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_source_mut(&mut node.from);
-    v.visit_expr_mut(&mut node.filter);
+    v.visit_filter_mut(&mut node.filter);
 
     if let Some(returning) = &mut node.returning {
         v.visit_returning_mut(returning);
@@ -972,7 +989,7 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_source_mut(&mut node.source);
-    v.visit_expr_mut(&mut node.filter);
+    v.visit_filter_mut(&mut node.filter);
     v.visit_returning_mut(&mut node.returning);
 }
 
@@ -982,10 +999,7 @@ where
 {
     v.visit_update_target_mut(&mut node.target);
     v.visit_assignments_mut(&mut node.assignments);
-
-    if let Some(expr) = &mut node.filter {
-        v.visit_expr_mut(expr);
-    }
+    v.visit_filter_mut(&mut node.filter);
 
     if let Some(expr) = &mut node.condition {
         v.visit_expr_mut(expr);

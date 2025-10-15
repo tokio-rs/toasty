@@ -4,9 +4,9 @@ use super::{
     Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
     ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList, ExprInSubquery,
     ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
-    ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, FuncCount, Insert, InsertTarget, Join,
-    JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
-    Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
+    ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, Filter, FuncCount, Insert, InsertTarget,
+    Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
+    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
     TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
@@ -136,6 +136,10 @@ pub trait Visit {
 
     fn visit_expr_pattern(&mut self, i: &ExprPattern) {
         visit_expr_pattern(self, i);
+    }
+
+    fn visit_filter(&mut self, i: &Filter) {
+        visit_filter(self, i);
     }
 
     fn visit_expr_project(&mut self, i: &ExprProject) {
@@ -378,6 +382,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_expr_pattern(&mut self, i: &ExprPattern) {
         Visit::visit_expr_pattern(&mut **self, i);
+    }
+
+    fn visit_filter(&mut self, i: &Filter) {
+        Visit::visit_filter(&mut **self, i);
     }
 
     fn visit_expr_project(&mut self, i: &ExprProject) {
@@ -783,6 +791,15 @@ where
     v.visit_projection(&node.projection);
 }
 
+pub fn visit_filter<V>(v: &mut V, node: &Filter)
+where
+    V: Visit + ?Sized,
+{
+    if let Some(expr) = &node.expr {
+        v.visit_expr(expr);
+    }
+}
+
 pub fn visit_insert_target<V>(v: &mut V, node: &InsertTarget)
 where
     V: Visit + ?Sized,
@@ -929,7 +946,7 @@ where
     V: Visit + ?Sized,
 {
     v.visit_source(&node.from);
-    v.visit_expr(&node.filter);
+    v.visit_filter(&node.filter);
 
     if let Some(returning) = &node.returning {
         v.visit_returning(returning);
@@ -974,7 +991,7 @@ where
     V: Visit + ?Sized,
 {
     v.visit_source(&node.source);
-    v.visit_expr(&node.filter);
+    v.visit_filter(&node.filter);
     v.visit_returning(&node.returning);
 }
 
@@ -984,10 +1001,7 @@ where
 {
     v.visit_update_target(&node.target);
     v.visit_assignments(&node.assignments);
-
-    if let Some(expr) = &node.filter {
-        v.visit_expr(expr);
-    }
+    v.visit_filter(&node.filter);
 
     if let Some(expr) = &node.condition {
         v.visit_expr(expr);

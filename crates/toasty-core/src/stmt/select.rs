@@ -1,4 +1,4 @@
-use super::{Expr, Node, Path, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut};
+use super::{Node, Path, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut};
 use crate::{
     schema::db::TableId,
     stmt::{ExprSet, Filter},

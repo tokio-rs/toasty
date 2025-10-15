@@ -123,7 +123,7 @@ impl Planner<'_> {
         };
 
         let scope_expr = match &stmt.target {
-            stmt::InsertTarget::Scope(query) => Some(&query.body.as_select().filter),
+            stmt::InsertTarget::Scope(query) => Some(&query.body.as_select_unwrap().filter),
             _ => None,
         };
 
@@ -311,7 +311,7 @@ impl Planner<'_> {
         model.find_by_id(&args)
     }
 
-    fn apply_insert_scope(&mut self, expr: &mut stmt::Expr, scope: &stmt::Expr) {
+    fn apply_insert_scope(&mut self, expr: &mut stmt::Expr, scope: &stmt::Filter) {
         ApplyInsertScope { expr }.apply(scope);
     }
 
@@ -386,8 +386,10 @@ impl Planner<'_> {
 }
 
 impl ApplyInsertScope<'_> {
-    fn apply(&mut self, expr: &stmt::Expr) {
-        self.apply_expr(expr, true);
+    fn apply(&mut self, filter: &stmt::Filter) {
+        if let Some(expr) = &filter.expr {
+            self.apply_expr(expr, true);
+        }
     }
 
     fn apply_expr(&mut self, stmt: &stmt::Expr, set: bool) {

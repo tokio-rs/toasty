@@ -2,7 +2,7 @@ use crate::stmt::{Expr, ExprSet, Statement};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Filter {
-    expr: Option<Expr>,
+    pub expr: Option<Expr>,
 }
 
 impl Filter {

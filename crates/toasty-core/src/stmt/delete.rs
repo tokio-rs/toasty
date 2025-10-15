@@ -15,7 +15,7 @@ pub struct Delete {
 
 impl Delete {
     pub fn selection(&self) -> Query {
-        stmt::Query::new_select(self.from.model_id(), self.filter.clone())
+        stmt::Query::new_select(self.from.model_id_unwrap(), self.filter.clone())
     }
 }
 

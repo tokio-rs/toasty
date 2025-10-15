@@ -56,7 +56,7 @@ impl Planner<'_> {
         let Some(returning) = stmt else { return None };
         let project = self.partition_returning(cx, returning);
 
-        if returning.as_expr().as_record().is_empty() {
+        if returning.as_expr_unwrap().as_record().is_empty() {
             *stmt = None;
         }
 

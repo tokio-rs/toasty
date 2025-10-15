@@ -197,7 +197,8 @@ impl<'a> Planner<'a> {
             }
             stmt::Statement::Insert(stmt) => {
                 match &stmt.target {
-                    stmt::InsertTarget::Scope(query) => match &query.body.as_select().source {
+                    stmt::InsertTarget::Scope(query) => match &query.body.as_select_unwrap().source
+                    {
                         stmt::Source::Model(source) => source.via.is_none(),
                         stmt::Source::Table(_) => true,
                     },

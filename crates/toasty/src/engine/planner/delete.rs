@@ -3,7 +3,7 @@ use toasty_core::{schema::app, stmt};
 
 impl Planner<'_> {
     pub(super) fn plan_stmt_delete(&mut self, stmt: stmt::Delete) -> Result<()> {
-        let model = self.model(stmt.from.model_id());
+        let model = self.model(stmt.from.model_id_unwrap());
         let selection = stmt.selection();
 
         // Handle any cascading deletes
@@ -19,7 +19,7 @@ impl Planner<'_> {
                 let pair = self.schema().app.field(rel.pair);
 
                 // TODO: can this be unified with update?
-                let query = stmt::Query::filter(
+                let query = stmt::Query::new_select(
                     rel.target,
                     stmt::Expr::in_subquery(
                         stmt::Expr::ref_self_field(rel.pair),

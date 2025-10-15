@@ -49,17 +49,31 @@ impl Returning {
         matches!(self, Self::Expr(_))
     }
 
-    pub fn as_expr(&self) -> &Expr {
+    pub fn as_expr(&self) -> Option<&Expr> {
         match self {
-            Self::Expr(expr) => expr,
-            _ => todo!("self={self:#?}"),
+            Self::Expr(expr) => Some(expr),
+            _ => None,
         }
     }
 
-    pub fn as_expr_mut(&mut self) -> &mut Expr {
+    #[track_caller]
+    pub fn as_expr_unwrap(&self) -> &Expr {
+        self.as_expr()
+            .unwrap_or_else(|| panic!("expected stmt::Returning::Expr; actual={self:#?}"))
+    }
+
+    pub fn as_expr_mut(&mut self) -> Option<&mut Expr> {
+        match self {
+            Self::Expr(expr) => Some(expr),
+            _ => None,
+        }
+    }
+
+    #[track_caller]
+    pub fn as_expr_mut_unwrap(&mut self) -> &mut Expr {
         match self {
             Self::Expr(expr) => expr,
-            _ => todo!(),
+            _ => panic!("expected stmt::Returningm::Expr; actual={self:#?}"),
         }
     }
 

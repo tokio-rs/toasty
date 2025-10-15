@@ -121,7 +121,11 @@ impl VisitMut for LowerStatement<'_> {
                 let maybe_res = self.lower_expr_binary_op(
                     stmt::BinaryOp::Eq,
                     &mut expr.expr,
-                    expr.query.body.as_select_mut().returning.as_expr_mut(),
+                    expr.query
+                        .body
+                        .as_select_mut_unwrap()
+                        .returning
+                        .as_expr_mut_unwrap(),
                 );
 
                 assert!(maybe_res.is_none(), "TODO");
