@@ -42,11 +42,7 @@ impl Engine {
         // Build the key filter as a projection of input
         args: Vec<stmt::Type>,
     ) -> Option<eval::Func> {
-        let mut conv = TryConvert {
-            cx,
-            index,
-            args,
-        };
+        let mut conv = TryConvert { cx, index, args };
 
         conv.try_convert(expr).map(|expr| {
             if conv.args.is_empty() {
@@ -177,9 +173,7 @@ impl TryConvert<'_, '_> {
 
     fn key_list_expr_to_eval(&mut self, expr: &stmt::Expr) -> stmt::Expr {
         match expr {
-            stmt::Expr::Arg(_) => {
-                expr.clone()
-            }
+            stmt::Expr::Arg(_) => expr.clone(),
             stmt::Expr::Value(stmt::Value::List(items)) => {
                 let mut ret = vec![];
 
