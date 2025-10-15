@@ -9,6 +9,6 @@ impl Planner<'_> {
         // Lower the statement
         self.lower_stmt(&mut stmt);
 
-        return self.plan_v2_stmt(stmt);
+        self.plan_v2_stmt(stmt)
     }
 }

@@ -32,7 +32,7 @@ impl super::MaterializePlanner<'_> {
 
         let nested_merge_planner = NestedMergePlanner {
             engine: self.engine,
-            store: &mut self.store,
+            store: self.store,
             inputs: IndexSet::new(),
             stack: vec![],
         };

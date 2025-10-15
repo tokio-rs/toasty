@@ -462,19 +462,17 @@ impl MaterializePlanner<'_> {
                 if let Some(keys) = pk_keys {
                     let get_by_key_input = if ref_source.is_none() {
                         self.insert_const(keys.eval_const(), index_key_ty)
+                    } else if keys.is_identity() {
+                        debug_assert_eq!(1, inputs.len(), "TODO");
+                        inputs[0]
                     } else {
-                        if keys.is_identity() {
-                            debug_assert_eq!(1, inputs.len(), "TODO");
-                            inputs[0]
-                        } else {
-                            let ty = stmt::Type::list(keys.ret.clone());
-                            // Gotta project
-                            self.graph.insert(MaterializeProject {
-                                input: inputs[0],
-                                projection: keys,
-                                ty,
-                            })
-                        }
+                        let ty = stmt::Type::list(keys.ret.clone());
+                        // Gotta project
+                        self.graph.insert(MaterializeProject {
+                            input: inputs[0],
+                            projection: keys,
+                            ty,
+                        })
                     };
 
                     self.graph.insert(MaterializeGetByKey {
@@ -620,27 +618,27 @@ impl MaterializePlanner<'_> {
                 MaterializeKind::Const(_) => {}
                 MaterializeKind::ExecStatement(materialize_exec_statement) => {
                     for &input_id in &materialize_exec_statement.inputs {
-                        visit(&self.graph, &mut stack, input_id);
+                        visit(self.graph, &mut stack, input_id);
                     }
                 }
                 MaterializeKind::Filter(materialize_filter) => {
-                    visit(&self.graph, &mut stack, materialize_filter.input);
+                    visit(self.graph, &mut stack, materialize_filter.input);
                 }
                 MaterializeKind::FindPkByIndex(materialize_find_pk_by_index) => {
                     for &input in &materialize_find_pk_by_index.inputs {
-                        visit(&self.graph, &mut stack, input);
+                        visit(self.graph, &mut stack, input);
                     }
                 }
                 MaterializeKind::GetByKey(materialize_get_by_key) => {
-                    visit(&self.graph, &mut stack, materialize_get_by_key.input);
+                    visit(self.graph, &mut stack, materialize_get_by_key.input);
                 }
                 MaterializeKind::NestedMerge(materialize_nested_merge) => {
                     for &input_id in &materialize_nested_merge.inputs {
-                        visit(&self.graph, &mut stack, input_id);
+                        visit(self.graph, &mut stack, input_id);
                     }
                 }
                 MaterializeKind::Project(materialize_project) => {
-                    visit(&self.graph, &mut stack, materialize_project.input);
+                    visit(self.graph, &mut stack, materialize_project.input);
                 }
                 // As of now, QueryPk has no inputs
                 MaterializeKind::QueryPk(_materialize_query_pk) => {}

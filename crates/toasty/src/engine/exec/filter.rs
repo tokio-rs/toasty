@@ -18,7 +18,7 @@ impl Exec<'_> {
             let value = res?;
 
             // Apply the filter
-            if action.filter.eval_bool(&[value.clone()])? {
+            if action.filter.eval_bool(std::slice::from_ref(&value))? {
                 filtered_rows.push(value);
             }
         }

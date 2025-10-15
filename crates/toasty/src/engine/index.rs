@@ -13,10 +13,7 @@ use toasty_core::{
  */
 
 impl Engine {
-    pub(crate) fn plan_index_path2<'a, 'stmt>(
-        &'a self,
-        stmt: &'stmt stmt::Statement,
-    ) -> IndexPlan<'a> {
+    pub(crate) fn plan_index_path2<'a>(&'a self, stmt: &stmt::Statement) -> IndexPlan<'a> {
         let cx = self.expr_cx();
         let cx = cx.scope(stmt);
         // Get a handle to the expression target so it can be passed into plan_index_path
