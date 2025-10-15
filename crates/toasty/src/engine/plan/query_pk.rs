@@ -1,3 +1,5 @@
+use crate::engine::plan::Output2;
+
 use super::{eval, stmt, Action, Output};
 use toasty_core::schema::db::{ColumnId, TableId};
 
@@ -22,8 +24,32 @@ pub(crate) struct QueryPk {
     pub post_filter: Option<eval::Func>,
 }
 
+#[derive(Debug)]
+pub(crate) struct QueryPk2 {
+    /// Where to store the result
+    pub output: Output2,
+
+    /// Table to query
+    pub table: TableId,
+
+    /// Columns to get
+    pub columns: Vec<ColumnId>,
+
+    /// How to filter the index.
+    pub pk_filter: stmt::Expr,
+
+    /// Filter to pass to the database
+    pub row_filter: Option<stmt::Expr>,
+}
+
 impl From<QueryPk> for Action {
     fn from(value: QueryPk) -> Self {
         Self::QueryPk(value)
+    }
+}
+
+impl From<QueryPk2> for Action {
+    fn from(value: QueryPk2) -> Self {
+        Action::QueryPk2(value)
     }
 }

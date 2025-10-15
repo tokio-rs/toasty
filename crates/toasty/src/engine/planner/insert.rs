@@ -33,7 +33,7 @@ impl Planner<'_> {
 
         let mut output_var = None;
 
-        let cx = ExprContext::new_with_target(self.schema, &stmt.target);
+        let cx = ExprContext::new_with_target(self.schema(), &stmt.target);
 
         // First, lower the returning part of the statement and get any
         // necessary in-memory projection.
@@ -355,7 +355,7 @@ impl Planner<'_> {
             insert_table
                 .columns
                 .iter()
-                .map(|column_id| self.schema.db.column(*column_id).ty.clone())
+                .map(|column_id| self.schema().db.column(*column_id).ty.clone())
                 .collect(),
         );
 
@@ -363,7 +363,7 @@ impl Planner<'_> {
             returning.clone(),
             vec![args],
             ConstReturning {
-                cx: stmt::ExprContext::new_with_target(self.schema, &*stmt),
+                cx: stmt::ExprContext::new_with_target(self.schema(), &*stmt),
                 columns: &insert_table.columns,
             },
         )

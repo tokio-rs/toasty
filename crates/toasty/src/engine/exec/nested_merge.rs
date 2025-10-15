@@ -11,7 +11,7 @@ impl Exec<'_> {
 
         for var_id in &action.inputs {
             // TODO: make loading input concurrent
-            let data = self.vars.load(*var_id).collect().await?;
+            let data = self.vars.load_count(*var_id).await?.collect().await?;
             input.push(data);
         }
 
@@ -30,8 +30,11 @@ impl Exec<'_> {
         }
 
         // Store the output
-        self.vars
-            .store(action.output, ValueStream::from_vec(merged_rows));
+        self.vars.store_counted(
+            action.output.var,
+            action.output.num_uses,
+            ValueStream::from_vec(merged_rows),
+        );
 
         Ok(())
     }

@@ -4,7 +4,7 @@ use crate::engine::{
 };
 
 #[derive(Debug)]
-pub(crate) struct Project {
+pub(crate) struct Filter {
     /// Source of the input
     pub(crate) input: VarId,
 
@@ -12,11 +12,11 @@ pub(crate) struct Project {
     pub(crate) output: Output2,
 
     /// How to project it before storing
-    pub(crate) projection: eval::Func,
+    pub(crate) filter: eval::Func,
 }
 
-impl From<Project> for Action {
-    fn from(value: Project) -> Self {
-        Action::Project(value)
+impl From<Filter> for Action {
+    fn from(value: Filter) -> Self {
+        Action::Filter(value)
     }
 }

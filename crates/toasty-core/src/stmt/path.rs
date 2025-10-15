@@ -4,7 +4,7 @@ use crate::schema::app::{self, Field, FieldId, ModelId};
 /// Describes a traversal through fields.
 ///
 /// The root is not specified as part of the struct.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Path {
     /// Model the path originates from
     pub root: ModelId,

@@ -1,6 +1,6 @@
 use super::{Expr, Projection};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprProject {
     pub base: Box<Expr>,
     pub projection: Projection,

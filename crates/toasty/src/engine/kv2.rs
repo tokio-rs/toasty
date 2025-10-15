@@ -1,11 +1,10 @@
-use super::{eval, Planner};
+use super::eval;
+use crate::engine::Engine;
 use toasty_core::{schema::db::Index, stmt};
 
 /// Try to convert an index filter expression to a key expression
 struct TryConvert<'a, 'stmt> {
     cx: stmt::ExprContext<'stmt>,
-
-    planner: &'a Planner<'a>,
 
     /// Index being keyed on
     index: &'a Index,
@@ -14,7 +13,7 @@ struct TryConvert<'a, 'stmt> {
     args: Vec<stmt::Type>,
 }
 
-impl Planner<'_> {
+impl Engine {
     /// Attempts to optimize a WHERE clause filter into a direct primary key lookup.
     ///
     /// This function analyzes filter expressions to detect when they're actually specifying
@@ -35,31 +34,39 @@ impl Planner<'_> {
     ///
     /// Returns `Some(eval::Func)` if the filter can be converted to key lookups, `None` if
     /// the query requires a full scan with filtering.
-    pub(crate) fn try_build_key_filter(
+    pub(crate) fn try_build_key_filter2(
         &self,
         cx: stmt::ExprContext<'_>,
         index: &Index,
         expr: &stmt::Expr,
+        // Build the key filter as a projection of input
+        args: Vec<stmt::Type>,
     ) -> Option<eval::Func> {
-        let mut conv = TryConvert {
-            cx,
-            planner: self,
-            index,
-            args: vec![],
-        };
+        let mut conv = TryConvert { cx, index, args };
 
         conv.try_convert(expr).map(|expr| {
-            let expr = match expr {
-                expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
-                stmt::Expr::Value(value) => stmt::Expr::Value(stmt::Value::List(vec![value])),
-                expr @ stmt::Expr::Record(_) => stmt::Expr::list_from_vec(vec![expr]),
-                expr @ stmt::Expr::Arg(_) => expr,
-                expr => todo!("expr={expr:#?}"),
-            };
+            if conv.args.is_empty() {
+                // Extract constant
+                let expr = match expr {
+                    expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
+                    expr @ stmt::Expr::Record(_) => stmt::Expr::list_from_vec(vec![expr]),
+                    /*
+                    expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
+                    stmt::Expr::Value(value) => stmt::Expr::Value(stmt::Value::List(vec![value])),
+                    expr @ stmt::Expr::Arg(_) => expr,
+                    */
+                    expr => todo!("expr={expr:#?}"),
+                };
 
-            let key_ty = self.index_key_ty(index);
-
-            eval::Func::from_stmt_unchecked(expr, conv.args, stmt::Type::list(key_ty))
+                // We can't always infer here (e.g. empty list)
+                let ty = stmt::Type::list(self.index_key_record_ty(index));
+                eval::Func::from_stmt_typed(expr, conv.args, ty)
+            } else {
+                assert!(expr.is_record(), "TODO; expr={expr:#?}");
+                let project = eval::Func::from_stmt(expr, conv.args);
+                debug_assert_eq!(project.ret, self.index_key_record_ty(index));
+                project
+            }
         })
     }
 }
@@ -75,7 +82,7 @@ impl TryConvert<'_, '_> {
                     if self.index.columns.len() > 1 {
                         None
                     } else {
-                        Some(self.key_expr_to_eval(&e.rhs))
+                        Some(stmt::Expr::record([self.key_expr_to_eval(&e.rhs)]))
                     }
                 } else {
                     todo!("expr = {:#?}", expr);
@@ -161,18 +168,24 @@ impl TryConvert<'_, '_> {
     }
 
     fn key_expr_to_eval(&self, expr: &stmt::Expr) -> stmt::Expr {
-        assert!(expr.is_value(), "expr={expr:#?}");
         expr.clone()
     }
 
     fn key_list_expr_to_eval(&mut self, expr: &stmt::Expr) -> stmt::Expr {
         match expr {
-            stmt::Expr::Arg(_) => {
-                self.args
-                    .push(stmt::Type::list(self.planner.index_key_ty(self.index)));
-                expr.clone()
+            stmt::Expr::Arg(_) => expr.clone(),
+            stmt::Expr::Value(stmt::Value::List(items)) => {
+                let mut ret = vec![];
+
+                for item in items {
+                    ret.push(match item {
+                        record @ stmt::Value::Record(_) => record.clone(),
+                        value => stmt::Value::record_from_vec(vec![value.clone()]),
+                    });
+                }
+
+                stmt::Expr::Value(ret.into())
             }
-            stmt::Expr::Value(_) => expr.clone(),
             _ => todo!("expr={:#?}", expr),
         }
     }

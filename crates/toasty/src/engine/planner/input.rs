@@ -85,28 +85,4 @@ impl Planner<'_> {
 
         partitioner.input
     }
-
-    pub(crate) fn partition_stmt_query_input(
-        &mut self,
-        stmt: &mut stmt::Query,
-        sources: &[plan::InputSource],
-    ) -> Option<plan::Input> {
-        assert!(sources.len() <= 1, "sources={sources:#?}");
-        let mut partitioner = Partitioner {
-            planner: &*self,
-            sources,
-            input: None,
-        };
-
-        match &mut stmt.body {
-            stmt::ExprSet::Select(select) => {
-                assert!(select.source.is_table());
-                let partition = partitioner.partition_expr(&mut select.filter);
-                assert!(partition.is_stmt());
-            }
-            _ => todo!("{stmt:#?}"),
-        }
-
-        partitioner.input
-    }
 }

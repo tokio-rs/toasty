@@ -1,8 +1,11 @@
+use crate::stmt::Type;
+
 use super::Value;
 
 use std::{
     collections::VecDeque,
     fmt, mem,
+    panic::Location,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -12,6 +15,9 @@ use tokio_stream::{Stream, StreamExt};
 pub struct ValueStream {
     buffer: Buffer,
     stream: Option<DynStream>,
+
+    /// If set, check values to ensure they are the correct type.
+    ty: Option<(Type, &'static Location<'static>)>,
 }
 
 #[derive(Debug)]
@@ -34,6 +40,7 @@ impl ValueStream {
         Self {
             buffer: Buffer::One(value.into()),
             stream: None,
+            ty: None,
         }
     }
 
@@ -41,6 +48,7 @@ impl ValueStream {
         Self {
             buffer: Buffer::Empty,
             stream: Some(Box::pin(stream)),
+            ty: None,
         }
     }
 
@@ -48,6 +56,7 @@ impl ValueStream {
         Self {
             buffer: Buffer::Many(records.into()),
             stream: None,
+            ty: None,
         }
     }
 
@@ -110,6 +119,7 @@ impl ValueStream {
         Ok(Self {
             buffer: self.buffer.clone(),
             stream: None,
+            ty: self.ty.clone(),
         })
     }
 
@@ -117,6 +127,14 @@ impl ValueStream {
         if let Some(stream) = &mut self.stream {
             while let Some(res) = stream.next().await {
                 let value = res?;
+
+                if let Some((ty, location)) = &self.ty {
+                    assert!(
+                        value.is_a(ty),
+                        "expected `{ty:?}`; was={value:#?}; origin={location}"
+                    );
+                }
+
                 self.buffer.push(value);
             }
         }
@@ -149,6 +167,36 @@ impl ValueStream {
             Buffer::Many(v) => Box::new(v.iter_mut()) as Box<dyn Iterator<Item = &mut Value>>,
         }
     }
+
+    #[track_caller]
+    pub fn typed(mut self, ty: Type) -> ValueStream {
+        let location = Location::caller();
+
+        match &self.ty {
+            Some((prev, _)) => assert_eq!(*prev, ty),
+            None => {
+                match &self.buffer {
+                    Buffer::One(value) => assert!(
+                        value.is_a(&ty),
+                        "expected `{ty:?}`; was={value:#?}; origin={location}"
+                    ),
+                    Buffer::Many(values) => {
+                        for value in values {
+                            assert!(
+                                value.is_a(&ty),
+                                "expected `{ty:?}`; was={value:#?}; origin={location}"
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+
+                self.ty = Some((ty, location));
+            }
+        }
+
+        self
+    }
 }
 
 impl Stream for ValueStream {
@@ -158,7 +206,16 @@ impl Stream for ValueStream {
         if let Some(next) = self.buffer.next() {
             Poll::Ready(Some(Ok(next)))
         } else if let Some(stream) = self.stream.as_mut() {
-            Pin::new(stream).poll_next(cx)
+            let next = Pin::new(stream).poll_next(cx);
+            if let Poll::Ready(Some(Ok(value))) = &next {
+                if let Some((ty, location)) = &self.ty {
+                    assert!(
+                        value.is_a(ty),
+                        "expected `{ty:?}`; was={value:#?}; origin={location}"
+                    );
+                }
+            }
+            next
         } else {
             Poll::Ready(None)
         }
@@ -187,6 +244,7 @@ impl From<Value> for ValueStream {
         Self {
             buffer: Buffer::One(src),
             stream: None,
+            ty: None,
         }
     }
 }

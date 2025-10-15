@@ -1,7 +1,7 @@
 use super::Expr;
 use crate::schema::app::ModelId;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprKey {
     pub model: ModelId,
 }

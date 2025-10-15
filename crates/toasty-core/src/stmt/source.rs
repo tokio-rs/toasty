@@ -7,7 +7,7 @@ use crate::{
     stmt::ExprArg,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Source {
     /// Source is a model
     Model(SourceModel),
@@ -16,7 +16,7 @@ pub enum Source {
     Table(SourceTable),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SourceModel {
     /// The source model
     pub model: ModelId,

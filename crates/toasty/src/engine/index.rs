@@ -1,5 +1,4 @@
-use super::Planner;
-use crate::driver::Capability;
+use crate::{driver::Capability, engine::Engine};
 use by_address::ByAddress;
 use std::collections::{hash_map, HashMap};
 use toasty_core::{
@@ -13,11 +12,32 @@ use toasty_core::{
 3) If no index path matches full restriction, and there are ORs, try multiple paths.
  */
 
-impl<'a> Planner<'a> {
-    pub(crate) fn plan_index_path2<'stmt>(
-        &mut self,
+impl Engine {
+    pub(crate) fn plan_index_path2<'a>(&'a self, stmt: &stmt::Statement) -> IndexPlan<'a> {
+        let cx = self.expr_cx();
+        let cx = cx.scope(stmt);
+        // Get a handle to the expression target so it can be passed into plan_index_path
+        let target = cx.target();
+        let stmt::ExprTarget::Table(table) = target else {
+            todo!("target={target:#?}")
+        };
+
+        // Get the statement filter
+        let filter = match stmt {
+            stmt::Statement::Query(query) => match &query.body {
+                stmt::ExprSet::Select(select) => &select.filter,
+                _ => todo!("stmt={stmt:#?}"),
+            },
+            _ => todo!("stmt={stmt:#?}"),
+        };
+
+        self.plan_index_path(cx, table, filter)
+    }
+
+    pub(crate) fn plan_index_path<'a, 'stmt>(
+        &'a self,
         cx: stmt::ExprContext<'stmt>,
-        table: &'a Table,
+        table: &'stmt Table,
         filter: &'stmt stmt::Expr,
     ) -> IndexPlan<'a> {
         let mut index_planner = IndexPlanner {
@@ -32,7 +52,7 @@ impl<'a> Planner<'a> {
         let index_path = index_planner.plan_index_path();
 
         let mut cx = PartitionCtx {
-            capability: self.capability,
+            capability: self.capability(),
             apply_result_filter_on_results: false,
         };
 
@@ -40,7 +60,8 @@ impl<'a> Planner<'a> {
         let (index_filter, result_filter) = index_match.partition_filter(&mut cx, filter);
 
         IndexPlan {
-            index: index_match.index,
+            // Reload the index to make lifetimes happy.
+            index: self.schema.db.index(index_match.index.id),
             index_filter,
             result_filter: if result_filter.is_true() {
                 None
@@ -72,25 +93,25 @@ pub(crate) struct IndexPlan<'a> {
     pub(crate) post_filter: Option<stmt::Expr>,
 }
 
-struct IndexPlanner<'a, 'stmt> {
+struct IndexPlanner<'stmt> {
     cx: stmt::ExprContext<'stmt>,
 
-    table: &'a Table,
+    table: &'stmt Table,
 
     /// Query filter
     filter: &'stmt stmt::Expr,
 
     /// Matches clauses in the filter with available indices
-    index_matches: Vec<IndexMatch<'a, 'stmt>>,
+    index_matches: Vec<IndexMatch<'stmt>>,
 
     /// Possible ways to execute the query using one or more index
     index_paths: Vec<IndexPath>,
 }
 
 #[derive(Debug)]
-struct IndexMatch<'a, 'stmt> {
+struct IndexMatch<'stmt> {
     /// The index in question
-    index: &'a Index,
+    index: &'stmt Index,
 
     /// Restriction matches for each column
     columns: Vec<IndexColumnMatch<'stmt>>,
@@ -119,7 +140,7 @@ struct PartitionCtx<'a> {
     apply_result_filter_on_results: bool,
 }
 
-impl IndexPlanner<'_, '_> {
+impl IndexPlanner<'_> {
     fn plan_index_path(&mut self) -> IndexPath {
         // A preprocessing step that matches filter clauses to various index columns.
         self.build_index_matches();
@@ -180,7 +201,7 @@ impl IndexPlanner<'_, '_> {
     }
 }
 
-impl<'stmt> IndexMatch<'_, 'stmt> {
+impl<'stmt> IndexMatch<'stmt> {
     fn match_restriction(&mut self, cx: &stmt::ExprContext<'_>, expr: &'stmt stmt::Expr) -> bool {
         use stmt::Expr::*;
 
@@ -204,10 +225,14 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                 }
             }
             BinaryOp(e) => match (&*e.lhs, &*e.rhs) {
-                (stmt::Expr::Reference(lhs @ stmt::ExprReference::Column { .. }), Value(..)) => {
+                (stmt::Expr::Reference(lhs @ stmt::ExprReference::Column { .. }), rhs) => {
+                    assert!(
+                        !rhs.is_expr_reference(),
+                        "TODO: handle ExprReference on both sides"
+                    );
                     self.match_expr_binary_op_column(cx, lhs, expr, e.op)
                 }
-                (Value(..), stmt::Expr::Reference(rhs @ stmt::ExprReference::Column { .. })) => {
+                (_, stmt::Expr::Reference(rhs @ stmt::ExprReference::Column { .. })) => {
                     let mut op = e.op;
                     op.reverse();
 
@@ -434,11 +459,11 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
                     // Normalize the expression to include the column on the LHS
                     // TODO: is this needed?
                     let expr = match (&*binary_op.lhs, &*binary_op.rhs) {
-                        (stmt::Expr::Reference(stmt::ExprReference::Column { .. }), Value(_)) => {
+                        (stmt::Expr::Reference(stmt::ExprReference::Column { .. }), _) => {
                             expr.clone()
                         }
                         (
-                            Value(value),
+                            lhs,
                             stmt::Expr::Reference(column_ref @ stmt::ExprReference::Column { .. }),
                         ) => {
                             let mut op = binary_op.op;
@@ -446,7 +471,7 @@ impl<'stmt> IndexMatch<'_, 'stmt> {
 
                             stmt::ExprBinaryOp {
                                 lhs: Box::new(stmt::Expr::Reference(*column_ref)),
-                                rhs: Box::new(value.clone().into()),
+                                rhs: Box::new(lhs.clone()),
                                 op,
                             }
                             .into()

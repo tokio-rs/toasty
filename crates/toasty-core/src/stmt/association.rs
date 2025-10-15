@@ -1,6 +1,6 @@
 use super::{Path, Query};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Association {
     /// The association source
     pub source: Box<Query>,

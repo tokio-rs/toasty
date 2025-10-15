@@ -29,7 +29,7 @@ impl<T: AsExpr> Func<T> {
         Self { args, ret, expr }
     }
 
-    pub(crate) fn from_stmt_unchecked(expr: T, args: Vec<stmt::Type>, ret: stmt::Type) -> Self {
+    pub(crate) fn from_stmt_typed(expr: T, args: Vec<stmt::Type>, ret: stmt::Type) -> Self {
         Self { args, ret, expr }
     }
 
@@ -82,7 +82,7 @@ impl Func<stmt::Expr> {
         }
 
         let ret = ExprContext::new_free().infer_expr_ty(&expr, &args);
-        Some(Self::from_stmt_unchecked(expr, args, ret))
+        Some(Self::from_stmt_typed(expr, args, ret))
     }
 }
 
@@ -96,7 +96,7 @@ impl Func<&stmt::Expr> {
         }
 
         let ret = ExprContext::new_free().infer_expr_ty(expr, &args);
-        Some(Func::from_stmt_unchecked(expr, args, ret))
+        Some(Func::from_stmt_typed(expr, args, ret))
     }
 }
 
@@ -204,13 +204,14 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
         And(expr_and) => expr_and.operands.iter().all(verify_expr),
         BinaryOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
         Cast(expr) => verify_expr(&expr.expr),
-        Reference(_) => false,
+        DecodeEnum(expr, _, _) => verify_expr(expr),
+        IsNull(expr) => verify_expr(&expr.expr),
         List(expr) => expr.items.iter().all(verify_expr),
         Map(expr) => verify_expr(&expr.base) && verify_expr(&expr.map),
         Project(expr) => verify_expr(&expr.base),
         Record(expr) => expr.fields.iter().all(verify_expr),
+        Reference(_) => false,
         Value(_) => true,
-        DecodeEnum(expr, _, _) => verify_expr(expr),
         _ => todo!("expr={expr:#?}"),
     }
 }

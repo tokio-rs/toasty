@@ -1,7 +1,7 @@
 use super::{InsertTarget, Node, Query, Returning, Statement, Visit, VisitMut};
 use crate::stmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Insert {
     /// Where to insert the values
     pub target: InsertTarget,

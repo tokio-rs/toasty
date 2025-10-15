@@ -2,7 +2,7 @@ use super::{Expr, Path};
 use crate::stmt::{self, Node, Value};
 
 /// TODO: rename since this is also used in `Select`?
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Returning {
     /// Return the full model with specified includes
     Model {

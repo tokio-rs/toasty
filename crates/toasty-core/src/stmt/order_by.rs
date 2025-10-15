@@ -1,6 +1,6 @@
 use super::OrderByExpr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OrderBy {
     pub exprs: Vec<OrderByExpr>,
 }

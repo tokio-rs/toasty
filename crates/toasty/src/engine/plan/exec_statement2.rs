@@ -1,4 +1,4 @@
-use crate::engine::plan::VarId;
+use crate::engine::plan::{Output2, VarId};
 
 use super::{stmt, Action};
 
@@ -19,7 +19,7 @@ pub(crate) struct ExecStatementOutput {
     /// Databases always return rows as a vec of values. This specifies the type
     /// of each value.
     pub ty: Vec<stmt::Type>,
-    pub var: VarId,
+    pub output: Output2,
 }
 
 impl From<ExecStatement2> for Action {

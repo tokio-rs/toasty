@@ -4,10 +4,10 @@ use crate::driver::Rows;
 impl Exec<'_> {
     pub(super) async fn action_query_pk(&mut self, action: &plan::QueryPk) -> Result<()> {
         let res = self
-            .db
+            .engine
             .driver
             .exec(
-                &self.db.schema.db,
+                &self.engine.schema.db,
                 operation::QueryPk {
                     table: action.table,
                     select: action.columns.clone(),
@@ -31,6 +31,32 @@ impl Exec<'_> {
 
         self.vars.store(action.output.var, res);
 
+        Ok(())
+    }
+
+    pub(super) async fn action_query_pk2(&mut self, action: &plan::QueryPk2) -> Result<()> {
+        let res = self
+            .engine
+            .driver
+            .exec(
+                &self.engine.schema.db,
+                operation::QueryPk {
+                    table: action.table,
+                    select: action.columns.clone(),
+                    pk_filter: action.pk_filter.clone(),
+                    filter: action.row_filter.clone(),
+                }
+                .into(),
+            )
+            .await?;
+
+        let rows = match res.rows {
+            Rows::Values(rows) => rows,
+            _ => todo!("res={res:#?}"),
+        };
+
+        self.vars
+            .store_counted(action.output.var, action.output.num_uses, rows);
         Ok(())
     }
 }

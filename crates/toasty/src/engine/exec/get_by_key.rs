@@ -17,7 +17,11 @@ impl Exec<'_> {
                 keys,
             };
 
-            let res = self.db.driver.exec(&self.db.schema.db, op.into()).await?;
+            let res = self
+                .engine
+                .driver
+                .exec(&self.engine.schema.db, op.into())
+                .await?;
             let rows = match res.rows {
                 Rows::Values(rows) => rows,
                 _ => todo!("res={res:#?}"),
@@ -31,6 +35,35 @@ impl Exec<'_> {
         };
 
         self.vars.store(action.output.var, res);
+        Ok(())
+    }
+
+    pub(super) async fn action_get_by_key2(&mut self, action: &plan::GetByKey2) -> Result<()> {
+        let keys = self.vars.load_count(action.input).await?.collect().await?;
+
+        let res = if keys.is_empty() {
+            ValueStream::default()
+        } else {
+            let op = operation::GetByKey {
+                table: action.table,
+                select: action.columns.clone(),
+                keys,
+            };
+
+            let res = self
+                .engine
+                .driver
+                .exec(&self.engine.schema.db, op.into())
+                .await?;
+
+            match res.rows {
+                Rows::Values(rows) => rows,
+                _ => todo!("res={res:#?}"),
+            }
+        };
+
+        self.vars
+            .store_counted(action.output.var, action.output.num_uses, res);
         Ok(())
     }
 }

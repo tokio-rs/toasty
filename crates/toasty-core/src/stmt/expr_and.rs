@@ -2,7 +2,7 @@ use super::Expr;
 
 use std::ops;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprAnd {
     pub operands: Vec<Expr>,
 }

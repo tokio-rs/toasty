@@ -2,7 +2,7 @@ use crate::stmt::{ExprArg, TableDerived};
 
 use super::TableId;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TableRef {
     /// An aliased table (in a `FROM` statement or equivalent).
     Cte {

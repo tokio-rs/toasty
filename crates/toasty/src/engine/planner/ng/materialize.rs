@@ -1,115 +1,200 @@
-use std::cell::Cell;
+mod materialize_nested_merge;
 
+use std::{cell::Cell, ops};
+
+use index_vec::IndexVec;
 use indexmap::IndexSet;
 use toasty_core::{
-    stmt::{self, visit_mut},
-    Schema,
+    schema::db::{IndexId, TableId},
+    stmt::{self, visit, visit_mut},
 };
 
 use crate::engine::{
-    eval,
-    plan::{self, NestedLevel},
+    eval, plan,
     planner::ng::{Arg, StatementInfoStore, StmtId},
+    Engine,
 };
 
 #[derive(Debug)]
-pub(crate) struct MaterializationGraph {
+pub(crate) struct MaterializeGraph {
     /// Nodes in the graph
-    pub(crate) nodes: Vec<MaterializationNode>,
+    pub(crate) store: IndexVec<NodeId, MaterializeNode>,
 
     /// Order of execution
     pub(crate) execution_order: Vec<NodeId>,
 }
 
 #[derive(Debug)]
-pub(crate) struct MaterializationNode {
+pub(crate) struct MaterializeNode {
     /// Materialization kind
-    pub(crate) kind: MaterializationKind,
+    pub(crate) kind: MaterializeKind,
 
     /// Variable where the output is stored
     pub(crate) var: Cell<Option<plan::VarId>>,
+
+    /// Number of nodes that use this one as input.
+    pub(crate) num_uses: Cell<usize>,
 
     /// Used for topo-sort
     visited: Cell<bool>,
 }
 
-type NodeId = usize;
+index_vec::define_index_type! {
+    pub(crate) struct NodeId = u32;
+}
 
 /// Materialization operation
 #[derive(Debug)]
-pub(crate) enum MaterializationKind {
-    /// Execute a database query
-    ExecStatement {
-        /// Inputs needed to reify the statement
-        inputs: IndexSet<NodeId>,
+pub(crate) enum MaterializeKind {
+    /// A constant value
+    Const(MaterializeConst),
 
-        /// The database query to execute
-        stmt: stmt::Statement,
-    },
+    /// Execute a database query
+    ExecStatement(MaterializeExecStatement),
+
+    /// Filter results
+    Filter(MaterializeFilter),
+
+    /// Find primary keys by index
+    FindPkByIndex(MaterializeFindPkByIndex),
+
+    /// Get records by primary key
+    GetByKey(MaterializeGetByKey),
 
     /// Execute a nested merge
-    NestedMerge {
-        inputs: IndexSet<NodeId>,
-
-        /// The root nested merge level
-        root: plan::NestedLevel,
-    },
+    NestedMerge(MaterializeNestedMerge),
 
     /// Projection operation - transforms records
-    Project {
-        /// Input required to perform the projection
-        input: NodeId,
+    Project(MaterializeProject),
 
-        /// Projection expression
-        projection: stmt::Expr,
-    },
+    QueryPk(MaterializeQueryPk),
 }
 
 #[derive(Debug)]
-struct PlanMaterialization<'a> {
-    schema: &'a Schema,
+pub(crate) struct MaterializeConst {
+    pub(crate) value: Vec<stmt::Value>,
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeExecStatement {
+    /// Inputs needed to reify the statement
+    pub(crate) inputs: IndexSet<NodeId>,
+
+    /// The database query to execute
+    pub(crate) stmt: stmt::Statement,
+
+    /// Node return type
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeFilter {
+    /// Input needed to reify the statement
+    pub(crate) input: NodeId,
+
+    /// Filter
+    pub(crate) filter: eval::Func,
+
+    /// Row type
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeFindPkByIndex {
+    pub(crate) inputs: IndexSet<NodeId>,
+    pub(crate) table: TableId,
+    pub(crate) index: IndexId,
+    pub(crate) filter: stmt::Expr,
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeGetByKey {
+    /// Keys are always specified as an input, whether const or a set of
+    /// dependent materializations and transformations.
+    pub(crate) input: NodeId,
+
+    /// The table to get keys from
+    pub(crate) table: TableId,
+
+    /// Columns to get
+    pub(crate) columns: IndexSet<stmt::ExprReference>,
+
+    /// Return type
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeNestedMerge {
+    /// Inputs needed to reify the statement
+    pub(crate) inputs: IndexSet<NodeId>,
+
+    /// The root nested merge level
+    pub(crate) root: plan::NestedLevel,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeProject {
+    /// Input required to perform the projection
+    pub(crate) input: NodeId,
+
+    /// Projection expression
+    pub(crate) projection: eval::Func,
+
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeQueryPk {
+    pub(crate) table: TableId,
+
+    /// Columns to get
+    pub(crate) columns: IndexSet<stmt::ExprReference>,
+
+    /// How to filter the index
+    pub(crate) pk_filter: stmt::Expr,
+
+    /// Additional filter to pass to the database
+    pub(crate) row_filter: Option<stmt::Expr>,
+
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+struct MaterializePlanner<'a> {
+    engine: &'a Engine,
 
     /// Root statement and all nested statements.
     store: &'a StatementInfoStore,
 
     /// Graph of operations needed to materialize the statement, in-progress
-    graph: MaterializationGraph,
-}
-
-#[derive(Debug)]
-struct PlanNestedMerge<'a> {
-    schema: &'a Schema,
-    store: &'a StatementInfoStore,
-    inputs: IndexSet<NodeId>,
-    /// Statement stack, used to infer expression types
-    stack: Vec<StmtId>,
+    graph: &'a mut MaterializeGraph,
 }
 
 impl super::PlannerNg<'_, '_> {
-    pub(super) fn plan_materializations(&self) -> MaterializationGraph {
-        let mut plan_materialization = PlanMaterialization {
-            schema: self.old.schema,
+    pub(super) fn plan_materializations(&mut self) {
+        MaterializePlanner {
+            engine: self.old.engine,
             store: &self.store,
-            graph: MaterializationGraph::new(),
-        };
-        plan_materialization.build_graph();
-
-        let exit = self.store.root().output.get().unwrap();
-
-        plan_materialization.compute_execution_order(exit);
-        plan_materialization.graph
+            graph: &mut self.graph,
+        }
+        .plan_materialize();
     }
 }
 
-impl PlanMaterialization<'_> {
-    fn build_graph(&mut self) {
+impl MaterializePlanner<'_> {
+    fn plan_materialize(&mut self) {
         let root_id = self.store.root_id();
-        self.plan_stmt_materialization(root_id);
+        self.plan_materialize_statement(root_id);
+
+        let exit = self.store.root().output.get().unwrap();
+        self.compute_materialization_execution_order(exit);
     }
 
-    fn plan_stmt_materialization(&mut self, stmt_id: StmtId) {
-        let stmt_state = &self.store[stmt_id];
-        let mut stmt = stmt_state.stmt.as_deref().unwrap().clone();
+    fn plan_materialize_statement(&mut self, stmt_id: StmtId) {
+        let stmt_info = &self.store[stmt_id];
+        let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
 
         // Get the returning clause
         let stmt::Statement::Query(query) = &mut stmt else {
@@ -123,6 +208,9 @@ impl PlanMaterialization<'_> {
         let stmt::ExprSet::Select(select) = &mut query.body else {
             panic!()
         };
+
+        let filter_is_false = select.filter.is_false();
+
         let stmt::Returning::Expr(returning) = &mut select.returning else {
             panic!()
         };
@@ -142,17 +230,15 @@ impl PlanMaterialization<'_> {
                     let (index, _) = columns.insert_full(*expr_reference);
                     *expr = stmt::Expr::arg_project(0, [index]);
                 }
-                stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
+                stmt::Expr::Arg(expr_arg) => match &stmt_info.args[expr_arg.position] {
                     Arg::Ref { .. } => {
-                        // let (index, _) = inputs.insert_full(*stmt_id);
-                        // *input = Some(index);
                         todo!("refs in returning is not yet supported");
                     }
                     Arg::Sub { stmt_id, input } => {
                         // If there are back-refs, the exec statement is preloading
                         // data for a NestedMerge. Sub-statements will be loaded
                         // during the NestedMerge.
-                        if !stmt_state.back_refs.is_empty() {
+                        if !stmt_info.back_refs.is_empty() {
                             return;
                         }
 
@@ -167,7 +253,7 @@ impl PlanMaterialization<'_> {
         });
 
         // For each back ref, include the needed columns
-        for back_ref in stmt_state.back_refs.values() {
+        for back_ref in stmt_info.back_refs.values() {
             for expr in &back_ref.exprs {
                 columns.insert(*expr);
             }
@@ -177,7 +263,7 @@ impl PlanMaterialization<'_> {
         // to batch load all records for a NestedMerge operation .
         let mut ref_source = None;
 
-        for arg in &self.store[stmt_id].args {
+        for arg in &stmt_info.args {
             let Arg::Ref {
                 stmt_id: target_id,
                 input,
@@ -188,394 +274,525 @@ impl PlanMaterialization<'_> {
             };
 
             assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
+            assert!(!filter_is_false, "TODO: handle const false filters");
 
             // Find the back-ref for this arg
             let node_id = self.store[target_id].back_refs[&stmt_id]
                 .node_id
                 .get()
                 .unwrap();
+
             let (index, _) = inputs.insert_full(node_id);
             ref_source = Some(stmt::ExprArg::new(index));
             input.set(Some(0));
         }
 
-        // Rewrite the filter to batch load all possible records that
-        // will be needed to materialize the original statement.
+        // If targeting SQL, leverage the SQL query engine to handle most of the rewrite details.
+
         if let Some(ref_source) = ref_source {
-            /*
-            -- Step 1: Store filtered users
-            CREATE TEMP TABLE temp_users AS
-            SELECT * FROM users WHERE users.active = true;
+            if self.engine.capability().sql {
+                /*
+                -- Step 1: Store filtered users
+                CREATE TEMP TABLE temp_users AS
+                SELECT * FROM users WHERE users.active = true;
 
-            -- Step 2: Fetch all potentially matching todos
-            SELECT todos.*
-            FROM todos
-            WHERE EXISTS (
-              SELECT 1 FROM temp_users u
-              WHERE todos.user_id = u.id
-              AND todos.created_at > u.created_at
-              AND todos.priority > 3
-            );
-                 */
+                -- Step 2: Fetch all potentially matching todos
+                SELECT todos.*
+                FROM todos
+                WHERE EXISTS (
+                  SELECT 1 FROM temp_users u
+                  WHERE todos.user_id = u.id
+                  AND todos.created_at > u.created_at
+                  AND todos.priority > 3
+                );
+                     */
 
-            visit_mut::for_each_expr_mut(&mut select.filter, |expr| {
-                match expr {
+                visit_mut::for_each_expr_mut(&mut select.filter, |expr| {
+                    match expr {
+                        stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
+                            debug_assert_eq!(0, *nesting);
+                            // We need to up the nesting to reflect that the filter is moved
+                            // one level deeper.
+                            *nesting += 1;
+                        }
+                        stmt::Expr::Arg(expr_arg) => {
+                            let Arg::Ref {
+                                input,
+                                batch_load_index: index,
+                                ..
+                            } = &stmt_info.args[expr_arg.position]
+                            else {
+                                todo!()
+                            };
+
+                            // Rewrite reference the new `FROM`.
+                            *expr = stmt::ExprReference::Column {
+                                nesting: 0,
+                                table: input.get().unwrap(),
+                                column: *index,
+                            }
+                            .into();
+                        }
+                        _ => {}
+                    }
+                });
+
+                let sub_query = stmt::Select {
+                    returning: stmt::Returning::Expr(stmt::Expr::record([1])),
+                    source: stmt::Source::from(ref_source),
+                    filter: select.filter.take(),
+                };
+
+                select.filter = stmt::Expr::exists(sub_query);
+            } else {
+                println!("filter={:#?}", select.filter);
+                visit_mut::for_each_expr_mut(&mut select.filter, |expr| match expr {
                     stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
                         debug_assert_eq!(0, *nesting);
-                        // We need to up the nesting to reflect that the filter is moved
-                        // one level deeper.
-                        *nesting += 1;
                     }
                     stmt::Expr::Arg(expr_arg) => {
                         let Arg::Ref {
-                            input,
                             batch_load_index: index,
                             ..
-                        } = &stmt_state.args[expr_arg.position]
+                        } = &stmt_info.args[expr_arg.position]
                         else {
                             todo!()
                         };
 
-                        // Rewrite reference the new `FROM`.
-                        *expr = stmt::ExprReference::Column {
-                            nesting: 0,
-                            table: input.get().unwrap(),
-                            column: *index,
-                        }
-                        .into();
+                        *expr = stmt::Expr::arg_project(0, [*index]);
                     }
                     _ => {}
-                }
-            });
-
-            let sub_query = stmt::Select {
-                returning: stmt::Returning::Expr(stmt::Expr::record([1])),
-                source: stmt::Source::from(ref_source),
-                filter: select.filter.take(),
-            };
-
-            select.filter = stmt::Expr::exists(sub_query);
+                });
+            }
         }
 
-        select.returning = stmt::Returning::Expr(stmt::Expr::record(
-            columns
-                .iter()
-                .map(|expr_reference| stmt::Expr::from(*expr_reference)),
-        ));
+        let exec_stmt_node_id = if filter_is_false {
+            // Don't bother querying and just return false
+            self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
+        } else if self.engine.capability().sql {
+            select.returning = stmt::Returning::Expr(stmt::Expr::record(
+                columns
+                    .iter()
+                    .map(|expr_reference| stmt::Expr::from(*expr_reference)),
+            ));
 
-        // Create the exec statement materialization node.
-        let exec_stmt_node_id = self.graph.nodes.len();
-        self.graph
-            .nodes
-            .push(MaterializationKind::ExecStatement { inputs, stmt }.into());
+            let input_args: Vec<_> = inputs
+                .iter()
+                .map(|input| self.graph.ty(*input).clone())
+                .collect();
+
+            let ty = self.engine.infer_ty(&stmt, &input_args[..]);
+
+            // With SQL capability, we can just punt the details of execution to
+            // the database's query planner.
+            self.graph
+                .insert(MaterializeExecStatement { inputs, stmt, ty })
+        } else {
+            // Without SQL capability, we have to plan the materialization of
+            // the statement based on available indices.
+            let mut index_plan = self.engine.plan_index_path2(&stmt);
+            let table_id = self.engine.resolve_table_for(&stmt).id;
+
+            // If the query can be reduced to fetching rows using a set of
+            // primary-key keys, then `pk_keys` will be set to `Some(<keys>)`.
+            let mut pk_keys = None;
+
+            // The post-filter is an expression that filters out returned rows
+            // in-memory. To process this filter, Toasty needs to make sure that
+            // any column referenced in the filter is included when fetching
+            // data.
+            let mut post_filter = index_plan.post_filter.clone();
+
+            if index_plan.index.primary_key {
+                let pk_keys_project_args = if ref_source.is_some() {
+                    assert_eq!(inputs.len(), 1, "TODO");
+                    let ty = self.graph[inputs[0]].ty();
+                    vec![ty.unwrap_list_ref().clone()]
+                } else {
+                    vec![]
+                };
+
+                // If using the primary key to find rows, try to convert the
+                // filter expression to a set of primary-key keys.
+                //
+                // TODO: move this to the index planner?
+                let cx = self.engine.expr_cx_for(&stmt);
+                pk_keys = self.engine.try_build_key_filter2(
+                    cx,
+                    index_plan.index,
+                    &index_plan.index_filter,
+                    pk_keys_project_args,
+                );
+            };
+
+            // If fetching rows using GetByKey, some databases do not support
+            // applying additional filters to the rows before returning results.
+            // In this case, the result_filter needs to be applied in-memory.
+            if pk_keys.is_some() || !index_plan.index.primary_key {
+                if let Some(result_filter) = index_plan.result_filter.take() {
+                    post_filter = Some(match post_filter {
+                        Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
+                        None => result_filter,
+                    });
+                }
+            }
+
+            // Make sure we are including columns needed to apply the post filter
+            if let Some(post_filter) = &mut post_filter {
+                visit_mut::for_each_expr_mut(post_filter, |expr| match expr {
+                    stmt::Expr::Reference(expr_reference) => {
+                        let (index, _) = columns.insert_full(*expr_reference);
+                        *expr = stmt::Expr::arg_project(0, [index]);
+                    }
+                    stmt::Expr::Arg(_) => todo!("expr={expr:#?}"),
+                    _ => {}
+                });
+            }
+
+            // Type of the final record.
+            let ty = self.engine.infer_record_list_ty(&stmt, &columns);
+
+            // Type of the index key. Value for single index keys, record for
+            // composite.
+            let index_key_ty = stmt::Type::list(self.engine.index_key_record_ty(index_plan.index));
+
+            let mut node_id = if index_plan.index.primary_key {
+                // TODO: I'm not sure if calling try_build_key_filter is the
+                // right way to do this anymore, but it works for now?
+                if let Some(keys) = pk_keys {
+                    let get_by_key_input = if ref_source.is_none() {
+                        self.insert_const(keys.eval_const(), index_key_ty)
+                    } else if keys.is_identity() {
+                        debug_assert_eq!(1, inputs.len(), "TODO");
+                        inputs[0]
+                    } else {
+                        let ty = stmt::Type::list(keys.ret.clone());
+                        // Gotta project
+                        self.graph.insert(MaterializeProject {
+                            input: inputs[0],
+                            projection: keys,
+                            ty,
+                        })
+                    };
+
+                    self.graph.insert(MaterializeGetByKey {
+                        input: get_by_key_input,
+                        table: table_id,
+                        columns: columns.clone(),
+                        ty: ty.clone(),
+                    })
+                } else {
+                    assert!(inputs.is_empty(), "TODO");
+                    assert!(ref_source.is_none(), "TODO");
+
+                    self.graph.insert(MaterializeQueryPk {
+                        table: table_id,
+                        columns: columns.clone(),
+                        pk_filter: index_plan.index_filter,
+                        row_filter: index_plan.result_filter,
+                        ty: ty.clone(),
+                    })
+                }
+            } else {
+                assert!(index_plan.post_filter.is_none(), "TODO");
+                assert!(inputs.len() <= 1, "TODO: inputs={inputs:#?}");
+
+                // Args not supportd yet...
+                visit::for_each_expr(&index_plan.index_filter, |expr| {
+                    if let stmt::Expr::Arg(expr_arg) = expr {
+                        debug_assert_eq!(0, expr_arg.position, "TODO; index_plan={index_plan:#?}");
+                        debug_assert_eq!(Some(expr_arg), ref_source.as_ref());
+                    }
+                });
+
+                let get_by_key_input = self.graph.insert(MaterializeFindPkByIndex {
+                    inputs,
+                    table: index_plan.index.on,
+                    index: index_plan.index.id,
+                    filter: index_plan.index_filter.take(),
+                    ty: index_key_ty,
+                });
+
+                self.graph.insert(MaterializeGetByKey {
+                    input: get_by_key_input,
+                    table: table_id,
+                    columns: columns.clone(),
+                    ty: ty.clone(),
+                })
+            };
+
+            // If there is a post filter, we need to apply a filter step on the returned rows.
+            if let Some(post_filter) = post_filter {
+                let item_ty = ty.unwrap_list_ref();
+                node_id = self.graph.insert(MaterializeFilter {
+                    input: node_id,
+                    filter: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
+                    ty,
+                });
+            }
+
+            node_id
+        };
 
         // Track the exec statement materialization node.
-        stmt_state.exec_statement.set(Some(exec_stmt_node_id));
+        stmt_info.exec_statement.set(Some(exec_stmt_node_id));
 
         // Now, for each back ref, we need to project the expression to what the
         // next statement expects.
-        for back_ref in stmt_state.back_refs.values() {
+        for back_ref in stmt_info.back_refs.values() {
             let projection = stmt::Expr::record(back_ref.exprs.iter().map(|expr_reference| {
                 let index = columns.get_index_of(expr_reference).unwrap();
                 stmt::Expr::arg_project(0, [index])
             }));
 
-            let project_node_id = self.graph.nodes.len();
-            self.graph.nodes.push(
-                MaterializationKind::Project {
-                    input: exec_stmt_node_id,
-                    projection,
-                }
-                .into(),
-            );
+            let arg_ty = self.graph[exec_stmt_node_id].ty().unwrap_list_ref().clone();
+            let projection = eval::Func::from_stmt(projection, vec![arg_ty]);
+            let ty = stmt::Type::list(projection.ret.clone());
+
+            let project_node_id = self.graph.insert(MaterializeProject {
+                input: exec_stmt_node_id,
+                projection,
+                ty,
+            });
             back_ref.node_id.set(Some(project_node_id));
         }
 
         // Track the selection for later use.
-        stmt_state.exec_statement_selection.set(columns).unwrap();
+        stmt_info.exec_statement_selection.set(columns).unwrap();
 
         // Plan each child
-        for arg in &stmt_state.args {
+        for arg in &stmt_info.args {
             let Arg::Sub { stmt_id, .. } = arg else {
                 continue;
             };
 
-            self.plan_stmt_materialization(*stmt_id);
+            self.plan_materialize_statement(*stmt_id);
         }
 
         // Plans a NestedMerge if one is needed
-        let output_node_id = if let Some(materialize_nested_merge) = self.plan_nested_merge(stmt_id)
-        {
-            let materialize_nested_merge_id = self.graph.nodes.len();
-            self.graph.nodes.push(materialize_nested_merge);
-            materialize_nested_merge_id
+        let output_node_id = if let Some(node_id) = self.plan_nested_merge(stmt_id) {
+            node_id
         } else {
             debug_assert!(
                 !single || ref_source.is_some(),
                 "TODO: single queries not supported here"
             );
 
+            let arg_ty = self.graph[exec_stmt_node_id].ty().unwrap_list_ref().clone();
+            let projection = eval::Func::from_stmt(returning, vec![arg_ty]);
+            let ty = stmt::Type::list(projection.ret.clone());
+
             // Plan the final projection to handle the returning clause.
-            let project_node_id = self.graph.nodes.len();
-            self.graph.nodes.push(
-                MaterializationKind::Project {
-                    input: exec_stmt_node_id,
-                    projection: returning,
-                }
-                .into(),
-            );
-            project_node_id
+            self.graph.insert(MaterializeProject {
+                input: exec_stmt_node_id,
+                projection,
+                ty,
+            })
         };
 
-        stmt_state.output.set(Some(output_node_id));
+        stmt_info.output.set(Some(output_node_id));
     }
 
-    fn plan_nested_merge(&mut self, stmt_id: StmtId) -> Option<MaterializationNode> {
-        let stmt_state = &self.store[stmt_id];
-
-        // Return if there is no nested merge to do
-        let need_nested_merge = stmt_state
-            .args
-            .iter()
-            .any(|arg| matches!(arg, Arg::Sub { .. }));
-        if !need_nested_merge {
-            return None;
-        }
-
-        let planner = PlanNestedMerge {
-            schema: self.schema,
-            store: self.store,
-            inputs: IndexSet::new(),
-            stack: vec![],
-        };
-        Some(planner.plan_nested_merge(stmt_id))
-    }
-
-    fn compute_execution_order(&mut self, exit: NodeId) {
+    fn compute_materialization_execution_order(&mut self, exit: NodeId) {
         debug_assert!(self.graph.execution_order.is_empty());
         // Backward traversal to mark reachable nodes
         let mut stack = vec![exit];
-        self.graph.nodes[exit].visited.set(true);
+        self.graph[exit].visited.set(true);
 
         while let Some(node_id) = stack.pop() {
             self.graph.execution_order.push(node_id);
 
-            fn visit(graph: &MaterializationGraph, stack: &mut Vec<NodeId>, node_id: NodeId) {
-                if !graph.nodes[node_id].visited.get() {
-                    graph.nodes[node_id].visited.set(true);
+            fn visit(graph: &MaterializeGraph, stack: &mut Vec<NodeId>, node_id: NodeId) {
+                let node = &graph[node_id];
+
+                // Increment use count
+                node.num_uses.set(node.num_uses.get() + 1);
+
+                if !node.visited.get() {
+                    node.visited.set(true);
                     stack.push(node_id);
                 }
             }
 
-            match &self.graph.nodes[node_id].kind {
-                MaterializationKind::ExecStatement { inputs, .. } => {
-                    for &input_id in inputs {
-                        visit(&self.graph, &mut stack, input_id);
+            match &self.graph[node_id].kind {
+                MaterializeKind::Const(_) => {}
+                MaterializeKind::ExecStatement(materialize_exec_statement) => {
+                    for &input_id in &materialize_exec_statement.inputs {
+                        visit(self.graph, &mut stack, input_id);
                     }
                 }
-                MaterializationKind::NestedMerge { inputs, .. } => {
-                    for &input_id in inputs {
-                        visit(&self.graph, &mut stack, input_id);
+                MaterializeKind::Filter(materialize_filter) => {
+                    visit(self.graph, &mut stack, materialize_filter.input);
+                }
+                MaterializeKind::FindPkByIndex(materialize_find_pk_by_index) => {
+                    for &input in &materialize_find_pk_by_index.inputs {
+                        visit(self.graph, &mut stack, input);
                     }
                 }
-                MaterializationKind::Project { input, .. } => {
-                    visit(&self.graph, &mut stack, *input);
+                MaterializeKind::GetByKey(materialize_get_by_key) => {
+                    visit(self.graph, &mut stack, materialize_get_by_key.input);
                 }
+                MaterializeKind::NestedMerge(materialize_nested_merge) => {
+                    for &input_id in &materialize_nested_merge.inputs {
+                        visit(self.graph, &mut stack, input_id);
+                    }
+                }
+                MaterializeKind::Project(materialize_project) => {
+                    visit(self.graph, &mut stack, materialize_project.input);
+                }
+                // As of now, QueryPk has no inputs
+                MaterializeKind::QueryPk(_materialize_query_pk) => {}
             }
         }
 
         self.graph.execution_order.reverse();
     }
+
+    #[track_caller]
+    fn insert_const(&mut self, value: impl Into<stmt::Value>, ty: stmt::Type) -> NodeId {
+        let value = value.into();
+
+        // Type check
+        debug_assert!(
+            ty.is_list(),
+            "const types must be of type `stmt::Type::List`"
+        );
+        debug_assert!(
+            value.is_a(&ty),
+            "const type mismatch; expected={ty:#?}; actual={value:#?}",
+        );
+
+        self.graph.insert(MaterializeConst {
+            value: value.unwrap_list(),
+            ty,
+        })
+    }
 }
 
-impl MaterializationGraph {
-    fn new() -> MaterializationGraph {
-        MaterializationGraph {
-            nodes: vec![],
+impl MaterializeGraph {
+    pub(super) fn new() -> MaterializeGraph {
+        MaterializeGraph {
+            store: IndexVec::new(),
             execution_order: vec![],
         }
     }
+
+    /// Insert a node into the graph
+    pub(super) fn insert(&mut self, node: impl Into<MaterializeNode>) -> NodeId {
+        self.store.push(node.into())
+    }
+
+    pub(super) fn var_id(&self, node_id: NodeId) -> plan::VarId {
+        self.store[node_id].var_id()
+    }
+
+    pub(super) fn ty(&self, node_id: NodeId) -> &stmt::Type {
+        self.store[node_id].ty()
+    }
 }
 
-impl From<MaterializationKind> for MaterializationNode {
-    fn from(value: MaterializationKind) -> Self {
-        MaterializationNode {
+impl MaterializeNode {
+    pub(super) fn ty(&self) -> &stmt::Type {
+        match &self.kind {
+            MaterializeKind::Const(kind) => &kind.ty,
+            MaterializeKind::ExecStatement(kind) => &kind.ty,
+            MaterializeKind::Filter(kind) => &kind.ty,
+            MaterializeKind::FindPkByIndex(kind) => &kind.ty,
+            MaterializeKind::GetByKey(kind) => &kind.ty,
+            MaterializeKind::QueryPk(kind) => &kind.ty,
+            MaterializeKind::Project(kind) => &kind.ty,
+            _ => todo!("node={self:#?}"),
+        }
+    }
+
+    pub(super) fn var_id(&self) -> plan::VarId {
+        self.var.get().unwrap()
+    }
+}
+
+impl ops::Index<NodeId> for MaterializeGraph {
+    type Output = MaterializeNode;
+
+    fn index(&self, index: NodeId) -> &Self::Output {
+        self.store.index(index)
+    }
+}
+
+impl ops::IndexMut<NodeId> for MaterializeGraph {
+    fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
+        self.store.index_mut(index)
+    }
+}
+
+impl ops::Index<&NodeId> for MaterializeGraph {
+    type Output = MaterializeNode;
+
+    fn index(&self, index: &NodeId) -> &Self::Output {
+        self.store.index(*index)
+    }
+}
+
+impl ops::IndexMut<&NodeId> for MaterializeGraph {
+    fn index_mut(&mut self, index: &NodeId) -> &mut Self::Output {
+        self.store.index_mut(*index)
+    }
+}
+
+impl From<MaterializeConst> for MaterializeNode {
+    fn from(value: MaterializeConst) -> Self {
+        MaterializeKind::Const(value).into()
+    }
+}
+
+impl From<MaterializeExecStatement> for MaterializeNode {
+    fn from(value: MaterializeExecStatement) -> Self {
+        MaterializeKind::ExecStatement(value).into()
+    }
+}
+
+impl From<MaterializeFilter> for MaterializeNode {
+    fn from(value: MaterializeFilter) -> Self {
+        MaterializeKind::Filter(value).into()
+    }
+}
+
+impl From<MaterializeFindPkByIndex> for MaterializeNode {
+    fn from(value: MaterializeFindPkByIndex) -> Self {
+        MaterializeKind::FindPkByIndex(value).into()
+    }
+}
+
+impl From<MaterializeGetByKey> for MaterializeNode {
+    fn from(value: MaterializeGetByKey) -> Self {
+        MaterializeKind::GetByKey(value).into()
+    }
+}
+
+impl From<MaterializeNestedMerge> for MaterializeNode {
+    fn from(value: MaterializeNestedMerge) -> Self {
+        MaterializeKind::NestedMerge(value).into()
+    }
+}
+
+impl From<MaterializeProject> for MaterializeNode {
+    fn from(value: MaterializeProject) -> Self {
+        MaterializeKind::Project(value).into()
+    }
+}
+
+impl From<MaterializeQueryPk> for MaterializeNode {
+    fn from(value: MaterializeQueryPk) -> Self {
+        MaterializeKind::QueryPk(value).into()
+    }
+}
+
+impl From<MaterializeKind> for MaterializeNode {
+    fn from(value: MaterializeKind) -> Self {
+        MaterializeNode {
             kind: value,
             var: Cell::new(None),
+            num_uses: Cell::new(0),
             visited: Cell::new(false),
         }
-    }
-}
-
-impl PlanNestedMerge<'_> {
-    fn plan_nested_merge(mut self, root: StmtId) -> MaterializationNode {
-        self.stack.push(root);
-        let root = self.plan_nested_level(root, 0);
-        self.stack.pop();
-
-        MaterializationKind::NestedMerge {
-            inputs: self.inputs,
-            root,
-        }
-        .into()
-    }
-
-    fn plan_nested_child(&mut self, stmt_id: StmtId, depth: usize) -> plan::NestedChild {
-        self.stack.push(stmt_id);
-
-        let level = self.plan_nested_level(stmt_id, depth);
-        let stmt_state = &self.store[stmt_id];
-        let selection = stmt_state.exec_statement_selection.get().unwrap();
-
-        let query = stmt_state.stmt.as_deref().unwrap().as_query().unwrap();
-        let select = query.body.as_select();
-
-        // Extract the qualification. For now, we will just re-run the
-        // entire where clause, but that can be improved later.
-        let mut filter = select.filter.clone();
-
-        visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
-            stmt::Expr::Arg(expr_arg) => {
-                let Arg::Ref {
-                    nesting,
-                    stmt_id: target_id,
-                    batch_load_index,
-                    ..
-                } = &stmt_state.args[expr_arg.position]
-                else {
-                    todo!()
-                };
-
-                debug_assert!(*nesting > 0);
-
-                // This is a bit of a roundabout way to get the data. We may
-                // want to find a better way to track the info for more direct
-                // access.
-                let target_stmt = &self.store[target_id];
-                // The ExprReference based on the target's "self"
-                let target_expr_reference =
-                    &target_stmt.back_refs[&stmt_id].exprs[*batch_load_index];
-
-                let target_exec_statement_index = target_stmt
-                    .exec_statement_selection
-                    .get()
-                    .unwrap()
-                    .get_index_of(target_expr_reference)
-                    .unwrap();
-
-                let _ = self.store[target_id]
-                    .exec_statement_selection
-                    .get()
-                    .unwrap();
-
-                *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
-            }
-            stmt::Expr::Reference(expr_reference) => {
-                let index = selection.get_index_of(expr_reference).unwrap();
-                *expr = stmt::Expr::arg_project(depth, [index]);
-            }
-            _ => {}
-        });
-
-        let filter_arg_tys = self.build_filter_arg_tys();
-        let filter = eval::Func::from_stmt(filter, filter_arg_tys);
-
-        let ret = plan::NestedChild {
-            level,
-            qualification: plan::MergeQualification::Predicate(filter),
-            single: query.single,
-        };
-
-        self.stack.pop();
-
-        ret
-    }
-
-    fn plan_nested_level(&mut self, stmt_id: StmtId, depth: usize) -> NestedLevel {
-        let stmt_state = &self.store[stmt_id];
-        let selection = stmt_state.exec_statement_selection.get().unwrap();
-
-        // First, track the batch-load as a required input for the nested merge
-        let (source, _) = self
-            .inputs
-            .insert_full(stmt_state.exec_statement.get().unwrap());
-
-        let select = stmt_state
-            .stmt
-            .as_deref()
-            .unwrap()
-            .as_query()
-            .unwrap()
-            .body
-            .as_select();
-
-        let mut nested = vec![];
-
-        // Map the returning clause to projection expression
-        let mut projection = select.returning.as_expr().clone();
-
-        visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
-            stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
-                Arg::Sub { stmt_id, .. } => {
-                    let nested_child = self.plan_nested_child(*stmt_id, depth + 1);
-                    nested.push(nested_child);
-
-                    // Taking the
-                    *expr = stmt::Expr::arg(nested.len());
-                }
-                Arg::Ref { .. } => todo!(),
-            },
-            stmt::Expr::Reference(expr_reference) => {
-                debug_assert_eq!(0, expr_reference.nesting());
-                let index = selection.get_index_of(expr_reference).unwrap();
-                *expr = stmt::Expr::arg_project(0, [index]);
-            }
-            _ => {}
-        });
-
-        let projection_arg_tys = self.build_projection_arg_tys(&nested);
-        let projection = eval::Func::from_stmt(projection, projection_arg_tys);
-
-        NestedLevel {
-            source,
-            projection,
-            nested,
-        }
-    }
-
-    fn build_filter_arg_tys(&self) -> Vec<stmt::Type> {
-        self.stack
-            .iter()
-            .map(|stmt_id| self.build_exec_statement_ty_for(*stmt_id))
-            .collect()
-    }
-
-    fn build_projection_arg_tys(&self, nested_children: &[plan::NestedChild]) -> Vec<stmt::Type> {
-        let curr = self.stack.last().unwrap();
-        let mut ret = vec![self.build_exec_statement_ty_for(*curr)];
-
-        for nested in nested_children {
-            ret.push(if nested.single {
-                nested.level.projection.ret.clone()
-            } else {
-                stmt::Type::list(nested.level.projection.ret.clone())
-            });
-        }
-
-        ret
-    }
-
-    fn build_exec_statement_ty_for(&self, stmt_id: StmtId) -> stmt::Type {
-        let stmt_state = &self.store[stmt_id];
-        let cx =
-            stmt::ExprContext::new_with_target(self.schema, stmt_state.stmt.as_deref().unwrap());
-
-        let mut fields = vec![];
-
-        for expr_reference in stmt_state.exec_statement_selection.get().unwrap() {
-            fields.push(cx.infer_expr_reference_ty(expr_reference));
-        }
-
-        stmt::Type::Record(fields)
     }
 }

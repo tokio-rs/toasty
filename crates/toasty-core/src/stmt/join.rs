@@ -1,6 +1,6 @@
 use super::{Expr, SourceTableId};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Join {
     /// The table to join
     pub table: SourceTableId,
@@ -9,7 +9,7 @@ pub struct Join {
     pub constraint: JoinOp,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum JoinOp {
     Left(Expr),
 }

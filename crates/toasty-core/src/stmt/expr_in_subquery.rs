@@ -1,6 +1,6 @@
 use super::{Expr, Query};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprInSubquery {
     pub expr: Box<Expr>,
     pub query: Box<Query>,

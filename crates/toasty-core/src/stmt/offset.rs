@@ -1,6 +1,6 @@
 use super::Expr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Offset {
     /// Keyset-based offset
     After(Expr),

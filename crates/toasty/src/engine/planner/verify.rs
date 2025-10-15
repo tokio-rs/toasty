@@ -19,6 +19,7 @@ impl Planner<'_> {
             ReadModifyWrite(action) => self.verify_read_modify_write(action),
             SetVar(action) => self.verify_set_var(action),
             UpdateByKey(action) => self.verify_update_by_key(action),
+            _ => {}
         }
     }
 

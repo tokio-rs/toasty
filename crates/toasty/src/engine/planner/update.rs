@@ -87,7 +87,7 @@ impl Planner<'_> {
             )));
         }
 
-        if !self.capability.sql {
+        if !self.engine.capability().sql {
             // Subqueries are planned before lowering
             self.plan_subqueries(&mut stmt)?;
         }
@@ -98,7 +98,7 @@ impl Planner<'_> {
         // database evaluating the statement), then extract it here.
         self.constantize_update_returning(&mut stmt);
 
-        let cx = stmt::ExprContext::new_with_target(self.schema, &stmt.target);
+        let cx = stmt::ExprContext::new_with_target(self.schema(), &stmt.target);
 
         let output = self
             .partition_maybe_returning(&cx, &mut stmt.returning)
@@ -109,7 +109,7 @@ impl Planner<'_> {
                 project,
             });
 
-        Ok(if self.capability.sql {
+        Ok(if self.capability().sql {
             self.plan_update_sql(stmt, output)
         } else {
             self.plan_update_kv(model, stmt, output)
@@ -127,7 +127,7 @@ impl Planner<'_> {
         // statement. This is a bit tricky because the best strategy for
         // rewriting the statement will depend on the target database.
         if stmt.condition.is_some() {
-            if self.capability.cte_with_update {
+            if self.capability().cte_with_update {
                 let stmt = self.rewrite_conditional_update_as_query_with_cte(stmt);
 
                 assert!(output.is_none());
@@ -162,10 +162,10 @@ impl Planner<'_> {
         stmt: stmt::Update,
         output: Option<plan::Output>,
     ) -> Option<plan::VarId> {
-        let table = self.schema.table_for(model);
+        let table = self.schema().table_for(model);
 
-        let mut index_plan = self.plan_index_path2(
-            stmt::ExprContext::new_with_target(self.schema, &stmt),
+        let mut index_plan = self.engine.plan_index_path(
+            stmt::ExprContext::new_with_target(self.schema(), &stmt),
             table,
             stmt.filter.as_ref().expect("no filter specified"),
         );
@@ -175,8 +175,8 @@ impl Planner<'_> {
         let output_var = output.as_ref().map(|o| o.var);
 
         if index_plan.index.primary_key {
-            let Some(key) = self.try_build_key_filter(
-                stmt::ExprContext::new_with_target(self.schema, &stmt),
+            let Some(key) = self.engine.try_build_key_filter(
+                stmt::ExprContext::new_with_target(self.schema(), &stmt),
                 index_plan.index,
                 &index_plan.index_filter,
             ) else {
@@ -434,7 +434,7 @@ impl Planner<'_> {
                 }
                 .into(),
             ])
-            .locks(if self.capability.select_for_update {
+            .locks(if self.capability().select_for_update {
                 vec![stmt::Lock::Update]
             } else {
                 vec![]

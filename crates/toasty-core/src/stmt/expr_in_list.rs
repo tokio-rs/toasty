@@ -1,6 +1,6 @@
 use super::Expr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprInList {
     pub expr: Box<Expr>,
     pub list: Box<Expr>,

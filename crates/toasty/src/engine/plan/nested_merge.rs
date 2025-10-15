@@ -1,3 +1,5 @@
+use crate::engine::plan::Output2;
+
 use super::{eval, Action, VarId};
 
 /// Nested merge operation - combines parent and child materializations
@@ -18,7 +20,7 @@ pub(crate) struct NestedMerge {
     pub(crate) inputs: Vec<VarId>,
 
     /// Output variable, where to store the merged values
-    pub(crate) output: VarId,
+    pub(crate) output: Output2,
 
     /// The root level
     pub(crate) root: NestedLevel,

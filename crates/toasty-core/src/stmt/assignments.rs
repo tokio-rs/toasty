@@ -3,7 +3,7 @@ use super::{Expr, Projection};
 use indexmap::{Equivalent, IndexMap};
 use std::{hash::Hash, ops};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Assignments {
     /// Map from UpdateTarget field the assignment for that field. The
     /// UpdateTarget field may be an application-level model field or a lowered
@@ -11,7 +11,7 @@ pub struct Assignments {
     assignments: IndexMap<usize, Assignment>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
     /// Assignment operation
     pub op: AssignmentOp,
@@ -20,7 +20,7 @@ pub struct Assignment {
     pub expr: Expr,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AssignmentOp {
     /// Set a field, replacing the current value.
     Set,

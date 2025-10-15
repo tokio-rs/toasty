@@ -50,10 +50,10 @@ impl Exec<'_> {
         assert_eq!(expect_rows, ty.is_some());
 
         let res = self
-            .db
+            .engine
             .driver
             .exec(
-                &self.db.schema.db,
+                &self.engine.schema.db,
                 operation::QuerySql { stmt, ret: ty }.into(),
             )
             .await?;

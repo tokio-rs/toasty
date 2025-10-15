@@ -1,4 +1,7 @@
-use crate::engine::plan::{exec_statement2::ExecStatement2, project::Project};
+use crate::engine::plan::{
+    exec_statement2::ExecStatement2, project::Project, Filter, FindPkByIndex2, GetByKey2, QueryPk2,
+    SetVar2,
+};
 
 use super::{
     Associate, BatchWrite, DeleteByKey, ExecStatement, FindPkByIndex, GetByKey, Insert,
@@ -22,10 +25,15 @@ pub(crate) enum Action {
     /// Execute a statement
     ExecStatement2(ExecStatement2),
 
+    /// Filter a value stream
+    Filter(Filter),
+
     FindPkByIndex(FindPkByIndex),
+    FindPkByIndex2(FindPkByIndex2),
 
     /// Execute `Operation::GetByKey` using key input
     GetByKey(GetByKey),
+    GetByKey2(GetByKey2),
 
     /// Insert a record
     Insert(Insert),
@@ -40,12 +48,14 @@ pub(crate) enum Action {
 
     /// Query records by primary key
     QueryPk(QueryPk),
+    QueryPk2(QueryPk2),
 
     /// Perform an atomic operation in multiple steps
     ReadModifyWrite(Box<ReadModifyWrite>),
 
     /// Set a variable to a const
     SetVar(SetVar),
+    SetVar2(SetVar2),
 
     /// Update a record by the primary key
     UpdateByKey(UpdateByKey),
@@ -59,14 +69,19 @@ impl fmt::Debug for Action {
             Self::DeleteByKey(a) => a.fmt(f),
             Self::ExecStatement(a) => a.fmt(f),
             Self::ExecStatement2(a) => a.fmt(f),
+            Self::Filter(a) => a.fmt(f),
             Self::FindPkByIndex(a) => a.fmt(f),
+            Self::FindPkByIndex2(a) => a.fmt(f),
             Self::GetByKey(a) => a.fmt(f),
+            Self::GetByKey2(a) => a.fmt(f),
             Self::Insert(a) => a.fmt(f),
             Self::NestedMerge(a) => a.fmt(f),
             Self::QueryPk(a) => a.fmt(f),
+            Self::QueryPk2(a) => a.fmt(f),
             Self::ReadModifyWrite(a) => a.fmt(f),
             Self::Project(a) => a.fmt(f),
             Self::SetVar(a) => a.fmt(f),
+            Self::SetVar2(a) => a.fmt(f),
             Self::UpdateByKey(a) => a.fmt(f),
         }
     }

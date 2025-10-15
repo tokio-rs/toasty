@@ -234,7 +234,7 @@ pub use with::With;
 use crate::schema::db::TableId;
 use std::fmt;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Statement {
     /// Delete one or more existing records
     Delete(Delete),
@@ -252,6 +252,18 @@ pub enum Statement {
 impl Statement {
     pub fn substitute(&mut self, input: impl substitute::Input) {
         Substitute::new(input).visit_stmt_mut(self);
+    }
+
+    pub fn as_filter(&self) -> Option<&Expr> {
+        match self {
+            Statement::Query(query) => match &query.body {
+                ExprSet::Select(select) => Some(&select.filter),
+                _ => None,
+            },
+            Statement::Update(update) => update.filter.as_ref(),
+            Statement::Delete(delete) => Some(&delete.filter),
+            _ => None,
+        }
     }
 
     /// Attempts to return a reference to an inner [`Delete`].

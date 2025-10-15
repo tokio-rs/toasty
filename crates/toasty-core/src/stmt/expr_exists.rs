@@ -1,6 +1,6 @@
 use crate::stmt::{Expr, Query};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprExists {
     pub subquery: Box<Query>,
     pub negated: bool,

@@ -2,7 +2,7 @@ use crate::stmt::{ExprArg, Source, SourceTableId, TableFactor};
 
 use super::{TableRef, TableWithJoins};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SourceTable {
     /// All tables referenced in the statement
     pub tables: Vec<TableRef>,

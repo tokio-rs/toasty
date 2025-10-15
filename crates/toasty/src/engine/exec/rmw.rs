@@ -17,19 +17,19 @@ impl Exec<'_> {
         assert!(action.output.is_none(), "TODO");
 
         let res = self
-            .db
+            .engine
             .driver
-            .exec(&self.db.schema.db, Transaction::Start.into())
+            .exec(&self.engine.schema.db, Transaction::Start.into())
             .await?;
         assert!(matches!(res.rows, Rows::Count(0)));
 
         let ty = Some(vec![stmt::Type::I64, stmt::Type::I64]);
 
         let res = self
-            .db
+            .engine
             .driver
             .exec(
-                &self.db.schema.db,
+                &self.engine.schema.db,
                 operation::QuerySql {
                     stmt: action.read.clone().into(),
                     ret: ty,
@@ -59,10 +59,10 @@ impl Exec<'_> {
         }
 
         let res = self
-            .db
+            .engine
             .driver
             .exec(
-                &self.db.schema.db,
+                &self.engine.schema.db,
                 operation::QuerySql {
                     stmt: action.write.clone(),
                     ret: None,
@@ -78,9 +78,9 @@ impl Exec<'_> {
         assert_eq!(actual, count as u64);
 
         let res = self
-            .db
+            .engine
             .driver
-            .exec(&self.db.schema.db, Transaction::Commit.into())
+            .exec(&self.engine.schema.db, Transaction::Commit.into())
             .await?;
         assert!(matches!(res.rows, Rows::Count(0)));
 

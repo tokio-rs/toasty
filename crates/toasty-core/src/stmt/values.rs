@@ -1,7 +1,7 @@
 use super::{Expr, ExprSet, Query};
 
 /// Set of values to insert
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Values {
     pub rows: Vec<Expr>,
 }

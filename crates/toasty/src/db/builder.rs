@@ -1,4 +1,4 @@
-use crate::{driver::Driver, engine, Db, DbInner, Model, Result};
+use crate::{driver::Driver, engine::Engine, Db, Model, Result};
 
 use toasty_core::{
     schema::{self, app},
@@ -48,11 +48,8 @@ impl Builder {
 
         driver.register_schema(&schema.db).await.unwrap();
 
-        let inner = DbInner {
-            driver: Arc::new(driver),
-            schema: Arc::new(schema),
-        };
-        let inner2 = inner.clone();
+        let engine = Engine::new(Arc::new(schema), Arc::new(driver));
+        let engine2 = engine.clone();
 
         let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<(
             toasty_core::stmt::Statement,
@@ -63,7 +60,7 @@ impl Builder {
             loop {
                 let (stmt, tx) = in_rx.recv().await.unwrap();
 
-                match engine::exec(&inner2, stmt).await {
+                match engine2.exec(stmt).await {
                     Ok(mut value_stream) => {
                         let (row_tx, mut row_rx) =
                             tokio::sync::mpsc::unbounded_channel::<crate::Result<Value>>();
@@ -86,7 +83,7 @@ impl Builder {
         });
 
         Ok(Db {
-            inner,
+            engine,
             in_tx,
             join_handle,
         })

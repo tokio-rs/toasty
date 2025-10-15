@@ -5,15 +5,13 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::{driver::Driver, stmt, Cursor, Model, Result, Statement};
+use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
 
 use toasty_core::{stmt::ValueStream, Schema};
 
-use std::sync::Arc;
-
 #[derive(Debug)]
 pub struct Db {
-    pub(crate) inner: DbInner,
+    pub(crate) engine: Engine,
 
     /// Handle to send statements to be executed
     pub(crate) in_tx: mpsc::UnboundedSender<(
@@ -25,15 +23,6 @@ pub struct Db {
     pub(crate) join_handle: JoinHandle<()>,
 }
 
-#[derive(Debug, Clone)]
-pub struct DbInner {
-    /// Handle to the underlying database driver.
-    pub(crate) driver: Arc<dyn Driver>,
-
-    /// Schema being managed by this DB instance.
-    pub(crate) schema: Arc<Schema>,
-}
-
 impl Db {
     pub fn builder() -> Builder {
         Builder::default()
@@ -42,7 +31,7 @@ impl Db {
     /// Execute a query, returning all matching records
     pub async fn all<M: Model>(&self, query: stmt::Select<M>) -> Result<Cursor<M>> {
         let records = self.exec(query.into()).await?;
-        Ok(Cursor::new(self.inner.schema.clone(), records))
+        Ok(Cursor::new(self.engine.schema.clone(), records))
     }
 
     pub async fn first<M: Model>(&self, query: stmt::Select<M>) -> Result<Option<M>> {
@@ -101,18 +90,18 @@ impl Db {
     pub async fn exec_insert_one<M: Model>(&self, stmt: stmt::Insert<M>) -> Result<M> {
         // Execute the statement and return the result
         let records = self.exec(stmt.into()).await?;
-        let mut cursor = Cursor::new(self.inner.schema.clone(), records);
+        let mut cursor = Cursor::new(self.engine.schema.clone(), records);
 
         cursor.next().await.unwrap()
     }
 
     /// TODO: remove
     pub async fn reset_db(&self) -> Result<()> {
-        self.inner.driver.reset_db(&self.inner.schema.db).await
+        self.engine.driver.reset_db(&self.engine.schema.db).await
     }
 
     pub fn schema(&self) -> &Schema {
-        &self.inner.schema
+        &self.engine.schema
     }
 }
 

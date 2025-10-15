@@ -4,7 +4,7 @@ use crate::{
     stmt,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Update {
     /// What to update
     pub target: UpdateTarget,
@@ -28,7 +28,7 @@ impl Statement {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UpdateTarget {
     /// The query must return a "model" for it to be updated.
     Query(Box<Query>),

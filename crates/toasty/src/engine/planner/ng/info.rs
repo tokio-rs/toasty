@@ -8,6 +8,8 @@ use index_vec::IndexVec;
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
+use super::NodeId;
+
 /// Additional information needed for planning a statement for materialization.
 /// Note, there is not a 1-1 mapping between `StatementInfo` and statements. A
 /// `StatementInfo` is used for statements that need to be materialized
@@ -24,14 +26,14 @@ pub(super) struct StatementInfo {
     /// current statemetn.
     pub(super) back_refs: HashMap<StmtId, BackRef>,
 
-    /// Index of the ExecStatement materialization node for this statement.
-    pub(super) exec_statement: Cell<Option<usize>>,
+    /// This statement's ExecStatement materialization node ID.
+    pub(super) exec_statement: Cell<Option<NodeId>>,
 
     /// Columns selected by exec_statement
     pub(super) exec_statement_selection: OnceCell<IndexSet<stmt::ExprReference>>,
 
-    /// Index of the node that computes the final result for the statement
-    pub(super) output: Cell<Option<usize>>,
+    /// This statement's node ID representing the final computation.
+    pub(super) output: Cell<Option<NodeId>>,
 }
 
 /// StatementInfo store
@@ -63,7 +65,7 @@ pub(super) struct BackRef {
     pub(super) exprs: IndexSet<stmt::ExprReference>,
 
     /// Projection materialization node ID
-    pub(super) node_id: Cell<Option<usize>>,
+    pub(super) node_id: Cell<Option<NodeId>>,
 }
 
 #[derive(Debug)]

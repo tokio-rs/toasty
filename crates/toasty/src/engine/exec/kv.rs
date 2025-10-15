@@ -55,13 +55,7 @@ impl Exec<'_> {
                 };
 
                 if select {
-                    let value = if project.is_identity() {
-                        let [value] = args;
-                        value
-                    } else {
-                        project.eval(&args)?
-                    };
-
+                    let value = project.eval(&args)?;
                     yield value;
                 }
             }

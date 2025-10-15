@@ -1,6 +1,6 @@
 use super::{BinaryOp, Expr};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprBinaryOp {
     pub lhs: Box<Expr>,
     pub op: BinaryOp,

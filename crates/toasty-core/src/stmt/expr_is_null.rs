@@ -1,6 +1,6 @@
 use super::Expr;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprIsNull {
     /// IS NOT NULL
     pub negate: bool,

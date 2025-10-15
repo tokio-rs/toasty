@@ -4,8 +4,8 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprReference, ExprSet, Insert, InsertTable, InsertTarget, Query, Returning,
-        Select, Source, SourceTable, Statement, TableRef, Type, Update, UpdateTarget,
+        Delete, Expr, ExprReference, ExprSet, Insert, InsertTarget, Query, Returning, Select,
+        Source, SourceTable, Statement, TableFactor, TableRef, Type, Update, UpdateTarget,
     },
     Schema,
 };
@@ -91,7 +91,6 @@ pub enum ExprTarget<'a> {
     Table(&'a Table),
 
     // Reference statement targets directly
-    Insert(&'a InsertTable),
     Source(&'a SourceTable),
 }
 
@@ -118,22 +117,6 @@ pub trait IntoExprTarget<'a, T = Schema> {
 }
 
 impl<'a, T> ExprContext<'a, T> {
-    pub fn new(schema: &'a T) -> ExprContext<'a, T> {
-        ExprContext::new_with_target(schema, ExprTarget::Free)
-    }
-
-    pub fn new_with_target(
-        schema: &'a T,
-        target: impl IntoExprTarget<'a, T>,
-    ) -> ExprContext<'a, T> {
-        let target = target.into_expr_target(schema);
-        ExprContext {
-            schema,
-            parent: None,
-            target,
-        }
-    }
-
     pub fn schema(&self) -> &'a T {
         self.schema
     }
@@ -157,6 +140,34 @@ impl<'a, T> ExprContext<'a, T> {
 
         &curr.target
     }
+}
+
+impl<'a> ExprContext<'a, ()> {
+    pub fn new_free() -> ExprContext<'a, ()> {
+        ExprContext {
+            schema: &(),
+            parent: None,
+            target: ExprTarget::Free,
+        }
+    }
+}
+
+impl<'a, T: Resolve> ExprContext<'a, T> {
+    pub fn new(schema: &'a T) -> ExprContext<'a, T> {
+        ExprContext::new_with_target(schema, ExprTarget::Free)
+    }
+
+    pub fn new_with_target(
+        schema: &'a T,
+        target: impl IntoExprTarget<'a, T>,
+    ) -> ExprContext<'a, T> {
+        let target = target.into_expr_target(schema);
+        ExprContext {
+            schema,
+            parent: None,
+            target,
+        }
+    }
 
     pub fn scope<'child>(
         &'child self,
@@ -170,60 +181,7 @@ impl<'a, T> ExprContext<'a, T> {
             target,
         }
     }
-}
 
-impl<'a> ExprContext<'a, ()> {
-    pub fn new_free() -> ExprContext<'a, ()> {
-        ExprContext {
-            schema: &(),
-            parent: None,
-            target: ExprTarget::Free,
-        }
-    }
-}
-
-impl<'a> ExprContext<'a, Schema> {
-    pub fn target_as_model(&self) -> Option<&'a Model> {
-        let model_id = self.target.as_model_id()?;
-        Some(self.schema.app.model(model_id))
-    }
-
-    pub fn expr_ref_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
-        let column_id = column_id.into();
-
-        match self.target {
-            ExprTarget::Free => {
-                panic!("Cannot create ExprColumn in free context - no table target available")
-            }
-            ExprTarget::Model(model) => {
-                let Some(table) = self.schema.table_for_model(model) else {
-                    panic!("Failed to find database table for model '{:?}' - model may not be mapped to a table", model.name)
-                };
-
-                assert_eq!(table.id, column_id.table);
-            }
-            ExprTarget::Table(table) => assert_eq!(table.id, column_id.table),
-            ExprTarget::Insert(_) => todo!(),
-            ExprTarget::Source(source_table) => {
-                let [TableRef::Table(table_id)] = source_table.tables[..] else {
-                    panic!(
-                        "Expected exactly one table reference, found {} tables",
-                        source_table.tables.len()
-                    );
-                };
-                assert_eq!(table_id, column_id.table);
-            }
-        }
-
-        ExprReference::Column {
-            nesting: 0,
-            table: 0,
-            column: column_id.index,
-        }
-    }
-}
-
-impl<'a, T: Resolve> ExprContext<'a, T> {
     /// Resolves an ExprReference::Column reference to the actual database Column it
     /// represents.
     ///
@@ -314,20 +272,6 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     ),
                 }
             }
-            ExprTarget::Insert(insert_table) => match expr_reference {
-                ExprReference::Model { .. } => panic!(
-                    "Cannot resolve ExprReference::Model in InsertTarget::Table context"
-                ),
-                ExprReference::Field { .. } => panic!(
-                    "Cannot resolve ExprReference::Field in InsertTarget::Table context - use ExprReference::Column instead"
-                ),
-                ExprReference::Column { column, .. } => {
-                    let Some(table) = self.schema.table(insert_table.table) else {
-                        panic!("Failed to resolve table with ID {:?} for INSERT target - table not found in schema", insert_table.table);
-                    };
-                    ResolvedRef::Column(&table.columns[*column])
-                }
-            },
         }
     }
 
@@ -429,6 +373,46 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     }
 }
 
+impl<'a> ExprContext<'a, Schema> {
+    pub fn target_as_model(&self) -> Option<&'a Model> {
+        let model_id = self.target.as_model_id()?;
+        Some(self.schema.app.model(model_id))
+    }
+
+    pub fn expr_ref_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
+        let column_id = column_id.into();
+
+        match self.target {
+            ExprTarget::Free => {
+                panic!("Cannot create ExprColumn in free context - no table target available")
+            }
+            ExprTarget::Model(model) => {
+                let Some(table) = self.schema.table_for_model(model) else {
+                    panic!("Failed to find database table for model '{:?}' - model may not be mapped to a table", model.name)
+                };
+
+                assert_eq!(table.id, column_id.table);
+            }
+            ExprTarget::Table(table) => assert_eq!(table.id, column_id.table),
+            ExprTarget::Source(source_table) => {
+                let [TableRef::Table(table_id)] = source_table.tables[..] else {
+                    panic!(
+                        "Expected exactly one table reference, found {} tables",
+                        source_table.tables.len()
+                    );
+                };
+                assert_eq!(table_id, column_id.table);
+            }
+        }
+
+        ExprReference::Column {
+            nesting: 0,
+            table: 0,
+            column: column_id.index,
+        }
+    }
+}
+
 impl<'a, T> Clone for ExprContext<'a, T> {
     fn clone(&self) -> Self {
         *self
@@ -506,6 +490,7 @@ impl Resolve for () {
 }
 
 impl<'a> ExprTarget<'a> {
+    #[track_caller]
     pub fn expect_model(self) -> &'a Model {
         match self {
             ExprTarget::Model(model) => model,
@@ -519,11 +504,41 @@ impl<'a> ExprTarget<'a> {
             _ => return None,
         })
     }
+
+    #[track_caller]
+    pub fn expect_table(self) -> &'a Table {
+        match self {
+            ExprTarget::Table(table) => table,
+            _ => panic!("expected ExprTarget::Table; was {self:#?}"),
+        }
+    }
 }
 
-impl<'a, T> IntoExprTarget<'a, T> for ExprTarget<'a> {
-    fn into_expr_target(self, _schema: &'a T) -> ExprTarget<'a> {
-        self
+impl<'a, T: Resolve> IntoExprTarget<'a, T> for ExprTarget<'a> {
+    fn into_expr_target(self, schema: &'a T) -> ExprTarget<'a> {
+        match self {
+            ExprTarget::Source(source_table) => {
+                if source_table.from_item.joins.is_empty() {
+                    match &source_table.from_item.relation {
+                        TableFactor::Table(source_table_id) => {
+                            debug_assert_eq!(0, source_table_id.0);
+                            debug_assert_eq!(1, source_table.tables.len());
+
+                            match &source_table.tables[0] {
+                                TableRef::Table(table_id) => {
+                                    let table = schema.table(*table_id).unwrap();
+                                    ExprTarget::Table(table)
+                                }
+                                _ => self,
+                            }
+                        }
+                    }
+                } else {
+                    self
+                }
+            }
+            _ => self,
+        }
     }
 }
 
@@ -590,7 +605,10 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a InsertTarget {
                 };
                 ExprTarget::Model(model)
             }
-            InsertTarget::Table(insert_table) => ExprTarget::Insert(insert_table),
+            InsertTarget::Table(insert_table) => {
+                let table = schema.table(insert_table.table).unwrap();
+                ExprTarget::Table(table)
+            }
         }
     }
 }
@@ -624,7 +642,9 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a Source {
                 };
                 ExprTarget::Model(model)
             }
-            Source::Table(source_table) => ExprTarget::Source(source_table),
+            Source::Table(source_table) => {
+                ExprTarget::Source(source_table).into_expr_target(schema)
+            }
         }
     }
 }

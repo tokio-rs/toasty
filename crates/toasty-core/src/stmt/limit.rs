@@ -1,6 +1,6 @@
 use super::{Expr, Offset};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Limit {
     /// The limit expression
     pub limit: Expr,
