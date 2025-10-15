@@ -234,7 +234,7 @@ impl VisitMut for LowerStatement<'_> {
     }
 
     fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update) {
-        let model_id = i.target.as_model_id();
+        let model_id = i.target.model_id_unwrap();
         let mut lower = self.scope(self.cx.schema().app.model(model_id));
 
         // Before lowering children, convert the "Changed" returning statement

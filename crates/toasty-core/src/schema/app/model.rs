@@ -70,7 +70,7 @@ impl Model {
             ),
         };
 
-        stmt::Query::filter(self.id, filter)
+        stmt::Query::new_select(self.id, filter)
     }
 
     /// Iterate over the fields used for the model's primary key.

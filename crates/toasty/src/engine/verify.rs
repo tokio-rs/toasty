@@ -29,7 +29,7 @@ impl stmt::Visit for Verify<'_> {
 
         VerifyExpr {
             schema: self.schema,
-            model: i.from.as_model_id(),
+            model: i.from.model_id(),
         }
         .verify_filter(&i.filter);
     }
@@ -45,7 +45,7 @@ impl stmt::Visit for Verify<'_> {
 
         VerifyExpr {
             schema: self.schema,
-            model: i.source.as_model_id(),
+            model: i.source.model_id(),
         }
         .verify_filter(&i.filter);
     }
@@ -58,7 +58,7 @@ impl stmt::Visit for Verify<'_> {
 
         let mut verify_expr = VerifyExpr {
             schema: self.schema,
-            model: i.target.as_model_id(),
+            model: i.target.model_id_unwrap(),
         };
 
         verify_expr.visit_stmt_update(i);

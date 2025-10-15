@@ -3,7 +3,7 @@ use toasty_core::{schema::app, stmt};
 
 impl Planner<'_> {
     pub(super) fn plan_stmt_delete(&mut self, stmt: stmt::Delete) -> Result<()> {
-        let model = self.model(stmt.from.as_model_id());
+        let model = self.model(stmt.from.model_id());
         let selection = stmt.selection();
 
         // Handle any cascading deletes

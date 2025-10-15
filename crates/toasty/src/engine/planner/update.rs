@@ -16,7 +16,7 @@ impl Planner<'_> {
         &mut self,
         mut stmt: stmt::Update,
     ) -> Result<Option<plan::VarId>> {
-        let model = self.model(stmt.target.as_model_id());
+        let model = self.model(stmt.target.model_id_unwrap());
 
         // Make sure the update statement isn't empty
         assert!(

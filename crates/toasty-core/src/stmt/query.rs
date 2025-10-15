@@ -2,7 +2,7 @@ use super::{
     Delete, Expr, ExprSet, ExprSetOp, Limit, Node, OrderBy, Path, Returning, Select, SetOp, Source,
     Statement, Update, UpdateTarget, Values, Visit, VisitMut, With,
 };
-use crate::stmt;
+use crate::stmt::{self, Filter};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Query {
@@ -51,6 +51,10 @@ impl Query {
         }
     }
 
+    pub fn new_select(source: impl Into<Source>, filter: impl Into<Filter>) -> Self {
+        Self::builder(Select::new(source, filter)).build()
+    }
+
     pub fn builder(body: impl Into<ExprSet>) -> QueryBuilder {
         QueryBuilder {
             query: Query::new(body),
@@ -59,10 +63,6 @@ impl Query {
 
     pub fn unit() -> Self {
         Query::new(Values::default())
-    }
-
-    pub fn filter(source: impl Into<Source>, filter: impl Into<Expr>) -> Self {
-        Self::builder(Select::new(source, filter)).build()
     }
 
     pub fn values(values: impl Into<Values>) -> Self {
@@ -86,7 +86,7 @@ impl Query {
         stmt::Update {
             target: UpdateTarget::Query(Box::new(self)),
             assignments: stmt::Assignments::default(),
-            filter: None,
+            filter: Filter::default(),
             condition: None,
             returning: None,
         }
@@ -103,10 +103,11 @@ impl Query {
         }
     }
 
-    pub fn and(&mut self, expr: impl Into<Expr>) {
+    pub fn add_filter(&mut self, filter: impl Into<Filter>) {
         self.body.as_select_mut().and(expr);
     }
 
+    /*
     pub fn union(&mut self, query: impl Into<Self>) {
         let rhs = query.into();
 
@@ -125,6 +126,7 @@ impl Query {
             }
         }
     }
+    */
 
     pub fn include(&mut self, path: impl Into<Path>) {
         match &mut self.body {
@@ -161,7 +163,7 @@ impl QueryBuilder {
         self
     }
 
-    pub fn filter(mut self, filter: impl Into<Expr>) -> Self {
+    pub fn filter(mut self, filter: impl Into<Filter>) -> Self {
         let filter = filter.into();
 
         match &mut self.query.body {

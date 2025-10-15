@@ -178,7 +178,7 @@ impl VisitMut for Simplify<'_> {
                 None
             };
 
-            stmt.target = stmt::UpdateTarget::Model(select.source.as_model_id());
+            stmt.target = stmt::UpdateTarget::Model(select.source.model_id());
         }
 
         self.visit_update_target_mut(&mut stmt.target);

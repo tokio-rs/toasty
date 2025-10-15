@@ -345,7 +345,7 @@ impl ToSql for &stmt::Update {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         let prev = mem::replace(&mut f.alias, true);
 
-        let table = f.serializer.schema.table(self.target.as_table());
+        let table = f.serializer.schema.table(self.target.as_table_unwrap());
         let assignments = (table, &self.assignments);
 
         // Create a new expression scope to serialize the statement

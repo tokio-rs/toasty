@@ -35,7 +35,7 @@ impl InsertTarget {
         }
     }
 
-    pub fn constrain(&mut self, expr: impl Into<Expr>) {
+    pub fn add_constraint(&mut self, expr: impl Into<Expr>) {
         match self {
             Self::Scope(query) => query.and(expr),
             Self::Model(model_id) => {

@@ -36,16 +36,25 @@ impl Source {
         matches!(self, Self::Model(_))
     }
 
-    #[track_caller]
-    pub fn as_model(&self) -> &SourceModel {
+    pub fn as_model(&self) -> Option<&SourceModel> {
         match self {
-            Self::Model(source) => source,
-            Self::Table(_) => todo!(),
+            Self::Model(source) => Some(source),
+            _ => None,
         }
     }
 
-    pub fn as_model_id(&self) -> ModelId {
-        self.as_model().model
+    #[track_caller]
+    pub fn as_model_unwrap(&self) -> &SourceModel {
+        self.as_model()
+            .expect("expected SourceModel; actual={self:#?}")
+    }
+
+    pub fn model_id(&self) -> Option<ModelId> {
+        self.as_model().map(|source_model| source_model.model)
+    }
+
+    pub fn model_id_unwrap(&self) -> ModelId {
+        self.as_model_unwrap().model
     }
 
     pub fn is_table(&self) -> bool {
