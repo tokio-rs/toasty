@@ -83,6 +83,9 @@ pub(crate) struct MaterializeExecStatement {
 
     /// The database query to execute
     pub(crate) stmt: stmt::Statement,
+
+    /// Node return type
+    pub(crate) ty: stmt::Type,
 }
 
 #[derive(Debug)]
@@ -373,9 +376,17 @@ impl MaterializePlanner<'_> {
                     .map(|expr_reference| stmt::Expr::from(*expr_reference)),
             ));
 
+            let input_args: Vec<_> = inputs
+                .iter()
+                .map(|input| self.graph.ty(*input).clone())
+                .collect();
+
+            let ty = self.engine.infer_ty(&stmt, &input_args[..]);
+
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
-            self.graph.insert(MaterializeExecStatement { inputs, stmt })
+            self.graph
+                .insert(MaterializeExecStatement { inputs, stmt, ty })
         } else {
             // Without SQL capability, we have to plan the materialization of
             // the statement based on available indices.
@@ -676,12 +687,17 @@ impl MaterializeGraph {
     pub(super) fn var_id(&self, node_id: NodeId) -> plan::VarId {
         self.store[node_id].var_id()
     }
+
+    pub(super) fn ty(&self, node_id: NodeId) -> &stmt::Type {
+        self.store[node_id].ty()
+    }
 }
 
 impl MaterializeNode {
     pub(super) fn ty(&self) -> &stmt::Type {
         match &self.kind {
             MaterializeKind::Const(kind) => &kind.ty,
+            MaterializeKind::ExecStatement(kind) => &kind.ty,
             MaterializeKind::Filter(kind) => &kind.ty,
             MaterializeKind::FindPkByIndex(kind) => &kind.ty,
             MaterializeKind::GetByKey(kind) => &kind.ty,

@@ -172,29 +172,21 @@ impl PlannerNg<'_, '_> {
                         "as of now, no database can execute single queries"
                     );
 
-                    let mut input_args = vec![];
-                    let mut input_vars = vec![];
+                    let ty = node.ty();
+                    let input_vars = materialize_exec_statement
+                        .inputs
+                        .iter()
+                        .map(|input| self.graph[input].var.get().unwrap())
+                        .collect();
 
-                    for input in &materialize_exec_statement.inputs {
-                        let var = self.graph[input].var.get().unwrap();
-
-                        input_args.push(self.old.var_table.ty(var).clone());
-                        input_vars.push(var);
-                    }
-
-                    let ty = self
-                        .old
-                        .engine
-                        .infer_ty(&materialize_exec_statement.stmt, &input_args);
-
-                    let ty_fields = match &ty {
+                    let ty_fields = match ty {
                         stmt::Type::List(ty_rows) => match &**ty_rows {
                             stmt::Type::Record(ty_fields) => ty_fields.clone(),
                             _ => todo!("ty={ty:#?}"),
                         },
                         _ => todo!("ty={ty:#?}"),
                     };
-                    let var = self.old.var_table.register_var(ty);
+                    let var = self.old.var_table.register_var(ty.clone());
                     node.var.set(Some(var));
 
                     self.old.push_action(plan::ExecStatement2 {
