@@ -106,6 +106,9 @@ pub use expr_stmt::ExprStmt;
 mod expr_ty;
 pub use expr_ty::ExprTy;
 
+mod filter;
+pub use filter::Filter;
+
 mod func_count;
 pub use func_count::FuncCount;
 
@@ -252,18 +255,6 @@ pub enum Statement {
 impl Statement {
     pub fn substitute(&mut self, input: impl substitute::Input) {
         Substitute::new(input).visit_stmt_mut(self);
-    }
-
-    pub fn as_filter(&self) -> Option<&Expr> {
-        match self {
-            Statement::Query(query) => match &query.body {
-                ExprSet::Select(select) => Some(&select.filter),
-                _ => None,
-            },
-            Statement::Update(update) => update.filter.as_ref(),
-            Statement::Delete(delete) => Some(&delete.filter),
-            _ => None,
-        }
     }
 
     /// Attempts to return a reference to an inner [`Delete`].

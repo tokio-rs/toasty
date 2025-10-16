@@ -20,34 +20,6 @@ pub enum ExprSet {
 
 impl ExprSet {
     #[track_caller]
-    pub fn as_select(&self) -> &Select {
-        match self {
-            Self::Select(expr) => expr,
-            _ => todo!("expected Select, but was not; expr_set={:#?}", self),
-        }
-    }
-
-    #[track_caller]
-    pub fn as_select_mut(&mut self) -> &mut Select {
-        match self {
-            Self::Select(expr) => expr,
-            _ => todo!("expected Select, but was not"),
-        }
-    }
-
-    #[track_caller]
-    pub fn into_select(self) -> Select {
-        match self {
-            Self::Select(expr) => *expr,
-            _ => todo!(),
-        }
-    }
-
-    pub fn is_select(&self) -> bool {
-        matches!(self, Self::Select(_))
-    }
-
-    #[track_caller]
     pub fn as_values_mut(&mut self) -> &mut Values {
         match self {
             Self::Values(expr) => expr,

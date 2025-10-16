@@ -67,6 +67,14 @@ impl ToSql for &stmt::Delete {
     }
 }
 
+impl ToSql for &stmt::Filter {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        if let Some(expr) = &self.expr {
+            expr.to_sql(cx, f);
+        }
+    }
+}
+
 impl ToSql for &stmt::Direction {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         match self {
@@ -345,13 +353,13 @@ impl ToSql for &stmt::Update {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         let prev = mem::replace(&mut f.alias, true);
 
-        let table = f.serializer.schema.table(self.target.as_table());
+        let table = f.serializer.schema.table(self.target.as_table_unwrap());
         let assignments = (table, &self.assignments);
 
         // Create a new expression scope to serialize the statement
         let cx = cx.scope(self);
 
-        let filter = self.filter.as_ref().map(|expr| (" WHERE ", expr));
+        let filter = self.filter.expr.as_ref().map(|expr| (" WHERE ", expr));
         let returning = self
             .returning
             .as_ref()

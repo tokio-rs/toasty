@@ -343,7 +343,7 @@ impl MaterializePlanner<'_> {
                     filter: select.filter.take(),
                 };
 
-                select.filter = stmt::Expr::exists(sub_query);
+                select.filter = stmt::Expr::exists(sub_query).into();
             } else {
                 println!("filter={:#?}", select.filter);
                 visit_mut::for_each_expr_mut(&mut select.filter, |expr| match expr {

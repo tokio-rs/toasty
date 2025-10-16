@@ -121,7 +121,11 @@ impl VisitMut for LowerStatement<'_> {
                 let maybe_res = self.lower_expr_binary_op(
                     stmt::BinaryOp::Eq,
                     &mut expr.expr,
-                    expr.query.body.as_select_mut().returning.as_expr_mut(),
+                    expr.query
+                        .body
+                        .as_select_mut_unwrap()
+                        .returning
+                        .as_expr_mut_unwrap(),
                 );
 
                 assert!(maybe_res.is_none(), "TODO");
@@ -234,7 +238,7 @@ impl VisitMut for LowerStatement<'_> {
     }
 
     fn visit_stmt_update_mut(&mut self, i: &mut stmt::Update) {
-        let model_id = i.target.as_model_id();
+        let model_id = i.target.model_id_unwrap();
         let mut lower = self.scope(self.cx.schema().app.model(model_id));
 
         // Before lowering children, convert the "Changed" returning statement
@@ -299,11 +303,13 @@ impl<'a> LowerStatement<'a> {
         }
     }
 
-    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Expr) {
+    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Filter) {
         // TODO: we really shouldn't have to simplify here, but until
         // simplification includes overlapping predicate pruning, we have to do
         // this here.
-        simplify::simplify_expr(self.cx, filter);
+        if let Some(expr) = &mut filter.expr {
+            simplify::simplify_expr(self.cx, expr);
+        }
 
         let mut operands = vec![];
 
@@ -324,8 +330,10 @@ impl<'a> LowerStatement<'a> {
                 _ => continue,
             };
 
-            if self.is_eq_constrained(filter, column) {
-                continue;
+            if let Some(filter) = &filter.expr {
+                if self.is_eq_constrained(filter, column) {
+                    continue;
+                }
             }
 
             assert_eq!(self.mapping().columns[column.id.index], column.id);
@@ -340,15 +348,7 @@ impl<'a> LowerStatement<'a> {
             return;
         }
 
-        match filter {
-            stmt::Expr::And(expr_and) => {
-                expr_and.operands.extend(operands);
-            }
-            expr => {
-                operands.push(expr.take());
-                *expr = stmt::ExprAnd { operands }.into();
-            }
-        }
+        filter.add_filter(stmt::Expr::and_from_vec(operands));
     }
 
     fn is_eq_constrained(&self, expr: &stmt::Expr, column: &Column) -> bool {
@@ -538,7 +538,7 @@ impl<'a> LowerStatement<'a> {
         let field = &self.model().fields[*field_index];
 
         let mut stmt = match &field.ty {
-            FieldTy::HasMany(rel) => stmt::Query::filter(
+            FieldTy::HasMany(rel) => stmt::Query::new_select(
                 rel.target,
                 stmt::Expr::eq(
                     stmt::Expr::ref_parent_model(),
@@ -569,12 +569,12 @@ impl<'a> LowerStatement<'a> {
                 }
 
                 let mut query =
-                    stmt::Query::filter(rel.target, stmt::Expr::eq(source_fk, target_pk));
+                    stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
                 query.single = true;
                 query
             }
             FieldTy::HasOne(rel) => {
-                let mut query = stmt::Query::filter(
+                let mut query = stmt::Query::new_select(
                     rel.target,
                     stmt::Expr::eq(
                         stmt::Expr::ref_parent_model(),

@@ -9,7 +9,7 @@ impl Simplify<'_> {
                 let mut s = self.scope(&stmt.from);
 
                 let filter = s.rewrite_association_as_filter(via);
-                stmt.filter = stmt::Expr::and(stmt.filter.take(), filter);
+                stmt.filter = stmt::Filter::and(stmt.filter.take(), filter);
             }
         }
     }
@@ -28,13 +28,16 @@ impl Simplify<'_> {
                     let mut s = self.scope(&select.source);
 
                     let filter = s.rewrite_association_as_filter(via);
-                    select.filter = stmt::Expr::and(select.filter.take(), filter);
+                    select.filter = stmt::Filter::and(select.filter.take(), filter);
                 }
             }
         }
     }
 
-    fn rewrite_association_as_filter(&mut self, mut association: stmt::Association) -> stmt::Expr {
+    fn rewrite_association_as_filter(
+        &mut self,
+        mut association: stmt::Association,
+    ) -> stmt::Filter {
         // First, we want to simplify the association source.
         stmt::visit_mut::visit_stmt_query_mut(self, &mut association.source);
 
@@ -49,9 +52,11 @@ impl Simplify<'_> {
             }
             app::FieldTy::HasOne(rel) => {
                 stmt::Expr::in_subquery(stmt::Expr::ref_self_field(rel.pair), *association.source)
+                    .into()
             }
             app::FieldTy::HasMany(rel) => {
                 stmt::Expr::in_subquery(stmt::Expr::ref_self_field(rel.pair), *association.source)
+                    .into()
             }
             _ => todo!("field={field:#?}"),
         }
@@ -61,13 +66,7 @@ impl Simplify<'_> {
         &mut self,
         rel: &app::BelongsTo,
         association: stmt::Association,
-    ) -> stmt::Expr {
-        /*
-        let operands = rel.foreign_key.fields.iter().map(|fk_field| {
-            stmt::Expr::eq(todo!())
-        });
-        */
-
+    ) -> stmt::Filter {
         todo!("rel={rel:#?}, association={association:#?}");
     }
 }

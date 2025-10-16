@@ -1,7 +1,7 @@
 use super::{Assignments, Expr, Node, Query, Returning, Statement, Visit, VisitMut};
 use crate::{
     schema::{app::ModelId, db::TableId},
-    stmt,
+    stmt::{self, Filter},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -13,7 +13,7 @@ pub struct Update {
     pub assignments: Assignments,
 
     /// Which entries to update
-    pub filter: Option<Expr>,
+    pub filter: Filter,
 
     /// A condition that must be satisfied in order for the update to apply.
     pub condition: Option<Expr>,
@@ -42,19 +42,27 @@ pub enum UpdateTarget {
 
 impl Update {
     pub fn selection(&self) -> Query {
-        stmt::Query::filter(
-            self.target.as_model_id(),
-            self.filter.as_ref().unwrap().clone(),
-        )
+        stmt::Query::new_select(self.target.model_id_unwrap(), self.filter.clone())
     }
 }
 
 impl UpdateTarget {
+    pub fn model_id(&self) -> Option<ModelId> {
+        match self {
+            Self::Model(model_id) => Some(*model_id),
+            Self::Query(query) => query
+                .body
+                .as_select()
+                .and_then(|select| select.source.model_id()),
+            _ => None,
+        }
+    }
+
     #[track_caller]
-    pub fn as_model_id(&self) -> ModelId {
+    pub fn model_id_unwrap(&self) -> ModelId {
         match self {
             Self::Model(model_id) => *model_id,
-            Self::Query(query) => query.body.as_select().source.as_model_id(),
+            Self::Query(query) => query.body.as_select_unwrap().source.model_id_unwrap(),
             _ => todo!("not a model"),
         }
     }
@@ -64,7 +72,7 @@ impl UpdateTarget {
     }
 
     #[track_caller]
-    pub fn as_table(&self) -> TableId {
+    pub fn as_table_unwrap(&self) -> TableId {
         match self {
             Self::Table(table) => *table,
             _ => todo!(),

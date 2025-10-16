@@ -80,7 +80,7 @@ impl Planner<'_> {
             input: None,
         };
 
-        let partition = partitioner.partition_expr(&mut stmt.filter);
+        let partition = partitioner.partition_expr(stmt.filter.expr.as_mut().unwrap());
         assert!(partition.is_stmt());
 
         partitioner.input

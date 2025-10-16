@@ -1,5 +1,8 @@
-use super::{Expr, Node, Path, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut};
-use crate::schema::db::TableId;
+use super::{Node, Path, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut};
+use crate::{
+    schema::db::TableId,
+    stmt::{ExprSet, Filter},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Select {
@@ -12,11 +15,11 @@ pub struct Select {
     pub source: Source,
 
     /// Query filter
-    pub filter: Expr,
+    pub filter: Filter,
 }
 
 impl Select {
-    pub fn new(source: impl Into<Source>, filter: impl Into<Expr>) -> Self {
+    pub fn new(source: impl Into<Source>, filter: impl Into<Filter>) -> Self {
         Self {
             returning: Returning::Model { include: vec![] },
             source: source.into(),
@@ -31,20 +34,77 @@ impl Select {
         }
     }
 
-    pub fn and(&mut self, expr: impl Into<Expr>) {
-        if let Expr::And(expr_and) = &mut self.filter {
-            expr_and.operands.push(expr.into());
-        } else {
-            self.filter = Expr::and(self.filter.take(), expr);
-        }
+    pub fn add_filter(&mut self, filter: impl Into<Filter>) {
+        self.filter.add_filter(filter);
     }
 
+    /*
     pub fn or(&mut self, expr: impl Into<Expr>) {
         if let Expr::Or(expr_or) = &mut self.filter {
             expr_or.operands.push(expr.into());
         } else {
             self.filter = Expr::or(self.filter.take(), expr);
         }
+    }
+    */
+}
+
+impl Statement {
+    pub fn as_select(&self) -> Option<&Select> {
+        self.as_query().and_then(|query| query.body.as_select())
+    }
+
+    #[track_caller]
+    pub fn as_select_unwrap(&self) -> &Select {
+        self.as_select()
+            .unwrap_or_else(|| panic!("expected `Select`; actual={self:#?}"))
+    }
+}
+
+impl Query {
+    pub fn into_select(self) -> Select {
+        self.body.into_select()
+    }
+}
+
+impl ExprSet {
+    pub fn as_select(&self) -> Option<&Select> {
+        match self {
+            Self::Select(expr) => Some(expr),
+            _ => None,
+        }
+    }
+
+    #[track_caller]
+    pub fn as_select_unwrap(&self) -> &Select {
+        self.as_select()
+            .unwrap_or_else(|| panic!("expected `Select`; actual={self:#?}"))
+    }
+
+    pub fn as_select_mut(&mut self) -> Option<&mut Select> {
+        match self {
+            Self::Select(expr) => Some(expr),
+            _ => None,
+        }
+    }
+
+    pub fn as_select_mut_unwrap(&mut self) -> &mut Select {
+        match self {
+            Self::Select(select) => select,
+            _ => panic!("expected `Select`; actual={self:#?}"),
+        }
+    }
+
+    #[track_caller]
+    pub fn into_select(self) -> Select {
+        match self {
+            Self::Select(expr) => *expr,
+            _ => todo!(),
+        }
+    }
+
+    pub fn is_select(&self) -> bool {
+        matches!(self, Self::Select(_))
     }
 }
 

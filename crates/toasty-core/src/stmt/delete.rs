@@ -1,5 +1,5 @@
-use super::{Expr, Node, Query, Returning, Source, Statement, Visit, VisitMut};
-use crate::stmt;
+use super::{Node, Query, Returning, Source, Statement, Visit, VisitMut};
+use crate::stmt::{self, Filter};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Delete {
@@ -7,7 +7,7 @@ pub struct Delete {
     pub from: Source,
 
     /// WHERE
-    pub filter: Expr,
+    pub filter: Filter,
 
     /// Optionally, return something
     pub returning: Option<Returning>,
@@ -15,7 +15,7 @@ pub struct Delete {
 
 impl Delete {
     pub fn selection(&self) -> Query {
-        stmt::Query::filter(self.from.as_model_id(), self.filter.clone())
+        stmt::Query::new_select(self.from.model_id_unwrap(), self.filter.clone())
     }
 }
 

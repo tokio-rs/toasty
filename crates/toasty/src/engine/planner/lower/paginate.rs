@@ -32,11 +32,7 @@ impl LowerStatement<'_> {
             stmt::Expr::Value(value) => {
                 let expr =
                     self.rewrite_offset_after_field_as_filter(&order_by.exprs[0], value, true);
-                if body.filter.is_true() {
-                    body.filter = expr;
-                } else {
-                    body.filter = stmt::Expr::and(body.filter.take(), expr);
-                }
+                body.filter.add_filter(expr);
             }
             _ => todo!(),
         }

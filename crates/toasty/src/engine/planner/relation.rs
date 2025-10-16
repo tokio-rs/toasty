@@ -95,7 +95,7 @@ impl Planner<'_> {
                         todo!("composite key")
                     };
 
-                    let scope = stmt::Query::filter(
+                    let scope = stmt::Query::new_select(
                         field.id.model,
                         stmt::Expr::eq(stmt::Expr::ref_self_field(fk_field.source), value.clone()),
                     );
@@ -200,11 +200,11 @@ impl Planner<'_> {
                     // If the belongs_to is nullable, then we want to only update
                     // instances that have a belongs_to that is not null.
                     if field.nullable {
-                        let filter = &mut scope.body.as_select_mut().filter;
-                        *filter = stmt::Expr::and(
-                            filter.take(),
-                            stmt::Expr::ne(stmt::Expr::ref_self_field(field), stmt::Value::Null),
-                        );
+                        let filter = &mut scope.body.as_select_mut_unwrap().filter;
+                        filter.add_filter(stmt::Expr::ne(
+                            stmt::Expr::ref_self_field(field),
+                            stmt::Value::Null,
+                        ));
                     }
 
                     let delete = planner.relation_pair_scope(pair.id, scope).delete();
@@ -272,7 +272,7 @@ impl Planner<'_> {
         if op.is_remove() {
             self.plan_mut_has_many_value_remove(has_many, value, scope)?;
         } else {
-            let mut stmt = stmt::Query::filter(
+            let mut stmt = stmt::Query::new_select(
                 has_many.target,
                 stmt::Expr::eq(stmt::Expr::key(has_many.target), value),
             )
@@ -295,7 +295,7 @@ impl Planner<'_> {
     ) -> Result<()> {
         let pair = self.schema().app.field(has_many.pair);
 
-        let selection = stmt::Query::filter(
+        let selection = stmt::Query::new_select(
             has_many.target,
             stmt::Expr::eq(stmt::Expr::key(has_many.target), value),
         );
@@ -397,7 +397,7 @@ impl Planner<'_> {
             self.plan_mut_has_one_nullify(has_one, scope)?;
         }
 
-        let mut stmt = stmt::Query::filter(
+        let mut stmt = stmt::Query::new_select(
             has_one.target,
             stmt::Expr::eq(stmt::Expr::key(has_one.target), value),
         )
@@ -447,11 +447,11 @@ impl Planner<'_> {
             self.plan_mut_has_one_nullify(has_one, scope)?;
         }
 
-        stmt.target.constrain(
+        stmt.target.add_constraint(
             self.relation_pair_scope(has_one.pair, scope.clone())
-                .body
                 .into_select()
-                .filter,
+                .filter
+                .into_expr(),
         );
 
         let out = self.plan_stmt(stmt.into())?;
@@ -462,7 +462,7 @@ impl Planner<'_> {
     /// Translate a source model scope to a target model scope for a has_one
     /// relation.
     fn relation_pair_scope(&self, pair: FieldId, scope: stmt::Query) -> stmt::Query {
-        stmt::Query::filter(
+        stmt::Query::new_select(
             pair.model,
             stmt::Expr::in_subquery(stmt::Expr::ref_self_field(pair), scope),
         )

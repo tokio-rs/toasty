@@ -22,7 +22,7 @@ pub enum InsertTarget {
 impl InsertTarget {
     pub fn as_model(&self) -> ModelId {
         match self {
-            Self::Scope(query) => query.body.as_select().source.as_model_id(),
+            Self::Scope(query) => query.body.as_select_unwrap().source.model_id_unwrap(),
             Self::Model(model_id) => *model_id,
             _ => todo!(),
         }
@@ -35,11 +35,12 @@ impl InsertTarget {
         }
     }
 
-    pub fn constrain(&mut self, expr: impl Into<Expr>) {
+    pub fn add_constraint(&mut self, expr: impl Into<Expr>) {
+        let expr = expr.into();
         match self {
-            Self::Scope(query) => query.and(expr),
+            Self::Scope(query) => query.add_filter(expr),
             Self::Model(model_id) => {
-                *self = Self::Scope(Box::new(Query::filter(*model_id, expr)));
+                *self = Self::Scope(Box::new(Query::new_select(*model_id, expr)));
             }
             _ => todo!("{self:#?}"),
         }

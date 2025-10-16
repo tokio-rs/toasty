@@ -36,7 +36,7 @@ impl Simplify<'_> {
             todo!()
         };
 
-        match &select.filter {
+        match select.filter.as_expr() {
             stmt::Expr::BinaryOp(expr_binary_op) => {
                 if !expr_binary_op.op.is_eq() {
                     return None;

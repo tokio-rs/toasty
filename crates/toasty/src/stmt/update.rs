@@ -66,7 +66,7 @@ impl<M: Model> Default for Update<M> {
             untyped: stmt::Update {
                 target: stmt::UpdateTarget::Model(M::id()),
                 assignments: stmt::Assignments::default(),
-                filter: Some(stmt::Expr::from(false)),
+                filter: stmt::Filter::new(stmt::Expr::from(false)),
                 condition: None,
                 returning: Some(stmt::Returning::Changed),
             },
