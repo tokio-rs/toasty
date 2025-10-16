@@ -64,7 +64,7 @@ impl NestedMergePlanner<'_> {
         let selection = stmt_state.exec_statement_selection.get().unwrap();
 
         let query = stmt_state.stmt.as_deref().unwrap().as_query().unwrap();
-        let select = query.body.as_select();
+        let select = query.body.as_select_unwrap();
 
         // Extract the qualification. For now, we will just re-run the
         // entire where clause, but that can be improved later.
@@ -114,7 +114,7 @@ impl NestedMergePlanner<'_> {
         });
 
         let filter_arg_tys = self.build_filter_arg_tys();
-        let filter = eval::Func::from_stmt(filter, filter_arg_tys);
+        let filter = eval::Func::from_stmt(filter.into_expr(), filter_arg_tys);
 
         let ret = plan::NestedChild {
             level,
@@ -136,19 +136,12 @@ impl NestedMergePlanner<'_> {
             .inputs
             .insert_full(stmt_state.exec_statement.get().unwrap());
 
-        let select = stmt_state
-            .stmt
-            .as_deref()
-            .unwrap()
-            .as_query()
-            .unwrap()
-            .body
-            .as_select();
+        let select = stmt_state.stmt.as_deref().unwrap().as_select_unwrap();
 
         let mut nested = vec![];
 
         // Map the returning clause to projection expression
-        let mut projection = select.returning.as_expr().clone();
+        let mut projection = select.returning.as_expr_unwrap().clone();
 
         visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
             stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {

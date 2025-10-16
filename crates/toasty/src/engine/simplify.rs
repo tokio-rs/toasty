@@ -104,7 +104,7 @@ impl VisitMut for Simplify<'_> {
 
         let mut s = self.scope(&stmt.from);
 
-        s.visit_expr_mut(&mut stmt.filter);
+        s.visit_filter_mut(&mut stmt.filter);
 
         if let Some(returning) = &mut stmt.returning {
             s.visit_returning_mut(returning);
@@ -154,7 +154,7 @@ impl VisitMut for Simplify<'_> {
         // Create a new scope for the insert target
         let mut s = self.scope(&stmt.source);
 
-        s.visit_expr_mut(&mut stmt.filter);
+        s.visit_filter_mut(&mut stmt.filter);
         s.visit_returning_mut(&mut stmt.returning);
     }
 
@@ -170,15 +170,9 @@ impl VisitMut for Simplify<'_> {
 
             assert!(select.returning.is_model());
 
-            stmt.filter = if let Some(filter) = stmt.filter.take() {
-                Some(stmt::Expr::and(filter, select.filter.take()))
-            } else if !select.filter.is_true() {
-                Some(select.filter.take())
-            } else {
-                None
-            };
+            stmt.filter.add_filter(select.filter.take());
 
-            stmt.target = stmt::UpdateTarget::Model(select.source.model_id());
+            stmt.target = stmt::UpdateTarget::Model(select.source.model_id_unwrap());
         }
 
         self.visit_update_target_mut(&mut stmt.target);
@@ -186,9 +180,7 @@ impl VisitMut for Simplify<'_> {
         let mut s = self.scope(&stmt.target);
         s.visit_assignments_mut(&mut stmt.assignments);
 
-        if let Some(expr) = &mut stmt.filter {
-            s.visit_expr_mut(expr);
-        }
+        s.visit_filter_mut(&mut stmt.filter);
 
         if let Some(expr) = &mut stmt.condition {
             s.visit_expr_mut(expr);

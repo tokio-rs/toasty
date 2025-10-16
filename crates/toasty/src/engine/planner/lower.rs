@@ -303,11 +303,13 @@ impl<'a> LowerStatement<'a> {
         }
     }
 
-    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Expr) {
+    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Filter) {
         // TODO: we really shouldn't have to simplify here, but until
         // simplification includes overlapping predicate pruning, we have to do
         // this here.
-        simplify::simplify_expr(self.cx, filter);
+        if let Some(expr) = &mut filter.expr {
+            simplify::simplify_expr(self.cx, expr);
+        }
 
         let mut operands = vec![];
 
@@ -328,8 +330,10 @@ impl<'a> LowerStatement<'a> {
                 _ => continue,
             };
 
-            if self.is_eq_constrained(filter, column) {
-                continue;
+            if let Some(filter) = &filter.expr {
+                if self.is_eq_constrained(filter, column) {
+                    continue;
+                }
             }
 
             assert_eq!(self.mapping().columns[column.id.index], column.id);
@@ -344,15 +348,7 @@ impl<'a> LowerStatement<'a> {
             return;
         }
 
-        match filter {
-            stmt::Expr::And(expr_and) => {
-                expr_and.operands.extend(operands);
-            }
-            expr => {
-                operands.push(expr.take());
-                *expr = stmt::ExprAnd { operands }.into();
-            }
-        }
+        filter.add_filter(stmt::Expr::and_from_vec(operands));
     }
 
     fn is_eq_constrained(&self, expr: &stmt::Expr, column: &Column) -> bool {
@@ -542,7 +538,7 @@ impl<'a> LowerStatement<'a> {
         let field = &self.model().fields[*field_index];
 
         let mut stmt = match &field.ty {
-            FieldTy::HasMany(rel) => stmt::Query::filter(
+            FieldTy::HasMany(rel) => stmt::Query::new_select(
                 rel.target,
                 stmt::Expr::eq(
                     stmt::Expr::ref_parent_model(),
@@ -573,12 +569,12 @@ impl<'a> LowerStatement<'a> {
                 }
 
                 let mut query =
-                    stmt::Query::filter(rel.target, stmt::Expr::eq(source_fk, target_pk));
+                    stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
                 query.single = true;
                 query
             }
             FieldTy::HasOne(rel) => {
-                let mut query = stmt::Query::filter(
+                let mut query = stmt::Query::new_select(
                     rel.target,
                     stmt::Expr::eq(
                         stmt::Expr::ref_parent_model(),

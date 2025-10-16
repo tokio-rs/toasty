@@ -167,7 +167,7 @@ impl Planner<'_> {
         let mut index_plan = self.engine.plan_index_path(
             stmt::ExprContext::new_with_target(self.schema(), &stmt),
             table,
-            stmt.filter.as_ref().expect("no filter specified"),
+            &stmt.filter,
         );
 
         assert!(!stmt.assignments.is_empty());
@@ -261,7 +261,7 @@ impl Planner<'_> {
             panic!("conditional update without condition");
         };
 
-        let Some(filter) = stmt.filter else {
+        let Some(filter) = stmt.filter.expr else {
             panic!("conditional update without filter");
         };
 
@@ -303,7 +303,7 @@ impl Planner<'_> {
             query: stmt::Query::new(stmt::Update {
                 target: stmt.target,
                 assignments: stmt.assignments,
-                filter: Some(stmt::Expr::and(
+                filter: stmt::Filter::new(stmt::Expr::and(
                     filter,
                     // SELECT found.count(*) = found.count(CONDITION) FROM found
                     stmt::Expr::stmt(stmt::Select {
@@ -382,7 +382,7 @@ impl Planner<'_> {
                     }],
                 },
             ),
-            filter: stmt::Expr::from(true),
+            filter: stmt::Filter::new(true),
             returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
         })
         .with(ctes)
@@ -401,7 +401,7 @@ impl Planner<'_> {
             panic!("conditional update without condition");
         };
 
-        let Some(filter) = stmt.filter else {
+        let Some(filter) = stmt.filter.expr else {
             panic!("conditional update without filter");
         };
 
@@ -444,7 +444,7 @@ impl Planner<'_> {
         let write = stmt::Update {
             target: stmt.target,
             assignments: stmt.assignments,
-            filter: Some(filter),
+            filter: stmt::Filter::new(filter),
             condition: None,
             returning: None,
         };

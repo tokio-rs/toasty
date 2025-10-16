@@ -37,17 +37,17 @@ impl<M: Model> Select<M> {
     }
 
     pub fn filter(expr: Expr<bool>) -> Self {
-        Self::from_untyped(stmt::Query::filter(M::id(), expr.untyped))
+        Self::from_untyped(stmt::Query::new_select(M::id(), expr.untyped))
     }
 
     // TODO: why are these by value?
     pub fn and(mut self, filter: Expr<bool>) -> Self {
-        self.untyped.and(filter.untyped);
+        self.untyped.add_filter(filter.untyped);
         self
     }
 
     pub fn union(mut self, other: Self) -> Self {
-        self.untyped.union(other.untyped);
+        self.untyped.add_union(other.untyped);
         self
     }
 
@@ -70,7 +70,7 @@ impl<M: Model> Select<M> {
 impl<M: Model> Select<M> {
     pub fn all() -> Self {
         let filter = stmt::Expr::Value(Value::from_bool(true));
-        Self::from_untyped(stmt::Query::filter(M::id(), filter))
+        Self::from_untyped(stmt::Query::new_select(M::id(), filter))
     }
 }
 

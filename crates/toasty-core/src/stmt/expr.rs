@@ -88,6 +88,9 @@ pub enum Expr {
 }
 
 impl Expr {
+    pub const TRUE: Expr = Expr::Value(Value::Bool(true));
+    pub const FALSE: Expr = Expr::Value(Value::Bool(false));
+
     pub fn null() -> Self {
         Self::Value(Value::Null)
     }

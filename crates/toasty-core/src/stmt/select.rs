@@ -49,6 +49,24 @@ impl Select {
     */
 }
 
+impl Statement {
+    pub fn as_select(&self) -> Option<&Select> {
+        self.as_query().and_then(|query| query.body.as_select())
+    }
+
+    #[track_caller]
+    pub fn as_select_unwrap(&self) -> &Select {
+        self.as_select()
+            .unwrap_or_else(|| panic!("expected `Select`; actual={self:#?}"))
+    }
+}
+
+impl Query {
+    pub fn into_select(self) -> Select {
+        self.body.into_select()
+    }
+}
+
 impl ExprSet {
     pub fn as_select(&self) -> Option<&Select> {
         match self {

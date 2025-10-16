@@ -29,7 +29,7 @@ impl stmt::Visit for Verify<'_> {
 
         VerifyExpr {
             schema: self.schema,
-            model: i.from.model_id(),
+            model: i.from.model_id_unwrap(),
         }
         .verify_filter(&i.filter);
     }
@@ -45,7 +45,7 @@ impl stmt::Visit for Verify<'_> {
 
         VerifyExpr {
             schema: self.schema,
-            model: i.source.model_id(),
+            model: i.source.model_id_unwrap(),
         }
         .verify_filter(&i.filter);
     }
@@ -95,9 +95,9 @@ impl Verify<'_> {
 }
 
 impl VerifyExpr<'_> {
-    fn verify_filter(&mut self, expr: &stmt::Expr) {
-        self.assert_bool_expr(expr);
-        self.visit(expr);
+    fn verify_filter(&mut self, filter: &stmt::Filter) {
+        self.assert_bool_expr(filter.as_expr());
+        self.visit_expr(filter.as_expr());
     }
 
     fn assert_bool_expr(&self, expr: &stmt::Expr) {

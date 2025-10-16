@@ -15,3 +15,15 @@ impl AsExpr for &stmt::Expr {
         self
     }
 }
+
+impl AsExpr for stmt::Filter {
+    fn as_expr(&self) -> &stmt::Expr {
+        self.as_expr()
+    }
+}
+
+impl AsExpr for &stmt::Filter {
+    fn as_expr(&self) -> &stmt::Expr {
+        stmt::Filter::as_expr(self)
+    }
+}

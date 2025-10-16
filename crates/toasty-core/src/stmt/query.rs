@@ -2,7 +2,7 @@ use super::{
     Delete, ExprSet, Limit, Node, OrderBy, Path, Returning, Select, Source, Statement, Update,
     UpdateTarget, Values, Visit, VisitMut, With,
 };
-use crate::stmt::{self, Filter};
+use crate::stmt::{self, ExprSetOp, Filter, SetOp};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Query {
@@ -107,9 +107,8 @@ impl Query {
         self.body.as_select_mut_unwrap().add_filter(filter);
     }
 
-    /*
-    pub fn union(&mut self, query: impl Into<Self>) {
-        let rhs = query.into();
+    pub fn add_union(&mut self, other: impl Into<Self>) {
+        let rhs = other.into();
 
         match (&mut self.body, rhs.body) {
             (ExprSet::SetOp(_), ExprSet::SetOp(_)) => todo!(),
@@ -126,7 +125,6 @@ impl Query {
             }
         }
     }
-    */
 
     pub fn include(&mut self, path: impl Into<Path>) {
         match &mut self.body {
