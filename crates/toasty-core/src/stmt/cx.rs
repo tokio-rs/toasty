@@ -313,7 +313,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
         match returning {
             Returning::Model { .. } => Type::Model(
                 self.target
-                    .as_model_id()
+                    .model_id()
                     .expect("returning `Model` when not in model context"),
             ),
             Returning::Changed => todo!(),
@@ -375,7 +375,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
 
 impl<'a> ExprContext<'a, Schema> {
     pub fn target_as_model(&self) -> Option<&'a Model> {
-        let model_id = self.target.as_model_id()?;
+        let model_id = self.target.model_id()?;
         Some(self.schema.app.model(model_id))
     }
 
@@ -491,14 +491,14 @@ impl Resolve for () {
 
 impl<'a> ExprTarget<'a> {
     #[track_caller]
-    pub fn expect_model(self) -> &'a Model {
+    pub fn as_model_unwrap(self) -> &'a Model {
         match self {
             ExprTarget::Model(model) => model,
             _ => panic!("expected ExprTarget::Model; was {self:?}"),
         }
     }
 
-    pub fn as_model_id(self) -> Option<ModelId> {
+    pub fn model_id(self) -> Option<ModelId> {
         Some(match self {
             ExprTarget::Model(model) => model.id,
             _ => return None,
@@ -506,7 +506,7 @@ impl<'a> ExprTarget<'a> {
     }
 
     #[track_caller]
-    pub fn expect_table(self) -> &'a Table {
+    pub fn as_table_unwrap(self) -> &'a Table {
         match self {
             ExprTarget::Table(table) => table,
             _ => panic!("expected ExprTarget::Table; was {self:#?}"),
