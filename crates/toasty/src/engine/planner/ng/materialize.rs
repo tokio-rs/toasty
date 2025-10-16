@@ -196,26 +196,14 @@ impl MaterializePlanner<'_> {
         let stmt_info = &self.store[stmt_id];
         let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
 
-        // Get the returning clause
-        let stmt::Statement::Query(query) = &mut stmt else {
-            panic!()
-        };
+        // Tracks if the original query is a single query.
+        let single = stmt.as_query().map(|query| query.single).unwrap_or(false);
+        stmt.as_query_mut().map(|query| query.single = false);
 
-        // Tracks if the query is a single query
-        let single = query.single;
-        query.single = false;
-
-        let stmt::ExprSet::Select(select) = &mut query.body else {
-            panic!()
-        };
-
-        let filter_is_false = select.filter.is_false();
-
-        let stmt::Returning::Expr(returning) = &mut select.returning else {
-            panic!()
-        };
-        // Take the returning clause out. This will be modified later.
-        let mut returning = returning.take();
+        let mut returning = stmt
+            .returning_mut()
+            .map(|returning| returning.take().into_expr())
+            .unwrap_or_else(|| stmt::Expr::null());
 
         // Columns to select
         let mut columns = IndexSet::new();
@@ -274,7 +262,10 @@ impl MaterializePlanner<'_> {
             };
 
             assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
-            assert!(!filter_is_false, "TODO: handle const false filters");
+            assert!(
+                !stmt.filter_or_default().is_false(),
+                "TODO: handle const false filters"
+            );
 
             // Find the back-ref for this arg
             let node_id = self.store[target_id].back_refs[&stmt_id]
@@ -287,10 +278,13 @@ impl MaterializePlanner<'_> {
             input.set(Some(0));
         }
 
-        // If targeting SQL, leverage the SQL query engine to handle most of the rewrite details.
-
         if let Some(ref_source) = ref_source {
             if self.engine.capability().sql {
+                // If targeting SQL, leverage the SQL query engine to handle most of the rewrite details.
+                let mut filter = stmt
+                    .filter_mut()
+                    .map(|filter| filter.take())
+                    .unwrap_or_default();
                 /*
                 -- Step 1: Store filtered users
                 CREATE TEMP TABLE temp_users AS
@@ -307,7 +301,7 @@ impl MaterializePlanner<'_> {
                 );
                      */
 
-                visit_mut::for_each_expr_mut(&mut select.filter, |expr| {
+                visit_mut::for_each_expr_mut(&mut filter, |expr| {
                     match expr {
                         stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
                             debug_assert_eq!(0, *nesting);
@@ -340,13 +334,12 @@ impl MaterializePlanner<'_> {
                 let sub_query = stmt::Select {
                     returning: stmt::Returning::Expr(stmt::Expr::record([1])),
                     source: stmt::Source::from(ref_source),
-                    filter: select.filter.take(),
+                    filter,
                 };
 
-                select.filter = stmt::Expr::exists(sub_query).into();
+                stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
             } else {
-                println!("filter={:#?}", select.filter);
-                visit_mut::for_each_expr_mut(&mut select.filter, |expr| match expr {
+                visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| match expr {
                     stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
                         debug_assert_eq!(0, *nesting);
                     }
@@ -366,15 +359,16 @@ impl MaterializePlanner<'_> {
             }
         }
 
-        let exec_stmt_node_id = if filter_is_false {
+        let exec_stmt_node_id = if stmt.filter_or_default().is_false() {
             // Don't bother querying and just return false
             self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
         } else if self.engine.capability().sql {
-            select.returning = stmt::Returning::Expr(stmt::Expr::record(
+            *stmt.returning_mut_unwrap() = stmt::Returning::Expr(stmt::Expr::record(
                 columns
                     .iter()
                     .map(|expr_reference| stmt::Expr::from(*expr_reference)),
-            ));
+            ))
+            .into();
 
             let input_args: Vec<_> = inputs
                 .iter()

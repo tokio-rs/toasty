@@ -1,5 +1,5 @@
 use super::{Expr, Path};
-use crate::stmt::{self, Node, Value};
+use crate::stmt::{self, Node, Query, Statement, Value};
 
 /// TODO: rename since this is also used in `Select`?
 #[derive(Debug, Clone, PartialEq)]
@@ -81,6 +81,132 @@ impl Returning {
         match self {
             Self::Expr(expr) => expr,
             _ => todo!("self={self:#?}"),
+        }
+    }
+
+    /// Replaces this value with `Returning::Expr(null)` and returns the original value.
+    pub fn take(&mut self) -> Returning {
+        std::mem::replace(self, Returning::Expr(stmt::Expr::null()))
+    }
+}
+
+impl Statement {
+    /// Returns a reference to this statement's `RETURNING` clause, if present.
+    ///
+    /// Returns `None` if the statement does not have a `RETURNING` clause or is
+    /// a statement type that does not support `RETURNING`.
+    pub fn returning(&self) -> Option<&Returning> {
+        match self {
+            Statement::Delete(delete) => delete.returning.as_ref(),
+            Statement::Insert(insert) => insert.returning.as_ref(),
+            Statement::Query(query) => query.returning(),
+            Statement::Update(update) => update.returning.as_ref(),
+        }
+    }
+
+    /// Returns a reference to this statement's `RETURNING` clause.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the statement does not have a `RETURNING` clause.
+    #[track_caller]
+    pub fn returning_unwrap(&self) -> &Returning {
+        self.returning().unwrap_or_else(|| {
+            panic!("expected statement to have RETURNING clause; actual={self:#?}")
+        })
+    }
+
+    /// Returns a mutable reference to this statement's `RETURNING` clause, if present.
+    ///
+    /// Returns `None` if the statement does not have a `RETURNING` clause or is
+    /// a statement type that does not support `RETURNING`.
+    pub fn returning_mut(&mut self) -> Option<&mut Returning> {
+        match self {
+            Statement::Delete(delete) => delete.returning.as_mut(),
+            Statement::Insert(insert) => insert.returning.as_mut(),
+            Statement::Query(query) => query.returning_mut(),
+            Statement::Update(update) => update.returning.as_mut(),
+        }
+    }
+
+    /// Returns a mutable reference to this statement's `RETURNING` clause.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the statement does not have a `RETURNING` clause. This can occur when:
+    /// - A `DELETE`, `INSERT`, or `UPDATE` statement was created without specifying a
+    ///   `RETURNING` clause (the internal `Option<Returning>` is `None`)
+    /// - A `Query` statement contains a non-`SELECT` body (e.g., `VALUES`, `UNION`)
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let mut stmt = Statement::Insert(insert_with_returning);
+    /// let returning = stmt.returning_mut_unwrap();
+    /// // Modify the returning clause...
+    /// ```
+    ///
+    /// # Notes
+    ///
+    /// This method uses `#[track_caller]` to report the panic location at the call site
+    /// rather than inside this method, making debugging easier.
+    #[track_caller]
+    pub fn returning_mut_unwrap(&mut self) -> &mut Returning {
+        match self {
+            Statement::Delete(delete) => delete.returning.as_mut().unwrap(),
+            Statement::Insert(insert) => insert.returning.as_mut().unwrap(),
+            Statement::Query(query) => query.returning_mut_unwrap(),
+            Statement::Update(update) => update.returning.as_mut().unwrap(),
+        }
+    }
+}
+
+impl Query {
+    /// Returns a reference to this query's `RETURNING` clause, if present.
+    ///
+    /// Returns `Some` only for `SELECT` queries. Other query types (`VALUES`,
+    /// `UNION`, etc.) do not have a `RETURNING` clause.
+    pub fn returning(&self) -> Option<&Returning> {
+        match &self.body {
+            stmt::ExprSet::Select(select) => Some(&select.returning),
+            _ => None,
+        }
+    }
+
+    /// Returns a reference to this query's `RETURNING` clause.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the query does not have a `RETURNING` clause (i.e., the body
+    /// is not a `SELECT`).
+    #[track_caller]
+    pub fn returning_unwrap(&self) -> &Returning {
+        self.returning()
+            .unwrap_or_else(|| panic!("expected query to have RETURNING clause; actual={self:#?}"))
+    }
+
+    /// Returns a mutable reference to this query's `RETURNING` clause, if present.
+    ///
+    /// Returns `Some` only for `SELECT` queries. Other query types (`VALUES`,
+    /// `UNION`, etc.) do not have a `RETURNING` clause.
+    pub fn returning_mut(&mut self) -> Option<&mut Returning> {
+        match &mut self.body {
+            stmt::ExprSet::Select(select) => Some(&mut select.returning),
+            _ => None,
+        }
+    }
+
+    /// Returns a mutable reference to this query's `RETURNING` clause.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the query does not have a `RETURNING` clause (i.e., the body
+    /// is not a `SELECT`).
+    #[track_caller]
+    pub fn returning_mut_unwrap(&mut self) -> &mut Returning {
+        match &mut self.body {
+            stmt::ExprSet::Select(select) => &mut select.returning,
+            body => panic!("expected query to have RETURNING clause; actual={body:#?}"),
         }
     }
 }
