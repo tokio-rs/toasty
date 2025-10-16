@@ -3,19 +3,19 @@ use toasty_core::{schema::app, stmt};
 
 impl Planner<'_> {
     pub(super) fn plan_stmt_delete(&mut self, stmt: stmt::Delete) -> Result<()> {
-        /*
         if self.capability().sql {
             let mut stmt = stmt::Statement::Delete(stmt);
 
             // Lower the statement
             self.lower_stmt(&mut stmt);
 
-            // TODO: what to do about var?
-            let _ = self.plan_v2_stmt(stmt)?;
+            // TODO: vars should hold more than just ValueStream, then we can
+            // use the result of the var to get the result of the delete.
+            let maybe_var = self.plan_v2_stmt(stmt)?;
+            debug_assert!(maybe_var.is_none());
 
             return Ok(());
         }
-        */
 
         let model = self.model(stmt.from.model_id_unwrap());
         let selection = stmt.selection();

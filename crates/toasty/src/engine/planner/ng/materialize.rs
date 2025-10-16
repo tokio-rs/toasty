@@ -202,8 +202,7 @@ impl MaterializePlanner<'_> {
 
         let mut returning = stmt
             .returning_mut()
-            .map(|returning| returning.take().into_expr())
-            .unwrap_or_else(|| stmt::Expr::null());
+            .map(|returning| returning.take().into_expr());
 
         // Columns to select
         let mut columns = IndexSet::new();
@@ -363,12 +362,15 @@ impl MaterializePlanner<'_> {
             // Don't bother querying and just return false
             self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
         } else if self.engine.capability().sql {
-            *stmt.returning_mut_unwrap() = stmt::Returning::Expr(stmt::Expr::record(
-                columns
-                    .iter()
-                    .map(|expr_reference| stmt::Expr::from(*expr_reference)),
-            ))
-            .into();
+            if !columns.is_empty() {
+                assert!(stmt.is_query(), "TODO");
+
+                stmt.returning_mut_unwrap().set_expr(stmt::Expr::record(
+                    columns
+                        .iter()
+                        .map(|expr_reference| stmt::Expr::from(*expr_reference)),
+                ));
+            }
 
             let input_args: Vec<_> = inputs
                 .iter()
@@ -566,7 +568,7 @@ impl MaterializePlanner<'_> {
         // Plans a NestedMerge if one is needed
         let output_node_id = if let Some(node_id) = self.plan_nested_merge(stmt_id) {
             node_id
-        } else {
+        } else if let Some(returning) = returning {
             debug_assert!(
                 !single || ref_source.is_some(),
                 "TODO: single queries not supported here"
@@ -582,6 +584,8 @@ impl MaterializePlanner<'_> {
                 projection,
                 ty,
             })
+        } else {
+            exec_stmt_node_id
         };
 
         stmt_info.output.set(Some(output_node_id));

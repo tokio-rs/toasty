@@ -123,7 +123,8 @@ struct PlannerNg<'a, 'b> {
 }
 
 impl Planner<'_> {
-    pub(crate) fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<plan::VarId> {
+    // TODO: returning option here is a hack because we need vars to hold things besides ValueStream.
+    pub(crate) fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<Option<plan::VarId>> {
         PlannerNg {
             store: StatementInfoStore::new(),
             graph: MaterializeGraph::new(),
@@ -134,7 +135,7 @@ impl Planner<'_> {
 }
 
 impl PlannerNg<'_, '_> {
-    fn plan_statement(&mut self, stmt: stmt::Statement) -> Result<plan::VarId> {
+    fn plan_statement(&mut self, stmt: stmt::Statement) -> Result<Option<plan::VarId>> {
         self.decompose(stmt);
 
         // Build the execution plan...
@@ -179,22 +180,28 @@ impl PlannerNg<'_, '_> {
                         .map(|input| self.graph[input].var.get().unwrap())
                         .collect();
 
-                    let ty_fields = match ty {
-                        stmt::Type::List(ty_rows) => match &**ty_rows {
-                            stmt::Type::Record(ty_fields) => ty_fields.clone(),
-                            _ => todo!("ty={ty:#?}"),
-                        },
+                    let output = match ty {
+                        stmt::Type::List(ty_rows) => {
+                            let ty_fields = match &**ty_rows {
+                                stmt::Type::Record(ty_fields) => ty_fields.clone(),
+                                _ => todo!("ty={ty:#?}"),
+                            };
+
+                            let var = self.old.var_table.register_var(ty.clone());
+                            node.var.set(Some(var));
+
+                            Some(plan::ExecStatementOutput {
+                                ty: ty_fields,
+                                output: plan::Output2 { var, num_uses },
+                            })
+                        }
+                        stmt::Type::Unit => None,
                         _ => todo!("ty={ty:#?}"),
                     };
-                    let var = self.old.var_table.register_var(ty.clone());
-                    node.var.set(Some(var));
 
                     self.old.push_action(plan::ExecStatement2 {
                         input: input_vars,
-                        output: Some(plan::ExecStatementOutput {
-                            ty: ty_fields,
-                            output: plan::Output2 { var, num_uses },
-                        }),
+                        output,
                         stmt: materialize_exec_statement.stmt.clone(),
                     });
                 }
@@ -348,8 +355,6 @@ impl PlannerNg<'_, '_> {
         }
 
         let mid = self.store.root().output.get().unwrap();
-        let output = self.graph[mid].var.get().unwrap();
-
-        Ok(output)
+        Ok(self.graph[mid].var.get())
     }
 }

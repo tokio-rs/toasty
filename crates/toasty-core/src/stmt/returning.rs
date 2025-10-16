@@ -84,6 +84,10 @@ impl Returning {
         }
     }
 
+    pub fn set_expr(&mut self, expr: impl Into<Expr>) {
+        *self = Returning::Expr(expr.into());
+    }
+
     /// Replaces this value with `Returning::Expr(null)` and returns the original value.
     pub fn take(&mut self) -> Returning {
         std::mem::replace(self, Returning::Expr(stmt::Expr::null()))

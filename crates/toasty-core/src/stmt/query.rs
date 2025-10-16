@@ -135,6 +135,10 @@ impl Query {
 }
 
 impl Statement {
+    pub fn is_query(&self) -> bool {
+        matches!(self, Statement::Query(_))
+    }
+
     /// Attempts to return a reference to an inner [`Query`].
     ///
     /// * If `self` is a [`Statement::Query`], a reference to the inner [`Query`] is
