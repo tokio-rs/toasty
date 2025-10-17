@@ -190,7 +190,7 @@ impl TryConvert<'_, '_> {
 
     fn is_key_reference(&self, expr: &stmt::Expr) -> bool {
         match expr {
-            stmt::Expr::Reference(stmt::ExprReference::Column { .. })
+            stmt::Expr::Reference(stmt::ExprReference::Column(_))
                 if self.index.columns.len() == 1 =>
             {
                 true

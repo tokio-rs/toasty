@@ -28,7 +28,7 @@ impl Partitioner<'_> {
                 source: self.sources[expr.position],
                 project: stmt::Expr::arg(0),
             },
-            stmt::Expr::Reference(stmt::ExprReference::Column { .. }) => Partition::Stmt,
+            stmt::Expr::Reference(stmt::ExprReference::Column(_)) => Partition::Stmt,
             stmt::Expr::InList(expr) => {
                 assert!(self.partition_expr(&mut expr.expr).is_stmt(), "TODO");
 

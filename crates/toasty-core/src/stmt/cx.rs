@@ -4,8 +4,8 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprReference, ExprSet, Insert, InsertTarget, Query, Returning, Select,
-        Source, SourceTable, Statement, TableFactor, TableRef, Type, Update, UpdateTarget,
+        Delete, Expr, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query, Returning,
+        Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, Update, UpdateTarget,
     },
     Schema,
 };
@@ -199,25 +199,25 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     /// match index columns, and key extraction to identify column IDs.
     pub fn resolve_expr_reference(&self, expr_reference: &ExprReference) -> ResolvedRef<'a> {
         let nesting = match expr_reference {
-            ExprReference::Model { nesting } => nesting,
-            ExprReference::Field { nesting, .. } => nesting,
-            ExprReference::Column { nesting, .. } => nesting,
+            ExprReference::Model { nesting } => *nesting,
+            ExprReference::Field { nesting, .. } => *nesting,
+            ExprReference::Column(expr_column) => expr_column.nesting,
         };
 
-        let target = self.target_at(*nesting);
+        let target = self.target_at(nesting);
 
         match target {
             ExprTarget::Free => todo!("cannot resolve column in free context"),
             ExprTarget::Model(model) => match expr_reference {
                 ExprReference::Model { .. } => ResolvedRef::Model(model),
                 ExprReference::Field { index, .. } => ResolvedRef::Field(&model.fields[*index]),
-                ExprReference::Column { table, column, ..  } => {
-                    assert_eq!(*table, 0, "TODO: is this true?");
+                ExprReference::Column(expr_column) => {
+                    assert_eq!(expr_column.table, 0, "TODO: is this true?");
 
                     let Some(table) = self.schema.table_for_model(model) else {
                         panic!("Failed to find database table for model '{:?}' - model may not be mapped to a table", model.name)
                     };
-                    ResolvedRef::Column(&table.columns[*column])
+                    ResolvedRef::Column(&table.columns[expr_column.column])
                 }
             },
             ExprTarget::Table(table) => match expr_reference {
@@ -227,13 +227,13 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 ExprReference::Field {.. } => panic!(
                     "Cannot resolve ExprReference::Field in Table target context - use ExprReference::Column instead"
                 ),
-                ExprReference::Column { column, .. } => ResolvedRef::Column(&table.columns[*column]),
+                ExprReference::Column(expr_column) => ResolvedRef::Column(&table.columns[expr_column.column]),
             },
             ExprTarget::Source(source_table) => {
                 match expr_reference {
-                    ExprReference::Column { table, column, .. } => {
+                    ExprReference::Column(expr_column) => {
                         // Get the table reference at the specified index
-                        let table_ref = &source_table.tables[*table];
+                        let table_ref = &source_table.tables[expr_column.table];
                         match table_ref {
                             TableRef::Table(table_id) => {
                                 let Some(table) = self.schema.table(*table_id) else {
@@ -242,13 +242,13 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                                     table_id,
                                 );
                                 };
-                                ResolvedRef::Column(&table.columns[*column])
+                                ResolvedRef::Column(&table.columns[expr_column.column])
                             }
                             TableRef::Derived { .. } => {
                                 // Derived tables use col_<index> naming like CTEs
                                 ResolvedRef::Derived {
-                                    nesting: *nesting,
-                                    index: *column,
+                                    nesting: expr_column.nesting,
+                                    index: expr_column.column,
                                 }
                             }
                             TableRef::Cte {
@@ -257,7 +257,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                             } => {
                                 // TODO: return more info
                                 ResolvedRef::Cte {
-                                    nesting: *nesting + cte_nesting,
+                                    nesting: expr_column.nesting + cte_nesting,
                                     index: *index,
                                 }
                             }
@@ -405,11 +405,11 @@ impl<'a> ExprContext<'a, Schema> {
             }
         }
 
-        ExprReference::Column {
+        ExprReference::Column(ExprColumn {
             nesting: 0,
             table: 0,
             column: column_id.index,
-        }
+        })
     }
 }
 

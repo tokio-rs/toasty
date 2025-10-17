@@ -248,20 +248,15 @@ impl PlannerNg<'_, '_> {
                         .columns
                         .iter()
                         .map(|expr_reference| {
-                            let stmt::ExprReference::Column {
-                                nesting,
-                                table,
-                                column,
-                            } = expr_reference
-                            else {
+                            let stmt::ExprReference::Column(expr_column) = expr_reference else {
                                 todo!()
                             };
-                            debug_assert_eq!(*nesting, 0);
-                            debug_assert_eq!(*table, 0);
+                            debug_assert_eq!(expr_column.nesting, 0);
+                            debug_assert_eq!(expr_column.table, 0);
 
                             ColumnId {
                                 table: materialize_get_by_key.table,
-                                index: *column,
+                                index: expr_column.column,
                             }
                         })
                         .collect();
@@ -321,20 +316,15 @@ impl PlannerNg<'_, '_> {
                         .columns
                         .iter()
                         .map(|expr_reference| {
-                            let stmt::ExprReference::Column {
-                                nesting,
-                                table,
-                                column,
-                            } = expr_reference
-                            else {
+                            let stmt::ExprReference::Column(expr_column) = expr_reference else {
                                 todo!()
                             };
-                            debug_assert_eq!(*nesting, 0);
-                            debug_assert_eq!(*table, 0);
+                            debug_assert_eq!(expr_column.nesting, 0);
+                            debug_assert_eq!(expr_column.table, 0);
 
                             ColumnId {
                                 table: materialize_query_pk.table,
-                                index: *column,
+                                index: expr_column.column,
                             }
                         })
                         .collect();

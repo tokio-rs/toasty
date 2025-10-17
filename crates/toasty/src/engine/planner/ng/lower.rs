@@ -7,7 +7,7 @@ use toasty_core::{
         app::{self, Model},
         mapping,
     },
-    stmt::{self, visit_mut, VisitMut},
+    stmt::{self, visit_mut, ExprColumn, VisitMut},
 };
 
 use crate::engine::{
@@ -41,12 +41,19 @@ impl super::PlannerNg<'_, '_> {
     }
 }
 
-struct LowerStatement<'a, 'b> {
-    /// The context in which the statement is being lowered.
+struct LowerAssignment<'a, 'b> {
+    cx: LoweringContext<'a, 'b>,
+
+    /// Assignments being lowered
+    assignments: &'a stmt::Assignments,
+}
+
+struct LowerReturning<'a, 'b> {
     cx: LoweringContext<'a, 'b>,
 }
 
-struct LoweringReturning<'a, 'b> {
+struct LowerStatement<'a, 'b> {
+    /// The context in which the statement is being lowered.
     cx: LoweringContext<'a, 'b>,
 }
 
@@ -86,6 +93,13 @@ index_vec::define_index_type! {
     struct ScopeId = u32;
 }
 
+impl visit_mut::VisitMut for LowerAssignment<'_, '_> {
+    fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
+        // self.cx.lower_expr_common(i);
+        todo!()
+    }
+}
+
 impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
@@ -99,16 +113,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
             match &field.ty {
                 app::FieldTy::Primitive(_) => {
-                    let Some(field_mapping) = &self.cx.mapping_unwrap().fields[index] else {
+                    let mapping = self.cx.mapping_unwrap();
+
+                    let Some(field_mapping) = &mapping.fields[index] else {
                         todo!()
                     };
 
-                    /*
-                    let mut lowered = self.mapping().model_to_table[field_mapping.lowering].clone();
-                    Substitute::new(self.model(), &*i).visit_expr_mut(&mut lowered);
-                    assignments.set(field_mapping.column, lowered);
-                    */
-                    todo!()
+                    let column = field_mapping.column;
+                    let mut lowered = mapping.model_to_table[field_mapping.lowering].clone();
+                    self.cx.lower_assignment(i).visit_expr_mut(&mut lowered);
+                    assignments.set(column, lowered);
                 }
                 _ => {
                     todo!("field = {:#?};", field);
@@ -127,20 +141,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         self.cx.lower_expr_common(i);
 
         match i {
-            stmt::Expr::Stmt(expr_stmt) => {
-                // For now, we assume nested sub-statements cannot be executed on the
-                // target database. Eventually, we will need to make this smarter.
-
-                let source_id = self.cx.scope_stmt_id();
-                let target_id = self.cx.new_statement_info();
-
-                self.scope(target_id, |child| {
-                    visit_mut::visit_expr_stmt_mut(child, expr_stmt);
-                });
-
-                let position = self.cx.new_sub_statement(source_id, target_id, i.take());
-                *i = stmt::Expr::arg(position);
-            }
             _ => {
                 visit_mut::visit_expr_mut(self, i);
             }
@@ -148,14 +148,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
-        LoweringReturning {
-            cx: LoweringContext {
-                state: self.cx.state,
-                expr: self.cx.expr.clone(),
-                scope_id: self.cx.scope_id,
-            },
-        }
-        .visit_returning_mut(i);
+        self.cx.lower_returning().visit_returning_mut(i);
     }
 
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
@@ -176,28 +169,29 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 }
 
-impl LowerStatement<'_, '_> {
-    fn scope(&mut self, stmt_id: StmtId, f: impl FnOnce(&mut LowerStatement<'_, '_>)) {
-        let scope_id = self.cx.state.scopes.push(Scope { stmt_id });
-
-        let mut child = LowerStatement {
-            cx: LoweringContext {
-                state: self.cx.state,
-                expr: self.cx.expr.clone(),
-                scope_id: scope_id,
-            },
-        };
-
-        f(&mut child);
-
-        self.cx.state.scopes.pop();
-    }
-}
-
-impl VisitMut for LoweringReturning<'_, '_> {
+impl VisitMut for LowerReturning<'_, '_> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
         self.cx.lower_expr_common(i);
-        visit_mut::visit_expr_mut(self, i);
+
+        match i {
+            stmt::Expr::Stmt(expr_stmt) => {
+                // For now, we assume nested sub-statements cannot be executed on the
+                // target database. Eventually, we will need to make this smarter.
+
+                let source_id = self.cx.scope_stmt_id();
+                let target_id = self.cx.new_statement_info();
+
+                self.cx.scope_statement(target_id, |lower| {
+                    visit_mut::visit_expr_stmt_mut(lower, expr_stmt);
+                });
+
+                let position = self.cx.new_sub_statement(source_id, target_id, i.take());
+                *i = stmt::Expr::arg(position);
+            }
+            _ => {
+                visit_mut::visit_expr_mut(self, i);
+            }
+        }
     }
 
     fn visit_stmt_query_mut(&mut self, i: &mut stmt::Query) {
@@ -209,25 +203,20 @@ impl VisitMut for LoweringReturning<'_, '_> {
     }
 }
 
-impl LoweringState<'_> {
-    fn capability(&self) -> &Capability {
-        self.engine.capability()
-    }
-}
-
-impl LoweringContext<'_, '_> {
+impl<'b> LoweringContext<'_, 'b> {
     /// Shared expr lowering behavior
     fn lower_expr_common(&mut self, expr: &mut stmt::Expr) {
+        /*
         match expr {
             stmt::Expr::Reference(expr_reference) => {
                 // At this point, the query should have been fully lowered
-                let stmt::ExprReference::Column { nesting, .. } = expr_reference else {
+                let stmt::ExprReference::Column(expr_column) = expr_reference else {
                     panic!("unexpected state: statement not lowered")
                 };
 
-                if *nesting > 0 {
+                if expr_column.nesting > 0 {
                     let source_id = self.scope_stmt_id();
-                    let target_id = self.resolve_stmt_id(*nesting);
+                    let target_id = self.resolve_stmt_id(expr_column.nesting);
 
                     let position = self.new_ref(source_id, target_id, *expr_reference);
 
@@ -236,8 +225,16 @@ impl LoweringContext<'_, '_> {
                     *expr = stmt::Expr::arg(position);
                 }
             }
+            stmt::Expr::InSubquery(_) => {
+                todo!("in_subquery={expr:#?}");
+            }
+            stmt::Expr::Stmt(_) => {
+                todo!("stmt={expr:#?}");
+            }
             _ => {}
         }
+        */
+        todo!()
     }
 
     /// Returns the ArgId for the new reference
@@ -257,10 +254,10 @@ impl LoweringContext<'_, '_> {
 
         // Set the nesting to zero as the stored ExprReference will be used from
         // the context of the *target* statement.
-        let stmt::ExprReference::Column { nesting: n, .. } = &mut expr else {
+        let stmt::ExprReference::Column(ref mut expr_column) = &mut expr else {
             panic!()
         };
-        *n = 0;
+        expr_column.nesting = 0;
 
         let target = &mut self.state.store[target_id];
 
@@ -338,5 +335,37 @@ impl LoweringContext<'_, '_> {
     /// Get the StmtId for the specified nesting level
     fn resolve_stmt_id(&self, nesting: usize) -> StmtId {
         self.state.scopes[self.scope_id - nesting].stmt_id
+    }
+
+    fn scope_statement(&mut self, stmt_id: StmtId, f: impl FnOnce(&mut LowerStatement<'_, '_>)) {
+        self.scope_id = self.state.scopes.push(Scope { stmt_id });
+        f(&mut self.lower_statement());
+        self.state.scopes.pop();
+    }
+
+    fn lower_assignment<'a>(
+        &'a mut self,
+        assignments: &'a stmt::Assignments,
+    ) -> LowerAssignment<'a, 'b> {
+        LowerAssignment {
+            cx: self.borrow(),
+            assignments,
+        }
+    }
+
+    fn lower_returning(&mut self) -> LowerReturning<'_, 'b> {
+        LowerReturning { cx: self.borrow() }
+    }
+
+    fn lower_statement(&mut self) -> LowerStatement<'_, 'b> {
+        LowerStatement { cx: self.borrow() }
+    }
+
+    fn borrow(&mut self) -> LoweringContext<'_, 'b> {
+        LoweringContext {
+            state: self.state,
+            expr: self.expr.clone(),
+            scope_id: self.scope_id,
+        }
     }
 }

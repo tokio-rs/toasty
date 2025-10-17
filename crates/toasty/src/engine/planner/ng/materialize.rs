@@ -302,11 +302,11 @@ impl MaterializePlanner<'_> {
 
                 visit_mut::for_each_expr_mut(&mut filter, |expr| {
                     match expr {
-                        stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
-                            debug_assert_eq!(0, *nesting);
+                        stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
+                            debug_assert_eq!(0, expr_column.nesting);
                             // We need to up the nesting to reflect that the filter is moved
                             // one level deeper.
-                            *nesting += 1;
+                            expr_column.nesting += 1;
                         }
                         stmt::Expr::Arg(expr_arg) => {
                             let Arg::Ref {
@@ -319,12 +319,11 @@ impl MaterializePlanner<'_> {
                             };
 
                             // Rewrite reference the new `FROM`.
-                            *expr = stmt::ExprReference::Column {
+                            *expr = stmt::Expr::column(stmt::ExprColumn {
                                 nesting: 0,
                                 table: input.get().unwrap(),
                                 column: *index,
-                            }
-                            .into();
+                            });
                         }
                         _ => {}
                     }
@@ -339,8 +338,8 @@ impl MaterializePlanner<'_> {
                 stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
             } else {
                 visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| match expr {
-                    stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
-                        debug_assert_eq!(0, *nesting);
+                    stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
+                        debug_assert_eq!(0, expr_column.nesting);
                     }
                     stmt::Expr::Arg(expr_arg) => {
                         let Arg::Ref {

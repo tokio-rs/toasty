@@ -92,7 +92,7 @@ mod expr_record;
 pub use expr_record::ExprRecord;
 
 mod expr_reference;
-pub use expr_reference::ExprReference;
+pub use expr_reference::{ExprColumn, ExprReference};
 
 mod expr_set;
 pub use expr_set::ExprSet;

@@ -70,23 +70,17 @@ impl ToSql for &stmt::Expr {
                 let exprs = Comma(&expr.fields);
                 fmt!(cx, f, "(" exprs ")");
             }
-            Reference(
-                expr_reference @ stmt::ExprReference::Column {
-                    nesting,
-                    table,
-                    column,
-                },
-            ) => {
+            Reference(expr_reference @ stmt::ExprReference::Column(expr_column)) => {
                 if f.alias {
-                    let depth = f.depth - *nesting;
+                    let depth = f.depth - expr_column.nesting;
 
                     match cx.resolve_expr_reference(expr_reference) {
                         ResolvedRef::Column(column) => {
                             let name = Ident(&column.name);
-                            fmt!(cx, f, "tbl_" depth "_" table "." name)
+                            fmt!(cx, f, "tbl_" depth "_" expr_column.table "." name)
                         }
                         ResolvedRef::Cte { .. } | ResolvedRef::Derived { .. } => {
-                            fmt!(cx, f, "tbl_" depth "_" table "." ColumnAlias(*column))
+                            fmt!(cx, f, "tbl_" depth "_" expr_column.table "." ColumnAlias(expr_column.column))
                         }
                         ResolvedRef::Model(model) => {
                             panic!("Model references cannot be serialized to SQL; model={model:?}")

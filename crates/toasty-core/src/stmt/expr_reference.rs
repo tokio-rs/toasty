@@ -27,21 +27,24 @@ pub enum ExprReference {
     /// application schema to the database schema. It uses a scope-based approach
     /// similar to ExprReference::Field, referencing a specific column within a target
     /// at a given nesting level.
-    Column {
-        /// Query scope nesting level: 0 = current query, 1+ = higher scope queries
-        nesting: usize,
+    Column(ExprColumn),
+}
 
-        /// Index into the table references vector for this column's source relation.
-        ///
-        /// For statements with multiple tables (SELECT with JOINs), this indexes into
-        /// the `SourceTable::tables` field to identify which specific table contains
-        /// this column. For single-target statements (INSERT, UPDATE), this is
-        /// typically 0 since these operations target only one relation at a time.
-        table: usize,
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
+pub struct ExprColumn {
+    /// Query scope nesting level: 0 = current query, 1+ = higher scope queries
+    pub nesting: usize,
 
-        /// The index of the column in the table
-        column: usize,
-    },
+    /// Index into the table references vector for this column's source relation.
+    ///
+    /// For statements with multiple tables (SELECT with JOINs), this indexes into
+    /// the `SourceTable::tables` field to identify which specific table contains
+    /// this column. For single-target statements (INSERT, UPDATE), this is
+    /// typically 0 since these operations target only one relation at a time.
+    pub table: usize,
+
+    /// The index of the column in the table
+    pub column: usize,
 }
 
 impl Expr {
@@ -112,7 +115,7 @@ impl ExprReference {
         match self {
             ExprReference::Model { nesting } => *nesting,
             ExprReference::Field { nesting, .. } => *nesting,
-            ExprReference::Column { nesting, .. } => *nesting,
+            ExprReference::Column(expr_column) => expr_column.nesting,
         }
     }
 
@@ -132,11 +135,17 @@ impl ExprReference {
     }
 
     pub fn column(table: usize, column: usize) -> Self {
-        ExprReference::Column {
+        ExprReference::Column(ExprColumn {
             nesting: 0,
             table,
             column,
-        }
+        })
+    }
+}
+
+impl From<ExprColumn> for ExprReference {
+    fn from(value: ExprColumn) -> Self {
+        ExprReference::Column(value)
     }
 }
 
@@ -146,15 +155,33 @@ impl From<ExprReference> for Expr {
     }
 }
 
+impl From<ExprColumn> for Expr {
+    fn from(value: ExprColumn) -> Self {
+        Expr::Reference(ExprReference::Column(value))
+    }
+}
+
 impl From<&ExprReference> for Expr {
     fn from(value: &ExprReference) -> Self {
         Expr::Reference(*value)
     }
 }
 
+impl From<&ExprColumn> for Expr {
+    fn from(value: &ExprColumn) -> Self {
+        Expr::Reference(ExprReference::Column(*value))
+    }
+}
+
 impl From<ColumnId> for ExprReference {
     fn from(value: ColumnId) -> Self {
-        ExprReference::Column {
+        ExprReference::Column(value.into())
+    }
+}
+
+impl From<ColumnId> for ExprColumn {
+    fn from(value: ColumnId) -> Self {
+        ExprColumn {
             nesting: 0,
             table: 0,
             column: value.index,
