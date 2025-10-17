@@ -371,6 +371,10 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             }
         }
     }
+
+    pub fn infer_expr_column_ty(&self, expr_column: &ExprColumn) -> Type {
+        todo!()
+    }
 }
 
 impl<'a> ExprContext<'a, Schema> {

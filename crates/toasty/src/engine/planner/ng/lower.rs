@@ -7,7 +7,7 @@ use toasty_core::{
         app::{self, Model},
         mapping,
     },
-    stmt::{self, visit_mut, ExprColumn, VisitMut},
+    stmt::{self, visit_mut, VisitMut},
 };
 
 use crate::engine::{
@@ -57,6 +57,34 @@ struct LowerStatement<'a, 'b> {
     cx: LoweringContext<'a, 'b>,
 }
 
+trait LowerCommon<'a, 'b: 'a>: VisitMut {
+    fn cx(&mut self) -> &mut LoweringContext<'a, 'b>;
+
+    fn lower_expr_common(&mut self, expr: &mut stmt::Expr) {
+        loop {
+            // First recurse up the expression
+            stmt::visit_mut::visit_expr_mut(self, expr);
+
+            match self.cx().lower_expr_common(expr) {
+                Lowering::Final(lowered) => {
+                    *expr = lowered;
+                    break;
+                }
+                Lowering::Partial(lowered) => {
+                    *expr = lowered;
+                }
+                Lowering::None => break,
+            }
+        }
+    }
+}
+
+impl<'a, 'b> LowerCommon<'a, 'b> for LowerStatement<'a, 'b> {
+    fn cx(&mut self) -> &mut LoweringContext<'a, 'b> {
+        &mut self.cx
+    }
+}
+
 #[derive(Debug)]
 struct LoweringState<'a> {
     /// Database engine handle
@@ -87,6 +115,13 @@ struct LoweringContext<'a, 'b> {
 struct Scope {
     /// Identifier of the statement in the partitioner state.
     stmt_id: StmtId,
+}
+
+#[derive(Debug)]
+enum Lowering {
+    Final(stmt::Expr),
+    Partial(stmt::Expr),
+    None,
 }
 
 index_vec::define_index_type! {
@@ -137,14 +172,35 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         todo!("stmt={i:#?}");
     }
 
-    fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
-        self.cx.lower_expr_common(i);
+    fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+        loop {
+            // First recurse up the expression
+            stmt::visit_mut::visit_expr_mut(self, expr);
 
-        match i {
-            _ => {
-                visit_mut::visit_expr_mut(self, i);
+            match self.cx.lower_expr_common(expr) {
+                Lowering::Final(lowered) => {
+                    *expr = lowered;
+                    break;
+                }
+                Lowering::Partial(lowered) => {
+                    *expr = lowered;
+                }
+                Lowering::None => break,
             }
         }
+
+        self.cx.register_expr_column_as_ref(expr);
+
+        match expr {
+            stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
+                todo!()
+            }
+            _ => todo!(),
+        }
+    }
+
+    fn visit_expr_stmt_mut(&mut self, i: &mut stmt::ExprStmt) {
+        todo!("expr={i:#?}");
     }
 
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
@@ -203,38 +259,58 @@ impl VisitMut for LowerReturning<'_, '_> {
     }
 }
 
-impl<'b> LoweringContext<'_, 'b> {
-    /// Shared expr lowering behavior
-    fn lower_expr_common(&mut self, expr: &mut stmt::Expr) {
-        /*
-        match expr {
-            stmt::Expr::Reference(expr_reference) => {
-                // At this point, the query should have been fully lowered
-                let stmt::ExprReference::Column(expr_column) = expr_reference else {
-                    panic!("unexpected state: statement not lowered")
-                };
+/*
+fn lower_expr_common<'a>(lower: &mut impl LowerCommon<'a>, expr: &mut stmt::Expr) {
+    loop {
+        // First recurse up the expression
+        stmt::visit_mut::visit_expr_mut(lower, expr);
 
-                if expr_column.nesting > 0 {
-                    let source_id = self.scope_stmt_id();
-                    let target_id = self.resolve_stmt_id(expr_column.nesting);
-
-                    let position = self.new_ref(source_id, target_id, *expr_reference);
-
-                    // Using ExprArg as a placeholder. It will be rewritten
-                    // later.
-                    *expr = stmt::Expr::arg(position);
-                }
+        match lower.cx().lower_expr_common(expr) {
+            Lowering::Final(lowered) => {
+                *expr = lowered;
+                break;
             }
-            stmt::Expr::InSubquery(_) => {
-                todo!("in_subquery={expr:#?}");
+            Lowering::Partial(lowered) => {
+                *expr = lowered;
             }
-            stmt::Expr::Stmt(_) => {
-                todo!("stmt={expr:#?}");
-            }
-            _ => {}
+            Lowering::None => break,
         }
-        */
-        todo!()
+    }
+}
+    */
+
+impl<'b> LoweringContext<'_, 'b> {
+    fn lower_expr_common(&mut self, expr: &mut stmt::Expr) -> Lowering {
+        match expr {
+            stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
+                let mapping = self.mapping_at_unwrap(*nesting);
+                Lowering::Partial(
+                    mapping
+                        .table_to_model
+                        .lower_expr_reference(*nesting, *index),
+                )
+            }
+            _ => Lowering::None,
+        }
+    }
+
+    /// If the ExprColumn points to an ancesstor statement, register it with the
+    /// current StatementInfo.
+    fn register_expr_column_as_ref(&mut self, expr: &mut stmt::Expr) {
+        if let stmt::Expr::Reference(expr_reference) = expr {
+            debug_assert!(expr_reference.is_column());
+
+            if expr_reference.nesting() > 0 {
+                let source_id = self.scope_stmt_id();
+                let target_id = self.resolve_stmt_id(expr_reference.nesting());
+
+                let position = self.new_ref(source_id, target_id, *expr_reference);
+
+                // Using ExprArg as a placeholder. It will be rewritten
+                // later.
+                *expr = stmt::Expr::arg(position);
+            }
+        }
     }
 
     /// Returns the ArgId for the new reference
@@ -242,10 +318,14 @@ impl<'b> LoweringContext<'_, 'b> {
         &mut self,
         source_id: StmtId,
         target_id: StmtId,
-        mut expr: stmt::ExprReference,
+        mut expr_reference: stmt::ExprReference,
     ) -> usize {
+        let stmt::ExprReference::Column(expr_column) = &mut expr_reference else {
+            todo!()
+        };
+
         // First, get the nesting so we can resolve the target statmeent
-        let nesting = expr.nesting();
+        let nesting = expr_column.nesting;
 
         // We only track references that point to statements being executed by
         // separate materializations. References within the same materialization
@@ -254,9 +334,6 @@ impl<'b> LoweringContext<'_, 'b> {
 
         // Set the nesting to zero as the stored ExprReference will be used from
         // the context of the *target* statement.
-        let stmt::ExprReference::Column(ref mut expr_column) = &mut expr else {
-            panic!()
-        };
         expr_column.nesting = 0;
 
         let target = &mut self.state.store[target_id];
@@ -270,7 +347,7 @@ impl<'b> LoweringContext<'_, 'b> {
             .entry(source_id)
             .or_default()
             .exprs
-            .insert_full(expr);
+            .insert_full(expr_reference);
 
         // Create an argument for inputing the expr reference's materialized
         // value into the statement.
@@ -325,6 +402,12 @@ impl<'b> LoweringContext<'_, 'b> {
     #[track_caller]
     fn mapping_unwrap(&self) -> &mapping::Model {
         self.expr.schema().mapping_for(self.model_unwrap())
+    }
+
+    #[track_caller]
+    fn mapping_at_unwrap(&self, nesting: usize) -> &mapping::Model {
+        let model = self.expr.target_at(nesting).as_model_unwrap();
+        self.expr.schema().mapping_for(model)
     }
 
     /// Returns the `StmtId` for the Statement at the **current** scope.

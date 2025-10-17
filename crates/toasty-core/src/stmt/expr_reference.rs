@@ -106,7 +106,7 @@ impl Expr {
     }
 
     pub fn is_column(&self) -> bool {
-        matches!(self, Self::Reference(ExprReference::Column { .. }))
+        matches!(self, Self::Reference(ExprReference::Column(..)))
     }
 }
 
@@ -140,6 +140,10 @@ impl ExprReference {
             table,
             column,
         })
+    }
+
+    pub fn is_column(&self) -> bool {
+        matches!(self, ExprReference::Column(..))
     }
 }
 
