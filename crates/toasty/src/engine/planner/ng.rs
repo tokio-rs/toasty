@@ -1,8 +1,7 @@
-mod decompose;
-
 mod info;
-
 use info::{Arg, StatementInfoStore, StmtId};
+
+mod lower;
 
 mod materialize;
 use materialize::{MaterializeGraph, MaterializeKind, NodeId};
@@ -136,7 +135,7 @@ impl Planner<'_> {
 
 impl PlannerNg<'_, '_> {
     fn plan_statement(&mut self, stmt: stmt::Statement) -> Result<Option<plan::VarId>> {
-        self.decompose(stmt);
+        self.lower_stmt(stmt);
 
         // Build the execution plan...
         self.plan_materializations();
