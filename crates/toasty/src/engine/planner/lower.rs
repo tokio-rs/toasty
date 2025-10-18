@@ -214,7 +214,7 @@ impl VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert) {
-        let model_id = i.target.as_model();
+        let model_id = i.target.as_model_unwrap();
 
         let mut lower = self.scope(self.cx.schema().app.model(model_id));
 

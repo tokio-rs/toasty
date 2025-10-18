@@ -12,7 +12,7 @@ impl DynamoDb {
     ) -> Result<Response> {
         assert!(insert.returning.is_none());
 
-        let insert_table = insert.target.as_table();
+        let insert_table = insert.target.as_table_unwrap();
         let table = &schema.table(insert_table.table);
 
         let unique_indices = table
