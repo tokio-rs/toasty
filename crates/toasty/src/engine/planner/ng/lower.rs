@@ -293,8 +293,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower.visit_with_mut(with);
         }
 
-        if let Some(with) = &mut stmt.with {
-            lower.visit_with_mut(with);
+        if let Some(order_by) = &mut stmt.order_by {
+            lower.visit_order_by_mut(order_by);
+        }
+
+        if let Some(limit) = &mut stmt.limit {
+            lower.visit_limit_mut(limit);
         }
 
         self.visit_expr_set_mut(&mut stmt.body);
