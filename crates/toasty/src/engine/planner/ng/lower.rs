@@ -73,8 +73,19 @@ struct LoweringState<'a> {
 
 #[derive(Debug, Clone, Copy)]
 enum LoweringContext<'a> {
+    /// Lowering update assignments
     Assignment(&'a stmt::Assignments),
+
+    /// Lowering an insertion statement
+    Insert,
+
+    /// Lowering a value row being inserted
+    InsertRow(&'a stmt::Expr),
+
+    /// Lowering the returning clause of a statement.
     Returning,
+
+    /// All other lowering cases
     Statement,
 }
 
@@ -208,6 +219,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         }
     }
 
+    fn visit_update_target_mut(&mut self, i: &mut stmt::UpdateTarget) {
+        if !i.is_table() {
+            let mapping = self.mapping_unwrap();
+            *i = stmt::UpdateTarget::table(mapping.table);
+        }
+    }
+
     fn visit_expr_stmt_mut(&mut self, i: &mut stmt::ExprStmt) {
         todo!("expr={i:#?}");
     }
@@ -231,12 +249,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_stmt_delete_mut(&mut self, stmt: &mut stmt::Delete) {
-        // Create a new expr scope for the statement, and lower all parts
-        // *except* the source field (since it is borrowed).
-
         assert!(stmt.returning.is_none(), "TODO; stmt={stmt:#?}");
 
+        // Create a new expr scope for the statement, and lower all parts
+        // *except* the source field (since it is borrowed).
         let mut lower = self.scope_expr(&stmt.from);
+
         lower.visit_filter_mut(&mut stmt.filter);
 
         if let Some(returning) = &mut stmt.returning {
@@ -248,13 +266,91 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         self.visit_source_mut(&mut stmt.from);
     }
 
+    fn visit_stmt_insert_mut(&mut self, stmt: &mut stmt::Insert) {
+        // Create a new expr scope for the statement, and lower all parts
+        // *except* the target field (since it is borrowed).
+        let mut lower = self.lower_insert(&stmt.target);
+
+        // Lower the insertion source
+        lower.visit_stmt_query_mut(&mut stmt.source);
+
+        if let Some(returning) = &mut stmt.returning {
+            lower.visit_returning_mut(returning);
+        }
+
+        self.visit_insert_target_mut(&mut stmt.target);
+    }
+
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
         if !self.capability().sql {
             assert!(stmt.order_by.is_none(), "TODO: implement ordering for KV");
             assert!(stmt.limit.is_none(), "TODO: implement limit for KV");
         }
 
-        visit_mut::visit_stmt_query_mut(self, stmt);
+        let mut lower = self.scope_expr(&stmt.body);
+
+        if let Some(with) = &mut stmt.with {
+            lower.visit_with_mut(with);
+        }
+
+        if let Some(with) = &mut stmt.with {
+            lower.visit_with_mut(with);
+        }
+
+        self.visit_expr_set_mut(&mut stmt.body);
+    }
+
+    fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
+        let mut lower = self.scope_expr(&stmt.source);
+
+        lower.visit_filter_mut(&mut stmt.filter);
+        lower.visit_returning_mut(&mut stmt.returning);
+
+        self.visit_source_mut(&mut stmt.source);
+        self.apply_lowering_filter_constraint(&mut stmt.filter);
+    }
+
+    fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
+        let mut lower = self.scope_expr(&stmt.target);
+
+        // Before lowering children, convert the "Changed" returning statement
+        // to an expression referencing changed fields.
+        if let Some(returning) = &mut stmt.returning {
+            if returning.is_changed() {
+                if let Some(model) = lower.model() {
+                    let mut fields = vec![];
+
+                    for i in stmt.assignments.keys() {
+                        let field = &model.fields[i];
+
+                        assert!(field.ty.is_primitive(), "field={field:#?}");
+
+                        fields.push(stmt::Expr::ref_self_field(app::FieldId {
+                            model: model.id,
+                            index: i,
+                        }));
+                    }
+
+                    *returning = stmt::Returning::Expr(stmt::Expr::cast(
+                        stmt::ExprRecord::from_vec(fields),
+                        stmt::Type::SparseRecord(stmt.assignments.keys().collect()),
+                    ));
+                }
+            }
+        }
+
+        lower.visit_assignments_mut(&mut stmt.assignments);
+        lower.visit_filter_mut(&mut stmt.filter);
+
+        if let Some(expr) = &mut stmt.condition {
+            lower.visit_expr_mut(expr);
+        }
+
+        if let Some(returning) = &mut stmt.returning {
+            lower.visit_returning_mut(returning);
+        }
+
+        self.visit_update_target_mut(&mut stmt.target);
     }
 
     fn visit_source_mut(&mut self, stmt: &mut stmt::Source) {
@@ -264,6 +360,24 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             let table_id = self.expr_cx.schema().table_id_for(source_model.model);
             *stmt = stmt::Source::table(table_id);
         }
+    }
+
+    fn visit_values_mut(&mut self, stmt: &mut stmt::Values) {
+        if self.cx.is_insert() {
+            if let Some(mapping) = self.mapping() {
+                for row in &mut stmt.rows {
+                    let mut lowered = mapping.model_to_table.clone();
+                    self.lower_insert_row(row)
+                        .visit_expr_record_mut(&mut lowered);
+
+                    *row = lowered.into();
+                }
+
+                return;
+            }
+        }
+
+        visit_mut::visit_values_mut(self, stmt);
     }
 }
 
@@ -471,6 +585,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 assert!(assignment.op.is_set(), "TODO");
                 assignment.expr.clone()
             }
+            LoweringContext::InsertRow(row) => row.entry(index).to_expr(),
             _ => todo!("cx={:#?}", self.cx),
         }
     }
@@ -625,20 +740,29 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         self.state.engine.capability()
     }
 
+    fn model(&self) -> Option<&Model> {
+        self.expr_cx.target().as_model()
+    }
+
     #[track_caller]
     fn model_unwrap(&self) -> &Model {
         self.expr_cx.target().as_model_unwrap()
     }
 
-    #[track_caller]
-    fn mapping_unwrap(&self) -> &mapping::Model {
-        self.expr_cx.schema().mapping_for(self.model_unwrap())
+    fn mapping(&self) -> Option<&'b mapping::Model> {
+        self.model()
+            .map(|model| self.state.engine.schema.mapping_for(model))
     }
 
     #[track_caller]
-    fn mapping_at_unwrap(&self, nesting: usize) -> &mapping::Model {
+    fn mapping_unwrap(&self) -> &'b mapping::Model {
+        self.state.engine.schema.mapping_for(self.model_unwrap())
+    }
+
+    #[track_caller]
+    fn mapping_at_unwrap(&self, nesting: usize) -> &'b mapping::Model {
         let model = self.expr_cx.target_at(nesting).as_model_unwrap();
-        self.expr_cx.schema().mapping_for(model)
+        self.state.engine.schema.mapping_for(model)
     }
 
     /// Returns the `StmtId` for the Statement at the **current** scope.
@@ -681,6 +805,30 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
+    fn lower_insert<'child>(
+        &'child mut self,
+        target: impl IntoExprTarget<'child>,
+    ) -> LowerStatement<'child, 'b> {
+        LowerStatement {
+            state: self.state,
+            expr_cx: self.expr_cx.scope(target),
+            scope_id: self.scope_id,
+            cx: LoweringContext::Insert,
+        }
+    }
+
+    fn lower_insert_row<'child>(
+        &'child mut self,
+        row: &'child stmt::Expr,
+    ) -> LowerStatement<'child, 'b> {
+        LowerStatement {
+            state: self.state,
+            expr_cx: self.expr_cx.clone(),
+            scope_id: self.scope_id,
+            cx: LoweringContext::InsertRow(row),
+        }
+    }
+
     fn lower_returning(&mut self) -> LowerStatement<'_, 'b> {
         LowerStatement {
             state: self.state,
@@ -701,6 +849,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 }
 
 impl LoweringContext<'_> {
+    fn is_insert(&self) -> bool {
+        matches!(self, LoweringContext::Insert)
+    }
+
     fn is_statement(&self) -> bool {
         matches!(self, LoweringContext::Statement)
     }

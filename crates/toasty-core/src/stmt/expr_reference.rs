@@ -108,6 +108,32 @@ impl Expr {
     pub fn is_column(&self) -> bool {
         matches!(self, Self::Reference(ExprReference::Column(..)))
     }
+
+    pub fn as_expr_reference(&self) -> Option<&ExprReference> {
+        match self {
+            Expr::Reference(expr_reference) => Some(expr_reference),
+            _ => None,
+        }
+    }
+
+    #[track_caller]
+    pub fn as_expr_reference_unwrap(&self) -> &ExprReference {
+        self.as_expr_reference()
+            .unwrap_or_else(|| panic!("expected ExprReference; actual={self:#?}"))
+    }
+
+    pub fn as_expr_column(&self) -> Option<&ExprColumn> {
+        match self {
+            Expr::Reference(ExprReference::Column(expr_column)) => Some(expr_column),
+            _ => None,
+        }
+    }
+
+    #[track_caller]
+    pub fn as_expr_column_unwrap(&self) -> &ExprColumn {
+        self.as_expr_column()
+            .unwrap_or_else(|| panic!("expected ExprColumn; actual={self:#?}"))
+    }
 }
 
 impl ExprReference {
