@@ -11,7 +11,6 @@ use toasty_core::{
         mapping,
     },
     stmt::{self, VisitMut},
-    Schema,
 };
 
 struct LowerStatement<'a, 'b> {
@@ -26,11 +25,6 @@ struct LowerStatement<'a, 'b> {
 struct State<'a> {
     /// The target database's capabilities
     engine: &'a Engine,
-
-    /// Lowering a query can require walking relations to maintain data
-    /// consistency. This field tracks the current relation edge being traversed
-    /// so the planner doesn't walk it backwards.
-    relations: Vec<app::FieldId>,
 }
 
 /// Substitute fields for columns
@@ -44,12 +38,6 @@ trait Input {
 }
 
 impl Planner<'_> {
-    pub(crate) fn lower_stmt(&self, stmt: &mut stmt::Statement) {
-        let mut state = State::new(self.engine);
-        LowerStatement::new(self.engine, &mut state).visit_stmt_mut(stmt);
-        simplify::simplify_stmt(&self.engine.schema, stmt);
-    }
-
     pub(crate) fn lower_stmt_delete(&self, stmt: &mut stmt::Delete) {
         let mut state = State::new(self.engine);
         LowerStatement::new(self.engine, &mut state).visit_stmt_delete_mut(stmt);
@@ -71,10 +59,7 @@ impl Planner<'_> {
 
 impl<'a> State<'a> {
     fn new(engine: &'a Engine) -> Self {
-        State {
-            engine,
-            relations: vec![],
-        }
+        State { engine }
     }
 }
 
@@ -88,10 +73,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn capability(&self) -> &'a Capability {
         self.state.engine.capability()
-    }
-
-    fn schema(&self) -> &'a Schema {
-        &self.state.engine.schema
     }
 }
 

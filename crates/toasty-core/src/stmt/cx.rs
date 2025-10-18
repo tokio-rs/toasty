@@ -371,10 +371,6 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             }
         }
     }
-
-    pub fn infer_expr_column_ty(&self, expr_column: &ExprColumn) -> Type {
-        todo!()
-    }
 }
 
 impl<'a> ExprContext<'a, Schema> {
@@ -494,12 +490,17 @@ impl Resolve for () {
 }
 
 impl<'a> ExprTarget<'a> {
+    pub fn as_model(self) -> Option<&'a Model> {
+        match self {
+            ExprTarget::Model(model) => Some(model),
+            _ => None,
+        }
+    }
+
     #[track_caller]
     pub fn as_model_unwrap(self) -> &'a Model {
-        match self {
-            ExprTarget::Model(model) => model,
-            _ => panic!("expected ExprTarget::Model; was {self:?}"),
-        }
+        self.as_model()
+            .unwrap_or_else(|| panic!("expected ExprTarget::Model; was {self:?}"))
     }
 
     pub fn model_id(self) -> Option<ModelId> {

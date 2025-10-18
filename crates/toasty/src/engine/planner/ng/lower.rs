@@ -5,14 +5,16 @@ use toasty_core::{
     driver::Capability,
     schema::{
         app::{self, FieldTy, Model},
+        db::Column,
         mapping,
     },
     stmt::{self, visit_mut, IntoExprTarget, VisitMut},
+    Schema,
 };
 
 use crate::engine::{
     planner::ng::{Arg, StatementInfoStore, StmtId},
-    simplify::Simplify,
+    simplify::{self, Simplify},
     Engine,
 };
 
@@ -31,7 +33,7 @@ impl super::PlannerNg<'_, '_> {
         // Map the statement
         LowerStatement {
             state: &mut state,
-            expr: stmt::ExprContext::new(self.old.schema()),
+            expr_cx: stmt::ExprContext::new(self.old.schema()),
             scope_id,
             cx: LoweringContext::Statement,
         }
@@ -47,7 +49,7 @@ struct LowerStatement<'a, 'b> {
     state: &'a mut LoweringState<'b>,
 
     /// Expression context in which the statement is being lowered
-    expr: stmt::ExprContext<'a>,
+    expr_cx: stmt::ExprContext<'a>,
 
     /// Identifier to the current scope (stored in `scopes` on LoweringState)
     scope_id: ScopeId,
@@ -179,7 +181,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 // For now, we assume nested sub-statements cannot be executed on the
                 // target database. Eventually, we will need to make this smarter.
                 let source_id = self.scope_stmt_id();
-                let target_id = self.state.store.new_statement_info();
+                let target_id = self.new_statement_info();
 
                 self.scope_statement(target_id, |child| {
                     visit_mut::visit_expr_stmt_mut(child, expr_stmt);
@@ -241,8 +243,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower.visit_returning_mut(returning);
         }
 
-        // lower.apply_lowering_filter_constraint(&mut i.filter);
-        todo!()
+        lower.apply_lowering_filter_constraint(&mut stmt.filter);
+
+        self.visit_source_mut(&mut stmt.from);
     }
 
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
@@ -258,7 +261,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if let stmt::Source::Model(source_model) = stmt {
             debug_assert!(source_model.via.is_none(), "TODO");
 
-            let table_id = self.expr.schema().table_id_for(source_model.model);
+            let table_id = self.expr_cx.schema().table_id_for(source_model.model);
             *stmt = stmt::Source::table(table_id);
         }
     }
@@ -370,6 +373,92 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
+    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Filter) {
+        let Some(model) = self.expr_cx.target().as_model() else {
+            return;
+        };
+
+        let table = self.schema().table_for(model);
+        let mapping = self.mapping_unwrap();
+
+        // TODO: we really shouldn't have to simplify here, but until
+        // simplification includes overlapping predicate pruning, we have to do
+        // this here.
+        if let Some(expr) = &mut filter.expr {
+            simplify::simplify_expr(self.expr_cx, expr);
+        }
+
+        let mut operands = vec![];
+
+        for column in table.primary_key_columns() {
+            let pattern = match &mapping.model_to_table[column.id.index] {
+                stmt::Expr::ConcatStr(expr) => {
+                    // hax
+                    let stmt::Expr::Value(stmt::Value::String(a)) = &expr.exprs[0] else {
+                        todo!()
+                    };
+                    let stmt::Expr::Value(stmt::Value::String(b)) = &expr.exprs[1] else {
+                        todo!()
+                    };
+
+                    format!("{a}{b}")
+                }
+                stmt::Expr::Value(_) => todo!(),
+                _ => continue,
+            };
+
+            if let Some(filter) = &filter.expr {
+                if self.is_eq_constrained(filter, column) {
+                    continue;
+                }
+            }
+
+            assert_eq!(self.mapping_unwrap().columns[column.id.index], column.id);
+
+            operands.push(stmt::Expr::begins_with(
+                self.expr_cx.expr_ref_column(column),
+                pattern,
+            ));
+        }
+
+        if operands.is_empty() {
+            return;
+        }
+
+        filter.add_filter(stmt::Expr::and_from_vec(operands));
+    }
+
+    fn is_eq_constrained(&self, expr: &stmt::Expr, column: &Column) -> bool {
+        use stmt::Expr::*;
+
+        match expr {
+            And(expr) => expr.iter().any(|expr| self.is_eq_constrained(expr, column)),
+            Or(expr) => expr.iter().all(|expr| self.is_eq_constrained(expr, column)),
+            BinaryOp(expr) => {
+                if !expr.op.is_eq() {
+                    return false;
+                }
+
+                match (&*expr.lhs, &*expr.rhs) {
+                    (Reference(lhs), _) => {
+                        self.expr_cx.resolve_expr_reference(lhs).expect_column().id == column.id
+                    }
+                    (_, Reference(rhs)) => {
+                        self.expr_cx.resolve_expr_reference(rhs).expect_column().id == column.id
+                    }
+                    _ => false,
+                }
+            }
+            InList(expr) => match &*expr.expr {
+                Reference(lhs) => {
+                    self.expr_cx.resolve_expr_reference(lhs).expect_column().id == column.id
+                }
+                _ => todo!("expr={:#?}", expr),
+            },
+            _ => todo!("expr={:#?}", expr),
+        }
+    }
+
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {
             LoweringContext::Statement => {
@@ -444,7 +533,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         };
 
         // Simplify the new stmt to handle relations.
-        Simplify::with_context(self.expr).visit_stmt_query_mut(&mut stmt);
+        Simplify::with_context(self.expr_cx).visit_stmt_query_mut(&mut stmt);
 
         returning
             .entry_mut(*field_index)
@@ -528,24 +617,28 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         arg
     }
 
+    fn schema(&self) -> &Schema {
+        self.expr_cx.schema()
+    }
+
     fn capability(&self) -> &Capability {
         self.state.engine.capability()
     }
 
     #[track_caller]
     fn model_unwrap(&self) -> &Model {
-        self.expr.target().as_model_unwrap()
+        self.expr_cx.target().as_model_unwrap()
     }
 
     #[track_caller]
     fn mapping_unwrap(&self) -> &mapping::Model {
-        self.expr.schema().mapping_for(self.model_unwrap())
+        self.expr_cx.schema().mapping_for(self.model_unwrap())
     }
 
     #[track_caller]
     fn mapping_at_unwrap(&self, nesting: usize) -> &mapping::Model {
-        let model = self.expr.target_at(nesting).as_model_unwrap();
-        self.expr.schema().mapping_for(model)
+        let model = self.expr_cx.target_at(nesting).as_model_unwrap();
+        self.expr_cx.schema().mapping_for(model)
     }
 
     /// Returns the `StmtId` for the Statement at the **current** scope.
@@ -570,7 +663,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     ) -> LowerStatement<'child, 'b> {
         LowerStatement {
             state: self.state,
-            expr: self.expr.scope(target),
+            expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
             cx: self.cx,
         }
@@ -582,7 +675,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     ) -> LowerStatement<'child, 'b> {
         LowerStatement {
             state: self.state,
-            expr: self.expr.clone(),
+            expr_cx: self.expr_cx.clone(),
             scope_id: self.scope_id,
             cx: LoweringContext::Assignment(assignments),
         }
@@ -591,7 +684,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     fn lower_returning(&mut self) -> LowerStatement<'_, 'b> {
         LowerStatement {
             state: self.state,
-            expr: self.expr.clone(),
+            expr_cx: self.expr_cx.clone(),
             scope_id: self.scope_id,
             cx: LoweringContext::Returning,
         }
@@ -600,7 +693,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     fn lower_statement(&mut self, scope_id: ScopeId) -> LowerStatement<'_, 'b> {
         LowerStatement {
             state: self.state,
-            expr: self.expr.clone(),
+            expr_cx: self.expr_cx.clone(),
             scope_id,
             cx: LoweringContext::Statement,
         }
