@@ -41,19 +41,19 @@ impl Planner<'_> {
     pub(crate) fn lower_stmt_delete(&self, stmt: &mut stmt::Delete) {
         let mut state = State::new(self.engine);
         LowerStatement::new(self.engine, &mut state).visit_stmt_delete_mut(stmt);
-        simplify::simplify_stmt(&self.engine.schema, stmt);
+        self.engine.simplify_stmt(stmt);
     }
 
     pub(crate) fn lower_stmt_insert(&self, stmt: &mut stmt::Insert) {
         let mut state = State::new(self.engine);
         LowerStatement::new(self.engine, &mut state).visit_stmt_insert_mut(stmt);
-        simplify::simplify_stmt(&self.engine.schema, stmt);
+        self.engine.simplify_stmt(stmt);
     }
 
     pub(crate) fn lower_stmt_update(&self, stmt: &mut stmt::Update) {
         let mut state = State::new(self.engine);
         LowerStatement::new(self.engine, &mut state).visit_stmt_update_mut(stmt);
-        simplify::simplify_stmt(&self.engine.schema, stmt);
+        self.engine.simplify_stmt(stmt);
     }
 }
 

@@ -187,7 +187,7 @@ fn eval(expr: &stmt::Expr, input: &mut impl Input) -> Result<stmt::Value> {
             let decoded_variant: usize = decoded_variant.parse()?;
 
             if decoded_variant != *variant {
-                todo!("error");
+                todo!("error; decoded={decoded_variant:#?}; expr={expr:#?}; ty={ty:#?}; variant={variant:#?}");
             }
 
             ty.cast(rest.into())

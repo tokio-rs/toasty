@@ -25,12 +25,16 @@ use toasty_core::{
     stmt::{self, Expr, IntoExprTarget, Node, VisitMut},
 };
 
+use crate::engine::Engine;
+
 pub(crate) struct Simplify<'a> {
     cx: stmt::ExprContext<'a>,
 }
 
-pub(crate) fn simplify_stmt<T: Node>(schema: &Schema, stmt: &mut T) {
-    Simplify::new(schema).visit_mut(stmt);
+impl Engine {
+    pub(crate) fn simplify_stmt<T: Node>(&self, stmt: &mut T) {
+        Simplify::new(&self.schema).visit_mut(stmt);
+    }
 }
 
 // TODO: get rid of this?

@@ -185,7 +185,7 @@ impl<'a> Planner<'a> {
     }
 
     fn simplify_stmt(&self, stmt: &mut stmt::Statement) {
-        simplify::simplify_stmt(&self.engine.schema, stmt);
+        self.engine.simplify_stmt(stmt);
 
         // Make sure `via` associations is simplified
         debug_assert!(match stmt {

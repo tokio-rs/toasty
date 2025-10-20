@@ -39,6 +39,9 @@ impl super::PlannerNg<'_, '_> {
         }
         .visit_stmt_mut(&mut stmt);
 
+        // TODO: is there a way to avoid simplifying again?
+        self.old.engine.simplify_stmt(&mut stmt);
+
         self.store.root_mut().stmt = Some(Box::new(stmt));
     }
 }
@@ -734,9 +737,13 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             input: Cell::new(None),
         });
 
-        let stmt::Expr::Stmt(expr_stmt) = expr else {
+        let stmt::Expr::Stmt(mut expr_stmt) = expr else {
             panic!()
         };
+
+        // TODO: Is ther ea way to avoid simplifying here?
+        self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
+
         self.state.store[target_id].stmt = Some(expr_stmt.stmt);
 
         arg
