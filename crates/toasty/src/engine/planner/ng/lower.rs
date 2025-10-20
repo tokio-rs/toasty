@@ -592,7 +592,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {
-            LoweringContext::Statement => {
+            LoweringContext::Statement | LoweringContext::Returning => {
                 let mapping = self.mapping_at_unwrap(nesting);
                 mapping.table_to_model.lower_expr_reference(nesting, index)
             }
@@ -820,7 +820,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     ) -> LowerStatement<'child, 'b> {
         LowerStatement {
             state: self.state,
-            expr_cx: self.expr_cx.clone(),
+            expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::Assignment(assignments),
         }
@@ -844,7 +844,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     ) -> LowerStatement<'child, 'b> {
         LowerStatement {
             state: self.state,
-            expr_cx: self.expr_cx.clone(),
+            expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::InsertRow(row),
         }
@@ -853,7 +853,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     fn lower_returning(&mut self) -> LowerStatement<'_, 'b> {
         LowerStatement {
             state: self.state,
-            expr_cx: self.expr_cx.clone(),
+            expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::Returning,
         }
@@ -862,7 +862,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     fn lower_statement(&mut self, scope_id: ScopeId) -> LowerStatement<'_, 'b> {
         LowerStatement {
             state: self.state,
-            expr_cx: self.expr_cx.clone(),
+            expr_cx: self.expr_cx,
             scope_id,
             cx: LoweringContext::Statement,
         }

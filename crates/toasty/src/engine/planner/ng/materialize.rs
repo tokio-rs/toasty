@@ -198,7 +198,9 @@ impl MaterializePlanner<'_> {
 
         // Tracks if the original query is a single query.
         let single = stmt.as_query().map(|query| query.single).unwrap_or(false);
-        stmt.as_query_mut().map(|query| query.single = false);
+        if let Some(query) = stmt.as_query_mut() {
+            query.single = false;
+        }
 
         let mut returning = stmt
             .returning_mut()
