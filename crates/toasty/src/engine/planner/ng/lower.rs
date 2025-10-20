@@ -147,16 +147,22 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::BinaryOp(e) => {
+                stmt::visit_mut::visit_expr_binary_op_mut(self, e);
+
                 if let Some(lowered) = self.lower_expr_binary_op(e.op, &mut e.lhs, &mut e.rhs) {
                     *expr = lowered;
                 }
             }
             stmt::Expr::InList(e) => {
+                stmt::visit_mut::visit_expr_in_list_mut(self, e);
+
                 if let Some(lowered) = self.lower_expr_in_list(&mut e.expr, &mut e.list) {
                     *expr = lowered;
                 }
             }
             stmt::Expr::InSubquery(e) => {
+                stmt::visit_mut::visit_expr_in_subquery_mut(self, e);
+
                 let maybe_res = self.lower_expr_binary_op(
                     stmt::BinaryOp::Eq,
                     &mut e.expr,
@@ -187,7 +193,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
             }
             stmt::Expr::Stmt(expr_stmt) => {
-                assert!(self.cx.is_statement());
+                assert!(self.cx.is_returning(), "cx={:#?}", self.cx);
 
                 // For now, we assume nested sub-statements cannot be executed on the
                 // target database. Eventually, we will need to make this smarter.
@@ -857,8 +863,8 @@ impl LoweringContext<'_> {
         matches!(self, LoweringContext::Insert)
     }
 
-    fn is_statement(&self) -> bool {
-        matches!(self, LoweringContext::Statement)
+    fn is_returning(&self) -> bool {
+        matches!(self, LoweringContext::Returning)
     }
 }
 
