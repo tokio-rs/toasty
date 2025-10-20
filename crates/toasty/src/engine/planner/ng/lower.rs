@@ -318,9 +318,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
         lower.visit_filter_mut(&mut stmt.filter);
         lower.visit_returning_mut(&mut stmt.returning);
+        lower.apply_lowering_filter_constraint(&mut stmt.filter);
 
         self.visit_source_mut(&mut stmt.source);
-        self.apply_lowering_filter_constraint(&mut stmt.filter);
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {

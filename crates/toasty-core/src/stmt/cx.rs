@@ -499,8 +499,10 @@ impl<'a> ExprTarget<'a> {
 
     #[track_caller]
     pub fn as_model_unwrap(self) -> &'a Model {
-        self.as_model()
-            .unwrap_or_else(|| panic!("expected ExprTarget::Model; was {self:?}"))
+        match self.as_model() {
+            Some(model) => model,
+            _ => panic!("expected ExprTarget::Model; was {self:#?}"),
+        }
     }
 
     pub fn model_id(self) -> Option<ModelId> {

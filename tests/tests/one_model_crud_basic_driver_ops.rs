@@ -3,7 +3,7 @@ use tests::{prelude::*, stmt::Any};
 use toasty::stmt::Id;
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{BinaryOp, Expr, ExprColumn, ExprReference, ExprSet, Source, Statement},
+    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement},
 };
 
 async fn basic_crud(test: &mut DbTest) {
