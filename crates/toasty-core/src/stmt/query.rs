@@ -134,6 +134,49 @@ impl Query {
     }
 }
 
+impl Statement {
+    pub fn is_query(&self) -> bool {
+        matches!(self, Statement::Query(_))
+    }
+
+    /// Attempts to return a reference to an inner [`Query`].
+    ///
+    /// * If `self` is a [`Statement::Query`], a reference to the inner [`Query`] is
+    ///   returned wrapped in [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn as_query(&self) -> Option<&Query> {
+        match self {
+            Self::Query(query) => Some(query),
+            _ => None,
+        }
+    }
+
+    /// Returns a mutable reference to the inner [`Query`], if this is a query statement.
+    ///
+    /// * If `self` is a [`Statement::Query`], a mutable reference to the inner [`Query`] is
+    ///   returned wrapped in [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn as_query_mut(&mut self) -> Option<&mut Query> {
+        match self {
+            Self::Query(query) => Some(query),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and returns the inner [`Query`].
+    ///
+    /// # Panics
+    ///
+    /// If `self` is not a [`Statement::Query`].
+    #[track_caller]
+    pub fn into_query(self) -> Query {
+        match self {
+            Self::Query(query) => query,
+            v => panic!("expected `Query`, found {v:#?}"),
+        }
+    }
+}
+
 impl From<Query> for Statement {
     fn from(value: Query) -> Self {
         Self::Query(value)

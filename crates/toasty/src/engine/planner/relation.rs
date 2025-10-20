@@ -420,7 +420,7 @@ impl Planner<'_> {
         // Returning does nothing in this context.
         stmt.returning = None;
 
-        assert_eq!(stmt.target.as_model(), has_many.target);
+        assert_eq!(stmt.target.as_model_unwrap(), has_many.target);
 
         stmt.target = self
             .relation_pair_scope(has_many.pair, scope.clone())

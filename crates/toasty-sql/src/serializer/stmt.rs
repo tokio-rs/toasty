@@ -61,7 +61,7 @@ impl ToSql for &stmt::Delete {
         // Create a new expression scope to serialize the statement
         let cx = cx.scope(self);
 
-        fmt!(&cx, f, "DELETE FROM " self.from " WHERE " self.filter);
+        fmt!(&cx, f, "DELETE FROM " self.from self.filter);
 
         f.alias = prev;
     }
@@ -70,7 +70,7 @@ impl ToSql for &stmt::Delete {
 impl ToSql for &stmt::Filter {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         if let Some(expr) = &self.expr {
-            expr.to_sql(cx, f);
+            fmt!(&cx, f, " WHERE " expr);
         }
     }
 }
@@ -134,7 +134,7 @@ impl ToSql for &stmt::InsertTarget {
 
 impl ToSql for &stmt::Limit {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        assert!(self.offset.is_none(), "TODO");
+        assert!(self.offset.is_none(), "TODO; {:#?}", self);
 
         fmt!(cx, f, "LIMIT " self.limit);
     }
@@ -221,8 +221,7 @@ impl ToSql for &stmt::Select {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         fmt!(
             cx, f,
-            "SELECT " self.returning " FROM " self.source
-            " WHERE " self.filter
+            "SELECT " self.returning " FROM " self.source self.filter
         );
     }
 }
@@ -359,7 +358,6 @@ impl ToSql for &stmt::Update {
         // Create a new expression scope to serialize the statement
         let cx = cx.scope(self);
 
-        let filter = self.filter.expr.as_ref().map(|expr| (" WHERE ", expr));
         let returning = self
             .returning
             .as_ref()
@@ -370,7 +368,7 @@ impl ToSql for &stmt::Update {
             "SQL does not support update conditions"
         );
 
-        fmt!(&cx, f, "UPDATE " self.target " SET " assignments filter returning);
+        fmt!(&cx, f, "UPDATE " self.target " SET " assignments self.filter returning);
 
         f.alias = prev;
     }

@@ -21,14 +21,9 @@ impl Exec<'_> {
             stmt.substitute(&input_values);
         }
 
-        let op = match &action.output {
-            Some(output) => operation::QuerySql {
-                stmt,
-                ret: Some(output.ty.clone()),
-            },
-            None => {
-                todo!()
-            }
+        let op = operation::QuerySql {
+            stmt,
+            ret: action.output.as_ref().map(|output| output.ty.clone()),
         };
 
         let res = self
@@ -48,7 +43,7 @@ impl Exec<'_> {
                 }
             }
         } else {
-            todo!()
+            assert!(res.rows.is_count());
         }
 
         Ok(())

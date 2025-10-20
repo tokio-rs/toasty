@@ -2,12 +2,13 @@
 
 use super::{
     Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
-    ExprBinaryOp, ExprCast, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList, ExprInSubquery,
-    ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord,
-    ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, Filter, FuncCount, Insert, InsertTarget,
-    Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
-    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
-    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList,
+    ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern,
+    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, Filter,
+    FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path,
+    Projection, Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId,
+    Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget,
+    Value, ValueRecord, Values, With,
 };
 
 pub trait Visit {
@@ -56,6 +57,10 @@ pub trait Visit {
 
     fn visit_expr_cast(&mut self, i: &ExprCast) {
         visit_expr_cast(self, i);
+    }
+
+    fn visit_expr_column(&mut self, i: &ExprColumn) {
+        visit_expr_column(self, i);
     }
 
     fn visit_expr_concat(&mut self, i: &ExprConcat) {
@@ -302,6 +307,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_expr_cast(&mut self, i: &ExprCast) {
         Visit::visit_expr_cast(&mut **self, i);
+    }
+
+    fn visit_expr_column(&mut self, i: &ExprColumn) {
+        Visit::visit_expr_column(&mut **self, i);
     }
 
     fn visit_expr_concat(&mut self, i: &ExprConcat) {
@@ -615,6 +624,12 @@ where
     v.visit_type(&node.ty);
 }
 
+pub fn visit_expr_column<V>(v: &mut V, node: &ExprColumn)
+where
+    V: Visit + ?Sized,
+{
+}
+
 pub fn visit_expr_concat<V>(v: &mut V, node: &ExprConcat)
 where
     V: Visit + ?Sized,
@@ -736,6 +751,11 @@ pub fn visit_expr_reference<V>(v: &mut V, node: &ExprReference)
 where
     V: Visit + ?Sized,
 {
+    match node {
+        ExprReference::Model { .. } => {}
+        ExprReference::Field { .. } => {}
+        ExprReference::Column(expr_column) => v.visit_expr_column(expr_column),
+    }
 }
 
 pub fn visit_expr_set<V>(v: &mut V, node: &ExprSet)

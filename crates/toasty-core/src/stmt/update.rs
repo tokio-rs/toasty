@@ -67,6 +67,10 @@ impl UpdateTarget {
         }
     }
 
+    pub fn is_table(&self) -> bool {
+        matches!(self, UpdateTarget::Table(..))
+    }
+
     pub fn table(table: impl Into<TableId>) -> Self {
         Self::Table(table.into())
     }

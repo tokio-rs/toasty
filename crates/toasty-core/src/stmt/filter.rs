@@ -6,6 +6,9 @@ pub struct Filter {
 }
 
 impl Filter {
+    /// Default filters selects everything (i.e. no filter)
+    pub const ALL: Filter = Filter { expr: None };
+
     pub fn new(expr: impl Into<Expr>) -> Filter {
         Filter {
             expr: Some(expr.into()),
@@ -34,6 +37,10 @@ impl Filter {
             .as_ref()
             .map(|expr| expr.is_false())
             .unwrap_or(false)
+    }
+
+    pub fn set(&mut self, expr: impl Into<Expr>) {
+        self.expr = Some(expr.into());
     }
 
     pub fn add_filter(&mut self, filter: impl Into<Filter>) {
@@ -76,6 +83,38 @@ impl Statement {
             Statement::Update(update) => Some(&update.filter),
         }
     }
+
+    pub fn filter_or_default(&self) -> &Filter {
+        self.filter().unwrap_or(&Filter::ALL)
+    }
+
+    /// Returns a mutable reference to the statement's filter.
+    ///
+    /// Returns `None` for statements that do not support filtering, such as
+    /// `INSERT`.
+    pub fn filter_mut(&mut self) -> Option<&mut Filter> {
+        match self {
+            Statement::Delete(delete) => Some(&mut delete.filter),
+            Statement::Insert(_) => None,
+            Statement::Query(query) => query.filter_mut(),
+            Statement::Update(update) => Some(&mut update.filter),
+        }
+    }
+
+    /// Returns a mutable reference to the statement's filter.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the statement does not support filtering.
+    #[track_caller]
+    pub fn filter_mut_unwrap(&mut self) -> &mut Filter {
+        match self {
+            Statement::Delete(delete) => &mut delete.filter,
+            Statement::Insert(_) => panic!("expected Statement with filter"),
+            Statement::Query(query) => query.filter_mut_unwrap(),
+            Statement::Update(update) => &mut update.filter,
+        }
+    }
 }
 
 impl Query {
@@ -90,6 +129,30 @@ impl Query {
     pub fn filter_unwrap(&self) -> &Filter {
         self.filter()
             .unwrap_or_else(|| panic!("expected Query with filter; actual={self:#?}"))
+    }
+
+    /// Returns a mutable reference to the query's filter.
+    ///
+    /// Returns `None` for queries that are not `SELECT` statements, such as
+    /// `UNION` or `VALUES`.
+    pub fn filter_mut(&mut self) -> Option<&mut Filter> {
+        match &mut self.body {
+            ExprSet::Select(select) => Some(&mut select.filter),
+            _ => None,
+        }
+    }
+
+    /// Returns a mutable reference to the query's filter.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the query body is not a `SELECT` statement.
+    #[track_caller]
+    pub fn filter_mut_unwrap(&mut self) -> &mut Filter {
+        match &mut self.body {
+            ExprSet::Select(select) => &mut select.filter,
+            _ => panic!("expected Query with filter"),
+        }
     }
 }
 

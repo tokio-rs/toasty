@@ -196,26 +196,15 @@ impl MaterializePlanner<'_> {
         let stmt_info = &self.store[stmt_id];
         let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
 
-        // Get the returning clause
-        let stmt::Statement::Query(query) = &mut stmt else {
-            panic!()
-        };
+        // Tracks if the original query is a single query.
+        let single = stmt.as_query().map(|query| query.single).unwrap_or(false);
+        if let Some(query) = stmt.as_query_mut() {
+            query.single = false;
+        }
 
-        // Tracks if the query is a single query
-        let single = query.single;
-        query.single = false;
-
-        let stmt::ExprSet::Select(select) = &mut query.body else {
-            panic!()
-        };
-
-        let filter_is_false = select.filter.is_false();
-
-        let stmt::Returning::Expr(returning) = &mut select.returning else {
-            panic!()
-        };
-        // Take the returning clause out. This will be modified later.
-        let mut returning = returning.take();
+        let mut returning = stmt
+            .returning_mut()
+            .map(|returning| returning.take().into_expr());
 
         // Columns to select
         let mut columns = IndexSet::new();
@@ -274,7 +263,10 @@ impl MaterializePlanner<'_> {
             };
 
             assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
-            assert!(!filter_is_false, "TODO: handle const false filters");
+            assert!(
+                !stmt.filter_or_default().is_false(),
+                "TODO: handle const false filters"
+            );
 
             // Find the back-ref for this arg
             let node_id = self.store[target_id].back_refs[&stmt_id]
@@ -287,10 +279,13 @@ impl MaterializePlanner<'_> {
             input.set(Some(0));
         }
 
-        // If targeting SQL, leverage the SQL query engine to handle most of the rewrite details.
-
         if let Some(ref_source) = ref_source {
             if self.engine.capability().sql {
+                // If targeting SQL, leverage the SQL query engine to handle most of the rewrite details.
+                let mut filter = stmt
+                    .filter_mut()
+                    .map(|filter| filter.take())
+                    .unwrap_or_default();
                 /*
                 -- Step 1: Store filtered users
                 CREATE TEMP TABLE temp_users AS
@@ -307,13 +302,13 @@ impl MaterializePlanner<'_> {
                 );
                      */
 
-                visit_mut::for_each_expr_mut(&mut select.filter, |expr| {
+                visit_mut::for_each_expr_mut(&mut filter, |expr| {
                     match expr {
-                        stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
-                            debug_assert_eq!(0, *nesting);
+                        stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
+                            debug_assert_eq!(0, expr_column.nesting);
                             // We need to up the nesting to reflect that the filter is moved
                             // one level deeper.
-                            *nesting += 1;
+                            expr_column.nesting += 1;
                         }
                         stmt::Expr::Arg(expr_arg) => {
                             let Arg::Ref {
@@ -326,12 +321,11 @@ impl MaterializePlanner<'_> {
                             };
 
                             // Rewrite reference the new `FROM`.
-                            *expr = stmt::ExprReference::Column {
+                            *expr = stmt::Expr::column(stmt::ExprColumn {
                                 nesting: 0,
                                 table: input.get().unwrap(),
                                 column: *index,
-                            }
-                            .into();
+                            });
                         }
                         _ => {}
                     }
@@ -340,15 +334,14 @@ impl MaterializePlanner<'_> {
                 let sub_query = stmt::Select {
                     returning: stmt::Returning::Expr(stmt::Expr::record([1])),
                     source: stmt::Source::from(ref_source),
-                    filter: select.filter.take(),
+                    filter,
                 };
 
-                select.filter = stmt::Expr::exists(sub_query).into();
+                stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
             } else {
-                println!("filter={:#?}", select.filter);
-                visit_mut::for_each_expr_mut(&mut select.filter, |expr| match expr {
-                    stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) => {
-                        debug_assert_eq!(0, *nesting);
+                visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| match expr {
+                    stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
+                        debug_assert_eq!(0, expr_column.nesting);
                     }
                     stmt::Expr::Arg(expr_arg) => {
                         let Arg::Ref {
@@ -366,15 +359,19 @@ impl MaterializePlanner<'_> {
             }
         }
 
-        let exec_stmt_node_id = if filter_is_false {
+        let exec_stmt_node_id = if stmt.filter_or_default().is_false() {
             // Don't bother querying and just return false
             self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
         } else if self.engine.capability().sql {
-            select.returning = stmt::Returning::Expr(stmt::Expr::record(
-                columns
-                    .iter()
-                    .map(|expr_reference| stmt::Expr::from(*expr_reference)),
-            ));
+            if !columns.is_empty() {
+                assert!(stmt.is_query(), "TODO");
+
+                stmt.returning_mut_unwrap().set_expr(stmt::Expr::record(
+                    columns
+                        .iter()
+                        .map(|expr_reference| stmt::Expr::from(*expr_reference)),
+                ));
+            }
 
             let input_args: Vec<_> = inputs
                 .iter()
@@ -572,7 +569,7 @@ impl MaterializePlanner<'_> {
         // Plans a NestedMerge if one is needed
         let output_node_id = if let Some(node_id) = self.plan_nested_merge(stmt_id) {
             node_id
-        } else {
+        } else if let Some(returning) = returning {
             debug_assert!(
                 !single || ref_source.is_some(),
                 "TODO: single queries not supported here"
@@ -588,6 +585,8 @@ impl MaterializePlanner<'_> {
                 projection,
                 ty,
             })
+        } else {
+            exec_stmt_node_id
         };
 
         stmt_info.output.set(Some(output_node_id));

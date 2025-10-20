@@ -51,8 +51,8 @@ impl TableToModel {
 
         if n > 0 {
             stmt::visit_mut::for_each_expr_mut(&mut expr, |expr| {
-                if let stmt::Expr::Reference(stmt::ExprReference::Column { nesting, .. }) = expr {
-                    *nesting = n;
+                if let stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) = expr {
+                    expr_column.nesting = n;
                 }
             });
         }

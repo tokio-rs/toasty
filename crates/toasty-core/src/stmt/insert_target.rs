@@ -20,7 +20,7 @@ pub enum InsertTarget {
 }
 
 impl InsertTarget {
-    pub fn as_model(&self) -> ModelId {
+    pub fn as_model_unwrap(&self) -> ModelId {
         match self {
             Self::Scope(query) => query.body.as_select_unwrap().source.model_id_unwrap(),
             Self::Model(model_id) => *model_id,
@@ -28,7 +28,11 @@ impl InsertTarget {
         }
     }
 
-    pub fn as_table(&self) -> &InsertTable {
+    pub fn is_table(&self) -> bool {
+        matches!(self, InsertTarget::Table(..))
+    }
+
+    pub fn as_table_unwrap(&self) -> &InsertTable {
         match self {
             Self::Table(table) => table,
             _ => todo!(),

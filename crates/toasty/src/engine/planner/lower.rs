@@ -13,14 +13,18 @@ use toasty_core::{
     stmt::{self, VisitMut},
 };
 
-struct LowerStatement<'a> {
+struct LowerStatement<'a, 'b> {
     /// The context in which the statement is being lowered.
     ///
     /// This will always be `Model`
     cx: stmt::ExprContext<'a>,
 
+    state: &'a mut State<'b>,
+}
+
+struct State<'a> {
     /// The target database's capabilities
-    capability: &'a Capability,
+    engine: &'a Engine,
 }
 
 /// Substitute fields for columns
@@ -33,38 +37,46 @@ trait Input {
     fn resolve_field(&mut self, field_id: FieldId) -> stmt::Expr;
 }
 
-impl<'a> LowerStatement<'a> {
-    fn new(engine: &'a Engine) -> Self {
-        LowerStatement {
-            cx: stmt::ExprContext::new(&*engine.schema),
-            capability: engine.capability(),
-        }
-    }
-}
-
 impl Planner<'_> {
-    pub(crate) fn lower_stmt(&self, stmt: &mut stmt::Statement) {
-        LowerStatement::new(self.engine).visit_stmt_mut(stmt);
-        simplify::simplify_stmt(&self.engine.schema, stmt);
-    }
-
     pub(crate) fn lower_stmt_delete(&self, stmt: &mut stmt::Delete) {
-        LowerStatement::new(self.engine).visit_stmt_delete_mut(stmt);
-        simplify::simplify_stmt(&self.engine.schema, stmt);
+        let mut state = State::new(self.engine);
+        LowerStatement::new(self.engine, &mut state).visit_stmt_delete_mut(stmt);
+        self.engine.simplify_stmt(stmt);
     }
 
     pub(crate) fn lower_stmt_insert(&self, stmt: &mut stmt::Insert) {
-        LowerStatement::new(self.engine).visit_stmt_insert_mut(stmt);
-        simplify::simplify_stmt(&self.engine.schema, stmt);
+        let mut state = State::new(self.engine);
+        LowerStatement::new(self.engine, &mut state).visit_stmt_insert_mut(stmt);
+        self.engine.simplify_stmt(stmt);
     }
 
     pub(crate) fn lower_stmt_update(&self, stmt: &mut stmt::Update) {
-        LowerStatement::new(self.engine).visit_stmt_update_mut(stmt);
-        simplify::simplify_stmt(&self.engine.schema, stmt);
+        let mut state = State::new(self.engine);
+        LowerStatement::new(self.engine, &mut state).visit_stmt_update_mut(stmt);
+        self.engine.simplify_stmt(stmt);
     }
 }
 
-impl VisitMut for LowerStatement<'_> {
+impl<'a> State<'a> {
+    fn new(engine: &'a Engine) -> Self {
+        State { engine }
+    }
+}
+
+impl<'a, 'b> LowerStatement<'a, 'b> {
+    fn new(engine: &'a Engine, state: &'a mut State<'b>) -> Self {
+        LowerStatement {
+            cx: stmt::ExprContext::new(&*engine.schema),
+            state,
+        }
+    }
+
+    fn capability(&self) -> &'a Capability {
+        self.state.engine.capability()
+    }
+}
+
+impl VisitMut for LowerStatement<'_, '_> {
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
 
@@ -106,7 +118,7 @@ impl VisitMut for LowerStatement<'_> {
                 self.lower_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
             stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
-                let model = self.cx.target_at(*nesting).expect_model();
+                let model = self.cx.target_at(*nesting).as_model_unwrap();
                 let mapping = self.mapping_for(model);
 
                 *i = mapping
@@ -174,6 +186,7 @@ impl VisitMut for LowerStatement<'_> {
         };
 
         let mut lower = self.scope(self.cx.schema().app.model(source.model));
+
         stmt::visit_mut::visit_stmt_delete_mut(&mut lower, i);
 
         assert!(i.returning.is_none(), "TODO; stmt={i:#?}");
@@ -182,7 +195,7 @@ impl VisitMut for LowerStatement<'_> {
     }
 
     fn visit_stmt_insert_mut(&mut self, i: &mut stmt::Insert) {
-        let model_id = i.target.as_model();
+        let model_id = i.target.as_model_unwrap();
 
         let mut lower = self.scope(self.cx.schema().app.model(model_id));
 
@@ -223,7 +236,7 @@ impl VisitMut for LowerStatement<'_> {
                 // Values is a free context
                 let mut lower = LowerStatement {
                     cx: self.cx.scope(stmt::ExprTarget::Free),
-                    capability: self.capability,
+                    state: self.state,
                 };
                 stmt::visit_mut::visit_stmt_query_mut(&mut lower, i);
                 return;
@@ -279,7 +292,7 @@ impl VisitMut for LowerStatement<'_> {
     }
 }
 
-impl<'a> LowerStatement<'a> {
+impl<'a, 'b> LowerStatement<'a, 'b> {
     fn model(&self) -> &'a Model {
         self.cx.target_as_model().expect("expected model")
     }
@@ -296,10 +309,10 @@ impl<'a> LowerStatement<'a> {
         self.cx.schema().mapping_for(model)
     }
 
-    fn scope<'child>(&'child self, target: &'a Model) -> LowerStatement<'child> {
+    fn scope<'child>(&'child mut self, target: &'a Model) -> LowerStatement<'child, 'b> {
         LowerStatement {
             cx: self.cx.scope(target),
-            capability: self.capability,
+            state: self.state,
         }
     }
 

@@ -92,7 +92,7 @@ mod expr_record;
 pub use expr_record::ExprRecord;
 
 mod expr_reference;
-pub use expr_reference::ExprReference;
+pub use expr_reference::{ExprColumn, ExprReference};
 
 mod expr_set;
 pub use expr_set::ExprSet;
@@ -326,42 +326,6 @@ impl Statement {
         match self {
             Self::Insert(insert) => insert,
             v => panic!("expected `Insert`, found {v:#?}"),
-        }
-    }
-
-    /// Attempts to return a reference to an inner [`Query`].
-    ///
-    /// * If `self` is a [`Statement::Query`], a reference to the inner [`Query`] is
-    ///   returned wrapped in [`Some`].
-    /// * Else, [`None`] is returned.
-    pub fn as_query(&self) -> Option<&Query> {
-        match self {
-            Self::Query(query) => Some(query),
-            _ => None,
-        }
-    }
-
-    /// Consumes `self` and attempts to return the inner [`Query`].
-    ///
-    /// * If `self` is a [`Statement::Query`], inner [`Query`] is returned wrapped in
-    ///   [`Some`].
-    /// * Else, [`None`] is returned.
-    pub fn into_query(self) -> Option<Query> {
-        match self {
-            Self::Query(query) => Some(query),
-            _ => None,
-        }
-    }
-
-    /// Consumes `self` and returns the inner [`Query`].
-    ///
-    /// # Panics
-    ///
-    /// If `self` is not a [`Statement::Query`].
-    pub fn unwrap_query(self) -> Query {
-        match self {
-            Self::Query(query) => query,
-            v => panic!("expected `Query`, found {v:#?}"),
         }
     }
 

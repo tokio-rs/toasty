@@ -80,7 +80,7 @@ pub(super) enum Arg {
         input: Cell<Option<usize>>,
     },
 
-    /// A back-reference
+    /// A reference to a parent statement.
     Ref {
         /// The statement providing the data for the reference
         stmt_id: StmtId,

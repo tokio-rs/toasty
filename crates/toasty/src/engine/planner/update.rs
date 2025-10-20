@@ -232,14 +232,11 @@ impl Planner<'_> {
             fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
                 stmt::visit_mut::visit_expr_mut(self, expr);
 
-                if let stmt::Expr::Reference(stmt::ExprReference::Column {
-                    table, column, ..
-                }) = expr
-                {
+                if let stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) = expr {
                     // For the transition, try to find assignment by column index
                     // This assumes table 0, which should be accurate for UPDATE statements
-                    if *table == 0 {
-                        if let Some(assignment) = self.assignments.get(column) {
+                    if expr_column.table == 0 {
+                        if let Some(assignment) = self.assignments.get(&expr_column.column) {
                             assert!(assignment.op.is_set());
                             assert!(assignment.expr.is_const());
 
@@ -314,12 +311,12 @@ impl Planner<'_> {
                         .into(),
                         filter: true.into(),
                         returning: stmt::Returning::Expr(stmt::Expr::eq(
-                            stmt::ExprReference::Column {
+                            stmt::ExprColumn {
                                 nesting: 0,
                                 table: 0,
                                 column: 0,
                             },
-                            stmt::ExprReference::Column {
+                            stmt::ExprColumn {
                                 nesting: 0,
                                 table: 0,
                                 column: 1,
@@ -337,29 +334,24 @@ impl Planner<'_> {
         });
 
         let mut columns = vec![
-            stmt::ExprReference::Column {
+            stmt::Expr::column(stmt::ExprColumn {
                 nesting: 0,
                 table: 0,
                 column: 0,
-            }
-            .into(),
-            stmt::ExprReference::Column {
+            }),
+            stmt::Expr::column(stmt::ExprColumn {
                 nesting: 0,
                 table: 0,
                 column: 1,
-            }
-            .into(),
+            }),
         ];
 
         for i in 0..returning_len {
-            columns.push(
-                stmt::ExprReference::Column {
-                    nesting: 0,
-                    table: 1,
-                    column: i,
-                }
-                .into(),
-            );
+            columns.push(stmt::Expr::column(stmt::ExprColumn {
+                nesting: 0,
+                table: 1,
+                column: i,
+            }));
         }
 
         stmt::Query::builder(stmt::Select {

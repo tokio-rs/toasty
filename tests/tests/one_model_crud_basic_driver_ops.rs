@@ -3,7 +3,7 @@ use tests::{prelude::*, stmt::Any};
 use toasty::stmt::Id;
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{BinaryOp, Expr, ExprReference, ExprSet, Source, Statement},
+    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement},
 };
 
 async fn basic_crud(test: &mut DbTest) {
@@ -82,11 +82,11 @@ async fn basic_crud(test: &mut DbTest) {
                         ..
                     }),
                     filter.expr: Some(Expr::BinaryOp(_ {
-                        *lhs: Expr::Reference(ExprReference::Column {
+                        lhs.as_expr_column_unwrap(): ExprColumn {
                             nesting: 0,
                             table: 0,
                             column: user_id_column_index,
-                        }),
+                        },
                         op: BinaryOp::Eq,
                         *rhs: == user_id,
                         ..
@@ -130,11 +130,11 @@ async fn basic_crud(test: &mut DbTest) {
                 target: toasty_core::stmt::UpdateTarget::Table(user_table_id),
                 assignments: #{ 2: _ { expr: 31, .. }},
                 filter.expr: Some(Expr::BinaryOp(_ {
-                    *lhs: Expr::Reference(ExprReference::Column {
+                    lhs.as_expr_column_unwrap(): ExprColumn {
                         nesting: 0,
                         table: 0,
                         column: user_id_column_index,
-                    }),
+                    },
                     op: BinaryOp::Eq,
                     *rhs: == user_id,
                     ..
@@ -182,11 +182,11 @@ async fn basic_crud(test: &mut DbTest) {
                     ..
                 }),
                 filter.expr: Some(Expr::BinaryOp(_ {
-                    *lhs: Expr::Reference(ExprReference::Column {
+                    lhs.as_expr_column_unwrap(): ExprColumn {
                         nesting: 0,
                         table: 0,
                         column: user_id_column_index,
-                    }),
+                    },
                     op: BinaryOp::Eq,
                     *rhs: == user_id,
                     ..

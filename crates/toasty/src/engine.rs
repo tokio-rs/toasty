@@ -63,6 +63,6 @@ impl Engine {
 
     // TODO: where should this util go?
     fn resolve_table_for<'a>(&'a self, target: impl stmt::IntoExprTarget<'a>) -> &'a Table {
-        self.expr_cx_for(target).target().expect_table()
+        self.expr_cx_for(target).target().as_table_unwrap()
     }
 }

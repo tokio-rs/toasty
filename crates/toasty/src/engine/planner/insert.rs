@@ -15,7 +15,7 @@ impl Planner<'_> {
         &mut self,
         mut stmt: stmt::Insert,
     ) -> Result<Option<plan::VarId>> {
-        let model = self.model(stmt.target.as_model());
+        let model = self.model(stmt.target.as_model_unwrap());
 
         if let stmt::ExprSet::Values(values) = &stmt.source.body {
             assert!(!values.is_empty(), "stmt={stmt:#?}");
