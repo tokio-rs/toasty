@@ -1,3 +1,5 @@
+mod paginate;
+
 use std::cell::Cell;
 
 use index_vec::IndexVec;
@@ -311,6 +313,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         }
 
         self.visit_expr_set_mut(&mut stmt.body);
+
+        self.rewrite_offset_after_as_filter(stmt);
     }
 
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {

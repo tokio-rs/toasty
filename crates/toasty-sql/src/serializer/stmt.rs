@@ -134,7 +134,7 @@ impl ToSql for &stmt::InsertTarget {
 
 impl ToSql for &stmt::Limit {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        assert!(self.offset.is_none(), "TODO");
+        assert!(self.offset.is_none(), "TODO; {:#?}", self);
 
         fmt!(cx, f, "LIMIT " self.limit);
     }
