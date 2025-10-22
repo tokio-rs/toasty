@@ -118,8 +118,11 @@ impl Assignments {
         }
     }
 
-    pub fn take(&mut self, key: usize) -> Assignment {
-        self.assignments.swap_remove(&key).unwrap()
+    pub fn take<Q>(&mut self, key: &Q) -> Option<Assignment>
+    where
+        Q: ?Sized + Hash + Equivalent<usize>,
+    {
+        self.assignments.swap_remove(key)
     }
 
     pub fn keys(&self) -> impl Iterator<Item = usize> + '_ {

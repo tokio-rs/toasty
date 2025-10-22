@@ -3,7 +3,7 @@ mod materialize_nested_merge;
 use std::{cell::Cell, ops};
 
 use index_vec::IndexVec;
-use indexmap::IndexSet;
+use indexmap::{indexset, IndexSet};
 use toasty_core::{
     schema::db::{IndexId, TableId},
     stmt::{self, visit, visit_mut},
@@ -28,6 +28,10 @@ pub(crate) struct MaterializeGraph {
 pub(crate) struct MaterializeNode {
     /// Materialization kind
     pub(crate) kind: MaterializeKind,
+
+    /// Nodes that must execute *before* the current one. This should be a
+    /// superset of the node's inputs.
+    pub(crate) deps: IndexSet<NodeId>,
 
     /// Variable where the output is stored
     pub(crate) var: Cell<Option<plan::VarId>>,
@@ -196,6 +200,12 @@ impl MaterializePlanner<'_> {
         let stmt_info = &self.store[stmt_id];
         let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
 
+        // First, plan dependency statements. These are statments that must run
+        // before the current one but do not reference the current statement.
+        for &stmt_id in &stmt_info.deps {
+            self.plan_materialize_statement(stmt_id);
+        }
+
         // Tracks if the original query is a single query.
         let single = stmt.as_query().map(|query| query.single).unwrap_or(false);
         if let Some(query) = stmt.as_query_mut() {
@@ -360,6 +370,7 @@ impl MaterializePlanner<'_> {
         }
 
         let exec_stmt_node_id = if stmt.filter_or_default().is_false() {
+            debug_assert!(stmt_info.deps.is_empty(), "TODO");
             // Don't bother querying and just return false
             self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
         } else if self.engine.capability().sql {
@@ -382,8 +393,10 @@ impl MaterializePlanner<'_> {
 
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
-            self.graph
-                .insert(MaterializeExecStatement { inputs, stmt, ty })
+            self.graph.insert_with_deps(
+                MaterializeExecStatement { inputs, stmt, ty },
+                stmt_info.dependent_materializations(&self.store),
+            )
         } else {
             // Without SQL capability, we have to plan the materialization of
             // the statement based on available indices.
@@ -601,46 +614,16 @@ impl MaterializePlanner<'_> {
         while let Some(node_id) = stack.pop() {
             self.graph.execution_order.push(node_id);
 
-            fn visit(graph: &MaterializeGraph, stack: &mut Vec<NodeId>, node_id: NodeId) {
-                let node = &graph[node_id];
+            for &dep_id in &self.graph[node_id].deps {
+                let dep = &self.graph[dep_id];
 
                 // Increment use count
-                node.num_uses.set(node.num_uses.get() + 1);
+                dep.num_uses.set(dep.num_uses.get() + 1);
 
-                if !node.visited.get() {
-                    node.visited.set(true);
-                    stack.push(node_id);
+                if !dep.visited.get() {
+                    dep.visited.set(true);
+                    stack.push(dep_id);
                 }
-            }
-
-            match &self.graph[node_id].kind {
-                MaterializeKind::Const(_) => {}
-                MaterializeKind::ExecStatement(materialize_exec_statement) => {
-                    for &input_id in &materialize_exec_statement.inputs {
-                        visit(self.graph, &mut stack, input_id);
-                    }
-                }
-                MaterializeKind::Filter(materialize_filter) => {
-                    visit(self.graph, &mut stack, materialize_filter.input);
-                }
-                MaterializeKind::FindPkByIndex(materialize_find_pk_by_index) => {
-                    for &input in &materialize_find_pk_by_index.inputs {
-                        visit(self.graph, &mut stack, input);
-                    }
-                }
-                MaterializeKind::GetByKey(materialize_get_by_key) => {
-                    visit(self.graph, &mut stack, materialize_get_by_key.input);
-                }
-                MaterializeKind::NestedMerge(materialize_nested_merge) => {
-                    for &input_id in &materialize_nested_merge.inputs {
-                        visit(self.graph, &mut stack, input_id);
-                    }
-                }
-                MaterializeKind::Project(materialize_project) => {
-                    visit(self.graph, &mut stack, materialize_project.input);
-                }
-                // As of now, QueryPk has no inputs
-                MaterializeKind::QueryPk(_materialize_query_pk) => {}
             }
         }
 
@@ -679,6 +662,19 @@ impl MaterializeGraph {
     /// Insert a node into the graph
     pub(super) fn insert(&mut self, node: impl Into<MaterializeNode>) -> NodeId {
         self.store.push(node.into())
+    }
+
+    pub(super) fn insert_with_deps<I>(
+        &mut self,
+        node: impl Into<MaterializeNode>,
+        deps: I,
+    ) -> NodeId
+    where
+        I: IntoIterator<Item = NodeId>,
+    {
+        let mut node = node.into();
+        node.deps.extend(deps);
+        self.store.push(node)
     }
 
     pub(super) fn var_id(&self, node_id: NodeId) -> plan::VarId {
@@ -787,8 +783,28 @@ impl From<MaterializeQueryPk> for MaterializeNode {
 
 impl From<MaterializeKind> for MaterializeNode {
     fn from(value: MaterializeKind) -> Self {
+        let deps = match &value {
+            MaterializeKind::Const(_materialize_const) => IndexSet::new(),
+            MaterializeKind::ExecStatement(materialize_exec_statement) => {
+                materialize_exec_statement.inputs.clone()
+            }
+            MaterializeKind::Filter(materialize_filter) => indexset![materialize_filter.input],
+            MaterializeKind::FindPkByIndex(materialize_find_pk_by_index) => {
+                materialize_find_pk_by_index.inputs.clone()
+            }
+            MaterializeKind::GetByKey(materialize_get_by_key) => {
+                indexset![materialize_get_by_key.input]
+            }
+            MaterializeKind::NestedMerge(materialize_nested_merge) => {
+                materialize_nested_merge.inputs.clone()
+            }
+            MaterializeKind::Project(materialize_project) => indexset![materialize_project.input],
+            MaterializeKind::QueryPk(_materialize_query_pk) => IndexSet::new(),
+        };
+
         MaterializeNode {
             kind: value,
+            deps,
             var: Cell::new(None),
             num_uses: Cell::new(0),
             visited: Cell::new(false),

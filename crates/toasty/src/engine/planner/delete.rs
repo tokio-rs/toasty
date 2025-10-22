@@ -3,12 +3,8 @@ use toasty_core::{schema::app, stmt};
 
 impl Planner<'_> {
     pub(super) fn plan_stmt_delete(&mut self, stmt: stmt::Delete) -> Result<()> {
-        /*
         if self.capability().sql {
-            let mut stmt = stmt::Statement::Delete(stmt);
-
-            // Lower the statement
-            self.lower_stmt(&mut stmt);
+            let stmt = stmt::Statement::Delete(stmt);
 
             // TODO: vars should hold more than just ValueStream, then we can
             // use the result of the var to get the result of the delete.
@@ -17,7 +13,6 @@ impl Planner<'_> {
 
             return Ok(());
         }
-        */
 
         let model = self.model(stmt.from.model_id_unwrap());
         let selection = stmt.selection();

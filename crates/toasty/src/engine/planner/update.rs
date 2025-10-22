@@ -52,7 +52,8 @@ impl Planner<'_> {
 
             // Map the belongs_to statement to the foreign key fields
             if let FieldTy::BelongsTo(belongs_to) = &field.ty {
-                let stmt::Expr::Value(value) = stmt.assignments.take(i).expr else {
+                let assignment = stmt.assignments.take(&i).unwrap();
+                let stmt::Expr::Value(value) = assignment.expr else {
                     todo!()
                 };
 

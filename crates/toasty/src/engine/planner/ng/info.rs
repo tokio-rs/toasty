@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, OnceCell},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ops,
 };
 
@@ -18,6 +18,10 @@ use super::NodeId;
 pub(super) struct StatementInfo {
     /// Populated later
     pub(super) stmt: Option<Box<stmt::Statement>>,
+
+    /// Statements that this statement depends on. The result is not needed, but
+    /// dependencies need to execute first for consistency.
+    pub(super) deps: HashSet<StmtId>,
 
     /// Statement arguments
     pub(super) args: Vec<Arg>,
@@ -50,12 +54,22 @@ impl StatementInfo {
     pub(super) fn new() -> StatementInfo {
         StatementInfo {
             stmt: None,
+            deps: HashSet::new(),
             args: vec![],
             back_refs: HashMap::new(),
             exec_statement: Cell::new(None),
             exec_statement_selection: OnceCell::new(),
             output: Cell::new(None),
         }
+    }
+
+    pub(super) fn dependent_materializations<'a>(
+        &'a self,
+        store: &'a StatementInfoStore,
+    ) -> impl Iterator<Item = NodeId> + 'a {
+        self.deps
+            .iter()
+            .map(|stmt_id| store[stmt_id].output.get().unwrap())
     }
 }
 
@@ -100,12 +114,9 @@ pub(super) enum Arg {
 
 impl StatementInfoStore {
     pub(super) fn new() -> StatementInfoStore {
-        let mut store = StatementInfoStore {
+        StatementInfoStore {
             store: IndexVec::new(),
-        };
-        let root_id = store.new_statement_info();
-        debug_assert_eq!(root_id, StmtId::from(0));
-        store
+        }
     }
 
     pub(super) fn insert(&mut self, info: StatementInfo) -> StmtId {
@@ -123,11 +134,6 @@ impl StatementInfoStore {
     pub(super) fn root(&self) -> &StatementInfo {
         let root_id = self.root_id();
         &self.store[root_id]
-    }
-
-    pub(super) fn root_mut(&mut self) -> &mut StatementInfo {
-        let root_id = self.root_id();
-        &mut self.store[root_id]
     }
 }
 
