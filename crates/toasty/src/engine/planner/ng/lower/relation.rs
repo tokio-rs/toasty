@@ -5,6 +5,7 @@ use toasty_core::{
 
 use crate::engine::planner::ng::lower::LowerStatement;
 
+#[derive(Debug)]
 enum Mutation {
     /// An existing value is being associated with the relation source.
     Associate {
@@ -17,7 +18,10 @@ enum Mutation {
     },
 
     /// Disassociate any target relations
-    DisassociateAll,
+    DisassociateAll {
+        // True when disasociating before deleting a record.
+        delete: bool,
+    },
 }
 
 trait RelationSource {
@@ -37,7 +41,11 @@ impl LowerStatement<'_, '_> {
 
         // Handle any cascading deletes
         for field in model.fields.iter() {
-            self.plan_mut_relation_field(field, Mutation::DisassociateAll, &mut stmt);
+            self.plan_mut_relation_field(
+                field,
+                Mutation::DisassociateAll { delete: true },
+                &mut stmt,
+            );
         }
     }
 
@@ -55,7 +63,7 @@ impl LowerStatement<'_, '_> {
 
             let mutation = match assignment.op {
                 stmt::AssignmentOp::Set => match &assignment.expr {
-                    e if e.is_value_null() => Mutation::DisassociateAll,
+                    e if e.is_value_null() => Mutation::DisassociateAll { delete: false },
                     _ => todo!("assignment={assignment:#?}"),
                 },
                 stmt::AssignmentOp::Insert => todo!(),
@@ -84,7 +92,7 @@ impl LowerStatement<'_, '_> {
             FieldTy::HasMany(has_many) => {
                 debug_assert_ne!(self.state.relations.last(), Some(&has_many.pair));
 
-                self.relation_step(field, |lower| lower.plan_mut_has_many(has_many, op, source));
+                self.relation_step(field, |lower| lower.plan_mut_has_many(field, op, source));
             }
             FieldTy::BelongsTo(belongs_to) => {
                 self.plan_mut_belongs_to(field, op, source);
@@ -93,7 +101,8 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    fn plan_mut_has_many(&mut self, has_many: &HasMany, op: Mutation, source: &dyn RelationSource) {
+    fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &dyn RelationSource) {
+        let has_many = field.ty.expect_has_many();
         /*
                 let pair = self.schema().app.field(rel.pair);
 
@@ -119,7 +128,7 @@ impl LowerStatement<'_, '_> {
         let pair = self.schema().app.field(has_many.pair);
 
         match op {
-            Mutation::DisassociateAll => {
+            Mutation::DisassociateAll { .. } => {
                 let query = self.relation_pair_scope(has_many.pair, source);
 
                 if pair.nullable {
@@ -128,7 +137,7 @@ impl LowerStatement<'_, '_> {
 
                     self.new_dependency(update.into());
                 } else {
-                    todo!()
+                    self.new_dependency(query.delete().into());
                 }
             }
             _ => todo!(),
@@ -183,7 +192,11 @@ impl LowerStatement<'_, '_> {
                     _ => todo!("expr={expr:#?}"),
                 }
             }
-            Mutation::DisassociateAll => self.plan_mut_belongs_to_nullify(field, source),
+            Mutation::DisassociateAll { delete } => {
+                if !delete {
+                    self.plan_mut_belongs_to_nullify(field, source);
+                }
+            }
         }
     }
 
