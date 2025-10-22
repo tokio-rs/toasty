@@ -84,10 +84,7 @@ impl LowerStatement<'_, '_> {
             FieldTy::HasOne(has_one) => {
                 debug_assert_ne!(self.state.relations.last(), Some(&has_one.pair));
 
-                self.relation_step(field, |lower| {
-                    // lower.plan_mut_has_one_expr(has_one, mem::take(expr), selection, is_insert)
-                    todo!()
-                });
+                self.relation_step(field, |lower| lower.plan_mut_has_one(field, op, source));
             }
             FieldTy::HasMany(has_many) => {
                 debug_assert_ne!(self.state.relations.last(), Some(&has_many.pair));
@@ -103,49 +100,39 @@ impl LowerStatement<'_, '_> {
 
     fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &dyn RelationSource) {
         let has_many = field.ty.expect_has_many();
-        /*
-                let pair = self.schema().app.field(rel.pair);
-
-                // TODO: can this be unified with update?
-                let query = stmt::Query::new_select(
-                    rel.target,
-                    stmt::Expr::in_subquery(
-                        stmt::Expr::ref_self_field(rel.pair),
-                        selection.clone(),
-                    ),
-                );
-
-                if pair.nullable {
-                    let mut update = query.update();
-                    update.assignments.set(pair.id, stmt::Value::Null);
-
-                    self.plan_stmt(update.into())?;
-                } else {
-                    self.plan_stmt(query.delete().into())?;
-                }
-        */
-
         let pair = self.schema().app.field(has_many.pair);
 
         match op {
             Mutation::DisassociateAll { .. } => {
-                let query = self.relation_pair_scope(has_many.pair, source);
-
-                if pair.nullable {
-                    let mut update = query.update();
-                    update.assignments.set(pair.id, stmt::Value::Null);
-
-                    self.new_dependency(update.into());
-                } else {
-                    self.new_dependency(query.delete().into());
-                }
+                self.plan_mut_has_n_disassociate(pair, source);
             }
             _ => todo!(),
         }
     }
 
-    fn plan_mut_has_many_delete(&mut self) {
-        todo!()
+    fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &dyn RelationSource) {
+        let has_one = field.ty.expect_has_one();
+        let pair = self.schema().app.field(has_one.pair);
+
+        match op {
+            Mutation::DisassociateAll { .. } => {
+                self.plan_mut_has_n_disassociate(pair, source);
+            }
+            _ => todo!("plan_mut_has_one; field={field:#?}; op={op:#?}"),
+        }
+    }
+
+    fn plan_mut_has_n_disassociate(&mut self, pair: &Field, source: &dyn RelationSource) {
+        let query = self.relation_pair_scope(pair.id, source);
+
+        if pair.nullable {
+            let mut update = query.update();
+            update.assignments.set(pair.id, stmt::Value::Null);
+
+            self.new_dependency(update.into());
+        } else {
+            self.new_dependency(query.delete().into());
+        }
     }
 
     fn plan_has_one_nullify(&mut self, field: &Field, source: &dyn RelationSource) {
