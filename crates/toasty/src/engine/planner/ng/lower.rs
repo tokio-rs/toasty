@@ -249,13 +249,17 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_insert_target_mut(&mut self, i: &mut stmt::InsertTarget) {
-        if !i.is_table() {
-            let mapping = self.mapping_unwrap();
-            *i = stmt::InsertTable {
-                table: mapping.table,
-                columns: mapping.columns.clone(),
+        match i {
+            stmt::InsertTarget::Scope(_) => todo!("stmt={i:#?}"),
+            stmt::InsertTarget::Model(model_id) => {
+                let mapping = self.schema().mapping_for(model_id);
+                *i = stmt::InsertTable {
+                    table: mapping.table,
+                    columns: mapping.columns.clone(),
+                }
+                .into();
             }
-            .into();
+            _ => todo!(),
         }
     }
 

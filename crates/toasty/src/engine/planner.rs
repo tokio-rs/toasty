@@ -98,7 +98,13 @@ impl<'a> Planner<'a> {
             ));
         }
 
-        if let Some(output) = self.plan_stmt(stmt)? {
+        let output = if self.capability().sql {
+            self.plan_v2_stmt(stmt)?
+        } else {
+            self.plan_stmt(stmt)?
+        };
+
+        if let Some(output) = output {
             self.returning = Some(output);
         }
 

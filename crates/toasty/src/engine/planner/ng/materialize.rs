@@ -375,7 +375,10 @@ impl MaterializePlanner<'_> {
             self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
         } else if self.engine.capability().sql {
             if !columns.is_empty() {
-                assert!(stmt.is_query(), "TODO");
+                assert!(
+                    stmt.is_query(),
+                    "TODO; stmt={stmt:#?}; columns={columns:#?}"
+                );
 
                 stmt.returning_mut_unwrap().set_expr(stmt::Expr::record(
                     columns
