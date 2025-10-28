@@ -87,6 +87,10 @@ impl LowerStatement<'_, '_> {
         let model = self.expr_cx.target().as_model_unwrap();
 
         for (i, field) in model.fields.iter().enumerate() {
+            if !field.is_relation() {
+                continue;
+            }
+
             let Some(assignment) = assignments.take(&i) else {
                 continue;
             };

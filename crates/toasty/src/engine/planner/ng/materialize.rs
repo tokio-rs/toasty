@@ -212,12 +212,7 @@ impl MaterializePlanner<'_> {
             query.single = false;
         }
 
-        let mut returning = match &mut stmt {
-            stmt::Statement::Delete(delete) => delete.returning.take(),
-            stmt::Statement::Insert(insert) => insert.returning.take(),
-            stmt::Statement::Query(query) => Some(query.returning_mut_unwrap().take()),
-            stmt::Statement::Update(update) => update.returning.take(),
-        };
+        let mut returning = stmt.take_returning();
 
         // Columns to select
         let mut columns = IndexSet::new();
@@ -378,16 +373,11 @@ impl MaterializePlanner<'_> {
             self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
         } else if self.engine.capability().sql {
             if !columns.is_empty() {
-                assert!(
-                    stmt.is_query(),
-                    "TODO; stmt={stmt:#?}; columns={columns:#?}"
-                );
-
-                stmt.returning_mut_unwrap().set_expr(stmt::Expr::record(
+                stmt.set_returning(stmt::Expr::record(
                     columns
                         .iter()
                         .map(|expr_reference| stmt::Expr::from(*expr_reference)),
-                ));
+                ).into());
             }
 
             let input_args: Vec<_> = inputs

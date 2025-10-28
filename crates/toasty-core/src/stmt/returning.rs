@@ -104,6 +104,26 @@ impl Statement {
         }
     }
 
+    /// Take the `Returning` clause
+    pub fn take_returning(&mut self) -> Option<Returning> {
+        match self {
+            Statement::Delete(delete) => delete.returning.take(),
+            Statement::Insert(insert) => insert.returning.take(),
+            Statement::Query(query) => Some(query.returning_mut_unwrap().take()),
+            Statement::Update(update) => update.returning.take(),
+        }
+    }
+
+    /// Set the `Returning` clause
+    pub fn set_returning(&mut self, returning: Returning) {
+        match self {
+            Statement::Delete(delete) => delete.returning = Some(returning),
+            Statement::Insert(insert) => insert.returning = Some(returning),
+            Statement::Query(query) => *query.returning_mut_unwrap() = returning,
+            Statement::Update(update) => update.returning = Some(returning),
+        }
+    }
+
     /// Returns a reference to this statement's `RETURNING` clause.
     ///
     /// # Panics
