@@ -195,17 +195,7 @@ impl Planner<'_> {
 
             if let Some(pair) = belongs_to.pair.map(|pair| planner.schema().app.field(pair)) {
                 if pair.ty.is_has_one() && !pair.nullable {
-                    let mut scope = scope.clone();
-
-                    // If the belongs_to is nullable, then we want to only update
-                    // instances that have a belongs_to that is not null.
-                    if field.nullable {
-                        let filter = &mut scope.body.as_select_mut_unwrap().filter;
-                        filter.add_filter(stmt::Expr::ne(
-                            stmt::Expr::ref_self_field(field),
-                            stmt::Value::Null,
-                        ));
-                    }
+                    let scope = scope.clone();
 
                     let delete = planner.relation_pair_scope(pair.id, scope).delete();
                     planner.plan_stmt(delete.into())?;

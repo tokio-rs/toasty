@@ -11,6 +11,10 @@ impl ValueRecord {
     pub fn from_vec(fields: Vec<Value>) -> Self {
         Self { fields }
     }
+
+    pub fn into_iter(self) -> impl Iterator<Item = Value> {
+        self.fields.into_iter()
+    }
 }
 
 impl ops::Deref for ValueRecord {

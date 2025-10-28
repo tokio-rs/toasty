@@ -132,7 +132,7 @@ index_vec::define_index_type! {
 }
 
 impl LowerStatement<'_, '_> {
-    fn new_dependency(&mut self, stmt: stmt::Statement) {
+    fn new_dependency(&mut self, stmt: stmt::Statement) -> StmtId {
         // Need to reset the scope stack as the statement cannot reference the
         // current scope.
         let scopes = mem::take(&mut self.state.scopes);
@@ -144,6 +144,7 @@ impl LowerStatement<'_, '_> {
         self.state.scopes = scopes;
 
         self.curr_stmt_info().deps.insert(stmt_id);
+        stmt_id
     }
 }
 
@@ -388,9 +389,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
         let mut lower = self.scope_expr(&stmt.target);
+        println!("STMT={stmt:#?}");
 
         // Plan relations
         lower.plan_stmt_update_relations(&mut stmt.assignments, &stmt.filter);
+        println!("LOWER={stmt:#?}");
 
         // Before lowering children, convert the "Changed" returning statement
         // to an expression referencing changed fields.

@@ -85,7 +85,7 @@ impl LowerStatement<'_, '_> {
                     field,
                     Mutation::Associate {
                         expr,
-                        exclusive: false,
+                        exclusive: field.ty.is_belongs_to(),
                     },
                     &mut InsertRelationSource { model, row },
                 );
@@ -110,9 +110,12 @@ impl LowerStatement<'_, '_> {
             };
 
             let mutation = match assignment.op {
-                stmt::AssignmentOp::Set => match &assignment.expr {
+                stmt::AssignmentOp::Set => match assignment.expr {
                     e if e.is_value_null() => Mutation::DisassociateAll { delete: false },
-                    _ => todo!("assignment={assignment:#?}"),
+                    expr => Mutation::Associate {
+                        expr,
+                        exclusive: true,
+                    },
                 },
                 stmt::AssignmentOp::Insert => todo!(),
                 stmt::AssignmentOp::Remove => todo!(),
@@ -147,7 +150,7 @@ impl LowerStatement<'_, '_> {
 
                 self.relation_step(field, |lower| lower.plan_mut_has_many(field, op, source));
             }
-            FieldTy::BelongsTo(belongs_to) => {
+            FieldTy::BelongsTo(_) => {
                 self.plan_mut_belongs_to(field, op, source);
             }
             _ => (),
@@ -221,20 +224,17 @@ impl LowerStatement<'_, '_> {
         source: &mut dyn RelationSource,
     ) {
         match op {
-            Mutation::Associate { expr, exclusive } => {
-                // belongs-to associations are always exclusive
-                debug_assert!(exclusive);
+            Mutation::Associate { expr, .. } => match expr {
+                expr if expr.is_value() => {
+                    assert!(!expr.is_value_null());
 
-                match expr {
-                    stmt::Expr::Value(v) => {
-                        assert!(!v.is_null());
-                    }
-                    stmt::Expr::Stmt(_) => {
-                        todo!("stmt");
-                    }
-                    _ => todo!("expr={expr:#?}"),
+                    self.set_relation_field(field, expr, source);
                 }
-            }
+                stmt::Expr::Stmt(expr_stmt) => {
+                    self.plan_mut_belongs_to_stmt(field, *expr_stmt.stmt, source);
+                }
+                _ => todo!("expr={expr:#?}"),
+            },
             Mutation::DisassociateAll { delete } => {
                 if !delete {
                     self.plan_mut_belongs_to_nullify(field, source);
@@ -269,6 +269,85 @@ impl LowerStatement<'_, '_> {
         });
     }
 
+    fn plan_mut_belongs_to_stmt(
+        &mut self,
+        field: &Field,
+        stmt: stmt::Statement,
+        source: &mut dyn RelationSource,
+    ) {
+        let belongs_to = field.ty.expect_belongs_to();
+
+        match stmt {
+            stmt::Statement::Insert(mut insert) => {
+                if let stmt::ExprSet::Values(values) = &insert.source.body {
+                    assert_eq!(1, values.rows.len());
+                }
+
+                // Only returning that makes sense here as that is the type that
+                // "belongs" in this field. We translate it to the key to set
+                // the FK fields in the source model.
+                assert!(matches!(
+                    insert.returning,
+                    Some(stmt::Returning::Model { .. })
+                ));
+
+                // Previous value of returning does nothing in this
+                // context
+                insert.returning = Some(
+                    stmt::Expr::record(
+                        belongs_to
+                            .foreign_key
+                            .fields
+                            .iter()
+                            .map(|fk_field| stmt::Expr::ref_self_field(fk_field.target)),
+                    )
+                    .into(),
+                );
+
+                let stmt_id = self.new_dependency(insert.into());
+
+                let stmt_info = &self.state.store[stmt_id];
+
+                let returning = stmt_info.stmt.as_ref().unwrap().returning().expect("bug");
+                let stmt::Returning::Value(value) = returning.clone() else {
+                    todo!()
+                };
+                let stmt::Value::List(rows) = value else {
+                    todo!()
+                };
+                assert_eq!(1, rows.len());
+
+                self.set_relation_field(field, rows.into_iter().next().unwrap().into(), source);
+            }
+            stmt::Statement::Query(query) => {
+                /*
+                // First, we have to try to extract the FK from the select
+                // without having to perform the query
+                //
+                // TODO: make this less terrible lol
+                let fields: Vec<_> = belongs_to
+                    .foreign_key
+                    .fields
+                    .iter()
+                    .map(|fk_field| fk_field.target)
+                    .collect();
+
+                let Some(e) = Simplify::new(self.schema()).extract_key_value(&fields, &query)
+                else {
+                    todo!("belongs_to={:#?}; stmt={:#?}", belongs_to, query);
+                };
+
+                *expr = e;
+
+                // Plan again
+                self.plan_mut_belongs_to_expr(field, expr, scope, is_insert)?;
+                */
+                todo!()
+            }
+            _ => todo!("stmt={:#?}", stmt),
+        }
+    }
+
     /// Translate a source model scope to a target model scope for a has_one
     /// relation.
     fn relation_pair_scope(&self, pair: FieldId, source: &dyn RelationSource) -> stmt::Query {
@@ -288,6 +367,26 @@ impl LowerStatement<'_, '_> {
         self.state.relations.push(field.id);
         f(self);
         self.state.relations.pop();
+    }
+
+    fn set_relation_field(&self, field: &Field, expr: stmt::Expr, source: &mut dyn RelationSource) {
+        let app::FieldTy::BelongsTo(belongs_to) = &field.ty else {
+            todo!("field={field:#?}")
+        };
+
+        let fk_fields = &belongs_to.foreign_key.fields;
+
+        if let Some(len) = expr.record_len() {
+            assert_eq!(len, fk_fields.len(), "expr={expr:#?}");
+            let fk_values = expr.into_record_items().unwrap();
+
+            for (fk_field, fk_value) in fk_fields.iter().zip(fk_values) {
+                source.set(fk_field.source, fk_value);
+            }
+        } else {
+            let [fk_field] = &fk_fields[..] else { todo!() };
+            source.set(fk_field.source, expr);
+        }
     }
 }
 
@@ -317,6 +416,7 @@ impl RelationSource for InsertRelationSource<'_> {
     }
 
     fn set(&mut self, field: FieldId, expr: stmt::Expr) {
-        todo!()
+        assert_eq!(self.model.id, field.model);
+        self.row.as_record_mut()[field.index] = expr;
     }
 }

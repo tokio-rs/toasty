@@ -1,5 +1,5 @@
 use super::{Expr, Node, Visit, VisitMut};
-use crate::stmt;
+use crate::stmt::{self, Value};
 
 use std::{fmt, ops};
 
@@ -43,6 +43,26 @@ impl Expr {
             Self::Record(expr_record) => expr_record,
             _ => panic!(),
         }
+    }
+
+    pub fn record_len(&self) -> Option<usize> {
+        match self {
+            Expr::Record(expr_record) => Some(expr_record.len()),
+            Expr::Value(Value::Record(value_record)) => Some(value_record.len()),
+            _ => None,
+        }
+    }
+
+    pub fn into_record_items(self) -> Option<impl Iterator<Item = Expr>> {
+        let ret: Option<Box<dyn Iterator<Item = Expr>>> = match self {
+            Expr::Record(expr_record) => Some(Box::new(expr_record.into_iter())),
+            Expr::Value(Value::Record(value_record)) => {
+                Some(Box::new(value_record.into_iter().map(Expr::Value)))
+            }
+            _ => None,
+        };
+
+        ret
     }
 }
 
