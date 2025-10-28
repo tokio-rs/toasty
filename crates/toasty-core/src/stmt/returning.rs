@@ -11,8 +11,11 @@ pub enum Returning {
 
     Changed,
 
-    /// Return an expression
+    /// Return an expression.
     Expr(Expr),
+
+    /// Return a constant list of rows
+    Value(Value),
 }
 
 impl Returning {
@@ -74,13 +77,6 @@ impl Returning {
         match self {
             Self::Expr(expr) => expr,
             _ => panic!("expected stmt::Returningm::Expr; actual={self:#?}"),
-        }
-    }
-
-    pub fn into_expr(self) -> Expr {
-        match self {
-            Self::Expr(expr) => expr,
-            _ => todo!("self={self:#?}"),
         }
     }
 

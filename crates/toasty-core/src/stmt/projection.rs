@@ -1,6 +1,9 @@
-use crate::schema::{
-    app::{self, Field, FieldId, Model},
-    db::ColumnId,
+use crate::{
+    schema::{
+        app::{self, Field, FieldId, Model},
+        db::ColumnId,
+    },
+    stmt::{Expr, Value},
 };
 
 use std::{fmt, ops};
@@ -8,6 +11,10 @@ use std::{fmt, ops};
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Projection {
     steps: Steps,
+}
+
+pub trait Project {
+    fn project(self, projection: &Projection) -> Option<Expr>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -199,5 +206,41 @@ impl Iterator for Iter<'_> {
 
     fn next(&mut self) -> Option<usize> {
         self.0.next().copied()
+    }
+}
+
+impl Project for Expr {
+    fn project(self, projection: &Projection) -> Option<Expr> {
+        Some(self.entry(projection).to_expr())
+    }
+}
+
+impl Project for &Expr {
+    fn project(self, projection: &Projection) -> Option<Expr> {
+        Some(self.entry(projection).to_expr())
+    }
+}
+
+impl Project for &&Expr {
+    fn project(self, projection: &Projection) -> Option<Expr> {
+        Some(self.entry(projection).to_expr())
+    }
+}
+
+impl Project for Value {
+    fn project(self, projection: &Projection) -> Option<Expr> {
+        Some(self.entry(projection).to_expr())
+    }
+}
+
+impl Project for &Value {
+    fn project(self, projection: &Projection) -> Option<Expr> {
+        Some(self.entry(projection).to_expr())
+    }
+}
+
+impl Project for &&Value {
+    fn project(self, projection: &Projection) -> Option<Expr> {
+        Some(self.entry(projection).to_expr())
     }
 }

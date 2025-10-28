@@ -282,21 +282,15 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Statement::Delete(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| Type::list(cx.infer_returning_ty(returning, args)))
+                .map(|returning| cx.infer_returning_ty(returning, args, false))
                 .unwrap_or(Type::Unit),
             Statement::Insert(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| Type::list(cx.infer_returning_ty(returning, args)))
+                .map(|returning| cx.infer_returning_ty(returning, args, false))
                 .unwrap_or(Type::Unit),
             Statement::Query(stmt) => match &stmt.body {
-                ExprSet::Select(body) => {
-                    if stmt.single {
-                        cx.infer_returning_ty(&body.returning, args)
-                    } else {
-                        Type::list(cx.infer_returning_ty(&body.returning, args))
-                    }
-                }
+                ExprSet::Select(body) => cx.infer_returning_ty(&body.returning, args, stmt.single),
                 ExprSet::SetOp(_body) => todo!(),
                 ExprSet::Update(_body) => todo!(),
                 ExprSet::Values(_body) => todo!(),
@@ -304,20 +298,37 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Statement::Update(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| Type::list(cx.infer_returning_ty(returning, args)))
+                .map(|returning| cx.infer_returning_ty(returning, args, false))
                 .unwrap_or(Type::Unit),
         }
     }
 
-    pub fn infer_returning_ty(&self, returning: &Returning, args: &[Type]) -> Type {
+    fn infer_returning_ty(&self, returning: &Returning, args: &[Type], single: bool) -> Type {
         match returning {
-            Returning::Model { .. } => Type::Model(
-                self.target
-                    .model_id()
-                    .expect("returning `Model` when not in model context"),
-            ),
+            Returning::Model { .. } => {
+                let ty = Type::Model(
+                    self.target
+                        .model_id()
+                        .expect("returning `Model` when not in model context"),
+                );
+
+                if single {
+                    ty
+                } else {
+                    Type::list(ty)
+                }
+            }
             Returning::Changed => todo!(),
-            Returning::Expr(expr) => self.infer_expr_ty(expr, args),
+            Returning::Expr(expr) => {
+                let ty = self.infer_expr_ty(expr, args);
+
+                if single {
+                    ty
+                } else {
+                    Type::list(ty)
+                }
+            }
+            Returning::Value(value) => value.infer_ty(),
         }
     }
 

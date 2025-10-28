@@ -1,5 +1,5 @@
 use toasty_core::{
-    schema::app::{self, BelongsTo, Field, FieldId, FieldTy, HasMany, HasOne, Model},
+    schema::app::{self, Field, FieldId, FieldTy},
     stmt,
 };
 
@@ -32,6 +32,17 @@ trait RelationSource {
     fn set(&mut self, field: FieldId, expr: stmt::Expr);
 }
 
+struct InsertRelationSource<'a> {
+    model: &'a app::Model,
+    row: &'a mut stmt::Expr,
+}
+
+struct UpdateRelationSource<'a> {
+    model: &'a app::Model,
+    filter: &'a stmt::Filter,
+    assignments: &'a mut stmt::Assignments,
+}
+
 impl LowerStatement<'_, '_> {
     pub(super) fn plan_stmt_delete_relations(&mut self, mut stmt: &stmt::Delete) {
         // Cascading deletes are only handled at the application level
@@ -46,6 +57,25 @@ impl LowerStatement<'_, '_> {
                 Mutation::DisassociateAll { delete: true },
                 &mut stmt,
             );
+        }
+    }
+
+    pub(super) fn plan_stmt_insert_relations(&mut self, row: &mut stmt::Expr) {
+        let model = self.expr_cx.target().as_model_unwrap();
+
+        for (i, field) in model.fields.iter().enumerate() {
+            if field.is_relation() {
+                let expr = row.entry_mut(i).take();
+
+                self.plan_mut_relation_field(
+                    field,
+                    Mutation::Associate {
+                        expr,
+                        exclusive: false,
+                    },
+                    &mut InsertRelationSource { model, row },
+                );
+            }
         }
     }
 
@@ -70,7 +100,15 @@ impl LowerStatement<'_, '_> {
                 stmt::AssignmentOp::Remove => todo!(),
             };
 
-            self.plan_mut_relation_field(field, mutation, &mut (model, filter, &mut *assignments));
+            self.plan_mut_relation_field(
+                field,
+                mutation,
+                &mut UpdateRelationSource {
+                    model,
+                    filter,
+                    assignments: &mut *assignments,
+                },
+            );
         }
     }
 
@@ -245,12 +283,22 @@ impl RelationSource for &stmt::Delete {
     }
 }
 
-impl RelationSource for (&Model, &stmt::Filter, &mut stmt::Assignments) {
+impl RelationSource for UpdateRelationSource<'_> {
     fn selection(&self) -> stmt::Query {
-        stmt::Query::new_select(self.0, self.1.clone())
+        stmt::Query::new_select(self.model, self.filter.clone())
     }
 
     fn set(&mut self, field: FieldId, expr: stmt::Expr) {
-        self.2.set(field, expr);
+        self.assignments.set(field, expr);
+    }
+}
+
+impl RelationSource for InsertRelationSource<'_> {
+    fn selection(&self) -> stmt::Query {
+        todo!()
+    }
+
+    fn set(&mut self, field: FieldId, expr: stmt::Expr) {
+        todo!()
     }
 }

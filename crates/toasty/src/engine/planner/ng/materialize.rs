@@ -212,9 +212,12 @@ impl MaterializePlanner<'_> {
             query.single = false;
         }
 
-        let mut returning = stmt
-            .returning_mut()
-            .map(|returning| returning.take().into_expr());
+        let mut returning = match &mut stmt {
+            stmt::Statement::Delete(delete) => delete.returning.take(),
+            stmt::Statement::Insert(insert) => insert.returning.take(),
+            stmt::Statement::Query(query) => Some(query.returning_mut_unwrap().take()),
+            stmt::Statement::Update(update) => update.returning.take(),
+        };
 
         // Columns to select
         let mut columns = IndexSet::new();
@@ -591,16 +594,34 @@ impl MaterializePlanner<'_> {
                 "TODO: single queries not supported here"
             );
 
-            let arg_ty = self.graph[exec_stmt_node_id].ty().unwrap_list_ref().clone();
-            let projection = eval::Func::from_stmt(returning, vec![arg_ty]);
-            let ty = stmt::Type::list(projection.ret.clone());
+            match returning {
+                stmt::Returning::Value(returning) => {
+                    let ty = returning.infer_ty();
 
-            // Plan the final projection to handle the returning clause.
-            self.graph.insert(MaterializeProject {
-                input: exec_stmt_node_id,
-                projection,
-                ty,
-            })
+                    let stmt::Value::List(rows) = returning else {
+                        todo!(
+                            "unexpected returning type; returning={returning:#?}; stmt={:#?}",
+                            stmt_info.stmt
+                        )
+                    };
+
+                    self.graph
+                        .insert_with_deps(MaterializeConst { value: rows, ty }, [exec_stmt_node_id])
+                }
+                stmt::Returning::Expr(returning) => {
+                    let arg_ty = self.graph[exec_stmt_node_id].ty().unwrap_list_ref().clone();
+                    let projection = eval::Func::from_stmt(returning, vec![arg_ty]);
+                    let ty = stmt::Type::list(projection.ret.clone());
+
+                    // Plan the final projection to handle the returning clause.
+                    self.graph.insert(MaterializeProject {
+                        input: exec_stmt_node_id,
+                        projection,
+                        ty,
+                    })
+                }
+                returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
+            }
         } else {
             exec_stmt_node_id
         };

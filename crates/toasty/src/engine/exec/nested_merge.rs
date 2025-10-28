@@ -120,12 +120,12 @@ struct RowAndNested<'a> {
     nested: &'a [stmt::Value],
 }
 
-impl eval::Input for &RowStack<'_> {
+impl stmt::Input for &RowStack<'_> {
     fn resolve_arg(
         &mut self,
         expr_arg: &stmt::ExprArg,
         projection: &stmt::Projection,
-    ) -> stmt::Value {
+    ) -> Option<stmt::Expr> {
         let mut current: &RowStack<'_> = self;
 
         // Find the stack level that corresponds with the argument.
@@ -141,22 +141,22 @@ impl eval::Input for &RowStack<'_> {
         }
 
         // Get the value and apply projection
-        current.row.entry(projection).to_value()
+        Some(current.row.entry(projection).to_expr())
     }
 }
 
-impl eval::Input for &RowAndNested<'_> {
+impl stmt::Input for &RowAndNested<'_> {
     fn resolve_arg(
         &mut self,
         expr_arg: &stmt::ExprArg,
         projection: &stmt::Projection,
-    ) -> stmt::Value {
+    ) -> Option<stmt::Expr> {
         let base = if expr_arg.position == 0 {
             self.row
         } else {
             &self.nested[expr_arg.position - 1]
         };
 
-        base.entry(projection).to_value()
+        Some(base.entry(projection).to_expr())
     }
 }

@@ -1,18 +1,6 @@
-use crate::stmt::{visit_mut, ExprSet, Projection, Query, TableDerived, TableRef, Values};
+use crate::stmt::{visit_mut, ExprSet, Input, Projection, Query, TableDerived, TableRef, Values};
 
-use super::{Expr, ExprArg, Value};
-
-pub trait Input {
-    fn resolve_arg_as_expr(&mut self, expr_arg: &ExprArg) -> Expr {
-        self.resolve_arg_projected_as_expr(expr_arg, &Projection::identity())
-    }
-
-    fn resolve_arg_projected_as_expr(
-        &mut self,
-        expr_arg: &ExprArg,
-        projection: &Projection,
-    ) -> Expr;
-}
+use super::{Expr, Value};
 
 pub(crate) struct Substitute<I> {
     input: I,
@@ -35,11 +23,15 @@ where
                 if let Expr::Arg(expr_arg) = &*expr_project.base {
                     *expr = self
                         .input
-                        .resolve_arg_projected_as_expr(expr_arg, &expr_project.projection);
+                        .resolve_arg(expr_arg, &expr_project.projection)
+                        .unwrap();
                 }
             }
             Expr::Arg(expr_arg) => {
-                *expr = self.input.resolve_arg_as_expr(expr_arg);
+                *expr = self
+                    .input
+                    .resolve_arg(expr_arg, &Projection::identity())
+                    .unwrap();
             }
             _ => {}
         }
@@ -59,7 +51,11 @@ where
 
     fn visit_table_ref_mut(&mut self, i: &mut TableRef) {
         if let TableRef::Arg(expr_arg) = i {
-            let rows = match self.input.resolve_arg_as_expr(expr_arg) {
+            let rows = match self
+                .input
+                .resolve_arg(expr_arg, &Projection::identity())
+                .unwrap()
+            {
                 Expr::List(expr_list) => expr_list.items,
                 Expr::Value(Value::List(value_list)) => {
                     // TODO: this conversion is not ideal
@@ -83,35 +79,5 @@ where
         } else {
             visit_mut::visit_table_ref_mut(self, i);
         }
-    }
-}
-
-impl Input for &Vec<Value> {
-    fn resolve_arg_projected_as_expr(
-        &mut self,
-        expr_arg: &ExprArg,
-        projection: &Projection,
-    ) -> Expr {
-        self[expr_arg.position].entry(projection).to_expr()
-    }
-}
-
-impl<T: AsRef<Value>, const N: usize> Input for [T; N] {
-    fn resolve_arg_projected_as_expr(
-        &mut self,
-        expr_arg: &ExprArg,
-        projection: &Projection,
-    ) -> Expr {
-        self[expr_arg.position].as_ref().entry(projection).to_expr()
-    }
-}
-
-impl<T: AsRef<Value>, const N: usize> Input for &[T; N] {
-    fn resolve_arg_projected_as_expr(
-        &mut self,
-        expr_arg: &ExprArg,
-        projection: &Projection,
-    ) -> Expr {
-        self[expr_arg.position].as_ref().entry(projection).to_expr()
     }
 }

@@ -8,7 +8,7 @@ mod cte;
 pub use cte::Cte;
 
 mod cx;
-pub use cx::{ExprContext, ExprTarget, IntoExprTarget, ResolvedRef};
+pub use cx::{ExprContext, ExprTarget, IntoExprTarget, Resolve, ResolvedRef};
 
 mod delete;
 pub use delete::Delete;
@@ -24,6 +24,8 @@ pub use entry_mut::EntryMut;
 
 mod entry_path;
 pub use entry_path::EntryPath;
+
+mod eval;
 
 mod expr;
 pub use expr::Expr;
@@ -124,6 +126,9 @@ pub use insert_table::InsertTable;
 mod insert_target;
 pub use insert_target::InsertTarget;
 
+mod input;
+pub use input::{ConstInput, Input, TypedInput};
+
 mod join;
 pub use join::{Join, JoinOp};
 
@@ -160,7 +165,7 @@ mod path_field_set;
 pub use path_field_set::PathFieldSet;
 
 mod projection;
-pub use projection::Projection;
+pub use projection::{Project, Projection};
 
 mod query;
 pub use query::{Lock, Query};
@@ -184,7 +189,6 @@ mod sparse_record;
 pub use sparse_record::SparseRecord;
 
 mod substitute;
-pub use substitute::Input;
 use substitute::Substitute;
 
 mod table_derived;
@@ -253,7 +257,7 @@ pub enum Statement {
 }
 
 impl Statement {
-    pub fn substitute(&mut self, input: impl substitute::Input) {
+    pub fn substitute(&mut self, input: impl Input) {
         Substitute::new(input).visit_stmt_mut(self);
     }
 

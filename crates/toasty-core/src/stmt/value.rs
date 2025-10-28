@@ -187,6 +187,7 @@ impl Value {
             Value::Null => Type::Null,
             Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
             Value::String(_) => Type::String,
+            Value::List(items) => Type::list(items[0].infer_ty()),
             _ => todo!("{self:#?}"),
         }
     }

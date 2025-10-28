@@ -1,5 +1,7 @@
+mod insert;
 mod paginate;
 mod relation;
+mod returning;
 
 use std::{cell::Cell, mem};
 
@@ -8,11 +10,11 @@ use toasty_core::{
     driver::Capability,
     schema::{
         app::{self, FieldTy, Model},
-        db::Column,
+        db::{Column, ColumnId},
         mapping,
     },
     stmt::{self, visit_mut, IntoExprTarget, VisitMut},
-    Schema,
+    Result, Schema,
 };
 
 use crate::engine::{
@@ -22,15 +24,22 @@ use crate::engine::{
 };
 
 impl super::PlannerNg<'_, '_> {
-    pub(crate) fn lower_stmt(&mut self, stmt: stmt::Statement) {
+    pub(crate) fn lower_stmt(&mut self, stmt: stmt::Statement) -> Result<()> {
         let mut state = LoweringState {
             store: &mut self.store,
             scopes: IndexVec::new(),
             engine: self.old.engine,
             relations: vec![],
+            errors: vec![],
         };
 
         state.lower_stmt(stmt::ExprContext::new(self.old.schema()), stmt);
+
+        if let Some(err) = state.errors.into_iter().next() {
+            return Err(err);
+        }
+
+        Ok(())
     }
 }
 
@@ -89,6 +98,9 @@ struct LoweringState<'a> {
     /// consistency. This field tracks the current relation edge being traversed
     /// so the planner doesn't walk it backwards.
     relations: Vec<app::FieldId>,
+
+    /// Tracks errors that occured while lowering the statement
+    errors: Vec<crate::Error>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -97,7 +109,7 @@ enum LoweringContext<'a> {
     Assignment(&'a stmt::Assignments),
 
     /// Lowering an insertion statement
-    Insert,
+    Insert(&'a [ColumnId]),
 
     /// Lowering a value row being inserted
     InsertRow(&'a stmt::Expr),
@@ -318,15 +330,22 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_stmt_insert_mut(&mut self, stmt: &mut stmt::Insert) {
+        // First, if an insertion scope is specified, lower the scope to be just "model"
+        self.apply_insert_scope(&mut stmt.target, &mut stmt.source);
+
         // Create a new expr scope for the statement, and lower all parts
         // *except* the target field (since it is borrowed).
         let mut lower = self.lower_insert(&stmt.target);
+
+        // Preprocess the insertion source (values usually);
+        lower.preprocess_insert_values(&mut stmt.source);
 
         // Lower the insertion source
         lower.visit_stmt_query_mut(&mut stmt.source);
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
+            lower.constantize_insert_returning(returning, &stmt.source);
         }
 
         self.visit_insert_target_mut(&mut stmt.target);
@@ -877,13 +896,21 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn lower_insert<'child>(
         &'child mut self,
-        target: impl IntoExprTarget<'child>,
+        target: &'child stmt::InsertTarget,
     ) -> LowerStatement<'child, 'b> {
+        let columns = match target {
+            stmt::InsertTarget::Scope(_) => {
+                panic!("InsertTarget::Scope should already have been lowered by this point")
+            }
+            stmt::InsertTarget::Model(model_id) => &self.schema().mapping_for(model_id).columns,
+            stmt::InsertTarget::Table(insert_table) => &insert_table.columns,
+        };
+
         LowerStatement {
             state: self.state,
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
-            cx: LoweringContext::Insert,
+            cx: LoweringContext::Insert(columns),
         }
     }
 
@@ -920,7 +947,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
 impl LoweringContext<'_> {
     fn is_insert(&self) -> bool {
-        matches!(self, LoweringContext::Insert)
+        matches!(self, LoweringContext::Insert { .. })
     }
 
     fn is_returning(&self) -> bool {

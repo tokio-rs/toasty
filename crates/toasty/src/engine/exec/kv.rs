@@ -20,7 +20,7 @@ impl Exec<'_> {
     ) -> Result<stmt::Value> {
         match input {
             Some(input) => self.eval_using_input(func, input).await,
-            None => func.eval(&[]),
+            None => Ok(func.eval_const()),
         }
     }
 

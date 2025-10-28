@@ -135,7 +135,7 @@ impl Planner<'_> {
 
 impl PlannerNg<'_, '_> {
     fn plan_statement(&mut self, stmt: stmt::Statement) -> Result<Option<plan::VarId>> {
-        self.lower_stmt(stmt);
+        self.lower_stmt(stmt)?;
 
         // Build the execution plan...
         self.plan_materializations();
@@ -183,7 +183,7 @@ impl PlannerNg<'_, '_> {
                         stmt::Type::List(ty_rows) => {
                             let ty_fields = match &**ty_rows {
                                 stmt::Type::Record(ty_fields) => ty_fields.clone(),
-                                _ => todo!("ty={ty:#?}"),
+                                _ => todo!("ty={ty:#?}; node={node:#?}"),
                             };
 
                             let var = self.old.var_table.register_var(ty.clone());
