@@ -67,6 +67,20 @@ impl LowerStatement<'_, '_> {
             if field.is_relation() {
                 let expr = row.entry_mut(i).take();
 
+                if expr.is_value_null() {
+                    if !field.nullable && field.ty.is_has_one() {
+                        panic!(
+                            "Insert missing non-nullable field; model={}; field={}; ty={:#?}; expr={:#?}",
+                            model.name.upper_camel_case(),
+                            field.name,
+                            field.ty,
+                            expr
+                        );
+                    }
+
+                    continue;
+                }
+
                 self.plan_mut_relation_field(
                     field,
                     Mutation::Associate {
@@ -148,7 +162,7 @@ impl LowerStatement<'_, '_> {
             Mutation::DisassociateAll { .. } => {
                 self.plan_mut_has_n_disassociate(pair, source);
             }
-            _ => todo!(),
+            _ => todo!("op={op:#?}"),
         }
     }
 
