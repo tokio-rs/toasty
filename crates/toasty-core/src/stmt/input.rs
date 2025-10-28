@@ -45,21 +45,24 @@ impl<'a, I, T> TypedInput<'a, I, T> {
 impl<I: Input, T: Resolve> Input for TypedInput<'_, I, T> {
     fn resolve_arg(&mut self, expr_arg: &ExprArg, projection: &Projection) -> Option<Expr> {
         let expr = self.input.resolve_arg(expr_arg, projection)?;
-        let actual_ty = self.cx.infer_expr_ty(&expr, &[]);
 
-        let mut ty = &self.tys[expr_arg.position];
+        if !expr.is_value_null() {
+            let actual_ty = self.cx.infer_expr_ty(&expr, &[]);
 
-        for step in projection {
-            ty = match ty {
-                Type::Record(tys) => &tys[step],
-                _ => todo!("ty={ty:#?}"),
-            };
+            let mut ty = &self.tys[expr_arg.position];
+
+            for step in projection {
+                ty = match ty {
+                    Type::Record(tys) => &tys[step],
+                    _ => todo!("ty={ty:#?}"),
+                };
+            }
+
+            assert_eq!(
+                actual_ty, *ty,
+                "resolved input did not match requested argument type"
+            );
         }
-
-        assert_eq!(
-            actual_ty, *ty,
-            "resolved input did not match requested argument type"
-        );
 
         Some(expr)
     }

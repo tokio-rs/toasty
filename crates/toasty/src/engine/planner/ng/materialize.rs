@@ -373,11 +373,14 @@ impl MaterializePlanner<'_> {
             self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
         } else if self.engine.capability().sql {
             if !columns.is_empty() {
-                stmt.set_returning(stmt::Expr::record(
-                    columns
-                        .iter()
-                        .map(|expr_reference| stmt::Expr::from(*expr_reference)),
-                ).into());
+                stmt.set_returning(
+                    stmt::Expr::record(
+                        columns
+                            .iter()
+                            .map(|expr_reference| stmt::Expr::from(*expr_reference)),
+                    )
+                    .into(),
+                );
             }
 
             let input_args: Vec<_> = inputs
