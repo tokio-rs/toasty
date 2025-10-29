@@ -20,6 +20,10 @@ pub enum InsertTarget {
 }
 
 impl InsertTarget {
+    pub fn is_model(&self) -> bool {
+        matches!(self, InsertTarget::Model(..))
+    }
+
     pub fn as_model_unwrap(&self) -> ModelId {
         match self {
             Self::Scope(query) => query.body.as_select_unwrap().source.model_id_unwrap(),

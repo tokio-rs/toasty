@@ -117,7 +117,13 @@ impl LowerStatement<'_, '_> {
                         exclusive: true,
                     },
                 },
-                stmt::AssignmentOp::Insert => todo!(),
+                stmt::AssignmentOp::Insert => {
+                    debug_assert!(!assignment.expr.is_value_null(), "should not be null");
+                    Mutation::Associate {
+                        expr: assignment.expr,
+                        exclusive: false,
+                    }
+                }
                 stmt::AssignmentOp::Remove => todo!(),
             };
 
@@ -165,6 +171,12 @@ impl LowerStatement<'_, '_> {
             Mutation::DisassociateAll { .. } => {
                 self.plan_mut_has_n_disassociate(pair, source);
             }
+            Mutation::Associate { expr, exclusive } => match expr {
+                stmt::Expr::Stmt(expr_stmt) => {
+                    self.plan_mut_has_n_associate_stmt(field, *expr_stmt.stmt, exclusive, source);
+                }
+                _ => todo!("field={field:#?}, expr={expr:#?}, exclusive={exclusive:#?}"),
+            },
             _ => todo!("op={op:#?}"),
         }
     }
@@ -192,6 +204,43 @@ impl LowerStatement<'_, '_> {
         } else {
             self.new_dependency(query.delete().into());
         }
+    }
+
+    fn plan_mut_has_n_associate_stmt(
+        &mut self,
+        field: &Field,
+        stmt: stmt::Statement,
+        exclusive: bool,
+        source: &dyn RelationSource,
+    ) {
+        match stmt {
+            stmt::Statement::Insert(stmt) => {
+                self.plan_mut_has_n_associate_insert(field, stmt, exclusive, source)
+            }
+            _ => todo!("stmt={:#?}", stmt),
+        }
+    }
+
+    fn plan_mut_has_n_associate_insert(
+        &mut self,
+        field: &Field,
+        mut stmt: stmt::Insert,
+        exclusive: bool,
+        source: &dyn RelationSource,
+    ) {
+        assert!(!exclusive, "TODO");
+
+        let has_many = field.ty.expect_has_many();
+
+        // Returning does nothing in this context.
+        stmt.returning = None;
+
+        assert_eq!(stmt.target.as_model_unwrap(), has_many.target);
+
+        assert!(stmt.target.is_model());
+        stmt.target = self.relation_pair_scope(has_many.pair, source).into();
+
+        self.new_dependency(stmt.into());
     }
 
     fn plan_has_one_nullify(&mut self, field: &Field, source: &dyn RelationSource) {
