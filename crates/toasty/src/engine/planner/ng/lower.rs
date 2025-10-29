@@ -393,7 +393,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
         // Plan relations
         lower.plan_stmt_update_relations(&mut stmt.assignments, &stmt.filter);
-        println!("LOWER={stmt:#?}");
 
         // Before lowering children, convert the "Changed" returning statement
         // to an expression referencing changed fields.

@@ -367,10 +367,24 @@ impl MaterializePlanner<'_> {
             }
         }
 
+        let mut tracked_dependencies = false;
+
         let exec_stmt_node_id = if stmt.filter_or_default().is_false() {
             debug_assert!(stmt_info.deps.is_empty(), "TODO");
             // Don't bother querying and just return false
             self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
+
+        // If the statement is an update statement without any assignments, then
+        // it can be substituted with a constant.
+        } else if stmt.assignments().map(|a| a.is_empty()).unwrap_or(false) {
+            assert!(returning.is_some(), "TODO");
+            // TODO: this isn't actually correct. In theory, we need to make
+            // sure the rows actually exist. Maybe the public API could be
+            // updated to make the guarantee softer.
+            self.insert_const(
+                vec![stmt::Value::empty_sparse_record()],
+                stmt::Type::list(stmt::Type::empty_sparse_record()),
+            )
         } else if self.engine.capability().sql {
             if !columns.is_empty() {
                 stmt.set_returning(
@@ -389,6 +403,8 @@ impl MaterializePlanner<'_> {
                 .collect();
 
             let ty = self.engine.infer_ty(&stmt, &input_args[..]);
+
+            tracked_dependencies = true;
 
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
@@ -606,18 +622,30 @@ impl MaterializePlanner<'_> {
                     let projection = eval::Func::from_stmt(returning, vec![arg_ty]);
                     let ty = stmt::Type::list(projection.ret.clone());
 
-                    // Plan the final projection to handle the returning clause.
-                    self.graph.insert(MaterializeProject {
+                    let node = MaterializeProject {
                         input: exec_stmt_node_id,
                         projection,
                         ty,
-                    })
+                    };
+
+                    // Plan the final projection to handle the returning clause.
+                    if tracked_dependencies {
+                        self.graph.insert(node)
+                    } else {
+                        tracked_dependencies = true;
+                        self.graph.insert_with_deps(
+                            node,
+                            stmt_info.dependent_materializations(&self.store),
+                        )
+                    }
                 }
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
             }
         } else {
             exec_stmt_node_id
         };
+
+        debug_assert!(tracked_dependencies);
 
         stmt_info.output.set(Some(output_node_id));
     }

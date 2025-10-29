@@ -162,6 +162,7 @@ impl<'a> Planner<'a> {
 
     fn push_action(&mut self, action: impl Into<plan::Action>) {
         let action = action.into();
+        println!(" + push_action = {action:#?}");
         self.verify_action(&action);
         self.actions.push(action);
     }

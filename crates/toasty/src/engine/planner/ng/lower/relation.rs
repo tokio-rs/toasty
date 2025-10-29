@@ -355,22 +355,6 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    /*
-    fn plan_mut_belongs_to_associate_value(&mut self, field: &Field, source: &dyn RelationSource) {
-        let belongs_to = field.ty.expect_belongs_to();
-
-        self.relation_step(field, |lower| {
-            let Some(pair) = belongs_to.pair.map(|id| lower.schema().app.field(id)) else {
-                return;
-            };
-
-            if pair.ty.is_has_one() {
-                lower.plan_has_one_nullify(field, source);
-            }
-        });
-    }
-    */
-
     fn plan_mut_belongs_to_associate_stmt(
         &mut self,
         field: &Field,
