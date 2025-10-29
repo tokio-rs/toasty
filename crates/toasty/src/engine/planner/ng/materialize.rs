@@ -377,14 +377,18 @@ impl MaterializePlanner<'_> {
         // If the statement is an update statement without any assignments, then
         // it can be substituted with a constant.
         } else if stmt.assignments().map(|a| a.is_empty()).unwrap_or(false) {
-            assert!(returning.is_some(), "TODO");
-            // TODO: this isn't actually correct. In theory, we need to make
-            // sure the rows actually exist. Maybe the public API could be
-            // updated to make the guarantee softer.
-            self.insert_const(
-                vec![stmt::Value::empty_sparse_record()],
-                stmt::Type::list(stmt::Type::empty_sparse_record()),
-            )
+            if returning.is_some() {
+                // TODO: this isn't actually correct. In theory, we need to make
+                // sure the rows actually exist. Maybe the public API could be
+                // updated to make the guarantee softer.
+                self.insert_const(
+                    vec![stmt::Value::empty_sparse_record()],
+                    stmt::Type::list(stmt::Type::empty_sparse_record()),
+                )
+            } else {
+                // TODO: Also not quite right...
+                self.insert_const(vec![], stmt::Type::list(stmt::Type::empty_sparse_record()))
+            }
         } else if self.engine.capability().sql {
             if !columns.is_empty() {
                 stmt.set_returning(
@@ -642,6 +646,14 @@ impl MaterializePlanner<'_> {
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
             }
         } else {
+            if !tracked_dependencies {
+                tracked_dependencies = true;
+
+                self.graph[exec_stmt_node_id]
+                    .deps
+                    .extend(stmt_info.dependent_materializations(&self.store));
+            }
+
             exec_stmt_node_id
         };
 

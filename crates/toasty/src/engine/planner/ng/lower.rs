@@ -389,7 +389,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
         let mut lower = self.scope_expr(&stmt.target);
-        println!("STMT={stmt:#?}");
 
         // Plan relations
         lower.plan_stmt_update_relations(&mut stmt.assignments, &stmt.filter);

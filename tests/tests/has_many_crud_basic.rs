@@ -886,14 +886,8 @@ async fn assign_todo_that_already_has_user_on_update(test: &mut DbTest) {
 
     let mut u2 = User::create().exec(&db).await.unwrap();
 
-    println!("");
-    println!("~~~~~~~~~~~~~~~~");
-    println!("");
     // Update the user
     u2.update().todo(&todo).exec(&db).await.unwrap();
-    println!("");
-    println!("~~~~~~~~~~~~~~~~");
-    println!("");
 
     let todo_reload = Todo::get_by_id(&db, &todo.id).await.unwrap();
 

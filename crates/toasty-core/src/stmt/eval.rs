@@ -46,6 +46,19 @@ impl Expr {
                 }
             }
             Expr::Cast(expr_cast) => expr_cast.ty.cast(expr_cast.expr.eval_ref(input)?),
+            Expr::ConcatStr(expr_concat_str) => {
+                let mut ret = String::new();
+
+                for expr in &expr_concat_str.exprs {
+                    let Value::String(s) = expr.eval_ref(input)? else {
+                        anyhow::bail!("not a string")
+                    };
+
+                    ret.push_str(&s);
+                }
+
+                Ok(ret.into())
+            }
             Expr::IsNull(expr_is_null) => {
                 let value = expr_is_null.expr.eval_ref(input)?;
                 Ok((value.is_null() != expr_is_null.negate).into())
