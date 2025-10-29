@@ -46,28 +46,27 @@ impl Simplify<'_> {
                     return None;
                 };
 
-                let expr_reference = match &*expr_binary_op.lhs {
-                    stmt::Expr::Reference(expr_ref) => expr_ref,
-                    _ => return None,
-                };
-                let lhs_field = cx.resolve_expr_reference(expr_reference).expect_field();
+                match (&*expr_binary_op.lhs, &*expr_binary_op.rhs) {
+                    (stmt::Expr::Reference(_), stmt::Expr::Reference(_)) => todo!("stmt={stmt:#?}"),
+                    (stmt::Expr::Reference(expr_ref), other)
+                    | (other, stmt::Expr::Reference(expr_ref)) => {
+                        let field_ref = cx.resolve_expr_reference(expr_ref).expect_field();
 
-                if *key_field == lhs_field.id {
-                    if let stmt::Expr::Value(value) = &*expr_binary_op.rhs {
-                        Some(value.clone().into())
-                    } else {
-                        todo!()
+                        if *key_field == field_ref.id {
+                            if let stmt::Expr::Value(value) = other {
+                                Some(value.clone().into())
+                            } else {
+                                todo!()
+                            }
+                        } else {
+                            None
+                        }
                     }
-                } else {
-                    None
+                    _ => return None,
                 }
             }
             stmt::Expr::And(_) => {
-                if model.primary_key.fields.len() > 1 {
-                    todo!("support composite keys");
-                }
-
-                None
+                todo!("either support PKs or check each op for the key");
             }
             _ => None,
         }

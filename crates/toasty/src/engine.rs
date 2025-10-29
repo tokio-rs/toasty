@@ -8,6 +8,7 @@ mod kv;
 mod kv2;
 mod planner;
 mod simplify;
+use simplify::Simplify;
 mod ty;
 mod verify;
 

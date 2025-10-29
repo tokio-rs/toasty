@@ -3,7 +3,7 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::planner::ng::lower::LowerStatement;
+use crate::engine::{planner::ng::lower::LowerStatement, Simplify};
 
 #[derive(Debug)]
 enum Mutation {
@@ -167,13 +167,45 @@ impl LowerStatement<'_, '_> {
         let has_many = field.ty.expect_has_many();
         let pair = self.schema().app.field(has_many.pair);
 
+        self.plan_mut_has_n(field, pair, op, source);
+    }
+
+    fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &dyn RelationSource) {
+        let has_one = field.ty.expect_has_one();
+        let pair = self.schema().app.field(has_one.pair);
+
+        self.plan_mut_has_n(field, pair, op, source);
+    }
+
+    fn plan_mut_has_n(
+        &mut self,
+        field: &Field,
+        pair: &Field,
+        op: Mutation,
+        source: &dyn RelationSource,
+    ) {
         match op {
             Mutation::DisassociateAll { .. } => {
                 self.plan_mut_has_n_disassociate(pair, source);
             }
             Mutation::Associate { expr, exclusive } => match expr {
+                stmt::Expr::List(_) => {
+                    assert!(!exclusive, "TODO: implement exclusive association");
+
+                    todo!()
+                }
                 stmt::Expr::Stmt(expr_stmt) => {
                     self.plan_mut_has_n_associate_stmt(field, *expr_stmt.stmt, exclusive, source);
+                }
+                stmt::Expr::Value(stmt::Value::List(value_list)) => {
+                    assert!(!exclusive, "TODO: implement exclusive association");
+
+                    for value in value_list {
+                        self.plan_mut_has_n_associate_value(pair, value, source);
+                    }
+                }
+                stmt::Expr::Value(value) => {
+                    self.plan_mut_has_n_associate_value(pair, value, source);
                 }
                 _ => todo!("field={field:#?}, expr={expr:#?}, exclusive={exclusive:#?}"),
             },
@@ -181,16 +213,24 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &dyn RelationSource) {
-        let has_one = field.ty.expect_has_one();
-        let pair = self.schema().app.field(has_one.pair);
+    fn plan_mut_has_n_associate_value(
+        &mut self,
+        pair: &Field,
+        value: stmt::Value,
+        source: &dyn RelationSource,
+    ) {
+        assert!(!value.is_list());
 
-        match op {
-            Mutation::DisassociateAll { .. } => {
-                self.plan_mut_has_n_disassociate(pair, source);
-            }
-            _ => todo!("plan_mut_has_one; field={field:#?}; op={op:#?}"),
-        }
+        let mut stmt = stmt::Query::new_select(
+            pair.id.model,
+            stmt::Expr::eq(stmt::Expr::key(pair.id.model), value),
+        )
+        .update();
+
+        stmt.assignments
+            .set(pair.id, stmt::Expr::stmt(source.selection()));
+
+        self.new_dependency(stmt);
     }
 
     fn plan_mut_has_n_disassociate(&mut self, pair: &Field, source: &dyn RelationSource) {
@@ -200,9 +240,9 @@ impl LowerStatement<'_, '_> {
             let mut update = query.update();
             update.assignments.set(pair.id, stmt::Value::Null);
 
-            self.new_dependency(update.into());
+            self.new_dependency(update);
         } else {
-            self.new_dependency(query.delete().into());
+            self.new_dependency(query.delete());
         }
     }
 
@@ -240,7 +280,7 @@ impl LowerStatement<'_, '_> {
         assert!(stmt.target.is_model());
         stmt.target = self.relation_pair_scope(has_many.pair, source).into();
 
-        self.new_dependency(stmt.into());
+        self.new_dependency(stmt);
     }
 
     fn plan_has_one_nullify(&mut self, field: &Field, source: &dyn RelationSource) {
@@ -273,17 +313,9 @@ impl LowerStatement<'_, '_> {
         source: &mut dyn RelationSource,
     ) {
         match op {
-            Mutation::Associate { expr, .. } => match expr {
-                expr if expr.is_value() => {
-                    assert!(!expr.is_value_null());
-
-                    self.set_relation_field(field, expr, source);
-                }
-                stmt::Expr::Stmt(expr_stmt) => {
-                    self.plan_mut_belongs_to_stmt(field, *expr_stmt.stmt, source);
-                }
-                _ => todo!("expr={expr:#?}"),
-            },
+            Mutation::Associate { expr, .. } => {
+                self.plan_mut_belongs_to_associate(field, expr, source)
+            }
             Mutation::DisassociateAll { delete } => {
                 if !delete {
                     self.plan_mut_belongs_to_nullify(field, source);
@@ -304,6 +336,26 @@ impl LowerStatement<'_, '_> {
         }
     }
 
+    fn plan_mut_belongs_to_associate(
+        &mut self,
+        field: &Field,
+        expr: stmt::Expr,
+        source: &mut dyn RelationSource,
+    ) {
+        match expr {
+            expr if expr.is_value() => {
+                assert!(!expr.is_value_null());
+
+                self.set_relation_field(field, expr, source);
+            }
+            stmt::Expr::Stmt(expr_stmt) => {
+                self.plan_mut_belongs_to_associate_stmt(field, *expr_stmt.stmt, source);
+            }
+            _ => todo!("expr={expr:#?}"),
+        }
+    }
+
+    /*
     fn plan_mut_belongs_to_associate_value(&mut self, field: &Field, source: &dyn RelationSource) {
         let belongs_to = field.ty.expect_belongs_to();
 
@@ -317,8 +369,9 @@ impl LowerStatement<'_, '_> {
             }
         });
     }
+    */
 
-    fn plan_mut_belongs_to_stmt(
+    fn plan_mut_belongs_to_associate_stmt(
         &mut self,
         field: &Field,
         stmt: stmt::Statement,
@@ -353,7 +406,7 @@ impl LowerStatement<'_, '_> {
                     .into(),
                 );
 
-                let stmt_id = self.new_dependency(insert.into());
+                let stmt_id = self.new_dependency(insert);
 
                 let stmt_info = &self.state.store[stmt_id];
 
@@ -369,7 +422,6 @@ impl LowerStatement<'_, '_> {
                 self.set_relation_field(field, rows.into_iter().next().unwrap().into(), source);
             }
             stmt::Statement::Query(query) => {
-                /*
                 // First, we have to try to extract the FK from the select
                 // without having to perform the query
                 //
@@ -381,17 +433,12 @@ impl LowerStatement<'_, '_> {
                     .map(|fk_field| fk_field.target)
                     .collect();
 
-                let Some(e) = Simplify::new(self.schema()).extract_key_value(&fields, &query)
+                let Some(expr) = Simplify::new(self.schema()).extract_key_value(&fields, &query)
                 else {
                     todo!("belongs_to={:#?}; stmt={:#?}", belongs_to, query);
                 };
 
-                *expr = e;
-
-                // Plan again
-                self.plan_mut_belongs_to_expr(field, expr, scope, is_insert)?;
-                */
-                todo!()
+                self.plan_mut_belongs_to_associate(field, expr, source);
             }
             _ => todo!("stmt={:#?}", stmt),
         }
@@ -461,7 +508,15 @@ impl RelationSource for UpdateRelationSource<'_> {
 
 impl RelationSource for InsertRelationSource<'_> {
     fn selection(&self) -> stmt::Query {
-        todo!()
+        // The owner's primary key
+        let mut args = vec![];
+
+        for pk_field in self.model.primary_key_fields() {
+            // let expr = eval::Expr::from(expr.entry(pk_field.id.index).to_value());
+            args.push(self.row.entry(pk_field.id.index).to_value());
+        }
+
+        self.model.find_by_id(&args)
     }
 
     fn set(&mut self, field: FieldId, expr: stmt::Expr) {

@@ -132,14 +132,14 @@ index_vec::define_index_type! {
 }
 
 impl LowerStatement<'_, '_> {
-    fn new_dependency(&mut self, stmt: stmt::Statement) -> StmtId {
+    fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> StmtId {
         // Need to reset the scope stack as the statement cannot reference the
         // current scope.
         let scopes = mem::take(&mut self.state.scopes);
 
         let stmt_id = self
             .state
-            .lower_stmt(stmt::ExprContext::new(self.schema()), stmt);
+            .lower_stmt(stmt::ExprContext::new(self.schema()), stmt.into());
 
         self.state.scopes = scopes;
 
