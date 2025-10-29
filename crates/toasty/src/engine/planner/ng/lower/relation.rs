@@ -163,14 +163,14 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &dyn RelationSource) {
+    fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_many = field.ty.expect_has_many();
         let pair = self.schema().app.field(has_many.pair);
 
         self.plan_mut_has_n(field, pair, op, source);
     }
 
-    fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &dyn RelationSource) {
+    fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_one = field.ty.expect_has_one();
         let pair = self.schema().app.field(has_one.pair);
 
@@ -182,34 +182,49 @@ impl LowerStatement<'_, '_> {
         field: &Field,
         pair: &Field,
         op: Mutation,
-        source: &dyn RelationSource,
+        source: &mut dyn RelationSource,
     ) {
         match op {
             Mutation::DisassociateAll { .. } => {
                 self.plan_mut_has_n_disassociate(pair, source);
             }
-            Mutation::Associate { expr, exclusive } => match expr {
-                stmt::Expr::List(_) => {
-                    assert!(!exclusive, "TODO: implement exclusive association");
+            Mutation::Associate { expr, exclusive } => {
+                self.plan_mut_has_n_associate_expr(field, pair, expr, exclusive, source)
+            }
+            _ => todo!("op={op:#?}"),
+        }
+    }
 
-                    todo!()
-                }
-                stmt::Expr::Stmt(expr_stmt) => {
-                    self.plan_mut_has_n_associate_stmt(field, *expr_stmt.stmt, exclusive, source);
-                }
-                stmt::Expr::Value(stmt::Value::List(value_list)) => {
-                    assert!(!exclusive, "TODO: implement exclusive association");
+    fn plan_mut_has_n_associate_expr(
+        &mut self,
+        field: &Field,
+        pair: &Field,
+        expr: stmt::Expr,
+        exclusive: bool,
+        source: &mut dyn RelationSource,
+    ) {
+        match expr {
+            stmt::Expr::List(expr_list) => {
+                assert!(!exclusive, "TODO: implement exclusive association");
 
-                    for value in value_list {
-                        self.plan_mut_has_n_associate_value(pair, value, source);
-                    }
+                for expr in expr_list.items {
+                    self.plan_mut_has_n_associate_expr(field, pair, expr, exclusive, source);
                 }
-                stmt::Expr::Value(value) => {
+            }
+            stmt::Expr::Stmt(expr_stmt) => {
+                self.plan_mut_has_n_associate_stmt(field, *expr_stmt.stmt, exclusive, source);
+            }
+            stmt::Expr::Value(stmt::Value::List(value_list)) => {
+                assert!(!exclusive, "TODO: implement exclusive association");
+
+                for value in value_list {
                     self.plan_mut_has_n_associate_value(pair, value, source);
                 }
-                _ => todo!("field={field:#?}, expr={expr:#?}, exclusive={exclusive:#?}"),
-            },
-            _ => todo!("op={op:#?}"),
+            }
+            stmt::Expr::Value(value) => {
+                self.plan_mut_has_n_associate_value(pair, value, source);
+            }
+            _ => todo!("field={field:#?}, expr={expr:#?}, exclusive={exclusive:#?}"),
         }
     }
 
@@ -217,7 +232,7 @@ impl LowerStatement<'_, '_> {
         &mut self,
         pair: &Field,
         value: stmt::Value,
-        source: &dyn RelationSource,
+        source: &mut dyn RelationSource,
     ) {
         assert!(!value.is_list());
 
