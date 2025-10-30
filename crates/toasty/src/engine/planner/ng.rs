@@ -308,6 +308,26 @@ impl PlannerNg<'_, '_> {
                         projection: materialize_project.projection.clone(),
                     });
                 }
+                MaterializeKind::ReadModifyWrite(materialize_rmw) => {
+                    let input = materialize_rmw
+                        .inputs
+                        .iter()
+                        .map(|input| self.graph[input].var.get().unwrap())
+                        .collect();
+
+                    // A hack since rmw doesn't support output yet
+                    let var = self
+                        .old
+                        .var_table
+                        .register_var(stmt::Type::list(stmt::Type::Unit));
+
+                    self.old.push_action(plan::ReadModifyWrite2 {
+                        input,
+                        output: Some(plan::Output2 { var, num_uses }),
+                        read: materialize_rmw.read.clone(),
+                        write: materialize_rmw.write.clone(),
+                    })
+                }
                 MaterializeKind::QueryPk(materialize_query_pk) => {
                     let output = self.old.var_table.register_var(node.ty().clone());
                     node.var.set(Some(output));

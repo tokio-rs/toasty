@@ -75,6 +75,7 @@ impl Exec<'_> {
             Action::QueryPk(action) => self.action_query_pk(action).await,
             Action::QueryPk2(action) => self.action_query_pk2(action).await,
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
+            Action::ReadModifyWrite2(action) => self.action_read_modify_write2(action).await,
             Action::Project(action) => self.action_project(action).await,
             Action::SetVar(action) => {
                 self.vars

@@ -191,7 +191,7 @@ impl Planner<'_> {
                 keys: key,
                 assignments: stmt.assignments,
                 filter: index_plan.result_filter,
-                condition: stmt.condition,
+                condition: stmt.condition.expr,
             });
 
             output_var
@@ -255,7 +255,7 @@ impl Planner<'_> {
     }
 
     fn rewrite_conditional_update_as_query_with_cte(&self, stmt: stmt::Update) -> stmt::Query {
-        let Some(condition) = stmt.condition else {
+        let Some(condition) = stmt.condition.expr else {
             panic!("conditional update without condition");
         };
 
@@ -325,7 +325,7 @@ impl Planner<'_> {
                         )),
                     }),
                 )),
-                condition: None,
+                condition: stmt::Condition::default(),
                 returning: Some(
                     stmt.returning
                         // TODO: hax
@@ -390,7 +390,7 @@ impl Planner<'_> {
         // For now, no returning supported
         assert!(stmt.returning.is_none(), "TODO: support returning");
 
-        let Some(condition) = stmt.condition else {
+        let Some(condition) = stmt.condition.expr else {
             panic!("conditional update without condition");
         };
 
@@ -438,7 +438,7 @@ impl Planner<'_> {
             target: stmt.target,
             assignments: stmt.assignments,
             filter: stmt::Filter::new(filter),
-            condition: None,
+            condition: stmt::Condition::default(),
             returning: None,
         };
 

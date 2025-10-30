@@ -4,6 +4,9 @@ pub use assignments::{Assignment, AssignmentOp, Assignments};
 mod association;
 pub use association::Association;
 
+mod condition;
+pub use condition::Condition;
+
 mod cte;
 pub use cte::Cte;
 

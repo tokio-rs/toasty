@@ -1,14 +1,14 @@
 #![allow(unused_variables)]
 
 use super::{
-    Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern,
-    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, Filter,
-    FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path,
-    Projection, Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId,
-    Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget,
-    Value, ValueRecord, Values, With,
+    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprArg,
+    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr,
+    ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
+    Filter, FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
+    OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
+    SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
+    UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait VisitMut {
@@ -145,6 +145,10 @@ pub trait VisitMut {
 
     fn visit_filter_mut(&mut self, i: &mut Filter) {
         visit_filter_mut(self, i);
+    }
+
+    fn visit_condition_mut(&mut self, i: &mut Condition) {
+        visit_condition_mut(self, i);
     }
 
     fn visit_expr_project_mut(&mut self, i: &mut ExprProject) {
@@ -395,6 +399,10 @@ impl<V: VisitMut> VisitMut for &mut V {
 
     fn visit_filter_mut(&mut self, i: &mut Filter) {
         VisitMut::visit_filter_mut(&mut **self, i);
+    }
+
+    fn visit_condition_mut(&mut self, i: &mut Condition) {
+        VisitMut::visit_condition_mut(&mut **self, i);
     }
 
     fn visit_expr_project_mut(&mut self, i: &mut ExprProject) {
@@ -820,6 +828,15 @@ where
     }
 }
 
+pub fn visit_condition_mut<V>(v: &mut V, node: &mut Condition)
+where
+    V: VisitMut + ?Sized,
+{
+    if let Some(expr) = &mut node.expr {
+        v.visit_expr_mut(expr);
+    }
+}
+
 pub fn visit_insert_target_mut<V>(v: &mut V, node: &mut InsertTarget)
 where
     V: VisitMut + ?Sized,
@@ -1021,10 +1038,7 @@ where
     v.visit_update_target_mut(&mut node.target);
     v.visit_assignments_mut(&mut node.assignments);
     v.visit_filter_mut(&mut node.filter);
-
-    if let Some(expr) = &mut node.condition {
-        v.visit_expr_mut(expr);
-    }
+    v.visit_condition_mut(&mut node.condition);
 
     if let Some(returning) = &mut node.returning {
         v.visit_returning_mut(returning);

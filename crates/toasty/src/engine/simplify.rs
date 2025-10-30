@@ -186,7 +186,7 @@ impl VisitMut for Simplify<'_> {
 
         s.visit_filter_mut(&mut stmt.filter);
 
-        if let Some(expr) = &mut stmt.condition {
+        if let Some(expr) = &mut stmt.condition.expr {
             s.visit_expr_mut(expr);
         }
 

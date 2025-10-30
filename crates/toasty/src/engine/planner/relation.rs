@@ -294,7 +294,7 @@ impl Planner<'_> {
             let mut stmt = selection.update();
 
             // This protects against races.
-            stmt.condition = Some(stmt::Expr::in_subquery(
+            stmt.condition = stmt::Condition::new(stmt::Expr::in_subquery(
                 stmt::Expr::ref_self_field(has_many.pair),
                 scope.clone(),
             ));

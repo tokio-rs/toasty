@@ -1,14 +1,14 @@
 #![allow(unused_variables)]
 
 use super::{
-    Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern,
-    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, Filter,
-    FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path,
-    Projection, Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId,
-    Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget,
-    Value, ValueRecord, Values, With,
+    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprArg,
+    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr,
+    ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
+    Filter, FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
+    OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
+    SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
+    UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait Visit {
@@ -145,6 +145,10 @@ pub trait Visit {
 
     fn visit_filter(&mut self, i: &Filter) {
         visit_filter(self, i);
+    }
+
+    fn visit_condition(&mut self, i: &Condition) {
+        visit_condition(self, i);
     }
 
     fn visit_expr_project(&mut self, i: &ExprProject) {
@@ -395,6 +399,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_filter(&mut self, i: &Filter) {
         Visit::visit_filter(&mut **self, i);
+    }
+
+    fn visit_condition(&mut self, i: &Condition) {
+        Visit::visit_condition(&mut **self, i);
     }
 
     fn visit_expr_project(&mut self, i: &ExprProject) {
@@ -820,6 +828,15 @@ where
     }
 }
 
+pub fn visit_condition<V>(v: &mut V, node: &Condition)
+where
+    V: Visit + ?Sized,
+{
+    if let Some(expr) = &node.expr {
+        v.visit_expr(expr);
+    }
+}
+
 pub fn visit_insert_target<V>(v: &mut V, node: &InsertTarget)
 where
     V: Visit + ?Sized,
@@ -1023,10 +1040,7 @@ where
     v.visit_update_target(&node.target);
     v.visit_assignments(&node.assignments);
     v.visit_filter(&node.filter);
-
-    if let Some(expr) = &node.condition {
-        v.visit_expr(expr);
-    }
+    v.visit_condition(&node.condition);
 }
 
 pub fn visit_table_derived<V>(v: &mut V, node: &TableDerived)

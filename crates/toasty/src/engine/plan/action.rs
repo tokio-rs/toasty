@@ -1,6 +1,6 @@
 use crate::engine::plan::{
-    exec_statement2::ExecStatement2, project::Project, Filter, FindPkByIndex2, GetByKey2, QueryPk2,
-    SetVar2,
+    exec_statement2::ExecStatement2, project::Project, rmw::ReadModifyWrite2, Filter,
+    FindPkByIndex2, GetByKey2, QueryPk2, SetVar2,
 };
 
 use super::{
@@ -52,6 +52,7 @@ pub(crate) enum Action {
 
     /// Perform an atomic operation in multiple steps
     ReadModifyWrite(Box<ReadModifyWrite>),
+    ReadModifyWrite2(Box<ReadModifyWrite2>),
 
     /// Set a variable to a const
     SetVar(SetVar),
@@ -79,6 +80,7 @@ impl fmt::Debug for Action {
             Self::QueryPk(a) => a.fmt(f),
             Self::QueryPk2(a) => a.fmt(f),
             Self::ReadModifyWrite(a) => a.fmt(f),
+            Self::ReadModifyWrite2(a) => a.fmt(f),
             Self::Project(a) => a.fmt(f),
             Self::SetVar(a) => a.fmt(f),
             Self::SetVar2(a) => a.fmt(f),

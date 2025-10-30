@@ -71,6 +71,10 @@ pub(crate) enum MaterializeKind {
     /// Projection operation - transforms records
     Project(MaterializeProject),
 
+    /// Read-modify-write. The write only succeeds if the values read are not
+    /// modified.
+    ReadModifyWrite(MaterializeReadModifyWrite),
+
     QueryPk(MaterializeQueryPk),
 }
 
@@ -146,6 +150,21 @@ pub(crate) struct MaterializeProject {
     /// Projection expression
     pub(crate) projection: eval::Func,
 
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeReadModifyWrite {
+    /// Inputs needed to reify the statement
+    pub(crate) inputs: IndexSet<NodeId>,
+
+    /// The read statement
+    pub(crate) read: stmt::Query,
+
+    /// The write statement
+    pub(crate) write: stmt::Statement,
+
+    /// Node return type
     pub(crate) ty: stmt::Type,
 }
 
@@ -408,14 +427,33 @@ impl MaterializePlanner<'_> {
 
             let ty = self.engine.infer_ty(&stmt, &input_args[..]);
 
+            let node = if stmt.condition().is_some() {
+                if let stmt::Statement::Update(stmt) = stmt {
+                    assert!(stmt.returning.is_none(), "TODO: stmt={stmt:#?}");
+                    assert!(returning.is_none(), "TODO: returning={returning:#?}");
+
+                    if self.engine.capability().cte_with_update {
+                        todo!("stmt={stmt:#?}")
+                    } else {
+                        MaterializeKind::ReadModifyWrite(
+                            self.plan_materialize_conditional_sql_query_as_rmw(inputs, stmt, ty),
+                        )
+                    }
+                } else {
+                    todo!("stmt={stmt:#?}");
+                }
+            } else {
+                // With SQL capability, we can just punt the details of execution to
+                // the database's query planner.
+                MaterializeKind::ExecStatement(MaterializeExecStatement { inputs, stmt, ty })
+            };
+
             tracked_dependencies = true;
 
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
-            self.graph.insert_with_deps(
-                MaterializeExecStatement { inputs, stmt, ty },
-                stmt_info.dependent_materializations(&self.store),
-            )
+            self.graph
+                .insert_with_deps(node, stmt_info.dependent_materializations(&self.store))
         } else {
             // Without SQL capability, we have to plan the materialization of
             // the statement based on available indices.
@@ -662,6 +700,75 @@ impl MaterializePlanner<'_> {
         stmt_info.output.set(Some(output_node_id));
     }
 
+    fn plan_materialize_conditional_sql_query_as_rmw(
+        &mut self,
+        inputs: IndexSet<NodeId>,
+        stmt: stmt::Update,
+        ty: stmt::Type,
+    ) -> MaterializeReadModifyWrite {
+        // For now, no returning supported
+        assert!(stmt.returning.is_none(), "TODO: support returning");
+
+        let Some(condition) = stmt.condition.expr else {
+            panic!("conditional update without condition");
+        };
+
+        let Some(filter) = stmt.filter.expr else {
+            panic!("conditional update without filter");
+        };
+
+        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
+            panic!("conditional update without table");
+        };
+
+        // Neither SQLite nor MySQL support CTE with update. We should transform
+        // the conditional update into a transaction with checks between.
+
+        /*
+         * BEGIN;
+         *
+         * SELECT FOR UPDATE count(*), count({condition}) FROM {table} WHERE {filter};
+         *
+         * UPDATE {table} SET {assignments} WHERE {filter} AND @col_0 = @col_1;
+         *
+         * SELECT @col_0, @col_1;
+         *
+         * COMMIT;
+         */
+
+        let read = stmt::Query::builder(target)
+            .filter(filter.clone())
+            .returning(vec![
+                stmt::Expr::count_star(),
+                stmt::FuncCount {
+                    arg: None,
+                    filter: Some(Box::new(condition)),
+                }
+                .into(),
+            ])
+            .locks(if self.engine.capability().select_for_update {
+                vec![stmt::Lock::Update]
+            } else {
+                vec![]
+            })
+            .build();
+
+        let write = stmt::Update {
+            target: stmt.target,
+            assignments: stmt.assignments,
+            filter: stmt::Filter::new(filter),
+            condition: stmt::Condition::default(),
+            returning: None,
+        };
+
+        MaterializeReadModifyWrite {
+            inputs,
+            read,
+            write: write.into(),
+            ty,
+        }
+    }
+
     fn compute_materialization_execution_order(&mut self, exit: NodeId) {
         debug_assert!(self.graph.execution_order.is_empty());
         // Backward traversal to mark reachable nodes
@@ -856,6 +963,7 @@ impl From<MaterializeKind> for MaterializeNode {
                 materialize_nested_merge.inputs.clone()
             }
             MaterializeKind::Project(materialize_project) => indexset![materialize_project.input],
+            MaterializeKind::ReadModifyWrite(materialize_rmw) => materialize_rmw.inputs.clone(),
             MaterializeKind::QueryPk(_materialize_query_pk) => IndexSet::new(),
         };
 

@@ -422,7 +422,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         lower.visit_assignments_mut(&mut stmt.assignments);
         lower.visit_filter_mut(&mut stmt.filter);
 
-        if let Some(expr) = &mut stmt.condition {
+        if let Some(expr) = &mut stmt.condition.expr {
             lower.visit_expr_mut(expr);
         }
 

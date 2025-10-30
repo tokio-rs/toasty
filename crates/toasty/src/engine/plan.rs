@@ -47,7 +47,7 @@ mod query_pk;
 pub(crate) use query_pk::{QueryPk, QueryPk2};
 
 mod rmw;
-pub(crate) use rmw::ReadModifyWrite;
+pub(crate) use rmw::{ReadModifyWrite, ReadModifyWrite2};
 
 mod set_var;
 pub(crate) use set_var::{SetVar, SetVar2, VarId};

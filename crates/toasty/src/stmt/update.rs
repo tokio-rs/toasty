@@ -67,7 +67,7 @@ impl<M: Model> Default for Update<M> {
                 target: stmt::UpdateTarget::Model(M::id()),
                 assignments: stmt::Assignments::default(),
                 filter: stmt::Filter::new(stmt::Expr::from(false)),
-                condition: None,
+                condition: stmt::Condition::default(),
                 returning: Some(stmt::Returning::Changed),
             },
             _p: PhantomData,

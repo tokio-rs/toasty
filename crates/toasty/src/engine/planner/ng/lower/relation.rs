@@ -292,7 +292,7 @@ impl LowerStatement<'_, '_> {
             let mut stmt = selection.update();
 
             // This protects against races.
-            stmt.condition = Some(self.relation_pair_filter(pair.id, source));
+            stmt.condition = stmt::Condition::new(self.relation_pair_filter(pair.id, source));
             stmt.assignments.set(pair, stmt::Value::Null);
             self.new_dependency(stmt);
         } else {
