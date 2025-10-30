@@ -17,6 +17,12 @@ enum Mutation {
         exclusive: bool,
     },
 
+    /// Disassociate an existing relation
+    Disassociate {
+        /// Target relation expression
+        expr: stmt::Expr,
+    },
+
     /// Disassociate any target relations
     DisassociateAll {
         // True when disasociating before deleting a record.
@@ -124,7 +130,12 @@ impl LowerStatement<'_, '_> {
                         exclusive: false,
                     }
                 }
-                stmt::AssignmentOp::Remove => todo!(),
+                stmt::AssignmentOp::Remove => {
+                    debug_assert!(!assignment.expr.is_value_null(), "should not be null");
+                    Mutation::Disassociate {
+                        expr: assignment.expr,
+                    }
+                }
             };
 
             self.plan_mut_relation_field(
@@ -186,12 +197,15 @@ impl LowerStatement<'_, '_> {
     ) {
         match op {
             Mutation::DisassociateAll { .. } => {
-                self.plan_mut_has_n_disassociate(pair, source);
+                self.plan_mut_has_n_disassociate_all(pair, source);
             }
             Mutation::Associate { expr, exclusive } => {
                 self.plan_mut_has_n_associate_expr(field, pair, expr, exclusive, source)
             }
-            _ => todo!("op={op:#?}"),
+            Mutation::Disassociate { expr } => {
+                debug_assert!(field.ty.is_has_many());
+                self.plan_mut_has_many_disassociate_expr(field, pair, expr, source);
+            }
         }
     }
 
@@ -248,7 +262,45 @@ impl LowerStatement<'_, '_> {
         self.new_dependency(stmt);
     }
 
-    fn plan_mut_has_n_disassociate(&mut self, pair: &Field, source: &dyn RelationSource) {
+    fn plan_mut_has_many_disassociate_expr(
+        &mut self,
+        field: &Field,
+        pair: &Field,
+        expr: stmt::Expr,
+        source: &dyn RelationSource,
+    ) {
+        match expr {
+            stmt::Expr::Value(value) => {
+                self.plan_mut_has_many_disassociate_value(pair, value, source)
+            }
+            _ => todo!("field={field:#?}; expr={expr:#?}"),
+        }
+    }
+
+    fn plan_mut_has_many_disassociate_value(
+        &mut self,
+        pair: &Field,
+        value: stmt::Value,
+        source: &dyn RelationSource,
+    ) {
+        let selection = stmt::Query::new_select(
+            pair.id.model,
+            stmt::Expr::eq(stmt::Expr::key(pair.id.model), value),
+        );
+
+        if pair.nullable {
+            let mut stmt = selection.update();
+
+            // This protects against races.
+            stmt.condition = Some(self.relation_pair_filter(pair.id, source));
+            stmt.assignments.set(pair, stmt::Value::Null);
+            self.new_dependency(stmt);
+        } else {
+            self.new_dependency(selection.delete());
+        }
+    }
+
+    fn plan_mut_has_n_disassociate_all(&mut self, pair: &Field, source: &dyn RelationSource) {
         let query = self.relation_pair_scope(pair.id, source);
 
         if pair.nullable {
@@ -298,29 +350,6 @@ impl LowerStatement<'_, '_> {
         self.new_dependency(stmt);
     }
 
-    fn plan_has_one_nullify(&mut self, field: &Field, source: &dyn RelationSource) {
-        let has_one = field.ty.expect_has_one();
-        let pair_scope = self.relation_pair_scope(has_one.pair, source);
-
-        if self.schema().app.field(has_one.pair).nullable {
-            // TODO: unify w/ has_many ops?
-            let mut stmt = pair_scope.update();
-            stmt.assignments.set(has_one.pair, stmt::Value::Null);
-            /*
-            let out = self.plan_stmt(stmt.into())?;
-            assert!(out.is_none());
-            */
-            todo!("stmt={stmt:#?}");
-        } else {
-            let stmt = pair_scope.delete();
-            /*
-            let out = self.plan_stmt(pair_scope.delete().into())?;
-            assert!(out.is_none());
-            */
-            todo!("stmt={stmt:#?}");
-        }
-    }
-
     fn plan_mut_belongs_to(
         &mut self,
         field: &Field,
@@ -335,6 +364,9 @@ impl LowerStatement<'_, '_> {
                 if !delete {
                     self.plan_mut_belongs_to_nullify(field, source);
                 }
+            }
+            Mutation::Disassociate { .. } => {
+                todo!("is this needed?")
             }
         }
     }
@@ -446,10 +478,11 @@ impl LowerStatement<'_, '_> {
     /// Translate a source model scope to a target model scope for a has_one
     /// relation.
     fn relation_pair_scope(&self, pair: FieldId, source: &dyn RelationSource) -> stmt::Query {
-        stmt::Query::new_select(
-            pair.model,
-            stmt::Expr::in_subquery(stmt::Expr::ref_self_field(pair), source.selection()),
-        )
+        stmt::Query::new_select(pair.model, self.relation_pair_filter(pair, source))
+    }
+
+    fn relation_pair_filter(&self, pair: FieldId, source: &dyn RelationSource) -> stmt::Expr {
+        stmt::Expr::in_subquery(stmt::Expr::ref_self_field(pair), source.selection())
     }
 
     fn relation_step(&mut self, field: &Field, f: impl FnOnce(&mut LowerStatement)) {
