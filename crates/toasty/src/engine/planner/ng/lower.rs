@@ -3,7 +3,7 @@ mod paginate;
 mod relation;
 mod returning;
 
-use std::{cell::Cell, mem};
+use std::{cell::Cell, collections::HashSet, mem};
 
 use index_vec::IndexVec;
 use toasty_core::{
@@ -31,6 +31,7 @@ impl super::PlannerNg<'_, '_> {
             engine: self.old.engine,
             relations: vec![],
             errors: vec![],
+            dependencies: HashSet::new(),
         };
 
         state.lower_stmt(stmt::ExprContext::new(self.old.schema()), stmt);
@@ -50,6 +51,7 @@ impl LoweringState<'_> {
 
         let stmt_id = self.store.new_statement_info();
         let scope_id = self.scopes.push(Scope { stmt_id });
+        let mut dependencies = self.dependencies.clone();
 
         // Map the statement
         LowerStatement {
@@ -57,12 +59,19 @@ impl LoweringState<'_> {
             expr_cx,
             scope_id,
             cx: LoweringContext::Statement,
+            dependencies: &mut dependencies,
         }
         .visit_stmt_mut(&mut stmt);
 
         // TODO: is there a way to avoid simplifying again?
         self.engine.simplify_stmt(&mut stmt);
-        self.store[stmt_id].stmt = Some(Box::new(stmt));
+
+        let stmt_info = &mut self.store[stmt_id];
+        stmt_info.stmt = Some(Box::new(stmt));
+
+        debug_assert!(stmt_info.deps.is_empty());
+        stmt_info.deps = dependencies;
+
         stmt_id
     }
 }
@@ -80,6 +89,9 @@ struct LowerStatement<'a, 'b> {
 
     /// Current lowering context
     cx: LoweringContext<'a>,
+
+    /// Track dependencies here.
+    dependencies: &'a mut HashSet<StmtId>,
 }
 
 #[derive(Debug)]
@@ -98,6 +110,9 @@ struct LoweringState<'a> {
     /// consistency. This field tracks the current relation edge being traversed
     /// so the planner doesn't walk it backwards.
     relations: Vec<app::FieldId>,
+
+    /// All new statements should include these as part of its dependencies
+    dependencies: HashSet<StmtId>,
 
     /// Tracks errors that occured while lowering the statement
     errors: Vec<crate::Error>,
@@ -142,9 +157,31 @@ impl LowerStatement<'_, '_> {
             .lower_stmt(stmt::ExprContext::new(self.schema()), stmt.into());
 
         self.state.scopes = scopes;
+        self.dependencies.insert(stmt_id);
 
-        self.curr_stmt_info().deps.insert(stmt_id);
         stmt_id
+    }
+
+    fn collect_dependencies(
+        &mut self,
+        f: impl FnOnce(&mut LowerStatement<'_, '_>),
+    ) -> HashSet<StmtId> {
+        let old = std::mem::take(self.dependencies);
+
+        f(self);
+
+        std::mem::replace(self.dependencies, old)
+    }
+
+    fn with_dependencies(
+        &mut self,
+        dependencies: HashSet<StmtId>,
+        f: impl FnOnce(&mut LowerStatement<'_, '_>),
+    ) {
+        debug_assert!(self.state.dependencies.is_empty());
+        let old = std::mem::replace(&mut self.state.dependencies, dependencies);
+        f(self);
+        self.state.dependencies = old;
     }
 }
 
@@ -251,9 +288,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 // For now, we assume nested sub-statements cannot be executed on the
                 // target database. Eventually, we will need to make this smarter.
                 let source_id = self.scope_stmt_id();
-                let target_id = self.new_statement_info();
-
-                self.scope_statement(target_id, |child| {
+                let target_id = self.scope_statement(|child| {
                     visit_mut::visit_expr_stmt_mut(child, expr_stmt);
                 });
 
@@ -875,10 +910,24 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     /// Plan a sub-statement that is able to reference the parent statement
-    fn scope_statement(&mut self, stmt_id: StmtId, f: impl FnOnce(&mut LowerStatement<'_, '_>)) {
+    fn scope_statement(&mut self, f: impl FnOnce(&mut LowerStatement<'_, '_>)) -> StmtId {
+        let stmt_id = self.new_statement_info();
         let scope_id = self.state.scopes.push(Scope { stmt_id });
-        f(&mut self.lower_statement(scope_id));
+        let mut dependencies = self.state.dependencies.clone();
+
+        let mut lower = LowerStatement {
+            state: self.state,
+            expr_cx: self.expr_cx,
+            scope_id,
+            cx: LoweringContext::Statement,
+            dependencies: &mut dependencies,
+        };
+
+        f(&mut lower);
+
+        self.state.store[stmt_id].deps = dependencies;
         self.state.scopes.pop();
+        stmt_id
     }
 
     fn scope_expr<'child>(
@@ -890,6 +939,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
             cx: self.cx,
+            dependencies: self.dependencies,
         }
     }
 
@@ -902,6 +952,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::Assignment(assignments),
+            dependencies: self.dependencies,
         }
     }
 
@@ -922,6 +973,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
             cx: LoweringContext::Insert(columns),
+            dependencies: self.dependencies,
         }
     }
 
@@ -934,6 +986,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::InsertRow(row),
+            dependencies: self.dependencies,
         }
     }
 
@@ -943,15 +996,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::Returning,
-        }
-    }
-
-    fn lower_statement(&mut self, scope_id: ScopeId) -> LowerStatement<'_, 'b> {
-        LowerStatement {
-            state: self.state,
-            expr_cx: self.expr_cx,
-            scope_id,
-            cx: LoweringContext::Statement,
+            dependencies: self.dependencies,
         }
     }
 }

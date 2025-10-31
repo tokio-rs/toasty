@@ -204,11 +204,15 @@ impl LowerStatement<'_, '_> {
                 self.plan_mut_has_n_disassociate_all(pair, source);
             }
             Mutation::Associate { expr, exclusive } => {
-                if exclusive {
-                    self.plan_mut_has_n_disassociate_all(pair, source);
-                }
+                let deps = self.collect_dependencies(|lower| {
+                    if exclusive {
+                        lower.plan_mut_has_n_disassociate_all(pair, source);
+                    }
+                });
 
-                self.plan_mut_has_n_associate_expr(field, pair, expr, source)
+                self.with_dependencies(deps, |lower| {
+                    lower.plan_mut_has_n_associate_expr(field, pair, expr, source);
+                });
             }
             Mutation::Disassociate { expr } => {
                 debug_assert!(field.ty.is_has_many());
@@ -373,8 +377,7 @@ impl LowerStatement<'_, '_> {
         delete: bool,
         source: &mut dyn RelationSource,
     ) {
-        if !field.nullable {
-            // TODO: probably don't panic if `delete`
+        if !field.nullable && !delete {
             todo!("invalid statement. handle this case");
         }
 
