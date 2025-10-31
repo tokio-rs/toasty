@@ -124,6 +124,10 @@ impl LowerStatement<'_, '_> {
                     },
                 },
                 stmt::AssignmentOp::Insert => {
+                    assert!(
+                        field.ty.is_has_many(),
+                        "TODO: can other types support insert?"
+                    );
                     debug_assert!(!assignment.expr.is_value_null(), "should not be null");
                     Mutation::Associate {
                         expr: assignment.expr,
@@ -131,6 +135,10 @@ impl LowerStatement<'_, '_> {
                     }
                 }
                 stmt::AssignmentOp::Remove => {
+                    assert!(
+                        field.ty.is_has_many(),
+                        "TODO: can other types support remove?"
+                    );
                     debug_assert!(!assignment.expr.is_value_null(), "should not be null");
                     Mutation::Disassociate {
                         expr: assignment.expr,
@@ -157,14 +165,10 @@ impl LowerStatement<'_, '_> {
         source: &mut dyn RelationSource,
     ) {
         match &field.ty {
-            FieldTy::HasOne(has_one) => {
-                debug_assert_ne!(self.state.relations.last(), Some(&has_one.pair));
-
+            FieldTy::HasOne(..) => {
                 self.relation_step(field, |lower| lower.plan_mut_has_one(field, op, source));
             }
-            FieldTy::HasMany(has_many) => {
-                debug_assert_ne!(self.state.relations.last(), Some(&has_many.pair));
-
+            FieldTy::HasMany(..) => {
                 self.relation_step(field, |lower| lower.plan_mut_has_many(field, op, source));
             }
             FieldTy::BelongsTo(_) => {
@@ -176,14 +180,14 @@ impl LowerStatement<'_, '_> {
 
     fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_many = field.ty.expect_has_many();
-        let pair = self.schema().app.field(has_many.pair);
+        let pair = self.field(has_many.pair);
 
         self.plan_mut_has_n(field, pair, op, source);
     }
 
     fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_one = field.ty.expect_has_one();
-        let pair = self.schema().app.field(has_one.pair);
+        let pair = self.field(has_one.pair);
 
         self.plan_mut_has_n(field, pair, op, source);
     }
@@ -200,7 +204,11 @@ impl LowerStatement<'_, '_> {
                 self.plan_mut_has_n_disassociate_all(pair, source);
             }
             Mutation::Associate { expr, exclusive } => {
-                self.plan_mut_has_n_associate_expr(field, pair, expr, exclusive, source)
+                if exclusive {
+                    self.plan_mut_has_n_disassociate_all(pair, source);
+                }
+
+                self.plan_mut_has_n_associate_expr(field, pair, expr, source)
             }
             Mutation::Disassociate { expr } => {
                 debug_assert!(field.ty.is_has_many());
@@ -214,23 +222,18 @@ impl LowerStatement<'_, '_> {
         field: &Field,
         pair: &Field,
         expr: stmt::Expr,
-        exclusive: bool,
         source: &mut dyn RelationSource,
     ) {
         match expr {
             stmt::Expr::List(expr_list) => {
-                assert!(!exclusive, "TODO: implement exclusive association");
-
                 for expr in expr_list.items {
-                    self.plan_mut_has_n_associate_expr(field, pair, expr, exclusive, source);
+                    self.plan_mut_has_n_associate_expr(field, pair, expr, source);
                 }
             }
             stmt::Expr::Stmt(expr_stmt) => {
-                self.plan_mut_has_n_associate_stmt(field, *expr_stmt.stmt, exclusive, source);
+                self.plan_mut_has_n_associate_stmt(field, pair, *expr_stmt.stmt, source);
             }
             stmt::Expr::Value(stmt::Value::List(value_list)) => {
-                assert!(!exclusive, "TODO: implement exclusive association");
-
                 for value in value_list {
                     self.plan_mut_has_n_associate_value(pair, value, source);
                 }
@@ -238,7 +241,7 @@ impl LowerStatement<'_, '_> {
             stmt::Expr::Value(value) => {
                 self.plan_mut_has_n_associate_value(pair, value, source);
             }
-            _ => todo!("field={field:#?}, expr={expr:#?}, exclusive={exclusive:#?}"),
+            _ => todo!("field={field:#?}, expr={expr:#?}"),
         }
     }
 
@@ -316,13 +319,13 @@ impl LowerStatement<'_, '_> {
     fn plan_mut_has_n_associate_stmt(
         &mut self,
         field: &Field,
+        pair: &Field,
         stmt: stmt::Statement,
-        exclusive: bool,
         source: &dyn RelationSource,
     ) {
         match stmt {
             stmt::Statement::Insert(stmt) => {
-                self.plan_mut_has_n_associate_insert(field, stmt, exclusive, source)
+                self.plan_mut_has_n_associate_insert(field, pair, stmt, source)
             }
             _ => todo!("stmt={:#?}", stmt),
         }
@@ -330,23 +333,18 @@ impl LowerStatement<'_, '_> {
 
     fn plan_mut_has_n_associate_insert(
         &mut self,
-        field: &Field,
+        _field: &Field,
+        pair: &Field,
         mut stmt: stmt::Insert,
-        exclusive: bool,
         source: &dyn RelationSource,
     ) {
-        assert!(!exclusive, "TODO");
-
-        let has_many = field.ty.expect_has_many();
-
         // Returning does nothing in this context.
         stmt.returning = None;
 
-        assert_eq!(stmt.target.as_model_unwrap(), has_many.target);
+        debug_assert_eq!(stmt.target.as_model_unwrap(), pair.id.model);
+        debug_assert!(stmt.target.is_model());
 
-        assert!(stmt.target.is_model());
-        stmt.target = self.relation_pair_scope(has_many.pair, source).into();
-
+        stmt.target = self.relation_pair_scope(pair.id, source).into();
         self.new_dependency(stmt);
     }
 
@@ -361,9 +359,7 @@ impl LowerStatement<'_, '_> {
                 self.plan_mut_belongs_to_associate(field, expr, source)
             }
             Mutation::DisassociateAll { delete } => {
-                if !delete {
-                    self.plan_mut_belongs_to_nullify(field, source);
-                }
+                self.plan_mut_belongs_to_disassociate(field, delete, source);
             }
             Mutation::Disassociate { .. } => {
                 todo!("is this needed?")
@@ -371,15 +367,34 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    fn plan_mut_belongs_to_nullify(&mut self, field: &Field, source: &mut dyn RelationSource) {
+    fn plan_mut_belongs_to_disassociate(
+        &mut self,
+        field: &Field,
+        delete: bool,
+        source: &mut dyn RelationSource,
+    ) {
         if !field.nullable {
+            // TODO: probably don't panic if `delete`
             todo!("invalid statement. handle this case");
         }
 
         let belongs_to = field.ty.expect_belongs_to();
 
-        for fk_field in &belongs_to.foreign_key.fields {
-            source.set(fk_field.source, stmt::Expr::null());
+        if let Some(pair_id) = belongs_to.pair {
+            let pair = self.field(pair_id);
+
+            if pair.ty.is_has_one() && !pair.nullable {
+                self.relation_step(field, |planner| {
+                    let delete = planner.relation_pair_scope(pair.id, source).delete();
+                    planner.new_dependency(delete);
+                });
+            }
+        }
+
+        if !delete {
+            for fk_field in &belongs_to.foreign_key.fields {
+                source.set(fk_field.source, stmt::Expr::null());
+            }
         }
     }
 
@@ -389,6 +404,40 @@ impl LowerStatement<'_, '_> {
         expr: stmt::Expr,
         source: &mut dyn RelationSource,
     ) {
+        if let Some(pair_id) = field.pair() {
+            if self.field(pair_id).ty.is_has_one() {
+                // Disassociate an existing HasOne. This handles the case where
+                // if the HasOne association is required (i.e. *not* `Option`),
+                // then the record gets deleted.
+                self.plan_mut_belongs_to_disassociate(field, false, source);
+
+                // This handles disassociating any *other* instances of the current
+                // model that already are associated with the target model being
+                // passed it. This is necessary because of the 1-1 relation
+                // mapping.
+                if field.nullable {
+                    self.relation_step(field, |planner| {
+                        assert!(expr.is_value(), "TODO; expr={expr:#?}");
+
+                        let scope = stmt::Query::new_select(
+                            field.id.model,
+                            stmt::Expr::eq(stmt::Expr::ref_self_field(field), expr.clone()),
+                        );
+
+                        if field.nullable {
+                            let mut stmt = scope.update();
+                            stmt.assignments.set(field.id, stmt::Value::Null);
+                            planner.new_dependency(stmt);
+                        } else {
+                            todo!();
+                        }
+                    });
+                } else {
+                    todo!()
+                }
+            }
+        }
+
         match expr {
             expr if expr.is_value() => {
                 assert!(!expr.is_value_null());

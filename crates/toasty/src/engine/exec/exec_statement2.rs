@@ -21,6 +21,14 @@ impl Exec<'_> {
             stmt.substitute(&input_values);
         }
 
+        debug_assert!(
+            stmt.returning()
+                .and_then(|returning| returning.as_expr())
+                .map(|expr| expr.is_record())
+                .unwrap_or(true),
+            "stmt={stmt:#?}"
+        );
+
         let op = operation::QuerySql {
             stmt,
             ret: action.output.as_ref().map(|output| output.ty.clone()),

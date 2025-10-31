@@ -443,6 +443,13 @@ impl MaterializePlanner<'_> {
                     todo!("stmt={stmt:#?}");
                 }
             } else {
+                debug_assert!(
+                    stmt.returning()
+                        .and_then(|returning| returning.as_expr())
+                        .map(|expr| expr.is_record())
+                        .unwrap_or(true),
+                    "stmt={stmt:#?}"
+                );
                 // With SQL capability, we can just punt the details of execution to
                 // the database's query planner.
                 MaterializeKind::ExecStatement(MaterializeExecStatement { inputs, stmt, ty })

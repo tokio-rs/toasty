@@ -194,21 +194,21 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::BinaryOp(e) => {
-                stmt::visit_mut::visit_expr_binary_op_mut(self, e);
+                self.visit_expr_binary_op_mut(e);
 
                 if let Some(lowered) = self.lower_expr_binary_op(e.op, &mut e.lhs, &mut e.rhs) {
                     *expr = lowered;
                 }
             }
             stmt::Expr::InList(e) => {
-                stmt::visit_mut::visit_expr_in_list_mut(self, e);
+                self.visit_expr_in_list_mut(e);
 
                 if let Some(lowered) = self.lower_expr_in_list(&mut e.expr, &mut e.list) {
                     *expr = lowered;
                 }
             }
             stmt::Expr::InSubquery(e) => {
-                stmt::visit_mut::visit_expr_in_subquery_mut(self, e);
+                self.visit_expr_in_subquery_mut(e);
 
                 let maybe_res = self.lower_expr_binary_op(
                     stmt::BinaryOp::Eq,
@@ -217,6 +217,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 );
 
                 assert!(maybe_res.is_none(), "TODO");
+
+                let returning = e.query.returning_mut_unwrap().as_expr_mut_unwrap();
+
+                if !returning.is_record() {
+                    *returning = stmt::Expr::record([returning.take()]);
+                }
             }
             stmt::Expr::Reference(expr_reference) => {
                 match expr_reference {
@@ -816,12 +822,16 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         arg
     }
 
-    fn schema(&self) -> &'a Schema {
-        self.expr_cx.schema()
+    fn schema(&self) -> &'b Schema {
+        &self.state.engine.schema
     }
 
     fn capability(&self) -> &Capability {
         self.state.engine.capability()
+    }
+
+    fn field(&self, id: impl Into<app::FieldId>) -> &'b app::Field {
+        self.schema().app.field(id.into())
     }
 
     fn model(&self) -> Option<&Model> {
