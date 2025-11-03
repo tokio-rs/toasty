@@ -1,8 +1,9 @@
+use toasty_core::driver::Rows;
+
 use crate::{
     engine::{exec::Exec, plan},
     Result,
 };
-use toasty_core::stmt::ValueStream;
 
 impl Exec<'_> {
     pub(super) fn action_set_var2(&mut self, action: &plan::SetVar2) -> Result<()> {
@@ -10,7 +11,7 @@ impl Exec<'_> {
         self.vars.store_counted(
             action.output.var,
             action.output.num_uses,
-            ValueStream::from_vec(action.value.clone()),
+            Rows::value_stream(action.rows.clone()),
         );
 
         Ok(())

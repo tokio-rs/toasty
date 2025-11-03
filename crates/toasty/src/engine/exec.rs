@@ -27,8 +27,8 @@ use crate::{
     },
     Result,
 };
-use toasty_core::stmt;
 use toasty_core::stmt::ValueStream;
+use toasty_core::{driver::Rows, stmt};
 
 struct Exec<'a> {
     engine: &'a Engine,
@@ -52,7 +52,10 @@ impl Exec<'_> {
         }
 
         Ok(if let Some(returning) = pipeline.returning {
-            self.vars.load(returning)
+            match self.vars.load_count(returning).await? {
+                Rows::Count(_) => ValueStream::default(),
+                Rows::Values(value_stream) => value_stream,
+            }
         } else {
             ValueStream::default()
         })
@@ -105,7 +108,13 @@ impl Exec<'_> {
         let mut ret = Vec::new();
 
         for var_id in input {
-            let values = self.vars.load_count(*var_id).await?.collect().await?;
+            let values = self
+                .vars
+                .load_count(*var_id)
+                .await?
+                .into_values()
+                .collect()
+                .await?;
             ret.push(stmt::Value::List(values));
         }
 

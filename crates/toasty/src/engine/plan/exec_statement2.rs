@@ -8,7 +8,7 @@ pub(crate) struct ExecStatement2 {
     pub input: Vec<VarId>,
 
     /// How to handle output
-    pub output: Option<ExecStatementOutput>,
+    pub output: ExecStatementOutput,
 
     /// The query to execute. This may require input to generate the query.
     pub stmt: stmt::Statement,
@@ -18,7 +18,7 @@ pub(crate) struct ExecStatement2 {
 pub(crate) struct ExecStatementOutput {
     /// Databases always return rows as a vec of values. This specifies the type
     /// of each value.
-    pub ty: Vec<stmt::Type>,
+    pub ty: Option<Vec<stmt::Type>>,
     pub output: Output2,
 }
 

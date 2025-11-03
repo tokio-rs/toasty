@@ -1,5 +1,4 @@
 use super::{operation, plan, Exec, Result};
-use crate::driver::Rows;
 use toasty_core::stmt;
 
 impl Exec<'_> {
@@ -15,7 +14,13 @@ impl Exec<'_> {
         if !action.input.is_empty() {
             let mut input_values = Vec::new();
             for var_id in &action.input {
-                let values = self.vars.load_count(*var_id).await?.collect().await?;
+                let values = self
+                    .vars
+                    .load_count(*var_id)
+                    .await?
+                    .into_values()
+                    .collect()
+                    .await?;
                 input_values.push(stmt::Value::List(values));
             }
             stmt.substitute(&input_values);
@@ -31,7 +36,7 @@ impl Exec<'_> {
 
         let op = operation::QuerySql {
             stmt,
-            ret: action.output.as_ref().map(|output| output.ty.clone()),
+            ret: action.output.ty.clone(),
         };
 
         let res = self
@@ -40,19 +45,11 @@ impl Exec<'_> {
             .exec(&self.engine.schema.db, op.into())
             .await?;
 
-        if let Some(output) = &action.output {
-            match res.rows {
-                Rows::Count(_) => {
-                    todo!()
-                }
-                Rows::Values(rows) => {
-                    self.vars
-                        .store_counted(output.output.var, output.output.num_uses, rows);
-                }
-            }
-        } else {
-            assert!(res.rows.is_count());
-        }
+        self.vars.store_counted(
+            action.output.output.var,
+            action.output.output.num_uses,
+            res.rows,
+        );
 
         Ok(())
     }

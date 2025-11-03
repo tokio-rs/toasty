@@ -24,9 +24,7 @@ impl DynamoDb {
 
             if let Some(item) = res.item() {
                 let row = item_to_record(item, op.select.iter().map(|id| schema.column(*id)))?;
-                Ok(Response::from_value_stream(stmt::ValueStream::from_value(
-                    row,
-                )))
+                Ok(Response::value_stream(stmt::ValueStream::from_value(row)))
             } else {
                 Ok(Response::empty_value_stream())
             }
@@ -67,7 +65,7 @@ impl DynamoDb {
 
             let schema = schema.clone();
 
-            Ok(Response::from_value_stream(stmt::ValueStream::from_iter(
+            Ok(Response::value_stream(stmt::ValueStream::from_iter(
                 items.into_iter().map(move |item| {
                     item_to_record(
                         &item,

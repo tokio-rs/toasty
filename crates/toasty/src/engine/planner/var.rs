@@ -12,7 +12,7 @@ pub(crate) struct VarTable {
 impl VarTable {
     #[track_caller]
     pub fn register_var(&mut self, ty: stmt::Type) -> plan::VarId {
-        debug_assert!(ty.is_list(), "{ty:#?}");
+        debug_assert!(ty.is_list() || ty.is_unit(), "{ty:#?}");
         // Register a new slot
         let ret = self.vars.len();
         self.vars.push(ty);

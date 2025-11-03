@@ -1,8 +1,6 @@
-use crate::engine::eval;
-
 use super::{plan, Exec, Result};
+use toasty_core::driver::Rows;
 use toasty_core::stmt;
-use toasty_core::stmt::ValueStream;
 
 impl Exec<'_> {
     pub(super) async fn action_nested_merge(&mut self, action: &plan::NestedMerge) -> Result<()> {
@@ -11,7 +9,13 @@ impl Exec<'_> {
 
         for var_id in &action.inputs {
             // TODO: make loading input concurrent
-            let data = self.vars.load_count(*var_id).await?.collect().await?;
+            let data = self
+                .vars
+                .load_count(*var_id)
+                .await?
+                .into_values()
+                .collect()
+                .await?;
             input.push(data);
         }
 
@@ -33,7 +37,7 @@ impl Exec<'_> {
         self.vars.store_counted(
             action.output.var,
             action.output.num_uses,
-            ValueStream::from_vec(merged_rows),
+            Rows::value_stream(merged_rows),
         );
 
         Ok(())

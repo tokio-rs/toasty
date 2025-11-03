@@ -1,3 +1,5 @@
+use toasty_core::driver::Rows;
+
 use crate::engine::plan::Output2;
 
 use super::{stmt, Action};
@@ -10,7 +12,7 @@ pub(crate) struct SetVar {
 
 #[derive(Debug)]
 pub(crate) struct SetVar2 {
-    pub value: Vec<stmt::Value>,
+    pub rows: Vec<stmt::Value>,
     pub output: Output2,
 }
 

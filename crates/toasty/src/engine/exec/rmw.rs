@@ -162,8 +162,8 @@ impl Exec<'_> {
         assert!(matches!(res.rows, Rows::Count(0)));
 
         if let Some(output) = &action.output {
-            self.vars
-                .store_counted(output.var, output.num_uses, ValueStream::from_vec(vec![]));
+            let rows = Rows::value_stream(ValueStream::default());
+            self.vars.store_counted(output.var, output.num_uses, rows);
         }
 
         Ok(())

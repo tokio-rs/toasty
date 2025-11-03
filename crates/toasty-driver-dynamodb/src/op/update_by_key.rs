@@ -128,7 +128,7 @@ impl DynamoDb {
                                 return if op.returning {
                                     Ok(Response::empty_value_stream())
                                 } else {
-                                    Ok(Response::from_count(0))
+                                    Ok(Response::count(0))
                                 };
                             }
 
@@ -385,9 +385,9 @@ impl DynamoDb {
         // If we get here, then returning should be false
         Ok(if op.returning {
             let values = stmt::ValueStream::from_value(stmt::Value::record_from_vec(ret));
-            Response::from_value_stream(values)
+            Response::value_stream(values)
         } else {
-            Response::from_count(ret.len() as _)
+            Response::count(ret.len() as _)
         })
     }
 }

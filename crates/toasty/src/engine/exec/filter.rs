@@ -2,12 +2,12 @@ use crate::{
     engine::{exec::Exec, plan},
     Result,
 };
-use toasty_core::stmt::ValueStream;
+use toasty_core::driver::Rows;
 
 impl Exec<'_> {
     pub(super) async fn action_filter(&mut self, action: &plan::Filter) -> Result<()> {
         // Load the input variable
-        let mut input_stream = self.vars.load_count(action.input).await?;
+        let mut input_stream = self.vars.load_count(action.input).await?.into_values();
 
         // TODO: come up with a more advanced execution task manager to avoid
         // having to eagerly buffer everything.
@@ -27,7 +27,7 @@ impl Exec<'_> {
         self.vars.store_counted(
             action.output.var,
             action.output.num_uses,
-            ValueStream::from_vec(filtered_rows),
+            Rows::value_stream(filtered_rows),
         );
 
         Ok(())

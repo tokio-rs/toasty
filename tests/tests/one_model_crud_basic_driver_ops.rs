@@ -141,6 +141,7 @@ async fn basic_crud(test: &mut DbTest) {
                 })),
                 ..
             }),
+            ret: None,
             ..
         }));
     } else {
@@ -149,6 +150,7 @@ async fn basic_crud(test: &mut DbTest) {
             filter: None,
             keys: [=~ (&user_id,)],
             assignments: #{ 2: _ { expr: 31, .. }},
+            returning: false,
             ..
         }));
     }

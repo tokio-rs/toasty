@@ -39,10 +39,16 @@ impl Exec<'_> {
     }
 
     pub(super) async fn action_get_by_key2(&mut self, action: &plan::GetByKey2) -> Result<()> {
-        let keys = self.vars.load_count(action.input).await?.collect().await?;
+        let keys = self
+            .vars
+            .load_count(action.input)
+            .await?
+            .into_values()
+            .collect()
+            .await?;
 
         let res = if keys.is_empty() {
-            ValueStream::default()
+            Rows::value_stream(ValueStream::default())
         } else {
             let op = operation::GetByKey {
                 table: action.table,
@@ -55,11 +61,7 @@ impl Exec<'_> {
                 .driver
                 .exec(&self.engine.schema.db, op.into())
                 .await?;
-
-            match res.rows {
-                Rows::Values(rows) => rows,
-                _ => todo!("res={res:#?}"),
-            }
+            res.rows
         };
 
         self.vars

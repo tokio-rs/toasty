@@ -15,6 +15,9 @@ enum ConstantizeSource<'a> {
         values: &'a stmt::Expr,
         columns: &'a [ColumnId],
     },
+    UpdateAssignments {
+        assignments: &'a stmt::Assignments,
+    },
 }
 
 impl LowerStatement<'_, '_> {
@@ -42,71 +45,31 @@ impl LowerStatement<'_, '_> {
                 },
             };
 
-            match returning.as_expr_unwrap().eval(input) {
-                Ok(row) => constantized.push(row),
-                Err(_) => return,
-            }
+            let Ok(row) = returning.as_expr_unwrap().eval(input) else {
+                return;
+            };
+
+            constantized.push(row);
         }
 
         *returning = stmt::Returning::Value(stmt::Value::List(constantized));
     }
 
-    fn constantize_returning(&self, returning: &mut stmt::Expr, source: ConstantizeSource<'_>) {
+    pub(super) fn constantize_update_returning(
+        &self,
+        returning: &mut stmt::Returning,
+        assignments: &stmt::Assignments,
+    ) {
+        let input = ConstantizeReturning {
+            cx: self.expr_cx,
+            source: ConstantizeSource::UpdateAssignments { assignments },
+        };
 
-        /*
-        struct ConstReturning<'a> {
-            cx: stmt::ExprContext<'a>,
-            columns: &'a [ColumnId],
-        }
-        */
+        let Ok(row) = returning.as_expr_unwrap().eval(input) else {
+            return;
+        };
 
-        /*
-        impl eval::Convert for ConstReturning<'_> {
-            fn convert_expr_reference(&mut self, stmt: &stmt::ExprReference) -> Option<stmt::Expr> {
-                let needle = self.cx.resolve_expr_reference(stmt).expect_column();
-
-                let index = self
-                    .columns
-                    .iter()
-                    .position(|column| needle.id == *column)
-                    .unwrap();
-
-                Some(stmt::Expr::arg_project(0, [index]))
-            }
-        }
-
-        let args = stmt::Type::Record(
-            insert_table
-                .columns
-                .iter()
-                .map(|column_id| self.schema().db.column(*column_id).ty.clone())
-                .collect(),
-        );
-
-        let expr = eval::Func::try_convert_from_stmt(
-            returning.clone(),
-            vec![args],
-            ConstReturning {
-                cx: stmt::ExprContext::new_with_target(self.schema(), &*stmt),
-                columns: &insert_table.columns,
-            },
-        )
-        .unwrap();
-
-        let mut rows = vec![];
-
-        // TODO: OPTIMIZE!
-        for row in &values.rows {
-            let evaled = expr.eval([row]).unwrap();
-            rows.push(evaled);
-        }
-
-        // The returning portion of the statement has been extracted as a const.
-        // We do not need to receive it from the database anymore.
-        stmt.returning = None;
-
-        Some((rows, stmt::Type::list(expr.ret)))
-        */
+        *returning = stmt::Returning::Expr(row.into());
     }
 }
 
@@ -116,6 +79,8 @@ impl stmt::Input for ConstantizeReturning<'_> {
         expr_reference: &stmt::ExprReference,
         projection: &stmt::Projection,
     ) -> Option<stmt::Expr> {
+        assert_eq!(0, expr_reference.nesting(), "TODO");
+
         let needle = self
             .cx
             .resolve_expr_reference(expr_reference)
@@ -130,6 +95,16 @@ impl stmt::Input for ConstantizeReturning<'_> {
                         Some(row[index].entry(projection).to_expr())
                     }
                     _ => todo!("values={values:#?}"),
+                }
+            }
+            ConstantizeSource::UpdateAssignments { assignments } => {
+                if let Some(assignment) = assignments.get(&needle.id.index) {
+                    assert!(assignment.op.is_set(), "TODO");
+                    assert!(assignment.expr.is_const(), "TODO");
+
+                    Some(assignment.expr.clone())
+                } else {
+                    None
                 }
             }
         }

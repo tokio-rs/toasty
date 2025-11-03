@@ -6,6 +6,7 @@ mod lower;
 mod materialize;
 use materialize::{MaterializeGraph, MaterializeKind, NodeId};
 
+use toasty_core::driver::Rows;
 use toasty_core::schema::db::ColumnId;
 use toasty_core::stmt;
 
@@ -158,7 +159,7 @@ impl PlannerNg<'_, '_> {
 
                     self.old.push_action(plan::SetVar2 {
                         output: plan::Output2 { var, num_uses },
-                        value: materialize_const.value.clone(),
+                        rows: materialize_const.value.clone(),
                     });
                 }
                 MaterializeKind::ExecStatement(materialize_exec_statement) => {
@@ -179,20 +180,17 @@ impl PlannerNg<'_, '_> {
                         .map(|input| self.graph[input].var.get().unwrap())
                         .collect();
 
-                    let output = match ty {
+                    let var = self.old.var_table.register_var(ty.clone());
+                    node.var.set(Some(var));
+
+                    let output_ty = match ty {
                         stmt::Type::List(ty_rows) => {
                             let ty_fields = match &**ty_rows {
                                 stmt::Type::Record(ty_fields) => ty_fields.clone(),
                                 _ => todo!("ty={ty:#?}; node={node:#?}"),
                             };
 
-                            let var = self.old.var_table.register_var(ty.clone());
-                            node.var.set(Some(var));
-
-                            Some(plan::ExecStatementOutput {
-                                ty: ty_fields,
-                                output: plan::Output2 { var, num_uses },
-                            })
+                            Some(ty_fields)
                         }
                         stmt::Type::Unit => None,
                         _ => todo!("ty={ty:#?}"),
@@ -200,7 +198,10 @@ impl PlannerNg<'_, '_> {
 
                     self.old.push_action(plan::ExecStatement2 {
                         input: input_vars,
-                        output,
+                        output: plan::ExecStatementOutput {
+                            ty: output_ty,
+                            output: plan::Output2 { var, num_uses },
+                        },
                         stmt: materialize_exec_statement.stmt.clone(),
                     });
                 }

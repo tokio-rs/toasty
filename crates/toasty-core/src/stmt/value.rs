@@ -181,6 +181,7 @@ impl Value {
     pub fn infer_ty(&self) -> Type {
         match self {
             Value::Bool(_) => Type::Bool,
+            Value::I32(_) => Type::I32,
             Value::I64(_) => Type::I64,
             Value::Id(v) => Type::Id(v.model_id()),
             Value::SparseRecord(v) => Type::SparseRecord(v.fields.clone()),

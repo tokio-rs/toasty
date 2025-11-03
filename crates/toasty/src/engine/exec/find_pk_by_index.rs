@@ -82,13 +82,8 @@ impl Exec<'_> {
             )
             .await?;
 
-        let rows = match res.rows {
-            Rows::Values(values) => values,
-            Rows::Count(_) => todo!(),
-        };
-
         self.vars
-            .store_counted(action.output.var, action.output.num_uses, rows);
+            .store_counted(action.output.var, action.output.num_uses, res.rows);
 
         Ok(())
     }

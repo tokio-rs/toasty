@@ -58,7 +58,7 @@ impl DynamoDb {
 
                 if let Err(SdkError::ServiceError(e)) = res {
                     if let DeleteItemError::ConditionalCheckFailedException(_) = e.err() {
-                        return Ok(Response::from_count(0));
+                        return Ok(Response::count(0));
                     }
 
                     return Err(SdkError::ServiceError(e).into());
@@ -66,7 +66,7 @@ impl DynamoDb {
 
                 assert!(res.is_ok());
 
-                return Ok(Response::from_count(1));
+                return Ok(Response::count(1));
             } else {
                 let mut transact_items = vec![];
 
@@ -110,7 +110,7 @@ impl DynamoDb {
                     todo!("err={:#?}", e);
                 }
 
-                return Ok(Response::from_count(op.keys.len() as _));
+                return Ok(Response::count(op.keys.len() as _));
             }
         }
 
@@ -144,7 +144,7 @@ impl DynamoDb {
             .await?;
 
         let Some(curr_unique_values) = res.item else {
-            return Ok(Response::from_count(0));
+            return Ok(Response::count(0));
         };
 
         // Now we must both delete from the main table **and** the unique index
@@ -198,6 +198,6 @@ impl DynamoDb {
             .send()
             .await?;
 
-        Ok(Response::from_count(1))
+        Ok(Response::count(1))
     }
 }

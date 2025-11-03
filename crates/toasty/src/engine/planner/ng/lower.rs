@@ -469,6 +469,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
+            lower.constantize_update_returning(returning, &stmt.assignments);
         }
 
         self.visit_update_target_mut(&mut stmt.target);

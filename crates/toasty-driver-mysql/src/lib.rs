@@ -137,15 +137,15 @@ impl Driver for MySQL {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret),
             Operation::Transaction(Transaction::Start) => {
                 conn.query_drop("START TRANSACTION").await?;
-                return Ok(Response::from_count(0));
+                return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
                 conn.query_drop("COMMIT").await?;
-                return Ok(Response::from_count(0));
+                return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {
                 conn.query_drop("ROLLBACK").await?;
-                return Ok(Response::from_count(0));
+                return Ok(Response::count(0));
             }
             op => todo!("op={:#?}", op),
         };
@@ -166,7 +166,7 @@ impl Driver for MySQL {
                 .await?
                 .affected_rows();
 
-            return Ok(Response::from_count(count));
+            return Ok(Response::count(count));
         }
 
         let rows: Vec<mysql_async::Row> = conn.exec(&sql_as_str, &args).await?;
@@ -188,7 +188,7 @@ impl Driver for MySQL {
                 Ok(ValueRecord::from_vec(results))
             });
 
-            Ok(Response::from_value_stream(stmt::ValueStream::from_iter(
+            Ok(Response::value_stream(stmt::ValueStream::from_iter(
                 results,
             )))
         } else {
@@ -197,7 +197,7 @@ impl Driver for MySQL {
             let condition_matched = row.get::<i64, usize>(1).unwrap();
 
             if total == condition_matched {
-                Ok(Response::from_count(total as _))
+                Ok(Response::count(total as _))
             } else {
                 anyhow::bail!("update condition did not match");
             }

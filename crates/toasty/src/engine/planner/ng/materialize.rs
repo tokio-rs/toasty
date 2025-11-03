@@ -667,8 +667,13 @@ impl MaterializePlanner<'_> {
                         .insert_with_deps(MaterializeConst { value: rows, ty }, [exec_stmt_node_id])
                 }
                 stmt::Returning::Expr(returning) => {
-                    let arg_ty = self.graph[exec_stmt_node_id].ty().unwrap_list_ref().clone();
-                    let projection = eval::Func::from_stmt(returning, vec![arg_ty]);
+                    let arg_ty = match self.graph[exec_stmt_node_id].ty() {
+                        stmt::Type::List(ty) => vec![(**ty).clone()],
+                        stmt::Type::Unit => vec![],
+                        _ => todo!(),
+                    };
+
+                    let projection = eval::Func::from_stmt(returning, arg_ty);
                     let ty = stmt::Type::list(projection.ret.clone());
 
                     let node = MaterializeProject {
