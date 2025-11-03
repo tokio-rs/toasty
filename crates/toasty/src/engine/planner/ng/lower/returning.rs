@@ -100,7 +100,10 @@ impl stmt::Input for ConstantizeReturning<'_> {
             ConstantizeSource::UpdateAssignments { assignments } => {
                 if let Some(assignment) = assignments.get(&needle.id.index) {
                     assert!(assignment.op.is_set(), "TODO");
-                    assert!(assignment.expr.is_const(), "TODO");
+                    assert!(
+                        assignment.expr.is_const(),
+                        "TODO; assignment={assignment:#?}"
+                    );
 
                     Some(assignment.expr.clone())
                 } else {

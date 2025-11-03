@@ -181,6 +181,8 @@ impl Value {
     pub fn infer_ty(&self) -> Type {
         match self {
             Value::Bool(_) => Type::Bool,
+            Value::I8(_) => Type::I8,
+            Value::I16(_) => Type::I16,
             Value::I32(_) => Type::I32,
             Value::I64(_) => Type::I64,
             Value::Id(v) => Type::Id(v.model_id()),
@@ -189,7 +191,11 @@ impl Value {
             Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
             Value::String(_) => Type::String,
             Value::List(items) => Type::list(items[0].infer_ty()),
-            _ => todo!("{self:#?}"),
+            Value::Enum(value_enum) => todo!(),
+            Value::U8(_) => Type::U8,
+            Value::U16(_) => Type::U16,
+            Value::U32(_) => Type::U32,
+            Value::U64(_) => Type::U64,
         }
     }
 
