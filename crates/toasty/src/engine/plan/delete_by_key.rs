@@ -1,17 +1,19 @@
-use super::{eval, stmt, Action, Input};
+use crate::engine::plan::{Output2, VarId};
+
+use super::{stmt, Action};
 use toasty_core::schema::db::TableId;
 
 /// Input is the key to delete
 #[derive(Debug)]
 pub(crate) struct DeleteByKey {
     /// How to access input from the variable table.
-    pub input: Option<Input>,
+    pub input: VarId,
+
+    /// Where to store the output (impacted row count)
+    pub output: Output2,
 
     /// Which model to get
     pub table: TableId,
-
-    /// Which keys to delete
-    pub keys: eval::Func,
 
     /// Only delete keys that match the filter
     pub filter: Option<stmt::Expr>,

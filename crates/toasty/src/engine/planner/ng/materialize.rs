@@ -53,6 +53,8 @@ pub(crate) enum MaterializeKind {
     /// A constant value
     Const(MaterializeConst),
 
+    DeleteByKey(MaterializeDeleteByKey),
+
     /// Execute a database query
     ExecStatement(MaterializeExecStatement),
 
@@ -81,6 +83,21 @@ pub(crate) enum MaterializeKind {
 #[derive(Debug)]
 pub(crate) struct MaterializeConst {
     pub(crate) value: Vec<stmt::Value>,
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeDeleteByKey {
+    /// Keys are always specified as an input, whether const or a set of
+    /// dependent materializations and transformations.
+    pub(crate) input: NodeId,
+
+    /// The table to get keys from
+    pub(crate) table: TableId,
+
+    pub(crate) filter: Option<stmt::Expr>,
+
+    /// Return type
     pub(crate) ty: stmt::Type,
 }
 
@@ -386,7 +403,7 @@ impl MaterializePlanner<'_> {
             }
         }
 
-        let mut tracked_dependencies = false;
+        let mut dependencies = Some(stmt_info.dependent_materializations(&self.store));
 
         let exec_stmt_node_id = if stmt.filter_or_default().is_false() {
             debug_assert!(stmt_info.deps.is_empty(), "TODO");
@@ -408,7 +425,7 @@ impl MaterializePlanner<'_> {
                 // TODO: Also not quite right...
                 self.insert_const(vec![], stmt::Type::list(stmt::Type::empty_sparse_record()))
             }
-        } else if self.engine.capability().sql {
+        } else if self.engine.capability().sql || stmt.is_insert() {
             if !columns.is_empty() {
                 stmt.set_returning(
                     stmt::Expr::record(
@@ -455,12 +472,10 @@ impl MaterializePlanner<'_> {
                 MaterializeKind::ExecStatement(MaterializeExecStatement { inputs, stmt, ty })
             };
 
-            tracked_dependencies = true;
-
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
             self.graph
-                .insert_with_deps(node, stmt_info.dependent_materializations(&self.store))
+                .insert_with_deps(node, dependencies.take().unwrap())
         } else {
             // Without SQL capability, we have to plan the materialization of
             // the statement based on available indices.
@@ -549,23 +564,43 @@ impl MaterializePlanner<'_> {
                         })
                     };
 
-                    self.graph.insert(MaterializeGetByKey {
-                        input: get_by_key_input,
-                        table: table_id,
-                        columns: columns.clone(),
-                        ty: ty.clone(),
-                    })
+                    if stmt.is_query() {
+                        self.graph.insert_with_deps(
+                            MaterializeGetByKey {
+                                input: get_by_key_input,
+                                table: table_id,
+                                columns: columns.clone(),
+                                ty: ty.clone(),
+                            },
+                            dependencies.take().into_iter().flatten(),
+                        )
+                    } else if stmt.is_delete() {
+                        self.graph.insert_with_deps(
+                            MaterializeDeleteByKey {
+                                input: get_by_key_input,
+                                table: table_id,
+                                filter: index_plan.result_filter,
+                                ty: stmt::Type::Unit,
+                            },
+                            dependencies.take().into_iter().flatten(),
+                        )
+                    } else {
+                        todo!("stmt={stmt:#?}")
+                    }
                 } else {
                     assert!(inputs.is_empty(), "TODO");
                     assert!(ref_source.is_none(), "TODO");
 
-                    self.graph.insert(MaterializeQueryPk {
-                        table: table_id,
-                        columns: columns.clone(),
-                        pk_filter: index_plan.index_filter,
-                        row_filter: index_plan.result_filter,
-                        ty: ty.clone(),
-                    })
+                    self.graph.insert_with_deps(
+                        MaterializeQueryPk {
+                            table: table_id,
+                            columns: columns.clone(),
+                            pk_filter: index_plan.index_filter,
+                            row_filter: index_plan.result_filter,
+                            ty: ty.clone(),
+                        },
+                        dependencies.take().into_iter().flatten(),
+                    )
                 }
             } else {
                 assert!(index_plan.post_filter.is_none(), "TODO");
@@ -579,13 +614,16 @@ impl MaterializePlanner<'_> {
                     }
                 });
 
-                let get_by_key_input = self.graph.insert(MaterializeFindPkByIndex {
-                    inputs,
-                    table: index_plan.index.on,
-                    index: index_plan.index.id,
-                    filter: index_plan.index_filter.take(),
-                    ty: index_key_ty,
-                });
+                let get_by_key_input = self.graph.insert_with_deps(
+                    MaterializeFindPkByIndex {
+                        inputs,
+                        table: index_plan.index.on,
+                        index: index_plan.index.id,
+                        filter: index_plan.index_filter.take(),
+                        ty: index_key_ty,
+                    },
+                    dependencies.take().into_iter().flatten(),
+                );
 
                 self.graph.insert(MaterializeGetByKey {
                     input: get_by_key_input,
@@ -683,31 +721,23 @@ impl MaterializePlanner<'_> {
                     };
 
                     // Plan the final projection to handle the returning clause.
-                    if tracked_dependencies {
-                        self.graph.insert(node)
+                    if let Some(deps) = dependencies.take() {
+                        self.graph.insert_with_deps(node, deps)
                     } else {
-                        tracked_dependencies = true;
-                        self.graph.insert_with_deps(
-                            node,
-                            stmt_info.dependent_materializations(&self.store),
-                        )
+                        self.graph.insert(node)
                     }
                 }
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
             }
         } else {
-            if !tracked_dependencies {
-                tracked_dependencies = true;
-
-                self.graph[exec_stmt_node_id]
-                    .deps
-                    .extend(stmt_info.dependent_materializations(&self.store));
+            if let Some(deps) = dependencies.take() {
+                self.graph[exec_stmt_node_id].deps.extend(deps);
             }
 
             exec_stmt_node_id
         };
 
-        debug_assert!(tracked_dependencies);
+        debug_assert!(dependencies.is_none());
 
         stmt_info.output.set(Some(output_node_id));
     }
@@ -866,6 +896,7 @@ impl MaterializeNode {
     pub(super) fn ty(&self) -> &stmt::Type {
         match &self.kind {
             MaterializeKind::Const(kind) => &kind.ty,
+            MaterializeKind::DeleteByKey(_) => &stmt::Type::Unit,
             MaterializeKind::ExecStatement(kind) => &kind.ty,
             MaterializeKind::Filter(kind) => &kind.ty,
             MaterializeKind::FindPkByIndex(kind) => &kind.ty,
@@ -915,6 +946,12 @@ impl From<MaterializeConst> for MaterializeNode {
     }
 }
 
+impl From<MaterializeDeleteByKey> for MaterializeNode {
+    fn from(value: MaterializeDeleteByKey) -> Self {
+        MaterializeKind::DeleteByKey(value).into()
+    }
+}
+
 impl From<MaterializeExecStatement> for MaterializeNode {
     fn from(value: MaterializeExecStatement) -> Self {
         MaterializeKind::ExecStatement(value).into()
@@ -961,6 +998,7 @@ impl From<MaterializeKind> for MaterializeNode {
     fn from(value: MaterializeKind) -> Self {
         let deps = match &value {
             MaterializeKind::Const(_materialize_const) => IndexSet::new(),
+            MaterializeKind::DeleteByKey(m) => indexset![m.input],
             MaterializeKind::ExecStatement(materialize_exec_statement) => {
                 materialize_exec_statement.inputs.clone()
             }

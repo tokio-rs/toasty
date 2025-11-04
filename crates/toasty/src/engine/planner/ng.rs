@@ -6,7 +6,6 @@ mod lower;
 mod materialize;
 use materialize::{MaterializeGraph, MaterializeKind, NodeId};
 
-use toasty_core::driver::Rows;
 use toasty_core::schema::db::ColumnId;
 use toasty_core::stmt;
 
@@ -160,6 +159,21 @@ impl PlannerNg<'_, '_> {
                     self.old.push_action(plan::SetVar2 {
                         output: plan::Output2 { var, num_uses },
                         rows: materialize_const.value.clone(),
+                    });
+                }
+                MaterializeKind::DeleteByKey(m) => {
+                    let input = self.graph.var_id(m.input);
+                    let output = self.old.var_table.register_var(node.ty().clone());
+                    node.var.set(Some(output));
+
+                    self.old.push_action(plan::DeleteByKey {
+                        input,
+                        output: plan::Output2 {
+                            var: output,
+                            num_uses,
+                        },
+                        table: m.table,
+                        filter: m.filter.clone(),
                     });
                 }
                 MaterializeKind::ExecStatement(materialize_exec_statement) => {

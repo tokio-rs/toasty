@@ -1,14 +1,8 @@
-mod delete;
 mod input;
-mod insert;
 mod kv;
 mod lower;
 mod ng;
 mod output;
-mod relation;
-mod select;
-mod subquery;
-mod update;
 mod verify;
 
 mod var;
@@ -98,31 +92,13 @@ impl<'a> Planner<'a> {
             ));
         }
 
-        let output = if self.capability().sql {
-            self.plan_v2_stmt(stmt)?
-        } else {
-            self.plan_stmt(stmt)?
-        };
+        let output = self.plan_v2_stmt(stmt)?;
 
         if let Some(output) = output {
             self.returning = Some(output);
         }
 
         Ok(())
-    }
-
-    fn plan_stmt(&mut self, mut stmt: stmt::Statement) -> Result<Option<plan::VarId>> {
-        self.simplify_stmt(&mut stmt);
-
-        Ok(match stmt {
-            stmt::Statement::Delete(stmt) => {
-                self.plan_stmt_delete(stmt)?;
-                None
-            }
-            stmt::Statement::Insert(stmt) => self.plan_stmt_insert(stmt)?,
-            stmt::Statement::Query(stmt) => Some(self.plan_stmt_select(stmt)?),
-            stmt::Statement::Update(stmt) => self.plan_stmt_update(stmt)?,
-        })
     }
 
     fn build(mut self) -> Result<Plan> {

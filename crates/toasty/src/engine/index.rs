@@ -23,12 +23,8 @@ impl Engine {
         };
 
         // Get the statement filter
-        let filter = match stmt {
-            stmt::Statement::Query(query) => match &query.body {
-                stmt::ExprSet::Select(select) => &select.filter,
-                _ => todo!("stmt={stmt:#?}"),
-            },
-            _ => todo!("stmt={stmt:#?}"),
+        let Some(filter) = stmt.filter() else {
+            todo!("stmt={stmt:#?}")
         };
 
         self.plan_index_path(cx, table, filter)
