@@ -43,6 +43,10 @@ impl Rows {
         matches!(self, Self::Count(_))
     }
 
+    pub fn is_values(&self) -> bool {
+        matches!(self, Self::Values(_))
+    }
+
     pub async fn dup(&mut self) -> Result<Self> {
         match self {
             Rows::Count(count) => Ok(Rows::Count(*count)),

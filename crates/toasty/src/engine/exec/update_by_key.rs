@@ -13,7 +13,11 @@ impl Exec<'_> {
             .await?;
 
         let res = if keys.is_empty() {
-            Rows::value_stream(ValueStream::default())
+            if action.returning {
+                Rows::value_stream(ValueStream::default())
+            } else {
+                Rows::Count(0)
+            }
         } else {
             let op = operation::UpdateByKey {
                 table: action.table,
@@ -29,6 +33,8 @@ impl Exec<'_> {
                 .driver
                 .exec(&self.engine.schema.db, op.into())
                 .await?;
+
+            debug_assert_eq!(res.rows.is_values(), action.returning);
 
             res.rows
         };
