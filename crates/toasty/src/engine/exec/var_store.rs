@@ -72,7 +72,7 @@ impl VarStore {
             }
             Rows::Values(value_stream) => {
                 let stmt::Type::List(item_tys) = &self.tys[var.0] else {
-                    todo!()
+                    todo!("ty={:#?}", self.tys[var.0])
                 };
 
                 Rows::Values(value_stream.typed((**item_tys).clone()))

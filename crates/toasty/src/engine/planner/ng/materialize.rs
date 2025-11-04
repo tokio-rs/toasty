@@ -534,7 +534,7 @@ impl MaterializePlanner<'_> {
             // If fetching rows using GetByKey, some databases do not support
             // applying additional filters to the rows before returning results.
             // In this case, the result_filter needs to be applied in-memory.
-            if pk_keys.is_some() || !index_plan.index.primary_key {
+            if stmt.is_query() && (pk_keys.is_some() || !index_plan.index.primary_key) {
                 if let Some(result_filter) = index_plan.result_filter.take() {
                     post_filter = Some(match post_filter {
                         Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
@@ -542,6 +542,11 @@ impl MaterializePlanner<'_> {
                     });
                 }
             }
+
+            debug_assert!(
+                post_filter.is_none() || stmt.is_query(),
+                "stmt={stmt:#?}; post_filter={post_filter:#?}"
+            );
 
             // Make sure we are including columns needed to apply the post filter
             if let Some(post_filter) = &mut post_filter {
@@ -586,17 +591,23 @@ impl MaterializePlanner<'_> {
                     };
 
                     match stmt {
-                        stmt::Statement::Query(_) => self.graph.insert_with_deps(
-                            MaterializeGetByKey {
-                                input: get_by_key_input,
-                                table: table_id,
-                                columns: columns.clone(),
-                                ty: ty.clone(),
-                            },
-                            dependencies.take().into_iter().flatten(),
-                        ),
+                        stmt::Statement::Query(_) => {
+                            debug_assert!(ty.is_list());
+                            self.graph.insert_with_deps(
+                                MaterializeGetByKey {
+                                    input: get_by_key_input,
+                                    table: table_id,
+                                    columns: columns.clone(),
+                                    ty: ty.clone(),
+                                },
+                                dependencies.take().into_iter().flatten(),
+                            )
+                        }
                         stmt::Statement::Delete(_) => {
-                            debug_assert!(ty.is_unit());
+                            debug_assert!(
+                                ty.is_unit(),
+                                "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
+                            );
                             self.graph.insert_with_deps(
                                 MaterializeDeleteByKey {
                                     input: get_by_key_input,
@@ -658,12 +669,48 @@ impl MaterializePlanner<'_> {
                     dependencies.take().into_iter().flatten(),
                 );
 
-                self.graph.insert(MaterializeGetByKey {
-                    input: get_by_key_input,
-                    table: table_id,
-                    columns: columns.clone(),
-                    ty: ty.clone(),
-                })
+                // TODO: unify this with above
+                match stmt {
+                    stmt::Statement::Query(_) => {
+                        debug_assert!(ty.is_list());
+                        self.graph.insert_with_deps(
+                            MaterializeGetByKey {
+                                input: get_by_key_input,
+                                table: table_id,
+                                columns: columns.clone(),
+                                ty: ty.clone(),
+                            },
+                            dependencies.take().into_iter().flatten(),
+                        )
+                    }
+                    stmt::Statement::Delete(_) => {
+                        debug_assert!(
+                            ty.is_unit(),
+                            "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
+                        );
+                        self.graph.insert_with_deps(
+                            MaterializeDeleteByKey {
+                                input: get_by_key_input,
+                                table: table_id,
+                                filter: index_plan.result_filter,
+                                ty: stmt::Type::Unit,
+                            },
+                            dependencies.take().into_iter().flatten(),
+                        )
+                    }
+                    stmt::Statement::Update(stmt) => self.graph.insert_with_deps(
+                        MaterializeUpdateByKey {
+                            input: get_by_key_input,
+                            table: table_id,
+                            assignments: stmt.assignments,
+                            filter: index_plan.result_filter,
+                            condition: stmt.condition.expr,
+                            ty: ty.clone(),
+                        },
+                        dependencies.take().into_iter().flatten(),
+                    ),
+                    _ => todo!("stmt={stmt:#?}"),
+                }
             };
 
             // If there is a post filter, we need to apply a filter step on the returned rows.
