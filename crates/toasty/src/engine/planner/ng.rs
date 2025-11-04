@@ -375,6 +375,24 @@ impl PlannerNg<'_, '_> {
                         row_filter: materialize_query_pk.row_filter.clone(),
                     });
                 }
+                MaterializeKind::UpdateByKey(m) => {
+                    let input = self.graph.var_id(m.input);
+                    let output = self.old.var_table.register_var(node.ty().clone());
+                    node.var.set(Some(output));
+
+                    self.old.push_action(plan::UpdateByKey {
+                        input,
+                        output: plan::Output2 {
+                            var: output,
+                            num_uses,
+                        },
+                        table: m.table,
+                        assignments: m.assignments.clone(),
+                        filter: m.filter.clone(),
+                        condition: m.condition.clone(),
+                        returning: !m.ty.is_unit(),
+                    });
+                }
             }
         }
 

@@ -78,6 +78,8 @@ pub(crate) enum MaterializeKind {
     ReadModifyWrite(MaterializeReadModifyWrite),
 
     QueryPk(MaterializeQueryPk),
+
+    UpdateByKey(MaterializeUpdateByKey),
 }
 
 #[derive(Debug)]
@@ -197,6 +199,21 @@ pub(crate) struct MaterializeQueryPk {
 
     /// Additional filter to pass to the database
     pub(crate) row_filter: Option<stmt::Expr>,
+
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeUpdateByKey {
+    pub(crate) input: NodeId,
+
+    pub(crate) table: TableId,
+
+    pub(crate) assignments: stmt::Assignments,
+
+    pub(crate) filter: Option<stmt::Expr>,
+
+    pub(crate) condition: Option<stmt::Expr>,
 
     pub(crate) ty: stmt::Type,
 }
@@ -539,7 +556,11 @@ impl MaterializePlanner<'_> {
             }
 
             // Type of the final record.
-            let ty = self.engine.infer_record_list_ty(&stmt, &columns);
+            let ty = if columns.is_empty() {
+                stmt::Type::Unit
+            } else {
+                self.engine.infer_record_list_ty(&stmt, &columns)
+            };
 
             // Type of the index key. Value for single index keys, record for
             // composite.
@@ -564,8 +585,8 @@ impl MaterializePlanner<'_> {
                         })
                     };
 
-                    if stmt.is_query() {
-                        self.graph.insert_with_deps(
+                    match stmt {
+                        stmt::Statement::Query(_) => self.graph.insert_with_deps(
                             MaterializeGetByKey {
                                 input: get_by_key_input,
                                 table: table_id,
@@ -573,19 +594,34 @@ impl MaterializePlanner<'_> {
                                 ty: ty.clone(),
                             },
                             dependencies.take().into_iter().flatten(),
-                        )
-                    } else if stmt.is_delete() {
-                        self.graph.insert_with_deps(
-                            MaterializeDeleteByKey {
-                                input: get_by_key_input,
-                                table: table_id,
-                                filter: index_plan.result_filter,
-                                ty: stmt::Type::Unit,
-                            },
-                            dependencies.take().into_iter().flatten(),
-                        )
-                    } else {
-                        todo!("stmt={stmt:#?}")
+                        ),
+                        stmt::Statement::Delete(_) => {
+                            debug_assert!(ty.is_unit());
+                            self.graph.insert_with_deps(
+                                MaterializeDeleteByKey {
+                                    input: get_by_key_input,
+                                    table: table_id,
+                                    filter: index_plan.result_filter,
+                                    ty: stmt::Type::Unit,
+                                },
+                                dependencies.take().into_iter().flatten(),
+                            )
+                        }
+                        stmt::Statement::Update(stmt) => {
+                            println!("materialize-update; ty={ty:#?}");
+                            self.graph.insert_with_deps(
+                                MaterializeUpdateByKey {
+                                    input: get_by_key_input,
+                                    table: table_id,
+                                    assignments: stmt.assignments,
+                                    filter: index_plan.result_filter,
+                                    condition: stmt.condition.expr,
+                                    ty: ty.clone(),
+                                },
+                                dependencies.take().into_iter().flatten(),
+                            )
+                        }
+                        _ => todo!("stmt={stmt:#?}"),
                     }
                 } else {
                     assert!(inputs.is_empty(), "TODO");
@@ -903,6 +939,7 @@ impl MaterializeNode {
             MaterializeKind::GetByKey(kind) => &kind.ty,
             MaterializeKind::QueryPk(kind) => &kind.ty,
             MaterializeKind::Project(kind) => &kind.ty,
+            MaterializeKind::UpdateByKey(kind) => &kind.ty,
             _ => todo!("node={self:#?}"),
         }
     }
@@ -994,27 +1031,28 @@ impl From<MaterializeQueryPk> for MaterializeNode {
     }
 }
 
+impl From<MaterializeUpdateByKey> for MaterializeNode {
+    fn from(value: MaterializeUpdateByKey) -> Self {
+        MaterializeKind::UpdateByKey(value).into()
+    }
+}
+
 impl From<MaterializeKind> for MaterializeNode {
     fn from(value: MaterializeKind) -> Self {
         let deps = match &value {
-            MaterializeKind::Const(_materialize_const) => IndexSet::new(),
+            MaterializeKind::Const(_m) => IndexSet::new(),
             MaterializeKind::DeleteByKey(m) => indexset![m.input],
-            MaterializeKind::ExecStatement(materialize_exec_statement) => {
-                materialize_exec_statement.inputs.clone()
+            MaterializeKind::ExecStatement(m) => m.inputs.clone(),
+            MaterializeKind::Filter(m) => indexset![m.input],
+            MaterializeKind::FindPkByIndex(m) => m.inputs.clone(),
+            MaterializeKind::GetByKey(m) => {
+                indexset![m.input]
             }
-            MaterializeKind::Filter(materialize_filter) => indexset![materialize_filter.input],
-            MaterializeKind::FindPkByIndex(materialize_find_pk_by_index) => {
-                materialize_find_pk_by_index.inputs.clone()
-            }
-            MaterializeKind::GetByKey(materialize_get_by_key) => {
-                indexset![materialize_get_by_key.input]
-            }
-            MaterializeKind::NestedMerge(materialize_nested_merge) => {
-                materialize_nested_merge.inputs.clone()
-            }
-            MaterializeKind::Project(materialize_project) => indexset![materialize_project.input],
-            MaterializeKind::ReadModifyWrite(materialize_rmw) => materialize_rmw.inputs.clone(),
-            MaterializeKind::QueryPk(_materialize_query_pk) => IndexSet::new(),
+            MaterializeKind::NestedMerge(m) => m.inputs.clone(),
+            MaterializeKind::Project(m) => indexset![m.input],
+            MaterializeKind::ReadModifyWrite(m) => m.inputs.clone(),
+            MaterializeKind::QueryPk(m) => IndexSet::new(),
+            MaterializeKind::UpdateByKey(m) => indexset![m.input],
         };
 
         MaterializeNode {

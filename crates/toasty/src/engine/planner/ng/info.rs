@@ -63,6 +63,16 @@ impl StatementInfo {
         }
     }
 
+    /// Returns an iterator over the materialization node IDs that this statement
+    /// depends on.
+    ///
+    /// Dependencies must execute before this statement for consistency, even if
+    /// their results are not directly consumed. For example, an UPDATE operation
+    /// may depend on a prior INSERT completing first to maintain referential
+    /// integrity.
+    ///
+    /// Each dependency is represented by its output node ID - the final
+    /// computation node that produces the dependency's result.
     pub(super) fn dependent_materializations<'a>(
         &'a self,
         store: &'a StatementInfoStore,
