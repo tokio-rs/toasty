@@ -607,20 +607,17 @@ impl MaterializePlanner<'_> {
                                 dependencies.take().into_iter().flatten(),
                             )
                         }
-                        stmt::Statement::Update(stmt) => {
-                            println!("materialize-update; ty={ty:#?}");
-                            self.graph.insert_with_deps(
-                                MaterializeUpdateByKey {
-                                    input: get_by_key_input,
-                                    table: table_id,
-                                    assignments: stmt.assignments,
-                                    filter: index_plan.result_filter,
-                                    condition: stmt.condition.expr,
-                                    ty: ty.clone(),
-                                },
-                                dependencies.take().into_iter().flatten(),
-                            )
-                        }
+                        stmt::Statement::Update(stmt) => self.graph.insert_with_deps(
+                            MaterializeUpdateByKey {
+                                input: get_by_key_input,
+                                table: table_id,
+                                assignments: stmt.assignments,
+                                filter: index_plan.result_filter,
+                                condition: stmt.condition.expr,
+                                ty: ty.clone(),
+                            },
+                            dependencies.take().into_iter().flatten(),
+                        ),
                         _ => todo!("stmt={stmt:#?}"),
                     }
                 } else {

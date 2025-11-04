@@ -473,7 +473,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         }
 
         self.visit_update_target_mut(&mut stmt.target);
-        println!("LOWERED={stmt:#?}");
     }
 
     fn visit_source_mut(&mut self, stmt: &mut stmt::Source) {

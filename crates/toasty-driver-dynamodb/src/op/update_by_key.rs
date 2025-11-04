@@ -387,7 +387,7 @@ impl DynamoDb {
             let values = stmt::ValueStream::from_value(stmt::Value::record_from_vec(ret));
             Response::value_stream(values)
         } else {
-            Response::count(ret.len() as _)
+            Response::count(op.keys.len() as _)
         })
     }
 }
