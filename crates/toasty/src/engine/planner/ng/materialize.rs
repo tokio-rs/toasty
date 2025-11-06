@@ -718,7 +718,6 @@ impl MaterializePlanner<'_> {
                 visit::for_each_expr(&index_plan.index_filter, |expr| {
                     if let stmt::Expr::Arg(expr_arg) = expr {
                         debug_assert_eq!(0, expr_arg.position, "TODO; index_plan={index_plan:#?}");
-                        debug_assert_eq!(Some(expr_arg), ref_source.as_ref());
                     }
                 });
 
