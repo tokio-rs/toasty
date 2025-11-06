@@ -189,6 +189,8 @@ pub(crate) struct MaterializeReadModifyWrite {
 
 #[derive(Debug)]
 pub(crate) struct MaterializeQueryPk {
+    pub(crate) input: Option<NodeId>,
+
     pub(crate) table: TableId,
 
     /// Columns to get
@@ -429,7 +431,6 @@ impl MaterializePlanner<'_> {
 
                 stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
             } else {
-                println!("WUT; stmt={stmt:#?}");
                 let mut filter = stmt.filter_expr_mut();
                 visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
                     stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
@@ -678,11 +679,17 @@ impl MaterializePlanner<'_> {
                         _ => todo!("stmt={stmt:#?}"),
                     }
                 } else {
-                    assert!(inputs.is_empty(), "TODO");
-                    assert!(ref_source.is_none(), "TODO");
+                    let input = if inputs.is_empty() {
+                        None
+                    } else if inputs.len() == 1 {
+                        Some(inputs[0])
+                    } else {
+                        todo!()
+                    };
 
                     self.graph.insert_with_deps(
                         MaterializeQueryPk {
+                            input,
                             table: table_id,
                             columns: columns.clone(),
                             pk_filter: index_plan.index_filter,
@@ -700,7 +707,7 @@ impl MaterializePlanner<'_> {
                 visit::for_each_expr(&index_plan.index_filter, |expr| {
                     if let stmt::Expr::Arg(expr_arg) = expr {
                         debug_assert_eq!(0, expr_arg.position, "TODO; index_plan={index_plan:#?}");
-                        debug_assert_eq!(Some(expr_arg), ref_source.as_ref());
+                        debug_assert!(ref_source.is_none() || ref_source == Some(*expr_arg));
                     }
                 });
 
@@ -1148,7 +1155,7 @@ impl From<MaterializeKind> for MaterializeNode {
             MaterializeKind::NestedMerge(m) => m.inputs.clone(),
             MaterializeKind::Project(m) => indexset![m.input],
             MaterializeKind::ReadModifyWrite(m) => m.inputs.clone(),
-            MaterializeKind::QueryPk(m) => IndexSet::new(),
+            MaterializeKind::QueryPk(m) => m.input.into_iter().collect(),
             MaterializeKind::UpdateByKey(m) => indexset![m.input],
         };
 

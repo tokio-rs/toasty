@@ -1,4 +1,4 @@
-use crate::engine::plan::Output2;
+use crate::engine::plan::{Output2, VarId};
 
 use super::{eval, stmt, Action, Output};
 use toasty_core::schema::db::{ColumnId, TableId};
@@ -26,6 +26,9 @@ pub(crate) struct QueryPk {
 
 #[derive(Debug)]
 pub(crate) struct QueryPk2 {
+    /// Where to get the input
+    pub input: Option<VarId>,
+
     /// Where to store the result
     pub output: Output2,
 

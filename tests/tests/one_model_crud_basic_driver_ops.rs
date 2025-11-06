@@ -155,20 +155,10 @@ async fn basic_crud(test: &mut DbTest) {
         }));
     }
 
-    // Check response
-    if is_sql {
-        assert_struct!(resp, _ {
-            rows: Rows::Count(1),
-            ..
-        });
-    } else {
-        // DynamoDB and some KV stores return values from updates
-        assert_struct!(resp.rows, Rows::Values(
-            0.buffered(): [
-                =~ (31,),
-            ],
-        ));
-    }
+    assert_struct!(resp, _ {
+        rows: Rows::Count(1),
+        ..
+    });
 
     // ========== DELETE ==========
     User::filter_by_id(&user_id).delete(&db).await.unwrap();

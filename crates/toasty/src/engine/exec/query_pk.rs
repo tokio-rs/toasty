@@ -1,5 +1,5 @@
 use super::{operation, plan, Exec, Result};
-use crate::driver::Rows;
+use crate::{driver::Rows, engine::simplify};
 
 impl Exec<'_> {
     pub(super) async fn action_query_pk(&mut self, action: &plan::QueryPk) -> Result<()> {
@@ -35,6 +35,14 @@ impl Exec<'_> {
     }
 
     pub(super) async fn action_query_pk2(&mut self, action: &plan::QueryPk2) -> Result<()> {
+        let mut pk_filter = action.pk_filter.clone();
+
+        if let Some(input) = &action.input {
+            let input = self.collect_input2(&[*input]).await?;
+            pk_filter.substitute(&input);
+            simplify::simplify_expr(self.engine.expr_cx(), &mut pk_filter);
+        }
+
         let res = self
             .engine
             .driver
@@ -43,7 +51,7 @@ impl Exec<'_> {
                 operation::QueryPk {
                     table: action.table,
                     select: action.columns.clone(),
-                    pk_filter: action.pk_filter.clone(),
+                    pk_filter,
                     filter: action.row_filter.clone(),
                 }
                 .into(),

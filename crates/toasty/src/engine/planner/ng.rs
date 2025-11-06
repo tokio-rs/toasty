@@ -323,8 +323,8 @@ impl PlannerNg<'_, '_> {
                         projection: materialize_project.projection.clone(),
                     });
                 }
-                MaterializeKind::ReadModifyWrite(materialize_rmw) => {
-                    let input = materialize_rmw
+                MaterializeKind::ReadModifyWrite(m) => {
+                    let input = m
                         .inputs
                         .iter()
                         .map(|input| self.graph[input].var.get().unwrap())
@@ -339,15 +339,16 @@ impl PlannerNg<'_, '_> {
                     self.old.push_action(plan::ReadModifyWrite2 {
                         input,
                         output: Some(plan::Output2 { var, num_uses }),
-                        read: materialize_rmw.read.clone(),
-                        write: materialize_rmw.write.clone(),
+                        read: m.read.clone(),
+                        write: m.write.clone(),
                     })
                 }
-                MaterializeKind::QueryPk(materialize_query_pk) => {
+                MaterializeKind::QueryPk(m) => {
+                    let input = m.input.map(|node_id| self.graph.var_id(node_id));
                     let output = self.old.var_table.register_var(node.ty().clone());
                     node.var.set(Some(output));
 
-                    let columns = materialize_query_pk
+                    let columns = m
                         .columns
                         .iter()
                         .map(|expr_reference| {
@@ -358,21 +359,22 @@ impl PlannerNg<'_, '_> {
                             debug_assert_eq!(expr_column.table, 0);
 
                             ColumnId {
-                                table: materialize_query_pk.table,
+                                table: m.table,
                                 index: expr_column.column,
                             }
                         })
                         .collect();
 
                     self.old.push_action(plan::QueryPk2 {
+                        input,
                         output: plan::Output2 {
                             var: output,
                             num_uses,
                         },
-                        table: materialize_query_pk.table,
+                        table: m.table,
                         columns,
-                        pk_filter: materialize_query_pk.pk_filter.clone(),
-                        row_filter: materialize_query_pk.row_filter.clone(),
+                        pk_filter: m.pk_filter.clone(),
+                        row_filter: m.row_filter.clone(),
                     });
                 }
                 MaterializeKind::UpdateByKey(m) => {
