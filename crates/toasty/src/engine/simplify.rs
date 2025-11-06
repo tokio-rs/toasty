@@ -1,5 +1,6 @@
 mod association;
 mod expr_and;
+mod expr_any;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_concat_str;
@@ -49,12 +50,7 @@ impl VisitMut for Simplify<'_> {
 
         // If an in-subquery expression, then try lifting it.
         let maybe_expr = match i {
-            Expr::Any(expr_any) => match &mut *expr_any.expr {
-                Expr::Map(expr_map) if expr_map.base.is_const() => {
-                    todo!("simplify; expr={i:#?}")
-                }
-                _ => None,
-            },
+            Expr::Any(expr_any) => self.simplify_expr_any(expr_any),
             Expr::And(expr_and) => self.simplify_expr_and(expr_and),
             Expr::BinaryOp(expr_binary_op) => self.simplify_expr_binary_op(
                 expr_binary_op.op,

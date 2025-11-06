@@ -30,6 +30,18 @@ impl Expr {
             .into(),
         }
     }
+
+    pub fn or_from_vec(operands: Vec<Self>) -> Self {
+        if operands.is_empty() {
+            return false.into();
+        }
+
+        if operands.len() == 1 {
+            return operands.into_iter().next().unwrap();
+        }
+
+        ExprOr { operands }.into()
+    }
 }
 
 impl ops::Deref for ExprOr {
