@@ -135,14 +135,10 @@ impl Planner<'_> {
 
 impl PlannerNg<'_, '_> {
     fn plan_statement(&mut self, stmt: stmt::Statement) -> Result<Option<plan::VarId>> {
-        println!("+++++++ LOWER ++++++");
         self.lower_stmt(stmt)?;
-        println!("++++++++++++++++++");
 
         // Build the execution plan...
         self.plan_materializations();
-
-        println!("GRAPH = {:#?}", self.graph);
 
         let mid = self.store.root().output.get().unwrap();
         let node = &self.graph[mid];

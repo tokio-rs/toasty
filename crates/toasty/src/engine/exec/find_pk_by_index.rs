@@ -56,9 +56,9 @@ impl Exec<'_> {
             assert!(action.input.len() == 1, "TODO");
             let input = self.collect_input2(&action.input).await?;
 
+            println!("filter={filter:#?}; input={input:#?}");
             filter.substitute(&input);
 
-            let before = filter.clone();
             simplify::simplify_expr(self.engine.expr_cx(), &mut filter);
         }
 

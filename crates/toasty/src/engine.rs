@@ -40,16 +40,12 @@ impl Engine {
     }
 
     pub(crate) async fn exec(&self, stmt: Statement) -> Result<ValueStream> {
-        println!("====== EXEC =======");
-        println!("stmt={stmt:#?}");
         if cfg!(debug_assertions) {
             self.verify(&stmt);
         }
 
         // Translate the optimized statement into a series of driver operations.
         let plan = self.plan(stmt)?;
-
-        println!("PLAN = {plan:#?}");
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).

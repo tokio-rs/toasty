@@ -242,8 +242,6 @@ impl super::PlannerNg<'_, '_> {
 
 impl MaterializePlanner<'_> {
     fn plan_materialize(&mut self) {
-        println!("=======================");
-        println!(" + plan_materialize; store={:#?}", self.store);
         let root_id = self.store.root_id();
         self.plan_materialize_statement(root_id);
 
@@ -254,19 +252,6 @@ impl MaterializePlanner<'_> {
     fn plan_materialize_statement(&mut self, stmt_id: StmtId) {
         let stmt_info = &self.store[stmt_id];
         let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
-        println!("stmt_info={:#?}", stmt_id);
-        println!("  deps={:?}", stmt_info.deps);
-        println!(
-            "  args={:?}",
-            stmt_info
-                .args
-                .iter()
-                .map(|arg| match arg {
-                    Arg::Sub { stmt_id, .. } => format!("Sub({})", stmt_id.index()),
-                    Arg::Ref { stmt_id, .. } => format!("Ref({})", stmt_id.index()),
-                })
-                .collect::<Vec<_>>()
-        );
 
         // Check if the statement has already been planned
         if stmt_info.exec_statement.get().is_some() {
@@ -276,7 +261,6 @@ impl MaterializePlanner<'_> {
         // First, plan dependency statements. These are statments that must run
         // before the current one but do not reference the current statement.
         for &dep_stmt_id in &stmt_info.deps {
-            println!("  -> processing dep {}", dep_stmt_id.index());
             self.plan_materialize_statement(dep_stmt_id);
         }
 
@@ -339,15 +323,6 @@ impl MaterializePlanner<'_> {
                 } = &stmt_info.args[expr_arg.position]
                 {
                     debug_assert!(input.get().is_none());
-
-                    println!(
-                        "  [FILTER ARG] Trying to get output of arg stmt_id={}",
-                        arg_stmt_id.index()
-                    );
-                    println!(
-                        "    Output set? {}",
-                        self.store[arg_stmt_id].output.get().is_some()
-                    );
                     let node_id = self.store[arg_stmt_id].output.get().expect("bug");
 
                     let (index, _) = inputs.insert_full(node_id);
@@ -454,6 +429,7 @@ impl MaterializePlanner<'_> {
 
                 stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
             } else {
+                println!("WUT; stmt={stmt:#?}");
                 visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| match expr {
                     stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
                         debug_assert_eq!(0, expr_column.nesting);
@@ -718,6 +694,7 @@ impl MaterializePlanner<'_> {
                 visit::for_each_expr(&index_plan.index_filter, |expr| {
                     if let stmt::Expr::Arg(expr_arg) = expr {
                         debug_assert_eq!(0, expr_arg.position, "TODO; index_plan={index_plan:#?}");
+                        debug_assert_eq!(Some(expr_arg), ref_source.as_ref());
                     }
                 });
 

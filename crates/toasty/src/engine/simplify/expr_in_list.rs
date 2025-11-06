@@ -48,7 +48,6 @@ impl Simplify<'_> {
     }
 
     fn rewrite_expr_in_list_with_single_item(&self, expr: &mut stmt::ExprInList) -> Option<Expr> {
-        println!("expr_in_list={expr:#?}");
         let rhs = match &mut *expr.list {
             Expr::Value(value) => {
                 let values = match value {
