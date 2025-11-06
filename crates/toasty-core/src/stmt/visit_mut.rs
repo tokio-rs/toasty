@@ -1,7 +1,7 @@
 #![allow(unused_variables)]
 
 use super::{
-    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprArg,
+    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
     ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr,
     ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
@@ -41,6 +41,10 @@ pub trait VisitMut {
 
     fn visit_expr_and_mut(&mut self, i: &mut ExprAnd) {
         visit_expr_and_mut(self, i);
+    }
+
+    fn visit_expr_any_mut(&mut self, i: &mut ExprAny) {
+        visit_expr_any_mut(self, i);
     }
 
     fn visit_expr_arg_mut(&mut self, i: &mut ExprArg) {
@@ -562,6 +566,7 @@ where
 {
     match node {
         Expr::And(expr) => v.visit_expr_and_mut(expr),
+        Expr::Any(expr) => v.visit_expr_any_mut(expr),
         Expr::Arg(expr) => v.visit_expr_arg_mut(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op_mut(expr),
         Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
@@ -600,6 +605,13 @@ where
     for expr in node {
         v.visit_expr_mut(expr);
     }
+}
+
+pub fn visit_expr_any_mut<V>(v: &mut V, node: &mut ExprAny)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
 }
 
 pub fn visit_expr_arg_mut<V>(v: &mut V, node: &mut ExprArg)

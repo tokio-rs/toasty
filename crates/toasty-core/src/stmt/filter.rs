@@ -115,6 +115,10 @@ impl Statement {
             Statement::Update(update) => &mut update.filter,
         }
     }
+
+    pub fn filter_expr_mut(&mut self) -> Option<&mut Expr> {
+        self.filter_mut().and_then(|filter| filter.expr.as_mut())
+    }
 }
 
 impl Query {

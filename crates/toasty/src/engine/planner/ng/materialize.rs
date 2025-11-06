@@ -430,7 +430,8 @@ impl MaterializePlanner<'_> {
                 stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
             } else {
                 println!("WUT; stmt={stmt:#?}");
-                visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| match expr {
+                let mut filter = stmt.filter_expr_mut();
+                visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
                     stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
                         debug_assert_eq!(0, expr_column.nesting);
                     }
@@ -443,10 +444,15 @@ impl MaterializePlanner<'_> {
                             todo!()
                         };
 
-                        *expr = stmt::Expr::arg_project(0, [*index]);
+                        *expr = stmt::Expr::arg(*index);
                     }
                     _ => {}
                 });
+
+                if let Some(filter) = filter {
+                    let expr = filter.take();
+                    *filter = stmt::Expr::any(stmt::Expr::map(ref_source, expr));
+                }
             }
         }
 
