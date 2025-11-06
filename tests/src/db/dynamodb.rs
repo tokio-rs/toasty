@@ -26,7 +26,7 @@ impl SetupDynamoDb {
 
                 // Create DynamoDB client with test credentials (matching the driver setup)
                 let config = aws_config::defaults(BehaviorVersion::latest())
-                    .region("foo")
+                    .region("us-east-1")
                     .credentials_provider(aws_sdk_dynamodb::config::Credentials::for_tests())
                     .endpoint_url("http://localhost:8000")
                     .load()
