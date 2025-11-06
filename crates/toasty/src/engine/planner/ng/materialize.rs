@@ -957,27 +957,11 @@ impl MaterializePlanner<'_> {
 
     fn compute_materialization_execution_order(&mut self, exit: NodeId) {
         debug_assert!(self.graph.execution_order.is_empty());
-        // Backward traversal to mark reachable nodes
-        let mut stack = vec![exit];
-        self.graph[exit].visited.set(true);
-
-        while let Some(node_id) = stack.pop() {
-            self.graph.execution_order.push(node_id);
-
-            for &dep_id in &self.graph[node_id].deps {
-                let dep = &self.graph[dep_id];
-
-                // Increment use count
-                dep.num_uses.set(dep.num_uses.get() + 1);
-
-                if !dep.visited.get() {
-                    dep.visited.set(true);
-                    stack.push(dep_id);
-                }
-            }
-        }
-
-        self.graph.execution_order.reverse();
+        compute_materialization_execution_order2(
+            exit,
+            &self.graph.store,
+            &mut self.graph.execution_order,
+        );
     }
 
     #[track_caller]
@@ -999,6 +983,29 @@ impl MaterializePlanner<'_> {
             ty,
         })
     }
+}
+
+fn compute_materialization_execution_order2(
+    node_id: NodeId,
+    graph: &IndexVec<NodeId, MaterializeNode>,
+    execution_order: &mut Vec<NodeId>,
+) {
+    let node = &graph[node_id];
+
+    if node.visited.get() {
+        return;
+    }
+
+    node.visited.set(true);
+
+    for &dep_id in &node.deps {
+        let dep = &graph[dep_id];
+        dep.num_uses.set(dep.num_uses.get() + 1);
+
+        compute_materialization_execution_order2(dep_id, graph, execution_order);
+    }
+
+    execution_order.push(node_id);
 }
 
 impl MaterializeGraph {

@@ -49,6 +49,8 @@ impl Engine {
         // Translate the optimized statement into a series of driver operations.
         let plan = self.plan(stmt)?;
 
+        println!("PLAN = {plan:#?}");
+
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
         self.exec_plan(&plan.pipeline, plan.vars).await

@@ -142,6 +142,8 @@ impl PlannerNg<'_, '_> {
         // Build the execution plan...
         self.plan_materializations();
 
+        println!("GRAPH = {:#?}", self.graph);
+
         let mid = self.store.root().output.get().unwrap();
         let node = &self.graph[mid];
         node.num_uses.set(node.num_uses.get() + 1);
