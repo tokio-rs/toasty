@@ -307,6 +307,36 @@ impl<'stmt> IndexMatch<'stmt> {
 
                 matched_operand
             }
+            Any(expr_any) => {
+                // Any operates on a Map expression that evaluates to bools.
+                // It's similar to a dynamic OR expression. If the map expression
+                // matches an index, the Any expression matches as well.
+                // We don't need the "balanced" check like OR because each
+                // evaluation of the map will have the same structure.
+                let stmt::Expr::Map(expr_map) = &*expr_any.expr else {
+                    todo!("expr_any.expr={:#?}", expr_any.expr);
+                };
+
+                // Try to match the map expression (the predicate applied to each element)
+                if self.match_restriction(cx, &expr_map.map) {
+                    // If the map expression matched, propagate that match to this Any expression
+                    for column in &mut self.columns {
+                        if let Some(operand_match) =
+                            column.exprs.get(&ByAddress(&*expr_map.map)).copied()
+                        {
+                            column.exprs.insert(
+                                ByAddress(expr),
+                                ExprMatch {
+                                    eq: operand_match.eq,
+                                },
+                            );
+                        }
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
             _ => todo!("expr={:#?}", expr),
         }
     }
@@ -553,6 +583,36 @@ impl<'stmt> IndexMatch<'stmt> {
                         }
                         .into(),
                     )
+                }
+            }
+            Any(expr_any) => {
+                // For Any expressions, partition the inner map expression
+                let stmt::Expr::Map(expr_map) = &*expr_any.expr else {
+                    todo!("expr_any.expr={:#?}", expr_any.expr);
+                };
+
+                let (index_filter, result_filter) = self.partition_filter(ctx, &expr_map.map);
+
+                // If the map expression can be used as an index filter, reconstruct
+                // the Any with the index filter version
+                if !index_filter.is_true() {
+                    let index_any = stmt::ExprAny {
+                        expr: Box::new(stmt::Expr::Map(stmt::ExprMap {
+                            base: expr_map.base.clone(),
+                            map: Box::new(index_filter),
+                        })),
+                    };
+                    (index_any.into(), true.into())
+                } else if !result_filter.is_true() {
+                    let result_any = stmt::ExprAny {
+                        expr: Box::new(stmt::Expr::Map(stmt::ExprMap {
+                            base: expr_map.base.clone(),
+                            map: Box::new(result_filter),
+                        })),
+                    };
+                    (true.into(), result_any.into())
+                } else {
+                    (true.into(), true.into())
                 }
             }
             _ => todo!("partition_filter={:#?}", expr),

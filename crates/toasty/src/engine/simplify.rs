@@ -35,10 +35,6 @@ impl Engine {
     pub(crate) fn simplify_stmt<T: Node>(&self, stmt: &mut T) {
         Simplify::new(&self.schema).visit_mut(stmt);
     }
-
-    pub(crate) fn simplify_expr(&self, cx: stmt::ExprContext<'_>, expr: &mut Expr) {
-        Simplify { cx }.visit_mut(expr);
-    }
 }
 
 // TODO: get rid of this?
@@ -53,6 +49,12 @@ impl VisitMut for Simplify<'_> {
 
         // If an in-subquery expression, then try lifting it.
         let maybe_expr = match i {
+            Expr::Any(expr_any) => match &mut *expr_any.expr {
+                Expr::Map(expr_map) if expr_map.base.is_const() => {
+                    todo!("simplify; expr={i:#?}")
+                }
+                _ => None,
+            },
             Expr::And(expr_and) => self.simplify_expr_and(expr_and),
             Expr::BinaryOp(expr_binary_op) => self.simplify_expr_binary_op(
                 expr_binary_op.op,
