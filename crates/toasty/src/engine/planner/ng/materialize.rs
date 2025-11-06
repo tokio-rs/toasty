@@ -242,6 +242,8 @@ impl super::PlannerNg<'_, '_> {
 
 impl MaterializePlanner<'_> {
     fn plan_materialize(&mut self) {
+        println!("=======================");
+        println!(" + plan_materialize; store={:#?}", self.store);
         let root_id = self.store.root_id();
         self.plan_materialize_statement(root_id);
 
@@ -252,11 +254,30 @@ impl MaterializePlanner<'_> {
     fn plan_materialize_statement(&mut self, stmt_id: StmtId) {
         let stmt_info = &self.store[stmt_id];
         let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
+        println!("stmt_info={:#?}", stmt_id);
+        println!("  deps={:?}", stmt_info.deps);
+        println!(
+            "  args={:?}",
+            stmt_info
+                .args
+                .iter()
+                .map(|arg| match arg {
+                    Arg::Sub { stmt_id, .. } => format!("Sub({})", stmt_id.index()),
+                    Arg::Ref { stmt_id, .. } => format!("Ref({})", stmt_id.index()),
+                })
+                .collect::<Vec<_>>()
+        );
+
+        // Check if the statement has already been planned
+        if stmt_info.exec_statement.get().is_some() {
+            return;
+        }
 
         // First, plan dependency statements. These are statments that must run
         // before the current one but do not reference the current statement.
-        for &stmt_id in &stmt_info.deps {
-            self.plan_materialize_statement(stmt_id);
+        for &dep_stmt_id in &stmt_info.deps {
+            println!("  -> processing dep {}", dep_stmt_id.index());
+            self.plan_materialize_statement(dep_stmt_id);
         }
 
         // Tracks if the original query is a single query.
@@ -284,7 +305,11 @@ impl MaterializePlanner<'_> {
                     Arg::Ref { .. } => {
                         todo!("refs in returning is not yet supported");
                     }
-                    Arg::Sub { stmt_id, input } => {
+                    Arg::Sub {
+                        stmt_id,
+                        input,
+                        returning: true,
+                    } => {
                         // If there are back-refs, the exec statement is preloading
                         // data for a NestedMerge. Sub-statements will be loaded
                         // during the NestedMerge.
@@ -297,8 +322,37 @@ impl MaterializePlanner<'_> {
                         let (index, _) = inputs.insert_full(node_id);
                         input.set(Some(index));
                     }
+                    _ => todo!(),
                 },
                 _ => {}
+            }
+        });
+
+        // Track sub-statement arguments from filter
+        visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| {
+            if let stmt::Expr::Arg(expr_arg) = expr {
+                debug_assert!(!self.engine.capability().sql);
+                if let Arg::Sub {
+                    stmt_id: arg_stmt_id,
+                    returning: false,
+                    input,
+                } = &stmt_info.args[expr_arg.position]
+                {
+                    debug_assert!(input.get().is_none());
+
+                    println!(
+                        "  [FILTER ARG] Trying to get output of arg stmt_id={}",
+                        arg_stmt_id.index()
+                    );
+                    println!(
+                        "    Output set? {}",
+                        self.store[arg_stmt_id].output.get().is_some()
+                    );
+                    let node_id = self.store[arg_stmt_id].output.get().expect("bug");
+
+                    let (index, _) = inputs.insert_full(node_id);
+                    input.set(Some(index));
+                }
             }
         });
 
@@ -510,12 +564,21 @@ impl MaterializePlanner<'_> {
             let mut post_filter = index_plan.post_filter.clone();
 
             if index_plan.index.primary_key {
+                /*
+                let pk_keys_project_args = inputs
+                    .iter()
+                    .map(|node_id| self.graph[node_id].ty().unwrap_list_ref().clone())
+                    .collect();
+                    */
                 let pk_keys_project_args = if ref_source.is_some() {
                     assert_eq!(inputs.len(), 1, "TODO");
                     let ty = self.graph[inputs[0]].ty();
                     vec![ty.unwrap_list_ref().clone()]
                 } else {
-                    vec![]
+                    inputs
+                        .iter()
+                        .map(|node_id| self.graph[node_id].ty().clone())
+                        .collect()
                 };
 
                 // If using the primary key to find rows, try to convert the
@@ -575,12 +638,13 @@ impl MaterializePlanner<'_> {
                 // TODO: I'm not sure if calling try_build_key_filter is the
                 // right way to do this anymore, but it works for now?
                 if let Some(keys) = pk_keys {
-                    let get_by_key_input = if ref_source.is_none() {
+                    let get_by_key_input = if keys.is_const() {
                         self.insert_const(keys.eval_const(), index_key_ty)
                     } else if keys.is_identity() {
                         debug_assert_eq!(1, inputs.len(), "TODO");
                         inputs[0]
                     } else {
+                        debug_assert!(ref_source.is_some(), "TODO");
                         let ty = stmt::Type::list(keys.ret.clone());
                         // Gotta project
                         self.graph.insert(MaterializeProject {

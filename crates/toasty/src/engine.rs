@@ -40,6 +40,8 @@ impl Engine {
     }
 
     pub(crate) async fn exec(&self, stmt: Statement) -> Result<ValueStream> {
+        println!("====== EXEC =======");
+        println!("stmt={stmt:#?}");
         if cfg!(debug_assertions) {
             self.verify(&stmt);
         }

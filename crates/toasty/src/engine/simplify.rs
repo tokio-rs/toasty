@@ -35,6 +35,10 @@ impl Engine {
     pub(crate) fn simplify_stmt<T: Node>(&self, stmt: &mut T) {
         Simplify::new(&self.schema).visit_mut(stmt);
     }
+
+    pub(crate) fn simplify_expr(&self, cx: stmt::ExprContext<'_>, expr: &mut Expr) {
+        Simplify { cx }.visit_mut(expr);
+    }
 }
 
 // TODO: get rid of this?

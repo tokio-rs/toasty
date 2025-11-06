@@ -50,10 +50,10 @@ impl Engine {
                 let expr = match expr {
                     expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
                     expr @ stmt::Expr::Record(_) => stmt::Expr::list_from_vec(vec![expr]),
+                    expr @ stmt::Expr::Arg(_) => expr,
                     /*
                     expr @ stmt::Expr::Value(stmt::Value::List(_)) => expr,
                     stmt::Expr::Value(value) => stmt::Expr::Value(stmt::Value::List(vec![value])),
-                    expr @ stmt::Expr::Arg(_) => expr,
                     */
                     expr => todo!("expr={expr:#?}"),
                 };
@@ -62,9 +62,14 @@ impl Engine {
                 let ty = stmt::Type::list(self.index_key_record_ty(index));
                 eval::Func::from_stmt_typed(expr, conv.args, ty)
             } else {
-                assert!(expr.is_record(), "TODO; expr={expr:#?}");
                 let project = eval::Func::from_stmt(expr, conv.args);
-                debug_assert_eq!(project.ret, self.index_key_record_ty(index));
+                /*
+                debug_assert_eq!(
+                    project.ret,
+                    self.index_key_record_ty(index),
+                    "project={project:#?}"
+                );
+                */
                 project
             }
         })
@@ -173,7 +178,14 @@ impl TryConvert<'_, '_> {
 
     fn key_list_expr_to_eval(&mut self, expr: &stmt::Expr) -> stmt::Expr {
         match expr {
-            stmt::Expr::Arg(_) => expr.clone(),
+            stmt::Expr::Arg(expr_arg) => {
+                debug_assert!(self
+                    .args
+                    .get(expr_arg.position)
+                    .map(|ty| ty.is_list())
+                    .unwrap_or(false));
+                expr.clone()
+            }
             stmt::Expr::Value(stmt::Value::List(items)) => {
                 let mut ret = vec![];
 

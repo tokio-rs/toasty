@@ -407,51 +407,53 @@ impl LowerStatement<'_, '_> {
         expr: stmt::Expr,
         source: &mut dyn RelationSource,
     ) {
-        if let Some(pair_id) = field.pair() {
-            if self.field(pair_id).ty.is_has_one() {
-                // Disassociate an existing HasOne. This handles the case where
-                // if the HasOne association is required (i.e. *not* `Option`),
-                // then the record gets deleted.
-                self.plan_mut_belongs_to_disassociate(field, false, source);
+        let dependencies = self.collect_dependencies(|lower| {
+            if let Some(pair_id) = field.pair() {
+                if lower.field(pair_id).ty.is_has_one() {
+                    // Disassociate an existing HasOne. This handles the case where
+                    // if the HasOne association is required (i.e. *not* `Option`),
+                    // then the record gets deleted.
+                    lower.plan_mut_belongs_to_disassociate(field, false, source);
 
-                // This handles disassociating any *other* instances of the current
-                // model that already are associated with the target model being
-                // passed it. This is necessary because of the 1-1 relation
-                // mapping.
-                if field.nullable {
-                    self.relation_step(field, |planner| {
-                        assert!(expr.is_value(), "TODO; expr={expr:#?}");
+                    // This handles disassociating any *other* instances of the current
+                    // model that already are associated with the target model being
+                    // passed it. This is necessary because of the 1-1 relation
+                    // mapping.
+                    if field.nullable {
+                        lower.relation_step(field, |planner| {
+                            assert!(expr.is_value(), "TODO; expr={expr:#?}");
 
-                        let scope = stmt::Query::new_select(
-                            field.id.model,
-                            stmt::Expr::eq(stmt::Expr::ref_self_field(field), expr.clone()),
-                        );
+                            let scope = stmt::Query::new_select(
+                                field.id.model,
+                                stmt::Expr::eq(stmt::Expr::ref_self_field(field), expr.clone()),
+                            );
 
-                        if field.nullable {
-                            let mut stmt = scope.update();
-                            stmt.assignments.set(field.id, stmt::Value::Null);
-                            planner.new_dependency(stmt);
-                        } else {
-                            todo!();
-                        }
-                    });
-                } else {
-                    todo!()
+                            if field.nullable {
+                                let mut stmt = scope.update();
+                                stmt.assignments.set(field.id, stmt::Value::Null);
+                                planner.new_dependency(stmt);
+                            } else {
+                                todo!();
+                            }
+                        });
+                    } else {
+                        todo!()
+                    }
                 }
             }
-        }
+        });
 
-        match expr {
+        self.with_dependencies(dependencies, |lower| match expr {
             expr if expr.is_value() => {
                 assert!(!expr.is_value_null());
 
-                self.set_relation_field(field, expr, source);
+                lower.set_relation_field(field, expr, source);
             }
             stmt::Expr::Stmt(expr_stmt) => {
-                self.plan_mut_belongs_to_associate_stmt(field, *expr_stmt.stmt, source);
+                lower.plan_mut_belongs_to_associate_stmt(field, *expr_stmt.stmt, source);
             }
             _ => todo!("expr={expr:#?}"),
-        }
+        });
     }
 
     fn plan_mut_belongs_to_associate_stmt(

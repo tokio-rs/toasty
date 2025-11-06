@@ -51,10 +51,10 @@ index_vec::define_index_type! {
 }
 
 impl StatementInfo {
-    pub(super) fn new() -> StatementInfo {
+    pub(super) fn new(deps: HashSet<StmtId>) -> StatementInfo {
         StatementInfo {
             stmt: None,
-            deps: HashSet::new(),
+            deps,
             args: vec![],
             back_refs: HashMap::new(),
             exec_statement: Cell::new(None),
@@ -99,6 +99,9 @@ pub(super) enum Arg {
         /// The statement ID providing the input
         stmt_id: StmtId,
 
+        /// True when the sub is used in the returning clause
+        returning: bool,
+
         /// The index in the materialization node's inputs list. This is set
         /// when planning materialization.
         input: Cell<Option<usize>>,
@@ -133,8 +136,8 @@ impl StatementInfoStore {
         self.store.push(info)
     }
 
-    pub(super) fn new_statement_info(&mut self) -> StmtId {
-        self.insert(StatementInfo::new())
+    pub(super) fn new_statement_info(&mut self, deps: HashSet<StmtId>) -> StmtId {
+        self.insert(StatementInfo::new(deps))
     }
 
     pub(super) fn root_id(&self) -> StmtId {

@@ -49,9 +49,9 @@ impl LoweringState<'_> {
         // TODO: avoid simplifying many times
         self.engine.simplify_stmt(&mut stmt);
 
-        let stmt_id = self.store.new_statement_info();
+        let stmt_id = self.store.new_statement_info(self.dependencies.clone());
         let scope_id = self.scopes.push(Scope { stmt_id });
-        let mut dependencies = self.dependencies.clone();
+        let mut collect_dependencies = None;
 
         // Map the statement
         LowerStatement {
@@ -59,7 +59,7 @@ impl LoweringState<'_> {
             expr_cx,
             scope_id,
             cx: LoweringContext::Statement,
-            dependencies: &mut dependencies,
+            collect_dependencies: &mut collect_dependencies,
         }
         .visit_stmt_mut(&mut stmt);
 
@@ -69,8 +69,7 @@ impl LoweringState<'_> {
         let stmt_info = &mut self.store[stmt_id];
         stmt_info.stmt = Some(Box::new(stmt));
 
-        debug_assert!(stmt_info.deps.is_empty());
-        stmt_info.deps = dependencies;
+        debug_assert!(collect_dependencies.is_none());
 
         stmt_id
     }
@@ -91,7 +90,7 @@ struct LowerStatement<'a, 'b> {
     cx: LoweringContext<'a>,
 
     /// Track dependencies here.
-    dependencies: &'a mut HashSet<StmtId>,
+    collect_dependencies: &'a mut Option<HashSet<StmtId>>,
 }
 
 #[derive(Debug)]
@@ -157,7 +156,12 @@ impl LowerStatement<'_, '_> {
             .lower_stmt(stmt::ExprContext::new(self.schema()), stmt.into());
 
         self.state.scopes = scopes;
-        self.dependencies.insert(stmt_id);
+
+        if let Some(dependencies) = &mut self.collect_dependencies {
+            dependencies.insert(stmt_id);
+        }
+
+        self.curr_stmt_info().deps.insert(stmt_id);
 
         stmt_id
     }
@@ -166,19 +170,23 @@ impl LowerStatement<'_, '_> {
         &mut self,
         f: impl FnOnce(&mut LowerStatement<'_, '_>),
     ) -> HashSet<StmtId> {
-        let old = std::mem::take(self.dependencies);
-
+        let old = std::mem::replace(self.collect_dependencies, Some(HashSet::new()));
         f(self);
+        std::mem::replace(self.collect_dependencies, old).unwrap()
+    }
 
-        std::mem::replace(self.dependencies, old)
+    fn track_dependency(&mut self, dependency: StmtId) {
+        self.curr_stmt_info().deps.insert(dependency);
     }
 
     fn with_dependencies(
         &mut self,
-        dependencies: HashSet<StmtId>,
+        mut dependencies: HashSet<StmtId>,
         f: impl FnOnce(&mut LowerStatement<'_, '_>),
     ) {
-        debug_assert!(self.state.dependencies.is_empty());
+        // Dependencies should stack
+        dependencies.extend(&self.state.dependencies);
+
         let old = std::mem::replace(&mut self.state.dependencies, dependencies);
         f(self);
         self.state.dependencies = old;
@@ -220,14 +228,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         todo!("stmt={i:#?}");
     }
 
-    fn visit_expr_in_subquery_mut(&mut self, i: &mut stmt::ExprInSubquery) {
-        if !self.capability().sql {
-            todo!("implement IN <subquery> expressions for KV");
-        }
-
-        visit_mut::visit_expr_in_subquery_mut(self, i);
-    }
-
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::BinaryOp(e) => {
@@ -245,20 +245,59 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
             }
             stmt::Expr::InSubquery(e) => {
-                self.visit_expr_in_subquery_mut(e);
+                if self.capability().sql {
+                    self.visit_expr_in_subquery_mut(e);
 
-                let maybe_res = self.lower_expr_binary_op(
-                    stmt::BinaryOp::Eq,
-                    &mut e.expr,
-                    e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
-                );
+                    let maybe_res = self.lower_expr_binary_op(
+                        stmt::BinaryOp::Eq,
+                        &mut e.expr,
+                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                    );
 
-                assert!(maybe_res.is_none(), "TODO");
+                    assert!(maybe_res.is_none(), "TODO");
 
-                let returning = e.query.returning_mut_unwrap().as_expr_mut_unwrap();
+                    let returning = e.query.returning_mut_unwrap().as_expr_mut_unwrap();
 
-                if !returning.is_record() {
-                    *returning = stmt::Expr::record([returning.take()]);
+                    if !returning.is_record() {
+                        *returning = stmt::Expr::record([returning.take()]);
+                    }
+                } else {
+                    self.visit_expr_mut(&mut e.expr);
+
+                    let source_id = self.scope_stmt_id();
+                    let target_id = self.scope_statement(|child| {
+                        child.visit_stmt_query_mut(&mut e.query);
+                    });
+
+                    // For now, we wonly support independent sub-queries. I.e.
+                    // the subquery must be able to be executed without any
+                    // context from the parent query.
+                    let target_stmt_info = &self.state.store[target_id];
+                    debug_assert!(target_stmt_info.args.is_empty(), "TODO");
+                    debug_assert!(target_stmt_info.back_refs.is_empty(), "TODO");
+
+                    self.track_dependency(target_id);
+
+                    let maybe_res = self.lower_expr_binary_op(
+                        stmt::BinaryOp::Eq,
+                        &mut e.expr,
+                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                    );
+
+                    assert!(maybe_res.is_none(), "TODO");
+
+                    let stmt::Expr::InSubquery(e) = expr.take() else {
+                        panic!()
+                    };
+
+                    let position =
+                        self.new_sub_statement(source_id, target_id, Box::new((*e.query).into()));
+
+                    *expr = stmt::ExprInList {
+                        expr: e.expr,
+                        list: Box::new(stmt::Expr::arg(position)),
+                    }
+                    .into();
                 }
             }
             stmt::Expr::Reference(expr_reference) => {
@@ -282,17 +321,24 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     }
                 }
             }
-            stmt::Expr::Stmt(expr_stmt) => {
+            stmt::Expr::Stmt(_) => {
+                let stmt::Expr::Stmt(mut expr_stmt) = expr.take() else {
+                    panic!()
+                };
+
                 assert!(self.cx.is_returning(), "cx={:#?}", self.cx);
 
                 // For now, we assume nested sub-statements cannot be executed on the
                 // target database. Eventually, we will need to make this smarter.
                 let source_id = self.scope_stmt_id();
                 let target_id = self.scope_statement(|child| {
-                    visit_mut::visit_expr_stmt_mut(child, expr_stmt);
+                    visit_mut::visit_expr_stmt_mut(child, &mut expr_stmt);
                 });
 
-                let position = self.new_sub_statement(source_id, target_id, expr.take());
+                // TODO: Is ther ea way to avoid simplifying here?
+                self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
+
+                let position = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
                 *expr = stmt::Expr::arg(position);
             }
             _ => {
@@ -829,7 +875,9 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     fn new_statement_info(&mut self) -> StmtId {
-        self.state.store.new_statement_info()
+        self.state
+            .store
+            .new_statement_info(self.state.dependencies.clone())
     }
 
     /// Create a new sub-statement. Returns the argument position
@@ -837,23 +885,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         &mut self,
         source_id: StmtId,
         target_id: StmtId,
-        expr: stmt::Expr,
+        stmt: Box<stmt::Statement>,
     ) -> usize {
         let source = &mut self.state.store[source_id];
         let arg = source.args.len();
         source.args.push(Arg::Sub {
             stmt_id: target_id,
+            returning: self.cx.is_returning(),
             input: Cell::new(None),
         });
 
-        let stmt::Expr::Stmt(mut expr_stmt) = expr else {
-            panic!()
-        };
-
-        // TODO: Is ther ea way to avoid simplifying here?
-        self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
-
-        self.state.store[target_id].stmt = Some(expr_stmt.stmt);
+        self.state.store[target_id].stmt = Some(stmt);
 
         arg
     }
@@ -914,19 +956,19 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     fn scope_statement(&mut self, f: impl FnOnce(&mut LowerStatement<'_, '_>)) -> StmtId {
         let stmt_id = self.new_statement_info();
         let scope_id = self.state.scopes.push(Scope { stmt_id });
-        let mut dependencies = self.state.dependencies.clone();
+        let mut dependencies = None;
 
         let mut lower = LowerStatement {
             state: self.state,
             expr_cx: self.expr_cx,
             scope_id,
             cx: LoweringContext::Statement,
-            dependencies: &mut dependencies,
+            collect_dependencies: &mut dependencies,
         };
 
         f(&mut lower);
 
-        self.state.store[stmt_id].deps = dependencies;
+        debug_assert!(dependencies.is_none());
         self.state.scopes.pop();
         stmt_id
     }
@@ -940,7 +982,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
             cx: self.cx,
-            dependencies: self.dependencies,
+            collect_dependencies: self.collect_dependencies,
         }
     }
 
@@ -953,7 +995,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::Assignment(assignments),
-            dependencies: self.dependencies,
+            collect_dependencies: self.collect_dependencies,
         }
     }
 
@@ -974,7 +1016,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
             cx: LoweringContext::Insert(columns),
-            dependencies: self.dependencies,
+            collect_dependencies: self.collect_dependencies,
         }
     }
 
@@ -987,7 +1029,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::InsertRow(row),
-            dependencies: self.dependencies,
+            collect_dependencies: self.collect_dependencies,
         }
     }
 
@@ -997,7 +1039,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::Returning,
-            dependencies: self.dependencies,
+            collect_dependencies: self.collect_dependencies,
         }
     }
 }
