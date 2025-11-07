@@ -71,7 +71,7 @@ impl Exec<'_> {
                 anyhow::bail!("update condition did not match");
             }
 
-            todo!("COUNT???");
+            res.rows = Rows::Count(record[0].to_u64_unwrap());
         }
 
         self.vars.store_counted(

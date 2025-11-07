@@ -1,10 +1,27 @@
 use super::{Type, Value};
 
+macro_rules! try_from {
+    ($v:expr, $ty:ty) => {
+        match $v {
+            Value::I8(v) => <$ty>::try_from(v).ok(),
+            Value::I16(v) => <$ty>::try_from(v).ok(),
+            Value::I32(v) => <$ty>::try_from(v).ok(),
+            Value::I64(v) => <$ty>::try_from(v).ok(),
+            Value::U8(v) => <$ty>::try_from(v).ok(),
+            Value::U16(v) => <$ty>::try_from(v).ok(),
+            Value::U32(v) => <$ty>::try_from(v).ok(),
+            Value::U64(v) => <$ty>::try_from(v).ok(),
+            _ => None,
+        }
+    };
+}
+
 macro_rules! impl_num {
     (
         $(
             $variant:ident($ty:ty) {
                 $to:ident
+                $to_unwrap:ident
                 $is:ident
             } )*
     ) => {
@@ -12,6 +29,19 @@ macro_rules! impl_num {
             $(
                 pub fn $is(&self) -> bool {
                     matches!(self, Self::$variant)
+                }
+            )*
+        }
+
+        impl Value {
+            $(
+                pub fn $to(&self) -> Option<$ty> {
+                    try_from!(*self, $ty)
+                }
+
+                #[track_caller]
+                pub fn $to_unwrap(&self) -> $ty {
+                    try_from!(*self, $ty).expect("out of range integral type conversion attempted")
                 }
             )*
         }
@@ -35,34 +65,42 @@ macro_rules! impl_num {
 impl_num! {
     I8(i8) {
         to_i8
+        to_i8_unwrap
         is_i8
     }
     I16(i16) {
         to_i16
+        to_i16_unwrap
         is_i16
     }
     I32(i32) {
         to_i32
+        to_i32_unwrap
         is_i32
     }
     I64(i64) {
         to_i64
+        to_i64_unwrap
         is_i64
     }
     U8(u8) {
         to_u8
+        to_u8_unwrap
         is_u8
     }
     U16(u16) {
         to_u16
+        to_u16_unwrap
         is_u16
     }
     U32(u32) {
         to_u32
+        to_u32_unwrap
         is_u32
     }
     U64(u64) {
         to_u64
+        to_u64_unwrap
         is_u64
     }
 }
