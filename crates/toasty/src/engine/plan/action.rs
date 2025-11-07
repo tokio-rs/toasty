@@ -1,26 +1,13 @@
 use crate::engine::plan::{
-    exec_statement2::ExecStatement2, project::Project, rmw::ReadModifyWrite2, Filter,
-    FindPkByIndex2, GetByKey2, QueryPk2, SetVar2,
+    DeleteByKey, ExecStatement2, Filter, FindPkByIndex2, GetByKey2, NestedMerge, Project, QueryPk2,
+    ReadModifyWrite2, SetVar2, UpdateByKey,
 };
 
-use super::{
-    Associate, BatchWrite, DeleteByKey, ExecStatement, FindPkByIndex, GetByKey, Insert,
-    NestedMerge, QueryPk, ReadModifyWrite, SetVar, UpdateByKey,
-};
 use std::fmt;
 
 pub(crate) enum Action {
-    /// Associate a preloaded relation with the owner
-    Associate(Associate),
-
-    /// Perform a batch write
-    BatchWrite(BatchWrite),
-
     /// Delete a record by the primary key
     DeleteByKey(DeleteByKey),
-
-    /// Execute a statement
-    ExecStatement(ExecStatement),
 
     /// Execute a statement
     ExecStatement2(ExecStatement2),
@@ -28,15 +15,10 @@ pub(crate) enum Action {
     /// Filter a value stream
     Filter(Filter),
 
-    FindPkByIndex(FindPkByIndex),
     FindPkByIndex2(FindPkByIndex2),
 
     /// Execute `Operation::GetByKey` using key input
-    GetByKey(GetByKey),
     GetByKey2(GetByKey2),
-
-    /// Insert a record
-    Insert(Insert),
 
     /// Nested merge operation - combines parent and child materializations
     /// Handles the ENTIRE nesting hierarchy, not just one level
@@ -47,15 +29,12 @@ pub(crate) enum Action {
     Project(Project),
 
     /// Query records by primary key
-    QueryPk(QueryPk),
     QueryPk2(QueryPk2),
 
     /// Perform an atomic operation in multiple steps
-    ReadModifyWrite(Box<ReadModifyWrite>),
     ReadModifyWrite2(Box<ReadModifyWrite2>),
 
     /// Set a variable to a const
-    SetVar(SetVar),
     SetVar2(SetVar2),
 
     /// Update a record by the primary key
@@ -65,24 +44,15 @@ pub(crate) enum Action {
 impl fmt::Debug for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Associate(a) => a.fmt(f),
-            Self::BatchWrite(a) => a.fmt(f),
             Self::DeleteByKey(a) => a.fmt(f),
-            Self::ExecStatement(a) => a.fmt(f),
             Self::ExecStatement2(a) => a.fmt(f),
             Self::Filter(a) => a.fmt(f),
-            Self::FindPkByIndex(a) => a.fmt(f),
             Self::FindPkByIndex2(a) => a.fmt(f),
-            Self::GetByKey(a) => a.fmt(f),
             Self::GetByKey2(a) => a.fmt(f),
-            Self::Insert(a) => a.fmt(f),
             Self::NestedMerge(a) => a.fmt(f),
-            Self::QueryPk(a) => a.fmt(f),
             Self::QueryPk2(a) => a.fmt(f),
-            Self::ReadModifyWrite(a) => a.fmt(f),
             Self::ReadModifyWrite2(a) => a.fmt(f),
             Self::Project(a) => a.fmt(f),
-            Self::SetVar(a) => a.fmt(f),
             Self::SetVar2(a) => a.fmt(f),
             Self::UpdateByKey(a) => a.fmt(f),
         }

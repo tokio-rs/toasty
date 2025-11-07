@@ -32,10 +32,6 @@ impl Simplify<'_> {
             return None;
         };
 
-        let Some(model) = cx.target_as_model() else {
-            todo!()
-        };
-
         match select.filter.as_expr() {
             stmt::Expr::BinaryOp(expr_binary_op) => {
                 if !expr_binary_op.op.is_eq() {

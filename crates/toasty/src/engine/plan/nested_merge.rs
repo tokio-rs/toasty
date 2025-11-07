@@ -1,6 +1,7 @@
-use crate::engine::plan::Output2;
-
-use super::{eval, Action, VarId};
+use crate::engine::{
+    eval,
+    plan::{Action, Output2, VarId},
+};
 
 /// Nested merge operation - combines parent and child materializations
 ///

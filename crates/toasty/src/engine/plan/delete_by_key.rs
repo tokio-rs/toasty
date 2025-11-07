@@ -1,7 +1,5 @@
-use crate::engine::plan::{Output2, VarId};
-
-use super::{stmt, Action};
-use toasty_core::schema::db::TableId;
+use crate::engine::plan::{Action, Output2, VarId};
+use toasty_core::{schema::db::TableId, stmt};
 
 /// Input is the key to delete
 #[derive(Debug)]

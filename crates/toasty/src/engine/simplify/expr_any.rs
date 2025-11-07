@@ -1,5 +1,4 @@
 use super::Simplify;
-use crate::engine::eval::Func;
 use toasty_core::stmt::{self, Expr};
 
 impl Simplify<'_> {

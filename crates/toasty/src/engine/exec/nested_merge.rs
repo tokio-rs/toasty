@@ -11,7 +11,7 @@ impl Exec<'_> {
             // TODO: make loading input concurrent
             let data = self
                 .vars
-                .load_count(*var_id)
+                .load(*var_id)
                 .await?
                 .into_values()
                 .collect()
@@ -34,7 +34,7 @@ impl Exec<'_> {
         }
 
         // Store the output
-        self.vars.store_counted(
+        self.vars.store(
             action.output.var,
             action.output.num_uses,
             Rows::value_stream(merged_rows),

@@ -191,7 +191,7 @@ impl Value {
             Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
             Value::String(_) => Type::String,
             Value::List(items) => Type::list(items[0].infer_ty()),
-            Value::Enum(value_enum) => todo!(),
+            Value::Enum(_) => todo!(),
             Value::U8(_) => Type::U8,
             Value::U16(_) => Type::U16,
             Value::U32(_) => Type::U32,

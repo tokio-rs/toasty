@@ -1,5 +1,7 @@
-use super::{plan, Exec};
-use crate::Result;
+use crate::{
+    engine::{exec::Exec, plan},
+    Result,
+};
 use toasty_core::{
     driver::{
         operation::{self, Transaction},
@@ -9,84 +11,6 @@ use toasty_core::{
 };
 
 impl Exec<'_> {
-    pub(super) async fn action_read_modify_write(
-        &mut self,
-        action: &plan::ReadModifyWrite,
-    ) -> Result<()> {
-        assert!(action.input.is_none(), "TODO");
-        assert!(action.output.is_none(), "TODO");
-
-        let res = self
-            .engine
-            .driver
-            .exec(&self.engine.schema.db, Transaction::Start.into())
-            .await?;
-        assert!(matches!(res.rows, Rows::Count(0)));
-
-        let ty = Some(vec![stmt::Type::I64, stmt::Type::I64]);
-
-        let res = self
-            .engine
-            .driver
-            .exec(
-                &self.engine.schema.db,
-                operation::QuerySql {
-                    stmt: action.read.clone().into(),
-                    ret: ty,
-                }
-                .into(),
-            )
-            .await?;
-
-        let Rows::Values(rows) = res.rows else {
-            anyhow::bail!("expected rows");
-        };
-
-        let rows = rows.collect().await?;
-        assert_eq!(rows.len(), 1);
-
-        let stmt::Value::Record(record) = &rows[0] else {
-            anyhow::bail!("expected record");
-        };
-        assert_eq!(record.len(), 2);
-
-        let stmt::Value::I64(count) = record[0] else {
-            anyhow::bail!("expected i64");
-        };
-
-        if record[0] != record[1] {
-            anyhow::bail!("update condition did not match");
-        }
-
-        let res = self
-            .engine
-            .driver
-            .exec(
-                &self.engine.schema.db,
-                operation::QuerySql {
-                    stmt: action.write.clone(),
-                    ret: None,
-                }
-                .into(),
-            )
-            .await?;
-
-        let Rows::Count(actual) = res.rows else {
-            anyhow::bail!("expected count");
-        };
-
-        assert_eq!(actual, count as u64);
-
-        let res = self
-            .engine
-            .driver
-            .exec(&self.engine.schema.db, Transaction::Commit.into())
-            .await?;
-        assert!(matches!(res.rows, Rows::Count(0)));
-
-        Ok(())
-    }
-
     pub(super) async fn action_read_modify_write2(
         &mut self,
         action: &plan::ReadModifyWrite2,
@@ -163,7 +87,7 @@ impl Exec<'_> {
 
         if let Some(output) = &action.output {
             let rows = Rows::value_stream(ValueStream::default());
-            self.vars.store_counted(output.var, output.num_uses, rows);
+            self.vars.store(output.var, output.num_uses, rows);
         }
 
         Ok(())

@@ -1,9 +1,6 @@
 mod as_expr;
 use as_expr::AsExpr;
 
-mod convert;
-pub(crate) use convert::Convert;
-
 use crate::Result;
 use toasty_core::stmt::{self, ExprContext};
 
@@ -59,30 +56,6 @@ impl<T: AsExpr> Func<T> {
     }
 }
 
-impl Func<stmt::Expr> {
-    /// Returns the identity function for the given type
-    pub(crate) fn identity(ty: stmt::Type) -> Self {
-        Self {
-            args: vec![ty.clone()],
-            ret: ty,
-            expr: stmt::Expr::arg(0),
-        }
-    }
-
-    pub fn try_convert_from_stmt(
-        mut expr: stmt::Expr,
-        args: Vec<stmt::Type>,
-        mut convert: impl Convert,
-    ) -> Option<Self> {
-        if !convert_and_verify_expr(&mut expr, &mut convert) {
-            return None;
-        }
-
-        let ret = ExprContext::new_free().infer_expr_ty(&expr, &args);
-        Some(Self::from_stmt_typed(expr, args, ret))
-    }
-}
-
 impl Func<&stmt::Expr> {
     pub(crate) fn try_from_stmt(
         expr: &stmt::Expr,
@@ -113,44 +86,6 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
         Record(expr) => expr.fields.iter().all(verify_expr),
         Reference(_) => false,
         Value(_) => true,
-        _ => todo!("expr={expr:#?}"),
-    }
-}
-
-fn convert_and_verify_expr(expr: &mut stmt::Expr, convert: &mut impl Convert) -> bool {
-    use stmt::Expr::*;
-
-    match expr {
-        Arg(_) => true,
-        And(expr_and) => expr_and
-            .operands
-            .iter_mut()
-            .all(|e| convert_and_verify_expr(e, convert)),
-        BinaryOp(expr) => {
-            convert_and_verify_expr(&mut expr.lhs, convert)
-                && convert_and_verify_expr(&mut expr.rhs, convert)
-        }
-        Cast(expr) => convert_and_verify_expr(&mut expr.expr, convert),
-        Reference(expr_reference) => {
-            let Some(e) = convert.convert_expr_reference(expr_reference) else {
-                return false;
-            };
-            *expr = e;
-            convert_and_verify_expr(expr, convert)
-        }
-        IsNull(e) => convert_and_verify_expr(&mut e.expr, convert),
-        List(expr) => expr
-            .items
-            .iter_mut()
-            .all(|e| convert_and_verify_expr(e, convert)),
-        Map(expr) => convert_and_verify_expr(&mut expr.base, convert) && verify_expr(&expr.map),
-        Project(expr) => convert_and_verify_expr(&mut expr.base, convert),
-        Record(expr) => expr
-            .fields
-            .iter_mut()
-            .all(|e| convert_and_verify_expr(e, convert)),
-        Value(_) => true,
-        DecodeEnum(expr, _, _) => convert_and_verify_expr(&mut *expr, convert),
         _ => todo!("expr={expr:#?}"),
     }
 }

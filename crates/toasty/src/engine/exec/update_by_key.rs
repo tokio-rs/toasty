@@ -1,12 +1,15 @@
-use super::{operation, plan, Exec, Result};
-use crate::driver::Rows;
-use toasty_core::stmt::ValueStream;
+use crate::{
+    driver::Rows,
+    engine::{exec::Exec, plan},
+    Result,
+};
+use toasty_core::{driver::operation, stmt::ValueStream};
 
 impl Exec<'_> {
     pub(super) async fn action_update_by_key(&mut self, action: &plan::UpdateByKey) -> Result<()> {
         let keys = self
             .vars
-            .load_count(action.input)
+            .load(action.input)
             .await?
             .into_values()
             .collect()
@@ -40,7 +43,7 @@ impl Exec<'_> {
         };
 
         self.vars
-            .store_counted(action.output.var, action.output.num_uses, res);
+            .store(action.output.var, action.output.num_uses, res);
 
         Ok(())
     }

@@ -1,12 +1,12 @@
-use toasty_core::driver::Rows;
+use toasty_core::driver::{operation, Rows};
 
-use super::{operation, plan, Exec, Result};
+use super::{plan, Exec, Result};
 
 impl Exec<'_> {
     pub(super) async fn action_delete_by_key(&mut self, action: &plan::DeleteByKey) -> Result<()> {
         let keys = self
             .vars
-            .load_count(action.input)
+            .load(action.input)
             .await?
             .into_values()
             .collect()
@@ -32,7 +32,7 @@ impl Exec<'_> {
         };
 
         self.vars
-            .store_counted(action.output.var, action.output.num_uses, res);
+            .store(action.output.var, action.output.num_uses, res);
 
         Ok(())
     }

@@ -1,6 +1,6 @@
-use crate::engine::plan::{Output2, VarId};
+use toasty_core::stmt;
 
-use super::{stmt, Action};
+use crate::engine::plan::{Action, Output2, VarId};
 
 #[derive(Debug)]
 pub(crate) struct ExecStatement2 {

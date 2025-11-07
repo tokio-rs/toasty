@@ -1,5 +1,8 @@
-use super::{operation, plan, Exec, Result};
-use toasty_core::{driver::Rows, stmt};
+use super::{plan, Exec, Result};
+use toasty_core::{
+    driver::{operation, Rows},
+    stmt,
+};
 
 impl Exec<'_> {
     pub(super) async fn action_exec_statement2(
@@ -16,7 +19,7 @@ impl Exec<'_> {
             for var_id in &action.input {
                 let values = self
                     .vars
-                    .load_count(*var_id)
+                    .load(*var_id)
                     .await?
                     .into_values()
                     .collect()
@@ -74,7 +77,7 @@ impl Exec<'_> {
             res.rows = Rows::Count(record[0].to_u64_unwrap());
         }
 
-        self.vars.store_counted(
+        self.vars.store(
             action.output.output.var,
             action.output.output.num_uses,
             res.rows,

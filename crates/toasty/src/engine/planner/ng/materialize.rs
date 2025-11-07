@@ -1193,16 +1193,17 @@ impl MaterializeGraph {
 impl MaterializeNode {
     pub(super) fn ty(&self) -> &stmt::Type {
         match &self.kind {
-            MaterializeKind::Const(kind) => &kind.ty,
-            MaterializeKind::DeleteByKey(_) => &stmt::Type::Unit,
-            MaterializeKind::ExecStatement(kind) => &kind.ty,
-            MaterializeKind::Filter(kind) => &kind.ty,
-            MaterializeKind::FindPkByIndex(kind) => &kind.ty,
-            MaterializeKind::GetByKey(kind) => &kind.ty,
-            MaterializeKind::QueryPk(kind) => &kind.ty,
-            MaterializeKind::Project(kind) => &kind.ty,
-            MaterializeKind::UpdateByKey(kind) => &kind.ty,
-            _ => todo!("node={self:#?}"),
+            MaterializeKind::Const(m) => &m.ty,
+            MaterializeKind::DeleteByKey(m) => &m.ty,
+            MaterializeKind::ExecStatement(m) => &m.ty,
+            MaterializeKind::Filter(m) => &m.ty,
+            MaterializeKind::FindPkByIndex(m) => &m.ty,
+            MaterializeKind::GetByKey(m) => &m.ty,
+            MaterializeKind::QueryPk(m) => &m.ty,
+            MaterializeKind::Project(m) => &m.ty,
+            MaterializeKind::UpdateByKey(m) => &m.ty,
+            MaterializeKind::NestedMerge(_m) => todo!(),
+            MaterializeKind::ReadModifyWrite(m) => &m.ty,
         }
     }
 

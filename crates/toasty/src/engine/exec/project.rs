@@ -10,7 +10,7 @@ impl Exec<'_> {
         // having to eagerly buffer everything.
         let mut projected_rows = vec![];
 
-        match self.vars.load_count(action.input).await? {
+        match self.vars.load(action.input).await? {
             Rows::Values(mut value_stream) => {
                 while let Some(res) = value_stream.next().await {
                     let value = res?;
@@ -29,7 +29,7 @@ impl Exec<'_> {
         }
 
         // Store the projected stream to the output variable
-        self.vars.store_counted(
+        self.vars.store(
             action.output.var,
             action.output.num_uses,
             Rows::value_stream(projected_rows),

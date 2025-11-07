@@ -19,11 +19,6 @@ impl VarTable {
         plan::VarId(ret)
     }
 
-    pub fn ty(&self, var: impl Into<plan::VarId>) -> &stmt::Type {
-        let var = var.into();
-        &self.vars[var.0]
-    }
-
     pub(crate) fn into_vec(self) -> Vec<stmt::Type> {
         self.vars
     }
