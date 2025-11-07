@@ -44,13 +44,11 @@ impl DynamoDb {
             ));
         }
 
-        use aws_sdk_dynamodb::config::{BehaviorVersion, Credentials, Region};
-        use aws_sdk_dynamodb::Config;
+        use aws_config::BehaviorVersion;
+        use aws_sdk_dynamodb::config::Credentials;
 
-        // Build config directly without going through the slow provider chain
-        let mut config_builder = Config::builder()
-            .behavior_version(BehaviorVersion::latest())
-            .region(Region::new("us-east-1"))
+        let mut aws_config = aws_config::defaults(BehaviorVersion::latest())
+            .region("us-east-1")
             .credentials_provider(Credentials::for_tests());
 
         if let Some(host) = url.host() {
@@ -60,10 +58,12 @@ impl DynamoDb {
                 endpoint_url.push_str(&format!(":{port}"));
             }
 
-            config_builder = config_builder.endpoint_url(&endpoint_url);
+            aws_config = aws_config.endpoint_url(&endpoint_url);
         }
 
-        let client = Client::from_conf(config_builder.build());
+        let sdk_config = aws_config.load().await;
+
+        let client = Client::new(&sdk_config);
 
         Ok(Self { client })
     }

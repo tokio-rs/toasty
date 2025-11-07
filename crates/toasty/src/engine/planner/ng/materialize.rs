@@ -6,7 +6,7 @@ use index_vec::IndexVec;
 use indexmap::{indexset, IndexSet};
 use toasty_core::{
     schema::db::{IndexId, TableId},
-    stmt::{self, visit, visit_mut},
+    stmt::{self, visit, visit_mut, Condition},
 };
 
 use crate::engine::{
@@ -317,13 +317,13 @@ impl MaterializePlanner<'_> {
         // Track sub-statement arguments from filter
         visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| {
             if let stmt::Expr::Arg(expr_arg) = expr {
-                debug_assert!(!self.engine.capability().sql);
                 if let Arg::Sub {
                     stmt_id: arg_stmt_id,
                     returning: false,
                     input,
                 } = &stmt_info.args[expr_arg.position]
                 {
+                    debug_assert!(!self.engine.capability().sql);
                     debug_assert!(input.get().is_none());
                     let node_id = self.store[arg_stmt_id].output.get().expect("bug");
 
@@ -504,7 +504,9 @@ impl MaterializePlanner<'_> {
                     assert!(returning.is_none(), "TODO: returning={returning:#?}");
 
                     if self.engine.capability().cte_with_update {
-                        todo!("stmt={stmt:#?}")
+                        MaterializeKind::ExecStatement(
+                            self.plan_materialize_conditional_sql_query_as_cte(inputs, stmt, ty),
+                        )
                     } else {
                         MaterializeKind::ReadModifyWrite(
                             self.plan_materialize_conditional_sql_query_as_rmw(inputs, stmt, ty),
@@ -873,6 +875,149 @@ impl MaterializePlanner<'_> {
         debug_assert!(dependencies.is_none());
 
         stmt_info.output.set(Some(output_node_id));
+    }
+
+    // plan_materialize_conditional_sql_query_as_cte
+    fn plan_materialize_conditional_sql_query_as_cte(
+        &self,
+        inputs: IndexSet<NodeId>,
+        stmt: stmt::Update,
+        ty: stmt::Type,
+    ) -> MaterializeExecStatement {
+        let Some(condition) = stmt.condition.expr else {
+            panic!("conditional update without condition");
+        };
+
+        let Some(filter) = stmt.filter.expr else {
+            panic!("conditional update without filter");
+        };
+
+        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
+            panic!("conditional update without table");
+        };
+
+        let mut ctes = vec![];
+
+        // Select from update table without the update condition.
+        ctes.push(stmt::Cte {
+            query: stmt::Query::builder(target)
+                .filter(filter.clone())
+                .returning(vec![
+                    stmt::Expr::count_star(),
+                    stmt::FuncCount {
+                        arg: None,
+                        filter: Some(Box::new(condition)),
+                    }
+                    .into(),
+                ])
+                .build(),
+        });
+
+        let returning_len = match &stmt.returning {
+            Some(stmt::Returning::Expr(expr)) => {
+                let stmt::Expr::Record(expr_record) = expr else {
+                    panic!("returning must be a record");
+                };
+
+                expr_record.fields.len()
+            }
+            Some(_) => todo!(),
+            None => 0,
+        };
+
+        // The update statement. The update condition is expressed using the select above
+        ctes.push(stmt::Cte {
+            query: stmt::Query::new(stmt::Update {
+                target: stmt.target,
+                assignments: stmt.assignments,
+                filter: stmt::Filter::new(stmt::Expr::and(
+                    filter,
+                    // SELECT found.count(*) = found.count(CONDITION) FROM found
+                    stmt::Expr::stmt(stmt::Select {
+                        source: stmt::TableRef::Cte {
+                            nesting: 2,
+                            index: 0,
+                        }
+                        .into(),
+                        filter: true.into(),
+                        returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                            stmt::Expr::eq(
+                                stmt::ExprColumn {
+                                    nesting: 0,
+                                    table: 0,
+                                    column: 0,
+                                },
+                                stmt::ExprColumn {
+                                    nesting: 0,
+                                    table: 0,
+                                    column: 1,
+                                },
+                            ),
+                        ])),
+                    }),
+                )),
+                condition: Condition::default(),
+                returning: Some(
+                    stmt.returning
+                        // TODO: hax
+                        .unwrap_or_else(|| {
+                            stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                                stmt::Expr::from("hello"),
+                            ]))
+                        }),
+                ),
+            }),
+        });
+
+        let mut columns = vec![
+            stmt::Expr::column(stmt::ExprColumn {
+                nesting: 0,
+                table: 0,
+                column: 0,
+            }),
+            stmt::Expr::column(stmt::ExprColumn {
+                nesting: 0,
+                table: 0,
+                column: 1,
+            }),
+        ];
+
+        for i in 0..returning_len {
+            columns.push(stmt::Expr::column(stmt::ExprColumn {
+                nesting: 0,
+                table: 1,
+                column: i,
+            }));
+        }
+
+        let stmt = stmt::Query::builder(stmt::Select {
+            source: stmt::Source::table_with_joins(
+                vec![
+                    stmt::TableRef::Cte {
+                        nesting: 0,
+                        index: 0,
+                    },
+                    stmt::TableRef::Cte {
+                        nesting: 0,
+                        index: 1,
+                    },
+                ],
+                stmt::TableWithJoins {
+                    relation: stmt::TableFactor::Table(stmt::SourceTableId(0)),
+                    joins: vec![stmt::Join {
+                        table: stmt::SourceTableId(1),
+                        constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
+                    }],
+                },
+            ),
+            filter: stmt::Filter::new(true),
+            returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
+        })
+        .with(ctes)
+        .build()
+        .into();
+
+        MaterializeExecStatement { inputs, stmt, ty }
     }
 
     fn plan_materialize_conditional_sql_query_as_rmw(
