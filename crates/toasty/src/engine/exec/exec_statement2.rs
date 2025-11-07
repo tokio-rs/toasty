@@ -1,5 +1,5 @@
 use super::{operation, plan, Exec, Result};
-use toasty_core::stmt;
+use toasty_core::{driver::Rows, stmt};
 
 impl Exec<'_> {
     pub(super) async fn action_exec_statement2(
@@ -36,14 +36,43 @@ impl Exec<'_> {
 
         let op = operation::QuerySql {
             stmt,
-            ret: action.output.ty.clone(),
+            ret: if action.conditional_update_with_no_returning {
+                Some(vec![stmt::Type::I64, stmt::Type::I64])
+            } else {
+                action.output.ty.clone()
+            },
         };
 
-        let res = self
+        let mut res = self
             .engine
             .driver
             .exec(&self.engine.schema.db, op.into())
             .await?;
+
+        if action.conditional_update_with_no_returning {
+            let Rows::Values(rows) = res.rows else {
+                return Err(anyhow::anyhow!(
+                    "conditional_update_with_no_returning: expected values, got {res:#?}"
+                ));
+            };
+
+            let rows = rows.collect().await?;
+            assert_eq!(rows.len(), 1);
+
+            let stmt::Value::Record(record) = &rows[0] else {
+                return Err(anyhow::anyhow!(
+                    "conditional_update_with_no_returning: expected record, got {rows:#?}"
+                ));
+            };
+
+            assert_eq!(record.len(), 2);
+
+            if record[0] != record[1] {
+                anyhow::bail!("update condition did not match");
+            }
+
+            todo!("COUNT???");
+        }
 
         self.vars.store_counted(
             action.output.output.var,

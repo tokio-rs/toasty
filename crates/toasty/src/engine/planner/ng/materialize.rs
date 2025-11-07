@@ -113,6 +113,9 @@ pub(crate) struct MaterializeExecStatement {
 
     /// Node return type
     pub(crate) ty: stmt::Type,
+
+    /// When true, the statement is a conditional update with no returning
+    pub(crate) conditional_update_with_no_returning: bool,
 }
 
 #[derive(Debug)]
@@ -525,7 +528,12 @@ impl MaterializePlanner<'_> {
                 );
                 // With SQL capability, we can just punt the details of execution to
                 // the database's query planner.
-                MaterializeKind::ExecStatement(MaterializeExecStatement { inputs, stmt, ty })
+                MaterializeKind::ExecStatement(MaterializeExecStatement {
+                    inputs,
+                    stmt,
+                    ty,
+                    conditional_update_with_no_returning: false,
+                })
             };
 
             // With SQL capability, we can just punt the details of execution to
@@ -1017,7 +1025,12 @@ impl MaterializePlanner<'_> {
         .build()
         .into();
 
-        MaterializeExecStatement { inputs, stmt, ty }
+        MaterializeExecStatement {
+            inputs,
+            stmt,
+            ty,
+            conditional_update_with_no_returning: true,
+        }
     }
 
     fn plan_materialize_conditional_sql_query_as_rmw(

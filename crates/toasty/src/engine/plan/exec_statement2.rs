@@ -12,6 +12,9 @@ pub(crate) struct ExecStatement2 {
 
     /// The query to execute. This may require input to generate the query.
     pub stmt: stmt::Statement,
+
+    /// When true, the statement is a conditional update without any returning.
+    pub conditional_update_with_no_returning: bool,
 }
 
 #[derive(Debug)]

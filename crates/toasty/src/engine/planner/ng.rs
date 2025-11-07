@@ -176,10 +176,10 @@ impl PlannerNg<'_, '_> {
                         filter: m.filter.clone(),
                     });
                 }
-                MaterializeKind::ExecStatement(materialize_exec_statement) => {
+                MaterializeKind::ExecStatement(m) => {
                     debug_assert!(
                         {
-                            match &materialize_exec_statement.stmt {
+                            match &m.stmt {
                                 stmt::Statement::Query(query) => !query.single,
                                 _ => true,
                             }
@@ -188,7 +188,7 @@ impl PlannerNg<'_, '_> {
                     );
 
                     let ty = node.ty();
-                    let input_vars = materialize_exec_statement
+                    let input_vars = m
                         .inputs
                         .iter()
                         .map(|input| self.graph[input].var.get().unwrap())
@@ -216,7 +216,9 @@ impl PlannerNg<'_, '_> {
                             ty: output_ty,
                             output: plan::Output2 { var, num_uses },
                         },
-                        stmt: materialize_exec_statement.stmt.clone(),
+                        stmt: m.stmt.clone(),
+                        conditional_update_with_no_returning: m
+                            .conditional_update_with_no_returning,
                     });
                 }
                 MaterializeKind::Filter(materialize_filter) => {
