@@ -11,10 +11,6 @@ impl ValueRecord {
     pub fn from_vec(fields: Vec<Value>) -> Self {
         Self { fields }
     }
-
-    pub fn into_iter(self) -> impl Iterator<Item = Value> {
-        self.fields.into_iter()
-    }
 }
 
 impl ops::Deref for ValueRecord {
@@ -28,6 +24,15 @@ impl ops::Deref for ValueRecord {
 impl ops::DerefMut for ValueRecord {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.fields[..]
+    }
+}
+
+impl IntoIterator for ValueRecord {
+    type Item = Value;
+    type IntoIter = std::vec::IntoIter<Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.fields.into_iter()
     }
 }
 

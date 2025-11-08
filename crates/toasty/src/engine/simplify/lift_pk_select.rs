@@ -58,7 +58,7 @@ impl Simplify<'_> {
                             None
                         }
                     }
-                    _ => return None,
+                    _ => None,
                 }
             }
             stmt::Expr::And(_) => {

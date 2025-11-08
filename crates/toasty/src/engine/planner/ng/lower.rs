@@ -170,7 +170,7 @@ impl LowerStatement<'_, '_> {
         &mut self,
         f: impl FnOnce(&mut LowerStatement<'_, '_>),
     ) -> HashSet<StmtId> {
-        let old = std::mem::replace(self.collect_dependencies, Some(HashSet::new()));
+        let old = self.collect_dependencies.replace(HashSet::new());
         f(self);
         std::mem::replace(self.collect_dependencies, old).unwrap()
     }

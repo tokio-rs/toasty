@@ -3,6 +3,8 @@ use std::hint::black_box;
 use tests::{models, LoggingDriver, Setup};
 use toasty::stmt::Id;
 
+type SetupFactory = Box<dyn Fn() -> Box<dyn Setup>>;
+
 #[derive(Debug, toasty::Model)]
 #[allow(dead_code)]
 struct User {
@@ -50,14 +52,14 @@ async fn setup_test_data(
 ) {
     for i in 0..num_users {
         let user = User::create()
-            .name(&format!("User {}", i))
+            .name(format!("User {}", i))
             .exec(db)
             .await
             .unwrap();
 
         for j in 0..posts_per_user {
             Post::create()
-                .title(&format!("Post {} for User {}", j, i))
+                .title(format!("Post {} for User {}", j, i))
                 .user(&user)
                 .exec(db)
                 .await
@@ -66,7 +68,7 @@ async fn setup_test_data(
 
         for j in 0..comments_per_user {
             Comment::create()
-                .text(&format!("Comment {} for User {}", j, i))
+                .text(format!("Comment {} for User {}", j, i))
                 .user(&user)
                 .exec(db)
                 .await
@@ -97,27 +99,31 @@ async fn setup_database_and_data(
 fn association_benchmarks(c: &mut Criterion) {
     let sizes = vec![(50, 10, 10), (100, 20, 20), (200, 25, 25)];
 
-    let database_setups = vec![
+    let database_setups: Vec<(&str, SetupFactory)> = vec![
         #[cfg(feature = "sqlite")]
-        ("sqlite", || {
-            Box::new(tests::db::sqlite::SetupSqlite::new()) as Box<dyn Setup>
-        }),
+        (
+            "sqlite",
+            Box::new(|| Box::new(tests::db::sqlite::SetupSqlite::new()) as Box<dyn Setup>),
+        ),
         #[cfg(feature = "postgresql")]
-        ("postgresql", || {
-            Box::new(tests::db::postgresql::SetupPostgreSQL::new()) as Box<dyn Setup>
-        }),
+        (
+            "postgresql",
+            Box::new(|| Box::new(tests::db::postgresql::SetupPostgreSQL::new()) as Box<dyn Setup>),
+        ),
         #[cfg(feature = "mysql")]
-        ("mysql", || {
-            Box::new(tests::db::mysql::SetupMySQL::new()) as Box<dyn Setup>
-        }),
+        (
+            "mysql",
+            Box::new(|| Box::new(tests::db::mysql::SetupMySQL::new()) as Box<dyn Setup>),
+        ),
         #[cfg(feature = "dynamodb")]
-        ("dynamodb", || {
-            Box::new(tests::db::dynamodb::SetupDynamoDb::new()) as Box<dyn Setup>
-        }),
+        (
+            "dynamodb",
+            Box::new(|| Box::new(tests::db::dynamodb::SetupDynamoDb::new()) as Box<dyn Setup>),
+        ),
     ];
 
     for (db_name, setup_fn) in database_setups {
-        let mut group = c.benchmark_group(&format!("association_performance_{}", db_name));
+        let mut group = c.benchmark_group(format!("association_performance_{}", db_name));
         group.sample_size(10);
 
         for (users, posts, comments) in &sizes {

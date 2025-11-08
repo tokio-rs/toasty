@@ -56,7 +56,7 @@ pub(crate) enum MaterializeKind {
     DeleteByKey(MaterializeDeleteByKey),
 
     /// Execute a database query
-    ExecStatement(MaterializeExecStatement),
+    ExecStatement(Box<MaterializeExecStatement>),
 
     /// Filter results
     Filter(MaterializeFilter),
@@ -75,7 +75,7 @@ pub(crate) enum MaterializeKind {
 
     /// Read-modify-write. The write only succeeds if the values read are not
     /// modified.
-    ReadModifyWrite(MaterializeReadModifyWrite),
+    ReadModifyWrite(Box<MaterializeReadModifyWrite>),
 
     QueryPk(MaterializeQueryPk),
 
@@ -460,7 +460,7 @@ impl MaterializePlanner<'_> {
             }
         }
 
-        let mut dependencies = Some(stmt_info.dependent_materializations(&self.store));
+        let mut dependencies = Some(stmt_info.dependent_materializations(self.store));
 
         let exec_stmt_node_id = if stmt.filter_or_default().is_false() {
             debug_assert!(stmt_info.deps.is_empty(), "TODO");
@@ -507,13 +507,13 @@ impl MaterializePlanner<'_> {
                     assert!(returning.is_none(), "TODO: returning={returning:#?}");
 
                     if self.engine.capability().cte_with_update {
-                        MaterializeKind::ExecStatement(
+                        MaterializeKind::ExecStatement(Box::new(
                             self.plan_materialize_conditional_sql_query_as_cte(inputs, stmt, ty),
-                        )
+                        ))
                     } else {
-                        MaterializeKind::ReadModifyWrite(
+                        MaterializeKind::ReadModifyWrite(Box::new(
                             self.plan_materialize_conditional_sql_query_as_rmw(inputs, stmt, ty),
-                        )
+                        ))
                     }
                 } else {
                     todo!("stmt={stmt:#?}");
@@ -528,12 +528,12 @@ impl MaterializePlanner<'_> {
                 );
                 // With SQL capability, we can just punt the details of execution to
                 // the database's query planner.
-                MaterializeKind::ExecStatement(MaterializeExecStatement {
+                MaterializeKind::ExecStatement(Box::new(MaterializeExecStatement {
                     inputs,
                     stmt,
                     ty,
                     conditional_update_with_no_returning: false,
-                })
+                }))
             };
 
             // With SQL capability, we can just punt the details of execution to
@@ -1254,7 +1254,7 @@ impl From<MaterializeDeleteByKey> for MaterializeNode {
 
 impl From<MaterializeExecStatement> for MaterializeNode {
     fn from(value: MaterializeExecStatement) -> Self {
-        MaterializeKind::ExecStatement(value).into()
+        MaterializeKind::ExecStatement(Box::new(value)).into()
     }
 }
 

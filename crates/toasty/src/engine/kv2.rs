@@ -62,7 +62,6 @@ impl Engine {
                 let ty = stmt::Type::list(self.index_key_record_ty(index));
                 eval::Func::from_stmt_typed(expr, conv.args, ty)
             } else {
-                let project = eval::Func::from_stmt(expr, conv.args);
                 /*
                 debug_assert_eq!(
                     project.ret,
@@ -70,7 +69,7 @@ impl Engine {
                     "project={project:#?}"
                 );
                 */
-                project
+                eval::Func::from_stmt(expr, conv.args)
             }
         })
     }
