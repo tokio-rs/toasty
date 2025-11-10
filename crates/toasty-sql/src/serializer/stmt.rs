@@ -208,6 +208,9 @@ impl ToSql for &stmt::Returning {
 
                 fmt!(cx, f, Comma(fields));
             }
+            stmt::Returning::Expr(stmt::Expr::Value(stmt::Value::Record(value_record))) => {
+                fmt!(cx, f, Comma(&value_record.fields));
+            }
             _ => todo!("returning={self:#?}"),
         }
     }

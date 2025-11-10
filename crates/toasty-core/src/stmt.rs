@@ -267,6 +267,19 @@ impl Statement {
         Substitute::new(input).visit_stmt_mut(self);
     }
 
+    pub fn is_const(&self) -> bool {
+        match self {
+            Statement::Query(query) => {
+                if query.with.is_some() {
+                    return false;
+                }
+
+                query.body.is_const()
+            }
+            _ => false,
+        }
+    }
+
     /// Attempts to return a reference to an inner [`Update`].
     ///
     /// * If `self` is a [`Statement::Update`], a reference to the inner [`Update`] is

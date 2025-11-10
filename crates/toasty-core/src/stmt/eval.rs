@@ -1,7 +1,50 @@
 use crate::{
-    stmt::{BinaryOp, ConstInput, Expr, Input, Projection, Value},
+    stmt::{BinaryOp, ConstInput, Expr, ExprSet, Input, Projection, Statement, Value},
     Result,
 };
+
+impl Statement {
+    pub fn eval(&self, mut input: impl Input) -> Result<Value> {
+        self.eval_ref(&mut input)
+    }
+
+    pub fn eval_const(&self) -> Result<Value> {
+        self.eval(ConstInput::new())
+    }
+
+    pub fn eval_ref(&self, input: &mut impl Input) -> Result<Value> {
+        match self {
+            Statement::Query(query) => {
+                if query.with.is_some() {
+                    anyhow::bail!("cannot eval statement; stmt={self:#?}");
+                }
+
+                assert!(query.order_by.is_none(), "TODO");
+                assert!(query.limit.is_none(), "TODO");
+                assert!(!query.single, "TODO");
+
+                query.body.eval_ref(input)
+            }
+            _ => anyhow::bail!("cannot eval statement; stmt={self:#?}"),
+        }
+    }
+}
+
+impl ExprSet {
+    fn eval_ref(&self, input: &mut impl Input) -> Result<Value> {
+        let ExprSet::Values(values) = self else {
+            anyhow::bail!("cannot eval {self:#?}")
+        };
+
+        let mut ret = vec![];
+
+        for row in &values.rows {
+            ret.push(row.eval_ref(input)?);
+        }
+
+        Ok(Value::List(ret))
+    }
+}
 
 impl Expr {
     pub fn eval(&self, mut input: impl Input) -> Result<Value> {

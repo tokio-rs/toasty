@@ -37,16 +37,6 @@ impl Select {
     pub fn add_filter(&mut self, filter: impl Into<Filter>) {
         self.filter.add_filter(filter);
     }
-
-    /*
-    pub fn or(&mut self, expr: impl Into<Expr>) {
-        if let Expr::Or(expr_or) = &mut self.filter {
-            expr_or.operands.push(expr.into());
-        } else {
-            self.filter = Expr::or(self.filter.take(), expr);
-        }
-    }
-    */
 }
 
 impl Statement {

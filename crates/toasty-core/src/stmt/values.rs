@@ -14,6 +14,10 @@ impl Values {
     pub fn is_empty(&self) -> bool {
         self.rows.is_empty()
     }
+
+    pub fn is_const(&self) -> bool {
+        self.rows.iter().all(|row| row.is_const())
+    }
 }
 
 impl From<Values> for ExprSet {

@@ -429,10 +429,98 @@ async fn combined_has_many_and_has_one_preload(test: &mut DbTest) {
     assert!(todo_titles.contains(&"Task 3"));
 }
 
+async fn preload_on_empty_table(test: &mut DbTest) {
+    if !test.capability().sql {
+        return;
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        #[has_many]
+        #[allow(dead_code)]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        #[index]
+        #[allow(dead_code)]
+        user_id: Id<User>,
+
+        #[belongs_to(key = user_id, references = id)]
+        #[allow(dead_code)]
+        user: toasty::BelongsTo<User>,
+    }
+
+    let db = test.setup_db(models!(User, Todo)).await;
+
+    // Query with include on empty table - should return empty result, not SQL error
+    let users: Vec<User> = User::all()
+        .include(User::FIELDS.todos())
+        .collect(&db)
+        .await
+        .unwrap();
+
+    assert_eq!(0, users.len());
+}
+
+async fn preload_on_empty_query(test: &mut DbTest) {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        #[index]
+        #[allow(dead_code)]
+        name: String,
+
+        #[has_many]
+        #[allow(dead_code)]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        #[index]
+        #[allow(dead_code)]
+        user_id: Id<User>,
+
+        #[belongs_to(key = user_id, references = id)]
+        #[allow(dead_code)]
+        user: toasty::BelongsTo<User>,
+    }
+
+    let db = test.setup_db(models!(User, Todo)).await;
+
+    // Query with include on empty table - should return empty result, not SQL error
+    let users: Vec<User> = User::filter_by_name("foo")
+        .include(User::FIELDS.todos())
+        .collect(&db)
+        .await
+        .unwrap();
+
+    assert_eq!(0, users.len());
+}
+
 tests!(
     basic_has_many_and_belongs_to_preload,
     multiple_includes_same_model,
     basic_has_one_and_belongs_to_preload,
     multiple_includes_with_has_one,
-    combined_has_many_and_has_one_preload
+    combined_has_many_and_has_one_preload,
+    preload_on_empty_table,
+    preload_on_empty_query,
 );
