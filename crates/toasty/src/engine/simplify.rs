@@ -38,7 +38,6 @@ impl Engine {
     }
 }
 
-// TODO: get rid of this?
 pub(crate) fn simplify_expr(cx: stmt::ExprContext<'_>, expr: &mut stmt::Expr) {
     Simplify { cx }.visit_expr_mut(expr);
 }
@@ -244,14 +243,6 @@ impl<'a> Simplify<'a> {
                 stmt::ExprSet::Select(select) => {
                     if let Some(stmt::ExprSet::Select(tail)) = operands.last_mut() {
                         todo!("merge select={:#?} tail={:#?}", select, tail);
-                        /*
-                        if tail.source == select.source {
-                            assert_eq!(select.returning, tail.returning);
-
-                            tail.or(select.filter.take());
-                            continue;
-                        }
-                        */
                     }
 
                     operands.push(std::mem::take(expr_set));

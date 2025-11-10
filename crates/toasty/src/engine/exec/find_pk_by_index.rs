@@ -12,11 +12,9 @@ impl Exec<'_> {
 
         // Collect input values and substitute into the statement
         if !action.input.is_empty() {
-            // Only one input supported so far
-            assert!(action.input.len() == 1, "TODO");
+            assert!(action.input.len() == 1);
             let input = self.collect_input2(&action.input).await?;
 
-            println!("filter={filter:#?}; input={input:#?}");
             filter.substitute(&input);
 
             simplify::simplify_expr(self.engine.expr_cx(), &mut filter);

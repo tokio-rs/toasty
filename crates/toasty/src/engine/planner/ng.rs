@@ -122,7 +122,6 @@ struct PlannerNg<'a, 'b> {
 }
 
 impl Planner<'_> {
-    // TODO: returning option here is a hack because we need vars to hold things besides ValueStream.
     pub(crate) fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<Option<plan::VarId>> {
         PlannerNg {
             store: StatementInfoStore::new(),
@@ -151,8 +150,6 @@ impl PlannerNg<'_, '_> {
 
             match &node.kind {
                 MaterializeKind::Const(materialize_const) => {
-                    // TODO: we probably want to optimize this using const folding
-
                     let var = self.old.var_table.register_var(node.ty().clone());
                     node.var.set(Some(var));
 

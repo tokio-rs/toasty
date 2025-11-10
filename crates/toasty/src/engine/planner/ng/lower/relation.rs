@@ -124,22 +124,16 @@ impl LowerStatement<'_, '_> {
                     },
                 },
                 stmt::AssignmentOp::Insert => {
-                    assert!(
-                        field.ty.is_has_many(),
-                        "TODO: can other types support insert?"
-                    );
-                    debug_assert!(!assignment.expr.is_value_null(), "should not be null");
+                    assert!(field.ty.is_has_many());
+                    debug_assert!(!assignment.expr.is_value_null());
                     Mutation::Associate {
                         expr: assignment.expr,
                         exclusive: false,
                     }
                 }
                 stmt::AssignmentOp::Remove => {
-                    assert!(
-                        field.ty.is_has_many(),
-                        "TODO: can other types support remove?"
-                    );
-                    debug_assert!(!assignment.expr.is_value_null(), "should not be null");
+                    assert!(field.ty.is_has_many());
+                    debug_assert!(!assignment.expr.is_value_null());
                     Mutation::Disassociate {
                         expr: assignment.expr,
                     }
@@ -298,7 +292,6 @@ impl LowerStatement<'_, '_> {
         if pair.nullable {
             let mut stmt = selection.update();
 
-            // This protects against races.
             stmt.condition = stmt::Condition::new(self.relation_pair_filter(pair.id, source));
             stmt.assignments.set(pair, stmt::Value::Null);
             self.new_dependency(stmt);
@@ -421,7 +414,7 @@ impl LowerStatement<'_, '_> {
                     // mapping.
                     if field.nullable {
                         lower.relation_step(field, |planner| {
-                            assert!(expr.is_value(), "TODO; expr={expr:#?}");
+                            assert!(expr.is_value());
 
                             let scope = stmt::Query::new_select(
                                 field.id.model,
@@ -507,10 +500,7 @@ impl LowerStatement<'_, '_> {
                 self.set_relation_field(field, rows.into_iter().next().unwrap().into(), source);
             }
             stmt::Statement::Query(query) => {
-                // First, we have to try to extract the FK from the select
-                // without having to perform the query
-                //
-                // TODO: make this less terrible lol
+                // Try to extract the FK from the select without performing the query
                 let fields: Vec<_> = belongs_to
                     .foreign_key
                     .fields
@@ -594,11 +584,9 @@ impl RelationSource for UpdateRelationSource<'_> {
 
 impl RelationSource for InsertRelationSource<'_> {
     fn selection(&self) -> stmt::Query {
-        // The owner's primary key
         let mut args = vec![];
 
         for pk_field in self.model.primary_key_fields() {
-            // let expr = eval::Expr::from(expr.entry(pk_field.id.index).to_value());
             args.push(self.row.entry(pk_field.id.index).to_value());
         }
 

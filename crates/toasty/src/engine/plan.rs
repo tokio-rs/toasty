@@ -41,7 +41,6 @@ mod update_by_key;
 pub(crate) use update_by_key::UpdateByKey;
 
 use crate::engine::exec;
-use toasty_core::stmt;
 
 #[derive(Debug)]
 pub(crate) struct Plan {

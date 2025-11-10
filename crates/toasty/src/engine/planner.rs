@@ -46,15 +46,13 @@ impl Engine {
 }
 
 impl<'a> Planner<'a> {
-    fn schema(&self) -> &'a Schema {
+    pub(crate) fn schema(&self) -> &'a Schema {
         &self.engine.schema
     }
 
     /// Entry point to plan the root statement.
     fn plan_stmt_root(&mut self, stmt: stmt::Statement) -> Result<()> {
         if let stmt::Statement::Insert(stmt) = &stmt {
-            // TODO: this isn't always true. The assert is there to help
-            // debug old code.
             assert!(matches!(
                 stmt.returning,
                 Some(stmt::Returning::Model { .. })

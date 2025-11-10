@@ -9,8 +9,6 @@ impl Exec<'_> {
         &mut self,
         action: &plan::ExecStatement2,
     ) -> Result<()> {
-        // TODO: make this parallel
-
         let mut stmt = action.stmt.clone();
 
         // Collect input values and substitute into the statement

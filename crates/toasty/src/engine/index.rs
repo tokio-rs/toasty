@@ -40,7 +40,6 @@ impl Engine {
 
         let mut index_planner = IndexPlanner {
             cx,
-            // TODO: get rid of this in favor of cx.
             table,
             filter,
             index_matches: vec![],
@@ -66,7 +65,6 @@ impl Engine {
             } else {
                 Some(result_filter)
             },
-            // TODO: not actually correct
             post_filter: if cx.apply_result_filter_on_results {
                 Some(filter.clone())
             } else {
@@ -435,7 +433,6 @@ impl<'stmt> IndexMatch<'stmt> {
 
     /// Copute the cost of using this index match to execute the query.
     fn compute_cost(&self, filter: &stmt::Expr) -> usize {
-        // TODO: factor in post query in-memory filtering.
         if self.index.unique {
             let mut cost = 0;
 
@@ -485,7 +482,6 @@ impl<'stmt> IndexMatch<'stmt> {
                     }
 
                     // Normalize the expression to include the column on the LHS
-                    // TODO: is this needed?
                     let expr = match (&*binary_op.lhs, &*binary_op.rhs) {
                         (stmt::Expr::Reference(stmt::ExprReference::Column(_)), _) => expr.clone(),
                         (

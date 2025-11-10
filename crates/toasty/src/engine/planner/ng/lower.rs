@@ -46,7 +46,6 @@ impl super::PlannerNg<'_, '_> {
 
 impl LoweringState<'_> {
     fn lower_stmt(&mut self, expr_cx: stmt::ExprContext, mut stmt: stmt::Statement) -> StmtId {
-        // TODO: avoid simplifying many times
         self.engine.simplify_stmt(&mut stmt);
 
         let stmt_id = self.store.new_statement_info(self.dependencies.clone());
@@ -63,7 +62,6 @@ impl LoweringState<'_> {
         }
         .visit_stmt_mut(&mut stmt);
 
-        // TODO: is there a way to avoid simplifying again?
         self.engine.simplify_stmt(&mut stmt);
 
         let stmt_info = &mut self.store[stmt_id];
@@ -335,7 +333,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     visit_mut::visit_expr_stmt_mut(child, &mut expr_stmt);
                 });
 
-                // TODO: Is ther ea way to avoid simplifying here?
                 self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
 
                 let position = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
@@ -622,7 +619,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     stmt::Expr::Arg(_) => {
                         let arg = list.take();
 
-                        // TODO: don't always cast to a string...
                         let cast = stmt::Expr::cast(stmt::Expr::arg(0), stmt::Type::String);
                         *list = stmt::Expr::map(arg, cast);
                     }
@@ -632,7 +628,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 None
             }
             (stmt::Expr::Record(lhs), stmt::Expr::List(list)) => {
-                // TODO: implement for real
                 for lhs in lhs {
                     assert!(lhs.is_column());
                 }
@@ -644,7 +639,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 None
             }
             (stmt::Expr::Record(lhs), stmt::Expr::Value(stmt::Value::List(_))) => {
-                // TODO: implement for real
                 for lhs in lhs {
                     assert!(lhs.is_column());
                 }
@@ -1063,7 +1057,6 @@ fn uncast_expr_id(expr: &mut stmt::Expr) {
             *expr = expr_cast.expr.take();
         }
         stmt::Expr::Project(_) => {
-            // TODO: don't always cast to a string...
             let base = expr.take();
             *expr = stmt::Expr::cast(base, stmt::Type::String);
         }

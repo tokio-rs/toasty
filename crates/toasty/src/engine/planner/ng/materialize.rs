@@ -381,21 +381,6 @@ impl MaterializePlanner<'_> {
                     .filter_mut()
                     .map(|filter| filter.take())
                     .unwrap_or_default();
-                /*
-                -- Step 1: Store filtered users
-                CREATE TEMP TABLE temp_users AS
-                SELECT * FROM users WHERE users.active = true;
-
-                -- Step 2: Fetch all potentially matching todos
-                SELECT todos.*
-                FROM todos
-                WHERE EXISTS (
-                  SELECT 1 FROM temp_users u
-                  WHERE todos.user_id = u.id
-                  AND todos.created_at > u.created_at
-                  AND todos.priority > 3
-                );
-                     */
 
                 visit_mut::for_each_expr_mut(&mut filter, |expr| {
                     match expr {
@@ -463,7 +448,7 @@ impl MaterializePlanner<'_> {
         let mut dependencies = Some(stmt_info.dependent_materializations(self.store));
 
         let exec_stmt_node_id = if stmt.filter_or_default().is_false() {
-            debug_assert!(stmt_info.deps.is_empty(), "TODO");
+            debug_assert!(stmt_info.deps.is_empty());
             // Don't bother querying and just return false
             self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
 
@@ -471,15 +456,11 @@ impl MaterializePlanner<'_> {
         // it can be substituted with a constant.
         } else if stmt.assignments().map(|a| a.is_empty()).unwrap_or(false) {
             if returning.is_some() {
-                // TODO: this isn't actually correct. In theory, we need to make
-                // sure the rows actually exist. Maybe the public API could be
-                // updated to make the guarantee softer.
                 self.insert_const(
                     vec![stmt::Value::empty_sparse_record()],
                     stmt::Type::list(stmt::Type::empty_sparse_record()),
                 )
             } else {
-                // TODO: Also not quite right...
                 self.insert_const(vec![], stmt::Type::list(stmt::Type::empty_sparse_record()))
             }
         } else if self.engine.capability().sql || stmt.is_insert() {
@@ -557,12 +538,6 @@ impl MaterializePlanner<'_> {
             let mut post_filter = index_plan.post_filter.clone();
 
             if index_plan.index.primary_key {
-                /*
-                let pk_keys_project_args = inputs
-                    .iter()
-                    .map(|node_id| self.graph[node_id].ty().unwrap_list_ref().clone())
-                    .collect();
-                    */
                 let pk_keys_project_args = if ref_source.is_some() {
                     assert_eq!(inputs.len(), 1, "TODO");
                     let ty = self.graph[inputs[0]].ty();
@@ -576,8 +551,6 @@ impl MaterializePlanner<'_> {
 
                 // If using the primary key to find rows, try to convert the
                 // filter expression to a set of primary-key keys.
-                //
-                // TODO: move this to the index planner?
                 let cx = self.engine.expr_cx_for(&stmt);
                 pk_keys = self.engine.try_build_key_filter2(
                     cx,
@@ -628,8 +601,6 @@ impl MaterializePlanner<'_> {
             let index_key_ty = stmt::Type::list(self.engine.index_key_record_ty(index_plan.index));
 
             let mut node_id = if index_plan.index.primary_key {
-                // TODO: I'm not sure if calling try_build_key_filter is the
-                // right way to do this anymore, but it works for now?
                 if let Some(keys) = pk_keys {
                     let get_by_key_input = if keys.is_const() {
                         self.insert_const(keys.eval_const(), index_key_ty)
@@ -732,7 +703,6 @@ impl MaterializePlanner<'_> {
                     dependencies.take().into_iter().flatten(),
                 );
 
-                // TODO: unify this with above
                 match stmt {
                     stmt::Statement::Query(_) => {
                         debug_assert!(ty.is_list());
@@ -1056,18 +1026,6 @@ impl MaterializePlanner<'_> {
 
         // Neither SQLite nor MySQL support CTE with update. We should transform
         // the conditional update into a transaction with checks between.
-
-        /*
-         * BEGIN;
-         *
-         * SELECT FOR UPDATE count(*), count({condition}) FROM {table} WHERE {filter};
-         *
-         * UPDATE {table} SET {assignments} WHERE {filter} AND @col_0 = @col_1;
-         *
-         * SELECT @col_0, @col_1;
-         *
-         * COMMIT;
-         */
 
         let read = stmt::Query::builder(target)
             .filter(filter.clone())
