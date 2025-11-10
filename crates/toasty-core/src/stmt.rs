@@ -4,11 +4,14 @@ pub use assignments::{Assignment, AssignmentOp, Assignments};
 mod association;
 pub use association::Association;
 
+mod condition;
+pub use condition::Condition;
+
 mod cte;
 pub use cte::Cte;
 
 mod cx;
-pub use cx::{ExprContext, ExprTarget, IntoExprTarget, ResolvedRef};
+pub use cx::{ExprContext, ExprTarget, IntoExprTarget, Resolve, ResolvedRef};
 
 mod delete;
 pub use delete::Delete;
@@ -25,11 +28,16 @@ pub use entry_mut::EntryMut;
 mod entry_path;
 pub use entry_path::EntryPath;
 
+mod eval;
+
 mod expr;
 pub use expr::Expr;
 
 mod expr_and;
 pub use expr_and::ExprAnd;
+
+mod expr_any;
+pub use expr_any::ExprAny;
 
 mod expr_arg;
 pub use expr_arg::ExprArg;
@@ -124,6 +132,9 @@ pub use insert_table::InsertTable;
 mod insert_target;
 pub use insert_target::InsertTarget;
 
+mod input;
+pub use input::{ConstInput, Input, TypedInput};
+
 mod join;
 pub use join::{Join, JoinOp};
 
@@ -160,7 +171,7 @@ mod path_field_set;
 pub use path_field_set::PathFieldSet;
 
 mod projection;
-pub use projection::Projection;
+pub use projection::{Project, Projection};
 
 mod query;
 pub use query::{Lock, Query};
@@ -184,7 +195,6 @@ mod sparse_record;
 pub use sparse_record::SparseRecord;
 
 mod substitute;
-pub use substitute::Input;
 use substitute::Substitute;
 
 mod table_derived;
@@ -253,80 +263,8 @@ pub enum Statement {
 }
 
 impl Statement {
-    pub fn substitute(&mut self, input: impl substitute::Input) {
+    pub fn substitute(&mut self, input: impl Input) {
         Substitute::new(input).visit_stmt_mut(self);
-    }
-
-    /// Attempts to return a reference to an inner [`Delete`].
-    ///
-    /// * If `self` is a [`Statement::Delete`], a reference to the inner [`Delete`] is
-    ///   returned wrapped in [`Some`].
-    /// * Else, [`None`] is returned.
-    pub fn as_delete(&self) -> Option<&Delete> {
-        match self {
-            Self::Delete(delete) => Some(delete),
-            _ => None,
-        }
-    }
-
-    /// Consumes `self` and attempts to return the inner [`Delete`].
-    ///
-    /// * If `self` is a [`Statement::Delete`], inner [`Delete`] is returned wrapped in
-    ///   [`Some`].
-    /// * Else, [`None`] is returned.
-    pub fn into_delete(self) -> Option<Delete> {
-        match self {
-            Self::Delete(delete) => Some(delete),
-            _ => None,
-        }
-    }
-
-    /// Consumes `self` and returns the inner [`Delete`].
-    ///
-    /// # Panics
-    ///
-    /// If `self` is not a [`Statement::Delete`].
-    pub fn unwrap_delete(self) -> Delete {
-        match self {
-            Self::Delete(delete) => delete,
-            v => panic!("expected `Delete`, found {v:#?}"),
-        }
-    }
-
-    /// Attempts to return a reference to an inner [`Insert`].
-    ///
-    /// * If `self` is a [`Statement::Insert`], a reference to the inner [`Insert`] is
-    ///   returned wrapped in [`Some`].
-    /// * Else, [`None`] is returned.
-    pub fn as_insert(&self) -> Option<&Insert> {
-        match self {
-            Self::Insert(insert) => Some(insert),
-            _ => None,
-        }
-    }
-
-    /// Consumes `self` and attempts to return the inner [`Insert`].
-    ///
-    /// * If `self` is a [`Statement::Insert`], inner [`Insert`] is returned wrapped in
-    ///   [`Some`].
-    /// * Else, [`None`] is returned.
-    pub fn into_insert(self) -> Option<Insert> {
-        match self {
-            Self::Insert(insert) => Some(insert),
-            _ => None,
-        }
-    }
-
-    /// Consumes `self` and returns the inner [`Insert`].
-    ///
-    /// # Panics
-    ///
-    /// If `self` is not a [`Statement::Insert`].
-    pub fn unwrap_insert(self) -> Insert {
-        match self {
-            Self::Insert(insert) => insert,
-            v => panic!("expected `Insert`, found {v:#?}"),
-        }
     }
 
     /// Attempts to return a reference to an inner [`Update`].

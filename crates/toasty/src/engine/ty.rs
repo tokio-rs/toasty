@@ -6,17 +6,6 @@ impl Engine {
         stmt::ExprContext::new(&*self.schema).infer_stmt_ty(stmt, args)
     }
 
-    pub(crate) fn index_key_ty(&self, index: &Index) -> stmt::Type {
-        match &index.columns[..] {
-            [id] => self.schema.db.column(id.column).ty.clone(),
-            ids => stmt::Type::Record(
-                ids.iter()
-                    .map(|id| self.schema.db.column(id.column).ty.clone())
-                    .collect(),
-            ),
-        }
-    }
-
     pub(crate) fn index_key_record_ty(&self, index: &Index) -> stmt::Type {
         let field_tys = index
             .columns

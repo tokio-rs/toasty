@@ -1,3 +1,5 @@
+use crate::stmt::Statement;
+
 use super::{Expr, Projection};
 
 use indexmap::{Equivalent, IndexMap};
@@ -30,6 +32,15 @@ pub enum AssignmentOp {
 
     /// Remove one or more values from a set.
     Remove,
+}
+
+impl Statement {
+    pub fn assignments(&self) -> Option<&Assignments> {
+        match self {
+            Statement::Update(update) => Some(&update.assignments),
+            _ => None,
+        }
+    }
 }
 
 impl Assignments {
@@ -118,8 +129,11 @@ impl Assignments {
         }
     }
 
-    pub fn take(&mut self, key: usize) -> Assignment {
-        self.assignments.swap_remove(&key).unwrap()
+    pub fn take<Q>(&mut self, key: &Q) -> Option<Assignment>
+    where
+        Q: ?Sized + Hash + Equivalent<usize>,
+    {
+        self.assignments.swap_remove(key)
     }
 
     pub fn keys(&self) -> impl Iterator<Item = usize> + '_ {

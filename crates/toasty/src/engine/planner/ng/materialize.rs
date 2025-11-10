@@ -3,10 +3,10 @@ mod materialize_nested_merge;
 use std::{cell::Cell, ops};
 
 use index_vec::IndexVec;
-use indexmap::IndexSet;
+use indexmap::{indexset, IndexSet};
 use toasty_core::{
     schema::db::{IndexId, TableId},
-    stmt::{self, visit, visit_mut},
+    stmt::{self, visit, visit_mut, Condition},
 };
 
 use crate::engine::{
@@ -29,6 +29,10 @@ pub(crate) struct MaterializeNode {
     /// Materialization kind
     pub(crate) kind: MaterializeKind,
 
+    /// Nodes that must execute *before* the current one. This should be a
+    /// superset of the node's inputs.
+    pub(crate) deps: IndexSet<NodeId>,
+
     /// Variable where the output is stored
     pub(crate) var: Cell<Option<plan::VarId>>,
 
@@ -49,8 +53,10 @@ pub(crate) enum MaterializeKind {
     /// A constant value
     Const(MaterializeConst),
 
+    DeleteByKey(MaterializeDeleteByKey),
+
     /// Execute a database query
-    ExecStatement(MaterializeExecStatement),
+    ExecStatement(Box<MaterializeExecStatement>),
 
     /// Filter results
     Filter(MaterializeFilter),
@@ -67,12 +73,33 @@ pub(crate) enum MaterializeKind {
     /// Projection operation - transforms records
     Project(MaterializeProject),
 
+    /// Read-modify-write. The write only succeeds if the values read are not
+    /// modified.
+    ReadModifyWrite(Box<MaterializeReadModifyWrite>),
+
     QueryPk(MaterializeQueryPk),
+
+    UpdateByKey(MaterializeUpdateByKey),
 }
 
 #[derive(Debug)]
 pub(crate) struct MaterializeConst {
     pub(crate) value: Vec<stmt::Value>,
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeDeleteByKey {
+    /// Keys are always specified as an input, whether const or a set of
+    /// dependent materializations and transformations.
+    pub(crate) input: NodeId,
+
+    /// The table to get keys from
+    pub(crate) table: TableId,
+
+    pub(crate) filter: Option<stmt::Expr>,
+
+    /// Return type
     pub(crate) ty: stmt::Type,
 }
 
@@ -86,6 +113,9 @@ pub(crate) struct MaterializeExecStatement {
 
     /// Node return type
     pub(crate) ty: stmt::Type,
+
+    /// When true, the statement is a conditional update with no returning
+    pub(crate) conditional_update_with_no_returning: bool,
 }
 
 #[derive(Debug)]
@@ -146,7 +176,24 @@ pub(crate) struct MaterializeProject {
 }
 
 #[derive(Debug)]
+pub(crate) struct MaterializeReadModifyWrite {
+    /// Inputs needed to reify the statement
+    pub(crate) inputs: IndexSet<NodeId>,
+
+    /// The read statement
+    pub(crate) read: stmt::Query,
+
+    /// The write statement
+    pub(crate) write: stmt::Statement,
+
+    /// Node return type
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
 pub(crate) struct MaterializeQueryPk {
+    pub(crate) input: Option<NodeId>,
+
     pub(crate) table: TableId,
 
     /// Columns to get
@@ -157,6 +204,21 @@ pub(crate) struct MaterializeQueryPk {
 
     /// Additional filter to pass to the database
     pub(crate) row_filter: Option<stmt::Expr>,
+
+    pub(crate) ty: stmt::Type,
+}
+
+#[derive(Debug)]
+pub(crate) struct MaterializeUpdateByKey {
+    pub(crate) input: NodeId,
+
+    pub(crate) table: TableId,
+
+    pub(crate) assignments: stmt::Assignments,
+
+    pub(crate) filter: Option<stmt::Expr>,
+
+    pub(crate) condition: Option<stmt::Expr>,
 
     pub(crate) ty: stmt::Type,
 }
@@ -196,15 +258,24 @@ impl MaterializePlanner<'_> {
         let stmt_info = &self.store[stmt_id];
         let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
 
+        // Check if the statement has already been planned
+        if stmt_info.exec_statement.get().is_some() {
+            return;
+        }
+
+        // First, plan dependency statements. These are statments that must run
+        // before the current one but do not reference the current statement.
+        for &dep_stmt_id in &stmt_info.deps {
+            self.plan_materialize_statement(dep_stmt_id);
+        }
+
         // Tracks if the original query is a single query.
         let single = stmt.as_query().map(|query| query.single).unwrap_or(false);
         if let Some(query) = stmt.as_query_mut() {
             query.single = false;
         }
 
-        let mut returning = stmt
-            .returning_mut()
-            .map(|returning| returning.take().into_expr());
+        let mut returning = stmt.take_returning();
 
         // Columns to select
         let mut columns = IndexSet::new();
@@ -223,7 +294,11 @@ impl MaterializePlanner<'_> {
                     Arg::Ref { .. } => {
                         todo!("refs in returning is not yet supported");
                     }
-                    Arg::Sub { stmt_id, input } => {
+                    Arg::Sub {
+                        stmt_id,
+                        input,
+                        returning: true,
+                    } => {
                         // If there are back-refs, the exec statement is preloading
                         // data for a NestedMerge. Sub-statements will be loaded
                         // during the NestedMerge.
@@ -236,8 +311,28 @@ impl MaterializePlanner<'_> {
                         let (index, _) = inputs.insert_full(node_id);
                         input.set(Some(index));
                     }
+                    _ => todo!(),
                 },
                 _ => {}
+            }
+        });
+
+        // Track sub-statement arguments from filter
+        visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| {
+            if let stmt::Expr::Arg(expr_arg) = expr {
+                if let Arg::Sub {
+                    stmt_id: arg_stmt_id,
+                    returning: false,
+                    input,
+                } = &stmt_info.args[expr_arg.position]
+                {
+                    debug_assert!(!self.engine.capability().sql);
+                    debug_assert!(input.get().is_none());
+                    let node_id = self.store[arg_stmt_id].output.get().expect("bug");
+
+                    let (index, _) = inputs.insert_full(node_id);
+                    input.set(Some(index));
+                }
             }
         });
 
@@ -286,21 +381,6 @@ impl MaterializePlanner<'_> {
                     .filter_mut()
                     .map(|filter| filter.take())
                     .unwrap_or_default();
-                /*
-                -- Step 1: Store filtered users
-                CREATE TEMP TABLE temp_users AS
-                SELECT * FROM users WHERE users.active = true;
-
-                -- Step 2: Fetch all potentially matching todos
-                SELECT todos.*
-                FROM todos
-                WHERE EXISTS (
-                  SELECT 1 FROM temp_users u
-                  WHERE todos.user_id = u.id
-                  AND todos.created_at > u.created_at
-                  AND todos.priority > 3
-                );
-                     */
 
                 visit_mut::for_each_expr_mut(&mut filter, |expr| {
                     match expr {
@@ -339,7 +419,8 @@ impl MaterializePlanner<'_> {
 
                 stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
             } else {
-                visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| match expr {
+                let mut filter = stmt.filter_expr_mut();
+                visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
                     stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
                         debug_assert_eq!(0, expr_column.nesting);
                     }
@@ -352,25 +433,46 @@ impl MaterializePlanner<'_> {
                             todo!()
                         };
 
-                        *expr = stmt::Expr::arg_project(0, [*index]);
+                        *expr = stmt::Expr::arg(*index);
                     }
                     _ => {}
                 });
+
+                if let Some(filter) = filter {
+                    let expr = filter.take();
+                    *filter = stmt::Expr::any(stmt::Expr::map(ref_source, expr));
+                }
             }
         }
 
+        let mut dependencies = Some(stmt_info.dependent_materializations(self.store));
+
         let exec_stmt_node_id = if stmt.filter_or_default().is_false() {
+            debug_assert!(stmt_info.deps.is_empty());
             // Don't bother querying and just return false
             self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
-        } else if self.engine.capability().sql {
-            if !columns.is_empty() {
-                assert!(stmt.is_query(), "TODO");
 
-                stmt.returning_mut_unwrap().set_expr(stmt::Expr::record(
-                    columns
-                        .iter()
-                        .map(|expr_reference| stmt::Expr::from(*expr_reference)),
-                ));
+        // If the statement is an update statement without any assignments, then
+        // it can be substituted with a constant.
+        } else if stmt.assignments().map(|a| a.is_empty()).unwrap_or(false) {
+            if returning.is_some() {
+                self.insert_const(
+                    vec![stmt::Value::empty_sparse_record()],
+                    stmt::Type::list(stmt::Type::empty_sparse_record()),
+                )
+            } else {
+                self.insert_const(vec![], stmt::Type::list(stmt::Type::empty_sparse_record()))
+            }
+        } else if self.engine.capability().sql || stmt.is_insert() {
+            if !columns.is_empty() {
+                stmt.set_returning(
+                    stmt::Expr::record(
+                        columns
+                            .iter()
+                            .map(|expr_reference| stmt::Expr::from(*expr_reference)),
+                    )
+                    .into(),
+                );
             }
 
             let input_args: Vec<_> = inputs
@@ -380,10 +482,45 @@ impl MaterializePlanner<'_> {
 
             let ty = self.engine.infer_ty(&stmt, &input_args[..]);
 
+            let node = if stmt.condition().is_some() {
+                if let stmt::Statement::Update(stmt) = stmt {
+                    assert!(stmt.returning.is_none(), "TODO: stmt={stmt:#?}");
+                    assert!(returning.is_none(), "TODO: returning={returning:#?}");
+
+                    if self.engine.capability().cte_with_update {
+                        MaterializeKind::ExecStatement(Box::new(
+                            self.plan_materialize_conditional_sql_query_as_cte(inputs, stmt, ty),
+                        ))
+                    } else {
+                        MaterializeKind::ReadModifyWrite(Box::new(
+                            self.plan_materialize_conditional_sql_query_as_rmw(inputs, stmt, ty),
+                        ))
+                    }
+                } else {
+                    todo!("stmt={stmt:#?}");
+                }
+            } else {
+                debug_assert!(
+                    stmt.returning()
+                        .and_then(|returning| returning.as_expr())
+                        .map(|expr| expr.is_record())
+                        .unwrap_or(true),
+                    "stmt={stmt:#?}"
+                );
+                // With SQL capability, we can just punt the details of execution to
+                // the database's query planner.
+                MaterializeKind::ExecStatement(Box::new(MaterializeExecStatement {
+                    inputs,
+                    stmt,
+                    ty,
+                    conditional_update_with_no_returning: false,
+                }))
+            };
+
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
             self.graph
-                .insert(MaterializeExecStatement { inputs, stmt, ty })
+                .insert_with_deps(node, dependencies.take().unwrap())
         } else {
             // Without SQL capability, we have to plan the materialization of
             // the statement based on available indices.
@@ -406,13 +543,14 @@ impl MaterializePlanner<'_> {
                     let ty = self.graph[inputs[0]].ty();
                     vec![ty.unwrap_list_ref().clone()]
                 } else {
-                    vec![]
+                    inputs
+                        .iter()
+                        .map(|node_id| self.graph[node_id].ty().clone())
+                        .collect()
                 };
 
                 // If using the primary key to find rows, try to convert the
                 // filter expression to a set of primary-key keys.
-                //
-                // TODO: move this to the index planner?
                 let cx = self.engine.expr_cx_for(&stmt);
                 pk_keys = self.engine.try_build_key_filter2(
                     cx,
@@ -425,7 +563,7 @@ impl MaterializePlanner<'_> {
             // If fetching rows using GetByKey, some databases do not support
             // applying additional filters to the rows before returning results.
             // In this case, the result_filter needs to be applied in-memory.
-            if pk_keys.is_some() || !index_plan.index.primary_key {
+            if stmt.is_query() && (pk_keys.is_some() || !index_plan.index.primary_key) {
                 if let Some(result_filter) = index_plan.result_filter.take() {
                     post_filter = Some(match post_filter {
                         Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
@@ -433,6 +571,11 @@ impl MaterializePlanner<'_> {
                     });
                 }
             }
+
+            debug_assert!(
+                post_filter.is_none() || stmt.is_query(),
+                "stmt={stmt:#?}; post_filter={post_filter:#?}"
+            );
 
             // Make sure we are including columns needed to apply the post filter
             if let Some(post_filter) = &mut post_filter {
@@ -447,22 +590,25 @@ impl MaterializePlanner<'_> {
             }
 
             // Type of the final record.
-            let ty = self.engine.infer_record_list_ty(&stmt, &columns);
+            let ty = if columns.is_empty() {
+                stmt::Type::Unit
+            } else {
+                self.engine.infer_record_list_ty(&stmt, &columns)
+            };
 
             // Type of the index key. Value for single index keys, record for
             // composite.
             let index_key_ty = stmt::Type::list(self.engine.index_key_record_ty(index_plan.index));
 
             let mut node_id = if index_plan.index.primary_key {
-                // TODO: I'm not sure if calling try_build_key_filter is the
-                // right way to do this anymore, but it works for now?
                 if let Some(keys) = pk_keys {
-                    let get_by_key_input = if ref_source.is_none() {
+                    let get_by_key_input = if keys.is_const() {
                         self.insert_const(keys.eval_const(), index_key_ty)
                     } else if keys.is_identity() {
                         debug_assert_eq!(1, inputs.len(), "TODO");
                         inputs[0]
                     } else {
+                        debug_assert!(ref_source.is_some(), "TODO");
                         let ty = stmt::Type::list(keys.ret.clone());
                         // Gotta project
                         self.graph.insert(MaterializeProject {
@@ -472,23 +618,67 @@ impl MaterializePlanner<'_> {
                         })
                     };
 
-                    self.graph.insert(MaterializeGetByKey {
-                        input: get_by_key_input,
-                        table: table_id,
-                        columns: columns.clone(),
-                        ty: ty.clone(),
-                    })
+                    match stmt {
+                        stmt::Statement::Query(_) => {
+                            debug_assert!(ty.is_list());
+                            self.graph.insert_with_deps(
+                                MaterializeGetByKey {
+                                    input: get_by_key_input,
+                                    table: table_id,
+                                    columns: columns.clone(),
+                                    ty: ty.clone(),
+                                },
+                                dependencies.take().into_iter().flatten(),
+                            )
+                        }
+                        stmt::Statement::Delete(_) => {
+                            debug_assert!(
+                                ty.is_unit(),
+                                "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
+                            );
+                            self.graph.insert_with_deps(
+                                MaterializeDeleteByKey {
+                                    input: get_by_key_input,
+                                    table: table_id,
+                                    filter: index_plan.result_filter,
+                                    ty: stmt::Type::Unit,
+                                },
+                                dependencies.take().into_iter().flatten(),
+                            )
+                        }
+                        stmt::Statement::Update(stmt) => self.graph.insert_with_deps(
+                            MaterializeUpdateByKey {
+                                input: get_by_key_input,
+                                table: table_id,
+                                assignments: stmt.assignments,
+                                filter: index_plan.result_filter,
+                                condition: stmt.condition.expr,
+                                ty: ty.clone(),
+                            },
+                            dependencies.take().into_iter().flatten(),
+                        ),
+                        _ => todo!("stmt={stmt:#?}"),
+                    }
                 } else {
-                    assert!(inputs.is_empty(), "TODO");
-                    assert!(ref_source.is_none(), "TODO");
+                    let input = if inputs.is_empty() {
+                        None
+                    } else if inputs.len() == 1 {
+                        Some(inputs[0])
+                    } else {
+                        todo!()
+                    };
 
-                    self.graph.insert(MaterializeQueryPk {
-                        table: table_id,
-                        columns: columns.clone(),
-                        pk_filter: index_plan.index_filter,
-                        row_filter: index_plan.result_filter,
-                        ty: ty.clone(),
-                    })
+                    self.graph.insert_with_deps(
+                        MaterializeQueryPk {
+                            input,
+                            table: table_id,
+                            columns: columns.clone(),
+                            pk_filter: index_plan.index_filter,
+                            row_filter: index_plan.result_filter,
+                            ty: ty.clone(),
+                        },
+                        dependencies.take().into_iter().flatten(),
+                    )
                 }
             } else {
                 assert!(index_plan.post_filter.is_none(), "TODO");
@@ -498,24 +688,62 @@ impl MaterializePlanner<'_> {
                 visit::for_each_expr(&index_plan.index_filter, |expr| {
                     if let stmt::Expr::Arg(expr_arg) = expr {
                         debug_assert_eq!(0, expr_arg.position, "TODO; index_plan={index_plan:#?}");
-                        debug_assert_eq!(Some(expr_arg), ref_source.as_ref());
+                        debug_assert!(ref_source.is_none() || ref_source == Some(*expr_arg));
                     }
                 });
 
-                let get_by_key_input = self.graph.insert(MaterializeFindPkByIndex {
-                    inputs,
-                    table: index_plan.index.on,
-                    index: index_plan.index.id,
-                    filter: index_plan.index_filter.take(),
-                    ty: index_key_ty,
-                });
+                let get_by_key_input = self.graph.insert_with_deps(
+                    MaterializeFindPkByIndex {
+                        inputs,
+                        table: index_plan.index.on,
+                        index: index_plan.index.id,
+                        filter: index_plan.index_filter.take(),
+                        ty: index_key_ty,
+                    },
+                    dependencies.take().into_iter().flatten(),
+                );
 
-                self.graph.insert(MaterializeGetByKey {
-                    input: get_by_key_input,
-                    table: table_id,
-                    columns: columns.clone(),
-                    ty: ty.clone(),
-                })
+                match stmt {
+                    stmt::Statement::Query(_) => {
+                        debug_assert!(ty.is_list());
+                        self.graph.insert_with_deps(
+                            MaterializeGetByKey {
+                                input: get_by_key_input,
+                                table: table_id,
+                                columns: columns.clone(),
+                                ty: ty.clone(),
+                            },
+                            dependencies.take().into_iter().flatten(),
+                        )
+                    }
+                    stmt::Statement::Delete(_) => {
+                        debug_assert!(
+                            ty.is_unit(),
+                            "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
+                        );
+                        self.graph.insert_with_deps(
+                            MaterializeDeleteByKey {
+                                input: get_by_key_input,
+                                table: table_id,
+                                filter: index_plan.result_filter,
+                                ty: stmt::Type::Unit,
+                            },
+                            dependencies.take().into_iter().flatten(),
+                        )
+                    }
+                    stmt::Statement::Update(stmt) => self.graph.insert_with_deps(
+                        MaterializeUpdateByKey {
+                            input: get_by_key_input,
+                            table: table_id,
+                            assignments: stmt.assignments,
+                            filter: index_plan.result_filter,
+                            condition: stmt.condition.expr,
+                            ty: ty.clone(),
+                        },
+                        dependencies.take().into_iter().flatten(),
+                    ),
+                    _ => todo!("stmt={stmt:#?}"),
+                }
             };
 
             // If there is a post filter, we need to apply a filter step on the returned rows.
@@ -575,76 +803,270 @@ impl MaterializePlanner<'_> {
                 "TODO: single queries not supported here"
             );
 
-            let arg_ty = self.graph[exec_stmt_node_id].ty().unwrap_list_ref().clone();
-            let projection = eval::Func::from_stmt(returning, vec![arg_ty]);
-            let ty = stmt::Type::list(projection.ret.clone());
+            match returning {
+                stmt::Returning::Value(returning) => {
+                    let ty = returning.infer_ty();
 
-            // Plan the final projection to handle the returning clause.
-            self.graph.insert(MaterializeProject {
-                input: exec_stmt_node_id,
-                projection,
-                ty,
-            })
+                    let stmt::Value::List(rows) = returning else {
+                        todo!(
+                            "unexpected returning type; returning={returning:#?}; stmt={:#?}",
+                            stmt_info.stmt
+                        )
+                    };
+
+                    self.graph
+                        .insert_with_deps(MaterializeConst { value: rows, ty }, [exec_stmt_node_id])
+                }
+                stmt::Returning::Expr(returning) => {
+                    let arg_ty = match self.graph[exec_stmt_node_id].ty() {
+                        stmt::Type::List(ty) => vec![(**ty).clone()],
+                        stmt::Type::Unit => vec![],
+                        _ => todo!(),
+                    };
+
+                    let projection = eval::Func::from_stmt(returning, arg_ty);
+                    let ty = stmt::Type::list(projection.ret.clone());
+
+                    let node = MaterializeProject {
+                        input: exec_stmt_node_id,
+                        projection,
+                        ty,
+                    };
+
+                    // Plan the final projection to handle the returning clause.
+                    if let Some(deps) = dependencies.take() {
+                        self.graph.insert_with_deps(node, deps)
+                    } else {
+                        self.graph.insert(node)
+                    }
+                }
+                returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
+            }
         } else {
+            if let Some(deps) = dependencies.take() {
+                self.graph[exec_stmt_node_id].deps.extend(deps);
+            }
+
             exec_stmt_node_id
         };
+
+        debug_assert!(dependencies.is_none());
 
         stmt_info.output.set(Some(output_node_id));
     }
 
-    fn compute_materialization_execution_order(&mut self, exit: NodeId) {
-        debug_assert!(self.graph.execution_order.is_empty());
-        // Backward traversal to mark reachable nodes
-        let mut stack = vec![exit];
-        self.graph[exit].visited.set(true);
+    // plan_materialize_conditional_sql_query_as_cte
+    fn plan_materialize_conditional_sql_query_as_cte(
+        &self,
+        inputs: IndexSet<NodeId>,
+        stmt: stmt::Update,
+        ty: stmt::Type,
+    ) -> MaterializeExecStatement {
+        let Some(condition) = stmt.condition.expr else {
+            panic!("conditional update without condition");
+        };
 
-        while let Some(node_id) = stack.pop() {
-            self.graph.execution_order.push(node_id);
+        let Some(filter) = stmt.filter.expr else {
+            panic!("conditional update without filter");
+        };
 
-            fn visit(graph: &MaterializeGraph, stack: &mut Vec<NodeId>, node_id: NodeId) {
-                let node = &graph[node_id];
+        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
+            panic!("conditional update without table");
+        };
 
-                // Increment use count
-                node.num_uses.set(node.num_uses.get() + 1);
+        let mut ctes = vec![];
 
-                if !node.visited.get() {
-                    node.visited.set(true);
-                    stack.push(node_id);
-                }
+        // Select from update table without the update condition.
+        ctes.push(stmt::Cte {
+            query: stmt::Query::builder(target)
+                .filter(filter.clone())
+                .returning(vec![
+                    stmt::Expr::count_star(),
+                    stmt::FuncCount {
+                        arg: None,
+                        filter: Some(Box::new(condition)),
+                    }
+                    .into(),
+                ])
+                .build(),
+        });
+
+        let returning_len = match &stmt.returning {
+            Some(stmt::Returning::Expr(expr)) => {
+                let stmt::Expr::Record(expr_record) = expr else {
+                    panic!("returning must be a record");
+                };
+
+                expr_record.fields.len()
             }
+            Some(_) => todo!(),
+            None => 0,
+        };
 
-            match &self.graph[node_id].kind {
-                MaterializeKind::Const(_) => {}
-                MaterializeKind::ExecStatement(materialize_exec_statement) => {
-                    for &input_id in &materialize_exec_statement.inputs {
-                        visit(self.graph, &mut stack, input_id);
-                    }
-                }
-                MaterializeKind::Filter(materialize_filter) => {
-                    visit(self.graph, &mut stack, materialize_filter.input);
-                }
-                MaterializeKind::FindPkByIndex(materialize_find_pk_by_index) => {
-                    for &input in &materialize_find_pk_by_index.inputs {
-                        visit(self.graph, &mut stack, input);
-                    }
-                }
-                MaterializeKind::GetByKey(materialize_get_by_key) => {
-                    visit(self.graph, &mut stack, materialize_get_by_key.input);
-                }
-                MaterializeKind::NestedMerge(materialize_nested_merge) => {
-                    for &input_id in &materialize_nested_merge.inputs {
-                        visit(self.graph, &mut stack, input_id);
-                    }
-                }
-                MaterializeKind::Project(materialize_project) => {
-                    visit(self.graph, &mut stack, materialize_project.input);
-                }
-                // As of now, QueryPk has no inputs
-                MaterializeKind::QueryPk(_materialize_query_pk) => {}
-            }
+        // The update statement. The update condition is expressed using the select above
+        ctes.push(stmt::Cte {
+            query: stmt::Query::new(stmt::Update {
+                target: stmt.target,
+                assignments: stmt.assignments,
+                filter: stmt::Filter::new(stmt::Expr::and(
+                    filter,
+                    // SELECT found.count(*) = found.count(CONDITION) FROM found
+                    stmt::Expr::stmt(stmt::Select {
+                        source: stmt::TableRef::Cte {
+                            nesting: 2,
+                            index: 0,
+                        }
+                        .into(),
+                        filter: true.into(),
+                        returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                            stmt::Expr::eq(
+                                stmt::ExprColumn {
+                                    nesting: 0,
+                                    table: 0,
+                                    column: 0,
+                                },
+                                stmt::ExprColumn {
+                                    nesting: 0,
+                                    table: 0,
+                                    column: 1,
+                                },
+                            ),
+                        ])),
+                    }),
+                )),
+                condition: Condition::default(),
+                returning: Some(
+                    stmt.returning
+                        // TODO: hax
+                        .unwrap_or_else(|| {
+                            stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
+                                stmt::Expr::from("hello"),
+                            ]))
+                        }),
+                ),
+            }),
+        });
+
+        let mut columns = vec![
+            stmt::Expr::column(stmt::ExprColumn {
+                nesting: 0,
+                table: 0,
+                column: 0,
+            }),
+            stmt::Expr::column(stmt::ExprColumn {
+                nesting: 0,
+                table: 0,
+                column: 1,
+            }),
+        ];
+
+        for i in 0..returning_len {
+            columns.push(stmt::Expr::column(stmt::ExprColumn {
+                nesting: 0,
+                table: 1,
+                column: i,
+            }));
         }
 
-        self.graph.execution_order.reverse();
+        let stmt = stmt::Query::builder(stmt::Select {
+            source: stmt::Source::table_with_joins(
+                vec![
+                    stmt::TableRef::Cte {
+                        nesting: 0,
+                        index: 0,
+                    },
+                    stmt::TableRef::Cte {
+                        nesting: 0,
+                        index: 1,
+                    },
+                ],
+                stmt::TableWithJoins {
+                    relation: stmt::TableFactor::Table(stmt::SourceTableId(0)),
+                    joins: vec![stmt::Join {
+                        table: stmt::SourceTableId(1),
+                        constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
+                    }],
+                },
+            ),
+            filter: stmt::Filter::new(true),
+            returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
+        })
+        .with(ctes)
+        .build()
+        .into();
+
+        MaterializeExecStatement {
+            inputs,
+            stmt,
+            ty,
+            conditional_update_with_no_returning: true,
+        }
+    }
+
+    fn plan_materialize_conditional_sql_query_as_rmw(
+        &mut self,
+        inputs: IndexSet<NodeId>,
+        stmt: stmt::Update,
+        ty: stmt::Type,
+    ) -> MaterializeReadModifyWrite {
+        // For now, no returning supported
+        assert!(stmt.returning.is_none(), "TODO: support returning");
+
+        let Some(condition) = stmt.condition.expr else {
+            panic!("conditional update without condition");
+        };
+
+        let Some(filter) = stmt.filter.expr else {
+            panic!("conditional update without filter");
+        };
+
+        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
+            panic!("conditional update without table");
+        };
+
+        // Neither SQLite nor MySQL support CTE with update. We should transform
+        // the conditional update into a transaction with checks between.
+
+        let read = stmt::Query::builder(target)
+            .filter(filter.clone())
+            .returning(vec![
+                stmt::Expr::count_star(),
+                stmt::FuncCount {
+                    arg: None,
+                    filter: Some(Box::new(condition)),
+                }
+                .into(),
+            ])
+            .locks(if self.engine.capability().select_for_update {
+                vec![stmt::Lock::Update]
+            } else {
+                vec![]
+            })
+            .build();
+
+        let write = stmt::Update {
+            target: stmt.target,
+            assignments: stmt.assignments,
+            filter: stmt::Filter::new(filter),
+            condition: stmt::Condition::default(),
+            returning: None,
+        };
+
+        MaterializeReadModifyWrite {
+            inputs,
+            read,
+            write: write.into(),
+            ty,
+        }
+    }
+
+    fn compute_materialization_execution_order(&mut self, exit: NodeId) {
+        debug_assert!(self.graph.execution_order.is_empty());
+        compute_materialization_execution_order2(
+            exit,
+            &self.graph.store,
+            &mut self.graph.execution_order,
+        );
     }
 
     #[track_caller]
@@ -668,6 +1090,29 @@ impl MaterializePlanner<'_> {
     }
 }
 
+fn compute_materialization_execution_order2(
+    node_id: NodeId,
+    graph: &IndexVec<NodeId, MaterializeNode>,
+    execution_order: &mut Vec<NodeId>,
+) {
+    let node = &graph[node_id];
+
+    if node.visited.get() {
+        return;
+    }
+
+    node.visited.set(true);
+
+    for &dep_id in &node.deps {
+        let dep = &graph[dep_id];
+        dep.num_uses.set(dep.num_uses.get() + 1);
+
+        compute_materialization_execution_order2(dep_id, graph, execution_order);
+    }
+
+    execution_order.push(node_id);
+}
+
 impl MaterializeGraph {
     pub(super) fn new() -> MaterializeGraph {
         MaterializeGraph {
@@ -679,6 +1124,19 @@ impl MaterializeGraph {
     /// Insert a node into the graph
     pub(super) fn insert(&mut self, node: impl Into<MaterializeNode>) -> NodeId {
         self.store.push(node.into())
+    }
+
+    pub(super) fn insert_with_deps<I>(
+        &mut self,
+        node: impl Into<MaterializeNode>,
+        deps: I,
+    ) -> NodeId
+    where
+        I: IntoIterator<Item = NodeId>,
+    {
+        let mut node = node.into();
+        node.deps.extend(deps);
+        self.store.push(node)
     }
 
     pub(super) fn var_id(&self, node_id: NodeId) -> plan::VarId {
@@ -693,14 +1151,17 @@ impl MaterializeGraph {
 impl MaterializeNode {
     pub(super) fn ty(&self) -> &stmt::Type {
         match &self.kind {
-            MaterializeKind::Const(kind) => &kind.ty,
-            MaterializeKind::ExecStatement(kind) => &kind.ty,
-            MaterializeKind::Filter(kind) => &kind.ty,
-            MaterializeKind::FindPkByIndex(kind) => &kind.ty,
-            MaterializeKind::GetByKey(kind) => &kind.ty,
-            MaterializeKind::QueryPk(kind) => &kind.ty,
-            MaterializeKind::Project(kind) => &kind.ty,
-            _ => todo!("node={self:#?}"),
+            MaterializeKind::Const(m) => &m.ty,
+            MaterializeKind::DeleteByKey(m) => &m.ty,
+            MaterializeKind::ExecStatement(m) => &m.ty,
+            MaterializeKind::Filter(m) => &m.ty,
+            MaterializeKind::FindPkByIndex(m) => &m.ty,
+            MaterializeKind::GetByKey(m) => &m.ty,
+            MaterializeKind::QueryPk(m) => &m.ty,
+            MaterializeKind::Project(m) => &m.ty,
+            MaterializeKind::UpdateByKey(m) => &m.ty,
+            MaterializeKind::NestedMerge(_m) => todo!(),
+            MaterializeKind::ReadModifyWrite(m) => &m.ty,
         }
     }
 
@@ -743,9 +1204,15 @@ impl From<MaterializeConst> for MaterializeNode {
     }
 }
 
+impl From<MaterializeDeleteByKey> for MaterializeNode {
+    fn from(value: MaterializeDeleteByKey) -> Self {
+        MaterializeKind::DeleteByKey(value).into()
+    }
+}
+
 impl From<MaterializeExecStatement> for MaterializeNode {
     fn from(value: MaterializeExecStatement) -> Self {
-        MaterializeKind::ExecStatement(value).into()
+        MaterializeKind::ExecStatement(Box::new(value)).into()
     }
 }
 
@@ -785,10 +1252,33 @@ impl From<MaterializeQueryPk> for MaterializeNode {
     }
 }
 
+impl From<MaterializeUpdateByKey> for MaterializeNode {
+    fn from(value: MaterializeUpdateByKey) -> Self {
+        MaterializeKind::UpdateByKey(value).into()
+    }
+}
+
 impl From<MaterializeKind> for MaterializeNode {
     fn from(value: MaterializeKind) -> Self {
+        let deps = match &value {
+            MaterializeKind::Const(_m) => IndexSet::new(),
+            MaterializeKind::DeleteByKey(m) => indexset![m.input],
+            MaterializeKind::ExecStatement(m) => m.inputs.clone(),
+            MaterializeKind::Filter(m) => indexset![m.input],
+            MaterializeKind::FindPkByIndex(m) => m.inputs.clone(),
+            MaterializeKind::GetByKey(m) => {
+                indexset![m.input]
+            }
+            MaterializeKind::NestedMerge(m) => m.inputs.clone(),
+            MaterializeKind::Project(m) => indexset![m.input],
+            MaterializeKind::ReadModifyWrite(m) => m.inputs.clone(),
+            MaterializeKind::QueryPk(m) => m.input.into_iter().collect(),
+            MaterializeKind::UpdateByKey(m) => indexset![m.input],
+        };
+
         MaterializeNode {
             kind: value,
+            deps,
             var: Cell::new(None),
             num_uses: Cell::new(0),
             visited: Cell::new(false),

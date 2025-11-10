@@ -1,14 +1,14 @@
 #![allow(unused_variables)]
 
 use super::{
-    Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern,
-    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, Filter,
-    FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path,
-    Projection, Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId,
-    Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget,
-    Value, ValueRecord, Values, With,
+    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
+    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr,
+    ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
+    Filter, FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
+    OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
+    SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
+    UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait Visit {
@@ -41,6 +41,10 @@ pub trait Visit {
 
     fn visit_expr_and(&mut self, i: &ExprAnd) {
         visit_expr_and(self, i);
+    }
+
+    fn visit_expr_any(&mut self, i: &ExprAny) {
+        visit_expr_any(self, i);
     }
 
     fn visit_expr_arg(&mut self, i: &ExprArg) {
@@ -145,6 +149,10 @@ pub trait Visit {
 
     fn visit_filter(&mut self, i: &Filter) {
         visit_filter(self, i);
+    }
+
+    fn visit_condition(&mut self, i: &Condition) {
+        visit_condition(self, i);
     }
 
     fn visit_expr_project(&mut self, i: &ExprProject) {
@@ -397,6 +405,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_filter(&mut **self, i);
     }
 
+    fn visit_condition(&mut self, i: &Condition) {
+        Visit::visit_condition(&mut **self, i);
+    }
+
     fn visit_expr_project(&mut self, i: &ExprProject) {
         Visit::visit_expr_project(&mut **self, i);
     }
@@ -554,6 +566,7 @@ where
 {
     match node {
         Expr::And(expr) => v.visit_expr_and(expr),
+        Expr::Any(expr) => v.visit_expr_any(expr),
         Expr::Arg(expr) => v.visit_expr_arg(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op(expr),
         Expr::Cast(expr) => v.visit_expr_cast(expr),
@@ -592,6 +605,13 @@ where
     for expr in node {
         v.visit_expr(expr);
     }
+}
+
+pub fn visit_expr_any<V>(v: &mut V, node: &ExprAny)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
 }
 
 pub fn visit_expr_arg<V>(v: &mut V, node: &ExprArg)
@@ -820,6 +840,15 @@ where
     }
 }
 
+pub fn visit_condition<V>(v: &mut V, node: &Condition)
+where
+    V: Visit + ?Sized,
+{
+    if let Some(expr) = &node.expr {
+        v.visit_expr(expr);
+    }
+}
+
 pub fn visit_insert_target<V>(v: &mut V, node: &InsertTarget)
 where
     V: Visit + ?Sized,
@@ -901,6 +930,7 @@ where
         }
         Returning::Changed => {}
         Returning::Expr(expr) => v.visit_expr(expr),
+        Returning::Value(value) => v.visit_value(value),
     }
 }
 
@@ -1022,10 +1052,7 @@ where
     v.visit_update_target(&node.target);
     v.visit_assignments(&node.assignments);
     v.visit_filter(&node.filter);
-
-    if let Some(expr) = &node.condition {
-        v.visit_expr(expr);
-    }
+    v.visit_condition(&node.condition);
 }
 
 pub fn visit_table_derived<V>(v: &mut V, node: &TableDerived)

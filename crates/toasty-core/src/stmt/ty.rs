@@ -105,6 +105,14 @@ impl Type {
         matches!(self, Self::String)
     }
 
+    pub fn is_unit(&self) -> bool {
+        matches!(self, Self::Unit)
+    }
+
+    pub fn is_record(&self) -> bool {
+        matches!(self, Self::Record(..))
+    }
+
     pub fn cast(&self, value: Value) -> Result<Value> {
         use stmt::Value;
 

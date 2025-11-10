@@ -2,11 +2,15 @@ use toasty_core::stmt::{self, Projection, Value};
 
 pub trait Input {
     fn resolve_arg(&mut self, expr_arg: &stmt::ExprArg, projection: &Projection) -> Value;
-}
 
-pub(super) struct TypedInput<'a, I> {
-    input: &'a mut I,
-    tys: &'a [stmt::Type],
+    fn resolve_expr_reference(
+        &mut self,
+        expr_reference: &stmt::ExprReference,
+        projection: &Projection,
+    ) -> Option<Value> {
+        let _ = (expr_reference, projection);
+        None
+    }
 }
 
 pub fn const_input() -> impl Input {
@@ -36,36 +40,5 @@ impl<const N: usize> Input for &[stmt::Value; N] {
 impl Input for &[stmt::Value] {
     fn resolve_arg(&mut self, expr_arg: &stmt::ExprArg, projection: &Projection) -> Value {
         self[expr_arg.position].entry(projection).to_value()
-    }
-}
-
-impl<'a, I> TypedInput<'a, I> {
-    pub(super) fn new(input: &'a mut I, tys: &'a [stmt::Type]) -> Self {
-        TypedInput { input, tys }
-    }
-}
-
-impl<I: Input> Input for TypedInput<'_, I> {
-    fn resolve_arg(
-        &mut self,
-        expr_arg: &stmt::ExprArg,
-        projection: &stmt::Projection,
-    ) -> stmt::Value {
-        let value = self.input.resolve_arg(expr_arg, projection);
-
-        if !value.is_null() {
-            let mut ty = &self.tys[expr_arg.position];
-
-            for step in projection {
-                ty = match ty {
-                    stmt::Type::Record(tys) => &tys[step],
-                    _ => todo!("ty={ty:#?}"),
-                };
-            }
-
-            assert!(value.is_a(ty), "resolved input did not match requested argument type; input={value:#?}; ty={ty:#?};");
-        }
-
-        value
     }
 }

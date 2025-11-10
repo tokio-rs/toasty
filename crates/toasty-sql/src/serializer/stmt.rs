@@ -194,7 +194,6 @@ impl ToSql for &stmt::OrderByExpr {
 impl ToSql for &stmt::Returning {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         match self {
-            stmt::Returning::Model { .. } => fmt!(cx, f, "*"),
             stmt::Returning::Expr(stmt::Expr::Record(expr_record)) => {
                 let fields = expr_record
                     .fields
@@ -209,10 +208,7 @@ impl ToSql for &stmt::Returning {
 
                 fmt!(cx, f, Comma(fields));
             }
-            stmt::Returning::Expr(expr) => {
-                fmt!(cx, f, expr);
-            }
-            _ => todo!(),
+            _ => todo!("returning={self:#?}"),
         }
     }
 }
@@ -350,7 +346,7 @@ impl ToSql for &TableAlias {
 
 impl ToSql for &stmt::Update {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let prev = mem::replace(&mut f.alias, true);
+        let prev = mem::replace(&mut f.alias, false);
 
         let table = f.serializer.schema.table(self.target.as_table_unwrap());
         let assignments = (table, &self.assignments);

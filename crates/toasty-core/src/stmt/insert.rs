@@ -31,6 +31,48 @@ impl Insert {
     }
 }
 
+impl Statement {
+    pub fn is_insert(&self) -> bool {
+        matches!(self, Statement::Insert(..))
+    }
+
+    /// Attempts to return a reference to an inner [`Insert`].
+    ///
+    /// * If `self` is a [`Statement::Insert`], a reference to the inner [`Insert`] is
+    ///   returned wrapped in [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn as_insert(&self) -> Option<&Insert> {
+        match self {
+            Self::Insert(insert) => Some(insert),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and attempts to return the inner [`Insert`].
+    ///
+    /// * If `self` is a [`Statement::Insert`], inner [`Insert`] is returned wrapped in
+    ///   [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn into_insert(self) -> Option<Insert> {
+        match self {
+            Self::Insert(insert) => Some(insert),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and returns the inner [`Insert`].
+    ///
+    /// # Panics
+    ///
+    /// If `self` is not a [`Statement::Insert`].
+    pub fn unwrap_insert(self) -> Insert {
+        match self {
+            Self::Insert(insert) => insert,
+            v => panic!("expected `Insert`, found {v:#?}"),
+        }
+    }
+}
+
 impl From<Insert> for Statement {
     fn from(src: Insert) -> Self {
         Self::Insert(src)

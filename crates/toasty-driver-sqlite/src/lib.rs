@@ -71,15 +71,15 @@ impl Driver for Sqlite {
             // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(Transaction::Start) => {
                 connection.execute("BEGIN", [])?;
-                return Ok(Response::from_count(0));
+                return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
                 connection.execute("COMMIT", [])?;
-                return Ok(Response::from_count(0));
+                return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {
                 connection.execute("ROLLBACK", [])?;
-                return Ok(Response::from_count(0));
+                return Ok(Response::count(0));
             }
             _ => todo!("op={:#?}", op),
         };
@@ -118,7 +118,7 @@ impl Driver for Sqlite {
                 params.iter().map(value_from_param),
             ))?;
 
-            return Ok(Response::from_count(count as _));
+            return Ok(Response::count(count as _));
         }
 
         let mut rows = stmt
@@ -151,9 +151,7 @@ impl Driver for Sqlite {
             }
         }
 
-        Ok(Response::from_value_stream(stmt::ValueStream::from_vec(
-            ret,
-        )))
+        Ok(Response::value_stream(stmt::ValueStream::from_vec(ret)))
     }
 
     async fn reset_db(&self, schema: &Schema) -> Result<()> {

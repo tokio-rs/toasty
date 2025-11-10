@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, OnceCell},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ops,
 };
 
@@ -18,6 +18,10 @@ use super::NodeId;
 pub(super) struct StatementInfo {
     /// Populated later
     pub(super) stmt: Option<Box<stmt::Statement>>,
+
+    /// Statements that this statement depends on. The result is not needed, but
+    /// dependencies need to execute first for consistency.
+    pub(super) deps: HashSet<StmtId>,
 
     /// Statement arguments
     pub(super) args: Vec<Arg>,
@@ -47,15 +51,35 @@ index_vec::define_index_type! {
 }
 
 impl StatementInfo {
-    pub(super) fn new() -> StatementInfo {
+    pub(super) fn new(deps: HashSet<StmtId>) -> StatementInfo {
         StatementInfo {
             stmt: None,
+            deps,
             args: vec![],
             back_refs: HashMap::new(),
             exec_statement: Cell::new(None),
             exec_statement_selection: OnceCell::new(),
             output: Cell::new(None),
         }
+    }
+
+    /// Returns an iterator over the materialization node IDs that this statement
+    /// depends on.
+    ///
+    /// Dependencies must execute before this statement for consistency, even if
+    /// their results are not directly consumed. For example, an UPDATE operation
+    /// may depend on a prior INSERT completing first to maintain referential
+    /// integrity.
+    ///
+    /// Each dependency is represented by its output node ID - the final
+    /// computation node that produces the dependency's result.
+    pub(super) fn dependent_materializations<'a>(
+        &'a self,
+        store: &'a StatementInfoStore,
+    ) -> impl Iterator<Item = NodeId> + 'a {
+        self.deps
+            .iter()
+            .map(|stmt_id| store[stmt_id].output.get().unwrap())
     }
 }
 
@@ -74,6 +98,9 @@ pub(super) enum Arg {
     Sub {
         /// The statement ID providing the input
         stmt_id: StmtId,
+
+        /// True when the sub is used in the returning clause
+        returning: bool,
 
         /// The index in the materialization node's inputs list. This is set
         /// when planning materialization.
@@ -100,20 +127,17 @@ pub(super) enum Arg {
 
 impl StatementInfoStore {
     pub(super) fn new() -> StatementInfoStore {
-        let mut store = StatementInfoStore {
+        StatementInfoStore {
             store: IndexVec::new(),
-        };
-        let root_id = store.new_statement_info();
-        debug_assert_eq!(root_id, StmtId::from(0));
-        store
+        }
     }
 
     pub(super) fn insert(&mut self, info: StatementInfo) -> StmtId {
         self.store.push(info)
     }
 
-    pub(super) fn new_statement_info(&mut self) -> StmtId {
-        self.insert(StatementInfo::new())
+    pub(super) fn new_statement_info(&mut self, deps: HashSet<StmtId>) -> StmtId {
+        self.insert(StatementInfo::new(deps))
     }
 
     pub(super) fn root_id(&self) -> StmtId {
@@ -123,11 +147,6 @@ impl StatementInfoStore {
     pub(super) fn root(&self) -> &StatementInfo {
         let root_id = self.root_id();
         &self.store[root_id]
-    }
-
-    pub(super) fn root_mut(&mut self) -> &mut StatementInfo {
-        let root_id = self.root_id();
-        &mut self.store[root_id]
     }
 }
 

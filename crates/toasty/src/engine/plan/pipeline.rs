@@ -1,4 +1,4 @@
-use super::{Action, VarId};
+use crate::engine::plan::{Action, VarId};
 
 #[derive(Debug)]
 pub(crate) struct Pipeline {

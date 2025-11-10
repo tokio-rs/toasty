@@ -167,8 +167,6 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
         .unwrap();
     assert_eq!(3, user_with_comments.comments.get().len());
 
-    println!("---");
-
     // Test multiple includes in one query
     let loaded_user = User::filter_by_id(&user.id)
         .include(User::FIELDS.posts()) // First include

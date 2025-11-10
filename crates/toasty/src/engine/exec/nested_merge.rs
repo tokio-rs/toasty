@@ -1,8 +1,6 @@
-use crate::engine::eval;
-
 use super::{plan, Exec, Result};
+use toasty_core::driver::Rows;
 use toasty_core::stmt;
-use toasty_core::stmt::ValueStream;
 
 impl Exec<'_> {
     pub(super) async fn action_nested_merge(&mut self, action: &plan::NestedMerge) -> Result<()> {
@@ -11,7 +9,13 @@ impl Exec<'_> {
 
         for var_id in &action.inputs {
             // TODO: make loading input concurrent
-            let data = self.vars.load_count(*var_id).await?.collect().await?;
+            let data = self
+                .vars
+                .load(*var_id)
+                .await?
+                .into_values()
+                .collect()
+                .await?;
             input.push(data);
         }
 
@@ -30,10 +34,10 @@ impl Exec<'_> {
         }
 
         // Store the output
-        self.vars.store_counted(
+        self.vars.store(
             action.output.var,
             action.output.num_uses,
-            ValueStream::from_vec(merged_rows),
+            Rows::value_stream(merged_rows),
         );
 
         Ok(())
@@ -120,12 +124,12 @@ struct RowAndNested<'a> {
     nested: &'a [stmt::Value],
 }
 
-impl eval::Input for &RowStack<'_> {
+impl stmt::Input for &RowStack<'_> {
     fn resolve_arg(
         &mut self,
         expr_arg: &stmt::ExprArg,
         projection: &stmt::Projection,
-    ) -> stmt::Value {
+    ) -> Option<stmt::Expr> {
         let mut current: &RowStack<'_> = self;
 
         // Find the stack level that corresponds with the argument.
@@ -141,22 +145,22 @@ impl eval::Input for &RowStack<'_> {
         }
 
         // Get the value and apply projection
-        current.row.entry(projection).to_value()
+        Some(current.row.entry(projection).to_expr())
     }
 }
 
-impl eval::Input for &RowAndNested<'_> {
+impl stmt::Input for &RowAndNested<'_> {
     fn resolve_arg(
         &mut self,
         expr_arg: &stmt::ExprArg,
         projection: &stmt::Projection,
-    ) -> stmt::Value {
+    ) -> Option<stmt::Expr> {
         let base = if expr_arg.position == 0 {
             self.row
         } else {
             &self.nested[expr_arg.position - 1]
         };
 
-        base.entry(projection).to_value()
+        Some(base.entry(projection).to_expr())
     }
 }

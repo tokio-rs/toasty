@@ -122,7 +122,6 @@ struct PlannerNg<'a, 'b> {
 }
 
 impl Planner<'_> {
-    // TODO: returning option here is a hack because we need vars to hold things besides ValueStream.
     pub(crate) fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<Option<plan::VarId>> {
         PlannerNg {
             store: StatementInfoStore::new(),
@@ -135,7 +134,7 @@ impl Planner<'_> {
 
 impl PlannerNg<'_, '_> {
     fn plan_statement(&mut self, stmt: stmt::Statement) -> Result<Option<plan::VarId>> {
-        self.lower_stmt(stmt);
+        self.lower_stmt(stmt)?;
 
         // Build the execution plan...
         self.plan_materializations();
@@ -151,20 +150,33 @@ impl PlannerNg<'_, '_> {
 
             match &node.kind {
                 MaterializeKind::Const(materialize_const) => {
-                    // TODO: we probably want to optimize this using const folding
-
                     let var = self.old.var_table.register_var(node.ty().clone());
                     node.var.set(Some(var));
 
                     self.old.push_action(plan::SetVar2 {
                         output: plan::Output2 { var, num_uses },
-                        value: materialize_const.value.clone(),
+                        rows: materialize_const.value.clone(),
                     });
                 }
-                MaterializeKind::ExecStatement(materialize_exec_statement) => {
+                MaterializeKind::DeleteByKey(m) => {
+                    let input = self.graph.var_id(m.input);
+                    let output = self.old.var_table.register_var(node.ty().clone());
+                    node.var.set(Some(output));
+
+                    self.old.push_action(plan::DeleteByKey {
+                        input,
+                        output: plan::Output2 {
+                            var: output,
+                            num_uses,
+                        },
+                        table: m.table,
+                        filter: m.filter.clone(),
+                    });
+                }
+                MaterializeKind::ExecStatement(m) => {
                     debug_assert!(
                         {
-                            match &materialize_exec_statement.stmt {
+                            match &m.stmt {
                                 stmt::Statement::Query(query) => !query.single,
                                 _ => true,
                             }
@@ -173,26 +185,23 @@ impl PlannerNg<'_, '_> {
                     );
 
                     let ty = node.ty();
-                    let input_vars = materialize_exec_statement
+                    let input_vars = m
                         .inputs
                         .iter()
                         .map(|input| self.graph[input].var.get().unwrap())
                         .collect();
 
-                    let output = match ty {
+                    let var = self.old.var_table.register_var(ty.clone());
+                    node.var.set(Some(var));
+
+                    let output_ty = match ty {
                         stmt::Type::List(ty_rows) => {
                             let ty_fields = match &**ty_rows {
                                 stmt::Type::Record(ty_fields) => ty_fields.clone(),
-                                _ => todo!("ty={ty:#?}"),
+                                _ => todo!("ty={ty:#?}; node={node:#?}"),
                             };
 
-                            let var = self.old.var_table.register_var(ty.clone());
-                            node.var.set(Some(var));
-
-                            Some(plan::ExecStatementOutput {
-                                ty: ty_fields,
-                                output: plan::Output2 { var, num_uses },
-                            })
+                            Some(ty_fields)
                         }
                         stmt::Type::Unit => None,
                         _ => todo!("ty={ty:#?}"),
@@ -200,8 +209,13 @@ impl PlannerNg<'_, '_> {
 
                     self.old.push_action(plan::ExecStatement2 {
                         input: input_vars,
-                        output,
-                        stmt: materialize_exec_statement.stmt.clone(),
+                        output: plan::ExecStatementOutput {
+                            ty: output_ty,
+                            output: plan::Output2 { var, num_uses },
+                        },
+                        stmt: m.stmt.clone(),
+                        conditional_update_with_no_returning: m
+                            .conditional_update_with_no_returning,
                     });
                 }
                 MaterializeKind::Filter(materialize_filter) => {
@@ -308,11 +322,32 @@ impl PlannerNg<'_, '_> {
                         projection: materialize_project.projection.clone(),
                     });
                 }
-                MaterializeKind::QueryPk(materialize_query_pk) => {
+                MaterializeKind::ReadModifyWrite(m) => {
+                    let input = m
+                        .inputs
+                        .iter()
+                        .map(|input| self.graph[input].var.get().unwrap())
+                        .collect();
+
+                    // A hack since rmw doesn't support output yet
+                    let var = self
+                        .old
+                        .var_table
+                        .register_var(stmt::Type::list(stmt::Type::Unit));
+
+                    self.old.push_action(plan::ReadModifyWrite2 {
+                        input,
+                        output: Some(plan::Output2 { var, num_uses }),
+                        read: m.read.clone(),
+                        write: m.write.clone(),
+                    })
+                }
+                MaterializeKind::QueryPk(m) => {
+                    let input = m.input.map(|node_id| self.graph.var_id(node_id));
                     let output = self.old.var_table.register_var(node.ty().clone());
                     node.var.set(Some(output));
 
-                    let columns = materialize_query_pk
+                    let columns = m
                         .columns
                         .iter()
                         .map(|expr_reference| {
@@ -323,21 +358,40 @@ impl PlannerNg<'_, '_> {
                             debug_assert_eq!(expr_column.table, 0);
 
                             ColumnId {
-                                table: materialize_query_pk.table,
+                                table: m.table,
                                 index: expr_column.column,
                             }
                         })
                         .collect();
 
                     self.old.push_action(plan::QueryPk2 {
+                        input,
                         output: plan::Output2 {
                             var: output,
                             num_uses,
                         },
-                        table: materialize_query_pk.table,
+                        table: m.table,
                         columns,
-                        pk_filter: materialize_query_pk.pk_filter.clone(),
-                        row_filter: materialize_query_pk.row_filter.clone(),
+                        pk_filter: m.pk_filter.clone(),
+                        row_filter: m.row_filter.clone(),
+                    });
+                }
+                MaterializeKind::UpdateByKey(m) => {
+                    let input = self.graph.var_id(m.input);
+                    let output = self.old.var_table.register_var(node.ty().clone());
+                    node.var.set(Some(output));
+
+                    self.old.push_action(plan::UpdateByKey {
+                        input,
+                        output: plan::Output2 {
+                            var: output,
+                            num_uses,
+                        },
+                        table: m.table,
+                        assignments: m.assignments.clone(),
+                        filter: m.filter.clone(),
+                        condition: m.condition.clone(),
+                        returning: !m.ty.is_unit(),
                     });
                 }
             }

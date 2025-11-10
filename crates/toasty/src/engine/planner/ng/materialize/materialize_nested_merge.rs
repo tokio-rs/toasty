@@ -22,10 +22,15 @@ impl super::MaterializePlanner<'_> {
         let stmt_state = &self.store[stmt_id];
 
         // Return if there is no nested merge to do
-        let need_nested_merge = stmt_state
-            .args
-            .iter()
-            .any(|arg| matches!(arg, Arg::Sub { .. }));
+        let need_nested_merge = stmt_state.args.iter().any(|arg| {
+            matches!(
+                arg,
+                Arg::Sub {
+                    returning: true,
+                    ..
+                }
+            )
+        });
         if !need_nested_merge {
             return None;
         }

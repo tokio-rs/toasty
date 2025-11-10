@@ -1,14 +1,14 @@
 #![allow(unused_variables)]
 
 use super::{
-    Assignment, Assignments, Association, Cte, Delete, Expr, ExprAnd, ExprArg, ExprBeginsWith,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr, ExprPattern,
-    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy, Filter,
-    FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path,
-    Projection, Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId,
-    Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget,
-    Value, ValueRecord, Values, With,
+    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
+    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr,
+    ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
+    Filter, FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
+    OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
+    SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
+    UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait VisitMut {
@@ -41,6 +41,10 @@ pub trait VisitMut {
 
     fn visit_expr_and_mut(&mut self, i: &mut ExprAnd) {
         visit_expr_and_mut(self, i);
+    }
+
+    fn visit_expr_any_mut(&mut self, i: &mut ExprAny) {
+        visit_expr_any_mut(self, i);
     }
 
     fn visit_expr_arg_mut(&mut self, i: &mut ExprArg) {
@@ -145,6 +149,10 @@ pub trait VisitMut {
 
     fn visit_filter_mut(&mut self, i: &mut Filter) {
         visit_filter_mut(self, i);
+    }
+
+    fn visit_condition_mut(&mut self, i: &mut Condition) {
+        visit_condition_mut(self, i);
     }
 
     fn visit_expr_project_mut(&mut self, i: &mut ExprProject) {
@@ -397,6 +405,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_filter_mut(&mut **self, i);
     }
 
+    fn visit_condition_mut(&mut self, i: &mut Condition) {
+        VisitMut::visit_condition_mut(&mut **self, i);
+    }
+
     fn visit_expr_project_mut(&mut self, i: &mut ExprProject) {
         VisitMut::visit_expr_project_mut(&mut **self, i);
     }
@@ -554,6 +566,7 @@ where
 {
     match node {
         Expr::And(expr) => v.visit_expr_and_mut(expr),
+        Expr::Any(expr) => v.visit_expr_any_mut(expr),
         Expr::Arg(expr) => v.visit_expr_arg_mut(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op_mut(expr),
         Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
@@ -592,6 +605,13 @@ where
     for expr in node {
         v.visit_expr_mut(expr);
     }
+}
+
+pub fn visit_expr_any_mut<V>(v: &mut V, node: &mut ExprAny)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
 }
 
 pub fn visit_expr_arg_mut<V>(v: &mut V, node: &mut ExprArg)
@@ -820,6 +840,15 @@ where
     }
 }
 
+pub fn visit_condition_mut<V>(v: &mut V, node: &mut Condition)
+where
+    V: VisitMut + ?Sized,
+{
+    if let Some(expr) = &mut node.expr {
+        v.visit_expr_mut(expr);
+    }
+}
+
 pub fn visit_insert_target_mut<V>(v: &mut V, node: &mut InsertTarget)
 where
     V: VisitMut + ?Sized,
@@ -901,6 +930,7 @@ where
         }
         Returning::Changed => {}
         Returning::Expr(expr) => v.visit_expr_mut(expr),
+        Returning::Value(value) => v.visit_value_mut(value),
     }
 }
 
@@ -1020,10 +1050,7 @@ where
     v.visit_update_target_mut(&mut node.target);
     v.visit_assignments_mut(&mut node.assignments);
     v.visit_filter_mut(&mut node.filter);
-
-    if let Some(expr) = &mut node.condition {
-        v.visit_expr_mut(expr);
-    }
+    v.visit_condition_mut(&mut node.condition);
 
     if let Some(returning) = &mut node.returning {
         v.visit_returning_mut(returning);

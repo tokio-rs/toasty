@@ -174,15 +174,19 @@ impl Visit for LiftBelongsTo<'_> {
         match (&*i.lhs, &*i.rhs) {
             (stmt::Expr::Reference(expr_reference), other)
             | (other, stmt::Expr::Reference(expr_reference)) => {
-                assert!(i.op.is_eq());
+                assert!(i.op.is_eq() || i.op.is_ne());
 
-                let field = self
-                    .simplify
-                    .cx
-                    .resolve_expr_reference(expr_reference)
-                    .expect_field();
+                if i.op.is_eq() || i.op.is_ne() {
+                    let field = self
+                        .simplify
+                        .cx
+                        .resolve_expr_reference(expr_reference)
+                        .expect_field();
 
-                self.lift_fk_constraint(field.id, other);
+                    self.lift_fk_constraint(field.id, i.op, other);
+                } else {
+                    self.fail = true;
+                }
             }
             _ => {}
         }
@@ -190,15 +194,16 @@ impl Visit for LiftBelongsTo<'_> {
 }
 
 impl LiftBelongsTo<'_> {
-    fn lift_fk_constraint(&mut self, field: FieldId, expr: &stmt::Expr) {
+    fn lift_fk_constraint(&mut self, field: FieldId, op: stmt::BinaryOp, expr: &stmt::Expr) {
         for (i, fk_field) in self.belongs_to.foreign_key.fields.iter().enumerate() {
             if fk_field.target == field {
                 if self.fk_field_matches[i] {
                     todo!("not handled");
                 }
 
-                self.operands.push(stmt::Expr::eq(
+                self.operands.push(stmt::Expr::binary_op(
                     stmt::Expr::ref_self_field(fk_field.source),
+                    op,
                     expr.clone(),
                 ));
                 self.fk_field_matches[i] = true;

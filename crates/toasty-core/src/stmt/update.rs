@@ -1,7 +1,7 @@
-use super::{Assignments, Expr, Node, Query, Returning, Statement, Visit, VisitMut};
+use super::{Assignments, Node, Query, Returning, Statement, Visit, VisitMut};
 use crate::{
     schema::{app::ModelId, db::TableId},
-    stmt::{self, Filter},
+    stmt::{self, Condition, Filter},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -16,7 +16,7 @@ pub struct Update {
     pub filter: Filter,
 
     /// A condition that must be satisfied in order for the update to apply.
-    pub condition: Option<Expr>,
+    pub condition: Condition,
 
     /// Optionally return data from the update
     pub returning: Option<Returning>,

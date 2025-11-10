@@ -1,3 +1,5 @@
+use crate::stmt::{Node, Visit, VisitMut};
+
 use super::{Expr, Query};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -17,6 +19,16 @@ impl Expr {
 
     pub fn is_in_subquery(&self) -> bool {
         matches!(self, Self::InSubquery(_))
+    }
+}
+
+impl Node for ExprInSubquery {
+    fn visit<V: Visit>(&self, mut visit: V) {
+        visit.visit_expr_in_subquery(self);
+    }
+
+    fn visit_mut<V: VisitMut>(&mut self, mut visit: V) {
+        visit.visit_expr_in_subquery_mut(self);
     }
 }
 

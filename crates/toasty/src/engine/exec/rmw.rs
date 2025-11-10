@@ -1,20 +1,21 @@
-use super::{plan, Exec};
-use crate::Result;
+use crate::{
+    engine::{exec::Exec, plan},
+    Result,
+};
 use toasty_core::{
     driver::{
         operation::{self, Transaction},
         Rows,
     },
-    stmt,
+    stmt::{self, ValueStream},
 };
 
 impl Exec<'_> {
-    pub(super) async fn action_read_modify_write(
+    pub(super) async fn action_read_modify_write2(
         &mut self,
-        action: &plan::ReadModifyWrite,
+        action: &plan::ReadModifyWrite2,
     ) -> Result<()> {
-        assert!(action.input.is_none(), "TODO");
-        assert!(action.output.is_none(), "TODO");
+        assert!(action.input.is_empty(), "TODO");
 
         let res = self
             .engine
@@ -83,6 +84,11 @@ impl Exec<'_> {
             .exec(&self.engine.schema.db, Transaction::Commit.into())
             .await?;
         assert!(matches!(res.rows, Rows::Count(0)));
+
+        if let Some(output) = &action.output {
+            let rows = Rows::value_stream(ValueStream::default());
+            self.vars.store(output.var, output.num_uses, rows);
+        }
 
         Ok(())
     }

@@ -46,7 +46,9 @@ impl Entry<'_> {
     pub fn to_value(&self) -> Value {
         match *self {
             Entry::Expr(Expr::Value(value)) | Entry::Value(value) => value.clone(),
-            _ => todo!("entry={self:#?}"),
+            Entry::Expr(expr) => expr.eval_const().unwrap_or_else(|err| {
+                panic!("not const expression; entry={self:#?}; error={err:#?}")
+            }),
         }
     }
 }

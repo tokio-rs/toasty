@@ -123,6 +123,18 @@ impl ValueStream {
         })
     }
 
+    pub fn try_clone(&self) -> Option<Self> {
+        if self.stream.is_some() {
+            return None;
+        }
+
+        Some(Self {
+            buffer: self.buffer.clone(),
+            stream: None,
+            ty: self.ty.clone(),
+        })
+    }
+
     pub async fn buffer(&mut self) -> crate::Result<()> {
         if let Some(stream) = &mut self.stream {
             while let Some(res) = stream.next().await {

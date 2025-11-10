@@ -1,24 +1,25 @@
-use super::{operation, plan, Exec, Result};
-use crate::driver::Rows;
-use toasty_core::stmt;
-use toasty_core::stmt::ValueStream;
+use crate::{
+    driver::Rows,
+    engine::{exec::Exec, plan},
+    Result,
+};
+use toasty_core::{driver::operation, stmt::ValueStream};
 
 impl Exec<'_> {
     pub(super) async fn action_update_by_key(&mut self, action: &plan::UpdateByKey) -> Result<()> {
-        let args = if let Some(input) = &action.input {
-            vec![self.collect_input(input).await?]
-        } else {
-            vec![]
-        };
+        let keys = self
+            .vars
+            .load(action.input)
+            .await?
+            .into_values()
+            .collect()
+            .await?;
 
-        let keys = match action.keys.eval(&args[..])? {
-            stmt::Value::List(keys) => keys,
-            res => todo!("res={res:#?}"),
-        };
-
-        if keys.is_empty() {
-            if let Some(output) = &action.output {
-                self.vars.store(output.var, ValueStream::default());
+        let res = if keys.is_empty() {
+            if action.returning {
+                Rows::value_stream(ValueStream::default())
+            } else {
+                Rows::Count(0)
             }
         } else {
             let op = operation::UpdateByKey {
@@ -27,8 +28,7 @@ impl Exec<'_> {
                 assignments: action.assignments.clone(),
                 filter: action.filter.clone(),
                 condition: action.condition.clone(),
-                // TODO: not actually correct
-                returning: action.output.is_some(),
+                returning: action.returning,
             };
 
             let res = self
@@ -37,20 +37,13 @@ impl Exec<'_> {
                 .exec(&self.engine.schema.db, op.into())
                 .await?;
 
-            match res.rows {
-                Rows::Values(rows) => {
-                    let Some(output) = &action.output else {
-                        todo!("action={action:#?}");
-                    };
+            debug_assert_eq!(res.rows.is_values(), action.returning);
 
-                    let res = self.project_and_filter_output(rows, &output.project, None);
-                    self.vars.store(output.var, res);
-                }
-                Rows::Count(_) => {
-                    debug_assert!(action.output.is_none());
-                }
-            }
-        }
+            res.rows
+        };
+
+        self.vars
+            .store(action.output.var, action.output.num_uses, res);
 
         Ok(())
     }

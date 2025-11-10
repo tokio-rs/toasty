@@ -56,8 +56,13 @@ impl Statement {
 
     #[track_caller]
     pub fn as_select_unwrap(&self) -> &Select {
-        self.as_select()
-            .unwrap_or_else(|| panic!("expected `Select`; actual={self:#?}"))
+        match self {
+            Statement::Query(query) => match &query.body {
+                ExprSet::Select(select) => select,
+                _ => todo!("expected `Select`; actual={self:#?}"),
+            },
+            _ => todo!("expected `Select`; actual={self:#?}"),
+        }
     }
 }
 

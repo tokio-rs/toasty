@@ -1,12 +1,6 @@
 mod as_expr;
 use as_expr::AsExpr;
 
-mod convert;
-pub(crate) use convert::Convert;
-
-mod input;
-pub(crate) use input::Input;
-
 use crate::Result;
 use toasty_core::stmt::{self, ExprContext};
 
@@ -42,47 +36,23 @@ impl<T: AsExpr> Func<T> {
         matches!(self.expr.as_expr(), stmt::Expr::Arg(expr_arg) if expr_arg.position == 0)
     }
 
-    pub(crate) fn eval(&self, mut input: impl Input) -> Result<stmt::Value> {
-        use input::TypedInput;
+    pub(crate) fn eval(&self, input: impl stmt::Input) -> Result<stmt::Value> {
+        use stmt::TypedInput;
 
-        let mut input = TypedInput::new(&mut input, &self.args);
-        eval(self.expr.as_expr(), &mut input)
+        let input = TypedInput::new(stmt::ExprContext::new_free(), &self.args, input);
+        self.expr.as_expr().eval(input)
     }
 
     pub(crate) fn eval_const(&self) -> stmt::Value {
         assert!(self.is_const());
-        eval(self.expr.as_expr(), &mut input::const_input()).unwrap()
+        self.expr.as_expr().eval_const().unwrap()
     }
 
-    pub(crate) fn eval_bool(&self, mut input: impl Input) -> Result<bool> {
-        use input::TypedInput;
+    pub(crate) fn eval_bool(&self, input: impl stmt::Input) -> Result<bool> {
+        use stmt::TypedInput;
 
-        let mut input = TypedInput::new(&mut input, &self.args);
-        eval_bool(self.expr.as_expr(), &mut input)
-    }
-}
-
-impl Func<stmt::Expr> {
-    /// Returns the identity function for the given type
-    pub(crate) fn identity(ty: stmt::Type) -> Self {
-        Self {
-            args: vec![ty.clone()],
-            ret: ty,
-            expr: stmt::Expr::arg(0),
-        }
-    }
-
-    pub fn try_convert_from_stmt(
-        mut expr: stmt::Expr,
-        args: Vec<stmt::Type>,
-        mut convert: impl Convert,
-    ) -> Option<Self> {
-        if !convert_and_verify_expr(&mut expr, &mut convert) {
-            return None;
-        }
-
-        let ret = ExprContext::new_free().infer_expr_ty(&expr, &args);
-        Some(Self::from_stmt_typed(expr, args, ret))
+        let input = TypedInput::new(stmt::ExprContext::new_free(), &self.args, input);
+        self.expr.as_expr().eval_bool(input)
     }
 }
 
@@ -97,102 +67,6 @@ impl Func<&stmt::Expr> {
 
         let ret = ExprContext::new_free().infer_expr_ty(expr, &args);
         Some(Func::from_stmt_typed(expr, args, ret))
-    }
-}
-
-fn eval_bool(expr: &stmt::Expr, input: &mut impl Input) -> Result<bool> {
-    match eval(expr, input)? {
-        stmt::Value::Bool(ret) => Ok(ret),
-        _ => todo!(),
-    }
-}
-
-fn eval(expr: &stmt::Expr, input: &mut impl Input) -> Result<stmt::Value> {
-    use stmt::Expr::*;
-
-    match expr {
-        And(expr_and) => {
-            debug_assert!(!expr_and.operands.is_empty());
-
-            for operand in &expr_and.operands {
-                if !eval_bool(operand, input)? {
-                    return Ok(false.into());
-                }
-            }
-
-            Ok(true.into())
-        }
-        Arg(expr_arg) => Ok(input.resolve_arg(expr_arg, &stmt::Projection::identity())),
-        BinaryOp(expr_binary_op) => {
-            let lhs = eval(&expr_binary_op.lhs, input)?;
-            let rhs = eval(&expr_binary_op.rhs, input)?;
-
-            match expr_binary_op.op {
-                stmt::BinaryOp::Eq => Ok((lhs == rhs).into()),
-                stmt::BinaryOp::Ne => Ok((lhs != rhs).into()),
-                _ => todo!("{:#?}", expr),
-            }
-        }
-        Cast(expr_cast) => expr_cast.ty.cast(eval(&expr_cast.expr, input)?),
-        IsNull(expr_is_null) => {
-            let value = eval(&expr_is_null.expr, input)?;
-            Ok((value.is_null() != expr_is_null.negate).into())
-        }
-        List(exprs) => {
-            let mut ret = vec![];
-
-            for expr in &exprs.items {
-                ret.push(eval(expr, input)?);
-            }
-
-            Ok(stmt::Value::List(ret))
-        }
-        Map(expr_map) => {
-            let mut base = eval(&expr_map.base, input)?;
-
-            let stmt::Value::List(ref mut items) = &mut base else {
-                todo!("base={base:#?}")
-            };
-
-            for item in items.iter_mut() {
-                let i = item.take();
-                *item = eval(&expr_map.map, &mut &[i])?;
-            }
-
-            Ok(base)
-        }
-        Project(expr_project) => {
-            if let Arg(expr_arg) = &*expr_project.base {
-                Ok(input.resolve_arg(expr_arg, &expr_project.projection))
-            } else {
-                let base = eval(&expr_project.base, input)?;
-                Ok(base.entry(&expr_project.projection).to_value())
-            }
-        }
-        Record(expr_record) => {
-            let mut ret = Vec::with_capacity(expr_record.len());
-
-            for expr in &expr_record.fields {
-                ret.push(eval(expr, input)?);
-            }
-
-            Ok(stmt::Value::record_from_vec(ret))
-        }
-        Value(value) => Ok(value.clone()),
-        DecodeEnum(expr, ty, variant) => {
-            let stmt::Value::String(base) = eval(expr, input)? else {
-                todo!()
-            };
-            let (decoded_variant, rest) = base.split_once("#").unwrap();
-            let decoded_variant: usize = decoded_variant.parse()?;
-
-            if decoded_variant != *variant {
-                todo!("error; decoded={decoded_variant:#?}; expr={expr:#?}; ty={ty:#?}; variant={variant:#?}");
-            }
-
-            ty.cast(rest.into())
-        }
-        _ => todo!("expr={expr:#?}"),
     }
 }
 
@@ -212,44 +86,6 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
         Record(expr) => expr.fields.iter().all(verify_expr),
         Reference(_) => false,
         Value(_) => true,
-        _ => todo!("expr={expr:#?}"),
-    }
-}
-
-fn convert_and_verify_expr(expr: &mut stmt::Expr, convert: &mut impl Convert) -> bool {
-    use stmt::Expr::*;
-
-    match expr {
-        Arg(_) => true,
-        And(expr_and) => expr_and
-            .operands
-            .iter_mut()
-            .all(|e| convert_and_verify_expr(e, convert)),
-        BinaryOp(expr) => {
-            convert_and_verify_expr(&mut expr.lhs, convert)
-                && convert_and_verify_expr(&mut expr.rhs, convert)
-        }
-        Cast(expr) => convert_and_verify_expr(&mut expr.expr, convert),
-        Reference(expr_reference) => {
-            let Some(e) = convert.convert_expr_reference(expr_reference) else {
-                return false;
-            };
-            *expr = e;
-            convert_and_verify_expr(expr, convert)
-        }
-        IsNull(e) => convert_and_verify_expr(&mut e.expr, convert),
-        List(expr) => expr
-            .items
-            .iter_mut()
-            .all(|e| convert_and_verify_expr(e, convert)),
-        Map(expr) => convert_and_verify_expr(&mut expr.base, convert) && verify_expr(&expr.map),
-        Project(expr) => convert_and_verify_expr(&mut expr.base, convert),
-        Record(expr) => expr
-            .fields
-            .iter_mut()
-            .all(|e| convert_and_verify_expr(e, convert)),
-        Value(_) => true,
-        DecodeEnum(expr, _, _) => convert_and_verify_expr(&mut *expr, convert),
         _ => todo!("expr={expr:#?}"),
     }
 }

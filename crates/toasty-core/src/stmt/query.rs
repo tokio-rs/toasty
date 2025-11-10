@@ -87,7 +87,7 @@ impl Query {
             target: UpdateTarget::Query(Box::new(self)),
             assignments: stmt::Assignments::default(),
             filter: Filter::default(),
-            condition: None,
+            condition: stmt::Condition::default(),
             returning: None,
         }
     }

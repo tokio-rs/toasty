@@ -1,5 +1,6 @@
 mod association;
 mod expr_and;
+mod expr_any;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_concat_str;
@@ -37,7 +38,6 @@ impl Engine {
     }
 }
 
-// TODO: get rid of this?
 pub(crate) fn simplify_expr(cx: stmt::ExprContext<'_>, expr: &mut stmt::Expr) {
     Simplify { cx }.visit_expr_mut(expr);
 }
@@ -49,6 +49,7 @@ impl VisitMut for Simplify<'_> {
 
         // If an in-subquery expression, then try lifting it.
         let maybe_expr = match i {
+            Expr::Any(expr_any) => self.simplify_expr_any(expr_any),
             Expr::And(expr_and) => self.simplify_expr_and(expr_and),
             Expr::BinaryOp(expr_binary_op) => self.simplify_expr_binary_op(
                 expr_binary_op.op,
@@ -186,7 +187,7 @@ impl VisitMut for Simplify<'_> {
 
         s.visit_filter_mut(&mut stmt.filter);
 
-        if let Some(expr) = &mut stmt.condition {
+        if let Some(expr) = &mut stmt.condition.expr {
             s.visit_expr_mut(expr);
         }
 
@@ -242,14 +243,6 @@ impl<'a> Simplify<'a> {
                 stmt::ExprSet::Select(select) => {
                     if let Some(stmt::ExprSet::Select(tail)) = operands.last_mut() {
                         todo!("merge select={:#?} tail={:#?}", select, tail);
-                        /*
-                        if tail.source == select.source {
-                            assert_eq!(select.returning, tail.returning);
-
-                            tail.or(select.filter.take());
-                            continue;
-                        }
-                        */
                     }
 
                     operands.push(std::mem::take(expr_set));

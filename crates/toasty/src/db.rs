@@ -76,8 +76,9 @@ impl Db {
         let Some(ret) = res.next().await else {
             anyhow::bail!("empty result set")
         };
-        let None = res.next().await else {
-            anyhow::bail!("more than one record")
+        let next = res.next().await;
+        let None = next else {
+            anyhow::bail!("more than one record; next={next:#?}")
         };
 
         ret

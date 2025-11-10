@@ -1,19 +1,16 @@
-use super::{eval, stmt, Action, Input, Output};
-use crate::schema::db::TableId;
+use crate::engine::plan::{Action, Output2, VarId};
+use toasty_core::{schema::db::TableId, stmt};
 
 #[derive(Debug, Clone)]
 pub(crate) struct UpdateByKey {
     /// If specified, use the input to generate the list of keys to update
-    pub input: Option<Input>,
+    pub input: VarId,
 
     /// Where to store the result of the update
-    pub output: Option<Output>,
+    pub output: Output2,
 
     /// Which table to update
     pub table: TableId,
-
-    /// Which key(s) to update
-    pub keys: eval::Func,
 
     /// Assignments
     pub assignments: stmt::Assignments,
@@ -23,6 +20,10 @@ pub(crate) struct UpdateByKey {
 
     /// Fail the update if the condition is not met
     pub condition: Option<stmt::Expr>,
+
+    /// When `true` return the record being updated *after* the update. When
+    /// `false`, just return the count of updated rows.
+    pub returning: bool,
 }
 
 impl From<UpdateByKey> for Action {

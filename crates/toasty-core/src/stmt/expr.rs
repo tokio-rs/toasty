@@ -1,10 +1,10 @@
 use crate::stmt::{ExprExists, Input};
 
 use super::{
-    expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprArg, ExprBinaryOp,
-    ExprCast, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc, ExprInList, ExprInSubquery,
-    ExprIsNull, ExprKey, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject, ExprRecord, ExprStmt,
-    ExprTy, Node, Projection, Substitute, Type, Value, Visit, VisitMut,
+    expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
+    ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc, ExprInList,
+    ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject,
+    ExprRecord, ExprStmt, ExprTy, Node, Projection, Substitute, Type, Value, Visit, VisitMut,
 };
 use std::fmt;
 
@@ -12,6 +12,9 @@ use std::fmt;
 pub enum Expr {
     /// AND a set of binary expressions
     And(ExprAnd),
+
+    /// ANY - returns true if any of the items evaluate to true
+    Any(ExprAny),
 
     /// An argument when the expression is a function body
     Arg(ExprArg),
@@ -143,11 +146,43 @@ impl Expr {
     }
 
     /// Returns `true` if the expression is a constant expression.
+    ///
+    /// A constant expression is one that does not reference any external data.
+    /// This means it contains no `Reference`, `Stmt`, or `Arg` expressions that
+    /// reference external inputs.
+    ///
+    /// Note: `Arg` expressions inside `Map` bodies are allowed because they reference
+    /// the mapped expression itself, not external data.
     pub fn is_const(&self) -> bool {
         match self {
-            Self::Value(_) => true,
+            // Always constant
+            Self::Value(_) | Self::Type(_) => true,
+
+            // Never constant - references external data
+            Self::Reference(_)
+            | Self::Stmt(_)
+            | Self::Arg(_)
+            | Self::InSubquery(_)
+            | Self::Exists(_) => false,
+
+            // Const if all children are const
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_const()),
-            _ => false,
+            Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_const()),
+            Self::Cast(expr_cast) => expr_cast.expr.is_const(),
+            Self::BinaryOp(expr_binary) => expr_binary.lhs.is_const() && expr_binary.rhs.is_const(),
+            Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_const()),
+            Self::Any(expr_any) => expr_any.expr.is_const(),
+            Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const()),
+            Self::IsNull(expr_is_null) => expr_is_null.expr.is_const(),
+            Self::InList(expr_in_list) => {
+                expr_in_list.expr.is_const() && expr_in_list.list.is_const()
+            }
+            Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_const()),
+            Self::ConcatStr(expr_concat_str) => {
+                expr_concat_str.exprs.iter().all(|expr| expr.is_const())
+            }
+            Self::Project(expr_project) => expr_project.base.is_const(),
+            _ => todo!("expr={self:#?}"),
         }
     }
 
@@ -282,6 +317,7 @@ impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::And(e) => e.fmt(f),
+            Self::Any(e) => e.fmt(f),
             Self::Arg(e) => e.fmt(f),
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),

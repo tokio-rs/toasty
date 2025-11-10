@@ -1,50 +1,75 @@
+mod insert;
 mod paginate;
+mod relation;
+mod returning;
 
-use std::cell::Cell;
+use std::{cell::Cell, collections::HashSet, mem};
 
 use index_vec::IndexVec;
 use toasty_core::{
     driver::Capability,
     schema::{
         app::{self, FieldTy, Model},
-        db::Column,
+        db::{Column, ColumnId},
         mapping,
     },
     stmt::{self, visit_mut, IntoExprTarget, VisitMut},
-    Schema,
+    Result, Schema,
 };
 
 use crate::engine::{
-    planner::ng::{Arg, StatementInfoStore, StmtId},
+    planner::ng::{info::StatementInfo, Arg, StatementInfoStore, StmtId},
     simplify::{self, Simplify},
     Engine,
 };
 
 impl super::PlannerNg<'_, '_> {
-    pub(crate) fn lower_stmt(&mut self, mut stmt: stmt::Statement) {
-        let root_id = self.store.root_id();
-
+    pub(crate) fn lower_stmt(&mut self, stmt: stmt::Statement) -> Result<()> {
         let mut state = LoweringState {
             store: &mut self.store,
             scopes: IndexVec::new(),
             engine: self.old.engine,
+            relations: vec![],
+            errors: vec![],
+            dependencies: HashSet::new(),
         };
 
-        let scope_id = state.scopes.push(Scope { stmt_id: root_id });
+        state.lower_stmt(stmt::ExprContext::new(self.old.schema()), stmt);
+
+        if let Some(err) = state.errors.into_iter().next() {
+            return Err(err);
+        }
+
+        Ok(())
+    }
+}
+
+impl LoweringState<'_> {
+    fn lower_stmt(&mut self, expr_cx: stmt::ExprContext, mut stmt: stmt::Statement) -> StmtId {
+        self.engine.simplify_stmt(&mut stmt);
+
+        let stmt_id = self.store.new_statement_info(self.dependencies.clone());
+        let scope_id = self.scopes.push(Scope { stmt_id });
+        let mut collect_dependencies = None;
 
         // Map the statement
         LowerStatement {
-            state: &mut state,
-            expr_cx: stmt::ExprContext::new(self.old.schema()),
+            state: self,
+            expr_cx,
             scope_id,
             cx: LoweringContext::Statement,
+            collect_dependencies: &mut collect_dependencies,
         }
         .visit_stmt_mut(&mut stmt);
 
-        // TODO: is there a way to avoid simplifying again?
-        self.old.engine.simplify_stmt(&mut stmt);
+        self.engine.simplify_stmt(&mut stmt);
 
-        self.store.root_mut().stmt = Some(Box::new(stmt));
+        let stmt_info = &mut self.store[stmt_id];
+        stmt_info.stmt = Some(Box::new(stmt));
+
+        debug_assert!(collect_dependencies.is_none());
+
+        stmt_id
     }
 }
 
@@ -61,6 +86,9 @@ struct LowerStatement<'a, 'b> {
 
     /// Current lowering context
     cx: LoweringContext<'a>,
+
+    /// Track dependencies here.
+    collect_dependencies: &'a mut Option<HashSet<StmtId>>,
 }
 
 #[derive(Debug)]
@@ -74,6 +102,17 @@ struct LoweringState<'a> {
 
     /// Scope state
     scopes: IndexVec<ScopeId, Scope>,
+
+    /// Planning a query can require walking relations to maintain data
+    /// consistency. This field tracks the current relation edge being traversed
+    /// so the planner doesn't walk it backwards.
+    relations: Vec<app::FieldId>,
+
+    /// All new statements should include these as part of its dependencies
+    dependencies: HashSet<StmtId>,
+
+    /// Tracks errors that occured while lowering the statement
+    errors: Vec<crate::Error>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -82,7 +121,7 @@ enum LoweringContext<'a> {
     Assignment(&'a stmt::Assignments),
 
     /// Lowering an insertion statement
-    Insert,
+    Insert(&'a [ColumnId]),
 
     /// Lowering a value row being inserted
     InsertRow(&'a stmt::Expr),
@@ -102,6 +141,54 @@ struct Scope {
 
 index_vec::define_index_type! {
     struct ScopeId = u32;
+}
+
+impl LowerStatement<'_, '_> {
+    fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> StmtId {
+        // Need to reset the scope stack as the statement cannot reference the
+        // current scope.
+        let scopes = mem::take(&mut self.state.scopes);
+
+        let stmt_id = self
+            .state
+            .lower_stmt(stmt::ExprContext::new(self.schema()), stmt.into());
+
+        self.state.scopes = scopes;
+
+        if let Some(dependencies) = &mut self.collect_dependencies {
+            dependencies.insert(stmt_id);
+        }
+
+        self.curr_stmt_info().deps.insert(stmt_id);
+
+        stmt_id
+    }
+
+    fn collect_dependencies(
+        &mut self,
+        f: impl FnOnce(&mut LowerStatement<'_, '_>),
+    ) -> HashSet<StmtId> {
+        let old = self.collect_dependencies.replace(HashSet::new());
+        f(self);
+        std::mem::replace(self.collect_dependencies, old).unwrap()
+    }
+
+    fn track_dependency(&mut self, dependency: StmtId) {
+        self.curr_stmt_info().deps.insert(dependency);
+    }
+
+    fn with_dependencies(
+        &mut self,
+        mut dependencies: HashSet<StmtId>,
+        f: impl FnOnce(&mut LowerStatement<'_, '_>),
+    ) {
+        // Dependencies should stack
+        dependencies.extend(&self.state.dependencies);
+
+        let old = std::mem::replace(&mut self.state.dependencies, dependencies);
+        f(self);
+        self.state.dependencies = old;
+    }
 }
 
 impl visit_mut::VisitMut for LowerStatement<'_, '_> {
@@ -128,9 +215,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.lower_assignment(i).visit_expr_mut(&mut lowered);
                     assignments.set(column, lowered);
                 }
-                _ => {
-                    todo!("field = {:#?};", field);
-                }
+                _ => panic!("relation fields should already have been handled; field={field:#?}"),
             }
         }
 
@@ -141,40 +226,77 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         todo!("stmt={i:#?}");
     }
 
-    fn visit_expr_in_subquery_mut(&mut self, i: &mut stmt::ExprInSubquery) {
-        if !self.capability().sql {
-            todo!("implement IN <subquery> expressions for KV");
-        }
-
-        visit_mut::visit_expr_in_subquery_mut(self, i);
-    }
-
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         match expr {
             stmt::Expr::BinaryOp(e) => {
-                stmt::visit_mut::visit_expr_binary_op_mut(self, e);
+                self.visit_expr_binary_op_mut(e);
 
                 if let Some(lowered) = self.lower_expr_binary_op(e.op, &mut e.lhs, &mut e.rhs) {
                     *expr = lowered;
                 }
             }
             stmt::Expr::InList(e) => {
-                stmt::visit_mut::visit_expr_in_list_mut(self, e);
+                self.visit_expr_in_list_mut(e);
 
                 if let Some(lowered) = self.lower_expr_in_list(&mut e.expr, &mut e.list) {
                     *expr = lowered;
                 }
             }
             stmt::Expr::InSubquery(e) => {
-                stmt::visit_mut::visit_expr_in_subquery_mut(self, e);
+                if self.capability().sql {
+                    self.visit_expr_in_subquery_mut(e);
 
-                let maybe_res = self.lower_expr_binary_op(
-                    stmt::BinaryOp::Eq,
-                    &mut e.expr,
-                    e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
-                );
+                    let maybe_res = self.lower_expr_binary_op(
+                        stmt::BinaryOp::Eq,
+                        &mut e.expr,
+                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                    );
 
-                assert!(maybe_res.is_none(), "TODO");
+                    assert!(maybe_res.is_none(), "TODO");
+
+                    let returning = e.query.returning_mut_unwrap().as_expr_mut_unwrap();
+
+                    if !returning.is_record() {
+                        *returning = stmt::Expr::record([returning.take()]);
+                    }
+                } else {
+                    self.visit_expr_mut(&mut e.expr);
+
+                    let source_id = self.scope_stmt_id();
+                    let target_id = self.scope_statement(|child| {
+                        child.visit_stmt_query_mut(&mut e.query);
+                    });
+
+                    // For now, we wonly support independent sub-queries. I.e.
+                    // the subquery must be able to be executed without any
+                    // context from the parent query.
+                    let target_stmt_info = &self.state.store[target_id];
+                    debug_assert!(target_stmt_info.args.is_empty(), "TODO");
+                    debug_assert!(target_stmt_info.back_refs.is_empty(), "TODO");
+
+                    self.track_dependency(target_id);
+
+                    let maybe_res = self.lower_expr_binary_op(
+                        stmt::BinaryOp::Eq,
+                        &mut e.expr,
+                        e.query.returning_mut_unwrap().as_expr_mut_unwrap(),
+                    );
+
+                    assert!(maybe_res.is_none(), "TODO");
+
+                    let stmt::Expr::InSubquery(e) = expr.take() else {
+                        panic!()
+                    };
+
+                    let position =
+                        self.new_sub_statement(source_id, target_id, Box::new((*e.query).into()));
+
+                    *expr = stmt::ExprInList {
+                        expr: e.expr,
+                        list: Box::new(stmt::Expr::arg(position)),
+                    }
+                    .into();
+                }
             }
             stmt::Expr::Reference(expr_reference) => {
                 match expr_reference {
@@ -197,19 +319,23 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     }
                 }
             }
-            stmt::Expr::Stmt(expr_stmt) => {
+            stmt::Expr::Stmt(_) => {
+                let stmt::Expr::Stmt(mut expr_stmt) = expr.take() else {
+                    panic!()
+                };
+
                 assert!(self.cx.is_returning(), "cx={:#?}", self.cx);
 
                 // For now, we assume nested sub-statements cannot be executed on the
                 // target database. Eventually, we will need to make this smarter.
                 let source_id = self.scope_stmt_id();
-                let target_id = self.new_statement_info();
-
-                self.scope_statement(target_id, |child| {
-                    visit_mut::visit_expr_stmt_mut(child, expr_stmt);
+                let target_id = self.scope_statement(|child| {
+                    visit_mut::visit_expr_stmt_mut(child, &mut expr_stmt);
                 });
 
-                let position = self.new_sub_statement(source_id, target_id, expr.take());
+                self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
+
+                let position = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
                 *expr = stmt::Expr::arg(position);
             }
             _ => {
@@ -220,20 +346,28 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_insert_target_mut(&mut self, i: &mut stmt::InsertTarget) {
-        if !i.is_table() {
-            let mapping = self.mapping_unwrap();
-            *i = stmt::InsertTable {
-                table: mapping.table,
-                columns: mapping.columns.clone(),
+        match i {
+            stmt::InsertTarget::Scope(_) => todo!("stmt={i:#?}"),
+            stmt::InsertTarget::Model(model_id) => {
+                let mapping = self.schema().mapping_for(model_id);
+                *i = stmt::InsertTable {
+                    table: mapping.table,
+                    columns: mapping.columns.clone(),
+                }
+                .into();
             }
-            .into();
+            _ => todo!(),
         }
     }
 
     fn visit_update_target_mut(&mut self, i: &mut stmt::UpdateTarget) {
-        if !i.is_table() {
-            let mapping = self.mapping_unwrap();
-            *i = stmt::UpdateTarget::table(mapping.table);
+        match i {
+            stmt::UpdateTarget::Query(_) => todo!("update_target={i:#?}"),
+            stmt::UpdateTarget::Model(model_id) => {
+                let table_id = self.schema().table_id_for(model_id);
+                *i = stmt::UpdateTarget::table(table_id);
+            }
+            stmt::UpdateTarget::Table(_) => {}
         }
     }
 
@@ -266,6 +400,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // *except* the source field (since it is borrowed).
         let mut lower = self.scope_expr(&stmt.from);
 
+        // Before lowering, handle cascading deletes
+        lower.plan_stmt_delete_relations(stmt);
+
         lower.visit_filter_mut(&mut stmt.filter);
 
         if let Some(returning) = &mut stmt.returning {
@@ -278,15 +415,22 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_stmt_insert_mut(&mut self, stmt: &mut stmt::Insert) {
+        // First, if an insertion scope is specified, lower the scope to be just "model"
+        self.apply_insert_scope(&mut stmt.target, &mut stmt.source);
+
         // Create a new expr scope for the statement, and lower all parts
         // *except* the target field (since it is borrowed).
         let mut lower = self.lower_insert(&stmt.target);
+
+        // Preprocess the insertion source (values usually);
+        lower.preprocess_insert_values(&mut stmt.source);
 
         // Lower the insertion source
         lower.visit_stmt_query_mut(&mut stmt.source);
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
+            lower.constantize_insert_returning(returning, &stmt.source);
         }
 
         self.visit_insert_target_mut(&mut stmt.target);
@@ -330,6 +474,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
         let mut lower = self.scope_expr(&stmt.target);
 
+        // Plan relations
+        lower.plan_stmt_update_relations(&mut stmt.assignments, &stmt.filter);
+
         // Before lowering children, convert the "Changed" returning statement
         // to an expression referencing changed fields.
         if let Some(returning) = &mut stmt.returning {
@@ -359,12 +506,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         lower.visit_assignments_mut(&mut stmt.assignments);
         lower.visit_filter_mut(&mut stmt.filter);
 
-        if let Some(expr) = &mut stmt.condition {
+        if let Some(expr) = &mut stmt.condition.expr {
             lower.visit_expr_mut(expr);
         }
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
+            lower.constantize_update_returning(returning, &stmt.assignments);
         }
 
         self.visit_update_target_mut(&mut stmt.target);
@@ -374,7 +522,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if let stmt::Source::Model(source_model) = stmt {
             debug_assert!(source_model.via.is_none(), "TODO");
 
-            let table_id = self.expr_cx.schema().table_id_for(source_model.model);
+            let table_id = self.schema().table_id_for(source_model.model);
             *stmt = stmt::Source::table(table_id);
         }
     }
@@ -471,7 +619,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     stmt::Expr::Arg(_) => {
                         let arg = list.take();
 
-                        // TODO: don't always cast to a string...
                         let cast = stmt::Expr::cast(stmt::Expr::arg(0), stmt::Type::String);
                         *list = stmt::Expr::map(arg, cast);
                     }
@@ -481,7 +628,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 None
             }
             (stmt::Expr::Record(lhs), stmt::Expr::List(list)) => {
-                // TODO: implement for real
                 for lhs in lhs {
                     assert!(lhs.is_column());
                 }
@@ -493,7 +639,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 None
             }
             (stmt::Expr::Record(lhs), stmt::Expr::Value(stmt::Value::List(_))) => {
-                // TODO: implement for real
                 for lhs in lhs {
                     assert!(lhs.is_column());
                 }
@@ -724,7 +869,9 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     fn new_statement_info(&mut self) -> StmtId {
-        self.state.store.new_statement_info()
+        self.state
+            .store
+            .new_statement_info(self.state.dependencies.clone())
     }
 
     /// Create a new sub-statement. Returns the argument position
@@ -732,33 +879,31 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         &mut self,
         source_id: StmtId,
         target_id: StmtId,
-        expr: stmt::Expr,
+        stmt: Box<stmt::Statement>,
     ) -> usize {
         let source = &mut self.state.store[source_id];
         let arg = source.args.len();
         source.args.push(Arg::Sub {
             stmt_id: target_id,
+            returning: self.cx.is_returning(),
             input: Cell::new(None),
         });
 
-        let stmt::Expr::Stmt(mut expr_stmt) = expr else {
-            panic!()
-        };
-
-        // TODO: Is ther ea way to avoid simplifying here?
-        self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
-
-        self.state.store[target_id].stmt = Some(expr_stmt.stmt);
+        self.state.store[target_id].stmt = Some(stmt);
 
         arg
     }
 
-    fn schema(&self) -> &Schema {
-        self.expr_cx.schema()
+    fn schema(&self) -> &'b Schema {
+        &self.state.engine.schema
     }
 
     fn capability(&self) -> &Capability {
         self.state.engine.capability()
+    }
+
+    fn field(&self, id: impl Into<app::FieldId>) -> &'b app::Field {
+        self.schema().app.field(id.into())
     }
 
     fn model(&self) -> Option<&Model> {
@@ -786,6 +931,11 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         self.state.engine.schema.mapping_for(model)
     }
 
+    fn curr_stmt_info(&mut self) -> &mut StatementInfo {
+        let stmt_id = self.scope_stmt_id();
+        &mut self.state.store[stmt_id]
+    }
+
     /// Returns the `StmtId` for the Statement at the **current** scope.
     fn scope_stmt_id(&self) -> StmtId {
         self.state.scopes[self.scope_id].stmt_id
@@ -796,10 +946,25 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         self.state.scopes[self.scope_id - nesting].stmt_id
     }
 
-    fn scope_statement(&mut self, stmt_id: StmtId, f: impl FnOnce(&mut LowerStatement<'_, '_>)) {
+    /// Plan a sub-statement that is able to reference the parent statement
+    fn scope_statement(&mut self, f: impl FnOnce(&mut LowerStatement<'_, '_>)) -> StmtId {
+        let stmt_id = self.new_statement_info();
         let scope_id = self.state.scopes.push(Scope { stmt_id });
-        f(&mut self.lower_statement(scope_id));
+        let mut dependencies = None;
+
+        let mut lower = LowerStatement {
+            state: self.state,
+            expr_cx: self.expr_cx,
+            scope_id,
+            cx: LoweringContext::Statement,
+            collect_dependencies: &mut dependencies,
+        };
+
+        f(&mut lower);
+
+        debug_assert!(dependencies.is_none());
         self.state.scopes.pop();
+        stmt_id
     }
 
     fn scope_expr<'child>(
@@ -811,6 +976,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
             cx: self.cx,
+            collect_dependencies: self.collect_dependencies,
         }
     }
 
@@ -823,18 +989,28 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::Assignment(assignments),
+            collect_dependencies: self.collect_dependencies,
         }
     }
 
     fn lower_insert<'child>(
         &'child mut self,
-        target: impl IntoExprTarget<'child>,
+        target: &'child stmt::InsertTarget,
     ) -> LowerStatement<'child, 'b> {
+        let columns = match target {
+            stmt::InsertTarget::Scope(_) => {
+                panic!("InsertTarget::Scope should already have been lowered by this point")
+            }
+            stmt::InsertTarget::Model(model_id) => &self.schema().mapping_for(model_id).columns,
+            stmt::InsertTarget::Table(insert_table) => &insert_table.columns,
+        };
+
         LowerStatement {
             state: self.state,
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
-            cx: LoweringContext::Insert,
+            cx: LoweringContext::Insert(columns),
+            collect_dependencies: self.collect_dependencies,
         }
     }
 
@@ -847,6 +1023,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::InsertRow(row),
+            collect_dependencies: self.collect_dependencies,
         }
     }
 
@@ -856,22 +1033,14 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
             cx: LoweringContext::Returning,
-        }
-    }
-
-    fn lower_statement(&mut self, scope_id: ScopeId) -> LowerStatement<'_, 'b> {
-        LowerStatement {
-            state: self.state,
-            expr_cx: self.expr_cx,
-            scope_id,
-            cx: LoweringContext::Statement,
+            collect_dependencies: self.collect_dependencies,
         }
     }
 }
 
 impl LoweringContext<'_> {
     fn is_insert(&self) -> bool {
-        matches!(self, LoweringContext::Insert)
+        matches!(self, LoweringContext::Insert { .. })
     }
 
     fn is_returning(&self) -> bool {
@@ -888,7 +1057,6 @@ fn uncast_expr_id(expr: &mut stmt::Expr) {
             *expr = expr_cast.expr.take();
         }
         stmt::Expr::Project(_) => {
-            // TODO: don't always cast to a string...
             let base = expr.take();
             *expr = stmt::Expr::cast(base, stmt::Type::String);
         }

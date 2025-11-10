@@ -141,6 +141,7 @@ async fn basic_crud(test: &mut DbTest) {
                 })),
                 ..
             }),
+            ret: None,
             ..
         }));
     } else {
@@ -149,24 +150,15 @@ async fn basic_crud(test: &mut DbTest) {
             filter: None,
             keys: [=~ (&user_id,)],
             assignments: #{ 2: _ { expr: 31, .. }},
+            returning: false,
             ..
         }));
     }
 
-    // Check response
-    if is_sql {
-        assert_struct!(resp, _ {
-            rows: Rows::Count(1),
-            ..
-        });
-    } else {
-        // DynamoDB and some KV stores return values from updates
-        assert_struct!(resp.rows, Rows::Values(
-            0.buffered(): [
-                =~ (31,),
-            ],
-        ));
-    }
+    assert_struct!(resp, _ {
+        rows: Rows::Count(1),
+        ..
+    });
 
     // ========== DELETE ==========
     User::filter_by_id(&user_id).delete(&db).await.unwrap();

@@ -1,6 +1,6 @@
-use crate::engine::plan::{Output2, VarId};
+use toasty_core::stmt;
 
-use super::{stmt, Action};
+use crate::engine::plan::{Action, Output2, VarId};
 
 #[derive(Debug)]
 pub(crate) struct ExecStatement2 {
@@ -8,17 +8,20 @@ pub(crate) struct ExecStatement2 {
     pub input: Vec<VarId>,
 
     /// How to handle output
-    pub output: Option<ExecStatementOutput>,
+    pub output: ExecStatementOutput,
 
     /// The query to execute. This may require input to generate the query.
     pub stmt: stmt::Statement,
+
+    /// When true, the statement is a conditional update without any returning.
+    pub conditional_update_with_no_returning: bool,
 }
 
 #[derive(Debug)]
 pub(crate) struct ExecStatementOutput {
     /// Databases always return rows as a vec of values. This specifies the type
     /// of each value.
-    pub ty: Vec<stmt::Type>,
+    pub ty: Option<Vec<stmt::Type>>,
     pub output: Output2,
 }
 

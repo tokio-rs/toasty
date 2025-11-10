@@ -27,6 +27,15 @@ impl ops::DerefMut for ValueRecord {
     }
 }
 
+impl IntoIterator for ValueRecord {
+    type Item = Value;
+    type IntoIter = std::vec::IntoIter<Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.fields.into_iter()
+    }
+}
+
 impl<'a> IntoIterator for &'a ValueRecord {
     type Item = &'a Value;
     type IntoIter = std::slice::Iter<'a, Value>;

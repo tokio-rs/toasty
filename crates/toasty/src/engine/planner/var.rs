@@ -12,16 +12,11 @@ pub(crate) struct VarTable {
 impl VarTable {
     #[track_caller]
     pub fn register_var(&mut self, ty: stmt::Type) -> plan::VarId {
-        debug_assert!(ty.is_list(), "{ty:#?}");
+        debug_assert!(ty.is_list() || ty.is_unit(), "{ty:#?}");
         // Register a new slot
         let ret = self.vars.len();
         self.vars.push(ty);
         plan::VarId(ret)
-    }
-
-    pub fn ty(&self, var: impl Into<plan::VarId>) -> &stmt::Type {
-        let var = var.into();
-        &self.vars[var.0]
     }
 
     pub(crate) fn into_vec(self) -> Vec<stmt::Type> {

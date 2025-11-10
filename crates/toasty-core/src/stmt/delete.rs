@@ -19,6 +19,48 @@ impl Delete {
     }
 }
 
+impl Statement {
+    pub fn is_delete(&self) -> bool {
+        matches!(self, Statement::Delete(..))
+    }
+
+    /// Attempts to return a reference to an inner [`Delete`].
+    ///
+    /// * If `self` is a [`Statement::Delete`], a reference to the inner [`Delete`] is
+    ///   returned wrapped in [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn as_delete(&self) -> Option<&Delete> {
+        match self {
+            Self::Delete(delete) => Some(delete),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and attempts to return the inner [`Delete`].
+    ///
+    /// * If `self` is a [`Statement::Delete`], inner [`Delete`] is returned wrapped in
+    ///   [`Some`].
+    /// * Else, [`None`] is returned.
+    pub fn into_delete(self) -> Option<Delete> {
+        match self {
+            Self::Delete(delete) => Some(delete),
+            _ => None,
+        }
+    }
+
+    /// Consumes `self` and returns the inner [`Delete`].
+    ///
+    /// # Panics
+    ///
+    /// If `self` is not a [`Statement::Delete`].
+    pub fn unwrap_delete(self) -> Delete {
+        match self {
+            Self::Delete(delete) => delete,
+            v => panic!("expected `Delete`, found {v:#?}"),
+        }
+    }
+}
+
 impl From<Delete> for Statement {
     fn from(src: Delete) -> Self {
         Self::Delete(src)
