@@ -18,23 +18,25 @@ use toasty_core::{
 };
 
 use crate::engine::{
-    planner::ng::{info::StatementInfo, Arg, StatementInfoStore, StmtId},
+    planner::{info::StatementInfo, Arg, Planner, StatementInfoStore, StmtId},
     simplify::{self, Simplify},
     Engine,
 };
 
-impl super::PlannerNg<'_, '_> {
+impl Planner<'_> {
     pub(crate) fn lower_stmt(&mut self, stmt: stmt::Statement) -> Result<()> {
+        let schema = self.schema();
+
         let mut state = LoweringState {
             store: &mut self.store,
             scopes: IndexVec::new(),
-            engine: self.old.engine,
+            engine: self.engine,
             relations: vec![],
             errors: vec![],
             dependencies: HashSet::new(),
         };
 
-        state.lower_stmt(stmt::ExprContext::new(self.old.schema()), stmt);
+        state.lower_stmt(stmt::ExprContext::new(schema), stmt);
 
         if let Some(err) = state.errors.into_iter().next() {
             return Err(err);

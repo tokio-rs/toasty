@@ -11,7 +11,7 @@ use toasty_core::{
 
 use crate::engine::{
     eval, plan,
-    planner::ng::{Arg, StatementInfoStore, StmtId},
+    planner::{Arg, Planner, StatementInfoStore, StmtId},
     Engine,
 };
 
@@ -234,10 +234,10 @@ struct MaterializePlanner<'a> {
     graph: &'a mut MaterializeGraph,
 }
 
-impl super::PlannerNg<'_, '_> {
+impl Planner<'_> {
     pub(super) fn plan_materializations(&mut self) {
         MaterializePlanner {
-            engine: self.old.engine,
+            engine: self.engine,
             store: &self.store,
             graph: &mut self.graph,
         }
