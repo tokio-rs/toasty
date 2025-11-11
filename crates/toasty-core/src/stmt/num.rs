@@ -292,3 +292,26 @@ impl TryFrom<Value> for i64 {
         }
     }
 }
+
+// Pointer-sized integers convert from their fixed-size equivalents
+impl TryFrom<Value> for isize {
+    type Error = crate::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        let i64_val = i64::try_from(value)?;
+        i64_val
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("value {} is out of range for isize", i64_val))
+    }
+}
+
+impl TryFrom<Value> for usize {
+    type Error = crate::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        let u64_val = u64::try_from(value)?;
+        u64_val
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("value {} is out of range for usize", u64_val))
+    }
+}
