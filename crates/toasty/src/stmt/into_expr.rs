@@ -35,6 +35,27 @@ impl_into_expr_for_copy! {
     U64(u64);
 }
 
+// Pointer-sized integers convert through their fixed-size equivalents
+impl IntoExpr<isize> for isize {
+    fn into_expr(self) -> Expr<isize> {
+        Expr::from_value(Value::from(self as i64))
+    }
+
+    fn by_ref(&self) -> Expr<isize> {
+        Expr::from_value(Value::from(*self as i64))
+    }
+}
+
+impl IntoExpr<usize> for usize {
+    fn into_expr(self) -> Expr<usize> {
+        Expr::from_value(Value::from(self as u64))
+    }
+
+    fn by_ref(&self) -> Expr<usize> {
+        Expr::from_value(Value::from(*self as u64))
+    }
+}
+
 impl<T: ?Sized> IntoExpr<T> for Expr<T> {
     fn into_expr(self) -> Self {
         self

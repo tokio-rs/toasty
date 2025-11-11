@@ -39,6 +39,27 @@ impl_primitive_numeric! {
     u64 => U64,
 }
 
+// Pointer-sized integers map to fixed-size types internally
+impl Primitive for isize {
+    fn ty() -> stmt::Type {
+        stmt::Type::I64
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
+impl Primitive for usize {
+    fn ty() -> stmt::Type {
+        stmt::Type::U64
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
 impl Primitive for String {
     fn ty() -> stmt::Type {
         stmt::Type::String
