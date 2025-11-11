@@ -4,7 +4,7 @@ use toasty_core::stmt::{self, visit_mut};
 use crate::engine::{
     eval,
     plan::{self, NestedLevel},
-    planner::ng::{materialize::MaterializeNestedMerge, Arg, NodeId, StatementInfoStore, StmtId},
+    planner::{materialize::MaterializeNestedMerge, Arg, NodeId, StatementInfoStore, StmtId},
     Engine,
 };
 
