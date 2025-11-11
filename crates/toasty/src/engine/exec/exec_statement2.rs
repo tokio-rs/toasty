@@ -24,7 +24,10 @@ impl Exec<'_> {
                     .await?;
                 input_values.push(stmt::Value::List(values));
             }
+
             stmt.substitute(&input_values);
+
+            self.engine.simplify_stmt(&mut stmt);
         }
 
         debug_assert!(
@@ -34,6 +37,29 @@ impl Exec<'_> {
                 .unwrap_or(true),
             "stmt={stmt:#?}"
         );
+
+        // Short circuit if we can statically determine there are no results
+        if let stmt::Statement::Query(query) = &stmt {
+            if let stmt::ExprSet::Values(values) = &query.body {
+                if values.is_empty() {
+                    assert!(!action.conditional_update_with_no_returning);
+
+                    let rows = if action.output.ty.is_some() {
+                        Rows::Values(stmt::ValueStream::default())
+                    } else {
+                        Rows::Count(0)
+                    };
+
+                    self.vars.store(
+                        action.output.output.var,
+                        action.output.output.num_uses,
+                        rows,
+                    );
+
+                    return Ok(());
+                }
+            }
+        }
 
         let op = operation::QuerySql {
             stmt,

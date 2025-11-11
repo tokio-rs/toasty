@@ -19,6 +19,10 @@ pub enum ExprSet {
 }
 
 impl ExprSet {
+    pub fn values(values: impl Into<Values>) -> ExprSet {
+        ExprSet::Values(values.into())
+    }
+
     #[track_caller]
     pub fn as_values_mut(&mut self) -> &mut Values {
         match self {
@@ -32,6 +36,18 @@ impl ExprSet {
         match self {
             Self::Values(expr) => expr,
             _ => todo!(),
+        }
+    }
+
+    pub fn is_const(&self) -> bool {
+        match self {
+            ExprSet::Select(..) => false,
+            ExprSet::SetOp(expr_set_op) => expr_set_op
+                .operands
+                .iter()
+                .all(|operand| operand.is_const()),
+            ExprSet::Update(..) => false,
+            ExprSet::Values(values) => values.is_const(),
         }
     }
 }

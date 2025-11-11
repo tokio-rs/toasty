@@ -1,4 +1,7 @@
-use toasty_core::driver::operation;
+use toasty_core::{
+    driver::{operation, Rows},
+    stmt,
+};
 
 use super::{plan, Exec, Result};
 use crate::engine::simplify;
@@ -18,6 +21,13 @@ impl Exec<'_> {
             filter.substitute(&input);
 
             simplify::simplify_expr(self.engine.expr_cx(), &mut filter);
+        }
+
+        if filter.is_false() {
+            let rows = Rows::Values(stmt::ValueStream::default());
+            self.vars
+                .store(action.output.var, action.output.num_uses, rows);
+            return Ok(());
         }
 
         let res = self

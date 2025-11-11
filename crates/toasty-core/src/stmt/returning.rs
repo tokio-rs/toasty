@@ -1,5 +1,5 @@
 use super::{Expr, Path};
-use crate::stmt::{self, Node, Query, Statement, Value};
+use crate::stmt::{self, ExprSet, Node, Query, Statement, Value};
 
 /// TODO: rename since this is also used in `Select`?
 #[derive(Debug, Clone, PartialEq)]
@@ -109,7 +109,11 @@ impl Statement {
         match self {
             Statement::Delete(delete) => delete.returning.take(),
             Statement::Insert(insert) => insert.returning.take(),
-            Statement::Query(query) => Some(query.returning_mut_unwrap().take()),
+            Statement::Query(query) => match &mut query.body {
+                ExprSet::Select(select) => Some(select.returning.take()),
+                ExprSet::Values(..) => None,
+                _ => todo!("stmt={self:#?}"),
+            },
             Statement::Update(update) => update.returning.take(),
         }
     }

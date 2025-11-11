@@ -447,10 +447,15 @@ impl MaterializePlanner<'_> {
 
         let mut dependencies = Some(stmt_info.dependent_materializations(self.store));
 
-        let exec_stmt_node_id = if stmt.filter_or_default().is_false() {
+        let exec_stmt_node_id = if stmt.is_const() {
             debug_assert!(stmt_info.deps.is_empty());
+
+            let stmt::Value::List(rows) = stmt.eval_const().unwrap() else {
+                todo!()
+            };
+
             // Don't bother querying and just return false
-            self.insert_const(vec![], self.engine.infer_record_list_ty(&stmt, &columns))
+            self.insert_const(rows, self.engine.infer_record_list_ty(&stmt, &columns))
 
         // If the statement is an update statement without any assignments, then
         // it can be substituted with a constant.

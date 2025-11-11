@@ -4,12 +4,13 @@ mod expr_any;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_concat_str;
+mod expr_exists;
 mod expr_in_list;
 mod expr_is_null;
 mod expr_list;
 mod expr_map;
 mod expr_record;
-
+mod stmt_query;
 mod value;
 
 // Simplifications
@@ -58,6 +59,7 @@ impl VisitMut for Simplify<'_> {
             ),
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
             Expr::ConcatStr(expr) => self.simplify_expr_concat_str(expr),
+            Expr::Exists(expr_exists) => self.simplify_expr_exists(expr_exists),
             Expr::InList(expr) => self.simplify_expr_in_list(expr),
             Expr::InSubquery(expr_in_subquery) => {
                 self.lift_in_subquery(&expr_in_subquery.expr, &expr_in_subquery.query)
@@ -144,6 +146,8 @@ impl VisitMut for Simplify<'_> {
         self.simplify_via_association_for_query(stmt);
 
         stmt::visit_mut::visit_stmt_query_mut(self, stmt);
+
+        self.simplify_stmt_query_when_empty(stmt);
     }
 
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
