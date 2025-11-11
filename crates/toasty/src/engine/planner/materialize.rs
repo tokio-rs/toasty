@@ -557,7 +557,7 @@ impl MaterializePlanner<'_> {
                 // If using the primary key to find rows, try to convert the
                 // filter expression to a set of primary-key keys.
                 let cx = self.engine.expr_cx_for(&stmt);
-                pk_keys = self.engine.try_build_key_filter2(
+                pk_keys = self.engine.try_build_key_filter(
                     cx,
                     index_plan.index,
                     &index_plan.index_filter,
