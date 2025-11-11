@@ -1,4 +1,4 @@
-use crate::engine::plan::{Action, Output2, VarId};
+use crate::engine::plan::{Action, Output, VarId};
 use toasty_core::{schema::db::TableId, stmt};
 
 #[derive(Debug, Clone)]
@@ -7,7 +7,7 @@ pub(crate) struct UpdateByKey {
     pub input: VarId,
 
     /// Where to store the result of the update
-    pub output: Output2,
+    pub output: Output,
 
     /// Which table to update
     pub table: TableId,

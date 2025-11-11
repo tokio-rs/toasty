@@ -1,7 +1,7 @@
 use crate::engine::plan::VarId;
 
 #[derive(Debug, Clone)]
-pub(crate) struct Output2 {
+pub(crate) struct Output {
     /// Where to store the output
     pub var: VarId,
 

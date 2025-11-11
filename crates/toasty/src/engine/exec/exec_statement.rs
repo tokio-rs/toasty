@@ -5,9 +5,9 @@ use toasty_core::{
 };
 
 impl Exec<'_> {
-    pub(super) async fn action_exec_statement2(
+    pub(super) async fn action_exec_statement(
         &mut self,
-        action: &plan::ExecStatement2,
+        action: &plan::ExecStatement,
     ) -> Result<()> {
         let mut stmt = action.stmt.clone();
 

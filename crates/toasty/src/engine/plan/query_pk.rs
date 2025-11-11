@@ -1,16 +1,16 @@
-use crate::engine::plan::{Action, Output2, VarId};
+use crate::engine::plan::{Action, Output, VarId};
 use toasty_core::{
     schema::db::{ColumnId, TableId},
     stmt,
 };
 
 #[derive(Debug)]
-pub(crate) struct QueryPk2 {
+pub(crate) struct QueryPk {
     /// Where to get the input
     pub input: Option<VarId>,
 
     /// Where to store the result
-    pub output: Output2,
+    pub output: Output,
 
     /// Table to query
     pub table: TableId,
@@ -25,8 +25,8 @@ pub(crate) struct QueryPk2 {
     pub row_filter: Option<stmt::Expr>,
 }
 
-impl From<QueryPk2> for Action {
-    fn from(value: QueryPk2) -> Self {
-        Action::QueryPk2(value)
+impl From<QueryPk> for Action {
+    fn from(value: QueryPk) -> Self {
+        Action::QueryPk(value)
     }
 }

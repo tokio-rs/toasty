@@ -1,18 +1,18 @@
-use crate::engine::plan::{Action, Output2};
+use crate::engine::plan::{Action, Output};
 use toasty_core::stmt;
 
 #[derive(Debug)]
-pub(crate) struct SetVar2 {
+pub(crate) struct SetVar {
     pub rows: Vec<stmt::Value>,
-    pub output: Output2,
+    pub output: Output,
 }
 
 /// Identifies a pipeline variable slot
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) struct VarId(pub(crate) usize);
 
-impl From<SetVar2> for Action {
-    fn from(value: SetVar2) -> Self {
-        Self::SetVar2(value)
+impl From<SetVar> for Action {
+    fn from(value: SetVar) -> Self {
+        Self::SetVar(value)
     }
 }

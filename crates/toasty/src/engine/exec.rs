@@ -1,5 +1,5 @@
 mod delete_by_key;
-mod exec_statement2;
+mod exec_statement;
 mod filter;
 mod find_pk_by_index;
 mod get_by_key;
@@ -57,15 +57,15 @@ impl Exec<'_> {
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,
-            Action::ExecStatement2(action) => self.action_exec_statement2(action).await,
+            Action::ExecStatement(action) => self.action_exec_statement(action).await,
             Action::Filter(action) => self.action_filter(action).await,
-            Action::FindPkByIndex2(action) => self.action_find_pk_by_index2(action).await,
-            Action::GetByKey2(action) => self.action_get_by_key2(action).await,
+            Action::FindPkByIndex(action) => self.action_find_pk_by_index(action).await,
+            Action::GetByKey(action) => self.action_get_by_key(action).await,
             Action::NestedMerge(action) => self.action_nested_merge(action).await,
-            Action::QueryPk2(action) => self.action_query_pk2(action).await,
-            Action::ReadModifyWrite2(action) => self.action_read_modify_write2(action).await,
+            Action::QueryPk(action) => self.action_query_pk(action).await,
+            Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
             Action::Project(action) => self.action_project(action).await,
-            Action::SetVar2(action) => self.action_set_var2(action),
+            Action::SetVar(action) => self.action_set_var(action),
             Action::UpdateByKey(action) => self.action_update_by_key(action).await,
         }
     }
