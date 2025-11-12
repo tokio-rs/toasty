@@ -76,7 +76,7 @@ impl LowerStatement<'_, '_> {
                 if expr.is_value_null() {
                     if !field.nullable && field.ty.is_has_one() {
                         panic!(
-                            "Insert missing non-nullable field; model={}; field={}; ty={:#?}; expr={:#?}",
+                            "Insert missing non-nullable field; model={}; name={:#?}; ty={:#?}; expr={:#?}",
                             model.name.upper_camel_case(),
                             field.name,
                             field.ty,

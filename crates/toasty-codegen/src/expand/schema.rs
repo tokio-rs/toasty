@@ -50,9 +50,22 @@ impl Expand<'_> {
 
         let fields = self.model.fields.iter().enumerate().map(|(index, field)| {
             let index_tokenized = util::int(index);
-            let name = field.name.ident.to_string();
             let field_ty;
             let nullable;
+
+            let name = {
+                let app_name = field.name.ident.to_string();
+                let storage_name = match field.attrs.column.as_ref().and_then(|column| column.name.as_ref()) {
+                    Some(name) => quote! { Some(#name) },
+                    None => quote! { None },
+                };
+                quote! {
+                    FieldName {
+                        app_name: #app_name,
+                        storage_name: #storage_name,
+                    }
+                }
+            };
 
             match &field.ty {
                 FieldTy::Primitive(ty) => {
@@ -143,7 +156,7 @@ impl Expand<'_> {
                         model: #model_ident::id(),
                         index: #index_tokenized,
                     },
-                    name: #name.to_string(),
+                    name: #name,
                     ty: #field_ty,
                     nullable: #nullable,
                     primary_key: #primary_key,

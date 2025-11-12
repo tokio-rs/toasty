@@ -10,7 +10,7 @@ mod constraint;
 pub use constraint::{Constraint, ConstraintLength};
 
 mod field;
-pub use field::{Field, FieldId, FieldPrimitive, FieldTy};
+pub use field::{Field, FieldId, FieldName, FieldPrimitive, FieldTy};
 
 mod fk;
 pub use fk::{ForeignKey, ForeignKeyField};

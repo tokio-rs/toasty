@@ -43,11 +43,13 @@ impl Model {
     }
 
     pub fn field_by_name(&self, name: &str) -> Option<&Field> {
-        self.fields.iter().find(|field| field.name == name)
+        self.fields.iter().find(|field| field.name.app_name == name)
     }
 
     pub fn field_by_name_mut(&mut self, name: &str) -> Option<&mut Field> {
-        self.fields.iter_mut().find(|field| field.name == name)
+        self.fields
+            .iter_mut()
+            .find(|field| field.name.app_name == name)
     }
 
     pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {
