@@ -385,10 +385,8 @@ impl<'a> Planner<'a> {
     fn build(self) -> Result<Plan> {
         Ok(Plan {
             vars: exec::VarStore::new(self.var_table.into_vec()),
-            pipeline: plan::Pipeline {
-                actions: self.actions,
-                returning: self.returning,
-            },
+            actions: self.actions,
+            returning: self.returning,
         })
     }
 }

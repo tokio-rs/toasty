@@ -29,23 +29,18 @@ struct Exec<'a> {
 }
 
 impl Engine {
-    pub(crate) async fn exec_plan(
-        &self,
-        pipeline: &plan::Pipeline,
-        vars: VarStore,
-    ) -> Result<ValueStream> {
-        Exec { engine: self, vars }.exec_pipeline(pipeline).await
-    }
-}
+    pub(crate) async fn exec_plan(&self, plan: plan::Plan) -> Result<ValueStream> {
+        let mut exec = Exec {
+            engine: self,
+            vars: plan.vars,
+        };
 
-impl Exec<'_> {
-    async fn exec_pipeline(&mut self, pipeline: &plan::Pipeline) -> Result<ValueStream> {
-        for step in &pipeline.actions {
-            self.exec_step(step).await?;
+        for step in &plan.actions {
+            exec.exec_step(step).await?;
         }
 
-        Ok(if let Some(returning) = pipeline.returning {
-            match self.vars.load(returning).await? {
+        Ok(if let Some(returning) = plan.returning {
+            match exec.vars.load(returning).await? {
                 Rows::Count(_) => ValueStream::default(),
                 Rows::Values(value_stream) => value_stream,
             }
@@ -53,7 +48,9 @@ impl Exec<'_> {
             ValueStream::default()
         })
     }
+}
 
+impl Exec<'_> {
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,
@@ -70,7 +67,7 @@ impl Exec<'_> {
         }
     }
 
-    async fn collect_input2(&mut self, input: &[VarId]) -> Result<Vec<stmt::Value>> {
+    async fn collect_input(&mut self, input: &[VarId]) -> Result<Vec<stmt::Value>> {
         let mut ret = Vec::new();
 
         for var_id in input {

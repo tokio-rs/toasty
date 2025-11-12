@@ -48,7 +48,7 @@ impl Engine {
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
-        self.exec_plan(&plan.pipeline, plan.vars).await
+        self.exec_plan(plan).await
     }
 
     /// Returns a new ExprContext

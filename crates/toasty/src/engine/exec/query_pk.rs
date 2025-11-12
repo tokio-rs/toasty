@@ -9,7 +9,7 @@ impl Exec<'_> {
         let mut pk_filter = action.pk_filter.clone();
 
         if let Some(input) = &action.input {
-            let input = self.collect_input2(&[*input]).await?;
+            let input = self.collect_input(&[*input]).await?;
             pk_filter.substitute(&input);
             simplify::simplify_expr(self.engine.expr_cx(), &mut pk_filter);
         }

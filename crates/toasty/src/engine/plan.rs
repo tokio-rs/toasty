@@ -22,9 +22,6 @@ pub(crate) use nested_merge::{MergeQualification, NestedChild, NestedLevel, Nest
 mod output;
 pub(crate) use output::Output;
 
-mod pipeline;
-pub(crate) use pipeline::Pipeline;
-
 mod project;
 pub(crate) use project::Project;
 
@@ -47,6 +44,11 @@ pub(crate) struct Plan {
     /// Arguments seeding the plan
     pub(crate) vars: exec::VarStore,
 
-    /// Pipeline of steps
-    pub(crate) pipeline: Pipeline,
+    /// Steps in the pipeline
+    pub(crate) actions: Vec<Action>,
+
+    /// Which record stream slot does the pipeline return
+    ///
+    /// When `None`, nothing is returned
+    pub(crate) returning: Option<VarId>,
 }

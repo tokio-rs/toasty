@@ -16,7 +16,7 @@ impl Exec<'_> {
         // Collect input values and substitute into the statement
         if !action.input.is_empty() {
             assert!(action.input.len() == 1);
-            let input = self.collect_input2(&action.input).await?;
+            let input = self.collect_input(&action.input).await?;
 
             filter.substitute(&input);
 
