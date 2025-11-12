@@ -1,7 +1,10 @@
+use quote::quote;
+use syn::parenthesized;
+
 #[derive(Debug)]
 pub(crate) struct Column {
-    name: Option<syn::Ident>,
-    ty: Option<syn::LitStr>,
+    pub(crate) name: Option<syn::LitStr>,
+    pub(crate) ty: Option<ColumnType>,
 }
 
 impl Column {
@@ -32,14 +35,14 @@ impl syn::parse::Parse for Column {
                 if result.name.is_some() {
                     return Err(syn::Error::new(input.span(), "duplicate column name"));
                 }
-                result.name = input.parse()?;
+                result.name = Some(input.parse()?);
             } else if lookahead.peek(syn::Token![type]) {
-                if result.name.is_some() {
+                if result.ty.is_some() {
                     return Err(syn::Error::new(input.span(), "duplicate column type"));
                 }
                 let _type_token: syn::Token![type] = input.parse()?;
                 let _eq_token: syn::Token![=] = input.parse()?;
-                result.ty = input.parse()?;
+                result.ty = Some(input.parse()?);
             } else {
                 return Err(lookahead.error());
             }
@@ -51,5 +54,42 @@ impl syn::parse::Parse for Column {
         }
 
         Ok(result)
+    }
+}
+
+mod kw {
+    syn::custom_keyword!(varchar);
+}
+
+#[derive(Debug)]
+pub enum ColumnType {
+    VarChar(u64),
+    Custom(syn::LitStr),
+}
+
+impl syn::parse::Parse for ColumnType {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(syn::LitStr) {
+            Ok(Self::Custom(input.parse()?))
+        } else if lookahead.peek(kw::varchar) {
+            let _kw: kw::varchar = input.parse()?;
+            let content;
+            parenthesized!(content in input);
+            let lit: syn::LitInt = content.parse()?;
+            Ok(Self::VarChar(lit.base10_parse()?))
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
+
+impl quote::ToTokens for ColumnType {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            Self::VarChar(size) => quote! { db::Type::VarChar(#size) },
+            Self::Custom(custom) => quote! { db::Type::Custom(#custom) },
+        }
+        .to_tokens(tokens);
     }
 }

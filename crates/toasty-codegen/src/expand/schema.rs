@@ -57,11 +57,10 @@ impl Expand<'_> {
             match &field.ty {
                 FieldTy::Primitive(ty) => {
                     let storage_ty = match &field.attrs.column {
-                        Some(Column::VarChar(size)) => {
-                            let size = util::int(*size);
-                            quote!(Some(db::Type::VarChar(#size)))
+                        Some(Column { ty: Some(ty), ..}) => {
+                            quote!(Some(#ty))
                         }
-                        None => quote!(None),
+                        _ => quote!(None),
                     };
 
                     nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
