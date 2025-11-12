@@ -1,19 +1,43 @@
 mod r#const;
 pub(crate) use r#const::Const;
 
+mod delete_by_key;
+pub(crate) use delete_by_key::DeleteByKey;
+
 mod exec_statement;
 pub(crate) use exec_statement::ExecStatement;
+
+mod filter;
+pub(crate) use filter::Filter;
+
+mod find_pk_by_index;
+pub(crate) use find_pk_by_index::FindPkByIndex;
+
+mod get_by_key;
+pub(crate) use get_by_key::GetByKey;
+
+mod nested_merge;
+pub(crate) use nested_merge::NestedMerge;
+
+mod project;
+pub(crate) use project::Project;
+
+mod query_pk;
+pub(crate) use query_pk::QueryPk;
+
+mod read_modify_write;
+pub(crate) use read_modify_write::ReadModifyWrite;
+
+mod update_by_key;
+pub(crate) use update_by_key::UpdateByKey;
 
 use std::{cell::Cell, ops};
 
 use index_vec::IndexVec;
 use indexmap::{indexset, IndexSet};
-use toasty_core::{
-    schema::db::{IndexId, TableId},
-    stmt,
-};
+use toasty_core::stmt;
 
-use crate::engine::{eval, exec};
+use crate::engine::exec;
 
 #[derive(Debug)]
 pub(crate) struct Node {
@@ -67,126 +91,6 @@ pub(crate) enum Operation {
     QueryPk(QueryPk),
 
     UpdateByKey(UpdateByKey),
-}
-
-#[derive(Debug)]
-pub(crate) struct DeleteByKey {
-    /// Keys are always specified as an input, whether const or a set of
-    /// dependent materializations and transformations.
-    pub(crate) input: NodeId,
-
-    /// The table to get keys from
-    pub(crate) table: TableId,
-
-    pub(crate) filter: Option<stmt::Expr>,
-
-    /// Return type
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct Filter {
-    /// Input needed to reify the statement
-    pub(crate) input: NodeId,
-
-    /// Filter
-    pub(crate) filter: eval::Func,
-
-    /// Row type
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct FindPkByIndex {
-    pub(crate) inputs: IndexSet<NodeId>,
-    pub(crate) table: TableId,
-    pub(crate) index: IndexId,
-    pub(crate) filter: stmt::Expr,
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct GetByKey {
-    /// Keys are always specified as an input, whether const or a set of
-    /// dependent materializations and transformations.
-    pub(crate) input: NodeId,
-
-    /// The table to get keys from
-    pub(crate) table: TableId,
-
-    /// Columns to get
-    pub(crate) columns: IndexSet<stmt::ExprReference>,
-
-    /// Return type
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct NestedMerge {
-    /// Inputs needed to reify the statement
-    pub(crate) inputs: IndexSet<NodeId>,
-
-    /// The root nested merge level
-    pub(crate) root: exec::NestedLevel,
-}
-
-#[derive(Debug)]
-pub(crate) struct Project {
-    /// Input required to perform the projection
-    pub(crate) input: NodeId,
-
-    /// Projection expression
-    pub(crate) projection: eval::Func,
-
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct ReadModifyWrite {
-    /// Inputs needed to reify the statement
-    pub(crate) inputs: IndexSet<NodeId>,
-
-    /// The read statement
-    pub(crate) read: stmt::Query,
-
-    /// The write statement
-    pub(crate) write: stmt::Statement,
-
-    /// Node return type
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct QueryPk {
-    pub(crate) input: Option<NodeId>,
-
-    pub(crate) table: TableId,
-
-    /// Columns to get
-    pub(crate) columns: IndexSet<stmt::ExprReference>,
-
-    /// How to filter the index
-    pub(crate) pk_filter: stmt::Expr,
-
-    /// Additional filter to pass to the database
-    pub(crate) row_filter: Option<stmt::Expr>,
-
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct UpdateByKey {
-    pub(crate) input: NodeId,
-
-    pub(crate) table: TableId,
-
-    pub(crate) assignments: stmt::Assignments,
-
-    pub(crate) filter: Option<stmt::Expr>,
-
-    pub(crate) condition: Option<stmt::Expr>,
-
-    pub(crate) ty: stmt::Type,
 }
 
 #[derive(Debug)]
@@ -280,54 +184,6 @@ impl ops::Index<&NodeId> for MaterializeGraph {
 impl ops::IndexMut<&NodeId> for MaterializeGraph {
     fn index_mut(&mut self, index: &NodeId) -> &mut Self::Output {
         self.store.index_mut(*index)
-    }
-}
-
-impl From<DeleteByKey> for Node {
-    fn from(value: DeleteByKey) -> Self {
-        Operation::DeleteByKey(value).into()
-    }
-}
-
-impl From<Filter> for Node {
-    fn from(value: Filter) -> Self {
-        Operation::Filter(value).into()
-    }
-}
-
-impl From<FindPkByIndex> for Node {
-    fn from(value: FindPkByIndex) -> Self {
-        Operation::FindPkByIndex(value).into()
-    }
-}
-
-impl From<GetByKey> for Node {
-    fn from(value: GetByKey) -> Self {
-        Operation::GetByKey(value).into()
-    }
-}
-
-impl From<NestedMerge> for Node {
-    fn from(value: NestedMerge) -> Self {
-        Operation::NestedMerge(value).into()
-    }
-}
-
-impl From<Project> for Node {
-    fn from(value: Project) -> Self {
-        Operation::Project(value).into()
-    }
-}
-
-impl From<QueryPk> for Node {
-    fn from(value: QueryPk) -> Self {
-        Operation::QueryPk(value).into()
-    }
-}
-
-impl From<UpdateByKey> for Node {
-    fn from(value: UpdateByKey) -> Self {
-        Operation::UpdateByKey(value).into()
     }
 }
 
