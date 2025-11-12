@@ -116,6 +116,12 @@ impl Statement {
         }
     }
 
+    pub fn filter_expr_unwrap(&self) -> &Expr {
+        self.filter()
+            .and_then(|f| f.expr.as_ref())
+            .expect("expected Statement with expression filter")
+    }
+
     pub fn filter_expr_mut(&mut self) -> Option<&mut Expr> {
         self.filter_mut().and_then(|filter| filter.expr.as_mut())
     }

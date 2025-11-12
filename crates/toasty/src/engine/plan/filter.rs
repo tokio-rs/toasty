@@ -1,6 +1,6 @@
 use crate::engine::{
     eval,
-    plan::{Action, Output2, VarId},
+    plan::{Action, Output, VarId},
 };
 
 #[derive(Debug)]
@@ -9,7 +9,7 @@ pub(crate) struct Filter {
     pub(crate) input: VarId,
 
     /// Where to store the output
-    pub(crate) output: Output2,
+    pub(crate) output: Output,
 
     /// How to project it before storing
     pub(crate) filter: eval::Func,

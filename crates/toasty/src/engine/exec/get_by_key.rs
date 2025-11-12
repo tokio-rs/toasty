@@ -3,7 +3,7 @@ use crate::driver::Rows;
 use toasty_core::{driver::operation, stmt::ValueStream};
 
 impl Exec<'_> {
-    pub(super) async fn action_get_by_key2(&mut self, action: &plan::GetByKey2) -> Result<()> {
+    pub(super) async fn action_get_by_key(&mut self, action: &plan::GetByKey) -> Result<()> {
         let keys = self
             .vars
             .load(action.input)

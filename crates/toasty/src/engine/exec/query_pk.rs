@@ -5,7 +5,7 @@ use crate::{
 use toasty_core::driver::operation;
 
 impl Exec<'_> {
-    pub(super) async fn action_query_pk2(&mut self, action: &plan::QueryPk2) -> Result<()> {
+    pub(super) async fn action_query_pk(&mut self, action: &plan::QueryPk) -> Result<()> {
         let mut pk_filter = action.pk_filter.clone();
 
         if let Some(input) = &action.input {

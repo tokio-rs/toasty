@@ -1,9 +1,9 @@
 use toasty_core::stmt;
 
-use crate::engine::plan::{Action, Output2, VarId};
+use crate::engine::plan::{Action, Output, VarId};
 
 #[derive(Debug)]
-pub(crate) struct ExecStatement2 {
+pub(crate) struct ExecStatement {
     /// Where to get arguments for this action.
     pub input: Vec<VarId>,
 
@@ -22,11 +22,11 @@ pub(crate) struct ExecStatementOutput {
     /// Databases always return rows as a vec of values. This specifies the type
     /// of each value.
     pub ty: Option<Vec<stmt::Type>>,
-    pub output: Output2,
+    pub output: Output,
 }
 
-impl From<ExecStatement2> for Action {
-    fn from(value: ExecStatement2) -> Self {
-        Self::ExecStatement2(value)
+impl From<ExecStatement> for Action {
+    fn from(value: ExecStatement) -> Self {
+        Self::ExecStatement(value)
     }
 }

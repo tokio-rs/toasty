@@ -11,9 +11,9 @@ use toasty_core::{
 };
 
 impl Exec<'_> {
-    pub(super) async fn action_read_modify_write2(
+    pub(super) async fn action_read_modify_write(
         &mut self,
-        action: &plan::ReadModifyWrite2,
+        action: &plan::ReadModifyWrite,
     ) -> Result<()> {
         assert!(action.input.is_empty(), "TODO");
 

@@ -4,7 +4,7 @@ use plan::Plan;
 mod eval;
 mod exec;
 mod index;
-mod kv2;
+mod kv;
 mod planner;
 mod simplify;
 use simplify::Simplify;

@@ -1,6 +1,6 @@
 use crate::engine::{
     eval,
-    plan::{Action, Output2, VarId},
+    plan::{Action, Output, VarId},
 };
 
 /// Nested merge operation - combines parent and child materializations
@@ -21,7 +21,7 @@ pub(crate) struct NestedMerge {
     pub(crate) inputs: Vec<VarId>,
 
     /// Output variable, where to store the merged values
-    pub(crate) output: Output2,
+    pub(crate) output: Output,
 
     /// The root level
     pub(crate) root: NestedLevel,

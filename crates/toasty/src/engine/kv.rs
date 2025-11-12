@@ -34,7 +34,7 @@ impl Engine {
     ///
     /// Returns `Some(eval::Func)` if the filter can be converted to key lookups, `None` if
     /// the query requires a full scan with filtering.
-    pub(crate) fn try_build_key_filter2(
+    pub(crate) fn try_build_key_filter(
         &self,
         cx: stmt::ExprContext<'_>,
         index: &Index,

@@ -529,7 +529,7 @@ impl MaterializePlanner<'_> {
         } else {
             // Without SQL capability, we have to plan the materialization of
             // the statement based on available indices.
-            let mut index_plan = self.engine.plan_index_path2(&stmt);
+            let mut index_plan = self.engine.plan_index_path(&stmt);
             let table_id = self.engine.resolve_table_for(&stmt).id;
 
             // If the query can be reduced to fetching rows using a set of
@@ -557,7 +557,7 @@ impl MaterializePlanner<'_> {
                 // If using the primary key to find rows, try to convert the
                 // filter expression to a set of primary-key keys.
                 let cx = self.engine.expr_cx_for(&stmt);
-                pk_keys = self.engine.try_build_key_filter2(
+                pk_keys = self.engine.try_build_key_filter(
                     cx,
                     index_plan.index,
                     &index_plan.index_filter,

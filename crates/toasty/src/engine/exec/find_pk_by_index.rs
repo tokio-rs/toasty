@@ -7,9 +7,9 @@ use super::{plan, Exec, Result};
 use crate::engine::simplify;
 
 impl Exec<'_> {
-    pub(super) async fn action_find_pk_by_index2(
+    pub(super) async fn action_find_pk_by_index(
         &mut self,
-        action: &plan::FindPkByIndex2,
+        action: &plan::FindPkByIndex,
     ) -> Result<()> {
         let mut filter = action.filter.clone();
 

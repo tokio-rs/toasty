@@ -1,4 +1,4 @@
-use crate::engine::plan::{Action, Output2, VarId};
+use crate::engine::plan::{Action, Output, VarId};
 use toasty_core::{schema::db::TableId, stmt};
 
 /// Input is the key to delete
@@ -8,7 +8,7 @@ pub(crate) struct DeleteByKey {
     pub input: VarId,
 
     /// Where to store the output (impacted row count)
-    pub output: Output2,
+    pub output: Output,
 
     /// Which model to get
     pub table: TableId,

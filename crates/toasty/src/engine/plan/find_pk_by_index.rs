@@ -1,4 +1,4 @@
-use crate::engine::plan::{Action, Output2, VarId};
+use crate::engine::plan::{Action, Output, VarId};
 use toasty_core::{
     schema::db::{IndexId, TableId},
     stmt,
@@ -6,12 +6,12 @@ use toasty_core::{
 
 /// Schema: `self` references [index-fields, input-fields] flattened
 #[derive(Debug)]
-pub(crate) struct FindPkByIndex2 {
+pub(crate) struct FindPkByIndex {
     /// How to access input from the variable table.
     pub input: Vec<VarId>,
 
     /// Where to store the output
-    pub output: Output2,
+    pub output: Output,
 
     /// Table to query
     pub table: TableId,
@@ -23,8 +23,8 @@ pub(crate) struct FindPkByIndex2 {
     pub filter: stmt::Expr,
 }
 
-impl From<FindPkByIndex2> for Action {
-    fn from(src: FindPkByIndex2) -> Self {
-        Self::FindPkByIndex2(src)
+impl From<FindPkByIndex> for Action {
+    fn from(src: FindPkByIndex) -> Self {
+        Self::FindPkByIndex(src)
     }
 }

@@ -104,8 +104,8 @@ impl<'a> Planner<'a> {
                     node.var.set(Some(var));
 
                     self.actions.push(
-                        plan::SetVar2 {
-                            output: plan::Output2 { var, num_uses },
+                        plan::SetVar {
+                            output: plan::Output { var, num_uses },
                             rows: materialize_const.value.clone(),
                         }
                         .into(),
@@ -119,7 +119,7 @@ impl<'a> Planner<'a> {
                     self.actions.push(
                         plan::DeleteByKey {
                             input,
-                            output: plan::Output2 {
+                            output: plan::Output {
                                 var: output,
                                 num_uses,
                             },
@@ -164,11 +164,11 @@ impl<'a> Planner<'a> {
                     };
 
                     self.actions.push(
-                        plan::ExecStatement2 {
+                        plan::ExecStatement {
                             input: input_vars,
                             output: plan::ExecStatementOutput {
                                 ty: output_ty,
-                                output: plan::Output2 { var, num_uses },
+                                output: plan::Output { var, num_uses },
                             },
                             stmt: m.stmt.clone(),
                             conditional_update_with_no_returning: m
@@ -187,7 +187,7 @@ impl<'a> Planner<'a> {
                     self.actions.push(
                         plan::Filter {
                             input,
-                            output: plan::Output2 { var, num_uses },
+                            output: plan::Output { var, num_uses },
                             filter: materialize_filter.filter.clone(),
                         }
                         .into(),
@@ -204,9 +204,9 @@ impl<'a> Planner<'a> {
                     node.var.set(Some(output));
 
                     self.actions.push(
-                        plan::FindPkByIndex2 {
+                        plan::FindPkByIndex {
                             input,
-                            output: plan::Output2 {
+                            output: plan::Output {
                                 var: output,
                                 num_uses,
                             },
@@ -241,9 +241,9 @@ impl<'a> Planner<'a> {
                         .collect();
 
                     self.actions.push(
-                        plan::GetByKey2 {
+                        plan::GetByKey {
                             input,
-                            output: plan::Output2 {
+                            output: plan::Output {
                                 var: output,
                                 num_uses,
                             },
@@ -269,7 +269,7 @@ impl<'a> Planner<'a> {
                     self.actions.push(
                         plan::NestedMerge {
                             inputs: input_vars,
-                            output: plan::Output2 {
+                            output: plan::Output {
                                 var: output,
                                 num_uses,
                             },
@@ -289,7 +289,7 @@ impl<'a> Planner<'a> {
                     self.actions.push(
                         plan::Project {
                             input: input_var,
-                            output: plan::Output2 { var, num_uses },
+                            output: plan::Output { var, num_uses },
                             projection: materialize_project.projection.clone(),
                         }
                         .into(),
@@ -308,9 +308,9 @@ impl<'a> Planner<'a> {
                         .register_var(stmt::Type::list(stmt::Type::Unit));
 
                     self.actions.push(
-                        plan::ReadModifyWrite2 {
+                        plan::ReadModifyWrite {
                             input,
-                            output: Some(plan::Output2 { var, num_uses }),
+                            output: Some(plan::Output { var, num_uses }),
                             read: m.read.clone(),
                             write: m.write.clone(),
                         }
@@ -340,9 +340,9 @@ impl<'a> Planner<'a> {
                         .collect();
 
                     self.actions.push(
-                        plan::QueryPk2 {
+                        plan::QueryPk {
                             input,
-                            output: plan::Output2 {
+                            output: plan::Output {
                                 var: output,
                                 num_uses,
                             },
@@ -362,7 +362,7 @@ impl<'a> Planner<'a> {
                     self.actions.push(
                         plan::UpdateByKey {
                             input,
-                            output: plan::Output2 {
+                            output: plan::Output {
                                 var: output,
                                 num_uses,
                             },
