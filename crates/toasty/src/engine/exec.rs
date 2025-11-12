@@ -1,27 +1,53 @@
+mod action;
+pub(crate) use action::Action;
+
 mod delete_by_key;
+pub(crate) use delete_by_key::DeleteByKey;
+
 mod exec_statement;
+pub(crate) use exec_statement::{ExecStatement, ExecStatementOutput};
+
 mod filter;
+pub(crate) use filter::Filter;
+
 mod find_pk_by_index;
+pub(crate) use find_pk_by_index::FindPkByIndex;
+
 mod get_by_key;
+pub(crate) use get_by_key::GetByKey;
+
 mod nested_merge;
+pub(crate) use nested_merge::{MergeQualification, NestedChild, NestedLevel, NestedMerge};
+
+mod output;
+pub(crate) use output::Output;
+
+mod plan;
+pub(crate) use plan::ExecPlan;
+
 mod project;
+pub(crate) use project::Project;
+
 mod query_pk;
+pub(crate) use query_pk::QueryPk;
+
 mod rmw;
+pub(crate) use rmw::ReadModifyWrite;
+
 mod set_var;
+pub(crate) use set_var::SetVar;
+
 mod update_by_key;
+pub(crate) use update_by_key::UpdateByKey;
 
-mod var_store;
-pub(crate) use var_store::VarStore;
+mod var;
+pub(crate) use var::{VarId, VarStore};
 
-use crate::{
-    engine::{
-        plan::{self, Action, VarId},
-        Engine,
-    },
-    Result,
+use crate::{engine::Engine, Result};
+use toasty_core::{
+    driver::Rows,
+    stmt::{self, ValueStream},
 };
-use toasty_core::stmt::ValueStream;
-use toasty_core::{driver::Rows, stmt};
 
 struct Exec<'a> {
     engine: &'a Engine,
@@ -29,7 +55,7 @@ struct Exec<'a> {
 }
 
 impl Engine {
-    pub(crate) async fn exec_plan(&self, plan: plan::Plan) -> Result<ValueStream> {
+    pub(crate) async fn exec_plan(&self, plan: ExecPlan) -> Result<ValueStream> {
         let mut exec = Exec {
             engine: self,
             vars: plan.vars,

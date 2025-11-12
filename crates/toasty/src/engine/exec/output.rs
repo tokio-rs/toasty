@@ -1,4 +1,4 @@
-use crate::engine::plan::VarId;
+use crate::engine::exec::VarId;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Output {

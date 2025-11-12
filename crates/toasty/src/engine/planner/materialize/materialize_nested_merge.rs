@@ -3,7 +3,7 @@ use toasty_core::stmt::{self, visit_mut};
 
 use crate::engine::{
     eval,
-    plan::{self, NestedLevel},
+    exec::{MergeQualification, NestedChild, NestedLevel},
     planner::{materialize::MaterializeNestedMerge, Arg, NodeId, StatementInfoStore, StmtId},
     Engine,
 };
@@ -61,7 +61,7 @@ impl NestedMergePlanner<'_> {
         }
     }
 
-    fn plan_nested_child(&mut self, stmt_id: StmtId, depth: usize) -> plan::NestedChild {
+    fn plan_nested_child(&mut self, stmt_id: StmtId, depth: usize) -> NestedChild {
         self.stack.push(stmt_id);
 
         let level = self.plan_nested_level(stmt_id, depth);
@@ -121,9 +121,9 @@ impl NestedMergePlanner<'_> {
         let filter_arg_tys = self.build_filter_arg_tys();
         let filter = eval::Func::from_stmt(filter.into_expr(), filter_arg_tys);
 
-        let ret = plan::NestedChild {
+        let ret = NestedChild {
             level,
-            qualification: plan::MergeQualification::Predicate(filter),
+            qualification: MergeQualification::Predicate(filter),
             single: query.single,
         };
 
@@ -184,7 +184,7 @@ impl NestedMergePlanner<'_> {
             .collect()
     }
 
-    fn build_projection_arg_tys(&self, nested_children: &[plan::NestedChild]) -> Vec<stmt::Type> {
+    fn build_projection_arg_tys(&self, nested_children: &[NestedChild]) -> Vec<stmt::Type> {
         let curr = self.stack.last().unwrap();
         let mut ret = vec![self.build_exec_statement_ty_for(*curr)];
 

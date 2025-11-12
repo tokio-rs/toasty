@@ -1,6 +1,3 @@
-mod plan;
-use plan::Plan;
-
 mod eval;
 mod exec;
 mod index;

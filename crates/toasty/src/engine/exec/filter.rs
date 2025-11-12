@@ -1,11 +1,26 @@
 use crate::{
-    engine::{exec::Exec, plan},
+    engine::{
+        eval,
+        exec::{Action, Exec, Output, VarId},
+    },
     Result,
 };
 use toasty_core::driver::Rows;
 
+#[derive(Debug)]
+pub(crate) struct Filter {
+    /// Source of the input
+    pub(crate) input: VarId,
+
+    /// Where to store the output
+    pub(crate) output: Output,
+
+    /// How to project it before storing
+    pub(crate) filter: eval::Func,
+}
+
 impl Exec<'_> {
-    pub(super) async fn action_filter(&mut self, action: &plan::Filter) -> Result<()> {
+    pub(super) async fn action_filter(&mut self, action: &Filter) -> Result<()> {
         // Load the input variable
         let mut input_stream = self.vars.load(action.input).await?.into_values();
 
@@ -28,5 +43,11 @@ impl Exec<'_> {
         );
 
         Ok(())
+    }
+}
+
+impl From<Filter> for Action {
+    fn from(value: Filter) -> Self {
+        Action::Filter(value)
     }
 }

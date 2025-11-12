@@ -1,4 +1,3 @@
-use super::plan;
 use toasty_core::{driver::Rows, stmt};
 
 #[derive(Debug)]
@@ -6,6 +5,10 @@ pub(crate) struct VarStore {
     slots: Vec<Option<Entry>>,
     tys: Vec<stmt::Type>,
 }
+
+/// Identifies a pipeline variable slot
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub(crate) struct VarId(pub(crate) usize);
 
 #[derive(Debug)]
 struct Entry {
@@ -18,7 +21,7 @@ impl VarStore {
         Self { slots: vec![], tys }
     }
 
-    pub(crate) async fn load(&mut self, var: plan::VarId) -> crate::Result<Rows> {
+    pub(crate) async fn load(&mut self, var: VarId) -> crate::Result<Rows> {
         let Some(entry) = &mut self.slots[var.0] else {
             panic!("no stream at slot {}; store={:#?}", var.0, self)
         };
@@ -32,7 +35,7 @@ impl VarStore {
     }
 
     #[track_caller]
-    pub(crate) fn store(&mut self, var: plan::VarId, count: usize, rows: Rows) {
+    pub(crate) fn store(&mut self, var: VarId, count: usize, rows: Rows) {
         while self.slots.len() <= var.0 {
             self.slots.push(None);
         }
