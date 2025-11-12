@@ -102,20 +102,12 @@ impl<'a> Planner<'a> {
             let num_uses = node.num_uses.get();
 
             match &node.op {
-                mir::Operation::Const(materialize_const) => {
-                    let var = self.var_table.register_var(node.ty().clone());
-                    node.var.set(Some(var));
-
-                    self.actions.push(
-                        exec::SetVar {
-                            output: exec::Output { var, num_uses },
-                            rows: materialize_const.value.clone(),
-                        }
-                        .into(),
-                    );
+                mir::Operation::Const(op) => {
+                    let action = op.to_exec(node, &mut self.var_table);
+                    self.actions.push(action.into());
                 }
-                mir::Operation::DeleteByKey(m) => {
-                    let input = self.graph.var_id(m.input);
+                mir::Operation::DeleteByKey(op) => {
+                    let input = self.graph.var_id(op.input);
                     let output = self.var_table.register_var(node.ty().clone());
                     node.var.set(Some(output));
 
@@ -126,62 +118,18 @@ impl<'a> Planner<'a> {
                                 var: output,
                                 num_uses,
                             },
-                            table: m.table,
-                            filter: m.filter.clone(),
+                            table: op.table,
+                            filter: op.filter.clone(),
                         }
                         .into(),
                     );
                 }
-                mir::Operation::ExecStatement(m) => {
-                    debug_assert!(
-                        {
-                            match &m.stmt {
-                                stmt::Statement::Query(query) => !query.single,
-                                _ => true,
-                            }
-                        },
-                        "as of now, no database can execute single queries"
-                    );
-
-                    let ty = node.ty();
-                    let input_vars = m
-                        .inputs
-                        .iter()
-                        .map(|input| self.graph[input].var.get().unwrap())
-                        .collect();
-
-                    let var = self.var_table.register_var(ty.clone());
-                    node.var.set(Some(var));
-
-                    let output_ty = match ty {
-                        stmt::Type::List(ty_rows) => {
-                            let ty_fields = match &**ty_rows {
-                                stmt::Type::Record(ty_fields) => ty_fields.clone(),
-                                _ => todo!("ty={ty:#?}; node={node:#?}"),
-                            };
-
-                            Some(ty_fields)
-                        }
-                        stmt::Type::Unit => None,
-                        _ => todo!("ty={ty:#?}"),
-                    };
-
-                    self.actions.push(
-                        exec::ExecStatement {
-                            input: input_vars,
-                            output: exec::ExecStatementOutput {
-                                ty: output_ty,
-                                output: exec::Output { var, num_uses },
-                            },
-                            stmt: m.stmt.clone(),
-                            conditional_update_with_no_returning: m
-                                .conditional_update_with_no_returning,
-                        }
-                        .into(),
-                    );
+                mir::Operation::ExecStatement(op) => {
+                    let action = op.to_exec(&self.graph, node, &mut self.var_table);
+                    self.actions.push(action.into());
                 }
-                mir::Operation::Filter(materialize_filter) => {
-                    let input = self.graph.var_id(materialize_filter.input);
+                mir::Operation::Filter(op) => {
+                    let input = self.graph.var_id(op.input);
                     let ty = node.ty().clone();
 
                     let var = self.var_table.register_var(ty);
@@ -191,13 +139,13 @@ impl<'a> Planner<'a> {
                         exec::Filter {
                             input,
                             output: exec::Output { var, num_uses },
-                            filter: materialize_filter.filter.clone(),
+                            filter: op.filter.clone(),
                         }
                         .into(),
                     );
                 }
-                mir::Operation::FindPkByIndex(materialize_find_pk_by_index) => {
-                    let input = materialize_find_pk_by_index
+                mir::Operation::FindPkByIndex(op) => {
+                    let input = op
                         .inputs
                         .iter()
                         .map(|node_id| self.graph.var_id(*node_id))
@@ -213,20 +161,20 @@ impl<'a> Planner<'a> {
                                 var: output,
                                 num_uses,
                             },
-                            table: materialize_find_pk_by_index.table,
-                            index: materialize_find_pk_by_index.index,
-                            filter: materialize_find_pk_by_index.filter.clone(),
+                            table: op.table,
+                            index: op.index,
+                            filter: op.filter.clone(),
                         }
                         .into(),
                     );
                 }
-                mir::Operation::GetByKey(materialize_get_by_key) => {
-                    let input = self.graph.var_id(materialize_get_by_key.input);
+                mir::Operation::GetByKey(op) => {
+                    let input = self.graph.var_id(op.input);
 
                     let output = self.var_table.register_var(node.ty().clone());
                     node.var.set(Some(output));
 
-                    let columns = materialize_get_by_key
+                    let columns = op
                         .columns
                         .iter()
                         .map(|expr_reference| {
@@ -237,7 +185,7 @@ impl<'a> Planner<'a> {
                             debug_assert_eq!(expr_column.table, 0);
 
                             ColumnId {
-                                table: materialize_get_by_key.table,
+                                table: op.table,
                                 index: expr_column.column,
                             }
                         })
@@ -250,23 +198,23 @@ impl<'a> Planner<'a> {
                                 var: output,
                                 num_uses,
                             },
-                            table: materialize_get_by_key.table,
+                            table: op.table,
                             columns,
                         }
                         .into(),
                     );
                 }
-                mir::Operation::NestedMerge(materialize_nested_merge) => {
+                mir::Operation::NestedMerge(op) => {
                     let mut input_vars = vec![];
 
-                    for input in &materialize_nested_merge.inputs {
+                    for input in &op.inputs {
                         let var = self.graph[input].var.get().unwrap();
                         input_vars.push(var);
                     }
 
-                    let output = self.var_table.register_var(stmt::Type::list(
-                        materialize_nested_merge.root.projection.ret.clone(),
-                    ));
+                    let output = self
+                        .var_table
+                        .register_var(stmt::Type::list(op.root.projection.ret.clone()));
                     node.var.set(Some(output));
 
                     self.actions.push(
@@ -276,30 +224,30 @@ impl<'a> Planner<'a> {
                                 var: output,
                                 num_uses,
                             },
-                            root: materialize_nested_merge.root.clone(),
+                            root: op.root.clone(),
                         }
                         .into(),
                     );
                 }
-                mir::Operation::Project(materialize_project) => {
-                    let input_var = self.graph[materialize_project.input].var.get().unwrap();
+                mir::Operation::Project(op) => {
+                    let input_var = self.graph[op.input].var.get().unwrap();
 
                     let var = self
                         .var_table
-                        .register_var(stmt::Type::list(materialize_project.projection.ret.clone()));
+                        .register_var(stmt::Type::list(op.projection.ret.clone()));
                     node.var.set(Some(var));
 
                     self.actions.push(
                         exec::Project {
                             input: input_var,
                             output: exec::Output { var, num_uses },
-                            projection: materialize_project.projection.clone(),
+                            projection: op.projection.clone(),
                         }
                         .into(),
                     );
                 }
-                mir::Operation::ReadModifyWrite(m) => {
-                    let input = m
+                mir::Operation::ReadModifyWrite(op) => {
+                    let input = op
                         .inputs
                         .iter()
                         .map(|input| self.graph[input].var.get().unwrap())
@@ -314,18 +262,18 @@ impl<'a> Planner<'a> {
                         exec::ReadModifyWrite {
                             input,
                             output: Some(exec::Output { var, num_uses }),
-                            read: m.read.clone(),
-                            write: m.write.clone(),
+                            read: op.read.clone(),
+                            write: op.write.clone(),
                         }
                         .into(),
                     )
                 }
-                mir::Operation::QueryPk(m) => {
-                    let input = m.input.map(|node_id| self.graph.var_id(node_id));
+                mir::Operation::QueryPk(op) => {
+                    let input = op.input.map(|node_id| self.graph.var_id(node_id));
                     let output = self.var_table.register_var(node.ty().clone());
                     node.var.set(Some(output));
 
-                    let columns = m
+                    let columns = op
                         .columns
                         .iter()
                         .map(|expr_reference| {
@@ -336,7 +284,7 @@ impl<'a> Planner<'a> {
                             debug_assert_eq!(expr_column.table, 0);
 
                             ColumnId {
-                                table: m.table,
+                                table: op.table,
                                 index: expr_column.column,
                             }
                         })
@@ -349,16 +297,16 @@ impl<'a> Planner<'a> {
                                 var: output,
                                 num_uses,
                             },
-                            table: m.table,
+                            table: op.table,
                             columns,
-                            pk_filter: m.pk_filter.clone(),
-                            row_filter: m.row_filter.clone(),
+                            pk_filter: op.pk_filter.clone(),
+                            row_filter: op.row_filter.clone(),
                         }
                         .into(),
                     );
                 }
-                mir::Operation::UpdateByKey(m) => {
-                    let input = self.graph.var_id(m.input);
+                mir::Operation::UpdateByKey(op) => {
+                    let input = self.graph.var_id(op.input);
                     let output = self.var_table.register_var(node.ty().clone());
                     node.var.set(Some(output));
 
@@ -369,11 +317,11 @@ impl<'a> Planner<'a> {
                                 var: output,
                                 num_uses,
                             },
-                            table: m.table,
-                            assignments: m.assignments.clone(),
-                            filter: m.filter.clone(),
-                            condition: m.condition.clone(),
-                            returning: !m.ty.is_unit(),
+                            table: op.table,
+                            assignments: op.assignments.clone(),
+                            filter: op.filter.clone(),
+                            condition: op.condition.clone(),
+                            returning: !op.ty.is_unit(),
                         }
                         .into(),
                     );

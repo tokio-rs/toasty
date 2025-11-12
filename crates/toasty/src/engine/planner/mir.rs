@@ -1,3 +1,9 @@
+mod r#const;
+pub(crate) use r#const::Const;
+
+mod exec_statement;
+pub(crate) use exec_statement::ExecStatement;
+
 use std::{cell::Cell, ops};
 
 use index_vec::IndexVec;
@@ -64,12 +70,6 @@ pub(crate) enum Operation {
 }
 
 #[derive(Debug)]
-pub(crate) struct Const {
-    pub(crate) value: Vec<stmt::Value>,
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
 pub(crate) struct DeleteByKey {
     /// Keys are always specified as an input, whether const or a set of
     /// dependent materializations and transformations.
@@ -82,21 +82,6 @@ pub(crate) struct DeleteByKey {
 
     /// Return type
     pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct ExecStatement {
-    /// Inputs needed to reify the statement
-    pub(crate) inputs: IndexSet<NodeId>,
-
-    /// The database query to execute
-    pub(crate) stmt: stmt::Statement,
-
-    /// Node return type
-    pub(crate) ty: stmt::Type,
-
-    /// When true, the statement is a conditional update with no returning
-    pub(crate) conditional_update_with_no_returning: bool,
 }
 
 #[derive(Debug)]
@@ -298,21 +283,9 @@ impl ops::IndexMut<&NodeId> for MaterializeGraph {
     }
 }
 
-impl From<Const> for Node {
-    fn from(value: Const) -> Self {
-        Operation::Const(value).into()
-    }
-}
-
 impl From<DeleteByKey> for Node {
     fn from(value: DeleteByKey) -> Self {
         Operation::DeleteByKey(value).into()
-    }
-}
-
-impl From<ExecStatement> for Node {
-    fn from(value: ExecStatement) -> Self {
-        Operation::ExecStatement(Box::new(value)).into()
     }
 }
 
