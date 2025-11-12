@@ -18,7 +18,7 @@ struct MaterializePlanner<'a> {
     store: &'a hir::Store,
 
     /// Graph of operations needed to materialize the statement, in-progress
-    graph: &'a mut mir::MaterializeGraph,
+    graph: &'a mut mir::Store,
 }
 
 impl Planner<'_> {

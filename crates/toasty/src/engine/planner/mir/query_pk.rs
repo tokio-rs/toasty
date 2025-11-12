@@ -30,7 +30,7 @@ pub(crate) struct QueryPk {
 impl QueryPk {
     pub(crate) fn to_exec(
         &self,
-        graph: &mir::MaterializeGraph,
+        graph: &mir::Store,
         node: &mir::Node,
         var_table: &mut VarTable,
     ) -> exec::QueryPk {

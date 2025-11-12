@@ -30,7 +30,7 @@ struct Planner<'a> {
 
     /// Graph of materialization steps to execute the original statement being
     /// planned.
-    graph: mir::MaterializeGraph,
+    graph: mir::Store,
 
     /// Table of record stream slots. Used to figure out where to store outputs
     /// of actions.
@@ -48,7 +48,7 @@ impl Engine {
         let mut planner = Planner {
             engine: self,
             store: hir::Store::new(),
-            graph: mir::MaterializeGraph::new(),
+            graph: mir::Store::new(),
             var_table: VarTable::default(),
             actions: vec![],
             returning: None,

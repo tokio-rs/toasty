@@ -94,7 +94,7 @@ pub(crate) enum Operation {
 }
 
 #[derive(Debug)]
-pub(crate) struct MaterializeGraph {
+pub(crate) struct Store {
     /// Nodes in the graph
     pub(crate) store: IndexVec<NodeId, Node>,
 
@@ -106,9 +106,9 @@ index_vec::define_index_type! {
     pub(crate) struct NodeId = u32;
 }
 
-impl MaterializeGraph {
-    pub(super) fn new() -> MaterializeGraph {
-        MaterializeGraph {
+impl Store {
+    pub(super) fn new() -> Store {
+        Store {
             store: IndexVec::new(),
             execution_order: vec![],
         }
@@ -159,7 +159,7 @@ impl Node {
     }
 }
 
-impl ops::Index<NodeId> for MaterializeGraph {
+impl ops::Index<NodeId> for Store {
     type Output = Node;
 
     fn index(&self, index: NodeId) -> &Self::Output {
@@ -167,13 +167,13 @@ impl ops::Index<NodeId> for MaterializeGraph {
     }
 }
 
-impl ops::IndexMut<NodeId> for MaterializeGraph {
+impl ops::IndexMut<NodeId> for Store {
     fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
         self.store.index_mut(index)
     }
 }
 
-impl ops::Index<&NodeId> for MaterializeGraph {
+impl ops::Index<&NodeId> for Store {
     type Output = Node;
 
     fn index(&self, index: &NodeId) -> &Self::Output {
@@ -181,7 +181,7 @@ impl ops::Index<&NodeId> for MaterializeGraph {
     }
 }
 
-impl ops::IndexMut<&NodeId> for MaterializeGraph {
+impl ops::IndexMut<&NodeId> for Store {
     fn index_mut(&mut self, index: &NodeId) -> &mut Self::Output {
         self.store.index_mut(*index)
     }
