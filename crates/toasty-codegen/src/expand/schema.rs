@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::{ColumnType, FieldTy, Name};
+use crate::schema::{Column, FieldTy, Name};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -56,8 +56,8 @@ impl Expand<'_> {
 
             match &field.ty {
                 FieldTy::Primitive(ty) => {
-                    let storage_ty = match &field.attrs.db {
-                        Some(ColumnType::VarChar(size)) => {
+                    let storage_ty = match &field.attrs.column {
+                        Some(Column::VarChar(size)) => {
                             let size = util::int(*size);
                             quote!(Some(db::Type::VarChar(#size)))
                         }

@@ -34,5 +34,5 @@ pub(crate) use name::Name;
 mod pk;
 pub(crate) use pk::PrimaryKey;
 
-mod ty;
-pub(crate) use ty::ColumnType;
+mod column;
+pub(crate) use column::Column;
