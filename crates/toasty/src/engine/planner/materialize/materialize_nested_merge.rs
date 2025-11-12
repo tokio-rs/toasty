@@ -4,28 +4,28 @@ use toasty_core::stmt::{self, visit_mut};
 use crate::engine::{
     eval,
     exec::{MergeQualification, NestedChild, NestedLevel},
-    planner::{materialize::MaterializeNestedMerge, Arg, NodeId, StatementInfoStore, StmtId},
+    planner::{hir, materialize::NestedMerge, NodeId},
     Engine,
 };
 
 #[derive(Debug)]
 struct NestedMergePlanner<'a> {
     engine: &'a Engine,
-    store: &'a StatementInfoStore,
+    store: &'a hir::Store,
     inputs: IndexSet<NodeId>,
     /// Statement stack, used to infer expression types
-    stack: Vec<StmtId>,
+    stack: Vec<hir::StmtId>,
 }
 
 impl super::MaterializePlanner<'_> {
-    pub(super) fn plan_nested_merge(&mut self, stmt_id: StmtId) -> Option<NodeId> {
+    pub(super) fn plan_nested_merge(&mut self, stmt_id: hir::StmtId) -> Option<NodeId> {
         let stmt_state = &self.store[stmt_id];
 
         // Return if there is no nested merge to do
         let need_nested_merge = stmt_state.args.iter().any(|arg| {
             matches!(
                 arg,
-                Arg::Sub {
+                hir::Arg::Sub {
                     returning: true,
                     ..
                 }
@@ -50,18 +50,18 @@ impl super::MaterializePlanner<'_> {
 }
 
 impl NestedMergePlanner<'_> {
-    fn plan_nested_merge(mut self, root: StmtId) -> MaterializeNestedMerge {
+    fn plan_nested_merge(mut self, root: hir::StmtId) -> NestedMerge {
         self.stack.push(root);
         let root = self.plan_nested_level(root, 0);
         self.stack.pop();
 
-        MaterializeNestedMerge {
+        NestedMerge {
             inputs: self.inputs,
             root,
         }
     }
 
-    fn plan_nested_child(&mut self, stmt_id: StmtId, depth: usize) -> NestedChild {
+    fn plan_nested_child(&mut self, stmt_id: hir::StmtId, depth: usize) -> NestedChild {
         self.stack.push(stmt_id);
 
         let level = self.plan_nested_level(stmt_id, depth);
@@ -77,7 +77,7 @@ impl NestedMergePlanner<'_> {
 
         visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
             stmt::Expr::Arg(expr_arg) => {
-                let Arg::Ref {
+                let hir::Arg::Ref {
                     nesting,
                     stmt_id: target_id,
                     batch_load_index,
@@ -132,7 +132,7 @@ impl NestedMergePlanner<'_> {
         ret
     }
 
-    fn plan_nested_level(&mut self, stmt_id: StmtId, depth: usize) -> NestedLevel {
+    fn plan_nested_level(&mut self, stmt_id: hir::StmtId, depth: usize) -> NestedLevel {
         let stmt_state = &self.store[stmt_id];
         let selection = stmt_state.exec_statement_selection.get().unwrap();
 
@@ -150,14 +150,14 @@ impl NestedMergePlanner<'_> {
 
         visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
             stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
-                Arg::Sub { stmt_id, .. } => {
+                hir::Arg::Sub { stmt_id, .. } => {
                     let nested_child = self.plan_nested_child(*stmt_id, depth + 1);
                     nested.push(nested_child);
 
                     // Taking the
                     *expr = stmt::Expr::arg(nested.len());
                 }
-                Arg::Ref { .. } => todo!(),
+                hir::Arg::Ref { .. } => todo!(),
             },
             stmt::Expr::Reference(expr_reference) => {
                 debug_assert_eq!(0, expr_reference.nesting());
@@ -199,7 +199,7 @@ impl NestedMergePlanner<'_> {
         ret
     }
 
-    fn build_exec_statement_ty_for(&self, stmt_id: StmtId) -> stmt::Type {
+    fn build_exec_statement_ty_for(&self, stmt_id: hir::StmtId) -> stmt::Type {
         let stmt_state = &self.store[stmt_id];
         let cx = stmt::ExprContext::new_with_target(
             &*self.engine.schema,

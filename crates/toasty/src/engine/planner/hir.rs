@@ -42,7 +42,7 @@ pub(super) struct StatementInfo {
 
 /// StatementInfo store
 #[derive(Debug)]
-pub(super) struct StatementInfoStore {
+pub(super) struct Store {
     store: IndexVec<StmtId, StatementInfo>,
 }
 
@@ -75,7 +75,7 @@ impl StatementInfo {
     /// computation node that produces the dependency's result.
     pub(super) fn dependent_materializations<'a>(
         &'a self,
-        store: &'a StatementInfoStore,
+        store: &'a Store,
     ) -> impl Iterator<Item = NodeId> + 'a {
         self.deps
             .iter()
@@ -125,9 +125,9 @@ pub(super) enum Arg {
     },
 }
 
-impl StatementInfoStore {
-    pub(super) fn new() -> StatementInfoStore {
-        StatementInfoStore {
+impl Store {
+    pub(super) fn new() -> Store {
+        Store {
             store: IndexVec::new(),
         }
     }
@@ -150,7 +150,7 @@ impl StatementInfoStore {
     }
 }
 
-impl ops::Index<StmtId> for StatementInfoStore {
+impl ops::Index<StmtId> for Store {
     type Output = StatementInfo;
 
     fn index(&self, index: StmtId) -> &Self::Output {
@@ -158,13 +158,13 @@ impl ops::Index<StmtId> for StatementInfoStore {
     }
 }
 
-impl ops::IndexMut<StmtId> for StatementInfoStore {
+impl ops::IndexMut<StmtId> for Store {
     fn index_mut(&mut self, index: StmtId) -> &mut Self::Output {
         self.store.index_mut(index)
     }
 }
 
-impl ops::Index<&StmtId> for StatementInfoStore {
+impl ops::Index<&StmtId> for Store {
     type Output = StatementInfo;
 
     fn index(&self, index: &StmtId) -> &Self::Output {
