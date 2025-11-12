@@ -13,30 +13,17 @@ use toasty_core::{
  */
 
 impl Engine {
-    pub(crate) fn plan_index_path2<'a>(&'a self, stmt: &stmt::Statement) -> IndexPlan<'a> {
+    pub(crate) fn plan_index_path<'a>(&'a self, stmt: &stmt::Statement) -> IndexPlan<'a> {
         let cx = self.expr_cx();
         let cx = cx.scope(stmt);
-        // Get a handle to the expression target so it can be passed into plan_index_path
+        // Get a handle to the expression target so it can be passed into the planner
         let target = cx.target();
         let stmt::ExprTarget::Table(table) = target else {
             todo!("target={target:#?}")
         };
 
         // Get the statement filter
-        let Some(filter) = stmt.filter() else {
-            todo!("stmt={stmt:#?}")
-        };
-
-        self.plan_index_path(cx, table, filter)
-    }
-
-    pub(crate) fn plan_index_path<'a, 'stmt>(
-        &'a self,
-        cx: stmt::ExprContext<'stmt>,
-        table: &'stmt Table,
-        filter: &'stmt stmt::Filter,
-    ) -> IndexPlan<'a> {
-        let filter = filter.expr.as_ref().expect("TODO");
+        let filter = stmt.filter_expr_unwrap();
 
         let mut index_planner = IndexPlanner {
             cx,
