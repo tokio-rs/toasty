@@ -4,7 +4,7 @@ use toasty_core::stmt::{self, visit_mut};
 use crate::engine::{
     eval,
     exec::{MergeQualification, NestedChild, NestedLevel},
-    planner::{hir, materialize::NestedMerge, NodeId},
+    planner::{hir, mir},
     Engine,
 };
 
@@ -12,13 +12,13 @@ use crate::engine::{
 struct NestedMergePlanner<'a> {
     engine: &'a Engine,
     store: &'a hir::Store,
-    inputs: IndexSet<NodeId>,
+    inputs: IndexSet<mir::NodeId>,
     /// Statement stack, used to infer expression types
     stack: Vec<hir::StmtId>,
 }
 
 impl super::MaterializePlanner<'_> {
-    pub(super) fn plan_nested_merge(&mut self, stmt_id: hir::StmtId) -> Option<NodeId> {
+    pub(super) fn plan_nested_merge(&mut self, stmt_id: hir::StmtId) -> Option<mir::NodeId> {
         let stmt_state = &self.store[stmt_id];
 
         // Return if there is no nested merge to do
@@ -50,12 +50,12 @@ impl super::MaterializePlanner<'_> {
 }
 
 impl NestedMergePlanner<'_> {
-    fn plan_nested_merge(mut self, root: hir::StmtId) -> NestedMerge {
+    fn plan_nested_merge(mut self, root: hir::StmtId) -> mir::NestedMerge {
         self.stack.push(root);
         let root = self.plan_nested_level(root, 0);
         self.stack.pop();
 
-        NestedMerge {
+        mir::NestedMerge {
             inputs: self.inputs,
             root,
         }

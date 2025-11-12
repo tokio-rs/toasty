@@ -8,7 +8,7 @@ use index_vec::IndexVec;
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use super::NodeId;
+use crate::engine::planner::mir;
 
 /// Additional information needed for planning a statement for materialization.
 /// Note, there is not a 1-1 mapping between `StatementInfo` and statements. A
@@ -31,13 +31,13 @@ pub(super) struct StatementInfo {
     pub(super) back_refs: HashMap<StmtId, BackRef>,
 
     /// This statement's ExecStatement materialization node ID.
-    pub(super) exec_statement: Cell<Option<NodeId>>,
+    pub(super) exec_statement: Cell<Option<mir::NodeId>>,
 
     /// Columns selected by exec_statement
     pub(super) exec_statement_selection: OnceCell<IndexSet<stmt::ExprReference>>,
 
     /// This statement's node ID representing the final computation.
-    pub(super) output: Cell<Option<NodeId>>,
+    pub(super) output: Cell<Option<mir::NodeId>>,
 }
 
 /// StatementInfo store
@@ -76,7 +76,7 @@ impl StatementInfo {
     pub(super) fn dependent_materializations<'a>(
         &'a self,
         store: &'a Store,
-    ) -> impl Iterator<Item = NodeId> + 'a {
+    ) -> impl Iterator<Item = mir::NodeId> + 'a {
         self.deps
             .iter()
             .map(|stmt_id| store[stmt_id].output.get().unwrap())
@@ -89,7 +89,7 @@ pub(super) struct BackRef {
     pub(super) exprs: IndexSet<stmt::ExprReference>,
 
     /// Projection materialization node ID
-    pub(super) node_id: Cell<Option<NodeId>>,
+    pub(super) node_id: Cell<Option<mir::NodeId>>,
 }
 
 #[derive(Debug)]

@@ -1,7 +1,8 @@
 mod hir;
 
 mod materialize;
-use materialize::{MaterializeGraph, NodeId};
+
+mod mir;
 
 mod lower;
 
@@ -33,7 +34,7 @@ struct Planner<'a> {
 
     /// Graph of materialization steps to execute the original statement being
     /// planned.
-    graph: MaterializeGraph,
+    graph: mir::MaterializeGraph,
 
     /// Table of record stream slots. Used to figure out where to store outputs
     /// of actions.
@@ -51,7 +52,7 @@ impl Engine {
         let mut planner = Planner {
             engine: self,
             store: hir::Store::new(),
-            graph: MaterializeGraph::new(),
+            graph: mir::MaterializeGraph::new(),
             var_table: VarTable::default(),
             actions: vec![],
             returning: None,
@@ -101,7 +102,7 @@ impl<'a> Planner<'a> {
             let num_uses = node.num_uses.get();
 
             match &node.op {
-                materialize::Operation::Const(materialize_const) => {
+                mir::Operation::Const(materialize_const) => {
                     let var = self.var_table.register_var(node.ty().clone());
                     node.var.set(Some(var));
 
@@ -113,7 +114,7 @@ impl<'a> Planner<'a> {
                         .into(),
                     );
                 }
-                materialize::Operation::DeleteByKey(m) => {
+                mir::Operation::DeleteByKey(m) => {
                     let input = self.graph.var_id(m.input);
                     let output = self.var_table.register_var(node.ty().clone());
                     node.var.set(Some(output));
@@ -131,7 +132,7 @@ impl<'a> Planner<'a> {
                         .into(),
                     );
                 }
-                materialize::Operation::ExecStatement(m) => {
+                mir::Operation::ExecStatement(m) => {
                     debug_assert!(
                         {
                             match &m.stmt {
@@ -179,7 +180,7 @@ impl<'a> Planner<'a> {
                         .into(),
                     );
                 }
-                materialize::Operation::Filter(materialize_filter) => {
+                mir::Operation::Filter(materialize_filter) => {
                     let input = self.graph.var_id(materialize_filter.input);
                     let ty = node.ty().clone();
 
@@ -195,7 +196,7 @@ impl<'a> Planner<'a> {
                         .into(),
                     );
                 }
-                materialize::Operation::FindPkByIndex(materialize_find_pk_by_index) => {
+                mir::Operation::FindPkByIndex(materialize_find_pk_by_index) => {
                     let input = materialize_find_pk_by_index
                         .inputs
                         .iter()
@@ -219,7 +220,7 @@ impl<'a> Planner<'a> {
                         .into(),
                     );
                 }
-                materialize::Operation::GetByKey(materialize_get_by_key) => {
+                mir::Operation::GetByKey(materialize_get_by_key) => {
                     let input = self.graph.var_id(materialize_get_by_key.input);
 
                     let output = self.var_table.register_var(node.ty().clone());
@@ -255,7 +256,7 @@ impl<'a> Planner<'a> {
                         .into(),
                     );
                 }
-                materialize::Operation::NestedMerge(materialize_nested_merge) => {
+                mir::Operation::NestedMerge(materialize_nested_merge) => {
                     let mut input_vars = vec![];
 
                     for input in &materialize_nested_merge.inputs {
@@ -280,7 +281,7 @@ impl<'a> Planner<'a> {
                         .into(),
                     );
                 }
-                materialize::Operation::Project(materialize_project) => {
+                mir::Operation::Project(materialize_project) => {
                     let input_var = self.graph[materialize_project.input].var.get().unwrap();
 
                     let var = self
@@ -297,7 +298,7 @@ impl<'a> Planner<'a> {
                         .into(),
                     );
                 }
-                materialize::Operation::ReadModifyWrite(m) => {
+                mir::Operation::ReadModifyWrite(m) => {
                     let input = m
                         .inputs
                         .iter()
@@ -319,7 +320,7 @@ impl<'a> Planner<'a> {
                         .into(),
                     )
                 }
-                materialize::Operation::QueryPk(m) => {
+                mir::Operation::QueryPk(m) => {
                     let input = m.input.map(|node_id| self.graph.var_id(node_id));
                     let output = self.var_table.register_var(node.ty().clone());
                     node.var.set(Some(output));
@@ -356,7 +357,7 @@ impl<'a> Planner<'a> {
                         .into(),
                     );
                 }
-                materialize::Operation::UpdateByKey(m) => {
+                mir::Operation::UpdateByKey(m) => {
                     let input = self.graph.var_id(m.input);
                     let output = self.var_table.register_var(node.ty().clone());
                     node.var.set(Some(output));
