@@ -1,7 +1,10 @@
-use crate::engine::plan::{Action, VarId};
+use crate::engine::exec::{Action, VarId, VarStore};
 
 #[derive(Debug)]
-pub(crate) struct Pipeline {
+pub(crate) struct ExecPlan {
+    /// Arguments seeding the plan
+    pub(crate) vars: VarStore,
+
     /// Steps in the pipeline
     pub(crate) actions: Vec<Action>,
 

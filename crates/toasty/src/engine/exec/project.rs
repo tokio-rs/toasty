@@ -1,11 +1,26 @@
 use crate::{
-    engine::{exec::Exec, plan},
+    engine::{
+        eval,
+        exec::{Action, Exec, Output, VarId},
+    },
     Result,
 };
 use toasty_core::driver::Rows;
 
+#[derive(Debug)]
+pub(crate) struct Project {
+    /// Source of the input
+    pub(crate) input: VarId,
+
+    /// Where to store the output
+    pub(crate) output: Output,
+
+    /// How to project it before storing
+    pub(crate) projection: eval::Func,
+}
+
 impl Exec<'_> {
-    pub(super) async fn action_project(&mut self, action: &plan::Project) -> Result<()> {
+    pub(super) async fn action_project(&mut self, action: &Project) -> Result<()> {
         // TODO: come up with a more advanced execution task manager to avoid
         // having to eagerly buffer everything.
         let mut projected_rows = vec![];
@@ -36,5 +51,11 @@ impl Exec<'_> {
         );
 
         Ok(())
+    }
+}
+
+impl From<Project> for Action {
+    fn from(value: Project) -> Self {
+        Action::Project(value)
     }
 }

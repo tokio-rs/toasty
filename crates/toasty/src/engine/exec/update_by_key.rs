@@ -1,12 +1,41 @@
 use crate::{
     driver::Rows,
-    engine::{exec::Exec, plan},
+    engine::exec::{Action, Exec, Output, VarId},
     Result,
 };
-use toasty_core::{driver::operation, stmt::ValueStream};
+use toasty_core::{
+    driver::operation,
+    schema::db::TableId,
+    stmt::{self, ValueStream},
+};
+
+#[derive(Debug, Clone)]
+pub(crate) struct UpdateByKey {
+    /// If specified, use the input to generate the list of keys to update
+    pub input: VarId,
+
+    /// Where to store the result of the update
+    pub output: Output,
+
+    /// Which table to update
+    pub table: TableId,
+
+    /// Assignments
+    pub assignments: stmt::Assignments,
+
+    /// Only update keys that match the filter
+    pub filter: Option<stmt::Expr>,
+
+    /// Fail the update if the condition is not met
+    pub condition: Option<stmt::Expr>,
+
+    /// When `true` return the record being updated *after* the update. When
+    /// `false`, just return the count of updated rows.
+    pub returning: bool,
+}
 
 impl Exec<'_> {
-    pub(super) async fn action_update_by_key(&mut self, action: &plan::UpdateByKey) -> Result<()> {
+    pub(super) async fn action_update_by_key(&mut self, action: &UpdateByKey) -> Result<()> {
         let keys = self
             .vars
             .load(action.input)
@@ -46,5 +75,11 @@ impl Exec<'_> {
             .store(action.output.var, action.output.num_uses, res);
 
         Ok(())
+    }
+}
+
+impl From<UpdateByKey> for Action {
+    fn from(src: UpdateByKey) -> Self {
+        Self::UpdateByKey(src)
     }
 }

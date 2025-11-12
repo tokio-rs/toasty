@@ -10,7 +10,10 @@ mod var;
 use var::VarTable;
 
 use crate::{
-    engine::{plan, Engine, Plan},
+    engine::{
+        exec::{ExecPlan, VarId},
+        Engine,
+    },
     Result,
 };
 use toasty_core::{
@@ -38,14 +41,14 @@ struct Planner<'a> {
     var_table: VarTable,
 
     /// Actions that will end up in the pipeline.
-    actions: Vec<plan::Action>,
+    actions: Vec<exec::Action>,
 
     /// Variable to return as the result of the pipeline execution
-    returning: Option<plan::VarId>,
+    returning: Option<exec::VarId>,
 }
 
 impl Engine {
-    pub(crate) fn plan(&self, stmt: stmt::Statement) -> Result<Plan> {
+    pub(crate) fn plan(&self, stmt: stmt::Statement) -> Result<ExecPlan> {
         let mut planner = Planner {
             engine: self,
             store: StatementInfoStore::new(),
@@ -83,7 +86,7 @@ impl<'a> Planner<'a> {
         Ok(())
     }
 
-    fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<Option<plan::VarId>> {
+    fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<Option<VarId>> {
         self.lower_stmt(stmt)?;
 
         // Build the execution plan...
@@ -104,8 +107,8 @@ impl<'a> Planner<'a> {
                     node.var.set(Some(var));
 
                     self.actions.push(
-                        plan::SetVar {
-                            output: plan::Output { var, num_uses },
+                        exec::SetVar {
+                            output: exec::Output { var, num_uses },
                             rows: materialize_const.value.clone(),
                         }
                         .into(),
@@ -117,9 +120,9 @@ impl<'a> Planner<'a> {
                     node.var.set(Some(output));
 
                     self.actions.push(
-                        plan::DeleteByKey {
+                        exec::DeleteByKey {
                             input,
-                            output: plan::Output {
+                            output: exec::Output {
                                 var: output,
                                 num_uses,
                             },
@@ -164,11 +167,11 @@ impl<'a> Planner<'a> {
                     };
 
                     self.actions.push(
-                        plan::ExecStatement {
+                        exec::ExecStatement {
                             input: input_vars,
-                            output: plan::ExecStatementOutput {
+                            output: exec::ExecStatementOutput {
                                 ty: output_ty,
-                                output: plan::Output { var, num_uses },
+                                output: exec::Output { var, num_uses },
                             },
                             stmt: m.stmt.clone(),
                             conditional_update_with_no_returning: m
@@ -185,9 +188,9 @@ impl<'a> Planner<'a> {
                     node.var.set(Some(var));
 
                     self.actions.push(
-                        plan::Filter {
+                        exec::Filter {
                             input,
-                            output: plan::Output { var, num_uses },
+                            output: exec::Output { var, num_uses },
                             filter: materialize_filter.filter.clone(),
                         }
                         .into(),
@@ -204,9 +207,9 @@ impl<'a> Planner<'a> {
                     node.var.set(Some(output));
 
                     self.actions.push(
-                        plan::FindPkByIndex {
+                        exec::FindPkByIndex {
                             input,
-                            output: plan::Output {
+                            output: exec::Output {
                                 var: output,
                                 num_uses,
                             },
@@ -241,9 +244,9 @@ impl<'a> Planner<'a> {
                         .collect();
 
                     self.actions.push(
-                        plan::GetByKey {
+                        exec::GetByKey {
                             input,
-                            output: plan::Output {
+                            output: exec::Output {
                                 var: output,
                                 num_uses,
                             },
@@ -267,9 +270,9 @@ impl<'a> Planner<'a> {
                     node.var.set(Some(output));
 
                     self.actions.push(
-                        plan::NestedMerge {
+                        exec::NestedMerge {
                             inputs: input_vars,
-                            output: plan::Output {
+                            output: exec::Output {
                                 var: output,
                                 num_uses,
                             },
@@ -287,9 +290,9 @@ impl<'a> Planner<'a> {
                     node.var.set(Some(var));
 
                     self.actions.push(
-                        plan::Project {
+                        exec::Project {
                             input: input_var,
-                            output: plan::Output { var, num_uses },
+                            output: exec::Output { var, num_uses },
                             projection: materialize_project.projection.clone(),
                         }
                         .into(),
@@ -308,9 +311,9 @@ impl<'a> Planner<'a> {
                         .register_var(stmt::Type::list(stmt::Type::Unit));
 
                     self.actions.push(
-                        plan::ReadModifyWrite {
+                        exec::ReadModifyWrite {
                             input,
-                            output: Some(plan::Output { var, num_uses }),
+                            output: Some(exec::Output { var, num_uses }),
                             read: m.read.clone(),
                             write: m.write.clone(),
                         }
@@ -340,9 +343,9 @@ impl<'a> Planner<'a> {
                         .collect();
 
                     self.actions.push(
-                        plan::QueryPk {
+                        exec::QueryPk {
                             input,
-                            output: plan::Output {
+                            output: exec::Output {
                                 var: output,
                                 num_uses,
                             },
@@ -360,9 +363,9 @@ impl<'a> Planner<'a> {
                     node.var.set(Some(output));
 
                     self.actions.push(
-                        plan::UpdateByKey {
+                        exec::UpdateByKey {
                             input,
-                            output: plan::Output {
+                            output: exec::Output {
                                 var: output,
                                 num_uses,
                             },
@@ -382,13 +385,11 @@ impl<'a> Planner<'a> {
         Ok(self.graph[mid].var.get())
     }
 
-    fn build(self) -> Result<Plan> {
-        Ok(Plan {
+    fn build(self) -> Result<ExecPlan> {
+        Ok(ExecPlan {
             vars: exec::VarStore::new(self.var_table.into_vec()),
-            pipeline: plan::Pipeline {
-                actions: self.actions,
-                returning: self.returning,
-            },
+            actions: self.actions,
+            returning: self.returning,
         })
     }
 }

@@ -1,5 +1,6 @@
-use super::plan;
 use toasty_core::stmt;
+
+use crate::engine::exec::VarId;
 
 /// Tracks available slots to store record streams in. These slots are used to
 /// pass record streams from action outputs into the next input.
@@ -11,12 +12,12 @@ pub(crate) struct VarTable {
 
 impl VarTable {
     #[track_caller]
-    pub fn register_var(&mut self, ty: stmt::Type) -> plan::VarId {
+    pub fn register_var(&mut self, ty: stmt::Type) -> VarId {
         debug_assert!(ty.is_list() || ty.is_unit(), "{ty:#?}");
         // Register a new slot
         let ret = self.vars.len();
         self.vars.push(ty);
-        plan::VarId(ret)
+        VarId(ret)
     }
 
     pub(crate) fn into_vec(self) -> Vec<stmt::Type> {

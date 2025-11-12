@@ -10,7 +10,8 @@ use toasty_core::{
 };
 
 use crate::engine::{
-    eval, plan,
+    eval,
+    exec::{NestedLevel, VarId},
     planner::{Arg, Planner, StatementInfoStore, StmtId},
     Engine,
 };
@@ -34,7 +35,7 @@ pub(crate) struct MaterializeNode {
     pub(crate) deps: IndexSet<NodeId>,
 
     /// Variable where the output is stored
-    pub(crate) var: Cell<Option<plan::VarId>>,
+    pub(crate) var: Cell<Option<VarId>>,
 
     /// Number of nodes that use this one as input.
     pub(crate) num_uses: Cell<usize>,
@@ -161,7 +162,7 @@ pub(crate) struct MaterializeNestedMerge {
     pub(crate) inputs: IndexSet<NodeId>,
 
     /// The root nested merge level
-    pub(crate) root: plan::NestedLevel,
+    pub(crate) root: NestedLevel,
 }
 
 #[derive(Debug)]
@@ -1144,7 +1145,7 @@ impl MaterializeGraph {
         self.store.push(node)
     }
 
-    pub(super) fn var_id(&self, node_id: NodeId) -> plan::VarId {
+    pub(super) fn var_id(&self, node_id: NodeId) -> VarId {
         self.store[node_id].var_id()
     }
 
@@ -1170,7 +1171,7 @@ impl MaterializeNode {
         }
     }
 
-    pub(super) fn var_id(&self) -> plan::VarId {
+    pub(super) fn var_id(&self) -> VarId {
         self.var.get().unwrap()
     }
 }

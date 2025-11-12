@@ -1,5 +1,5 @@
 use crate::{
-    engine::{exec::Exec, plan},
+    engine::exec::{Action, Exec, Output, VarId},
     Result,
 };
 use toasty_core::{
@@ -10,10 +10,25 @@ use toasty_core::{
     stmt::{self, ValueStream},
 };
 
+#[derive(Debug)]
+pub(crate) struct ReadModifyWrite {
+    /// Where to get arguments for this action.
+    pub input: Vec<VarId>,
+
+    /// How to handle output
+    pub output: Option<Output>,
+
+    /// Read statement
+    pub read: stmt::Query,
+
+    /// Write statement
+    pub write: stmt::Statement,
+}
+
 impl Exec<'_> {
     pub(super) async fn action_read_modify_write(
         &mut self,
-        action: &plan::ReadModifyWrite,
+        action: &ReadModifyWrite,
     ) -> Result<()> {
         assert!(action.input.is_empty(), "TODO");
 
@@ -91,5 +106,11 @@ impl Exec<'_> {
         }
 
         Ok(())
+    }
+}
+
+impl From<ReadModifyWrite> for Action {
+    fn from(value: ReadModifyWrite) -> Self {
+        Self::ReadModifyWrite(Box::new(value))
     }
 }
