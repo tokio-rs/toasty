@@ -4,10 +4,7 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::{
-    exec,
-    planner::{mir, VarTable},
-};
+use crate::engine::{exec, mir, planner::VarTable};
 
 #[derive(Debug)]
 pub(crate) struct FindPkByIndex {

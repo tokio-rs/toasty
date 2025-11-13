@@ -1,9 +1,6 @@
 use toasty_core::stmt;
 
-use crate::engine::{
-    eval, exec,
-    planner::{mir, VarTable},
-};
+use crate::engine::{eval, exec, mir, planner::VarTable};
 
 #[derive(Debug)]
 pub(crate) struct Project {

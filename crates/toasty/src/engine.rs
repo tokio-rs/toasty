@@ -3,6 +3,7 @@ mod exec;
 mod hir;
 mod index;
 mod kv;
+mod mir;
 mod planner;
 mod simplify;
 use simplify::Simplify;

@@ -1,11 +1,9 @@
 mod materialize;
 
-pub(super) mod mir;
-
 mod lower;
 
 mod var;
-use var::VarTable;
+pub(super) use var::VarTable;
 
 use crate::{
     engine::{
@@ -28,7 +26,7 @@ struct Planner<'a> {
 
     /// Graph of materialization steps to execute the original statement being
     /// planned.
-    graph: mir::Store,
+    graph: super::mir::Store,
 
     /// Table of record stream slots. Used to figure out where to store outputs
     /// of actions.
@@ -45,8 +43,8 @@ impl Engine {
     pub(crate) fn plan(&self, stmt: stmt::Statement) -> Result<ExecPlan> {
         let mut planner = Planner {
             engine: self,
-            store: hir::Store::new(),
-            graph: mir::Store::new(),
+            store: super::hir::Store::new(),
+            graph: super::mir::Store::new(),
             var_table: VarTable::default(),
             actions: vec![],
             returning: None,

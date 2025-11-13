@@ -4,9 +4,7 @@ use toasty_core::stmt::{self, visit_mut};
 use crate::engine::{
     eval,
     exec::{MergeQualification, NestedChild, NestedLevel},
-    hir,
-    planner::mir,
-    Engine,
+    hir, mir, Engine,
 };
 
 #[derive(Debug)]

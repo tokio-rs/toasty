@@ -4,11 +4,7 @@ use index_vec::IndexVec;
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit, visit_mut, Condition};
 
-use crate::engine::{
-    eval, hir,
-    planner::{mir, Planner},
-    Engine,
-};
+use crate::engine::{eval, hir, mir, planner::Planner, Engine};
 
 #[derive(Debug)]
 struct MaterializePlanner<'a> {

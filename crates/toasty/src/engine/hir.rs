@@ -8,7 +8,7 @@ use index_vec::IndexVec;
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::planner::mir;
+use crate::engine::mir;
 
 /// Additional information needed for planning a statement for materialization.
 /// Note, there is not a 1-1 mapping between `StatementInfo` and statements. A
