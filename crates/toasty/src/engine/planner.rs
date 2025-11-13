@@ -95,53 +95,8 @@ impl<'a> Planner<'a> {
         // Build the execution plan
         for node_id in &self.graph.execution_order {
             let node = &self.graph[node_id];
-
-            match &node.op {
-                mir::Operation::Const(op) => {
-                    let action = op.to_exec(node, &mut self.var_table);
-                    self.actions.push(action.into());
-                }
-                mir::Operation::DeleteByKey(op) => {
-                    let action = op.to_exec(&self.graph, node, &mut self.var_table);
-                    self.actions.push(action.into());
-                }
-                mir::Operation::ExecStatement(op) => {
-                    let action = op.to_exec(&self.graph, node, &mut self.var_table);
-                    self.actions.push(action.into());
-                }
-                mir::Operation::Filter(op) => {
-                    let action = op.to_exec(&self.graph, node, &mut self.var_table);
-                    self.actions.push(action.into());
-                }
-                mir::Operation::FindPkByIndex(op) => {
-                    let action = op.to_exec(&self.graph, node, &mut self.var_table);
-                    self.actions.push(action.into());
-                }
-                mir::Operation::GetByKey(op) => {
-                    let action = op.to_exec(&self.graph, node, &mut self.var_table);
-                    self.actions.push(action.into());
-                }
-                mir::Operation::NestedMerge(op) => {
-                    let action = op.to_exec(&self.graph, node, &mut self.var_table);
-                    self.actions.push(action.into());
-                }
-                mir::Operation::Project(op) => {
-                    let action = op.to_exec(&self.graph, node, &mut self.var_table);
-                    self.actions.push(action.into());
-                }
-                mir::Operation::ReadModifyWrite(op) => {
-                    let action = op.to_exec(&self.graph, node, &mut self.var_table);
-                    self.actions.push(action.into());
-                }
-                mir::Operation::QueryPk(op) => {
-                    let action = op.to_exec(&self.graph, node, &mut self.var_table);
-                    self.actions.push(action.into());
-                }
-                mir::Operation::UpdateByKey(op) => {
-                    let action = op.to_exec(&self.graph, node, &mut self.var_table);
-                    self.actions.push(action.into());
-                }
-            }
+            let action = node.to_exec(&self.graph, &mut self.var_table);
+            self.actions.push(action);
         }
 
         let mid = self.store.root().output.get().unwrap();

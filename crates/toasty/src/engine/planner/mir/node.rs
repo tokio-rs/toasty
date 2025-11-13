@@ -3,9 +3,9 @@ use std::cell::Cell;
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::exec;
+use crate::engine::{exec, planner::VarTable};
 
-use super::{NodeId, Operation};
+use super::{NodeId, Operation, Store};
 
 #[derive(Debug)]
 pub(crate) struct Node {
@@ -45,5 +45,21 @@ impl Node {
 
     pub(super) fn var_id(&self) -> exec::VarId {
         self.var.get().unwrap()
+    }
+
+    pub(crate) fn to_exec(&self, graph: &Store, var_table: &mut VarTable) -> exec::Action {
+        match &self.op {
+            Operation::Const(op) => op.to_exec(self, var_table).into(),
+            Operation::DeleteByKey(op) => op.to_exec(graph, self, var_table).into(),
+            Operation::ExecStatement(op) => op.to_exec(graph, self, var_table).into(),
+            Operation::Filter(op) => op.to_exec(graph, self, var_table).into(),
+            Operation::FindPkByIndex(op) => op.to_exec(graph, self, var_table).into(),
+            Operation::GetByKey(op) => op.to_exec(graph, self, var_table).into(),
+            Operation::NestedMerge(op) => op.to_exec(graph, self, var_table).into(),
+            Operation::Project(op) => op.to_exec(graph, self, var_table).into(),
+            Operation::ReadModifyWrite(op) => op.to_exec(graph, self, var_table).into(),
+            Operation::QueryPk(op) => op.to_exec(graph, self, var_table).into(),
+            Operation::UpdateByKey(op) => op.to_exec(graph, self, var_table).into(),
+        }
     }
 }
