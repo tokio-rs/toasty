@@ -12,8 +12,6 @@ pub struct Column {
     pub name: String,
 
     /// The name of the column in the database.
-    ///
-    /// When `None`, no specific name has been set.
     pub storage_name: String,
 
     /// The column type, from Toasty's point of view.

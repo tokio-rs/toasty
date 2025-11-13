@@ -376,7 +376,7 @@ impl ToSql for &stmt::Update {
 impl ToSql for (&db::Table, &stmt::Assignments) {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         let frags = self.1.iter().map(|(index, assignment)| {
-            let column_name = Ident(&self.0.columns[index].name);
+            let column_name = Ident(&self.0.columns[index].storage_name);
             (column_name, " = ", &assignment.expr)
         });
 

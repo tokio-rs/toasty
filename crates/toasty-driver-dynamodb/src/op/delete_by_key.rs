@@ -129,7 +129,7 @@ impl DynamoDb {
             .iter()
             .map(|index_column| {
                 let column = schema.column(index_column.column);
-                column.name.clone()
+                column.storage_name.clone()
             })
             .collect();
 
