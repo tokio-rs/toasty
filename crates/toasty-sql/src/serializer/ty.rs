@@ -38,6 +38,7 @@ impl ToSql for &db::Type {
             }
             db::Type::Text => fmt!(cx, f, "TEXT"),
             db::Type::VarChar(size) => fmt!(cx, f, "VARCHAR(" size ")"),
+            db::Type::Custom(custom) => fmt!(cx, f, custom.as_str()),
         }
     }
 }

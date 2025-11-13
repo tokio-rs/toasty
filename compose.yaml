@@ -1,0 +1,56 @@
+# Docker Compose file to start all database management systems supported by Toasty.
+# This makes it easier to run the tests locally, so long as you have Docker installed.
+#
+# Start with:
+# ```
+# docker compose up
+# ```
+#
+# Environment variables for running tests:
+#
+# TOASTY_TEST_MYSQL_URL = "mysql://toasty:toasty@localhost:3306/toasty"
+# TOASTY_TEST_POSTGRES_URL = "postgresql://toasty:toasty@localhost:5432/toasty"
+# TOASTY_TEST_DYNAMODB_URL = "dynamodb://localhost:8000"
+#
+# # DynamoDB specific environment variables
+# AWS_REGION = "foo"
+# AWS_EC2_METADATA_DISABLED="true"
+
+name: toasty
+version: "3.8"
+
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    command: -jar DynamoDBLocal.jar -port 8000 -inMemory
+    ports:
+      - "8000:8000"
+
+  mysql:
+    image: mysql:9
+    environment:
+      MYSQL_ROOT_PASSWORD: toasty_root_password
+      MYSQL_USER: toasty
+      MYSQL_PASSWORD: toasty
+      MYSQL_DATABASE: toasty
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgresql:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: toasty
+      POSTGRES_PASSWORD: toasty
+      POSTGRES_DB: toasty
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "toasty"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

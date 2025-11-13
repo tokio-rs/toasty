@@ -2,7 +2,7 @@ use super::BuildSchema;
 use crate::{
     driver,
     schema::{
-        app::{self, FieldId, Model},
+        app::{self, FieldId, FieldName, Model},
         db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping, TableToModel},
         Name,
@@ -185,6 +185,7 @@ impl BuildTableFromModels<'_> {
 
             if let Some(column) = self.table.columns.get_mut(i) {
                 column.name = format!("key_{i}");
+                column.storage_name = column.name.clone();
 
                 match &mut column.ty {
                     stmt::Type::Enum(ty_enum) => {
@@ -236,7 +237,10 @@ impl BuildTableFromModels<'_> {
                     .fields
                     .get(i)
                     .map(|field_id| model.field(*field_id).name.clone())
-                    .unwrap_or_else(|| format!("key_{i}"));
+                    .unwrap_or_else(|| FieldName {
+                        app_name: format!("key_{i}"),
+                        storage_name: None,
+                    });
 
                 // If unit type, go straight to enum
                 //
@@ -254,7 +258,8 @@ impl BuildTableFromModels<'_> {
                 assert_eq!(self.table.columns.len(), i);
                 self.table.columns.push(db::Column {
                     id: column_id,
-                    name,
+                    name: name.app_name.clone(),
+                    storage_name: name.storage_name().to_owned(),
                     ty,
                     storage_ty: None,
                     nullable: false,
@@ -364,14 +369,15 @@ impl BuildTableFromModels<'_> {
         &mut self,
         field_id: FieldId,
         primitive: &app::FieldPrimitive,
-        name: &str,
+        name: &app::FieldName,
         prefix: Option<&str>,
         nullable: bool,
     ) {
-        let name = if let Some(prefix) = prefix {
-            format!("{prefix}__{name}")
+        let storage_name = if let Some(prefix) = prefix {
+            let storage_name = name.storage_name();
+            format!("{prefix}__{storage_name}")
         } else {
-            name.to_string()
+            name.storage_name().to_owned()
         };
 
         let column = db::Column {
@@ -379,7 +385,8 @@ impl BuildTableFromModels<'_> {
                 table: self.table.id,
                 index: self.table.columns.len(),
             },
-            name,
+            name: name.app_name.clone(),
+            storage_name,
             ty: stmt_ty_to_table(primitive.ty.clone()),
             storage_ty: primitive.storage_ty.clone(),
             nullable,
@@ -406,7 +413,7 @@ impl BuildTableFromModels<'_> {
                 }
 
                 index.name.push('_');
-                index.name.push_str(&column.name);
+                index.name.push_str(&column.storage_name);
             }
         }
     }

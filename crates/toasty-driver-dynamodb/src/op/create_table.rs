@@ -89,7 +89,7 @@ impl DynamoDb {
                 let ty = ddb_ty(&column.ty);
 
                 AttributeDefinition::builder()
-                    .attribute_name(&column.name)
+                    .attribute_name(&column.storage_name)
                     .attribute_type(ty)
                     .build()
                     .unwrap()
@@ -119,7 +119,7 @@ impl DynamoDb {
                 .set_key_schema(Some(ddb_key_schema(pk, None)))
                 .attribute_definitions(
                     AttributeDefinition::builder()
-                        .attribute_name(&pk.name)
+                        .attribute_name(&pk.storage_name)
                         .attribute_type(ddb_ty(&pk.ty))
                         .build()
                         .unwrap(),

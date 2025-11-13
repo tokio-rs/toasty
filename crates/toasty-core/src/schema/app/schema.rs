@@ -103,7 +103,7 @@ impl Builder {
                                 panic!(
                                     "no relation pair for {}::{}",
                                     model.name.upper_camel_case(),
-                                    model.fields[index].name
+                                    model.fields[index].name.app_name
                                 );
                             }
                         };

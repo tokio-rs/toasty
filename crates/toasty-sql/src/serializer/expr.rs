@@ -76,7 +76,7 @@ impl ToSql for &stmt::Expr {
 
                     match cx.resolve_expr_reference(expr_reference) {
                         ResolvedRef::Column(column) => {
-                            let name = Ident(&column.name);
+                            let name = Ident(&column.storage_name);
                             fmt!(cx, f, "tbl_" depth "_" expr_column.table "." name)
                         }
                         ResolvedRef::Cte { .. } | ResolvedRef::Derived { .. } => {
@@ -91,7 +91,7 @@ impl ToSql for &stmt::Expr {
                     }
                 } else {
                     let column = cx.resolve_expr_reference(expr_reference).expect_column();
-                    fmt!(cx, f, Ident(&column.name))
+                    fmt!(cx, f, Ident(&column.storage_name))
                 }
             }
             Stmt(expr) => {

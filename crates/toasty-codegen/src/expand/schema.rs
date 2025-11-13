@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::{ColumnType, FieldTy, Name};
+use crate::schema::{Column, FieldTy, Name};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -50,18 +50,30 @@ impl Expand<'_> {
 
         let fields = self.model.fields.iter().enumerate().map(|(index, field)| {
             let index_tokenized = util::int(index);
-            let name = field.name.ident.to_string();
             let field_ty;
             let nullable;
 
+            let name = {
+                let app_name = field.name.ident.to_string();
+                let storage_name = match field.attrs.column.as_ref().and_then(|column| column.name.as_ref()) {
+                    Some(name) => quote! { Some(#name.to_string()) },
+                    None => quote! { None },
+                };
+                quote! {
+                    FieldName {
+                        app_name: #app_name.to_string(),
+                        storage_name: #storage_name,
+                    }
+                }
+            };
+
             match &field.ty {
                 FieldTy::Primitive(ty) => {
-                    let storage_ty = match &field.attrs.db {
-                        Some(ColumnType::VarChar(size)) => {
-                            let size = util::int(*size);
-                            quote!(Some(db::Type::VarChar(#size)))
+                    let storage_ty = match &field.attrs.column {
+                        Some(Column { ty: Some(ty), ..}) => {
+                            quote!(Some(#ty))
                         }
-                        None => quote!(None),
+                        _ => quote!(None),
                     };
 
                     nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
@@ -144,7 +156,7 @@ impl Expand<'_> {
                         model: #model_ident::id(),
                         index: #index_tokenized,
                     },
-                    name: #name.to_string(),
+                    name: #name,
                     ty: #field_ty,
                     nullable: #nullable,
                     primary_key: #primary_key,

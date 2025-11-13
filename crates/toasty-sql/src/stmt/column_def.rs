@@ -14,7 +14,7 @@ impl ColumnDef {
         let ty = db::Type::from_app(&column.ty, &column.storage_ty, storage_types).unwrap();
 
         Self {
-            name: column.name.clone(),
+            name: column.storage_name.clone(),
             ty,
         }
     }
