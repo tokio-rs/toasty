@@ -1,8 +1,6 @@
-mod hir;
-
 mod materialize;
 
-mod mir;
+pub(super) mod mir;
 
 mod lower;
 
@@ -18,7 +16,7 @@ use crate::{
 };
 use toasty_core::{stmt, Schema};
 
-use super::exec;
+use super::{exec, hir};
 
 #[derive(Debug)]
 struct Planner<'a> {

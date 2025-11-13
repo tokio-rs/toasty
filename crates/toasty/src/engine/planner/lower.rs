@@ -18,7 +18,8 @@ use toasty_core::{
 };
 
 use crate::engine::{
-    planner::{hir, Planner},
+    hir,
+    planner::Planner,
     simplify::{self, Simplify},
     Engine,
 };

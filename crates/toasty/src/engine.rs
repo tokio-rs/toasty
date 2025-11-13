@@ -1,5 +1,6 @@
 mod eval;
 mod exec;
+mod hir;
 mod index;
 mod kv;
 mod planner;

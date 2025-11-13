@@ -5,8 +5,8 @@ use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit, visit_mut, Condition};
 
 use crate::engine::{
-    eval,
-    planner::{hir, mir, Planner},
+    eval, hir,
+    planner::{mir, Planner},
     Engine,
 };
 
