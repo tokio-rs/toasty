@@ -17,7 +17,7 @@ pub enum Type {
     VarChar(u64),
 
     /// User-specified unrecognized type
-    Custom(&'static str),
+    Custom(String),
 }
 
 impl Type {

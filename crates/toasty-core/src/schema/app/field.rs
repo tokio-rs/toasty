@@ -37,8 +37,14 @@ pub struct FieldId {
 
 #[derive(Debug, Clone)]
 pub struct FieldName {
-    pub app_name: &'static str,
-    pub storage_name: Option<&'static str>,
+    pub app_name: String,
+    pub storage_name: Option<String>,
+}
+
+impl FieldName {
+    pub fn storage_name(&self) -> &str {
+        self.storage_name.as_ref().unwrap_or(&self.app_name)
+    }
 }
 
 #[derive(Clone)]

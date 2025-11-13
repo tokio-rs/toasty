@@ -62,7 +62,7 @@ async fn specify_varchar_ty_when_not_supported(test: &mut DbTest) {
         #[auto]
         id: Id<Self>,
 
-        #[column(type = "varchar(5)")]
+        #[column(type = varchar(5))]
         name: String,
     }
 

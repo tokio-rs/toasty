@@ -56,12 +56,12 @@ impl Expand<'_> {
             let name = {
                 let app_name = field.name.ident.to_string();
                 let storage_name = match field.attrs.column.as_ref().and_then(|column| column.name.as_ref()) {
-                    Some(name) => quote! { Some(#name) },
+                    Some(name) => quote! { Some(#name.to_string()) },
                     None => quote! { None },
                 };
                 quote! {
                     FieldName {
-                        app_name: #app_name,
+                        app_name: #app_name.to_string(),
                         storage_name: #storage_name,
                     }
                 }

@@ -235,8 +235,8 @@ impl BuildTableFromModels<'_> {
                     .primary_key
                     .fields
                     .get(i)
-                    .and(|field_id| model.field(*field_id).name.storage_name)
-                    .unwrap_or_else(|| format!("key_{i}"));
+                    .map(|field_id| &model.field(*field_id).name);
+                let fallback_name = || format!("key_{i}");
 
                 // If unit type, go straight to enum
                 //
@@ -254,7 +254,12 @@ impl BuildTableFromModels<'_> {
                 assert_eq!(self.table.columns.len(), i);
                 self.table.columns.push(db::Column {
                     id: column_id,
-                    name,
+                    name: name
+                        .map(|name| name.app_name.clone())
+                        .unwrap_or_else(fallback_name),
+                    storage_name: name
+                        .map(|name| name.storage_name().to_owned())
+                        .unwrap_or_else(fallback_name),
                     ty,
                     storage_ty: None,
                     nullable: false,
@@ -368,10 +373,11 @@ impl BuildTableFromModels<'_> {
         prefix: Option<&str>,
         nullable: bool,
     ) {
-        let name = if let Some(prefix) = prefix {
-            format!("{prefix}__{name}")
+        let storage_name = if let Some(prefix) = prefix {
+            let storage_name = name.storage_name();
+            format!("{prefix}__{storage_name}")
         } else {
-            name.to_string()
+            name.storage_name().to_owned()
         };
 
         let column = db::Column {
@@ -379,7 +385,8 @@ impl BuildTableFromModels<'_> {
                 table: self.table.id,
                 index: self.table.columns.len(),
             },
-            name,
+            name: name.app_name.clone(),
+            storage_name,
             ty: stmt_ty_to_table(primitive.ty.clone()),
             storage_ty: primitive.storage_ty.clone(),
             nullable,
