@@ -1,6 +1,6 @@
 use toasty_core::{schema::app, stmt};
 
-use crate::engine::planner::lower::LowerStatement;
+use crate::engine::lower::LowerStatement;
 
 /// Process the scope component of an insert statement.
 struct ApplyInsertScope<'a> {

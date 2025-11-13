@@ -19,19 +19,18 @@ use toasty_core::{
 
 use crate::engine::{
     hir,
-    planner::Planner,
     simplify::{self, Simplify},
     Engine, HirStatement,
 };
 
-impl Planner<'_> {
-    pub(crate) fn lower_stmt(&mut self, stmt: stmt::Statement) -> Result<HirStatement> {
-        let schema = self.schema();
+impl Engine {
+    pub(crate) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {
+        let schema = &self.schema;
 
         let mut state = LoweringState {
             store: hir::Store::new(),
             scopes: IndexVec::new(),
-            engine: self.engine,
+            engine: self,
             relations: vec![],
             errors: vec![],
             dependencies: HashSet::new(),

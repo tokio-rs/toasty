@@ -1,7 +1,5 @@
 mod materialize;
 
-mod lower;
-
 mod var;
 pub(super) use var::VarTable;
 
@@ -12,7 +10,7 @@ use crate::{
     },
     Result,
 };
-use toasty_core::{stmt, Schema};
+use toasty_core::stmt;
 
 use super::{exec, hir};
 
@@ -56,10 +54,6 @@ impl Engine {
 }
 
 impl<'a> Planner<'a> {
-    pub(crate) fn schema(&self) -> &'a Schema {
-        &self.engine.schema
-    }
-
     /// Entry point to plan the root statement.
     fn plan_stmt_root(&mut self, stmt: stmt::Statement) -> Result<()> {
         if let stmt::Statement::Insert(stmt) = &stmt {
@@ -79,7 +73,7 @@ impl<'a> Planner<'a> {
     }
 
     fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<Option<VarId>> {
-        let hir_stmt = self.lower_stmt(stmt)?;
+        let hir_stmt = self.engine.lower_stmt(stmt)?;
         self.store = hir_stmt.into_store();
 
         // Build the execution plan...

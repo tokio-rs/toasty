@@ -11,7 +11,7 @@ use toasty_core::stmt;
 use crate::engine::mir;
 
 #[derive(Debug)]
-pub(super) struct HirStatement {
+pub(crate) struct HirStatement {
     store: Store,
 }
 
