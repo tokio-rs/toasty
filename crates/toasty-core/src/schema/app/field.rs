@@ -11,7 +11,7 @@ pub struct Field {
     pub id: FieldId,
 
     /// The field name
-    pub name: String,
+    pub name: FieldName,
 
     /// Primitive, relation, composite, ...
     pub ty: FieldTy,
@@ -35,6 +35,18 @@ pub struct FieldId {
     pub index: usize,
 }
 
+#[derive(Debug, Clone)]
+pub struct FieldName {
+    pub app_name: String,
+    pub storage_name: Option<String>,
+}
+
+impl FieldName {
+    pub fn storage_name(&self) -> &str {
+        self.storage_name.as_ref().unwrap_or(&self.app_name)
+    }
+}
+
 #[derive(Clone)]
 pub enum FieldTy {
     Primitive(FieldPrimitive),
@@ -50,7 +62,7 @@ impl Field {
     }
 
     /// Gets the name.
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &FieldName {
         &self.name
     }
 
@@ -81,7 +93,7 @@ impl Field {
     /// Returns a fully qualified name for the field.
     pub fn full_name(&self, schema: &Schema) -> String {
         let model = schema.model(self.id.model);
-        format!("{}::{}", model.name.upper_camel_case(), self.name)
+        format!("{}::{}", model.name.upper_camel_case(), self.name.app_name)
     }
 
     /// If the field is a relation, return the relation's target ModelId.

@@ -46,6 +46,7 @@ impl Capability {
                 // These types shouldn't be used as default string types, but handle them gracefully
                 None
             }
+            db::Type::Custom(_) => None, // Custom types are not known to have a limited length
         }
     }
 

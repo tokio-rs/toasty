@@ -8,7 +8,7 @@ async fn specify_constrained_string_field(test: &mut DbTest) {
         #[auto]
         id: Id<Self>,
 
-        #[db(varchar(5))]
+        #[column(type = varchar(5))]
         name: String,
     }
 
@@ -34,7 +34,7 @@ async fn specify_invalid_varchar_size(test: &mut DbTest) {
         #[auto]
         id: Id<Self>,
 
-        #[db(varchar(1_000_000_000_000))]
+        #[column(type = varchar(1_000_000_000_000))]
         name: String,
     }
 
@@ -62,7 +62,7 @@ async fn specify_varchar_ty_when_not_supported(test: &mut DbTest) {
         #[auto]
         id: Id<Self>,
 
-        #[db(varchar(5))]
+        #[column(type = varchar(5))]
         name: String,
     }
 

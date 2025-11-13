@@ -1,4 +1,4 @@
-use super::{BelongsTo, ColumnType, ErrorSet, HasMany, HasOne, Name};
+use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
 
 use syn::spanned::Spanned;
 
@@ -34,8 +34,8 @@ pub(crate) struct FieldAttr {
     /// True if the field is indexed
     pub(crate) index: bool,
 
-    /// Optional database column type
-    pub(crate) db: Option<ColumnType>,
+    /// Optional database column name and / or type
+    pub(crate) column: Option<Column>,
 }
 
 #[derive(Debug)]
@@ -66,7 +66,7 @@ impl Field {
             unique: false,
             auto: false,
             index: false,
-            db: None,
+            column: None,
         };
 
         let mut ty = None;
@@ -136,18 +136,21 @@ impl Field {
                 } else {
                     ty = Some(FieldTy::HasOne(HasOne::from_ast(&field.ty, field.span())?));
                 }
-            } else if attr.path().is_ident("db") {
-                if attrs.db.is_some() {
-                    errs.push(syn::Error::new_spanned(attr, "duplicate #[db] attribute"));
+            } else if attr.path().is_ident("column") {
+                if attrs.column.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[column] attribute",
+                    ));
                 } else {
-                    attrs.db = Some(ColumnType::from_ast(attr)?);
+                    attrs.column = Some(Column::from_ast(attr)?);
                 }
             } else if attr.path().is_ident("toasty") {
                 // todo
             }
         }
 
-        if ty.is_some() && attrs.db.is_some() {
+        if ty.is_some() && attrs.column.is_some() {
             errs.push(syn::Error::new_spanned(
                 field,
                 "relation fields cannot have a database type",

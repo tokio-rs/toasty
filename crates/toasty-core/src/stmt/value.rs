@@ -1,3 +1,5 @@
+use anyhow::anyhow;
+
 use super::{sparse_record::SparseRecord, Entry, EntryPath, Id, Type, ValueEnum, ValueRecord};
 use std::hash::Hash;
 
@@ -269,5 +271,16 @@ where
 impl From<Vec<Value>> for Value {
     fn from(value: Vec<Value>) -> Self {
         Value::List(value)
+    }
+}
+
+impl TryFrom<Value> for String {
+    type Error = crate::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::String(value) => Ok(value),
+            _ => Err(anyhow!("value is not of type string")),
+        }
     }
 }
