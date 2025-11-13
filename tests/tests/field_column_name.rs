@@ -17,9 +17,12 @@ async fn specify_custom_column_name(test: &mut DbTest) {
     let u = User::create().name("foo").exec(&db).await.unwrap();
     assert_eq!(u.name, "foo");
 
+    let mut filter = std::collections::HashMap::new();
+    filter.insert("id".to_string(), toasty_core::stmt::Value::from(u.id));
+
     // Make sure the column has actually been renamed to my_name in the underlying database.
     assert_eq!(
-        test.get_raw_column_value::<String>("users", "my_name", Default::default())
+        test.get_raw_column_value::<String>("users", "my_name", filter)
             .await
             .unwrap(),
         "foo"
@@ -27,6 +30,10 @@ async fn specify_custom_column_name(test: &mut DbTest) {
 }
 
 async fn specify_custom_column_name_with_type(test: &mut DbTest) {
+    if test.capability().storage_types.varchar.is_none() {
+        return;
+    }
+
     #[derive(toasty::Model)]
     struct User {
         #[key]
