@@ -1,6 +1,9 @@
 mod eval;
 mod exec;
+
 mod hir;
+use hir::HirStatement;
+
 mod index;
 mod kv;
 mod mir;

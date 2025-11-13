@@ -79,7 +79,8 @@ impl<'a> Planner<'a> {
     }
 
     fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<Option<VarId>> {
-        self.lower_stmt(stmt)?;
+        let hir_stmt = self.lower_stmt(stmt)?;
+        self.store = hir_stmt.into_store();
 
         // Build the execution plan...
         self.plan_materializations();

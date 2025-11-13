@@ -10,6 +10,21 @@ use toasty_core::stmt;
 
 use crate::engine::mir;
 
+#[derive(Debug)]
+pub(super) struct HirStatement {
+    store: Store,
+}
+
+impl HirStatement {
+    pub(super) fn new(store: Store) -> HirStatement {
+        HirStatement { store }
+    }
+
+    pub(super) fn into_store(self) -> Store {
+        self.store
+    }
+}
+
 /// Additional information needed for planning a statement for materialization.
 /// Note, there is not a 1-1 mapping between `StatementInfo` and statements. A
 /// `StatementInfo` is used for statements that need to be materialized

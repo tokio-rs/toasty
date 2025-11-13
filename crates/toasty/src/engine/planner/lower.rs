@@ -21,15 +21,15 @@ use crate::engine::{
     hir,
     planner::Planner,
     simplify::{self, Simplify},
-    Engine,
+    Engine, HirStatement,
 };
 
 impl Planner<'_> {
-    pub(crate) fn lower_stmt(&mut self, stmt: stmt::Statement) -> Result<()> {
+    pub(crate) fn lower_stmt(&mut self, stmt: stmt::Statement) -> Result<HirStatement> {
         let schema = self.schema();
 
         let mut state = LoweringState {
-            store: &mut self.store,
+            store: hir::Store::new(),
             scopes: IndexVec::new(),
             engine: self.engine,
             relations: vec![],
@@ -43,7 +43,7 @@ impl Planner<'_> {
             return Err(err);
         }
 
-        Ok(())
+        Ok(HirStatement::new(state.store))
     }
 }
 
@@ -101,7 +101,7 @@ struct LoweringState<'a> {
 
     /// Statements to be executed by the database, though they may still be
     /// broken down into multiple sub-statements.
-    store: &'a mut hir::Store,
+    store: hir::Store,
 
     /// Scope state
     scopes: IndexVec<ScopeId, Scope>,
