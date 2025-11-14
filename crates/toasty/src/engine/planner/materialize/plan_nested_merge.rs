@@ -16,7 +16,7 @@ struct NestedMergePlanner<'a> {
     stack: Vec<hir::StmtId>,
 }
 
-impl super::MaterializePlanner<'_> {
+impl super::PlanStatement<'_> {
     pub(super) fn plan_nested_merge(&mut self, stmt_id: hir::StmtId) -> Option<mir::NodeId> {
         let stmt_state = &self.store[stmt_id];
 

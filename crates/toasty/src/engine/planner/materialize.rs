@@ -1,4 +1,4 @@
-mod materialize_nested_merge;
+mod plan_nested_merge;
 
 use index_vec::IndexVec;
 use indexmap::IndexSet;
@@ -7,7 +7,7 @@ use toasty_core::stmt::{self, visit, visit_mut, Condition};
 use crate::engine::{eval, hir, mir, planner::Planner, Engine};
 
 #[derive(Debug)]
-struct MaterializePlanner<'a> {
+struct PlanStatement<'a> {
     engine: &'a Engine,
 
     /// Root statement and all nested statements.
@@ -18,8 +18,8 @@ struct MaterializePlanner<'a> {
 }
 
 impl Planner<'_> {
-    pub(super) fn plan_materializations(&mut self) {
-        MaterializePlanner {
+    pub(super) fn plan_statement(&mut self) {
+        PlanStatement {
             engine: self.engine,
             store: &self.store,
             graph: &mut self.graph,
@@ -28,7 +28,7 @@ impl Planner<'_> {
     }
 }
 
-impl MaterializePlanner<'_> {
+impl PlanStatement<'_> {
     fn plan_materialize(&mut self) {
         let root_id = self.store.root_id();
         self.plan_materialize_statement(root_id);

@@ -74,7 +74,7 @@ impl<'a> Planner<'a> {
         self.store = hir_stmt.into_store();
 
         // Build the execution plan...
-        self.plan_materializations();
+        self.plan_statement();
 
         let mid = self.store.root().output.get().unwrap();
         let node = &self.graph[mid];
