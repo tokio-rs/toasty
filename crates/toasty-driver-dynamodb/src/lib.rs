@@ -149,7 +149,7 @@ fn ddb_key(table: &Table, key: &stmt::Value) -> HashMap<String, AttributeValue> 
             value => value,
         };
 
-        ret.insert(column.storage_name.clone(), ddb_val(value));
+        ret.insert(column.name.clone(), ddb_val(value));
     }
 
     ret
@@ -268,7 +268,7 @@ fn ddb_key_schema(partition: &Column, range: Option<&Column>) -> Vec<KeySchemaEl
 
     ks.push(
         KeySchemaElement::builder()
-            .attribute_name(&partition.storage_name)
+            .attribute_name(&partition.name)
             .key_type(KeyType::Hash)
             .build()
             .unwrap(),
@@ -277,7 +277,7 @@ fn ddb_key_schema(partition: &Column, range: Option<&Column>) -> Vec<KeySchemaEl
     if let Some(range) = range {
         ks.push(
             KeySchemaElement::builder()
-                .attribute_name(&range.storage_name)
+                .attribute_name(&range.name)
                 .key_type(KeyType::Range)
                 .build()
                 .unwrap(),
@@ -294,7 +294,7 @@ fn item_to_record<'a, 'stmt>(
     Ok(stmt::ValueRecord::from_vec(
         columns
             .map(|column| {
-                if let Some(value) = item.get(&column.storage_name) {
+                if let Some(value) = item.get(&column.name) {
                     ddb_to_val(&column.ty, value)
                 } else {
                     stmt::Value::Null
@@ -364,8 +364,7 @@ impl ExprAttrs {
         match self.columns.entry(column.id) {
             Entry::Vacant(e) => {
                 let name = format!("#col_{}", column.id.index);
-                self.attr_names
-                    .insert(name.clone(), column.storage_name.clone());
+                self.attr_names.insert(name.clone(), column.name.clone());
                 e.insert(name)
             }
             Entry::Occupied(e) => e.into_mut(),

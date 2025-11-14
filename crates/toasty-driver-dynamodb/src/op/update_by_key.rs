@@ -198,7 +198,7 @@ impl DynamoDb {
                 let attributes_to_get = index
                     .columns
                     .iter()
-                    .map(|index_column| index_column.table_column(schema).storage_name.clone())
+                    .map(|index_column| index_column.table_column(schema).name.clone())
                     .collect();
 
                 // Records that have had their unique values set initially
@@ -228,7 +228,7 @@ impl DynamoDb {
 
                     for (index, assignment) in op.assignments.iter() {
                         if column.id.index == index {
-                            if let Some(prev) = curr_unique_values.remove(&column.storage_name) {
+                            if let Some(prev) = curr_unique_values.remove(&column.name) {
                                 let stmt::Expr::Value(value) = &assignment.expr else {
                                     todo!()
                                 };
@@ -289,7 +289,7 @@ impl DynamoDb {
                     );
 
                     for (column_id, prev) in &updated_unique_attrs {
-                        let name = &schema.column(*column_id).storage_name;
+                        let name = &schema.column(*column_id).name;
                         // Delete the index entry for all rows that are updating
                         // their unique attribute.
                         transact_items.push(
@@ -306,7 +306,7 @@ impl DynamoDb {
                     }
 
                     for column_id in updated_unique_attrs.keys().chain(set_unique_attrs.keys()) {
-                        let name = &schema.column(*column_id).storage_name;
+                        let name = &schema.column(*column_id).name;
 
                         // Create the new entry if there is one.
                         let mut index_insert_items = HashMap::new();
@@ -324,8 +324,7 @@ impl DynamoDb {
                             };
 
                             if !value.is_null() {
-                                index_insert_items
-                                    .insert(column.storage_name.clone(), ddb_val(value));
+                                index_insert_items.insert(column.name.clone(), ddb_val(value));
                             }
                         }
 
@@ -340,8 +339,7 @@ impl DynamoDb {
                                 stmt::Value::Record(record) => &record[index],
                                 value => value,
                             };
-                            index_insert_items
-                                .insert(column.storage_name.clone(), ddb_val(key_field));
+                            index_insert_items.insert(column.name.clone(), ddb_val(key_field));
                         }
 
                         // Ensure value is unique

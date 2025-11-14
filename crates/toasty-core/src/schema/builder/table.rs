@@ -185,7 +185,7 @@ impl BuildTableFromModels<'_> {
 
             if let Some(column) = self.table.columns.get_mut(i) {
                 column.name = format!("key_{i}");
-                column.storage_name = column.name.clone();
+                column.name = column.name.clone();
 
                 match &mut column.ty {
                     stmt::Type::Enum(ty_enum) => {
@@ -258,8 +258,7 @@ impl BuildTableFromModels<'_> {
                 assert_eq!(self.table.columns.len(), i);
                 self.table.columns.push(db::Column {
                     id: column_id,
-                    name: name.app_name.clone(),
-                    storage_name: name.storage_name().to_owned(),
+                    name: name.storage_name().to_owned(),
                     ty,
                     storage_ty: None,
                     nullable: false,
@@ -385,8 +384,7 @@ impl BuildTableFromModels<'_> {
                 table: self.table.id,
                 index: self.table.columns.len(),
             },
-            name: name.app_name.clone(),
-            storage_name,
+            name: storage_name,
             ty: stmt_ty_to_table(primitive.ty.clone()),
             storage_ty: primitive.storage_ty.clone(),
             nullable,
@@ -413,7 +411,7 @@ impl BuildTableFromModels<'_> {
                 }
 
                 index.name.push('_');
-                index.name.push_str(&column.storage_name);
+                index.name.push_str(&column.name);
             }
         }
     }

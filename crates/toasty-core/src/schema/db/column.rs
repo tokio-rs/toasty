@@ -8,11 +8,8 @@ pub struct Column {
     /// Uniquely identifies the column in the schema.
     pub id: ColumnId,
 
-    /// The name of the column in Toasty.
-    pub name: String,
-
     /// The name of the column in the database.
-    pub storage_name: String,
+    pub name: String,
 
     /// The column type, from Toasty's point of view.
     pub ty: stmt::Type,
