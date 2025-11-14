@@ -1,6 +1,6 @@
 use toasty_core::{schema::db::TableId, stmt};
 
-use crate::engine::{exec, mir, planner::VarTable};
+use crate::engine::{exec, mir};
 
 #[derive(Debug)]
 pub(crate) struct DeleteByKey {
@@ -22,7 +22,7 @@ impl DeleteByKey {
         &self,
         graph: &mir::Store,
         node: &mir::Node,
-        var_table: &mut VarTable,
+        var_table: &mut exec::VarDecls,
     ) -> exec::DeleteByKey {
         let input = graph.var_id(self.input);
         let output = var_table.register_var(node.ty().clone());

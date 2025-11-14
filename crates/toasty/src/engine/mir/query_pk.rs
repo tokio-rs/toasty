@@ -4,7 +4,7 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::{exec, mir, planner::VarTable};
+use crate::engine::{exec, mir};
 
 #[derive(Debug)]
 pub(crate) struct QueryPk {
@@ -29,7 +29,7 @@ impl QueryPk {
         &self,
         graph: &mir::Store,
         node: &mir::Node,
-        var_table: &mut VarTable,
+        var_table: &mut exec::VarDecls,
     ) -> exec::QueryPk {
         let input = self.input.map(|node_id| graph.var_id(node_id));
         let output = var_table.register_var(node.ty().clone());

@@ -1,6 +1,6 @@
 use toasty_core::stmt;
 
-use crate::engine::{exec, mir, planner::VarTable};
+use crate::engine::{exec, mir};
 
 #[derive(Debug)]
 pub(crate) struct Const {
@@ -9,7 +9,7 @@ pub(crate) struct Const {
 }
 
 impl Const {
-    pub(crate) fn to_exec(&self, node: &mir::Node, var_table: &mut VarTable) -> exec::SetVar {
+    pub(crate) fn to_exec(&self, node: &mir::Node, var_table: &mut exec::VarDecls) -> exec::SetVar {
         let var = var_table.register_var(node.ty().clone());
         node.var.set(Some(var));
 

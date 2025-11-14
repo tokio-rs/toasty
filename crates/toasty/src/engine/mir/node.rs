@@ -3,7 +3,7 @@ use std::cell::Cell;
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::{exec, planner::VarTable};
+use crate::engine::exec;
 
 use super::{NodeId, Operation, Store};
 
@@ -47,7 +47,7 @@ impl Node {
         self.var.get().unwrap()
     }
 
-    pub(crate) fn to_exec(&self, graph: &Store, var_table: &mut VarTable) -> exec::Action {
+    pub(crate) fn to_exec(&self, graph: &Store, var_table: &mut exec::VarDecls) -> exec::Action {
         match &self.op {
             Operation::Const(op) => op.to_exec(self, var_table).into(),
             Operation::DeleteByKey(op) => op.to_exec(graph, self, var_table).into(),

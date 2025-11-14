@@ -4,7 +4,7 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::{exec, mir, planner::VarTable};
+use crate::engine::{exec, mir};
 
 #[derive(Debug)]
 pub(crate) struct GetByKey {
@@ -27,7 +27,7 @@ impl GetByKey {
         &self,
         graph: &mir::Store,
         node: &mir::Node,
-        var_table: &mut VarTable,
+        var_table: &mut exec::VarDecls,
     ) -> exec::GetByKey {
         let input = graph.var_id(self.input);
 

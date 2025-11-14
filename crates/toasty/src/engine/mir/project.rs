@@ -1,6 +1,6 @@
 use toasty_core::stmt;
 
-use crate::engine::{eval, exec, mir, planner::VarTable};
+use crate::engine::{eval, exec, mir};
 
 #[derive(Debug)]
 pub(crate) struct Project {
@@ -18,7 +18,7 @@ impl Project {
         &self,
         graph: &mir::Store,
         node: &mir::Node,
-        var_table: &mut VarTable,
+        var_table: &mut exec::VarDecls,
     ) -> exec::Project {
         let input_var = graph[self.input].var.get().unwrap();
 

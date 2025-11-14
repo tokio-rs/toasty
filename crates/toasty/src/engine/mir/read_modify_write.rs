@@ -1,7 +1,7 @@
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::{exec, mir, planner::VarTable};
+use crate::engine::{exec, mir};
 
 #[derive(Debug)]
 pub(crate) struct ReadModifyWrite {
@@ -23,7 +23,7 @@ impl ReadModifyWrite {
         &self,
         graph: &mir::Store,
         node: &mir::Node,
-        var_table: &mut VarTable,
+        var_table: &mut exec::VarDecls,
     ) -> exec::ReadModifyWrite {
         let input = self
             .inputs

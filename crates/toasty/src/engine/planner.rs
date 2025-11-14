@@ -1,11 +1,8 @@
 mod materialize;
 
-mod var;
-pub(super) use var::VarTable;
-
 use crate::{
     engine::{
-        exec::{ExecPlan, VarId},
+        exec::{ExecPlan, VarDecls, VarId},
         Engine,
     },
     Result,
@@ -28,7 +25,7 @@ struct Planner<'a> {
 
     /// Table of record stream slots. Used to figure out where to store outputs
     /// of actions.
-    var_table: VarTable,
+    var_table: VarDecls,
 
     /// Actions that will end up in the pipeline.
     actions: Vec<exec::Action>,
@@ -43,7 +40,7 @@ impl Engine {
             engine: self,
             store: super::hir::Store::new(),
             graph: super::mir::Store::new(),
-            var_table: VarTable::default(),
+            var_table: VarDecls::default(),
             actions: vec![],
             returning: None,
         };
