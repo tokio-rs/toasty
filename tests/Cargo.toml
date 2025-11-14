@@ -33,4 +33,7 @@ tempfile.workspace = true
 trybuild.workspace = true
 env_logger = "0.11.8"
 
+# Third-party types
+uuid.workspace = true
+
 [dev-dependencies]

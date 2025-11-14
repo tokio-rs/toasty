@@ -14,6 +14,10 @@ pub enum Type {
     /// Unconstrained text type
     Text,
 
+    /// 128-bit universally unique identifier (UUID)
+    Uuid,
+
+    /// Text type with an explicit maximum length
     VarChar(u64),
 
     /// User-specified unrecognized type
@@ -41,6 +45,7 @@ impl Type {
                 stmt::Type::U32 => Ok(Type::UnsignedInteger(4)),
                 stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
+                stmt::Type::Uuid => Ok(Type::Uuid),
                 // Gotta support some app-level types as well for now.
                 //
                 // TODO: not really correct, but we are getting rid of ID types

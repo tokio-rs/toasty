@@ -9,6 +9,8 @@ toasty-sql.workspace = true
 
 anyhow.workspace = true
 postgres.workspace = true
+postgres-types.workspace = true
 tokio.workspace = true
 tokio-postgres.workspace = true
+uuid.workspace = true
 url.workspace = true

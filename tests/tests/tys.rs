@@ -158,4 +158,25 @@ fn gen_string(length: usize, pattern: &str) -> String {
     }
 }
 
-tests!(ty_i8, ty_i16, ty_i32, ty_i64, ty_isize, ty_u8, ty_u16, ty_u32, ty_u64, ty_usize, ty_str,);
+async fn ty_uuid(test: &mut DbTest) {
+    #[derive(Debug, toasty::Model)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+        val: uuid::Uuid,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+    for _ in 0..16 {
+        let val = uuid::Uuid::new_v4();
+        let created = Foo::create().val(val).exec(&db).await.unwrap();
+        let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+        assert_eq!(read.val, val);
+    }
+}
+
+tests!(
+    ty_i8, ty_i16, ty_i32, ty_i64, ty_isize, ty_u8, ty_u16, ty_u32, ty_u64, ty_usize, ty_str,
+    ty_uuid
+);

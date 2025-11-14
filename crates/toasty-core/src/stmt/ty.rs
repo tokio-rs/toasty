@@ -37,6 +37,9 @@ pub enum Type {
     /// Unsigned 64-bit integer
     U64,
 
+    /// 128-bit universally unique identifier (UUID)
+    Uuid,
+
     /// An opaque type that uniquely identifies an instance of a model.
     Id(ModelId),
 
@@ -111,6 +114,10 @@ impl Type {
 
     pub fn is_record(&self) -> bool {
         matches!(self, Self::Record(..))
+    }
+
+    pub fn is_uuid(&self) -> bool {
+        matches!(self, Self::Uuid)
     }
 
     pub fn cast(&self, value: Value) -> Result<Value> {

@@ -12,6 +12,7 @@ bit-set = "0.8.0"
 indexmap.workspace = true
 std-util.workspace = true
 tokio-stream.workspace = true
+uuid.workspace = true
 
 [features]
 assert-struct = ["dep:assert-struct"]
