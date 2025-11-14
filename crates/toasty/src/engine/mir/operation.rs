@@ -7,7 +7,10 @@ use super::{
     QueryPk, ReadModifyWrite, UpdateByKey,
 };
 
-/// Materialization operation
+/// A step in the query execution plan.
+///
+/// Operations represent units of work: loading data from the database,
+/// filtering results, transforming records, or combining nested data.
 #[derive(Debug)]
 pub(crate) enum Operation {
     /// A constant value

@@ -846,7 +846,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
         // The `batch_load_index` is the index for this reference in the row
         // returned from the target statement's ExecStatement operation. This
-        // ExecStatement operation batch loads all records needed to materialize
+        // ExecStatement operation batch loads all records needed to execute
         // the full root statement.
         let (batch_load_index, _) = target
             .back_refs
@@ -855,8 +855,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             .exprs
             .insert_full(expr_reference);
 
-        // Create an argument for inputing the expr reference's materialized
-        // value into the statement.
+        // Create an argument for inputing the expr reference's value into the statement.
         let source = &mut self.state.store[source_id];
         let arg = source.args.len();
 

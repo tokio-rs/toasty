@@ -9,7 +9,7 @@ use crate::engine::{exec, mir};
 #[derive(Debug)]
 pub(crate) struct GetByKey {
     /// Keys are always specified as an input, whether const or a set of
-    /// dependent materializations and transformations.
+    /// dependent operations.
     pub(crate) input: mir::NodeId,
 
     /// The table to get keys from

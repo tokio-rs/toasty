@@ -25,10 +25,10 @@ impl HirStatement {
     }
 }
 
-/// Additional information needed for planning a statement for materialization.
-/// Note, there is not a 1-1 mapping between `StatementInfo` and statements. A
-/// `StatementInfo` is used for statements that need to be materialized
-/// separately.
+/// Planning metadata for a statement.
+///
+/// Not all statements have a `StatementInfo`. Only statements that execute as
+/// separate operations in the query plan have one.
 #[derive(Debug)]
 pub(super) struct StatementInfo {
     /// Populated later
@@ -45,7 +45,7 @@ pub(super) struct StatementInfo {
     /// current statemetn.
     pub(super) back_refs: HashMap<StmtId, BackRef>,
 
-    /// This statement's ExecStatement materialization node ID.
+    /// Node ID of the operation that executes this statement's database query.
     pub(super) exec_statement: Cell<Option<mir::NodeId>>,
 
     /// Columns selected by exec_statement
@@ -114,33 +114,39 @@ pub(super) struct BackRef {
 
 #[derive(Debug)]
 pub(super) enum Arg {
-    /// A sub-statement
+    /// A sub-statement argument.
     Sub {
-        /// The statement ID providing the input
+        /// The statement ID that provides the data for this argument.
         stmt_id: StmtId,
 
-        /// True when the sub is used in the returning clause
+        /// True when the sub-statement is used in the returning clause, false when used in filters.
+        ///
+        /// Determines how the sub-statement is handled during planning:
+        /// - `true`: Data is merged with parent rows via `NestedMerge`
+        /// - `false`: Data is used as input to filter expressions
         returning: bool,
 
-        /// The index in the materialization node's inputs list. This is set
-        /// when planning materialization.
+        /// Index in the operation's inputs list. Set during planning.
         input: Cell<Option<usize>>,
     },
 
-    /// A reference to a parent statement.
+    /// A reference to a parent statement's columns.
     Ref {
-        /// The statement providing the data for the reference
+        /// The parent statement that provides the data for this reference.
         stmt_id: StmtId,
 
-        /// The nesting level
+        /// Number of nesting levels between this statement and the referenced parent.
+        ///
+        /// A value of 1 means the immediate parent, 2 means the grandparent, etc.
         nesting: usize,
 
-        /// The index of the column within the set of columns included during
-        /// the batch-load query.
+        /// Index of this column in the parent's batch-load query results.
+        ///
+        /// The parent statement includes columns in its batch-load that are referenced
+        /// by child statements. This is the index of this specific column in that set.
         batch_load_index: usize,
 
-        /// The index in the materialization node's inputs list. This is set
-        /// when planning materialization.
+        /// Index in the operation's inputs list. Set during planning.
         input: Cell<Option<usize>>,
     },
 }
