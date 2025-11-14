@@ -228,7 +228,7 @@ impl PlanStatement<'_> {
             }
         }
 
-        let mut dependencies = Some(stmt_info.dependent_materializations(self.store));
+        let mut dependencies = Some(stmt_info.dependent_operations(self.store));
 
         let exec_stmt_node_id = if stmt.is_const() {
             debug_assert!(stmt_info.deps.is_empty());

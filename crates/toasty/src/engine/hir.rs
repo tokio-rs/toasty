@@ -78,17 +78,14 @@ impl StatementInfo {
         }
     }
 
-    /// Returns an iterator over the materialization node IDs that this statement
-    /// depends on.
+    /// Returns an iterator over the node IDs that this statement depends on.
     ///
-    /// Dependencies must execute before this statement for consistency, even if
-    /// their results are not directly consumed. For example, an UPDATE operation
-    /// may depend on a prior INSERT completing first to maintain referential
-    /// integrity.
+    /// Dependencies must execute before this statement, even if their results
+    /// are not directly consumed. For example, an UPDATE may depend on a prior
+    /// INSERT to maintain referential integrity.
     ///
-    /// Each dependency is represented by its output node ID - the final
-    /// computation node that produces the dependency's result.
-    pub(super) fn dependent_materializations<'a>(
+    /// Each dependency is represented by its output node ID.
+    pub(super) fn dependent_operations<'a>(
         &'a self,
         store: &'a Store,
     ) -> impl Iterator<Item = mir::NodeId> + 'a {
@@ -100,10 +97,18 @@ impl StatementInfo {
 
 #[derive(Debug, Default)]
 pub(super) struct BackRef {
-    /// The expression
+    /// Column expressions from this statement that are referenced by a child statement.
+    ///
+    /// When a child statement references columns from this statement (via `Arg::Ref`),
+    /// those columns must be included in this statement's batch-load query. This set
+    /// tracks which columns need to be loaded so they can be used during nested merge.
     pub(super) exprs: IndexSet<stmt::ExprReference>,
 
-    /// Projection materialization node ID
+    /// Node ID of the projection operation that extracts these back-ref columns.
+    ///
+    /// After executing this statement, a projection node is created to extract just
+    /// the columns needed by child statements. This projection's output is used as
+    /// input to the child statement's batch-load operation.
     pub(super) node_id: Cell<Option<mir::NodeId>>,
 }
 
