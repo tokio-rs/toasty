@@ -62,9 +62,9 @@ use crate::{
 ///
 /// # See Also
 ///
-/// - [`schema::db::Type`](crate::schema::db::Type) - External database storage
-/// types - [`stmt::Value`] - Values typed by this system - [`stmt::Expr`] -
-/// Expressions typed by this system
+/// - [`schema::db::Type`](crate::schema::db::Type) External database storage types
+/// - [`stmt::Value`] - Values typed by this system
+/// - [`stmt::Expr`] - Expressions typed by this system
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     /// Boolean value
