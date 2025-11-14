@@ -834,8 +834,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let nesting = expr_column.nesting;
 
         // We only track references that point to statements being executed by
-        // separate materializations. References within the same materialization
-        // are handled by the target database.
+        // separate operations. References within the same operation are handled
+        // by the target database.
         debug_assert!(nesting != 0);
 
         // Set the nesting to zero as the stored ExprReference will be used from

@@ -9,7 +9,7 @@ use super::{NodeId, Operation, Store};
 
 #[derive(Debug)]
 pub(crate) struct Node {
-    /// Materialization kind
+    /// Operation kind
     pub(crate) op: Operation,
 
     /// Nodes that must execute *before* the current one. This should be a

@@ -33,9 +33,13 @@ impl super::PlanStatement<'_> {
     ///    - How to project the combined parent+children into the final shape
     ///
     /// The resulting `NestedMerge` will execute by:
-    /// - Loading all batch data upfront
-    /// - For each parent row, filtering and recursively merging its children
-    /// - Projecting each row with its nested children into the final result
+    /// - Loading all batch data upfront - fetches all input data for all levels before processing
+    /// - Processing each root row:
+    ///   - For each nested child relationship, filters batch-loaded child data and recursively
+    ///     merges matching rows with their own children
+    ///   - Collects results into a list, or a single value if `single` is `true`
+    ///   - Projects the final row with the current row and all nested children
+    /// - Returning all merged rows with their nested data
     ///
     /// # Example
     ///
