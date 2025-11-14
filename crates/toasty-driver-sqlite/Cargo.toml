@@ -11,6 +11,7 @@ toasty-sql.workspace = true
 anyhow.workspace = true
 rusqlite.workspace = true
 url.workspace = true
+uuid.workspace = true
 
 # TODO: get rid of
 serde.workspace = true

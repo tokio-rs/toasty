@@ -225,9 +225,12 @@ fn mysql_to_toasty(
     match column.column_type() {
         MYSQL_TYPE_NULL => stmt::Value::Null,
 
-        MYSQL_TYPE_VARCHAR | MYSQL_TYPE_VAR_STRING | MYSQL_TYPE_BLOB => {
-            assert!(ty.is_string());
-            extract_or_null(row, i, stmt::Value::String)
+        MYSQL_TYPE_VARCHAR | MYSQL_TYPE_VAR_STRING | MYSQL_TYPE_STRING | MYSQL_TYPE_BLOB => {
+            match ty {
+                stmt::Type::String => extract_or_null(row, i, stmt::Value::String),
+                stmt::Type::Uuid => extract_or_null(row, i, stmt::Value::Uuid),
+                _ => todo!("ty={ty:#?}"),
+            }
         }
 
         MYSQL_TYPE_TINY | MYSQL_TYPE_SHORT | MYSQL_TYPE_INT24 | MYSQL_TYPE_LONG

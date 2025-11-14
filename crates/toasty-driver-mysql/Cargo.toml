@@ -11,3 +11,4 @@ anyhow.workspace = true
 mysql_async.workspace = true
 tokio.workspace = true
 url.workspace = true
+uuid.workspace = true

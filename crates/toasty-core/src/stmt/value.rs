@@ -53,6 +53,9 @@ pub enum Value {
 
     /// String value, either borrowed or owned
     String(String),
+
+    /// 128-bit universally unique identifier (UUID)
+    Uuid(uuid::Uuid),
 }
 
 impl Value {
@@ -175,6 +178,7 @@ impl Value {
                 _ => false,
             },
             Self::String(_) => ty.is_string(),
+            Self::Uuid(_) => ty.is_uuid(),
             _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
     }
@@ -198,6 +202,7 @@ impl Value {
             Value::U16(_) => Type::U16,
             Value::U32(_) => Type::U32,
             Value::U64(_) => Type::U64,
+            Value::Uuid(_) => Type::Uuid,
         }
     }
 
@@ -281,6 +286,23 @@ impl TryFrom<Value> for String {
         match value {
             Value::String(value) => Ok(value),
             _ => Err(anyhow!("value is not of type string")),
+        }
+    }
+}
+
+impl From<uuid::Uuid> for Value {
+    fn from(value: uuid::Uuid) -> Self {
+        Self::Uuid(value)
+    }
+}
+
+impl TryFrom<Value> for uuid::Uuid {
+    type Error = crate::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Uuid(value) => Ok(value),
+            _ => Err(anyhow!("value is not of type UUID")),
         }
     }
 }
