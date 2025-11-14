@@ -64,7 +64,6 @@ impl Driver for Sqlite {
     }
 
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        eprintln!("{op:#?}");
         let connection = self.connection.lock().unwrap();
 
         let (sql, ret_tys): (sql::Statement, _) = match op {
@@ -87,7 +86,6 @@ impl Driver for Sqlite {
 
         let mut params = vec![];
         let sql_str = sql::Serializer::sqlite(schema).serialize(&sql, &mut params);
-        eprintln!("{sql_str}  {:#?}", params);
 
         let mut stmt = connection.prepare(&sql_str).unwrap();
 
