@@ -75,8 +75,39 @@ async fn specify_varchar_ty_when_not_supported(test: &mut DbTest) {
     assert_eq!(err.to_string(), "varchar storage type not supported");
 }
 
+async fn specify_different_uuid_type(test: &mut DbTest) {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        #[column(type = text)]
+        val: uuid::Uuid,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+
+    for _ in 0..16 {
+        let val = uuid::Uuid::new_v4();
+        let created = Foo::create().val(val).exec(&db).await.unwrap();
+        let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+        assert_eq!(read.val, val);
+
+        let mut filter = std::collections::HashMap::new();
+        filter.insert("id".to_string(), toasty_core::stmt::Value::from(created.id));
+        let raw_value = test
+            .get_raw_column_value::<String>("foos", "val", filter)
+            .await
+            .unwrap();
+        assert_eq!(raw_value, val.to_string());
+    }
+}
+
 tests!(
     specify_constrained_string_field,
     specify_invalid_varchar_size,
     specify_varchar_ty_when_not_supported,
+    specify_different_uuid_type,
 );

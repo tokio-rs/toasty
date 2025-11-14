@@ -37,19 +37,26 @@ impl ToSql for &db::Type {
                 }
             }
             db::Type::Text => fmt!(cx, f, "TEXT"),
+            db::Type::VarChar(size) => fmt!(cx, f, "VARCHAR(" size ")"),
             db::Type::Uuid => {
                 fmt!(
                     cx,
                     f,
-                    // PostgreSQL has a native UUID type. For the others we fall back to binary blobs.
                     match f.serializer.flavor {
                         Flavor::Postgresql => "UUID",
-                        Flavor::Sqlite => "BLOB",
-                        Flavor::Mysql => "BINARY(16)",
+                        _ => todo!("Unsupported type UUID"),
                     }
                 );
             }
-            db::Type::VarChar(size) => fmt!(cx, f, "VARCHAR(" size ")"),
+            db::Type::Binary(size) => match f.serializer.flavor {
+                Flavor::Mysql => fmt!(cx, f, "BINARY(" size ")"),
+                _ => todo!("Unsupported fixed size binary type"),
+            },
+            db::Type::Blob => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, "BYTEA"),
+                Flavor::Mysql => fmt!(cx, f, "VARBINARY"),
+                Flavor::Sqlite => fmt!(cx, f, "BLOB"),
+            },
             db::Type::Custom(custom) => fmt!(cx, f, custom.as_str()),
         }
     }

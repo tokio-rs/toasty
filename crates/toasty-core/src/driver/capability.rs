@@ -28,6 +28,9 @@ pub struct StorageTypes {
     /// limit.
     pub varchar: Option<u64>,
 
+    /// The default storage type for a UUID.
+    pub default_uuid_type: db::Type,
+
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
     pub max_unsigned_integer: Option<u64>,
@@ -45,7 +48,9 @@ impl Capability {
             db::Type::Boolean
             | db::Type::Integer(_)
             | db::Type::UnsignedInteger(_)
-            | db::Type::Uuid => {
+            | db::Type::Uuid
+            | db::Type::Binary(_)
+            | db::Type::Blob => {
                 // These types shouldn't be used as default string types, but handle them gracefully
                 None
             }
@@ -103,6 +108,10 @@ impl StorageTypes {
         // the SQLITE_MAX_LENGTH parameter, which is set to 1 billion by default.
         varchar: Some(1_000_000_000),
 
+        // SQLite does not have an inbuilt UUID type. The binary blob type is more
+        // difficult to read than Text but likely has better performance characteristics.
+        default_uuid_type: db::Type::Blob,
+
         // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
         // are limited to i64::MAX to prevent overflow
         max_unsigned_integer: Some(i64::MAX as u64),
@@ -115,6 +124,8 @@ impl StorageTypes {
         // declare varchar with a larger typmod will be rejected at
         // table‐creation time.
         varchar: Some(10_485_760),
+
+        default_uuid_type: db::Type::Uuid,
 
         // PostgreSQL BIGINT is signed 64-bit, so unsigned integers are limited
         // to i64::MAX. While NUMERIC could theoretically support larger values,
@@ -131,6 +142,10 @@ impl StorageTypes {
         // which is shared among all columns) and the character set used.
         varchar: Some(65_535),
 
+        // MySQL does not have an inbuilt UUID type. The binary blob type is more
+        // difficult to read than Text but likely has better performance characteristics.
+        default_uuid_type: db::Type::Binary(16),
+
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
     };
@@ -140,6 +155,8 @@ impl StorageTypes {
 
         // DynamoDB does not support varchar types
         varchar: None,
+
+        default_uuid_type: db::Type::Text,
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,
