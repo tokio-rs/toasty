@@ -42,7 +42,10 @@ impl Capability {
         match &self.storage_types.default_string_type {
             db::Type::VarChar(len) => Some(*len),
             db::Type::Text => None, // Text types typically have very large or unlimited length
-            db::Type::Boolean | db::Type::Integer(_) | db::Type::UnsignedInteger(_) => {
+            db::Type::Boolean
+            | db::Type::Integer(_)
+            | db::Type::UnsignedInteger(_)
+            | db::Type::Uuid => {
                 // These types shouldn't be used as default string types, but handle them gracefully
                 None
             }

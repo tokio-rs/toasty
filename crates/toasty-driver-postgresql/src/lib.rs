@@ -294,6 +294,14 @@ fn postgres_to_toasty(
                 _ => stmt::Value::I64(v), // Default fallback
             })
             .unwrap_or(stmt::Value::Null)
+    } else if column.type_() == &Type::UUID {
+        row.get::<usize, Option<uuid::Uuid>>(index)
+            .map(|v| match expected_ty {
+                stmt::Type::Uuid => stmt::Value::Uuid(v),
+                stmt::Type::String => stmt::Value::String(v.to_string()),
+                _ => stmt::Value::Uuid(v),
+            })
+            .unwrap_or(stmt::Value::Null)
     } else {
         todo!(
             "implement PostgreSQL to toasty conversion for `{:#?}`",
@@ -315,6 +323,7 @@ fn postgres_ty_for_value(value: &stmt::Value) -> Type {
         stmt::Value::U64(_) => Type::INT8,
         stmt::Value::Id(_) => Type::TEXT,
         stmt::Value::String(_) => Type::TEXT,
+        stmt::Value::Uuid(_) => Type::UUID,
         stmt::Value::Null => Type::TEXT, // Default for NULL values
         _ => todo!("postgres_ty_for_value: {value:#?}"),
     }

@@ -647,6 +647,7 @@ fn stmt_ty_to_table(ty: stmt::Type) -> stmt::Type {
         stmt::Type::U32 => stmt::Type::U32,
         stmt::Type::U64 => stmt::Type::U64,
         stmt::Type::String => stmt::Type::String,
+        stmt::Type::Uuid => stmt::Type::Uuid,
         stmt::Type::Id(_) => stmt::Type::String,
         _ => todo!("{ty:#?}"),
     }

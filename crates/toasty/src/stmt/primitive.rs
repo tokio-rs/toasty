@@ -100,3 +100,16 @@ impl<T: Primitive> Primitive for Option<T> {
         }
     }
 }
+
+impl Primitive for uuid::Uuid {
+    fn ty() -> stmt::Type {
+        stmt::Type::Uuid
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::Uuid(v) => Ok(v),
+            _ => anyhow::bail!("cannot convert value to uuid::Uuid {value:#?}"),
+        }
+    }
+}
