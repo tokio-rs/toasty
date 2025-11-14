@@ -45,7 +45,7 @@ impl DynamoDb {
                 let value = entry.as_value();
 
                 if !value.is_null() {
-                    items.insert(column.storage_name.clone(), ddb_val(value));
+                    items.insert(column.name.clone(), ddb_val(value));
                 }
             }
             insert_items.push(items);
@@ -102,27 +102,25 @@ impl DynamoDb {
                     for index_column in &index.columns {
                         let column = schema.column(index_column.column);
 
-                        if !insert_items.contains_key(&column.storage_name) {
+                        if !insert_items.contains_key(&column.name) {
                             nullable = true;
                             break;
                         }
 
-                        index_insert_items.insert(
-                            column.storage_name.clone(),
-                            insert_items[&column.storage_name].clone(),
-                        );
+                        index_insert_items
+                            .insert(column.name.clone(), insert_items[&column.name].clone());
 
                         if condition_expression.is_empty() {
                             let name = format!("#{}", column.id.index);
                             condition_expression = format!("attribute_not_exists({name})");
-                            expression_names.insert(name, column.storage_name.clone());
+                            expression_names.insert(name, column.name.clone());
                         }
                     }
 
                     if !nullable {
                         // Add primary key values
                         for column in table.primary_key_columns() {
-                            let name = &column.storage_name;
+                            let name = &column.name;
                             index_insert_items.insert(name.clone(), insert_items[name].clone());
                         }
 

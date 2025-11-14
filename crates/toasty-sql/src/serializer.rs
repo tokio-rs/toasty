@@ -101,6 +101,6 @@ impl<'a> Serializer<'a> {
 
     fn column_name(&self, id: impl Into<db::ColumnId>) -> Ident<&str> {
         let column = self.schema.column(id.into());
-        Ident(&column.storage_name)
+        Ident(&column.name)
     }
 }
