@@ -1,5 +1,28 @@
 use toasty_core::{driver::Rows, stmt};
 
+/// Tracks variable declarations during planning. Each variable has a type and
+/// is assigned a unique VarId. This is converted into a VarStore for execution.
+#[derive(Debug, Default)]
+pub(crate) struct VarDecls {
+    /// Variable types
+    vars: Vec<stmt::Type>,
+}
+
+impl VarDecls {
+    #[track_caller]
+    pub(crate) fn register_var(&mut self, ty: stmt::Type) -> VarId {
+        debug_assert!(ty.is_list() || ty.is_unit(), "{ty:#?}");
+        // Register a new slot
+        let ret = self.vars.len();
+        self.vars.push(ty);
+        VarId(ret)
+    }
+
+    pub(crate) fn into_vec(self) -> Vec<stmt::Type> {
+        self.vars
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct VarStore {
     slots: Vec<Option<Entry>>,

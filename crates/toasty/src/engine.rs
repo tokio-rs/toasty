@@ -1,7 +1,13 @@
 mod eval;
 mod exec;
+
+mod hir;
+use hir::HirStatement;
+
 mod index;
 mod kv;
+mod lower;
+mod mir;
 mod planner;
 mod simplify;
 use simplify::Simplify;

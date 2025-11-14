@@ -41,7 +41,7 @@ mod update_by_key;
 pub(crate) use update_by_key::UpdateByKey;
 
 mod var;
-pub(crate) use var::{VarId, VarStore};
+pub(crate) use var::{VarDecls, VarId, VarStore};
 
 use crate::{engine::Engine, Result};
 use toasty_core::{
