@@ -132,6 +132,10 @@ impl Type {
             (value @ Value::String(_), Self::String) => value,
             (Value::Id(value), _) => value.cast(self)?,
             (Value::String(value), Self::Id(ty)) => Value::Id(Id::from_string(*ty, value)),
+            (Value::Uuid(value), Self::String) => Value::String(value.to_string()),
+            (Value::String(value), Self::Uuid) => {
+                Value::Uuid(value.parse().expect("could not parse uuid"))
+            }
             (Value::Record(record), Self::SparseRecord(fields)) => {
                 Value::sparse_record(fields.clone(), record)
             }

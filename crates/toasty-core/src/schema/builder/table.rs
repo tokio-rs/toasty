@@ -555,6 +555,14 @@ impl BuildMapping<'_> {
 
         assert_ne!(stmt::Type::Null, *ty);
 
+        if let Some(storage_ty) = &column.storage_ty {
+            if let (stmt::Type::Uuid, db::Type::Text | db::Type::VarChar(_)) =
+                (&column.ty, storage_ty)
+            {
+                return stmt::Expr::cast(expr, stmt::Type::String);
+            }
+        }
+
         match &column.ty {
             column_ty if column_ty == ty => expr,
             stmt::Type::Enum(ty_enum) => {
@@ -607,6 +615,14 @@ impl BuildMapping<'_> {
             table: 0,
             column: column_id.index,
         });
+
+        if let Some(storage_ty) = &column.storage_ty {
+            if let (stmt::Type::Uuid, db::Type::Text | db::Type::VarChar(_)) =
+                (&column.ty, storage_ty)
+            {
+                return stmt::Expr::cast(expr_column, stmt::Type::Uuid);
+            }
+        }
 
         match &column.ty {
             c_ty if *c_ty == primitive.ty => expr_column,
