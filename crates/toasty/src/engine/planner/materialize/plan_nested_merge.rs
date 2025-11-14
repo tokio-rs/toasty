@@ -17,6 +17,39 @@ struct NestedMergePlanner<'a> {
 }
 
 impl super::PlanStatement<'_> {
+    /// Builds a nested merge operation for queries with sub-statement arguments
+    /// in the returning clause.
+    ///
+    /// When a query has `Arg::Sub { returning: true, .. }` arguments
+    /// (sub-statements used in the returning clause), those represent nested
+    /// data that needs to be merged with their parent rows. This method
+    /// constructs a `NestedMerge` execution plan that:
+    ///
+    /// 1. Identifies all batch-loaded inputs needed (parent and child queries)
+    /// 2. Builds a tree structure mirroring the nesting hierarchy
+    /// 3. For each level, captures:
+    ///    - The source data (reference to batch-loaded results)
+    ///    - How to filter child rows for each parent (qualification predicates)
+    ///    - How to project the combined parent+children into the final shape
+    ///
+    /// The resulting `NestedMerge` will execute by:
+    /// - Loading all batch data upfront
+    /// - For each parent row, filtering and recursively merging its children
+    /// - Projecting each row with its nested children into the final result
+    ///
+    /// # Example
+    ///
+    /// For a query like:
+    /// ```sql
+    /// SELECT user.*, (SELECT * FROM todos WHERE user_id = user.id) as todos
+    /// FROM users
+    /// ```
+    ///
+    /// This builds a two-level merge where:
+    /// - Root level: user rows from batch load
+    /// - Nested level: todo rows filtered by user_id match, projected into a list
+    ///
+    /// Returns `None` if the statement has no sub-statements with `returning: true`.
     pub(super) fn plan_nested_merge(&mut self, stmt_id: hir::StmtId) -> Option<mir::NodeId> {
         let stmt_state = &self.store[stmt_id];
 
@@ -41,8 +74,8 @@ impl super::PlanStatement<'_> {
             stack: vec![],
         };
 
-        let nested_merge_materialization = nested_merge_planner.plan_nested_merge(stmt_id);
-        let node_id = self.graph.insert(nested_merge_materialization);
+        let nested_merges = nested_merge_planner.plan_nested_merge(stmt_id);
+        let node_id = self.graph.insert(nested_merges);
 
         Some(node_id)
     }
