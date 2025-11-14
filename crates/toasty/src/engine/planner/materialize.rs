@@ -13,31 +13,28 @@ struct PlanStatement<'a> {
     /// Root statement and all nested statements.
     store: &'a hir::Store,
 
-    /// Graph of operations needed to materialize the statement, in-progress
+    /// Graph of operations needed to execute the statement
     graph: &'a mut mir::Store,
 }
 
 impl Planner<'_> {
     pub(super) fn plan_statement(&mut self) {
-        PlanStatement {
+        let mut planner = PlanStatement {
             engine: self.engine,
             store: &self.store,
             graph: &mut self.graph,
-        }
-        .plan_materialize();
+        };
+
+        let root_id = planner.store.root_id();
+        planner.plan_statement(root_id);
+
+        let exit = planner.store.root().output.get().unwrap();
+        planner.compute_operation_execution_order(exit);
     }
 }
 
 impl PlanStatement<'_> {
-    fn plan_materialize(&mut self) {
-        let root_id = self.store.root_id();
-        self.plan_materialize_statement(root_id);
-
-        let exit = self.store.root().output.get().unwrap();
-        self.compute_materialization_execution_order(exit);
-    }
-
-    fn plan_materialize_statement(&mut self, stmt_id: hir::StmtId) {
+    fn plan_statement(&mut self, stmt_id: hir::StmtId) {
         let stmt_info = &self.store[stmt_id];
         let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
 
@@ -49,7 +46,7 @@ impl PlanStatement<'_> {
         // First, plan dependency statements. These are statments that must run
         // before the current one but do not reference the current statement.
         for &dep_stmt_id in &stmt_info.deps {
-            self.plan_materialize_statement(dep_stmt_id);
+            self.plan_statement(dep_stmt_id);
         }
 
         // Tracks if the original query is a single query.
@@ -63,7 +60,7 @@ impl PlanStatement<'_> {
         // Columns to select
         let mut columns = IndexSet::new();
 
-        // Materialization nodes this one depends on and uses the output of.
+        // Operation nodes this one depends on and uses the output of.
         let mut inputs = IndexSet::new();
 
         // Visit the main statement's returning clause to extract needed columns
@@ -277,11 +274,11 @@ impl PlanStatement<'_> {
 
                     if self.engine.capability().cte_with_update {
                         mir::Operation::ExecStatement(Box::new(
-                            self.plan_materialize_conditional_sql_query_as_cte(inputs, stmt, ty),
+                            self.plan_conditional_sql_query_as_cte(inputs, stmt, ty),
                         ))
                     } else {
                         mir::Operation::ReadModifyWrite(Box::new(
-                            self.plan_materialize_conditional_sql_query_as_rmw(inputs, stmt, ty),
+                            self.plan_conditional_sql_query_as_rmw(inputs, stmt, ty),
                         ))
                     }
                 } else {
@@ -310,8 +307,8 @@ impl PlanStatement<'_> {
             self.graph
                 .insert_with_deps(node, dependencies.take().unwrap())
         } else {
-            // Without SQL capability, we have to plan the materialization of
-            // the statement based on available indices.
+            // Without SQL capability, we have to plan the execution of the
+            // statement based on available indices.
             let mut index_plan = self.engine.plan_index_path(&stmt);
             let table_id = self.engine.resolve_table_for(&stmt).id;
 
@@ -547,7 +544,7 @@ impl PlanStatement<'_> {
             node_id
         };
 
-        // Track the exec statement materialization node.
+        // Track the exec statement operation node.
         stmt_info.exec_statement.set(Some(exec_stmt_node_id));
 
         // Now, for each back ref, we need to project the expression to what the
@@ -579,7 +576,7 @@ impl PlanStatement<'_> {
                 continue;
             };
 
-            self.plan_materialize_statement(*stmt_id);
+            self.plan_statement(*stmt_id);
         }
 
         // Plans a NestedMerge if one is needed
@@ -643,8 +640,7 @@ impl PlanStatement<'_> {
         stmt_info.output.set(Some(output_node_id));
     }
 
-    // plan_materialize_conditional_sql_query_as_cte
-    fn plan_materialize_conditional_sql_query_as_cte(
+    fn plan_conditional_sql_query_as_cte(
         &self,
         inputs: IndexSet<mir::NodeId>,
         stmt: stmt::Update,
@@ -791,7 +787,7 @@ impl PlanStatement<'_> {
         }
     }
 
-    fn plan_materialize_conditional_sql_query_as_rmw(
+    fn plan_conditional_sql_query_as_rmw(
         &mut self,
         inputs: IndexSet<mir::NodeId>,
         stmt: stmt::Update,
@@ -848,9 +844,9 @@ impl PlanStatement<'_> {
         }
     }
 
-    fn compute_materialization_execution_order(&mut self, exit: mir::NodeId) {
+    fn compute_operation_execution_order(&mut self, exit: mir::NodeId) {
         debug_assert!(self.graph.execution_order.is_empty());
-        compute_materialization_execution_order2(
+        compute_operation_execution_order2(
             exit,
             &self.graph.store,
             &mut self.graph.execution_order,
@@ -878,7 +874,7 @@ impl PlanStatement<'_> {
     }
 }
 
-fn compute_materialization_execution_order2(
+fn compute_operation_execution_order2(
     node_id: mir::NodeId,
     graph: &IndexVec<mir::NodeId, mir::Node>,
     execution_order: &mut Vec<mir::NodeId>,
@@ -895,7 +891,7 @@ fn compute_materialization_execution_order2(
         let dep = &graph[dep_id];
         dep.num_uses.set(dep.num_uses.get() + 1);
 
-        compute_materialization_execution_order2(dep_id, graph, execution_order);
+        compute_operation_execution_order2(dep_id, graph, execution_order);
     }
 
     execution_order.push(node_id);

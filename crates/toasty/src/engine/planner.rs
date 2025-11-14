@@ -19,8 +19,7 @@ struct Planner<'a> {
     /// Stores decomposed statement info
     store: hir::Store,
 
-    /// Graph of materialization steps to execute the original statement being
-    /// planned.
+    /// Graph of operations needed to execute the statement.
     graph: super::mir::Store,
 
     /// Table of record stream slots. Used to figure out where to store outputs
