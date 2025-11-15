@@ -259,8 +259,8 @@ impl BuildTableFromModels<'_> {
                 self.table.columns.push(db::Column {
                     id: column_id,
                     name: name.storage_name().to_owned(),
-                    ty,
-                    storage_ty: db::Type::Text,
+                    ty: ty.clone(),
+                    storage_ty: db::Type::from_app(&ty, None, &self.db.storage_types).unwrap(),
                     nullable: false,
                     primary_key: true,
                 });
