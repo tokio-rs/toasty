@@ -8,7 +8,7 @@ mod index;
 mod kv;
 mod lower;
 mod mir;
-mod planner;
+mod plan;
 mod simplify;
 use simplify::Simplify;
 mod ty;
