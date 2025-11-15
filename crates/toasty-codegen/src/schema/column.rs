@@ -58,12 +58,24 @@ impl syn::parse::Parse for Column {
 }
 
 mod kw {
+    syn::custom_keyword!(boolean);
+    syn::custom_keyword!(integer);
+    syn::custom_keyword!(unsignedinteger);
+    syn::custom_keyword!(text);
     syn::custom_keyword!(varchar);
+    syn::custom_keyword!(binary);
+    syn::custom_keyword!(blob);
 }
 
 #[derive(Debug)]
 pub enum ColumnType {
+    Boolean,
+    Integer(u8),
+    UnsignedInteger(u8),
+    Text,
     VarChar(u64),
+    Binary(u64),
+    Blob,
     Custom(syn::LitStr),
 }
 
@@ -72,12 +84,39 @@ impl syn::parse::Parse for ColumnType {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::LitStr) {
             Ok(Self::Custom(input.parse()?))
+        } else if lookahead.peek(kw::boolean) {
+            let _kw: kw::boolean = input.parse()?;
+            Ok(Self::Boolean)
+        } else if lookahead.peek(kw::integer) {
+            let _kw: kw::integer = input.parse()?;
+            let content;
+            parenthesized!(content in input);
+            let lit: syn::LitInt = content.parse()?;
+            Ok(Self::Integer(lit.base10_parse()?))
+        } else if lookahead.peek(kw::unsignedinteger) {
+            let _kw: kw::unsignedinteger = input.parse()?;
+            let content;
+            parenthesized!(content in input);
+            let lit: syn::LitInt = content.parse()?;
+            Ok(Self::UnsignedInteger(lit.base10_parse()?))
+        } else if lookahead.peek(kw::text) {
+            let _kw: kw::text = input.parse()?;
+            Ok(Self::Text)
         } else if lookahead.peek(kw::varchar) {
             let _kw: kw::varchar = input.parse()?;
             let content;
             parenthesized!(content in input);
             let lit: syn::LitInt = content.parse()?;
             Ok(Self::VarChar(lit.base10_parse()?))
+        } else if lookahead.peek(kw::binary) {
+            let _kw: kw::binary = input.parse()?;
+            let content;
+            parenthesized!(content in input);
+            let lit: syn::LitInt = content.parse()?;
+            Ok(Self::Binary(lit.base10_parse()?))
+        } else if lookahead.peek(kw::blob) {
+            let _kw: kw::blob = input.parse()?;
+            Ok(Self::Blob)
         } else {
             Err(lookahead.error())
         }
@@ -87,7 +126,13 @@ impl syn::parse::Parse for ColumnType {
 impl quote::ToTokens for ColumnType {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
+            Self::Boolean => quote! { db::Type::Boolean },
+            Self::Integer(size) => quote! { db::Type::Integer(#size) },
+            Self::UnsignedInteger(size) => quote! { db::Type::UnsignedInteger(#size) },
+            Self::Text => quote! { db::Type::Text },
             Self::VarChar(size) => quote! { db::Type::VarChar(#size) },
+            Self::Binary(size) => quote! { db::Type::Binary(#size) },
+            Self::Blob => quote! { db::Type::Blob },
             Self::Custom(custom) => quote! { db::Type::Custom(#custom) },
         }
         .to_tokens(tokens);

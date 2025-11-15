@@ -15,9 +15,7 @@ pub struct Column {
     pub ty: stmt::Type,
 
     /// The database storage type of the column.
-    ///
-    /// When `None`, no specific storage type has been requested.
-    pub storage_ty: Option<Type>,
+    pub storage_ty: Type,
 
     /// Whether or not the column is nullable
     pub nullable: bool,

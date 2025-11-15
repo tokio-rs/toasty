@@ -251,6 +251,10 @@ fn postgres_to_toasty(
         row.get::<usize, Option<String>>(index)
             .map(|v| match expected_ty {
                 stmt::Type::String => stmt::Value::String(v),
+                stmt::Type::Uuid => stmt::Value::Uuid(
+                    v.parse()
+                        .unwrap_or_else(|_| panic!("uuid could not be parsed from text")),
+                ),
                 _ => stmt::Value::String(v), // Default to string
             })
             .unwrap_or(stmt::Value::Null)
@@ -300,6 +304,16 @@ fn postgres_to_toasty(
                 stmt::Type::Uuid => stmt::Value::Uuid(v),
                 stmt::Type::String => stmt::Value::String(v.to_string()),
                 _ => stmt::Value::Uuid(v),
+            })
+            .unwrap_or(stmt::Value::Null)
+    } else if column.type_() == &Type::BYTEA {
+        row.get::<usize, Option<Vec<u8>>>(index)
+            .map(|v| match expected_ty {
+                stmt::Type::Uuid => stmt::Value::Uuid(v.try_into().expect("invalid uuid bytes")),
+                _ => todo!(
+                    "unsupported conversion from {:#?} to {expected_ty:?}",
+                    column.type_()
+                ),
             })
             .unwrap_or(stmt::Value::Null)
     } else {

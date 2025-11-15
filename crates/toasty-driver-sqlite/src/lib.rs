@@ -264,7 +264,10 @@ fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt:
             stmt::Type::U64 => stmt::Value::U64(value as u64),
             _ => todo!("ty={ty:#?}"),
         },
-        Some(SqlValue::Text(value)) => stmt::Value::String(value),
+        Some(SqlValue::Text(value)) => match ty {
+            stmt::Type::Uuid => stmt::Value::Uuid(value.parse().expect("text is a valid uuid")),
+            _ => stmt::Value::String(value),
+        },
         Some(SqlValue::Blob(value)) => match ty {
             stmt::Type::Uuid => {
                 stmt::Value::Uuid(uuid::Uuid::from_slice(&value).expect("blob is a valid uuid"))
