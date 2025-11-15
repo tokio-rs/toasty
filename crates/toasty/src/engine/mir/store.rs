@@ -11,9 +11,6 @@ use super::Node;
 pub(crate) struct Store {
     /// Nodes in the graph
     pub(crate) store: IndexVec<NodeId, Node>,
-
-    /// Order of execution
-    pub(crate) execution_order: Vec<NodeId>,
 }
 
 index_vec::define_index_type! {
@@ -24,7 +21,6 @@ impl Store {
     pub(crate) fn new() -> Store {
         Store {
             store: IndexVec::new(),
-            execution_order: vec![],
         }
     }
 

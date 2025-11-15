@@ -1,6 +1,5 @@
 mod plan_nested_merge;
 
-use index_vec::IndexVec;
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit, visit_mut, Condition};
 
@@ -11,31 +10,40 @@ struct PlanStatement<'a> {
     engine: &'a Engine,
 
     /// Root statement and all nested statements.
-    store: &'a hir::Store,
+    hir: &'a hir::Store,
 
     /// Graph of operations needed to execute the statement
-    graph: &'a mut mir::Store,
+    mir: mir::Store,
 }
 
 impl Planner<'_> {
-    pub(super) fn plan_statement(&mut self) {
+    pub(super) fn plan_statement(&mut self) -> mir::LogicalPlan {
         let mut planner = PlanStatement {
             engine: self.engine,
-            store: &self.store,
-            graph: &mut self.graph,
+            hir: &self.store,
+            mir: mir::Store::new(),
         };
 
-        let root_id = planner.store.root_id();
+        let root_id = planner.hir.root_id();
         planner.plan_statement(root_id);
 
-        let exit = planner.store.root().output.get().unwrap();
-        planner.compute_operation_execution_order(exit);
+        let exit = planner.hir.root().output.get().unwrap();
+        let exit_node = &planner.mir.store[exit];
+
+        // Increment num uses for the exit node. This counts as the "engines"
+        // use of the variable to return to the use.
+        exit_node.num_uses.set(exit_node.num_uses.get() + 1);
+
+        let mut execution_order = vec![];
+        compute_operation_execution_order(exit, &mut planner.mir, &mut execution_order);
+
+        mir::LogicalPlan::new(planner.mir, execution_order)
     }
 }
 
 impl PlanStatement<'_> {
     fn plan_statement(&mut self, stmt_id: hir::StmtId) {
-        let stmt_info = &self.store[stmt_id];
+        let stmt_info = &self.hir[stmt_id];
         let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
 
         // Check if the statement has already been planned
@@ -86,7 +94,7 @@ impl PlanStatement<'_> {
                             return;
                         }
 
-                        let node_id = self.store[stmt_id].exec_statement.get().expect("bug");
+                        let node_id = self.hir[stmt_id].exec_statement.get().expect("bug");
 
                         let (index, _) = inputs.insert_full(node_id);
                         input.set(Some(index));
@@ -108,7 +116,7 @@ impl PlanStatement<'_> {
                 {
                     debug_assert!(!self.engine.capability().sql);
                     debug_assert!(input.get().is_none());
-                    let node_id = self.store[arg_stmt_id].output.get().expect("bug");
+                    let node_id = self.hir[arg_stmt_id].output.get().expect("bug");
 
                     let (index, _) = inputs.insert_full(node_id);
                     input.set(Some(index));
@@ -144,7 +152,7 @@ impl PlanStatement<'_> {
             );
 
             // Find the back-ref for this arg
-            let node_id = self.store[target_id].back_refs[&stmt_id]
+            let node_id = self.hir[target_id].back_refs[&stmt_id]
                 .node_id
                 .get()
                 .unwrap();
@@ -225,7 +233,7 @@ impl PlanStatement<'_> {
             }
         }
 
-        let mut dependencies = Some(stmt_info.dependent_operations(self.store));
+        let mut dependencies = Some(stmt_info.dependent_operations(self.hir));
 
         let exec_stmt_node_id = if stmt.is_const() {
             debug_assert!(stmt_info.deps.is_empty());
@@ -262,7 +270,7 @@ impl PlanStatement<'_> {
 
             let input_args: Vec<_> = inputs
                 .iter()
-                .map(|input| self.graph.ty(*input).clone())
+                .map(|input| self.mir.ty(*input).clone())
                 .collect();
 
             let ty = self.engine.infer_ty(&stmt, &input_args[..]);
@@ -304,7 +312,7 @@ impl PlanStatement<'_> {
 
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
-            self.graph
+            self.mir
                 .insert_with_deps(node, dependencies.take().unwrap())
         } else {
             // Without SQL capability, we have to plan the execution of the
@@ -325,12 +333,12 @@ impl PlanStatement<'_> {
             if index_plan.index.primary_key {
                 let pk_keys_project_args = if ref_source.is_some() {
                     assert_eq!(inputs.len(), 1, "TODO");
-                    let ty = self.graph[inputs[0]].ty();
+                    let ty = self.mir[inputs[0]].ty();
                     vec![ty.unwrap_list_ref().clone()]
                 } else {
                     inputs
                         .iter()
-                        .map(|node_id| self.graph[node_id].ty().clone())
+                        .map(|node_id| self.mir[node_id].ty().clone())
                         .collect()
                 };
 
@@ -396,7 +404,7 @@ impl PlanStatement<'_> {
                         debug_assert!(ref_source.is_some(), "TODO");
                         let ty = stmt::Type::list(keys.ret.clone());
                         // Gotta project
-                        self.graph.insert(mir::Project {
+                        self.mir.insert(mir::Project {
                             input: inputs[0],
                             projection: keys,
                             ty,
@@ -406,7 +414,7 @@ impl PlanStatement<'_> {
                     match stmt {
                         stmt::Statement::Query(_) => {
                             debug_assert!(ty.is_list());
-                            self.graph.insert_with_deps(
+                            self.mir.insert_with_deps(
                                 mir::GetByKey {
                                     input: get_by_key_input,
                                     table: table_id,
@@ -421,7 +429,7 @@ impl PlanStatement<'_> {
                                 ty.is_unit(),
                                 "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
                             );
-                            self.graph.insert_with_deps(
+                            self.mir.insert_with_deps(
                                 mir::DeleteByKey {
                                     input: get_by_key_input,
                                     table: table_id,
@@ -431,7 +439,7 @@ impl PlanStatement<'_> {
                                 dependencies.take().into_iter().flatten(),
                             )
                         }
-                        stmt::Statement::Update(stmt) => self.graph.insert_with_deps(
+                        stmt::Statement::Update(stmt) => self.mir.insert_with_deps(
                             mir::UpdateByKey {
                                 input: get_by_key_input,
                                 table: table_id,
@@ -453,7 +461,7 @@ impl PlanStatement<'_> {
                         todo!()
                     };
 
-                    self.graph.insert_with_deps(
+                    self.mir.insert_with_deps(
                         mir::QueryPk {
                             input,
                             table: table_id,
@@ -477,7 +485,7 @@ impl PlanStatement<'_> {
                     }
                 });
 
-                let get_by_key_input = self.graph.insert_with_deps(
+                let get_by_key_input = self.mir.insert_with_deps(
                     mir::FindPkByIndex {
                         inputs,
                         table: index_plan.index.on,
@@ -491,7 +499,7 @@ impl PlanStatement<'_> {
                 match stmt {
                     stmt::Statement::Query(_) => {
                         debug_assert!(ty.is_list());
-                        self.graph.insert_with_deps(
+                        self.mir.insert_with_deps(
                             mir::GetByKey {
                                 input: get_by_key_input,
                                 table: table_id,
@@ -506,7 +514,7 @@ impl PlanStatement<'_> {
                             ty.is_unit(),
                             "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
                         );
-                        self.graph.insert_with_deps(
+                        self.mir.insert_with_deps(
                             mir::DeleteByKey {
                                 input: get_by_key_input,
                                 table: table_id,
@@ -516,7 +524,7 @@ impl PlanStatement<'_> {
                             dependencies.take().into_iter().flatten(),
                         )
                     }
-                    stmt::Statement::Update(stmt) => self.graph.insert_with_deps(
+                    stmt::Statement::Update(stmt) => self.mir.insert_with_deps(
                         mir::UpdateByKey {
                             input: get_by_key_input,
                             table: table_id,
@@ -534,7 +542,7 @@ impl PlanStatement<'_> {
             // If there is a post filter, we need to apply a filter step on the returned rows.
             if let Some(post_filter) = post_filter {
                 let item_ty = ty.unwrap_list_ref();
-                node_id = self.graph.insert(mir::Filter {
+                node_id = self.mir.insert(mir::Filter {
                     input: node_id,
                     filter: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
                     ty,
@@ -555,11 +563,11 @@ impl PlanStatement<'_> {
                 stmt::Expr::arg_project(0, [index])
             }));
 
-            let arg_ty = self.graph[exec_stmt_node_id].ty().unwrap_list_ref().clone();
+            let arg_ty = self.mir[exec_stmt_node_id].ty().unwrap_list_ref().clone();
             let projection = eval::Func::from_stmt(projection, vec![arg_ty]);
             let ty = stmt::Type::list(projection.ret.clone());
 
-            let project_node_id = self.graph.insert(mir::Project {
+            let project_node_id = self.mir.insert(mir::Project {
                 input: exec_stmt_node_id,
                 projection,
                 ty,
@@ -599,11 +607,11 @@ impl PlanStatement<'_> {
                         )
                     };
 
-                    self.graph
+                    self.mir
                         .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
                 }
                 stmt::Returning::Expr(returning) => {
-                    let arg_ty = match self.graph[exec_stmt_node_id].ty() {
+                    let arg_ty = match self.mir[exec_stmt_node_id].ty() {
                         stmt::Type::List(ty) => vec![(**ty).clone()],
                         stmt::Type::Unit => vec![],
                         _ => todo!(),
@@ -620,16 +628,16 @@ impl PlanStatement<'_> {
 
                     // Plan the final projection to handle the returning clause.
                     if let Some(deps) = dependencies.take() {
-                        self.graph.insert_with_deps(node, deps)
+                        self.mir.insert_with_deps(node, deps)
                     } else {
-                        self.graph.insert(node)
+                        self.mir.insert(node)
                     }
                 }
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
             }
         } else {
             if let Some(deps) = dependencies.take() {
-                self.graph[exec_stmt_node_id].deps.extend(deps);
+                self.mir[exec_stmt_node_id].deps.extend(deps);
             }
 
             exec_stmt_node_id
@@ -844,15 +852,6 @@ impl PlanStatement<'_> {
         }
     }
 
-    fn compute_operation_execution_order(&mut self, exit: mir::NodeId) {
-        debug_assert!(self.graph.execution_order.is_empty());
-        compute_operation_execution_order2(
-            exit,
-            &self.graph.store,
-            &mut self.graph.execution_order,
-        );
-    }
-
     #[track_caller]
     fn insert_const(&mut self, value: impl Into<stmt::Value>, ty: stmt::Type) -> mir::NodeId {
         let value = value.into();
@@ -867,19 +866,19 @@ impl PlanStatement<'_> {
             "const type mismatch; expected={ty:#?}; actual={value:#?}",
         );
 
-        self.graph.insert(mir::Const {
+        self.mir.insert(mir::Const {
             value: value.unwrap_list(),
             ty,
         })
     }
 }
 
-fn compute_operation_execution_order2(
+fn compute_operation_execution_order(
     node_id: mir::NodeId,
-    graph: &IndexVec<mir::NodeId, mir::Node>,
+    mir: &mir::Store,
     execution_order: &mut Vec<mir::NodeId>,
 ) {
-    let node = &graph[node_id];
+    let node = &mir[node_id];
 
     if node.visited.get() {
         return;
@@ -888,10 +887,10 @@ fn compute_operation_execution_order2(
     node.visited.set(true);
 
     for &dep_id in &node.deps {
-        let dep = &graph[dep_id];
+        let dep = &mir[dep_id];
         dep.num_uses.set(dep.num_uses.get() + 1);
 
-        compute_operation_execution_order2(dep_id, graph, execution_order);
+        compute_operation_execution_order(dep_id, mir, execution_order);
     }
 
     execution_order.push(node_id);

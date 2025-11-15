@@ -55,7 +55,7 @@ impl super::PlanStatement<'_> {
     ///
     /// Returns `None` if the statement has no sub-statements with `returning: true`.
     pub(super) fn plan_nested_merge(&mut self, stmt_id: hir::StmtId) -> Option<mir::NodeId> {
-        let stmt_state = &self.store[stmt_id];
+        let stmt_state = &self.hir[stmt_id];
 
         // Return if there is no nested merge to do
         let need_nested_merge = stmt_state.args.iter().any(|arg| {
@@ -73,13 +73,13 @@ impl super::PlanStatement<'_> {
 
         let nested_merge_planner = NestedMergePlanner {
             engine: self.engine,
-            store: self.store,
+            store: self.hir,
             inputs: IndexSet::new(),
             stack: vec![],
         };
 
         let nested_merges = nested_merge_planner.plan_nested_merge(stmt_id);
-        let node_id = self.graph.insert(nested_merges);
+        let node_id = self.mir.insert(nested_merges);
 
         Some(node_id)
     }

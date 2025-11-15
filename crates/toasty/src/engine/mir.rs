@@ -16,6 +16,9 @@ pub(crate) use find_pk_by_index::FindPkByIndex;
 mod get_by_key;
 pub(crate) use get_by_key::GetByKey;
 
+mod logical_plan;
+pub(crate) use logical_plan::LogicalPlan;
+
 mod nested_merge;
 pub(crate) use nested_merge::NestedMerge;
 

@@ -19,9 +19,6 @@ struct Planner<'a> {
     /// Stores decomposed statement info
     store: hir::Store,
 
-    /// Graph of operations needed to execute the statement.
-    graph: super::mir::Store,
-
     /// Table of record stream slots. Used to figure out where to store outputs
     /// of actions.
     var_table: VarDecls,
@@ -38,7 +35,6 @@ impl Engine {
         let mut planner = Planner {
             engine: self,
             store: super::hir::Store::new(),
-            graph: super::mir::Store::new(),
             var_table: VarDecls::default(),
             actions: vec![],
             returning: None,
@@ -73,18 +69,17 @@ impl<'a> Planner<'a> {
         self.store = hir_stmt.into_store();
 
         // Build the execution plan...
-        self.plan_statement();
+        let logical_plan = self.plan_statement();
 
-        let mid = self.store.root().output.get().unwrap();
-        let node = &self.graph[mid];
-        node.num_uses.set(node.num_uses.get() + 1);
-
+        /*
         // Build the execution plan
         for node_id in &self.graph.execution_order {
             let node = &self.graph[node_id];
             let action = node.to_exec(&self.graph, &mut self.var_table);
             self.actions.push(action);
         }
+        */
+        todo!()
 
         let mid = self.store.root().output.get().unwrap();
         Ok(self.graph[mid].var.get())
