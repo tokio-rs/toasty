@@ -5,11 +5,11 @@ use toasty_core::stmt;
 
 use crate::engine::exec;
 
-use super::{NodeId, Operation, Store};
+use super::{LogicalPlan, NodeId, Operation};
 
 #[derive(Debug)]
 pub(crate) struct Node {
-    /// Materialization kind
+    /// Operation kind
     pub(crate) op: Operation,
 
     /// Nodes that must execute *before* the current one. This should be a
@@ -43,23 +43,23 @@ impl Node {
         }
     }
 
-    pub(super) fn var_id(&self) -> exec::VarId {
-        self.var.get().unwrap()
-    }
-
-    pub(crate) fn to_exec(&self, graph: &Store, var_table: &mut exec::VarDecls) -> exec::Action {
+    pub(crate) fn to_exec(
+        &self,
+        logical_plan: &LogicalPlan,
+        var_table: &mut exec::VarDecls,
+    ) -> exec::Action {
         match &self.op {
             Operation::Const(op) => op.to_exec(self, var_table).into(),
-            Operation::DeleteByKey(op) => op.to_exec(graph, self, var_table).into(),
-            Operation::ExecStatement(op) => op.to_exec(graph, self, var_table).into(),
-            Operation::Filter(op) => op.to_exec(graph, self, var_table).into(),
-            Operation::FindPkByIndex(op) => op.to_exec(graph, self, var_table).into(),
-            Operation::GetByKey(op) => op.to_exec(graph, self, var_table).into(),
-            Operation::NestedMerge(op) => op.to_exec(graph, self, var_table).into(),
-            Operation::Project(op) => op.to_exec(graph, self, var_table).into(),
-            Operation::ReadModifyWrite(op) => op.to_exec(graph, self, var_table).into(),
-            Operation::QueryPk(op) => op.to_exec(graph, self, var_table).into(),
-            Operation::UpdateByKey(op) => op.to_exec(graph, self, var_table).into(),
+            Operation::DeleteByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::ExecStatement(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::Filter(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::FindPkByIndex(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::GetByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::NestedMerge(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::Project(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::ReadModifyWrite(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::QueryPk(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::UpdateByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
         }
     }
 }

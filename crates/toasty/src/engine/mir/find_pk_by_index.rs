@@ -4,7 +4,10 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::{exec, mir};
+use crate::engine::{
+    exec,
+    mir::{self, LogicalPlan},
+};
 
 #[derive(Debug)]
 pub(crate) struct FindPkByIndex {
@@ -18,14 +21,14 @@ pub(crate) struct FindPkByIndex {
 impl FindPkByIndex {
     pub(crate) fn to_exec(
         &self,
-        graph: &mir::Store,
+        logical_plan: &LogicalPlan,
         node: &mir::Node,
         var_table: &mut exec::VarDecls,
     ) -> exec::FindPkByIndex {
         let input = self
             .inputs
             .iter()
-            .map(|node_id| graph.var_id(*node_id))
+            .map(|node_id| logical_plan[node_id].var.get().unwrap())
             .collect();
 
         let output = var_table.register_var(node.ty().clone());

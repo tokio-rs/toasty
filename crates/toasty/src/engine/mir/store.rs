@@ -3,17 +3,12 @@ use std::ops;
 use index_vec::IndexVec;
 use toasty_core::stmt;
 
-use crate::engine::exec;
-
 use super::Node;
 
 #[derive(Debug)]
 pub(crate) struct Store {
     /// Nodes in the graph
     pub(crate) store: IndexVec<NodeId, Node>,
-
-    /// Order of execution
-    pub(crate) execution_order: Vec<NodeId>,
 }
 
 index_vec::define_index_type! {
@@ -24,7 +19,6 @@ impl Store {
     pub(crate) fn new() -> Store {
         Store {
             store: IndexVec::new(),
-            execution_order: vec![],
         }
     }
 
@@ -40,10 +34,6 @@ impl Store {
         let mut node = node.into();
         node.deps.extend(deps);
         self.store.push(node)
-    }
-
-    pub(crate) fn var_id(&self, node_id: NodeId) -> exec::VarId {
-        self.store[node_id].var_id()
     }
 
     pub(crate) fn ty(&self, node_id: NodeId) -> &stmt::Type {

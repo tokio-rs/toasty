@@ -17,10 +17,6 @@ impl VarDecls {
         self.vars.push(ty);
         VarId(ret)
     }
-
-    pub(crate) fn into_vec(self) -> Vec<stmt::Type> {
-        self.vars
-    }
 }
 
 #[derive(Debug)]
@@ -40,8 +36,11 @@ struct Entry {
 }
 
 impl VarStore {
-    pub(crate) fn new(tys: Vec<stmt::Type>) -> Self {
-        Self { slots: vec![], tys }
+    pub(crate) fn new(decls: VarDecls) -> Self {
+        Self {
+            slots: vec![],
+            tys: decls.vars,
+        }
     }
 
     pub(crate) async fn load(&mut self, var: VarId) -> crate::Result<Rows> {

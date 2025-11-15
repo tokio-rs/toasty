@@ -1,7 +1,10 @@
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::{exec, mir};
+use crate::engine::{
+    exec,
+    mir::{self, LogicalPlan},
+};
 
 #[derive(Debug)]
 pub(crate) struct ExecStatement {
@@ -21,7 +24,7 @@ pub(crate) struct ExecStatement {
 impl ExecStatement {
     pub(crate) fn to_exec(
         &self,
-        graph: &mir::Store,
+        logical_plan: &LogicalPlan,
         node: &mir::Node,
         var_table: &mut exec::VarDecls,
     ) -> exec::ExecStatement {
@@ -38,7 +41,7 @@ impl ExecStatement {
         let input_vars = self
             .inputs
             .iter()
-            .map(|input| graph[input].var.get().unwrap())
+            .map(|input| logical_plan[input].var.get().unwrap())
             .collect();
 
         let var = var_table.register_var(self.ty.clone());

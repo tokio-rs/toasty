@@ -1,7 +1,10 @@
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::{exec, mir};
+use crate::engine::{
+    exec,
+    mir::{self, LogicalPlan},
+};
 
 #[derive(Debug)]
 pub(crate) struct NestedMerge {
@@ -15,14 +18,14 @@ pub(crate) struct NestedMerge {
 impl NestedMerge {
     pub(crate) fn to_exec(
         &self,
-        graph: &mir::Store,
+        logical_plan: &LogicalPlan,
         node: &mir::Node,
         var_table: &mut exec::VarDecls,
     ) -> exec::NestedMerge {
         let mut input_vars = vec![];
 
         for input in &self.inputs {
-            let var = graph[input].var.get().unwrap();
+            let var = logical_plan[input].var.get().unwrap();
             input_vars.push(var);
         }
 

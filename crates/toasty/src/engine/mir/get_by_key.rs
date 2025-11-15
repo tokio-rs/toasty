@@ -4,12 +4,15 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::{exec, mir};
+use crate::engine::{
+    exec,
+    mir::{self, LogicalPlan},
+};
 
 #[derive(Debug)]
 pub(crate) struct GetByKey {
     /// Keys are always specified as an input, whether const or a set of
-    /// dependent materializations and transformations.
+    /// dependent operations.
     pub(crate) input: mir::NodeId,
 
     /// The table to get keys from
@@ -25,11 +28,11 @@ pub(crate) struct GetByKey {
 impl GetByKey {
     pub(crate) fn to_exec(
         &self,
-        graph: &mir::Store,
+        logical_plan: &LogicalPlan,
         node: &mir::Node,
         var_table: &mut exec::VarDecls,
     ) -> exec::GetByKey {
-        let input = graph.var_id(self.input);
+        let input = logical_plan[self.input].var.get().unwrap();
 
         let output = var_table.register_var(node.ty().clone());
         node.var.set(Some(output));

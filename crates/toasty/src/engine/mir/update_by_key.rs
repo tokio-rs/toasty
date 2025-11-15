@@ -1,6 +1,9 @@
 use toasty_core::{schema::db::TableId, stmt};
 
-use crate::engine::{exec, mir};
+use crate::engine::{
+    exec,
+    mir::{self, LogicalPlan},
+};
 
 #[derive(Debug)]
 pub(crate) struct UpdateByKey {
@@ -20,11 +23,11 @@ pub(crate) struct UpdateByKey {
 impl UpdateByKey {
     pub(crate) fn to_exec(
         &self,
-        graph: &mir::Store,
+        logical_plan: &LogicalPlan,
         node: &mir::Node,
         var_table: &mut exec::VarDecls,
     ) -> exec::UpdateByKey {
-        let input = graph.var_id(self.input);
+        let input = logical_plan[self.input].var.get().unwrap();
         let output = var_table.register_var(node.ty().clone());
         node.var.set(Some(output));
 

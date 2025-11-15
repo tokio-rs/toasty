@@ -1,6 +1,9 @@
 use toasty_core::stmt;
 
-use crate::engine::{eval, exec, mir};
+use crate::engine::{
+    eval, exec,
+    mir::{self, LogicalPlan},
+};
 
 #[derive(Debug)]
 pub(crate) struct Project {
@@ -16,11 +19,11 @@ pub(crate) struct Project {
 impl Project {
     pub(crate) fn to_exec(
         &self,
-        graph: &mir::Store,
+        logical_plan: &LogicalPlan,
         node: &mir::Node,
         var_table: &mut exec::VarDecls,
     ) -> exec::Project {
-        let input_var = graph[self.input].var.get().unwrap();
+        let input_var = logical_plan[self.input].var.get().unwrap();
 
         let var = var_table.register_var(stmt::Type::list(self.projection.ret.clone()));
         node.var.set(Some(var));

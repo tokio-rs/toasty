@@ -1,7 +1,10 @@
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::{exec, mir};
+use crate::engine::{
+    exec,
+    mir::{self, LogicalPlan},
+};
 
 #[derive(Debug)]
 pub(crate) struct ReadModifyWrite {
@@ -21,14 +24,14 @@ pub(crate) struct ReadModifyWrite {
 impl ReadModifyWrite {
     pub(crate) fn to_exec(
         &self,
-        graph: &mir::Store,
+        logical_plan: &LogicalPlan,
         node: &mir::Node,
         var_table: &mut exec::VarDecls,
     ) -> exec::ReadModifyWrite {
         let input = self
             .inputs
             .iter()
-            .map(|input| graph[input].var.get().unwrap())
+            .map(|input| logical_plan[input].var.get().unwrap())
             .collect();
 
         // A hack since rmw doesn't support output yet

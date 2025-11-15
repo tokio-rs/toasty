@@ -1,6 +1,9 @@
 use toasty_core::stmt;
 
-use crate::engine::{eval, exec, mir};
+use crate::engine::{
+    eval, exec,
+    mir::{self, LogicalPlan},
+};
 
 #[derive(Debug)]
 pub(crate) struct Filter {
@@ -17,11 +20,11 @@ pub(crate) struct Filter {
 impl Filter {
     pub(crate) fn to_exec(
         &self,
-        graph: &mir::Store,
+        logical_plan: &LogicalPlan,
         node: &mir::Node,
         var_table: &mut exec::VarDecls,
     ) -> exec::Filter {
-        let input = graph.var_id(self.input);
+        let input = logical_plan[self.input].var.get().unwrap();
         let ty = node.ty().clone();
 
         let var = var_table.register_var(ty);
