@@ -1,4 +1,5 @@
-mod materialize;
+mod nested_merge;
+mod statement;
 
 use crate::{
     engine::{
@@ -52,3 +53,5 @@ impl Engine {
         }
     }
 }
+
+impl PlanStatement<'_> {}

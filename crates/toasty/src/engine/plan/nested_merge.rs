@@ -4,7 +4,9 @@ use toasty_core::stmt::{self, visit_mut};
 use crate::engine::{
     eval,
     exec::{MergeQualification, NestedChild, NestedLevel},
-    hir, mir, Engine, HirStatement,
+    hir, mir,
+    plan::PlanStatement,
+    Engine, HirStatement,
 };
 
 #[derive(Debug)]
@@ -16,7 +18,7 @@ struct NestedMergePlanner<'a> {
     stack: Vec<hir::StmtId>,
 }
 
-impl super::PlanStatement<'_> {
+impl PlanStatement<'_> {
     /// Builds a nested merge operation for queries with sub-statement arguments
     /// in the returning clause.
     ///

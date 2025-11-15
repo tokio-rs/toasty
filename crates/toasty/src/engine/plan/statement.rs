@@ -1,5 +1,3 @@
-mod plan_nested_merge;
-
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit, visit_mut, Condition};
 
