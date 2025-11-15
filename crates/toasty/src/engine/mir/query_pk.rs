@@ -4,7 +4,10 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::{exec, mir};
+use crate::engine::{
+    exec,
+    mir::{self, LogicalPlan},
+};
 
 #[derive(Debug)]
 pub(crate) struct QueryPk {
@@ -27,11 +30,13 @@ pub(crate) struct QueryPk {
 impl QueryPk {
     pub(crate) fn to_exec(
         &self,
-        graph: &mir::Store,
+        logical_plan: &LogicalPlan,
         node: &mir::Node,
         var_table: &mut exec::VarDecls,
     ) -> exec::QueryPk {
-        let input = self.input.map(|node_id| graph.var_id(node_id));
+        let input = self
+            .input
+            .map(|node_id| logical_plan[node_id].var.get().unwrap());
         let output = var_table.register_var(node.ty().clone());
         node.var.set(Some(output));
 

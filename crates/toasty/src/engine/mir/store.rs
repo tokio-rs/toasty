@@ -3,8 +3,6 @@ use std::ops;
 use index_vec::IndexVec;
 use toasty_core::stmt;
 
-use crate::engine::exec;
-
 use super::Node;
 
 #[derive(Debug)]
@@ -36,10 +34,6 @@ impl Store {
         let mut node = node.into();
         node.deps.extend(deps);
         self.store.push(node)
-    }
-
-    pub(crate) fn var_id(&self, node_id: NodeId) -> exec::VarId {
-        self.store[node_id].var_id()
     }
 
     pub(crate) fn ty(&self, node_id: NodeId) -> &stmt::Type {

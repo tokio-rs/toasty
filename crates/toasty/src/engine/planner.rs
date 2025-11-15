@@ -2,14 +2,14 @@ mod materialize;
 
 use crate::{
     engine::{
-        exec::{ExecPlan, VarDecls, VarId},
-        Engine,
+        exec::{ExecPlan, VarDecls, VarStore},
+        mir, Engine,
     },
     Result,
 };
 use toasty_core::stmt;
 
-use super::{exec, hir};
+use super::hir;
 
 #[derive(Debug)]
 struct Planner<'a> {
@@ -18,36 +18,41 @@ struct Planner<'a> {
 
     /// Stores decomposed statement info
     store: hir::Store,
-
-    /// Table of record stream slots. Used to figure out where to store outputs
-    /// of actions.
-    var_table: VarDecls,
-
-    /// Actions that will end up in the pipeline.
-    actions: Vec<exec::Action>,
-
-    /// Variable to return as the result of the pipeline execution
-    returning: Option<exec::VarId>,
 }
 
 impl Engine {
     pub(crate) fn plan(&self, stmt: stmt::Statement) -> Result<ExecPlan> {
         let mut planner = Planner {
             engine: self,
-            store: super::hir::Store::new(),
-            var_table: VarDecls::default(),
-            actions: vec![],
-            returning: None,
+            store: hir::Store::new(),
         };
 
-        planner.plan_stmt_root(stmt)?;
-        planner.build()
+        planner.plan_stmt_root(stmt)
+    }
+
+    pub(crate) fn build_exec_plan(&self, logical_plan: mir::LogicalPlan) -> ExecPlan {
+        let mut var_table = VarDecls::default();
+        let mut actions = Vec::new();
+
+        // Convert each node in execution order
+        for node in logical_plan.operations() {
+            let action = node.to_exec(&logical_plan, &mut var_table);
+            actions.push(action);
+        }
+
+        let returning = logical_plan.completion().var.get();
+
+        ExecPlan {
+            vars: VarStore::new(var_table.into_vec()),
+            actions,
+            returning,
+        }
     }
 }
 
 impl<'a> Planner<'a> {
     /// Entry point to plan the root statement.
-    fn plan_stmt_root(&mut self, stmt: stmt::Statement) -> Result<()> {
+    fn plan_stmt_root(&mut self, stmt: stmt::Statement) -> Result<ExecPlan> {
         if let stmt::Statement::Insert(stmt) = &stmt {
             assert!(matches!(
                 stmt.returning,
@@ -55,41 +60,17 @@ impl<'a> Planner<'a> {
             ));
         }
 
-        let output = self.plan_v2_stmt(stmt)?;
-
-        if let Some(output) = output {
-            self.returning = Some(output);
-        }
-
-        Ok(())
+        self.plan_v2_stmt(stmt)
     }
 
-    fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<Option<VarId>> {
+    fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<ExecPlan> {
         let hir_stmt = self.engine.lower_stmt(stmt)?;
         self.store = hir_stmt.into_store();
 
-        // Build the execution plan...
+        // Build the logical plan
         let logical_plan = self.plan_statement();
 
-        /*
-        // Build the execution plan
-        for node_id in &self.graph.execution_order {
-            let node = &self.graph[node_id];
-            let action = node.to_exec(&self.graph, &mut self.var_table);
-            self.actions.push(action);
-        }
-        */
-        todo!()
-
-        let mid = self.store.root().output.get().unwrap();
-        Ok(self.graph[mid].var.get())
-    }
-
-    fn build(self) -> Result<ExecPlan> {
-        Ok(ExecPlan {
-            vars: exec::VarStore::new(self.var_table.into_vec()),
-            actions: self.actions,
-            returning: self.returning,
-        })
+        // Build the execution plan from the logical plan
+        Ok(self.engine.build_exec_plan(logical_plan))
     }
 }

@@ -43,10 +43,7 @@ pub(crate) use update_by_key::UpdateByKey;
 mod var;
 pub(crate) use var::{VarDecls, VarId, VarStore};
 
-use crate::{
-    engine::{mir, Engine},
-    Result,
-};
+use crate::{engine::Engine, Result};
 use toasty_core::{
     driver::Rows,
     stmt::{self, ValueStream},
@@ -58,10 +55,6 @@ struct Exec<'a> {
 }
 
 impl Engine {
-    pub(crate) fn build_exec_plan(&self, logial_plan: mir::LogicalPlan) -> ExecPlan {
-        todo!()
-    }
-
     pub(crate) async fn exec_plan(&self, plan: ExecPlan) -> Result<ValueStream> {
         let mut exec = Exec {
             engine: self,

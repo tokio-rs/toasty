@@ -35,9 +35,9 @@ impl Planner<'_> {
         exit_node.num_uses.set(exit_node.num_uses.get() + 1);
 
         let mut execution_order = vec![];
-        compute_operation_execution_order(exit, &mut planner.mir, &mut execution_order);
+        compute_operation_execution_order(exit, &planner.mir, &mut execution_order);
 
-        mir::LogicalPlan::new(planner.mir, execution_order)
+        mir::LogicalPlan::new(planner.mir, execution_order, exit)
     }
 }
 
