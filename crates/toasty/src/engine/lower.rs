@@ -24,11 +24,11 @@ use crate::engine::{
 };
 
 impl Engine {
-    pub(crate) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {
+    pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {
         let schema = &self.schema;
 
         let mut state = LoweringState {
-            store: hir::Store::new(),
+            hir: HirStatement::new(),
             scopes: IndexVec::new(),
             engine: self,
             relations: vec![],
@@ -42,7 +42,7 @@ impl Engine {
             return Err(err);
         }
 
-        Ok(HirStatement::new(state.store))
+        Ok(state.hir)
     }
 }
 
@@ -50,7 +50,7 @@ impl LoweringState<'_> {
     fn lower_stmt(&mut self, expr_cx: stmt::ExprContext, mut stmt: stmt::Statement) -> hir::StmtId {
         self.engine.simplify_stmt(&mut stmt);
 
-        let stmt_id = self.store.new_statement_info(self.dependencies.clone());
+        let stmt_id = self.hir.new_statement_info(self.dependencies.clone());
         let scope_id = self.scopes.push(Scope { stmt_id });
         let mut collect_dependencies = None;
 
@@ -66,7 +66,7 @@ impl LoweringState<'_> {
 
         self.engine.simplify_stmt(&mut stmt);
 
-        let stmt_info = &mut self.store[stmt_id];
+        let stmt_info = &mut self.hir[stmt_id];
         stmt_info.stmt = Some(Box::new(stmt));
 
         debug_assert!(collect_dependencies.is_none());
@@ -100,7 +100,7 @@ struct LoweringState<'a> {
 
     /// Statements to be executed by the database, though they may still be
     /// broken down into multiple sub-statements.
-    store: hir::Store,
+    hir: HirStatement,
 
     /// Scope state
     scopes: IndexVec<ScopeId, Scope>,
@@ -272,7 +272,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     // For now, we wonly support independent sub-queries. I.e.
                     // the subquery must be able to be executed without any
                     // context from the parent query.
-                    let target_stmt_info = &self.state.store[target_id];
+                    let target_stmt_info = &self.state.hir[target_id];
                     debug_assert!(target_stmt_info.args.is_empty(), "TODO");
                     debug_assert!(target_stmt_info.back_refs.is_empty(), "TODO");
 
@@ -842,7 +842,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         // the context of the *target* statement.
         expr_column.nesting = 0;
 
-        let target = &mut self.state.store[target_id];
+        let target = &mut self.state.hir[target_id];
 
         // The `batch_load_index` is the index for this reference in the row
         // returned from the target statement's ExecStatement operation. This
@@ -856,7 +856,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             .insert_full(expr_reference);
 
         // Create an argument for inputing the expr reference's value into the statement.
-        let source = &mut self.state.store[source_id];
+        let source = &mut self.state.hir[source_id];
         let arg = source.args.len();
 
         source.args.push(hir::Arg::Ref {
@@ -871,7 +871,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn new_statement_info(&mut self) -> hir::StmtId {
         self.state
-            .store
+            .hir
             .new_statement_info(self.state.dependencies.clone())
     }
 
@@ -882,7 +882,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         target_id: hir::StmtId,
         stmt: Box<stmt::Statement>,
     ) -> usize {
-        let source = &mut self.state.store[source_id];
+        let source = &mut self.state.hir[source_id];
         let arg = source.args.len();
         source.args.push(hir::Arg::Sub {
             stmt_id: target_id,
@@ -890,7 +890,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             input: Cell::new(None),
         });
 
-        self.state.store[target_id].stmt = Some(stmt);
+        self.state.hir[target_id].stmt = Some(stmt);
 
         arg
     }
@@ -934,7 +934,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn curr_stmt_info(&mut self) -> &mut hir::StatementInfo {
         let stmt_id = self.scope_stmt_id();
-        &mut self.state.store[stmt_id]
+        &mut self.state.hir[stmt_id]
     }
 
     /// Returns the `StmtId` for the Statement at the **current** scope.

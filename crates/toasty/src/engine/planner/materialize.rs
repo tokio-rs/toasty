@@ -3,24 +3,30 @@ mod plan_nested_merge;
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit, visit_mut, Condition};
 
-use crate::engine::{eval, hir, mir, planner::Planner, Engine};
+use crate::engine::{
+    eval,
+    hir::{self, HirStatement},
+    mir,
+    planner::Planner,
+    Engine,
+};
 
 #[derive(Debug)]
 struct PlanStatement<'a> {
     engine: &'a Engine,
 
     /// Root statement and all nested statements.
-    hir: &'a hir::Store,
+    hir: &'a HirStatement,
 
     /// Graph of operations needed to execute the statement
     mir: mir::Store,
 }
 
 impl Planner<'_> {
-    pub(super) fn plan_statement(&mut self) -> mir::LogicalPlan {
+    pub(super) fn plan_statement(&mut self, hir: &HirStatement) -> mir::LogicalPlan {
         let mut planner = PlanStatement {
             engine: self.engine,
-            hir: &self.store,
+            hir,
             mir: mir::Store::new(),
         };
 

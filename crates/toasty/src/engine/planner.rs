@@ -9,23 +9,15 @@ use crate::{
 };
 use toasty_core::stmt;
 
-use super::hir;
-
 #[derive(Debug)]
 struct Planner<'a> {
     /// Handle to the schema & driver capabilities.
     engine: &'a Engine,
-
-    /// Stores decomposed statement info
-    store: hir::Store,
 }
 
 impl Engine {
     pub(crate) fn plan(&self, stmt: stmt::Statement) -> Result<ExecPlan> {
-        let mut planner = Planner {
-            engine: self,
-            store: hir::Store::new(),
-        };
+        let mut planner = Planner { engine: self };
 
         planner.plan_stmt_root(stmt)
     }
@@ -60,15 +52,10 @@ impl<'a> Planner<'a> {
             ));
         }
 
-        self.plan_v2_stmt(stmt)
-    }
-
-    fn plan_v2_stmt(&mut self, stmt: stmt::Statement) -> Result<ExecPlan> {
-        let hir_stmt = self.engine.lower_stmt(stmt)?;
-        self.store = hir_stmt.into_store();
+        let hir = self.engine.lower_stmt(stmt)?;
 
         // Build the logical plan
-        let logical_plan = self.plan_statement();
+        let logical_plan = self.plan_statement(&hir);
 
         // Build the execution plan from the logical plan
         Ok(self.engine.build_exec_plan(logical_plan))

@@ -4,13 +4,13 @@ use toasty_core::stmt::{self, visit_mut};
 use crate::engine::{
     eval,
     exec::{MergeQualification, NestedChild, NestedLevel},
-    hir, mir, Engine,
+    hir, mir, Engine, HirStatement,
 };
 
 #[derive(Debug)]
 struct NestedMergePlanner<'a> {
     engine: &'a Engine,
-    store: &'a hir::Store,
+    hir: &'a HirStatement,
     inputs: IndexSet<mir::NodeId>,
     /// Statement stack, used to infer expression types
     stack: Vec<hir::StmtId>,
@@ -73,7 +73,7 @@ impl super::PlanStatement<'_> {
 
         let nested_merge_planner = NestedMergePlanner {
             engine: self.engine,
-            store: self.hir,
+            hir: self.hir,
             inputs: IndexSet::new(),
             stack: vec![],
         };
@@ -101,7 +101,7 @@ impl NestedMergePlanner<'_> {
         self.stack.push(stmt_id);
 
         let level = self.plan_nested_level(stmt_id, depth);
-        let stmt_state = &self.store[stmt_id];
+        let stmt_state = &self.hir[stmt_id];
         let selection = stmt_state.exec_statement_selection.get().unwrap();
 
         let query = stmt_state.stmt.as_deref().unwrap().as_query().unwrap();
@@ -128,7 +128,7 @@ impl NestedMergePlanner<'_> {
                 // This is a bit of a roundabout way to get the data. We may
                 // want to find a better way to track the info for more direct
                 // access.
-                let target_stmt = &self.store[target_id];
+                let target_stmt = &self.hir[target_id];
                 // The ExprReference based on the target's "self"
                 let target_expr_reference =
                     &target_stmt.back_refs[&stmt_id].exprs[*batch_load_index];
@@ -140,10 +140,7 @@ impl NestedMergePlanner<'_> {
                     .get_index_of(target_expr_reference)
                     .unwrap();
 
-                let _ = self.store[target_id]
-                    .exec_statement_selection
-                    .get()
-                    .unwrap();
+                let _ = self.hir[target_id].exec_statement_selection.get().unwrap();
 
                 *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
             }
@@ -169,7 +166,7 @@ impl NestedMergePlanner<'_> {
     }
 
     fn plan_nested_level(&mut self, stmt_id: hir::StmtId, depth: usize) -> NestedLevel {
-        let stmt_state = &self.store[stmt_id];
+        let stmt_state = &self.hir[stmt_id];
         let selection = stmt_state.exec_statement_selection.get().unwrap();
 
         // First, track the batch-load as a required input for the nested merge
@@ -236,7 +233,7 @@ impl NestedMergePlanner<'_> {
     }
 
     fn build_exec_statement_ty_for(&self, stmt_id: hir::StmtId) -> stmt::Type {
-        let stmt_state = &self.store[stmt_id];
+        let stmt_state = &self.hir[stmt_id];
         let cx = stmt::ExprContext::new_with_target(
             &*self.engine.schema,
             stmt_state.stmt.as_deref().unwrap(),

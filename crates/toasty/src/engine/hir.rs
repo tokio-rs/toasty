@@ -10,19 +10,10 @@ use toasty_core::stmt;
 
 use crate::engine::mir;
 
+/// StatementInfo store
 #[derive(Debug)]
-pub(crate) struct HirStatement {
-    store: Store,
-}
-
-impl HirStatement {
-    pub(super) fn new(store: Store) -> HirStatement {
-        HirStatement { store }
-    }
-
-    pub(super) fn into_store(self) -> Store {
-        self.store
-    }
+pub(super) struct HirStatement {
+    store: IndexVec<StmtId, StatementInfo>,
 }
 
 /// Planning metadata for a statement.
@@ -55,12 +46,6 @@ pub(super) struct StatementInfo {
     pub(super) output: Cell<Option<mir::NodeId>>,
 }
 
-/// StatementInfo store
-#[derive(Debug)]
-pub(super) struct Store {
-    store: IndexVec<StmtId, StatementInfo>,
-}
-
 index_vec::define_index_type! {
     pub(crate) struct StmtId = u32;
 }
@@ -87,11 +72,11 @@ impl StatementInfo {
     /// Each dependency is represented by its output node ID.
     pub(super) fn dependent_operations<'a>(
         &'a self,
-        store: &'a Store,
+        hir: &'a HirStatement,
     ) -> impl Iterator<Item = mir::NodeId> + 'a {
         self.deps
             .iter()
-            .map(|stmt_id| store[stmt_id].output.get().unwrap())
+            .map(|stmt_id| hir[stmt_id].output.get().unwrap())
     }
 }
 
@@ -151,9 +136,9 @@ pub(super) enum Arg {
     },
 }
 
-impl Store {
-    pub(super) fn new() -> Store {
-        Store {
+impl HirStatement {
+    pub(super) fn new() -> HirStatement {
+        HirStatement {
             store: IndexVec::new(),
         }
     }
@@ -176,7 +161,7 @@ impl Store {
     }
 }
 
-impl ops::Index<StmtId> for Store {
+impl ops::Index<StmtId> for HirStatement {
     type Output = StatementInfo;
 
     fn index(&self, index: StmtId) -> &Self::Output {
@@ -184,13 +169,13 @@ impl ops::Index<StmtId> for Store {
     }
 }
 
-impl ops::IndexMut<StmtId> for Store {
+impl ops::IndexMut<StmtId> for HirStatement {
     fn index_mut(&mut self, index: StmtId) -> &mut Self::Output {
         self.store.index_mut(index)
     }
 }
 
-impl ops::Index<&StmtId> for Store {
+impl ops::Index<&StmtId> for HirStatement {
     type Output = StatementInfo;
 
     fn index(&self, index: &StmtId) -> &Self::Output {

@@ -486,7 +486,7 @@ impl LowerStatement<'_, '_> {
 
                 let stmt_id = self.new_dependency(insert);
 
-                let stmt_info = &self.state.store[stmt_id];
+                let stmt_info = &self.state.hir[stmt_id];
 
                 let returning = stmt_info.stmt.as_ref().unwrap().returning().expect("bug");
                 let stmt::Returning::Value(value) = returning.clone() else {
