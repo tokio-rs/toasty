@@ -7,7 +7,7 @@ impl ExecPlanner<'_> {
     pub(super) fn plan_execution(mut self) -> ExecPlan {
         // Convert each node in execution order
         for node in self.logical_plan.operations() {
-            let action = node.to_exec(&self.logical_plan, &mut self.var_decls);
+            let action = node.to_exec(self.logical_plan, &mut self.var_decls);
             self.actions.push(action);
         }
 
