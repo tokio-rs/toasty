@@ -6,9 +6,7 @@ use toasty_core::stmt::{self, visit, visit_mut, Condition};
 use crate::engine::{
     eval,
     hir::{self, HirStatement},
-    mir,
-    planner::Planner,
-    Engine,
+    mir, Engine,
 };
 
 #[derive(Debug)]
@@ -22,10 +20,10 @@ struct PlanStatement<'a> {
     mir: mir::Store,
 }
 
-impl Planner<'_> {
-    pub(super) fn plan_statement(&mut self, hir: &HirStatement) -> mir::LogicalPlan {
+impl Engine {
+    pub(super) fn plan_hir_statement(&self, hir: &HirStatement) -> mir::LogicalPlan {
         let mut planner = PlanStatement {
-            engine: self.engine,
+            engine: self,
             hir,
             mir: mir::Store::new(),
         };
