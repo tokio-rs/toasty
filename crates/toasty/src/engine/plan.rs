@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-struct PlanStatement<'a> {
+struct HirPlanner<'a> {
     engine: &'a Engine,
 
     /// Root statement and all nested statements.
@@ -21,9 +21,9 @@ struct PlanStatement<'a> {
 }
 
 impl Engine {
-    pub(super) fn plan_statement(&self, hir: HirStatement) -> Result<ExecPlan> {
+    pub(super) fn plan_hir_statement(&self, hir: HirStatement) -> Result<ExecPlan> {
         // Build the logical plan
-        let logical_plan = PlanStatement {
+        let logical_plan = HirPlanner {
             engine: self,
             hir: &hir,
             mir: mir::Store::new(),
@@ -54,4 +54,18 @@ impl Engine {
     }
 }
 
-impl PlanStatement<'_> {}
+impl HirPlanner<'_> {
+    fn build_logical_plan(mut self) -> mir::LogicalPlan {
+        let root_id = self.hir.root_id();
+        self.plan_statement(root_id);
+
+        let exit = self.hir.root().output.get().unwrap();
+        let exit_node = &self.mir.store[exit];
+
+        // Increment num uses for the exit node. This counts as the "engines"
+        // use of the variable to return to the use.
+        exit_node.num_uses.set(exit_node.num_uses.get() + 1);
+
+        mir::LogicalPlan::new(self.mir, exit)
+    }
+}

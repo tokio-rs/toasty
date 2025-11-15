@@ -15,11 +15,10 @@ pub(crate) struct LogicalPlan {
 }
 
 impl LogicalPlan {
-    pub(crate) fn new(
-        store: Store,
-        execution_order: Vec<NodeId>,
-        completion: NodeId,
-    ) -> LogicalPlan {
+    pub(crate) fn new(store: Store, completion: NodeId) -> LogicalPlan {
+        let mut execution_order = vec![];
+        compute_operation_execution_order(completion, &store, &mut execution_order);
+
         LogicalPlan {
             store,
             execution_order,
@@ -52,4 +51,27 @@ impl ops::Index<&NodeId> for LogicalPlan {
     fn index(&self, index: &NodeId) -> &Self::Output {
         self.store.index(index)
     }
+}
+
+fn compute_operation_execution_order(
+    node_id: NodeId,
+    mir: &Store,
+    execution_order: &mut Vec<NodeId>,
+) {
+    let node = &mir[node_id];
+
+    if node.visited.get() {
+        return;
+    }
+
+    node.visited.set(true);
+
+    for &dep_id in &node.deps {
+        let dep = &mir[dep_id];
+        dep.num_uses.set(dep.num_uses.get() + 1);
+
+        compute_operation_execution_order(dep_id, mir, execution_order);
+    }
+
+    execution_order.push(node_id);
 }

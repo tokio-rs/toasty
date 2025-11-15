@@ -5,7 +5,7 @@ use crate::engine::{
     eval,
     exec::{MergeQualification, NestedChild, NestedLevel},
     hir, mir,
-    plan::PlanStatement,
+    plan::HirPlanner,
     Engine, HirStatement,
 };
 
@@ -18,7 +18,7 @@ struct NestedMergePlanner<'a> {
     stack: Vec<hir::StmtId>,
 }
 
-impl PlanStatement<'_> {
+impl HirPlanner<'_> {
     /// Builds a nested merge operation for queries with sub-statement arguments
     /// in the returning clause.
     ///

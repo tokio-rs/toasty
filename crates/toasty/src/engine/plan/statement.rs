@@ -1,27 +1,10 @@
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit, visit_mut, Condition};
 
-use crate::engine::{eval, hir, mir, plan::PlanStatement};
+use crate::engine::{eval, hir, mir, plan::HirPlanner};
 
-impl PlanStatement<'_> {
-    pub(super) fn build_logical_plan(mut self) -> mir::LogicalPlan {
-        let root_id = self.hir.root_id();
-        self.plan_statement(root_id);
-
-        let exit = self.hir.root().output.get().unwrap();
-        let exit_node = &self.mir.store[exit];
-
-        // Increment num uses for the exit node. This counts as the "engines"
-        // use of the variable to return to the use.
-        exit_node.num_uses.set(exit_node.num_uses.get() + 1);
-
-        let mut execution_order = vec![];
-        compute_operation_execution_order(exit, &self.mir, &mut execution_order);
-
-        mir::LogicalPlan::new(self.mir, execution_order, exit)
-    }
-
-    fn plan_statement(&mut self, stmt_id: hir::StmtId) {
+impl HirPlanner<'_> {
+    pub(super) fn plan_statement(&mut self, stmt_id: hir::StmtId) {
         let stmt_info = &self.hir[stmt_id];
         let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
 
@@ -850,27 +833,4 @@ impl PlanStatement<'_> {
             ty,
         })
     }
-}
-
-fn compute_operation_execution_order(
-    node_id: mir::NodeId,
-    mir: &mir::Store,
-    execution_order: &mut Vec<mir::NodeId>,
-) {
-    let node = &mir[node_id];
-
-    if node.visited.get() {
-        return;
-    }
-
-    node.visited.set(true);
-
-    for &dep_id in &node.deps {
-        let dep = &mir[dep_id];
-        dep.num_uses.set(dep.num_uses.get() + 1);
-
-        compute_operation_execution_order(dep_id, mir, execution_order);
-    }
-
-    execution_order.push(node_id);
 }

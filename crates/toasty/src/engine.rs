@@ -57,7 +57,7 @@ impl Engine {
         let hir = self.lower_stmt(stmt)?;
 
         // Translate the optimized statement into a series of driver operations.
-        let plan = self.plan_statement(hir)?;
+        let plan = self.plan_hir_statement(hir)?;
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
