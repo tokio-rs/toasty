@@ -23,7 +23,7 @@ pub use params::{Params, Placeholder};
 mod column_def;
 mod expr;
 mod name;
-mod stmt;
+mod statement;
 mod ty;
 mod value;
 
