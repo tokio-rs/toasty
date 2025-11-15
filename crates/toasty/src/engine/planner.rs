@@ -10,7 +10,7 @@ use crate::{
 use toasty_core::stmt;
 
 impl Engine {
-    pub(crate) fn plan(&self, stmt: stmt::Statement) -> Result<ExecPlan> {
+    pub(crate) fn plan_statement(&self, stmt: stmt::Statement) -> Result<ExecPlan> {
         if let stmt::Statement::Insert(stmt) = &stmt {
             assert!(matches!(
                 stmt.returning,

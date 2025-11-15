@@ -47,7 +47,7 @@ impl Engine {
         }
 
         // Translate the optimized statement into a series of driver operations.
-        let plan = self.plan(stmt)?;
+        let plan = self.plan_statement(stmt)?;
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
