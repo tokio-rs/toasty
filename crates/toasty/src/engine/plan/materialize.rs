@@ -3,49 +3,26 @@ mod plan_nested_merge;
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit, visit_mut, Condition};
 
-use crate::engine::{
-    eval,
-    hir::{self, HirStatement},
-    mir, Engine,
-};
+use crate::engine::{eval, hir, mir, plan::PlanStatement};
 
-#[derive(Debug)]
-struct PlanStatement<'a> {
-    engine: &'a Engine,
+impl PlanStatement<'_> {
+    pub(super) fn build_logical_plan(mut self) -> mir::LogicalPlan {
+        let root_id = self.hir.root_id();
+        self.plan_statement(root_id);
 
-    /// Root statement and all nested statements.
-    hir: &'a HirStatement,
-
-    /// Graph of operations needed to execute the statement
-    mir: mir::Store,
-}
-
-impl Engine {
-    pub(super) fn plan_hir_statement(&self, hir: &HirStatement) -> mir::LogicalPlan {
-        let mut planner = PlanStatement {
-            engine: self,
-            hir,
-            mir: mir::Store::new(),
-        };
-
-        let root_id = planner.hir.root_id();
-        planner.plan_statement(root_id);
-
-        let exit = planner.hir.root().output.get().unwrap();
-        let exit_node = &planner.mir.store[exit];
+        let exit = self.hir.root().output.get().unwrap();
+        let exit_node = &self.mir.store[exit];
 
         // Increment num uses for the exit node. This counts as the "engines"
         // use of the variable to return to the use.
         exit_node.num_uses.set(exit_node.num_uses.get() + 1);
 
         let mut execution_order = vec![];
-        compute_operation_execution_order(exit, &planner.mir, &mut execution_order);
+        compute_operation_execution_order(exit, &self.mir, &mut execution_order);
 
-        mir::LogicalPlan::new(planner.mir, execution_order, exit)
+        mir::LogicalPlan::new(self.mir, execution_order, exit)
     }
-}
 
-impl PlanStatement<'_> {
     fn plan_statement(&mut self, stmt_id: hir::StmtId) {
         let stmt_info = &self.hir[stmt_id];
         let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();

@@ -3,31 +3,37 @@ mod materialize;
 use crate::{
     engine::{
         exec::{ExecPlan, VarDecls, VarStore},
-        mir, Engine,
+        mir, Engine, HirStatement,
     },
     Result,
 };
-use toasty_core::stmt;
+
+#[derive(Debug)]
+struct PlanStatement<'a> {
+    engine: &'a Engine,
+
+    /// Root statement and all nested statements.
+    hir: &'a HirStatement,
+
+    /// Graph of operations needed to execute the statement
+    mir: mir::Store,
+}
 
 impl Engine {
-    pub(crate) fn plan_statement(&self, stmt: stmt::Statement) -> Result<ExecPlan> {
-        if let stmt::Statement::Insert(stmt) = &stmt {
-            assert!(matches!(
-                stmt.returning,
-                Some(stmt::Returning::Model { .. })
-            ));
-        }
-
-        let hir = self.lower_stmt(stmt)?;
-
+    pub(super) fn plan_statement(&self, hir: HirStatement) -> Result<ExecPlan> {
         // Build the logical plan
-        let logical_plan = self.plan_hir_statement(&hir);
+        let logical_plan = PlanStatement {
+            engine: self,
+            hir: &hir,
+            mir: mir::Store::new(),
+        }
+        .build_logical_plan();
 
         // Build the execution plan from the logical plan
-        Ok(self.build_exec_plan(logical_plan))
+        Ok(self.plan_execution(logical_plan))
     }
 
-    pub(crate) fn build_exec_plan(&self, logical_plan: mir::LogicalPlan) -> ExecPlan {
+    pub(super) fn plan_execution(&self, logical_plan: mir::LogicalPlan) -> ExecPlan {
         let mut var_table = VarDecls::default();
         let mut actions = Vec::new();
 
