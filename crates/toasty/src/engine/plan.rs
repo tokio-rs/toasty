@@ -1,10 +1,12 @@
+mod execution;
 mod nested_merge;
 mod statement;
 
 use crate::{
     engine::{
-        exec::{ExecPlan, VarDecls, VarStore},
-        mir, Engine, HirStatement,
+        exec::{self, ExecPlan, VarDecls},
+        mir::{self, LogicalPlan},
+        Engine, HirStatement,
     },
     Result,
 };
@@ -18,6 +20,13 @@ struct HirPlanner<'a> {
 
     /// Graph of operations needed to execute the statement
     mir: mir::Store,
+}
+
+#[derive(Debug)]
+struct ExecPlanner<'a> {
+    logical_plan: &'a LogicalPlan,
+    var_decls: VarDecls,
+    actions: Vec<exec::Action>,
 }
 
 impl Engine {
@@ -34,23 +43,13 @@ impl Engine {
         Ok(self.plan_execution(logical_plan))
     }
 
-    pub(super) fn plan_execution(&self, logical_plan: mir::LogicalPlan) -> ExecPlan {
-        let mut var_table = VarDecls::default();
-        let mut actions = Vec::new();
-
-        // Convert each node in execution order
-        for node in logical_plan.operations() {
-            let action = node.to_exec(&logical_plan, &mut var_table);
-            actions.push(action);
+    fn plan_execution(&self, logical_plan: mir::LogicalPlan) -> ExecPlan {
+        ExecPlanner {
+            logical_plan: &logical_plan,
+            var_decls: VarDecls::default(),
+            actions: vec![],
         }
-
-        let returning = logical_plan.completion().var.get();
-
-        ExecPlan {
-            vars: VarStore::new(var_table.into_vec()),
-            actions,
-            returning,
-        }
+        .plan_execution()
     }
 }
 
