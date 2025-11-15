@@ -24,7 +24,7 @@ pub enum Type {
     Blob,
 
     /// Fixed-size binary type of `n` bytes
-    Binary(u64),
+    Binary(u8),
 
     /// User-specified unrecognized type
     Custom(String),
@@ -34,11 +34,11 @@ impl Type {
     /// Maps an application-level type to a database-level storage type.
     pub fn from_app(
         ty: &stmt::Type,
-        hint: &Option<Type>,
+        hint: Option<&Type>,
         db: &driver::StorageTypes,
     ) -> Result<Type> {
-        match hint.clone() {
-            Some(ty) => Ok(ty),
+        match hint {
+            Some(ty) => Ok(ty.clone()),
             None => match ty {
                 stmt::Type::Bool => Ok(Type::Boolean),
                 stmt::Type::I8 => Ok(Type::Integer(1)),
@@ -59,6 +59,19 @@ impl Type {
                 stmt::Type::Id(_) => Ok(db.default_string_type.clone()),
                 _ => anyhow::bail!("unsupported type: {ty:?}"),
             },
+        }
+    }
+
+    /// Determines the [`stmt::Type`] closest to this [`db::Type`] that should be used
+    /// as an intermediate conversion step to lessen the work done by each individual driver.
+    pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {
+        match (self, ty) {
+            (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => {
+                stmt::Type::List(stmt::Type::U8.into())
+            }
+            (Self::Text | Self::VarChar(_), stmt::Type::Uuid) => stmt::Type::String,
+            (Self::Text | Self::VarChar(_), stmt::Type::Id(_)) => stmt::Type::String,
+            _ => ty.clone(),
         }
     }
 

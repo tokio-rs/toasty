@@ -10,12 +10,10 @@ pub struct ColumnDef {
 }
 
 impl ColumnDef {
-    pub(crate) fn from_schema(column: &Column, storage_types: &driver::StorageTypes) -> Self {
-        let ty = db::Type::from_app(&column.ty, &column.storage_ty, storage_types).unwrap();
-
+    pub(crate) fn from_schema(column: &Column, _storage_types: &driver::StorageTypes) -> Self {
         Self {
             name: column.name.clone(),
-            ty,
+            ty: column.storage_ty.clone(),
         }
     }
 }

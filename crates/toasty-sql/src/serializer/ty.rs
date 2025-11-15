@@ -54,7 +54,7 @@ impl ToSql for &db::Type {
             },
             db::Type::Blob => match f.serializer.flavor {
                 Flavor::Postgresql => fmt!(cx, f, "BYTEA"),
-                Flavor::Mysql => fmt!(cx, f, "VARBINARY"),
+                Flavor::Mysql => fmt!(cx, f, "BLOB"),
                 Flavor::Sqlite => fmt!(cx, f, "BLOB"),
             },
             db::Type::Custom(custom) => fmt!(cx, f, custom.as_str()),
