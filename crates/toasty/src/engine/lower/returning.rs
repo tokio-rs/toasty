@@ -1,6 +1,6 @@
 use toasty_core::{schema::db::ColumnId, stmt};
 
-use crate::engine::planner::lower::{LowerStatement, LoweringContext};
+use crate::engine::lower::{LowerStatement, LoweringContext};
 
 struct ConstantizeReturning<'a> {
     cx: stmt::ExprContext<'a>,

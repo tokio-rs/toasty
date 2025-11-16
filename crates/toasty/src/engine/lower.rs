@@ -18,19 +18,19 @@ use toasty_core::{
 };
 
 use crate::engine::{
-    planner::{info::StatementInfo, Arg, Planner, StatementInfoStore, StmtId},
+    hir,
     simplify::{self, Simplify},
-    Engine,
+    Engine, HirStatement,
 };
 
-impl Planner<'_> {
-    pub(crate) fn lower_stmt(&mut self, stmt: stmt::Statement) -> Result<()> {
-        let schema = self.schema();
+impl Engine {
+    pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {
+        let schema = &self.schema;
 
         let mut state = LoweringState {
-            store: &mut self.store,
+            hir: HirStatement::new(),
             scopes: IndexVec::new(),
-            engine: self.engine,
+            engine: self,
             relations: vec![],
             errors: vec![],
             dependencies: HashSet::new(),
@@ -42,15 +42,15 @@ impl Planner<'_> {
             return Err(err);
         }
 
-        Ok(())
+        Ok(state.hir)
     }
 }
 
 impl LoweringState<'_> {
-    fn lower_stmt(&mut self, expr_cx: stmt::ExprContext, mut stmt: stmt::Statement) -> StmtId {
+    fn lower_stmt(&mut self, expr_cx: stmt::ExprContext, mut stmt: stmt::Statement) -> hir::StmtId {
         self.engine.simplify_stmt(&mut stmt);
 
-        let stmt_id = self.store.new_statement_info(self.dependencies.clone());
+        let stmt_id = self.hir.new_statement_info(self.dependencies.clone());
         let scope_id = self.scopes.push(Scope { stmt_id });
         let mut collect_dependencies = None;
 
@@ -66,7 +66,7 @@ impl LoweringState<'_> {
 
         self.engine.simplify_stmt(&mut stmt);
 
-        let stmt_info = &mut self.store[stmt_id];
+        let stmt_info = &mut self.hir[stmt_id];
         stmt_info.stmt = Some(Box::new(stmt));
 
         debug_assert!(collect_dependencies.is_none());
@@ -90,7 +90,7 @@ struct LowerStatement<'a, 'b> {
     cx: LoweringContext<'a>,
 
     /// Track dependencies here.
-    collect_dependencies: &'a mut Option<HashSet<StmtId>>,
+    collect_dependencies: &'a mut Option<HashSet<hir::StmtId>>,
 }
 
 #[derive(Debug)]
@@ -100,7 +100,7 @@ struct LoweringState<'a> {
 
     /// Statements to be executed by the database, though they may still be
     /// broken down into multiple sub-statements.
-    store: &'a mut StatementInfoStore,
+    hir: HirStatement,
 
     /// Scope state
     scopes: IndexVec<ScopeId, Scope>,
@@ -111,7 +111,7 @@ struct LoweringState<'a> {
     relations: Vec<app::FieldId>,
 
     /// All new statements should include these as part of its dependencies
-    dependencies: HashSet<StmtId>,
+    dependencies: HashSet<hir::StmtId>,
 
     /// Tracks errors that occured while lowering the statement
     errors: Vec<crate::Error>,
@@ -138,7 +138,7 @@ enum LoweringContext<'a> {
 #[derive(Debug)]
 struct Scope {
     /// Identifier of the statement in the partitioner state.
-    stmt_id: StmtId,
+    stmt_id: hir::StmtId,
 }
 
 index_vec::define_index_type! {
@@ -146,7 +146,7 @@ index_vec::define_index_type! {
 }
 
 impl LowerStatement<'_, '_> {
-    fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> StmtId {
+    fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> hir::StmtId {
         // Need to reset the scope stack as the statement cannot reference the
         // current scope.
         let scopes = mem::take(&mut self.state.scopes);
@@ -169,19 +169,19 @@ impl LowerStatement<'_, '_> {
     fn collect_dependencies(
         &mut self,
         f: impl FnOnce(&mut LowerStatement<'_, '_>),
-    ) -> HashSet<StmtId> {
+    ) -> HashSet<hir::StmtId> {
         let old = self.collect_dependencies.replace(HashSet::new());
         f(self);
         std::mem::replace(self.collect_dependencies, old).unwrap()
     }
 
-    fn track_dependency(&mut self, dependency: StmtId) {
+    fn track_dependency(&mut self, dependency: hir::StmtId) {
         self.curr_stmt_info().deps.insert(dependency);
     }
 
     fn with_dependencies(
         &mut self,
-        mut dependencies: HashSet<StmtId>,
+        mut dependencies: HashSet<hir::StmtId>,
         f: impl FnOnce(&mut LowerStatement<'_, '_>),
     ) {
         // Dependencies should stack
@@ -272,7 +272,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     // For now, we wonly support independent sub-queries. I.e.
                     // the subquery must be able to be executed without any
                     // context from the parent query.
-                    let target_stmt_info = &self.state.store[target_id];
+                    let target_stmt_info = &self.state.hir[target_id];
                     debug_assert!(target_stmt_info.args.is_empty(), "TODO");
                     debug_assert!(target_stmt_info.back_refs.is_empty(), "TODO");
 
@@ -822,8 +822,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     /// Returns the ArgId for the new reference
     fn new_ref(
         &mut self,
-        source_id: StmtId,
-        target_id: StmtId,
+        source_id: hir::StmtId,
+        target_id: hir::StmtId,
         mut expr_reference: stmt::ExprReference,
     ) -> usize {
         let stmt::ExprReference::Column(expr_column) = &mut expr_reference else {
@@ -834,19 +834,19 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let nesting = expr_column.nesting;
 
         // We only track references that point to statements being executed by
-        // separate materializations. References within the same materialization
-        // are handled by the target database.
+        // separate operations. References within the same operation are handled
+        // by the target database.
         debug_assert!(nesting != 0);
 
         // Set the nesting to zero as the stored ExprReference will be used from
         // the context of the *target* statement.
         expr_column.nesting = 0;
 
-        let target = &mut self.state.store[target_id];
+        let target = &mut self.state.hir[target_id];
 
         // The `batch_load_index` is the index for this reference in the row
         // returned from the target statement's ExecStatement operation. This
-        // ExecStatement operation batch loads all records needed to materialize
+        // ExecStatement operation batch loads all records needed to execute
         // the full root statement.
         let (batch_load_index, _) = target
             .back_refs
@@ -855,12 +855,11 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             .exprs
             .insert_full(expr_reference);
 
-        // Create an argument for inputing the expr reference's materialized
-        // value into the statement.
-        let source = &mut self.state.store[source_id];
+        // Create an argument for inputing the expr reference's value into the statement.
+        let source = &mut self.state.hir[source_id];
         let arg = source.args.len();
 
-        source.args.push(Arg::Ref {
+        source.args.push(hir::Arg::Ref {
             stmt_id: target_id,
             nesting,
             batch_load_index,
@@ -870,28 +869,28 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         arg
     }
 
-    fn new_statement_info(&mut self) -> StmtId {
+    fn new_statement_info(&mut self) -> hir::StmtId {
         self.state
-            .store
+            .hir
             .new_statement_info(self.state.dependencies.clone())
     }
 
     /// Create a new sub-statement. Returns the argument position
     fn new_sub_statement(
         &mut self,
-        source_id: StmtId,
-        target_id: StmtId,
+        source_id: hir::StmtId,
+        target_id: hir::StmtId,
         stmt: Box<stmt::Statement>,
     ) -> usize {
-        let source = &mut self.state.store[source_id];
+        let source = &mut self.state.hir[source_id];
         let arg = source.args.len();
-        source.args.push(Arg::Sub {
+        source.args.push(hir::Arg::Sub {
             stmt_id: target_id,
             returning: self.cx.is_returning(),
             input: Cell::new(None),
         });
 
-        self.state.store[target_id].stmt = Some(stmt);
+        self.state.hir[target_id].stmt = Some(stmt);
 
         arg
     }
@@ -933,23 +932,23 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         self.state.engine.schema.mapping_for(model)
     }
 
-    fn curr_stmt_info(&mut self) -> &mut StatementInfo {
+    fn curr_stmt_info(&mut self) -> &mut hir::StatementInfo {
         let stmt_id = self.scope_stmt_id();
-        &mut self.state.store[stmt_id]
+        &mut self.state.hir[stmt_id]
     }
 
     /// Returns the `StmtId` for the Statement at the **current** scope.
-    fn scope_stmt_id(&self) -> StmtId {
+    fn scope_stmt_id(&self) -> hir::StmtId {
         self.state.scopes[self.scope_id].stmt_id
     }
 
     /// Get the StmtId for the specified nesting level
-    fn resolve_stmt_id(&self, nesting: usize) -> StmtId {
+    fn resolve_stmt_id(&self, nesting: usize) -> hir::StmtId {
         self.state.scopes[self.scope_id - nesting].stmt_id
     }
 
     /// Plan a sub-statement that is able to reference the parent statement
-    fn scope_statement(&mut self, f: impl FnOnce(&mut LowerStatement<'_, '_>)) -> StmtId {
+    fn scope_statement(&mut self, f: impl FnOnce(&mut LowerStatement<'_, '_>)) -> hir::StmtId {
         let stmt_id = self.new_statement_info();
         let scope_id = self.state.scopes.push(Scope { stmt_id });
         let mut dependencies = None;

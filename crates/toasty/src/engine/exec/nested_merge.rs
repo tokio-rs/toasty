@@ -5,18 +5,27 @@ use crate::engine::eval;
 use crate::engine::exec::{Action, Exec, Output, VarId};
 use crate::Result;
 
-/// Nested merge operation - combines parent and child materializations
+/// Combines parent and child data into nested structures.
 ///
-/// The nested merge algorithm is recursive.
-/// * First, we need to get the batch-loaded records for all statements.
-/// * Then, starting at the root we:
-///     * Iterate over each record.
-///         * The record is not the final projection, it may include extra fields.
-///     * For each nested stmt, filter records for the curent row
-///     * Perform a recursive nested merge.
-///     * Take the results of of the recursive nested merge
-///     * project the curent row
-///     * Store in vec to return.
+/// The nested merge algorithm processes hierarchical data by:
+///
+/// 1. Loading all batch data upfront - fetches all input data for all levels
+///    before processing
+/// 2. Processing each root row:
+///    - For each nested child relationship at this level:
+///      - Filters batch-loaded child data to find matching rows using the
+///        qualification predicate
+///      - Recursively merges each matching child row with its own children
+///      - Collects results into a list, or a single value if `single` is `true`
+///    - Projects the final row by applying the projection function with the
+///      current row and all nested children
+///    - Adds the projected row to output
+/// 3. Returning all merged rows with their nested data
+///
+/// # Note
+///
+/// Rows loaded from batch queries are not the final projection. They may include
+/// extra fields needed for filtering or projecting nested children.
 #[derive(Debug, Clone)]
 pub(crate) struct NestedMerge {
     /// Input sources. NestedLevel will reference their inputs by index in this vec.
@@ -119,7 +128,7 @@ impl Exec<'_> {
                 row,
                 position: 0,
             };
-            merged_rows.push(self.materialize_nested_row(&stack, &action.root, &input)?);
+            merged_rows.push(self.merge_nested_row(&stack, &action.root, &input)?);
         }
 
         // Store the output
@@ -132,7 +141,34 @@ impl Exec<'_> {
         Ok(())
     }
 
-    fn materialize_nested_row(
+    /// Recursively merges a single row with its nested child data.
+    ///
+    /// This is the core recursive function that processes one row at a time through
+    /// the nesting hierarchy. For each row, it:
+    ///
+    /// 1. **Processes each child relationship**: Iterates through all nested children
+    ///    defined at this level
+    /// 2. **Filters child rows**: For each child, scans the batch-loaded child data
+    ///    and applies the qualification predicate to find matching rows
+    /// 3. **Recursively merges**: For each matching child row, recursively calls
+    ///    `merge_nested_row` to process its own children
+    /// 4. **Collects results**: Gathers all processed child rows into a list (or
+    ///    single value if `single: true`)
+    /// 5. **Projects final result**: Applies the projection function with the current
+    ///    row and all nested children as arguments to produce the final output
+    ///
+    /// # Arguments
+    ///
+    /// * `row_stack` - The ancestor stack containing this row and all parent rows,
+    ///   used for evaluating predicates that reference parent data
+    /// * `level` - The current nesting level descriptor with source, projection, and children
+    /// * `input` - All batch-loaded data for the entire merge, indexed by source
+    ///
+    /// # Returns
+    ///
+    /// The projected value for this row, with all nested children merged in according
+    /// to the projection function.
+    fn merge_nested_row(
         &self,
         row_stack: &RowStack<'_>,
         level: &NestedLevel,
@@ -159,7 +195,7 @@ impl Exec<'_> {
                 }
 
                 // Recurse nested merge and track the result
-                nested_rows_projected.push(self.materialize_nested_row(
+                nested_rows_projected.push(self.merge_nested_row(
                     &nested_stack,
                     &nested_child.level,
                     input,

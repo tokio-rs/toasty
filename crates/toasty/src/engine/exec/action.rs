@@ -20,8 +20,11 @@ pub(crate) enum Action {
     /// Execute `Operation::GetByKey` using key input
     GetByKey(GetByKey),
 
-    /// Nested merge operation - combines parent and child materializations
-    /// Handles the ENTIRE nesting hierarchy, not just one level
+    /// Combines parent and child data into nested structures.
+    ///
+    /// Loads all batch data upfront, then recursively processes each row by filtering
+    /// and merging child data at all nesting levels, finally projecting each row with
+    /// its nested children into the final result.
     NestedMerge(NestedMerge),
 
     /// Take the contents of a variable and project it one or more times to a

@@ -1,262 +1,11 @@
-mod materialize_nested_merge;
+use indexmap::IndexSet;
+use toasty_core::stmt::{self, visit, visit_mut, Condition};
 
-use std::{cell::Cell, ops};
+use crate::engine::{eval, hir, mir, plan::HirPlanner};
 
-use index_vec::IndexVec;
-use indexmap::{indexset, IndexSet};
-use toasty_core::{
-    schema::db::{IndexId, TableId},
-    stmt::{self, visit, visit_mut, Condition},
-};
-
-use crate::engine::{
-    eval,
-    exec::{NestedLevel, VarId},
-    planner::{Arg, Planner, StatementInfoStore, StmtId},
-    Engine,
-};
-
-#[derive(Debug)]
-pub(crate) struct MaterializeGraph {
-    /// Nodes in the graph
-    pub(crate) store: IndexVec<NodeId, MaterializeNode>,
-
-    /// Order of execution
-    pub(crate) execution_order: Vec<NodeId>,
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeNode {
-    /// Materialization kind
-    pub(crate) kind: MaterializeKind,
-
-    /// Nodes that must execute *before* the current one. This should be a
-    /// superset of the node's inputs.
-    pub(crate) deps: IndexSet<NodeId>,
-
-    /// Variable where the output is stored
-    pub(crate) var: Cell<Option<VarId>>,
-
-    /// Number of nodes that use this one as input.
-    pub(crate) num_uses: Cell<usize>,
-
-    /// Used for topo-sort
-    visited: Cell<bool>,
-}
-
-index_vec::define_index_type! {
-    pub(crate) struct NodeId = u32;
-}
-
-/// Materialization operation
-#[derive(Debug)]
-pub(crate) enum MaterializeKind {
-    /// A constant value
-    Const(MaterializeConst),
-
-    DeleteByKey(MaterializeDeleteByKey),
-
-    /// Execute a database query
-    ExecStatement(Box<MaterializeExecStatement>),
-
-    /// Filter results
-    Filter(MaterializeFilter),
-
-    /// Find primary keys by index
-    FindPkByIndex(MaterializeFindPkByIndex),
-
-    /// Get records by primary key
-    GetByKey(MaterializeGetByKey),
-
-    /// Execute a nested merge
-    NestedMerge(MaterializeNestedMerge),
-
-    /// Projection operation - transforms records
-    Project(MaterializeProject),
-
-    /// Read-modify-write. The write only succeeds if the values read are not
-    /// modified.
-    ReadModifyWrite(Box<MaterializeReadModifyWrite>),
-
-    QueryPk(MaterializeQueryPk),
-
-    UpdateByKey(MaterializeUpdateByKey),
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeConst {
-    pub(crate) value: Vec<stmt::Value>,
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeDeleteByKey {
-    /// Keys are always specified as an input, whether const or a set of
-    /// dependent materializations and transformations.
-    pub(crate) input: NodeId,
-
-    /// The table to get keys from
-    pub(crate) table: TableId,
-
-    pub(crate) filter: Option<stmt::Expr>,
-
-    /// Return type
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeExecStatement {
-    /// Inputs needed to reify the statement
-    pub(crate) inputs: IndexSet<NodeId>,
-
-    /// The database query to execute
-    pub(crate) stmt: stmt::Statement,
-
-    /// Node return type
-    pub(crate) ty: stmt::Type,
-
-    /// When true, the statement is a conditional update with no returning
-    pub(crate) conditional_update_with_no_returning: bool,
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeFilter {
-    /// Input needed to reify the statement
-    pub(crate) input: NodeId,
-
-    /// Filter
-    pub(crate) filter: eval::Func,
-
-    /// Row type
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeFindPkByIndex {
-    pub(crate) inputs: IndexSet<NodeId>,
-    pub(crate) table: TableId,
-    pub(crate) index: IndexId,
-    pub(crate) filter: stmt::Expr,
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeGetByKey {
-    /// Keys are always specified as an input, whether const or a set of
-    /// dependent materializations and transformations.
-    pub(crate) input: NodeId,
-
-    /// The table to get keys from
-    pub(crate) table: TableId,
-
-    /// Columns to get
-    pub(crate) columns: IndexSet<stmt::ExprReference>,
-
-    /// Return type
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeNestedMerge {
-    /// Inputs needed to reify the statement
-    pub(crate) inputs: IndexSet<NodeId>,
-
-    /// The root nested merge level
-    pub(crate) root: NestedLevel,
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeProject {
-    /// Input required to perform the projection
-    pub(crate) input: NodeId,
-
-    /// Projection expression
-    pub(crate) projection: eval::Func,
-
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeReadModifyWrite {
-    /// Inputs needed to reify the statement
-    pub(crate) inputs: IndexSet<NodeId>,
-
-    /// The read statement
-    pub(crate) read: stmt::Query,
-
-    /// The write statement
-    pub(crate) write: stmt::Statement,
-
-    /// Node return type
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeQueryPk {
-    pub(crate) input: Option<NodeId>,
-
-    pub(crate) table: TableId,
-
-    /// Columns to get
-    pub(crate) columns: IndexSet<stmt::ExprReference>,
-
-    /// How to filter the index
-    pub(crate) pk_filter: stmt::Expr,
-
-    /// Additional filter to pass to the database
-    pub(crate) row_filter: Option<stmt::Expr>,
-
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-pub(crate) struct MaterializeUpdateByKey {
-    pub(crate) input: NodeId,
-
-    pub(crate) table: TableId,
-
-    pub(crate) assignments: stmt::Assignments,
-
-    pub(crate) filter: Option<stmt::Expr>,
-
-    pub(crate) condition: Option<stmt::Expr>,
-
-    pub(crate) ty: stmt::Type,
-}
-
-#[derive(Debug)]
-struct MaterializePlanner<'a> {
-    engine: &'a Engine,
-
-    /// Root statement and all nested statements.
-    store: &'a StatementInfoStore,
-
-    /// Graph of operations needed to materialize the statement, in-progress
-    graph: &'a mut MaterializeGraph,
-}
-
-impl Planner<'_> {
-    pub(super) fn plan_materializations(&mut self) {
-        MaterializePlanner {
-            engine: self.engine,
-            store: &self.store,
-            graph: &mut self.graph,
-        }
-        .plan_materialize();
-    }
-}
-
-impl MaterializePlanner<'_> {
-    fn plan_materialize(&mut self) {
-        let root_id = self.store.root_id();
-        self.plan_materialize_statement(root_id);
-
-        let exit = self.store.root().output.get().unwrap();
-        self.compute_materialization_execution_order(exit);
-    }
-
-    fn plan_materialize_statement(&mut self, stmt_id: StmtId) {
-        let stmt_info = &self.store[stmt_id];
+impl HirPlanner<'_> {
+    pub(super) fn plan_statement(&mut self, stmt_id: hir::StmtId) {
+        let stmt_info = &self.hir[stmt_id];
         let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
 
         // Check if the statement has already been planned
@@ -267,7 +16,7 @@ impl MaterializePlanner<'_> {
         // First, plan dependency statements. These are statments that must run
         // before the current one but do not reference the current statement.
         for &dep_stmt_id in &stmt_info.deps {
-            self.plan_materialize_statement(dep_stmt_id);
+            self.plan_statement(dep_stmt_id);
         }
 
         // Tracks if the original query is a single query.
@@ -281,7 +30,7 @@ impl MaterializePlanner<'_> {
         // Columns to select
         let mut columns = IndexSet::new();
 
-        // Materialization nodes this one depends on and uses the output of.
+        // Operation nodes this one depends on and uses the output of.
         let mut inputs = IndexSet::new();
 
         // Visit the main statement's returning clause to extract needed columns
@@ -292,10 +41,10 @@ impl MaterializePlanner<'_> {
                     *expr = stmt::Expr::arg_project(0, [index]);
                 }
                 stmt::Expr::Arg(expr_arg) => match &stmt_info.args[expr_arg.position] {
-                    Arg::Ref { .. } => {
+                    hir::Arg::Ref { .. } => {
                         todo!("refs in returning is not yet supported");
                     }
-                    Arg::Sub {
+                    hir::Arg::Sub {
                         stmt_id,
                         input,
                         returning: true,
@@ -307,7 +56,7 @@ impl MaterializePlanner<'_> {
                             return;
                         }
 
-                        let node_id = self.store[stmt_id].exec_statement.get().expect("bug");
+                        let node_id = self.hir[stmt_id].exec_statement.get().expect("bug");
 
                         let (index, _) = inputs.insert_full(node_id);
                         input.set(Some(index));
@@ -321,7 +70,7 @@ impl MaterializePlanner<'_> {
         // Track sub-statement arguments from filter
         visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| {
             if let stmt::Expr::Arg(expr_arg) = expr {
-                if let Arg::Sub {
+                if let hir::Arg::Sub {
                     stmt_id: arg_stmt_id,
                     returning: false,
                     input,
@@ -329,7 +78,7 @@ impl MaterializePlanner<'_> {
                 {
                     debug_assert!(!self.engine.capability().sql);
                     debug_assert!(input.get().is_none());
-                    let node_id = self.store[arg_stmt_id].output.get().expect("bug");
+                    let node_id = self.hir[arg_stmt_id].output.get().expect("bug");
 
                     let (index, _) = inputs.insert_full(node_id);
                     input.set(Some(index));
@@ -349,7 +98,7 @@ impl MaterializePlanner<'_> {
         let mut ref_source = None;
 
         for arg in &stmt_info.args {
-            let Arg::Ref {
+            let hir::Arg::Ref {
                 stmt_id: target_id,
                 input,
                 ..
@@ -365,7 +114,7 @@ impl MaterializePlanner<'_> {
             );
 
             // Find the back-ref for this arg
-            let node_id = self.store[target_id].back_refs[&stmt_id]
+            let node_id = self.hir[target_id].back_refs[&stmt_id]
                 .node_id
                 .get()
                 .unwrap();
@@ -392,7 +141,7 @@ impl MaterializePlanner<'_> {
                             expr_column.nesting += 1;
                         }
                         stmt::Expr::Arg(expr_arg) => {
-                            let Arg::Ref {
+                            let hir::Arg::Ref {
                                 input,
                                 batch_load_index: index,
                                 ..
@@ -426,7 +175,7 @@ impl MaterializePlanner<'_> {
                         debug_assert_eq!(0, expr_column.nesting);
                     }
                     stmt::Expr::Arg(expr_arg) => {
-                        let Arg::Ref {
+                        let hir::Arg::Ref {
                             batch_load_index: index,
                             ..
                         } = &stmt_info.args[expr_arg.position]
@@ -446,7 +195,7 @@ impl MaterializePlanner<'_> {
             }
         }
 
-        let mut dependencies = Some(stmt_info.dependent_materializations(self.store));
+        let mut dependencies = Some(stmt_info.dependent_operations(self.hir));
 
         let exec_stmt_node_id = if stmt.is_const() {
             debug_assert!(stmt_info.deps.is_empty());
@@ -483,7 +232,7 @@ impl MaterializePlanner<'_> {
 
             let input_args: Vec<_> = inputs
                 .iter()
-                .map(|input| self.graph.ty(*input).clone())
+                .map(|input| self.mir.ty(*input).clone())
                 .collect();
 
             let ty = self.engine.infer_ty(&stmt, &input_args[..]);
@@ -494,12 +243,12 @@ impl MaterializePlanner<'_> {
                     assert!(returning.is_none(), "TODO: returning={returning:#?}");
 
                     if self.engine.capability().cte_with_update {
-                        MaterializeKind::ExecStatement(Box::new(
-                            self.plan_materialize_conditional_sql_query_as_cte(inputs, stmt, ty),
+                        mir::Operation::ExecStatement(Box::new(
+                            self.plan_conditional_sql_query_as_cte(inputs, stmt, ty),
                         ))
                     } else {
-                        MaterializeKind::ReadModifyWrite(Box::new(
-                            self.plan_materialize_conditional_sql_query_as_rmw(inputs, stmt, ty),
+                        mir::Operation::ReadModifyWrite(Box::new(
+                            self.plan_conditional_sql_query_as_rmw(inputs, stmt, ty),
                         ))
                     }
                 } else {
@@ -515,7 +264,7 @@ impl MaterializePlanner<'_> {
                 );
                 // With SQL capability, we can just punt the details of execution to
                 // the database's query planner.
-                MaterializeKind::ExecStatement(Box::new(MaterializeExecStatement {
+                mir::Operation::ExecStatement(Box::new(mir::ExecStatement {
                     inputs,
                     stmt,
                     ty,
@@ -525,11 +274,11 @@ impl MaterializePlanner<'_> {
 
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
-            self.graph
+            self.mir
                 .insert_with_deps(node, dependencies.take().unwrap())
         } else {
-            // Without SQL capability, we have to plan the materialization of
-            // the statement based on available indices.
+            // Without SQL capability, we have to plan the execution of the
+            // statement based on available indices.
             let mut index_plan = self.engine.plan_index_path(&stmt);
             let table_id = self.engine.resolve_table_for(&stmt).id;
 
@@ -546,12 +295,12 @@ impl MaterializePlanner<'_> {
             if index_plan.index.primary_key {
                 let pk_keys_project_args = if ref_source.is_some() {
                     assert_eq!(inputs.len(), 1, "TODO");
-                    let ty = self.graph[inputs[0]].ty();
+                    let ty = self.mir[inputs[0]].ty();
                     vec![ty.unwrap_list_ref().clone()]
                 } else {
                     inputs
                         .iter()
-                        .map(|node_id| self.graph[node_id].ty().clone())
+                        .map(|node_id| self.mir[node_id].ty().clone())
                         .collect()
                 };
 
@@ -617,7 +366,7 @@ impl MaterializePlanner<'_> {
                         debug_assert!(ref_source.is_some(), "TODO");
                         let ty = stmt::Type::list(keys.ret.clone());
                         // Gotta project
-                        self.graph.insert(MaterializeProject {
+                        self.mir.insert(mir::Project {
                             input: inputs[0],
                             projection: keys,
                             ty,
@@ -627,8 +376,8 @@ impl MaterializePlanner<'_> {
                     match stmt {
                         stmt::Statement::Query(_) => {
                             debug_assert!(ty.is_list());
-                            self.graph.insert_with_deps(
-                                MaterializeGetByKey {
+                            self.mir.insert_with_deps(
+                                mir::GetByKey {
                                     input: get_by_key_input,
                                     table: table_id,
                                     columns: columns.clone(),
@@ -642,8 +391,8 @@ impl MaterializePlanner<'_> {
                                 ty.is_unit(),
                                 "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
                             );
-                            self.graph.insert_with_deps(
-                                MaterializeDeleteByKey {
+                            self.mir.insert_with_deps(
+                                mir::DeleteByKey {
                                     input: get_by_key_input,
                                     table: table_id,
                                     filter: index_plan.result_filter,
@@ -652,8 +401,8 @@ impl MaterializePlanner<'_> {
                                 dependencies.take().into_iter().flatten(),
                             )
                         }
-                        stmt::Statement::Update(stmt) => self.graph.insert_with_deps(
-                            MaterializeUpdateByKey {
+                        stmt::Statement::Update(stmt) => self.mir.insert_with_deps(
+                            mir::UpdateByKey {
                                 input: get_by_key_input,
                                 table: table_id,
                                 assignments: stmt.assignments,
@@ -674,8 +423,8 @@ impl MaterializePlanner<'_> {
                         todo!()
                     };
 
-                    self.graph.insert_with_deps(
-                        MaterializeQueryPk {
+                    self.mir.insert_with_deps(
+                        mir::QueryPk {
                             input,
                             table: table_id,
                             columns: columns.clone(),
@@ -698,8 +447,8 @@ impl MaterializePlanner<'_> {
                     }
                 });
 
-                let get_by_key_input = self.graph.insert_with_deps(
-                    MaterializeFindPkByIndex {
+                let get_by_key_input = self.mir.insert_with_deps(
+                    mir::FindPkByIndex {
                         inputs,
                         table: index_plan.index.on,
                         index: index_plan.index.id,
@@ -712,8 +461,8 @@ impl MaterializePlanner<'_> {
                 match stmt {
                     stmt::Statement::Query(_) => {
                         debug_assert!(ty.is_list());
-                        self.graph.insert_with_deps(
-                            MaterializeGetByKey {
+                        self.mir.insert_with_deps(
+                            mir::GetByKey {
                                 input: get_by_key_input,
                                 table: table_id,
                                 columns: columns.clone(),
@@ -727,8 +476,8 @@ impl MaterializePlanner<'_> {
                             ty.is_unit(),
                             "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
                         );
-                        self.graph.insert_with_deps(
-                            MaterializeDeleteByKey {
+                        self.mir.insert_with_deps(
+                            mir::DeleteByKey {
                                 input: get_by_key_input,
                                 table: table_id,
                                 filter: index_plan.result_filter,
@@ -737,8 +486,8 @@ impl MaterializePlanner<'_> {
                             dependencies.take().into_iter().flatten(),
                         )
                     }
-                    stmt::Statement::Update(stmt) => self.graph.insert_with_deps(
-                        MaterializeUpdateByKey {
+                    stmt::Statement::Update(stmt) => self.mir.insert_with_deps(
+                        mir::UpdateByKey {
                             input: get_by_key_input,
                             table: table_id,
                             assignments: stmt.assignments,
@@ -755,7 +504,7 @@ impl MaterializePlanner<'_> {
             // If there is a post filter, we need to apply a filter step on the returned rows.
             if let Some(post_filter) = post_filter {
                 let item_ty = ty.unwrap_list_ref();
-                node_id = self.graph.insert(MaterializeFilter {
+                node_id = self.mir.insert(mir::Filter {
                     input: node_id,
                     filter: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
                     ty,
@@ -765,7 +514,7 @@ impl MaterializePlanner<'_> {
             node_id
         };
 
-        // Track the exec statement materialization node.
+        // Track the exec statement operation node.
         stmt_info.exec_statement.set(Some(exec_stmt_node_id));
 
         // Now, for each back ref, we need to project the expression to what the
@@ -776,11 +525,11 @@ impl MaterializePlanner<'_> {
                 stmt::Expr::arg_project(0, [index])
             }));
 
-            let arg_ty = self.graph[exec_stmt_node_id].ty().unwrap_list_ref().clone();
+            let arg_ty = self.mir[exec_stmt_node_id].ty().unwrap_list_ref().clone();
             let projection = eval::Func::from_stmt(projection, vec![arg_ty]);
             let ty = stmt::Type::list(projection.ret.clone());
 
-            let project_node_id = self.graph.insert(MaterializeProject {
+            let project_node_id = self.mir.insert(mir::Project {
                 input: exec_stmt_node_id,
                 projection,
                 ty,
@@ -793,11 +542,11 @@ impl MaterializePlanner<'_> {
 
         // Plan each child
         for arg in &stmt_info.args {
-            let Arg::Sub { stmt_id, .. } = arg else {
+            let hir::Arg::Sub { stmt_id, .. } = arg else {
                 continue;
             };
 
-            self.plan_materialize_statement(*stmt_id);
+            self.plan_statement(*stmt_id);
         }
 
         // Plans a NestedMerge if one is needed
@@ -820,11 +569,11 @@ impl MaterializePlanner<'_> {
                         )
                     };
 
-                    self.graph
-                        .insert_with_deps(MaterializeConst { value: rows, ty }, [exec_stmt_node_id])
+                    self.mir
+                        .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
                 }
                 stmt::Returning::Expr(returning) => {
-                    let arg_ty = match self.graph[exec_stmt_node_id].ty() {
+                    let arg_ty = match self.mir[exec_stmt_node_id].ty() {
                         stmt::Type::List(ty) => vec![(**ty).clone()],
                         stmt::Type::Unit => vec![],
                         _ => todo!(),
@@ -833,7 +582,7 @@ impl MaterializePlanner<'_> {
                     let projection = eval::Func::from_stmt(returning, arg_ty);
                     let ty = stmt::Type::list(projection.ret.clone());
 
-                    let node = MaterializeProject {
+                    let node = mir::Project {
                         input: exec_stmt_node_id,
                         projection,
                         ty,
@@ -841,16 +590,16 @@ impl MaterializePlanner<'_> {
 
                     // Plan the final projection to handle the returning clause.
                     if let Some(deps) = dependencies.take() {
-                        self.graph.insert_with_deps(node, deps)
+                        self.mir.insert_with_deps(node, deps)
                     } else {
-                        self.graph.insert(node)
+                        self.mir.insert(node)
                     }
                 }
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
             }
         } else {
             if let Some(deps) = dependencies.take() {
-                self.graph[exec_stmt_node_id].deps.extend(deps);
+                self.mir[exec_stmt_node_id].deps.extend(deps);
             }
 
             exec_stmt_node_id
@@ -861,13 +610,12 @@ impl MaterializePlanner<'_> {
         stmt_info.output.set(Some(output_node_id));
     }
 
-    // plan_materialize_conditional_sql_query_as_cte
-    fn plan_materialize_conditional_sql_query_as_cte(
+    fn plan_conditional_sql_query_as_cte(
         &self,
-        inputs: IndexSet<NodeId>,
+        inputs: IndexSet<mir::NodeId>,
         stmt: stmt::Update,
         ty: stmt::Type,
-    ) -> MaterializeExecStatement {
+    ) -> mir::ExecStatement {
         let Some(condition) = stmt.condition.expr else {
             panic!("conditional update without condition");
         };
@@ -1001,7 +749,7 @@ impl MaterializePlanner<'_> {
         .build()
         .into();
 
-        MaterializeExecStatement {
+        mir::ExecStatement {
             inputs,
             stmt,
             ty,
@@ -1009,12 +757,12 @@ impl MaterializePlanner<'_> {
         }
     }
 
-    fn plan_materialize_conditional_sql_query_as_rmw(
+    fn plan_conditional_sql_query_as_rmw(
         &mut self,
-        inputs: IndexSet<NodeId>,
+        inputs: IndexSet<mir::NodeId>,
         stmt: stmt::Update,
         ty: stmt::Type,
-    ) -> MaterializeReadModifyWrite {
+    ) -> mir::ReadModifyWrite {
         // For now, no returning supported
         assert!(stmt.returning.is_none(), "TODO: support returning");
 
@@ -1058,7 +806,7 @@ impl MaterializePlanner<'_> {
             returning: None,
         };
 
-        MaterializeReadModifyWrite {
+        mir::ReadModifyWrite {
             inputs,
             read,
             write: write.into(),
@@ -1066,17 +814,8 @@ impl MaterializePlanner<'_> {
         }
     }
 
-    fn compute_materialization_execution_order(&mut self, exit: NodeId) {
-        debug_assert!(self.graph.execution_order.is_empty());
-        compute_materialization_execution_order2(
-            exit,
-            &self.graph.store,
-            &mut self.graph.execution_order,
-        );
-    }
-
     #[track_caller]
-    fn insert_const(&mut self, value: impl Into<stmt::Value>, ty: stmt::Type) -> NodeId {
+    fn insert_const(&mut self, value: impl Into<stmt::Value>, ty: stmt::Type) -> mir::NodeId {
         let value = value.into();
 
         // Type check
@@ -1089,205 +828,9 @@ impl MaterializePlanner<'_> {
             "const type mismatch; expected={ty:#?}; actual={value:#?}",
         );
 
-        self.graph.insert(MaterializeConst {
+        self.mir.insert(mir::Const {
             value: value.unwrap_list(),
             ty,
         })
-    }
-}
-
-fn compute_materialization_execution_order2(
-    node_id: NodeId,
-    graph: &IndexVec<NodeId, MaterializeNode>,
-    execution_order: &mut Vec<NodeId>,
-) {
-    let node = &graph[node_id];
-
-    if node.visited.get() {
-        return;
-    }
-
-    node.visited.set(true);
-
-    for &dep_id in &node.deps {
-        let dep = &graph[dep_id];
-        dep.num_uses.set(dep.num_uses.get() + 1);
-
-        compute_materialization_execution_order2(dep_id, graph, execution_order);
-    }
-
-    execution_order.push(node_id);
-}
-
-impl MaterializeGraph {
-    pub(super) fn new() -> MaterializeGraph {
-        MaterializeGraph {
-            store: IndexVec::new(),
-            execution_order: vec![],
-        }
-    }
-
-    /// Insert a node into the graph
-    pub(super) fn insert(&mut self, node: impl Into<MaterializeNode>) -> NodeId {
-        self.store.push(node.into())
-    }
-
-    pub(super) fn insert_with_deps<I>(
-        &mut self,
-        node: impl Into<MaterializeNode>,
-        deps: I,
-    ) -> NodeId
-    where
-        I: IntoIterator<Item = NodeId>,
-    {
-        let mut node = node.into();
-        node.deps.extend(deps);
-        self.store.push(node)
-    }
-
-    pub(super) fn var_id(&self, node_id: NodeId) -> VarId {
-        self.store[node_id].var_id()
-    }
-
-    pub(super) fn ty(&self, node_id: NodeId) -> &stmt::Type {
-        self.store[node_id].ty()
-    }
-}
-
-impl MaterializeNode {
-    pub(super) fn ty(&self) -> &stmt::Type {
-        match &self.kind {
-            MaterializeKind::Const(m) => &m.ty,
-            MaterializeKind::DeleteByKey(m) => &m.ty,
-            MaterializeKind::ExecStatement(m) => &m.ty,
-            MaterializeKind::Filter(m) => &m.ty,
-            MaterializeKind::FindPkByIndex(m) => &m.ty,
-            MaterializeKind::GetByKey(m) => &m.ty,
-            MaterializeKind::QueryPk(m) => &m.ty,
-            MaterializeKind::Project(m) => &m.ty,
-            MaterializeKind::UpdateByKey(m) => &m.ty,
-            MaterializeKind::NestedMerge(_m) => todo!(),
-            MaterializeKind::ReadModifyWrite(m) => &m.ty,
-        }
-    }
-
-    pub(super) fn var_id(&self) -> VarId {
-        self.var.get().unwrap()
-    }
-}
-
-impl ops::Index<NodeId> for MaterializeGraph {
-    type Output = MaterializeNode;
-
-    fn index(&self, index: NodeId) -> &Self::Output {
-        self.store.index(index)
-    }
-}
-
-impl ops::IndexMut<NodeId> for MaterializeGraph {
-    fn index_mut(&mut self, index: NodeId) -> &mut Self::Output {
-        self.store.index_mut(index)
-    }
-}
-
-impl ops::Index<&NodeId> for MaterializeGraph {
-    type Output = MaterializeNode;
-
-    fn index(&self, index: &NodeId) -> &Self::Output {
-        self.store.index(*index)
-    }
-}
-
-impl ops::IndexMut<&NodeId> for MaterializeGraph {
-    fn index_mut(&mut self, index: &NodeId) -> &mut Self::Output {
-        self.store.index_mut(*index)
-    }
-}
-
-impl From<MaterializeConst> for MaterializeNode {
-    fn from(value: MaterializeConst) -> Self {
-        MaterializeKind::Const(value).into()
-    }
-}
-
-impl From<MaterializeDeleteByKey> for MaterializeNode {
-    fn from(value: MaterializeDeleteByKey) -> Self {
-        MaterializeKind::DeleteByKey(value).into()
-    }
-}
-
-impl From<MaterializeExecStatement> for MaterializeNode {
-    fn from(value: MaterializeExecStatement) -> Self {
-        MaterializeKind::ExecStatement(Box::new(value)).into()
-    }
-}
-
-impl From<MaterializeFilter> for MaterializeNode {
-    fn from(value: MaterializeFilter) -> Self {
-        MaterializeKind::Filter(value).into()
-    }
-}
-
-impl From<MaterializeFindPkByIndex> for MaterializeNode {
-    fn from(value: MaterializeFindPkByIndex) -> Self {
-        MaterializeKind::FindPkByIndex(value).into()
-    }
-}
-
-impl From<MaterializeGetByKey> for MaterializeNode {
-    fn from(value: MaterializeGetByKey) -> Self {
-        MaterializeKind::GetByKey(value).into()
-    }
-}
-
-impl From<MaterializeNestedMerge> for MaterializeNode {
-    fn from(value: MaterializeNestedMerge) -> Self {
-        MaterializeKind::NestedMerge(value).into()
-    }
-}
-
-impl From<MaterializeProject> for MaterializeNode {
-    fn from(value: MaterializeProject) -> Self {
-        MaterializeKind::Project(value).into()
-    }
-}
-
-impl From<MaterializeQueryPk> for MaterializeNode {
-    fn from(value: MaterializeQueryPk) -> Self {
-        MaterializeKind::QueryPk(value).into()
-    }
-}
-
-impl From<MaterializeUpdateByKey> for MaterializeNode {
-    fn from(value: MaterializeUpdateByKey) -> Self {
-        MaterializeKind::UpdateByKey(value).into()
-    }
-}
-
-impl From<MaterializeKind> for MaterializeNode {
-    fn from(value: MaterializeKind) -> Self {
-        let deps = match &value {
-            MaterializeKind::Const(_m) => IndexSet::new(),
-            MaterializeKind::DeleteByKey(m) => indexset![m.input],
-            MaterializeKind::ExecStatement(m) => m.inputs.clone(),
-            MaterializeKind::Filter(m) => indexset![m.input],
-            MaterializeKind::FindPkByIndex(m) => m.inputs.clone(),
-            MaterializeKind::GetByKey(m) => {
-                indexset![m.input]
-            }
-            MaterializeKind::NestedMerge(m) => m.inputs.clone(),
-            MaterializeKind::Project(m) => indexset![m.input],
-            MaterializeKind::ReadModifyWrite(m) => m.inputs.clone(),
-            MaterializeKind::QueryPk(m) => m.input.into_iter().collect(),
-            MaterializeKind::UpdateByKey(m) => indexset![m.input],
-        };
-
-        MaterializeNode {
-            kind: value,
-            deps,
-            var: Cell::new(None),
-            num_uses: Cell::new(0),
-            visited: Cell::new(false),
-        }
     }
 }

@@ -1,5 +1,63 @@
 use crate::{driver, stmt, Result};
 
+/// Database-level storage types representing how values are stored in the target database.
+///
+/// `db::Type` represents the **external** types used by specific database systems
+/// (PostgreSQL, MySQL, SQLite, DynamoDB, etc.) to store column values. These are the actual
+/// storage types that appear in `CREATE TABLE` statements and database schemas.
+///
+/// # Type System Hierarchy
+///
+/// Toasty has two distinct type systems:
+///
+/// 1. **[`stmt::Type`](crate::stmt::Type)**: Application and query engine types (internal to Toasty)
+///    - Represents Rust types: `I8`, `I16`, `String`, etc.
+///    - Types of [`stmt::Value`] and [`stmt::Expr`]
+///    - Used throughout Toasty's query processing at both application and engine levels
+///
+/// 2. **`db::Type`** (this type): Database storage types (external)
+///    - Represents database column types: `Integer(n)`, `Text`, `VarChar(n)`, etc.
+///    - External representation specific to the target database
+///    - Specified in the schema, used by drivers
+///
+/// # Mapping from Application to Database Types
+///
+/// The mapping from [`stmt::Type`] to `db::Type` happens at the driver boundary:
+///
+/// ```text
+/// stmt::Type::String  →  db::Type::Text         (default for most databases)
+///                     →  db::Type::VarChar(255)  (if specified in schema)
+///
+/// stmt::Type::I64     →  db::Type::Integer(8)   (8-byte integer)
+/// stmt::Type::I32     →  db::Type::Integer(4)   (4-byte integer)
+/// stmt::Type::Bool    →  db::Type::Boolean
+/// ```
+///
+/// See [`Type::from_app`] for the complete mapping logic.
+///
+/// # Schema Usage
+///
+/// Each column in the database schema ([`Column`](crate::schema::db::Column)) stores both:
+/// - `column.ty: stmt::Type` - How Toasty views the column internally (application/engine type)
+/// - `column.storage_ty: Option<db::Type>` - How the database stores it externally (storage type)
+///
+/// When `storage_ty` is `None`, the driver uses default mappings from `stmt::Type`.
+/// When specified, it allows fine-grained control over storage (e.g., `VARCHAR(50)` vs `TEXT`).
+///
+/// # Database-Specific Behavior
+///
+/// Different databases support different storage types. The driver's capability
+/// structure ([`driver::Capability`]) describes what types are available:
+///
+/// - **PostgreSQL**: Supports `Text`, `VarChar`, `Integer`, `Boolean`, etc.
+/// - **SQLite**: Uses type affinity; most types map to `TEXT`, `INTEGER`, `REAL`, or `BLOB`
+/// - **DynamoDB**: Uses NoSQL types like `S` (string), `N` (number), `BOOL`, etc.
+///
+/// # See Also
+///
+/// - [`stmt::Type`](crate::stmt::Type) - Application and query engine type system with detailed flow documentation
+/// - [`Type::from_app`] - Mapping logic from statement types to database types
+/// - [`Column`](crate::schema::db::Column) - Schema representation with both type systems
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     /// A boolean value

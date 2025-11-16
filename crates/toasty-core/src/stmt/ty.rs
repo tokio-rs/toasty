@@ -4,7 +4,67 @@ use crate::{
     stmt, Result,
 };
 
-/// An expression type.
+/// Statement-level type system for values and expressions within Toasty's query engine.
+///
+/// `stmt::Type` represents types at both the **application level** (models, fields, Rust types)
+/// and the **query engine level** (tables, columns, internal processing). These types are
+/// **internal to Toasty** - they describe how Toasty views and processes data throughout the
+/// entire query pipeline, from user queries to driver execution.
+///
+/// # Distinction from Database Types
+///
+/// Toasty has two distinct type systems:
+///
+/// 1. **`stmt::Type`** (this type): Application and query engine types
+///    - Types of [`stmt::Value`] and [`stmt::Expr`] throughout query processing
+///    - Represents Rust primitive types: `I8`, `I16`, `String`, etc.
+///    - Works at both model level (application) and table/column level (engine)
+///    - Internal to Toasty's query processing pipeline
+///
+/// 2. **[`schema::db::Type`](crate::schema::db::Type)**: Database storage types
+///    - External representation for the target database
+///    - Database-specific types: `Integer(n)`, `Text`, `VarChar(n)`, etc.
+///    - Used only at the driver boundary when generating database queries
+///
+/// The key distinction: `stmt::Type` is how **Toasty** views types internally, while
+/// [`schema::db::Type`](crate::schema::db::Type) is how the **database** stores them externally.
+///
+/// # Query Processing Pipeline
+///
+/// Throughout query processing, all values and expressions are typed using `stmt::Type`,
+/// even as they are transformed and converted:
+///
+/// **Application Level (Model/Field)**
+/// - User writes queries referencing models and fields
+/// - Types like `stmt::Type::Model(UserId)`, `stmt::Type::String`
+/// - Values like `stmt::Value::String("alice")`, `stmt::Value::I64(42)`
+///
+/// **Query Engine Level (Table/Column)**
+/// - During planning, queries are "lowered" from models to tables
+/// - Values may be converted between types (e.g., Model → Record, Id → String)
+/// - All conversions are from `stmt::Type` to `stmt::Type`
+/// - Still using the same type system, now at table/column abstraction level
+///
+/// **Driver Boundary (Database Storage)**
+/// - Statements with `stmt::Value` (typed by `stmt::Type`) passed to drivers
+/// - Driver consults schema to map `stmt::Type` → [`schema::db::Type`](crate::schema::db::Type)
+/// - Same `stmt::Type::String` may map to different database types based on schema configuration
+///
+/// # Schema Representation
+///
+/// Each column in the database schema stores both type representations:
+/// - `column.ty: stmt::Type` - How Toasty views this column internally
+/// - `column.storage_ty: Option<db::Type>` - How the database stores it externally
+///
+/// This dual representation enables flexible mapping. For instance, `stmt::Type::String`
+/// might map to `db::Type::Text` in one column and `db::Type::VarChar(100)` in another,
+/// depending on schema configuration and database capabilities.
+///
+/// # See Also
+///
+/// - [`schema::db::Type`](crate::schema::db::Type) External database storage types
+/// - [`stmt::Value`] - Values typed by this system
+/// - [`stmt::Expr`] - Expressions typed by this system
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     /// Boolean value

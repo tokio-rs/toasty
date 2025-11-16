@@ -1,8 +1,14 @@
 mod eval;
 mod exec;
+
+mod hir;
+use hir::HirStatement;
+
 mod index;
 mod kv;
-mod planner;
+mod lower;
+mod mir;
+mod plan;
 mod simplify;
 use simplify::Simplify;
 mod ty;
@@ -40,8 +46,18 @@ impl Engine {
             self.verify(&stmt);
         }
 
+        if let stmt::Statement::Insert(stmt) = &stmt {
+            assert!(matches!(
+                stmt.returning,
+                Some(stmt::Returning::Model { .. })
+            ));
+        }
+
+        // Lower the statement to High-level intermediate representation
+        let hir = self.lower_stmt(stmt)?;
+
         // Translate the optimized statement into a series of driver operations.
-        let plan = self.plan(stmt)?;
+        let plan = self.plan_hir_statement(hir)?;
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
