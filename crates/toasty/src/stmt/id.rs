@@ -5,6 +5,7 @@ use crate::{
 use toasty_core::stmt::{self, Value};
 
 use std::{
+    convert::TryFrom,
     fmt,
     hash::{Hash, Hasher},
     marker::PhantomData,
@@ -21,6 +22,24 @@ impl<M> Id<M> {
             inner: id,
             _p: PhantomData,
         }
+    }
+}
+
+impl<M: Model> Id<M> {
+    /// Create an `Id` from the model's string representation.
+    pub fn from_string(id: impl Into<String>) -> Self {
+        Self::from_untyped(stmt::Id::from_string(M::id(), id.into()))
+    }
+
+    /// Create an `Id` from an unsigned integer.
+    pub fn from_u64(id: u64) -> Self {
+        Self::from_untyped(stmt::Id::from_int(M::id(), id))
+    }
+
+    /// Create an `Id` from a signed integer. Negative inputs panic.
+    pub fn from_i64(id: i64) -> Self {
+        let value = u64::try_from(id).expect("Id values must be non-negative");
+        Self::from_u64(value)
     }
 }
 
@@ -67,6 +86,59 @@ impl<M: Model> IntoExpr<Id<M>> for &String {
 
     fn by_ref(&self) -> Expr<Id<M>> {
         Self::into_expr(*self)
+    }
+}
+
+fn expr_from_int<M: Model>(value: u64) -> Expr<Id<M>> {
+    Expr::from_value(stmt::Id::from_int(M::id(), value).into())
+}
+
+macro_rules! impl_into_expr_id_unsigned {
+    ($($ty:ty),+ $(,)?) => {
+        $(
+            impl<M: Model> IntoExpr<Id<M>> for $ty {
+                fn into_expr(self) -> Expr<Id<M>> {
+                    expr_from_int::<M>(u64::from(self))
+                }
+
+                fn by_ref(&self) -> Expr<Id<M>> {
+                    expr_from_int::<M>(u64::from(*self))
+                }
+            }
+        )+
+    };
+}
+
+macro_rules! impl_into_expr_id_signed {
+    ($($ty:ty),+ $(,)?) => {
+        $(
+            impl<M: Model> IntoExpr<Id<M>> for $ty {
+                fn into_expr(self) -> Expr<Id<M>> {
+                    let value = u64::try_from(self).expect("Id values must be non-negative");
+                    expr_from_int::<M>(value)
+                }
+
+                fn by_ref(&self) -> Expr<Id<M>> {
+                    let value = u64::try_from(*self).expect("Id values must be non-negative");
+                    expr_from_int::<M>(value)
+                }
+            }
+        )+
+    };
+}
+
+impl_into_expr_id_unsigned!(u8, u16, u32, u64);
+impl_into_expr_id_signed!(i8, i16, i32, i64, isize);
+
+impl<M: Model> IntoExpr<Id<M>> for usize {
+    fn into_expr(self) -> Expr<Id<M>> {
+        let value = u64::try_from(self).expect("Id values must fit in u64");
+        expr_from_int::<M>(value)
+    }
+
+    fn by_ref(&self) -> Expr<Id<M>> {
+        let value = u64::try_from(*self).expect("Id values must fit in u64");
+        expr_from_int::<M>(value)
     }
 }
 
