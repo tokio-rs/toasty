@@ -86,6 +86,15 @@ impl Capability {
         select_for_update: false,
         primary_key_ne_predicate: false,
     };
+
+    /// MongoDB capabilities
+    pub const MONGODB: Self = Self {
+        sql: false,
+        storage_types: StorageTypes::MONGODB,
+        cte_with_update: false,
+        select_for_update: false,
+        primary_key_ne_predicate: true,
+    };
 }
 
 impl StorageTypes {
@@ -142,6 +151,17 @@ impl StorageTypes {
         varchar: None,
 
         // DynamoDB supports full u64 range (numbers stored as strings)
+        max_unsigned_integer: None,
+    };
+
+    pub const MONGODB: StorageTypes = StorageTypes {
+        default_string_type: db::Type::Text,
+
+        // MongoDB does not have varchar constraints - documents can store
+        // strings of any length (up to BSON document size limit of 16MB)
+        varchar: None,
+
+        // MongoDB supports full u64 range via BSON Int64 and numeric strings
         max_unsigned_integer: None,
     };
 }
