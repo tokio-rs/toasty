@@ -68,22 +68,32 @@ impl Id {
 
     pub fn to_primitive(&self) -> stmt::Value {
         match &self.repr {
-            Repr::Int(_) => todo!(),
+            Repr::Int(id) => stmt::Value::String(id.to_string()),
             Repr::String(id) => id.clone().into(),
         }
     }
 
     pub fn into_primitive(self) -> stmt::Value {
         match self.repr {
-            Repr::Int(_) => todo!(),
+            Repr::Int(id) => stmt::Value::String(id.to_string()),
             Repr::String(id) => id.into(),
         }
     }
 
     pub fn cast(self, ty: &Type) -> Result<Value> {
-        match (self.repr, ty) {
-            (Repr::String(id), Type::String) => Ok(id.into()),
-            (repr, _) => todo!("id={repr:#?}; ty={ty:#?}"),
+        match ty {
+            Type::String => match self.repr {
+                Repr::String(id) => Ok(id.into()),
+                Repr::Int(id) => Ok(id.to_string().into()),
+            },
+            Type::Id(model_id) => {
+                anyhow::ensure!(self.model == *model_id, "Id belongs to a different model");
+                Ok(Value::Id(self))
+            }
+            _ => {
+                let repr = self.repr;
+                todo!("id={repr:#?}; ty={ty:#?}")
+            }
         }
     }
 }
