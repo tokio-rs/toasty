@@ -250,7 +250,6 @@ fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt:
     use rusqlite::types::Value as SqlValue;
 
     let value: Option<SqlValue> = row.get(index).unwrap();
-    eprintln!("{value:#?}");
 
     match value {
         Some(SqlValue::Null) => stmt::Value::Null,

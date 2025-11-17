@@ -156,7 +156,7 @@ impl StorageTypes {
         // DynamoDB does not support varchar types
         varchar: None,
 
-        default_uuid_type: db::Type::Text,
+        default_uuid_type: db::Type::Blob,
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,

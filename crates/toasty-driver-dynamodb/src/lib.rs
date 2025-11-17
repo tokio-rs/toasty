@@ -183,6 +183,7 @@ fn ddb_val(val: &stmt::Value) -> AttributeValue {
         stmt::Value::U16(val) => AttributeValue::N(val.to_string()),
         stmt::Value::U32(val) => AttributeValue::N(val.to_string()),
         stmt::Value::U64(val) => AttributeValue::N(val.to_string()),
+        stmt::Value::Bytes(val) => AttributeValue::B(val.clone().into()),
         stmt::Value::Uuid(val) => AttributeValue::S(val.to_string()),
         stmt::Value::Id(val) => AttributeValue::S(val.to_string()),
         stmt::Value::Enum(val) => {
@@ -226,6 +227,7 @@ fn ddb_to_val(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
         (Type::U16, N(val)) => stmt::Value::from(val.parse::<u16>().unwrap()),
         (Type::U32, N(val)) => stmt::Value::from(val.parse::<u32>().unwrap()),
         (Type::U64, N(val)) => stmt::Value::from(val.parse::<u64>().unwrap()),
+        (Type::Bytes, B(val)) => stmt::Value::Bytes(val.clone().into_inner()),
         (Type::Uuid, S(val)) => stmt::Value::from(val.parse::<uuid::Uuid>().unwrap()),
         (Type::Id(model), S(val)) => stmt::Value::from(stmt::Id::from_string(*model, val.clone())),
         (Type::Enum(..), S(val)) => {
