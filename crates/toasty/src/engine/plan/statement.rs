@@ -471,23 +471,7 @@ impl HirPlanner<'_> {
 
         // Now, for each back ref, we need to project the expression to what the
         // next statement expects.
-        for back_ref in stmt_info.back_refs.values() {
-            let projection = stmt::Expr::record(back_ref.exprs.iter().map(|expr_reference| {
-                let index = columns.get_index_of(expr_reference).unwrap();
-                stmt::Expr::arg_project(0, [index])
-            }));
-
-            let arg_ty = self.mir[exec_stmt_node_id].ty().unwrap_list_ref().clone();
-            let projection = eval::Func::from_stmt(projection, vec![arg_ty]);
-            let ty = stmt::Type::list(projection.ret.clone());
-
-            let project_node_id = self.mir.insert(mir::Project {
-                input: exec_stmt_node_id,
-                projection,
-                ty,
-            });
-            back_ref.node_id.set(Some(project_node_id));
-        }
+        self.process_back_ref_projections(stmt_info, exec_stmt_node_id, &columns);
 
         // Track the selection for later use.
         stmt_info.exec_statement_selection.set(columns).unwrap();
@@ -636,6 +620,31 @@ impl HirPlanner<'_> {
             for expr in &back_ref.exprs {
                 columns.insert(*expr);
             }
+        }
+    }
+
+    fn process_back_ref_projections(
+        &mut self,
+        stmt_info: &hir::StatementInfo,
+        exec_stmt_node_id: mir::NodeId,
+        columns: &IndexSet<stmt::ExprReference>,
+    ) {
+        for back_ref in stmt_info.back_refs.values() {
+            let projection = stmt::Expr::record(back_ref.exprs.iter().map(|expr_reference| {
+                let index = columns.get_index_of(expr_reference).unwrap();
+                stmt::Expr::arg_project(0, [index])
+            }));
+
+            let arg_ty = self.mir[exec_stmt_node_id].ty().unwrap_list_ref().clone();
+            let projection = eval::Func::from_stmt(projection, vec![arg_ty]);
+            let ty = stmt::Type::list(projection.ret.clone());
+
+            let project_node_id = self.mir.insert(mir::Project {
+                input: exec_stmt_node_id,
+                projection,
+                ty,
+            });
+            back_ref.node_id.set(Some(project_node_id));
         }
     }
 
