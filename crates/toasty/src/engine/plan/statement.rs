@@ -40,11 +40,7 @@ impl HirPlanner<'_> {
         self.extract_sub_statement_args_from_filter(&mut stmt, stmt_info, &mut inputs);
 
         // For each back ref, include the needed columns
-        for back_ref in stmt_info.back_refs.values() {
-            for expr in &back_ref.exprs {
-                columns.insert(*expr);
-            }
-        }
+        Self::collect_back_ref_columns(stmt_info, &mut columns);
 
         // If there are any ref args, then the statement needs to be rewritten
         // to batch load all records for a NestedMerge operation .
@@ -630,6 +626,17 @@ impl HirPlanner<'_> {
                 }
             }
         });
+    }
+
+    fn collect_back_ref_columns(
+        stmt_info: &hir::StatementInfo,
+        columns: &mut IndexSet<stmt::ExprReference>,
+    ) {
+        for back_ref in stmt_info.back_refs.values() {
+            for expr in &back_ref.exprs {
+                columns.insert(*expr);
+            }
+        }
     }
 
     fn plan_conditional_sql_query_as_cte(
