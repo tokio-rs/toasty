@@ -53,63 +53,7 @@ impl HirPlanner<'_> {
         {
             node_id
         } else if self.engine.capability().sql || stmt.is_insert() {
-            if !columns.is_empty() {
-                stmt.set_returning(
-                    stmt::Expr::record(
-                        columns
-                            .iter()
-                            .map(|expr_reference| stmt::Expr::from(*expr_reference)),
-                    )
-                    .into(),
-                );
-            }
-
-            let input_args: Vec<_> = inputs
-                .iter()
-                .map(|input| self.mir.ty(*input).clone())
-                .collect();
-
-            let ty = self.engine.infer_ty(&stmt, &input_args[..]);
-
-            let node = if stmt.condition().is_some() {
-                if let stmt::Statement::Update(stmt) = stmt {
-                    assert!(stmt.returning.is_none(), "TODO: stmt={stmt:#?}");
-                    assert!(returning.is_none(), "TODO: returning={returning:#?}");
-
-                    if self.engine.capability().cte_with_update {
-                        mir::Operation::ExecStatement(Box::new(
-                            self.plan_conditional_sql_query_as_cte(inputs, stmt, ty),
-                        ))
-                    } else {
-                        mir::Operation::ReadModifyWrite(Box::new(
-                            self.plan_conditional_sql_query_as_rmw(inputs, stmt, ty),
-                        ))
-                    }
-                } else {
-                    todo!("stmt={stmt:#?}");
-                }
-            } else {
-                debug_assert!(
-                    stmt.returning()
-                        .and_then(|returning| returning.as_expr())
-                        .map(|expr| expr.is_record())
-                        .unwrap_or(true),
-                    "stmt={stmt:#?}"
-                );
-                // With SQL capability, we can just punt the details of execution to
-                // the database's query planner.
-                mir::Operation::ExecStatement(Box::new(mir::ExecStatement {
-                    inputs,
-                    stmt,
-                    ty,
-                    conditional_update_with_no_returning: false,
-                }))
-            };
-
-            // With SQL capability, we can just punt the details of execution to
-            // the database's query planner.
-            self.mir
-                .insert_with_deps(node, dependencies.take().unwrap())
+            self.plan_sql_execution(stmt, &columns, inputs, &returning, dependencies.take())
         } else {
             // Without SQL capability, we have to plan the execution of the
             // statement based on available indices.
@@ -487,6 +431,72 @@ impl HirPlanner<'_> {
         }
 
         None
+    }
+
+    fn plan_sql_execution(
+        &mut self,
+        mut stmt: stmt::Statement,
+        columns: &IndexSet<stmt::ExprReference>,
+        inputs: IndexSet<mir::NodeId>,
+        returning: &Option<stmt::Returning>,
+        dependencies: Option<impl Iterator<Item = mir::NodeId>>,
+    ) -> mir::NodeId {
+        if !columns.is_empty() {
+            stmt.set_returning(
+                stmt::Expr::record(
+                    columns
+                        .iter()
+                        .map(|expr_reference| stmt::Expr::from(*expr_reference)),
+                )
+                .into(),
+            );
+        }
+
+        let input_args: Vec<_> = inputs
+            .iter()
+            .map(|input| self.mir.ty(*input).clone())
+            .collect();
+
+        let ty = self.engine.infer_ty(&stmt, &input_args[..]);
+
+        let node = if stmt.condition().is_some() {
+            if let stmt::Statement::Update(stmt) = stmt {
+                assert!(stmt.returning.is_none(), "TODO: stmt={stmt:#?}");
+                assert!(returning.is_none(), "TODO: returning={returning:#?}");
+
+                if self.engine.capability().cte_with_update {
+                    mir::Operation::ExecStatement(Box::new(
+                        self.plan_conditional_sql_query_as_cte(inputs, stmt, ty),
+                    ))
+                } else {
+                    mir::Operation::ReadModifyWrite(Box::new(
+                        self.plan_conditional_sql_query_as_rmw(inputs, stmt, ty),
+                    ))
+                }
+            } else {
+                todo!("stmt={stmt:#?}");
+            }
+        } else {
+            debug_assert!(
+                stmt.returning()
+                    .and_then(|returning| returning.as_expr())
+                    .map(|expr| expr.is_record())
+                    .unwrap_or(true),
+                "stmt={stmt:#?}"
+            );
+            // With SQL capability, we can just punt the details of execution to
+            // the database's query planner.
+            mir::Operation::ExecStatement(Box::new(mir::ExecStatement {
+                inputs,
+                stmt,
+                ty,
+                conditional_update_with_no_returning: false,
+            }))
+        };
+
+        // With SQL capability, we can just punt the details of execution to
+        // the database's query planner.
+        self.mir.insert_with_deps(node, dependencies.unwrap())
     }
 
     fn process_ref_args(
