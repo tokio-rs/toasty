@@ -692,56 +692,35 @@ impl HirPlanner<'_> {
         ref_source: stmt::ExprArg,
     ) {
         if self.engine.capability().sql {
-            // If targeting SQL, leverage the SQL query engine to handle most of the rewrite details.
-            let mut filter = stmt
-                .filter_mut()
-                .map(|filter| filter.take())
-                .unwrap_or_default();
-
-            visit_mut::for_each_expr_mut(&mut filter, |expr| {
-                match expr {
-                    stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
-                        debug_assert_eq!(0, expr_column.nesting);
-                        // We need to up the nesting to reflect that the filter is moved
-                        // one level deeper.
-                        expr_column.nesting += 1;
-                    }
-                    stmt::Expr::Arg(expr_arg) => {
-                        let hir::Arg::Ref {
-                            input,
-                            batch_load_index: index,
-                            ..
-                        } = &stmt_info.args[expr_arg.position]
-                        else {
-                            todo!()
-                        };
-
-                        // Rewrite reference the new `FROM`.
-                        *expr = stmt::Expr::column(stmt::ExprColumn {
-                            nesting: 0,
-                            table: input.get().unwrap(),
-                            column: *index,
-                        });
-                    }
-                    _ => {}
-                }
-            });
-
-            let sub_query = stmt::Select {
-                returning: stmt::Returning::Expr(stmt::Expr::record([1])),
-                source: stmt::Source::from(ref_source),
-                filter,
-            };
-
-            stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
+            self.rewrite_stmt_for_ref_source_sql(stmt, stmt_info, ref_source);
         } else {
-            let mut filter = stmt.filter_expr_mut();
-            visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
+            self.rewrite_stmt_for_ref_source_nosql(stmt, stmt_info, ref_source);
+        }
+    }
+
+    fn rewrite_stmt_for_ref_source_sql(
+        &mut self,
+        stmt: &mut stmt::Statement,
+        stmt_info: &hir::StatementInfo,
+        ref_source: stmt::ExprArg,
+    ) {
+        // If targeting SQL, leverage the SQL query engine to handle most of the rewrite details.
+        let mut filter = stmt
+            .filter_mut()
+            .map(|filter| filter.take())
+            .unwrap_or_default();
+
+        visit_mut::for_each_expr_mut(&mut filter, |expr| {
+            match expr {
                 stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
                     debug_assert_eq!(0, expr_column.nesting);
+                    // We need to up the nesting to reflect that the filter is moved
+                    // one level deeper.
+                    expr_column.nesting += 1;
                 }
                 stmt::Expr::Arg(expr_arg) => {
                     let hir::Arg::Ref {
+                        input,
                         batch_load_index: index,
                         ..
                     } = &stmt_info.args[expr_arg.position]
@@ -749,15 +728,54 @@ impl HirPlanner<'_> {
                         todo!()
                     };
 
-                    *expr = stmt::Expr::arg(*index);
+                    // Rewrite reference the new `FROM`.
+                    *expr = stmt::Expr::column(stmt::ExprColumn {
+                        nesting: 0,
+                        table: input.get().unwrap(),
+                        column: *index,
+                    });
                 }
                 _ => {}
-            });
-
-            if let Some(filter) = filter {
-                let expr = filter.take();
-                *filter = stmt::Expr::any(stmt::Expr::map(ref_source, expr));
             }
+        });
+
+        let sub_query = stmt::Select {
+            returning: stmt::Returning::Expr(stmt::Expr::record([1])),
+            source: stmt::Source::from(ref_source),
+            filter,
+        };
+
+        stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
+    }
+
+    fn rewrite_stmt_for_ref_source_nosql(
+        &mut self,
+        stmt: &mut stmt::Statement,
+        stmt_info: &hir::StatementInfo,
+        ref_source: stmt::ExprArg,
+    ) {
+        let mut filter = stmt.filter_expr_mut();
+        visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
+            stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
+                debug_assert_eq!(0, expr_column.nesting);
+            }
+            stmt::Expr::Arg(expr_arg) => {
+                let hir::Arg::Ref {
+                    batch_load_index: index,
+                    ..
+                } = &stmt_info.args[expr_arg.position]
+                else {
+                    todo!()
+                };
+
+                *expr = stmt::Expr::arg(*index);
+            }
+            _ => {}
+        });
+
+        if let Some(filter) = filter {
+            let expr = filter.take();
+            *filter = stmt::Expr::any(stmt::Expr::map(ref_source, expr));
         }
     }
 
