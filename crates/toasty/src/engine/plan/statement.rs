@@ -37,23 +37,7 @@ impl HirPlanner<'_> {
         self.extract_columns_from_returning(&mut returning, stmt_info, &mut columns, &mut inputs);
 
         // Track sub-statement arguments from filter
-        visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| {
-            if let stmt::Expr::Arg(expr_arg) = expr {
-                if let hir::Arg::Sub {
-                    stmt_id: arg_stmt_id,
-                    returning: false,
-                    input,
-                } = &stmt_info.args[expr_arg.position]
-                {
-                    debug_assert!(!self.engine.capability().sql);
-                    debug_assert!(input.get().is_none());
-                    let node_id = self.hir[arg_stmt_id].output.get().expect("bug");
-
-                    let (index, _) = inputs.insert_full(node_id);
-                    input.set(Some(index));
-                }
-            }
-        });
+        self.extract_sub_statement_args_from_filter(&mut stmt, stmt_info, &mut inputs);
 
         // For each back ref, include the needed columns
         for back_ref in stmt_info.back_refs.values() {
@@ -619,6 +603,31 @@ impl HirPlanner<'_> {
                     _ => todo!(),
                 },
                 _ => {}
+            }
+        });
+    }
+
+    fn extract_sub_statement_args_from_filter(
+        &mut self,
+        stmt: &mut stmt::Statement,
+        stmt_info: &hir::StatementInfo,
+        inputs: &mut IndexSet<mir::NodeId>,
+    ) {
+        visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| {
+            if let stmt::Expr::Arg(expr_arg) = expr {
+                if let hir::Arg::Sub {
+                    stmt_id: arg_stmt_id,
+                    returning: false,
+                    input,
+                } = &stmt_info.args[expr_arg.position]
+                {
+                    debug_assert!(!self.engine.capability().sql);
+                    debug_assert!(input.get().is_none());
+                    let node_id = self.hir[arg_stmt_id].output.get().expect("bug");
+
+                    let (index, _) = inputs.insert_full(node_id);
+                    input.set(Some(index));
+                }
             }
         });
     }
