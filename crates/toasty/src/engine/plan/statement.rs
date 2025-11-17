@@ -48,22 +48,14 @@ impl HirPlanner<'_> {
 
         let mut dependencies = Some(stmt_info.dependent_operations(self.hir));
 
-        let exec_stmt_node_id = if let Some(node_id) =
-            self.plan_const_or_empty_statement(&stmt, &returning, &columns)
-        {
-            node_id
-        } else if self.engine.capability().sql || stmt.is_insert() {
-            self.plan_sql_execution(stmt, &columns, inputs, &returning, dependencies.take())
-        } else {
-            self.plan_nosql_execution(
-                &stmt,
-                &mut columns,
-                inputs,
-                dependencies.take(),
-                ref_source,
-                &returning,
-            )
-        };
+        let exec_stmt_node_id = self.plan_execution(
+            stmt,
+            &mut columns,
+            inputs,
+            &returning,
+            ref_source,
+            &mut dependencies,
+        );
 
         // Track the exec statement operation node.
         stmt_info.exec_statement.set(Some(exec_stmt_node_id));
@@ -90,6 +82,31 @@ impl HirPlanner<'_> {
         );
 
         stmt_info.output.set(Some(output_node_id));
+    }
+
+    fn plan_execution(
+        &mut self,
+        stmt: stmt::Statement,
+        columns: &mut IndexSet<stmt::ExprReference>,
+        inputs: IndexSet<mir::NodeId>,
+        returning: &Option<stmt::Returning>,
+        ref_source: Option<stmt::ExprArg>,
+        dependencies: &mut Option<impl Iterator<Item = mir::NodeId>>,
+    ) -> mir::NodeId {
+        if let Some(node_id) = self.plan_const_or_empty_statement(&stmt, returning, columns) {
+            node_id
+        } else if self.engine.capability().sql || stmt.is_insert() {
+            self.plan_sql_execution(stmt, columns, inputs, returning, dependencies.take())
+        } else {
+            self.plan_nosql_execution(
+                &stmt,
+                columns,
+                inputs,
+                dependencies.take(),
+                ref_source,
+                returning,
+            )
+        }
     }
 
     fn plan_nosql_execution(
