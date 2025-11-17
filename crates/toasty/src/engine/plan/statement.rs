@@ -48,30 +48,10 @@ impl HirPlanner<'_> {
 
         let mut dependencies = Some(stmt_info.dependent_operations(self.hir));
 
-        let exec_stmt_node_id = if stmt.is_const() {
-            debug_assert!(stmt_info.deps.is_empty());
-
-            let stmt::Value::List(rows) = stmt.eval_const().unwrap() else {
-                todo!()
-            };
-
-            // Don't bother querying and just return false
-            self.insert_const(rows, self.engine.infer_record_list_ty(&stmt, &columns))
-
-        // If the statement is an update statement without any assignments, then
-        // it can be substituted with a constant.
-        } else if stmt.assignments().map(|a| a.is_empty()).unwrap_or(false) {
-            if returning.is_some() {
-                self.insert_const(
-                    vec![stmt::Value::empty_sparse_record()],
-                    stmt::Type::list(stmt::Type::empty_sparse_record()),
-                )
-            } else {
-                self.insert_const(
-                    Vec::<stmt::Value>::new(),
-                    stmt::Type::list(stmt::Type::empty_sparse_record()),
-                )
-            }
+        let exec_stmt_node_id = if let Some(node_id) =
+            self.plan_const_or_empty_statement(&stmt, &returning, &columns)
+        {
+            node_id
         } else if self.engine.capability().sql || stmt.is_insert() {
             if !columns.is_empty() {
                 stmt.set_returning(
@@ -476,6 +456,37 @@ impl HirPlanner<'_> {
                 columns.insert(*expr);
             }
         }
+    }
+
+    fn plan_const_or_empty_statement(
+        &mut self,
+        stmt: &stmt::Statement,
+        returning: &Option<stmt::Returning>,
+        columns: &IndexSet<stmt::ExprReference>,
+    ) -> Option<mir::NodeId> {
+        if stmt.is_const() {
+            let stmt::Value::List(rows) = stmt.eval_const().unwrap() else {
+                todo!()
+            };
+
+            return Some(self.insert_const(rows, self.engine.infer_record_list_ty(stmt, columns)));
+        }
+
+        if stmt.assignments().map(|a| a.is_empty()).unwrap_or(false) {
+            if returning.is_some() {
+                return Some(self.insert_const(
+                    vec![stmt::Value::empty_sparse_record()],
+                    stmt::Type::list(stmt::Type::empty_sparse_record()),
+                ));
+            } else {
+                return Some(self.insert_const(
+                    Vec::<stmt::Value>::new(),
+                    stmt::Type::list(stmt::Type::empty_sparse_record()),
+                ));
+            }
+        }
+
+        None
     }
 
     fn process_ref_args(
