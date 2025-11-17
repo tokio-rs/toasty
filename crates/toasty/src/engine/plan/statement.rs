@@ -55,186 +55,147 @@ impl HirPlanner<'_> {
         } else if self.engine.capability().sql || stmt.is_insert() {
             self.plan_sql_execution(stmt, &columns, inputs, &returning, dependencies.take())
         } else {
-            // Without SQL capability, we have to plan the execution of the
-            // statement based on available indices.
-            let mut index_plan = self.engine.plan_index_path(&stmt);
-            let table_id = self.engine.resolve_table_for(&stmt).id;
+            self.plan_nosql_execution(
+                &stmt,
+                &mut columns,
+                inputs,
+                dependencies.take(),
+                ref_source,
+                &returning,
+            )
+        };
 
-            // If the query can be reduced to fetching rows using a set of
-            // primary-key keys, then `pk_keys` will be set to `Some(<keys>)`.
-            let mut pk_keys = None;
+        // Track the exec statement operation node.
+        stmt_info.exec_statement.set(Some(exec_stmt_node_id));
 
-            // The post-filter is an expression that filters out returned rows
-            // in-memory. To process this filter, Toasty needs to make sure that
-            // any column referenced in the filter is included when fetching
-            // data.
-            let mut post_filter = index_plan.post_filter.clone();
+        // Now, for each back ref, we need to project the expression to what the
+        // next statement expects.
+        self.process_back_ref_projections(stmt_info, exec_stmt_node_id, &columns);
 
-            if index_plan.index.primary_key {
-                let pk_keys_project_args = if ref_source.is_some() {
-                    assert_eq!(inputs.len(), 1, "TODO");
-                    let ty = self.mir[inputs[0]].ty();
-                    vec![ty.unwrap_list_ref().clone()]
-                } else {
-                    inputs
-                        .iter()
-                        .map(|node_id| self.mir[node_id].ty().clone())
-                        .collect()
-                };
+        // Track the selection for later use.
+        stmt_info.exec_statement_selection.set(columns).unwrap();
 
-                // If using the primary key to find rows, try to convert the
-                // filter expression to a set of primary-key keys.
-                let cx = self.engine.expr_cx_for(&stmt);
-                pk_keys = self.engine.try_build_key_filter(
-                    cx,
-                    index_plan.index,
-                    &index_plan.index_filter,
-                    pk_keys_project_args,
-                );
+        // Plan each child
+        self.plan_child_statements(stmt_info);
+
+        // Plans a NestedMerge if one is needed
+        let output_node_id = self.plan_output_node(
+            stmt_id,
+            stmt_info,
+            exec_stmt_node_id,
+            returning,
+            dependencies,
+            single,
+            ref_source,
+        );
+
+        stmt_info.output.set(Some(output_node_id));
+    }
+
+    fn plan_nosql_execution(
+        &mut self,
+        stmt: &stmt::Statement,
+        columns: &mut IndexSet<stmt::ExprReference>,
+        inputs: IndexSet<mir::NodeId>,
+        mut dependencies: Option<impl Iterator<Item = mir::NodeId>>,
+        ref_source: Option<stmt::ExprArg>,
+        returning: &Option<stmt::Returning>,
+    ) -> mir::NodeId {
+        // Without SQL capability, we have to plan the execution of the
+        // statement based on available indices.
+        let mut index_plan = self.engine.plan_index_path(stmt);
+        let table_id = self.engine.resolve_table_for(stmt).id;
+
+        // If the query can be reduced to fetching rows using a set of
+        // primary-key keys, then `pk_keys` will be set to `Some(<keys>)`.
+        let mut pk_keys = None;
+
+        // The post-filter is an expression that filters out returned rows
+        // in-memory. To process this filter, Toasty needs to make sure that
+        // any column referenced in the filter is included when fetching
+        // data.
+        let mut post_filter = index_plan.post_filter.clone();
+
+        if index_plan.index.primary_key {
+            let pk_keys_project_args = if ref_source.is_some() {
+                assert_eq!(inputs.len(), 1, "TODO");
+                let ty = self.mir[inputs[0]].ty();
+                vec![ty.unwrap_list_ref().clone()]
+            } else {
+                inputs
+                    .iter()
+                    .map(|node_id| self.mir[node_id].ty().clone())
+                    .collect()
             };
 
-            // If fetching rows using GetByKey, some databases do not support
-            // applying additional filters to the rows before returning results.
-            // In this case, the result_filter needs to be applied in-memory.
-            if stmt.is_query() && (pk_keys.is_some() || !index_plan.index.primary_key) {
-                if let Some(result_filter) = index_plan.result_filter.take() {
-                    post_filter = Some(match post_filter {
-                        Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
-                        None => result_filter,
-                    });
-                }
-            }
-
-            debug_assert!(
-                post_filter.is_none() || stmt.is_query(),
-                "stmt={stmt:#?}; post_filter={post_filter:#?}"
+            // If using the primary key to find rows, try to convert the
+            // filter expression to a set of primary-key keys.
+            let cx = self.engine.expr_cx_for(stmt);
+            pk_keys = self.engine.try_build_key_filter(
+                cx,
+                index_plan.index,
+                &index_plan.index_filter,
+                pk_keys_project_args,
             );
+        };
 
-            // Make sure we are including columns needed to apply the post filter
-            if let Some(post_filter) = &mut post_filter {
-                visit_mut::for_each_expr_mut(post_filter, |expr| match expr {
-                    stmt::Expr::Reference(expr_reference) => {
-                        let (index, _) = columns.insert_full(*expr_reference);
-                        *expr = stmt::Expr::arg_project(0, [index]);
-                    }
-                    stmt::Expr::Arg(_) => todo!("expr={expr:#?}"),
-                    _ => {}
+        // If fetching rows using GetByKey, some databases do not support
+        // applying additional filters to the rows before returning results.
+        // In this case, the result_filter needs to be applied in-memory.
+        if stmt.is_query() && (pk_keys.is_some() || !index_plan.index.primary_key) {
+            if let Some(result_filter) = index_plan.result_filter.take() {
+                post_filter = Some(match post_filter {
+                    Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
+                    None => result_filter,
                 });
             }
+        }
 
-            // Type of the final record.
-            let ty = if columns.is_empty() {
-                stmt::Type::Unit
-            } else {
-                self.engine.infer_record_list_ty(&stmt, &columns)
-            };
+        debug_assert!(
+            post_filter.is_none() || stmt.is_query(),
+            "stmt={stmt:#?}; post_filter={post_filter:#?}"
+        );
 
-            // Type of the index key. Value for single index keys, record for
-            // composite.
-            let index_key_ty = stmt::Type::list(self.engine.index_key_record_ty(index_plan.index));
-
-            let mut node_id = if index_plan.index.primary_key {
-                if let Some(keys) = pk_keys {
-                    let get_by_key_input = if keys.is_const() {
-                        self.insert_const(keys.eval_const(), index_key_ty)
-                    } else if keys.is_identity() {
-                        debug_assert_eq!(1, inputs.len(), "TODO");
-                        inputs[0]
-                    } else {
-                        debug_assert!(ref_source.is_some(), "TODO");
-                        let ty = stmt::Type::list(keys.ret.clone());
-                        // Gotta project
-                        self.mir.insert(mir::Project {
-                            input: inputs[0],
-                            projection: keys,
-                            ty,
-                        })
-                    };
-
-                    match stmt {
-                        stmt::Statement::Query(_) => {
-                            debug_assert!(ty.is_list());
-                            self.mir.insert_with_deps(
-                                mir::GetByKey {
-                                    input: get_by_key_input,
-                                    table: table_id,
-                                    columns: columns.clone(),
-                                    ty: ty.clone(),
-                                },
-                                dependencies.take().into_iter().flatten(),
-                            )
-                        }
-                        stmt::Statement::Delete(_) => {
-                            debug_assert!(
-                                ty.is_unit(),
-                                "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
-                            );
-                            self.mir.insert_with_deps(
-                                mir::DeleteByKey {
-                                    input: get_by_key_input,
-                                    table: table_id,
-                                    filter: index_plan.result_filter,
-                                    ty: stmt::Type::Unit,
-                                },
-                                dependencies.take().into_iter().flatten(),
-                            )
-                        }
-                        stmt::Statement::Update(stmt) => self.mir.insert_with_deps(
-                            mir::UpdateByKey {
-                                input: get_by_key_input,
-                                table: table_id,
-                                assignments: stmt.assignments,
-                                filter: index_plan.result_filter,
-                                condition: stmt.condition.expr,
-                                ty: ty.clone(),
-                            },
-                            dependencies.take().into_iter().flatten(),
-                        ),
-                        _ => todo!("stmt={stmt:#?}"),
-                    }
-                } else {
-                    let input = if inputs.is_empty() {
-                        None
-                    } else if inputs.len() == 1 {
-                        Some(inputs[0])
-                    } else {
-                        todo!()
-                    };
-
-                    self.mir.insert_with_deps(
-                        mir::QueryPk {
-                            input,
-                            table: table_id,
-                            columns: columns.clone(),
-                            pk_filter: index_plan.index_filter,
-                            row_filter: index_plan.result_filter,
-                            ty: ty.clone(),
-                        },
-                        dependencies.take().into_iter().flatten(),
-                    )
+        // Make sure we are including columns needed to apply the post filter
+        if let Some(post_filter) = &mut post_filter {
+            visit_mut::for_each_expr_mut(post_filter, |expr| match expr {
+                stmt::Expr::Reference(expr_reference) => {
+                    let (index, _) = columns.insert_full(*expr_reference);
+                    *expr = stmt::Expr::arg_project(0, [index]);
                 }
-            } else {
-                assert!(index_plan.post_filter.is_none(), "TODO");
-                assert!(inputs.len() <= 1, "TODO: inputs={inputs:#?}");
+                stmt::Expr::Arg(_) => todo!("expr={expr:#?}"),
+                _ => {}
+            });
+        }
 
-                // Args not supportd yet...
-                visit::for_each_expr(&index_plan.index_filter, |expr| {
-                    if let stmt::Expr::Arg(expr_arg) = expr {
-                        debug_assert_eq!(0, expr_arg.position, "TODO; index_plan={index_plan:#?}");
-                        debug_assert!(ref_source.is_none() || ref_source == Some(*expr_arg));
-                    }
-                });
+        // Type of the final record.
+        let ty = if columns.is_empty() {
+            stmt::Type::Unit
+        } else {
+            self.engine.infer_record_list_ty(stmt, &*columns)
+        };
 
-                let get_by_key_input = self.mir.insert_with_deps(
-                    mir::FindPkByIndex {
-                        inputs,
-                        table: index_plan.index.on,
-                        index: index_plan.index.id,
-                        filter: index_plan.index_filter.take(),
-                        ty: index_key_ty,
-                    },
-                    dependencies.take().into_iter().flatten(),
-                );
+        // Type of the index key. Value for single index keys, record for
+        // composite.
+        let index_key_ty = stmt::Type::list(self.engine.index_key_record_ty(index_plan.index));
+
+        let mut node_id = if index_plan.index.primary_key {
+            if let Some(keys) = pk_keys {
+                let get_by_key_input = if keys.is_const() {
+                    self.insert_const(keys.eval_const(), index_key_ty)
+                } else if keys.is_identity() {
+                    debug_assert_eq!(1, inputs.len(), "TODO");
+                    inputs[0]
+                } else {
+                    debug_assert!(ref_source.is_some(), "TODO");
+                    let ty = stmt::Type::list(keys.ret.clone());
+                    // Gotta project
+                    self.mir.insert(mir::Project {
+                        input: inputs[0],
+                        projection: keys,
+                        ty,
+                    })
+                };
 
                 match stmt {
                     stmt::Statement::Query(_) => {
@@ -268,55 +229,113 @@ impl HirPlanner<'_> {
                         mir::UpdateByKey {
                             input: get_by_key_input,
                             table: table_id,
-                            assignments: stmt.assignments,
+                            assignments: stmt.assignments.clone(),
                             filter: index_plan.result_filter,
-                            condition: stmt.condition.expr,
+                            condition: stmt.condition.expr.clone(),
                             ty: ty.clone(),
                         },
                         dependencies.take().into_iter().flatten(),
                     ),
                     _ => todo!("stmt={stmt:#?}"),
                 }
-            };
+            } else {
+                let input = if inputs.is_empty() {
+                    None
+                } else if inputs.len() == 1 {
+                    Some(inputs[0])
+                } else {
+                    todo!()
+                };
 
-            // If there is a post filter, we need to apply a filter step on the returned rows.
-            if let Some(post_filter) = post_filter {
-                let item_ty = ty.unwrap_list_ref();
-                node_id = self.mir.insert(mir::Filter {
-                    input: node_id,
-                    filter: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
-                    ty,
-                });
+                self.mir.insert_with_deps(
+                    mir::QueryPk {
+                        input,
+                        table: table_id,
+                        columns: columns.clone(),
+                        pk_filter: index_plan.index_filter,
+                        row_filter: index_plan.result_filter,
+                        ty: ty.clone(),
+                    },
+                    dependencies.take().into_iter().flatten(),
+                )
             }
+        } else {
+            assert!(index_plan.post_filter.is_none(), "TODO");
+            assert!(inputs.len() <= 1, "TODO: inputs={inputs:#?}");
 
-            node_id
+            // Args not supportd yet...
+            visit::for_each_expr(&index_plan.index_filter, |expr| {
+                if let stmt::Expr::Arg(expr_arg) = expr {
+                    debug_assert_eq!(0, expr_arg.position, "TODO; index_plan={index_plan:#?}");
+                    debug_assert!(ref_source.is_none() || ref_source == Some(*expr_arg));
+                }
+            });
+
+            let get_by_key_input = self.mir.insert_with_deps(
+                mir::FindPkByIndex {
+                    inputs,
+                    table: index_plan.index.on,
+                    index: index_plan.index.id,
+                    filter: index_plan.index_filter.take(),
+                    ty: index_key_ty,
+                },
+                dependencies.take().into_iter().flatten(),
+            );
+
+            match stmt {
+                stmt::Statement::Query(_) => {
+                    debug_assert!(ty.is_list());
+                    self.mir.insert_with_deps(
+                        mir::GetByKey {
+                            input: get_by_key_input,
+                            table: table_id,
+                            columns: columns.clone(),
+                            ty: ty.clone(),
+                        },
+                        dependencies.take().into_iter().flatten(),
+                    )
+                }
+                stmt::Statement::Delete(_) => {
+                    debug_assert!(
+                        ty.is_unit(),
+                        "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
+                    );
+                    self.mir.insert_with_deps(
+                        mir::DeleteByKey {
+                            input: get_by_key_input,
+                            table: table_id,
+                            filter: index_plan.result_filter,
+                            ty: stmt::Type::Unit,
+                        },
+                        dependencies.take().into_iter().flatten(),
+                    )
+                }
+                stmt::Statement::Update(stmt) => self.mir.insert_with_deps(
+                    mir::UpdateByKey {
+                        input: get_by_key_input,
+                        table: table_id,
+                        assignments: stmt.assignments.clone(),
+                        filter: index_plan.result_filter,
+                        condition: stmt.condition.expr.clone(),
+                        ty: ty.clone(),
+                    },
+                    dependencies.take().into_iter().flatten(),
+                ),
+                _ => todo!("stmt={stmt:#?}"),
+            }
         };
 
-        // Track the exec statement operation node.
-        stmt_info.exec_statement.set(Some(exec_stmt_node_id));
+        // If there is a post filter, we need to apply a filter step on the returned rows.
+        if let Some(post_filter) = post_filter {
+            let item_ty = ty.unwrap_list_ref();
+            node_id = self.mir.insert(mir::Filter {
+                input: node_id,
+                filter: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
+                ty,
+            });
+        }
 
-        // Now, for each back ref, we need to project the expression to what the
-        // next statement expects.
-        self.process_back_ref_projections(stmt_info, exec_stmt_node_id, &columns);
-
-        // Track the selection for later use.
-        stmt_info.exec_statement_selection.set(columns).unwrap();
-
-        // Plan each child
-        self.plan_child_statements(stmt_info);
-
-        // Plans a NestedMerge if one is needed
-        let output_node_id = self.plan_output_node(
-            stmt_id,
-            stmt_info,
-            exec_stmt_node_id,
-            returning,
-            dependencies,
-            single,
-            ref_source,
-        );
-
-        stmt_info.output.set(Some(output_node_id));
+        node_id
     }
 
     fn plan_child_statements(&mut self, stmt_info: &hir::StatementInfo) {
