@@ -72,11 +72,17 @@ pub enum Type {
     /// Unconstrained text type
     Text,
 
+    /// Text type with an explicit maximum length
+    VarChar(u64),
+
     /// 128-bit universally unique identifier (UUID)
     Uuid,
 
-    /// Text type with an explicit maximum length
-    VarChar(u64),
+    /// Unconstrained binary type
+    Blob,
+
+    /// Fixed-size binary type of `n` bytes
+    Binary(u8),
 
     /// User-specified unrecognized type
     Custom(String),
@@ -86,11 +92,11 @@ impl Type {
     /// Maps an application-level type to a database-level storage type.
     pub fn from_app(
         ty: &stmt::Type,
-        hint: &Option<Type>,
+        hint: Option<&Type>,
         db: &driver::StorageTypes,
     ) -> Result<Type> {
-        match hint.clone() {
-            Some(ty) => Ok(ty),
+        match hint {
+            Some(ty) => Ok(ty.clone()),
             None => match ty {
                 stmt::Type::Bool => Ok(Type::Boolean),
                 stmt::Type::I8 => Ok(Type::Integer(1)),
@@ -103,14 +109,27 @@ impl Type {
                 stmt::Type::U32 => Ok(Type::UnsignedInteger(4)),
                 stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
-                stmt::Type::Uuid => Ok(Type::Uuid),
+                stmt::Type::Uuid => Ok(db.default_uuid_type.clone()),
                 // Gotta support some app-level types as well for now.
                 //
                 // TODO: not really correct, but we are getting rid of ID types
                 // most likely.
                 stmt::Type::Id(_) => Ok(db.default_string_type.clone()),
+                // Enum types are stored as strings in the database
+                stmt::Type::Enum(_) => Ok(db.default_string_type.clone()),
                 _ => anyhow::bail!("unsupported type: {ty:?}"),
             },
+        }
+    }
+
+    /// Determines the [`stmt::Type`] closest to this [`db::Type`] that should be used
+    /// as an intermediate conversion step to lessen the work done by each individual driver.
+    pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {
+        match (self, ty) {
+            (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
+            (Self::Text | Self::VarChar(_), stmt::Type::Uuid) => stmt::Type::String,
+            (Self::Text | Self::VarChar(_), stmt::Type::Id(_)) => stmt::Type::String,
+            _ => ty.clone(),
         }
     }
 

@@ -221,7 +221,7 @@ fn value_from_param(value: &stmt::Value) -> rusqlite::types::ToSqlOutput<'_> {
         U32(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
         U64(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
         String(v) => ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes())),
-        Uuid(v) => ToSqlOutput::Borrowed(ValueRef::Blob(v.as_bytes())),
+        Bytes(v) => ToSqlOutput::Borrowed(ValueRef::Blob(&v[..])),
         Null => ToSqlOutput::Owned(Value::Null),
         Enum(value_enum) => {
             let v = match &value_enum.fields[..] {
@@ -264,11 +264,12 @@ fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt:
             stmt::Type::U64 => stmt::Value::U64(value as u64),
             _ => todo!("ty={ty:#?}"),
         },
-        Some(SqlValue::Text(value)) => stmt::Value::String(value),
+        Some(SqlValue::Text(value)) => match ty {
+            stmt::Type::Uuid => stmt::Value::Uuid(value.parse().expect("text is a valid uuid")),
+            _ => stmt::Value::String(value),
+        },
         Some(SqlValue::Blob(value)) => match ty {
-            stmt::Type::Uuid => {
-                stmt::Value::Uuid(uuid::Uuid::from_slice(&value).expect("blob is a valid uuid"))
-            }
+            stmt::Type::Bytes => stmt::Value::Bytes(value),
             _ => todo!("value={value:#?}"),
         },
         None => stmt::Value::Null,

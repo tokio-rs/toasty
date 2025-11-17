@@ -12,7 +12,7 @@ use crate::{
 
 struct BuildTableFromModels<'a> {
     /// Database-specific capabilities
-    _db: &'a driver::Capability,
+    db: &'a driver::Capability,
 
     /// The table being built from the set of models
     table: &'a mut Table,
@@ -63,7 +63,7 @@ impl BuildSchema<'_> {
                 .collect::<Vec<_>>();
 
             BuildTableFromModels {
-                _db: db,
+                db,
                 table,
                 mapping: &mut self.mapping,
                 prefix_table_names: models.len() > 1,
@@ -259,8 +259,8 @@ impl BuildTableFromModels<'_> {
                 self.table.columns.push(db::Column {
                     id: column_id,
                     name: name.storage_name().to_owned(),
-                    ty,
-                    storage_ty: None,
+                    ty: ty.clone(),
+                    storage_ty: db::Type::from_app(&ty, None, &self.db.storage_types).unwrap(),
                     nullable: false,
                     primary_key: true,
                 });
@@ -379,14 +379,21 @@ impl BuildTableFromModels<'_> {
             name.storage_name().to_owned()
         };
 
+        let storage_ty = db::Type::from_app(
+            &primitive.ty,
+            primitive.storage_ty.as_ref(),
+            &self.db.storage_types,
+        )
+        .expect("unsupported storage type");
+
         let column = db::Column {
             id: ColumnId {
                 table: self.table.id,
                 index: self.table.columns.len(),
             },
             name: storage_name,
-            ty: stmt_ty_to_table(primitive.ty.clone()),
-            storage_ty: primitive.storage_ty.clone(),
+            ty: storage_ty.bridge_type(&primitive.ty),
+            storage_ty,
             nullable,
             primary_key: false,
         };
@@ -570,8 +577,8 @@ impl BuildMapping<'_> {
                     stmt::Expr::cast(expr, stmt::Type::String),
                 ))
             }
-            stmt::Type::String if ty.is_id() => stmt::Expr::cast(expr, &column.ty),
-            _ => todo!("column={column:#?}"),
+            // If the types do not match, attempt casting as a fallback.
+            _ => stmt::Expr::cast(expr, &column.ty),
         }
     }
 
@@ -626,10 +633,8 @@ impl BuildMapping<'_> {
                     variant.discriminant,
                 )
             }
-            stmt::Type::String if primitive.ty.is_id() => {
-                stmt::Expr::cast(expr_column, &primitive.ty)
-            }
-            _ => todo!("column={column:#?}; primitive={primitive:#?}"),
+            // If the types do not match, attempt casting as a fallback.
+            _ => stmt::Expr::cast(expr_column, &primitive.ty),
         }
     }
 }

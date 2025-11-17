@@ -54,6 +54,9 @@ pub enum Value {
     /// String value, either borrowed or owned
     String(String),
 
+    /// An array of bytes that is more efficient than List(u8)
+    Bytes(Vec<u8>),
+
     /// 128-bit universally unique identifier (UUID)
     Uuid(uuid::Uuid),
 }
@@ -178,6 +181,7 @@ impl Value {
                 _ => false,
             },
             Self::String(_) => ty.is_string(),
+            Self::Bytes(_) => ty.is_bytes(),
             Self::Uuid(_) => ty.is_uuid(),
             _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
@@ -202,6 +206,7 @@ impl Value {
             Value::U16(_) => Type::U16,
             Value::U32(_) => Type::U32,
             Value::U64(_) => Type::U64,
+            Value::Bytes(_) => Type::Bytes,
             Value::Uuid(_) => Type::Uuid,
         }
     }
@@ -286,6 +291,23 @@ impl TryFrom<Value> for String {
         match value {
             Value::String(value) => Ok(value),
             _ => Err(anyhow!("value is not of type string")),
+        }
+    }
+}
+
+impl From<Vec<u8>> for Value {
+    fn from(value: Vec<u8>) -> Self {
+        Self::Bytes(value)
+    }
+}
+
+impl TryFrom<Value> for Vec<u8> {
+    type Error = crate::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bytes(value) => Ok(value),
+            _ => Err(anyhow!("value is not of type Bytes")),
         }
     }
 }

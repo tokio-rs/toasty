@@ -185,6 +185,7 @@ impl SetupDynamoDb {
                 // and let the TryFrom implementation handle the parsing
                 Ok(toasty_core::stmt::Value::String(n.clone()))
             }
+            AttributeValue::B(b) => Ok(toasty_core::stmt::Value::Bytes(b.clone().into_inner())),
             AttributeValue::Bool(b) => Ok(toasty_core::stmt::Value::Bool(*b)),
             AttributeValue::Null(_) => Ok(toasty_core::stmt::Value::Null),
             _ => todo!("Unsupported DynamoDB AttributeValue type: {attr:?}"),

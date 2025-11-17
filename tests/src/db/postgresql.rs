@@ -178,6 +178,7 @@ impl SetupPostgreSQL {
             Type::INT4 => Ok(stmt::Value::I32(row.get(col))),
             Type::INT8 => Ok(stmt::Value::I64(row.get(col))),
             Type::TEXT | Type::VARCHAR => Ok(stmt::Value::String(row.get(col))),
+            Type::BYTEA => Ok(stmt::Value::Bytes(row.get(col))),
             Type::BOOL => Ok(stmt::Value::Bool(row.get(col))),
             _ => todo!("Unsupported PostgreSQL type: {:?}", column.type_()),
         }
