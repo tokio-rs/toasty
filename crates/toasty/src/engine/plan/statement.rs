@@ -303,13 +303,7 @@ impl HirPlanner<'_> {
         stmt_info.exec_statement_selection.set(columns).unwrap();
 
         // Plan each child
-        for arg in &stmt_info.args {
-            let hir::Arg::Sub { stmt_id, .. } = arg else {
-                continue;
-            };
-
-            self.plan_statement(*stmt_id);
-        }
+        self.plan_child_statements(stmt_info);
 
         // Plans a NestedMerge if one is needed
         let output_node_id = self.plan_output_node(
@@ -323,6 +317,16 @@ impl HirPlanner<'_> {
         );
 
         stmt_info.output.set(Some(output_node_id));
+    }
+
+    fn plan_child_statements(&mut self, stmt_info: &hir::StatementInfo) {
+        for arg in &stmt_info.args {
+            let hir::Arg::Sub { stmt_id, .. } = arg else {
+                continue;
+            };
+
+            self.plan_statement(*stmt_id);
+        }
     }
 
     fn extract_columns_from_returning(
