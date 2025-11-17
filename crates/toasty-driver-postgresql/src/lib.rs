@@ -310,6 +310,7 @@ fn postgres_to_toasty(
         row.get::<usize, Option<Vec<u8>>>(index)
             .map(|v| match expected_ty {
                 stmt::Type::Uuid => stmt::Value::Uuid(v.try_into().expect("invalid uuid bytes")),
+                stmt::Type::Bytes => stmt::Value::Bytes(v),
                 _ => todo!(
                     "unsupported conversion from {:#?} to {expected_ty:?}",
                     column.type_()

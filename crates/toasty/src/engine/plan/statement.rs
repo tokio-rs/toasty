@@ -216,7 +216,10 @@ impl HirPlanner<'_> {
                     stmt::Type::list(stmt::Type::empty_sparse_record()),
                 )
             } else {
-                self.insert_const(vec![], stmt::Type::list(stmt::Type::empty_sparse_record()))
+                self.insert_const(
+                    Vec::<stmt::Value>::new(),
+                    stmt::Type::list(stmt::Type::empty_sparse_record()),
+                )
             }
         } else if self.engine.capability().sql || stmt.is_insert() {
             if !columns.is_empty() {

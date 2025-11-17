@@ -295,6 +295,23 @@ impl TryFrom<Value> for String {
     }
 }
 
+impl From<Vec<u8>> for Value {
+    fn from(value: Vec<u8>) -> Self {
+        Self::Bytes(value)
+    }
+}
+
+impl TryFrom<Value> for Vec<u8> {
+    type Error = crate::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bytes(value) => Ok(value),
+            _ => Err(anyhow!("value is not of type Bytes")),
+        }
+    }
+}
+
 impl From<uuid::Uuid> for Value {
     fn from(value: uuid::Uuid) -> Self {
         Self::Uuid(value)
