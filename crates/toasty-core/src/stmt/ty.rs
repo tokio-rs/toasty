@@ -121,6 +121,9 @@ pub enum Type {
     /// An enumeration of multiple types
     Enum(TypeEnum),
 
+    // An array of bytes that is more efficient than List(u8)
+    Bytes,
+
     /// The null type can be cast to any type.
     ///
     /// TODO: we should get rid of this.
@@ -176,6 +179,10 @@ impl Type {
         matches!(self, Self::Record(..))
     }
 
+    pub fn is_bytes(&self) -> bool {
+        matches!(self, Self::Bytes)
+    }
+
     pub fn is_uuid(&self) -> bool {
         matches!(self, Self::Uuid)
     }
@@ -189,13 +196,20 @@ impl Type {
         }
 
         Ok(match (value, self) {
+            // Identity
             (value @ Value::String(_), Self::String) => value,
+            // String <-> Id
             (Value::Id(value), _) => value.cast(self)?,
             (Value::String(value), Self::Id(ty)) => Value::Id(Id::from_string(*ty, value)),
+            // String <-> Uuid
             (Value::Uuid(value), Self::String) => Value::String(value.to_string()),
             (Value::String(value), Self::Uuid) => {
                 Value::Uuid(value.parse().expect("could not parse uuid"))
             }
+            // Bytes <-> Uuid
+            (Value::Uuid(value), Self::Bytes) => Value::Bytes(value.as_bytes().to_vec()),
+            (Value::Bytes(value), Self::Uuid) => Value::Uuid(value.try_into()?),
+            // Record <-> SparseRecord
             (Value::Record(record), Self::SparseRecord(fields)) => {
                 Value::sparse_record(fields.clone(), record)
             }

@@ -229,6 +229,7 @@ fn mysql_to_toasty(
             match ty {
                 stmt::Type::String => extract_or_null(row, i, stmt::Value::String),
                 stmt::Type::Uuid => extract_or_null(row, i, stmt::Value::Uuid),
+                stmt::Type::Bytes => extract_or_null(row, i, stmt::Value::Bytes),
                 _ => todo!("ty={ty:#?}"),
             }
         }

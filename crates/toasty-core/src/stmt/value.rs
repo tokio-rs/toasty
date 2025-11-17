@@ -54,6 +54,9 @@ pub enum Value {
     /// String value, either borrowed or owned
     String(String),
 
+    /// An array of bytes that is more efficient than List(u8)
+    Bytes(Vec<u8>),
+
     /// 128-bit universally unique identifier (UUID)
     Uuid(uuid::Uuid),
 }
@@ -178,6 +181,7 @@ impl Value {
                 _ => false,
             },
             Self::String(_) => ty.is_string(),
+            Self::Bytes(_) => ty.is_bytes(),
             Self::Uuid(_) => ty.is_uuid(),
             _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
@@ -202,6 +206,7 @@ impl Value {
             Value::U16(_) => Type::U16,
             Value::U32(_) => Type::U32,
             Value::U64(_) => Type::U64,
+            Value::Bytes(_) => Type::Bytes,
             Value::Uuid(_) => Type::Uuid,
         }
     }

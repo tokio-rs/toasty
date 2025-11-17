@@ -66,6 +66,8 @@ async fn main() -> toasty::Result<()> {
     let user = User::get_by_id(&db, &u1.id).await?;
     println!("USER = {user:#?}");
 
+    User::all().filter(User::FIELDS.email().eq(User::FIELDS.name()));
+
     // Find by email!
     println!("==> let user = User::find_by_email(&u1.email)");
     let mut user = User::get_by_email(&db, &u1.email).await?;

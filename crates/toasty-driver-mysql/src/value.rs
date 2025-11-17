@@ -25,6 +25,7 @@ impl ToValue for Value {
             CoreValue::Id(id) => id.to_string().to_value(),
             CoreValue::Null => mysql_async::Value::NULL,
             CoreValue::String(value) => value.to_value(),
+            CoreValue::Bytes(value) => value.to_value(),
             CoreValue::Uuid(value) => value.to_value(),
             value => todo!("{:#?}", value),
         }

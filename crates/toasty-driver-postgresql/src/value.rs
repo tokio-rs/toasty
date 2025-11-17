@@ -119,6 +119,10 @@ impl ToSql for Value {
             stmt::Value::Id(value) => value.to_string().to_sql(ty, out),
             stmt::Value::Null => Ok(IsNull::Yes),
             stmt::Value::String(value) => value.to_sql(ty, out),
+            stmt::Value::Bytes(value) => match *ty {
+                Type::BYTEA => value.to_sql(ty, out),
+                _ => todo!("Unsupported PostgreSQL type for bytes: {:?}", ty),
+            },
             stmt::Value::Uuid(value) => match *ty {
                 Type::UUID => value.to_sql(ty, out),
                 Type::BYTEA => value.as_bytes().to_sql(ty, out),
@@ -130,6 +134,6 @@ impl ToSql for Value {
         }
     }
 
-    accepts!(BOOL, INT2, INT4, INT8, TEXT, VARCHAR, UUID);
+    accepts!(BOOL, INT2, INT4, INT8, TEXT, VARCHAR, BYTEA, UUID);
     to_sql_checked!();
 }
