@@ -486,62 +486,15 @@ impl HirPlanner<'_> {
         }
 
         // Plans a NestedMerge if one is needed
-        let output_node_id = if let Some(node_id) = self.plan_nested_merge(stmt_id) {
-            node_id
-        } else if let Some(returning) = returning {
-            debug_assert!(
-                !single || ref_source.is_some(),
-                "TODO: single queries not supported here"
-            );
-
-            match returning {
-                stmt::Returning::Value(returning) => {
-                    let ty = returning.infer_ty();
-
-                    let stmt::Value::List(rows) = returning else {
-                        todo!(
-                            "unexpected returning type; returning={returning:#?}; stmt={:#?}",
-                            stmt_info.stmt
-                        )
-                    };
-
-                    self.mir
-                        .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
-                }
-                stmt::Returning::Expr(returning) => {
-                    let arg_ty = match self.mir[exec_stmt_node_id].ty() {
-                        stmt::Type::List(ty) => vec![(**ty).clone()],
-                        stmt::Type::Unit => vec![],
-                        _ => todo!(),
-                    };
-
-                    let projection = eval::Func::from_stmt(returning, arg_ty);
-                    let ty = stmt::Type::list(projection.ret.clone());
-
-                    let node = mir::Project {
-                        input: exec_stmt_node_id,
-                        projection,
-                        ty,
-                    };
-
-                    // Plan the final projection to handle the returning clause.
-                    if let Some(deps) = dependencies.take() {
-                        self.mir.insert_with_deps(node, deps)
-                    } else {
-                        self.mir.insert(node)
-                    }
-                }
-                returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
-            }
-        } else {
-            if let Some(deps) = dependencies.take() {
-                self.mir[exec_stmt_node_id].deps.extend(deps);
-            }
-
-            exec_stmt_node_id
-        };
-
-        debug_assert!(dependencies.is_none());
+        let output_node_id = self.plan_output_node(
+            stmt_id,
+            stmt_info,
+            exec_stmt_node_id,
+            returning,
+            dependencies,
+            single,
+            ref_source,
+        );
 
         stmt_info.output.set(Some(output_node_id));
     }
@@ -645,6 +598,76 @@ impl HirPlanner<'_> {
                 ty,
             });
             back_ref.node_id.set(Some(project_node_id));
+        }
+    }
+
+    fn plan_output_node(
+        &mut self,
+        stmt_id: hir::StmtId,
+        stmt_info: &hir::StatementInfo,
+        exec_stmt_node_id: mir::NodeId,
+        returning: Option<stmt::Returning>,
+        mut dependencies: Option<impl Iterator<Item = mir::NodeId>>,
+        single: bool,
+        ref_source: Option<stmt::ExprArg>,
+    ) -> mir::NodeId {
+        // First check for nested merge
+        if let Some(node_id) = self.plan_nested_merge(stmt_id) {
+            return node_id;
+        }
+
+        // Then handle returning clause
+        if let Some(returning) = returning {
+            debug_assert!(
+                !single || ref_source.is_some(),
+                "TODO: single queries not supported here"
+            );
+
+            match returning {
+                stmt::Returning::Value(returning) => {
+                    let ty = returning.infer_ty();
+
+                    let stmt::Value::List(rows) = returning else {
+                        todo!(
+                            "unexpected returning type; returning={returning:#?}; stmt={:#?}",
+                            stmt_info.stmt
+                        )
+                    };
+
+                    self.mir
+                        .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
+                }
+                stmt::Returning::Expr(returning) => {
+                    let arg_ty = match self.mir[exec_stmt_node_id].ty() {
+                        stmt::Type::List(ty) => vec![(**ty).clone()],
+                        stmt::Type::Unit => vec![],
+                        _ => todo!(),
+                    };
+
+                    let projection = eval::Func::from_stmt(returning, arg_ty);
+                    let ty = stmt::Type::list(projection.ret.clone());
+
+                    let node = mir::Project {
+                        input: exec_stmt_node_id,
+                        projection,
+                        ty,
+                    };
+
+                    // Plan the final projection to handle the returning clause.
+                    if let Some(deps) = dependencies.take() {
+                        self.mir.insert_with_deps(node, deps)
+                    } else {
+                        self.mir.insert(node)
+                    }
+                }
+                returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
+            }
+        } else {
+            if let Some(deps) = dependencies.take() {
+                self.mir[exec_stmt_node_id].deps.extend(deps);
+            }
+
+            exec_stmt_node_id
         }
     }
 
