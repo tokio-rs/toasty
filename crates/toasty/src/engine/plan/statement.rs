@@ -34,38 +34,7 @@ impl HirPlanner<'_> {
         let mut inputs = IndexSet::new();
 
         // Visit the main statement's returning clause to extract needed columns
-        visit_mut::for_each_expr_mut(&mut returning, |expr| {
-            match expr {
-                stmt::Expr::Reference(expr_reference) => {
-                    let (index, _) = columns.insert_full(*expr_reference);
-                    *expr = stmt::Expr::arg_project(0, [index]);
-                }
-                stmt::Expr::Arg(expr_arg) => match &stmt_info.args[expr_arg.position] {
-                    hir::Arg::Ref { .. } => {
-                        todo!("refs in returning is not yet supported");
-                    }
-                    hir::Arg::Sub {
-                        stmt_id,
-                        input,
-                        returning: true,
-                    } => {
-                        // If there are back-refs, the exec statement is preloading
-                        // data for a NestedMerge. Sub-statements will be loaded
-                        // during the NestedMerge.
-                        if !stmt_info.back_refs.is_empty() {
-                            return;
-                        }
-
-                        let node_id = self.hir[stmt_id].exec_statement.get().expect("bug");
-
-                        let (index, _) = inputs.insert_full(node_id);
-                        input.set(Some(index));
-                    }
-                    _ => todo!(),
-                },
-                _ => {}
-            }
-        });
+        self.extract_columns_from_returning(&mut returning, stmt_info, &mut columns, &mut inputs);
 
         // Track sub-statement arguments from filter
         visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| {
@@ -611,6 +580,47 @@ impl HirPlanner<'_> {
         debug_assert!(dependencies.is_none());
 
         stmt_info.output.set(Some(output_node_id));
+    }
+
+    fn extract_columns_from_returning(
+        &mut self,
+        returning: &mut Option<stmt::Returning>,
+        stmt_info: &hir::StatementInfo,
+        columns: &mut IndexSet<stmt::ExprReference>,
+        inputs: &mut IndexSet<mir::NodeId>,
+    ) {
+        visit_mut::for_each_expr_mut(returning, |expr| {
+            match expr {
+                stmt::Expr::Reference(expr_reference) => {
+                    let (index, _) = columns.insert_full(*expr_reference);
+                    *expr = stmt::Expr::arg_project(0, [index]);
+                }
+                stmt::Expr::Arg(expr_arg) => match &stmt_info.args[expr_arg.position] {
+                    hir::Arg::Ref { .. } => {
+                        todo!("refs in returning is not yet supported");
+                    }
+                    hir::Arg::Sub {
+                        stmt_id,
+                        input,
+                        returning: true,
+                    } => {
+                        // If there are back-refs, the exec statement is preloading
+                        // data for a NestedMerge. Sub-statements will be loaded
+                        // during the NestedMerge.
+                        if !stmt_info.back_refs.is_empty() {
+                            return;
+                        }
+
+                        let node_id = self.hir[stmt_id].exec_statement.get().expect("bug");
+
+                        let (index, _) = inputs.insert_full(node_id);
+                        input.set(Some(index));
+                    }
+                    _ => todo!(),
+                },
+                _ => {}
+            }
+        });
     }
 
     fn plan_conditional_sql_query_as_cte(
