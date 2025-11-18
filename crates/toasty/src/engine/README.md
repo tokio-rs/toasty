@@ -71,9 +71,21 @@ Lowering converts a simplified statement into **HIR (High-level Intermediate
 Representation)** - a collection of related statements with tracked
 dependencies.
 
-Toasty tries to maximize what the target database can handle natively, only decomposing queries when necessary. For example, a query like `User::find_by_name("John").todos().all()` contains a subquery. SQL databases can execute this as `SELECT * FROM todos WHERE user_id IN (SELECT id FROM users WHERE name = 'John')`. DynamoDB cannot handle subqueries, so lowering splits this into two statements: first fetch user IDs, then query todos with those IDs. The HIR tracks that the second statement depends on the first.
+Toasty tries to maximize what the target database can handle natively, only decomposing queries when necessary. For example, a query like `User::find_by_name("John").todos().all()` contains a subquery. SQL databases can execute this as `SELECT * FROM todos WHERE user_id IN (SELECT id FROM users WHERE name = 'John')`. DynamoDB cannot handle subqueries, so lowering splits this into two statements: first fetch user IDs, then query todos with those IDs.
 
-This phase handles:
+The HIR tracks a dependency graph between statements - which statements depend on results from others, and which columns flow between them. This graph can contain cycles when preloading associations. For example:
+
+```sql
+SELECT users.id, users.name, (
+    SELECT todos.id, todos.title 
+    FROM todos 
+    WHERE todos.user_id = users.id
+) FROM users WHERE ...
+```
+
+The users query must execute first to provide IDs for the todos subquery, but the todos results must be merged back into the user records. This creates a cycle: users → todos → users.
+
+This lowering phase handles:
 
 - **Statement Decomposition**: Breaking queries into sub-statements when the database can't handle them directly
 - **Dependency Tracking**: Which statements must execute before others
@@ -86,56 +98,28 @@ This phase handles:
 
 Planning converts HIR into **MIR (Middle-level Intermediate Representation)** - a directed acyclic graph of operations, both database queries and in-memory transformations. Edges represent data dependencies: an operation cannot execute until all operations it depends on have completed and produced their results.
 
+Since the HIR graph can contain cycles, planning must break them to produce a DAG. This is done by introducing intermediate operations that batch-load data and merge results (e.g., `NestedMerge`).
+
 ### Operation Types
 
-The MIR supports various operation types (`mir/operation.rs`):
+The MIR supports various operation types (see `engine::mir` for details):
 
-- **`ExecStatement`**: Execute a database query (SELECT, INSERT, UPDATE, DELETE)
-- **`GetByKey`**: Fetch records by primary key
-- **`QueryPk`**: Query primary keys only (for efficient lookups)
-- **`FindPkByIndex`**: Use an index to find primary keys
-- **`Filter`**: In-memory filtering of results
-- **`Project`**: Transform/extract fields from records
-- **`NestedMerge`**: Merge child records into parent records (for relationships)
-- **`DeleteByKey`**: Delete records by primary key
-- **`UpdateByKey`**: Update records by primary key
-- **`ReadModifyWrite`**: Conditional updates (optimistic locking)
-- **`Const`**: Constant value
+**SQL operations:**
+- `ExecStatement` - Execute a SQL query (SELECT, INSERT, UPDATE, DELETE)
+- `ReadModifyWrite` - Optimistic locking (read, modify, conditional write). Exists as a separate operation because the read result must be processed in-memory to compute the write, which `ExecStatement` cannot express.
 
-### Planning Algorithm
+**Key-value operations (NoSQL):**
+- `GetByKey`, `DeleteByKey`, `UpdateByKey` - Direct key access
+- `QueryPk`, `FindPkByIndex` - Key lookups via queries or indexes
 
-The planner works in two stages:
-
-1. **HIR to MIR** (`HirPlanner`): Converts each HIR statement into MIR operations
-   - Determines which columns to select
-   - Creates operations for sub-statements
-   - Sets up batch-loading for nested relationships
-   - Handles back-references between statements
-
-2. **MIR Optimization**: Orders operations for efficient execution
-   - Topological sort for dependency ordering
-   - Reference counting for result caching
-
-### Nested Merge Pattern
-
-For queries that load relationships (e.g., `user.todos`), the planner creates a pattern:
-
-```
-1. QueryPk(users WHERE ...)          → List of user IDs
-2. GetByKey(users, user_ids)         → Parent records
-3. ExecStatement(SELECT todos WHERE user_id IN (...))  → Child records
-4. NestedMerge(parents, children)    → Combined result
-```
-
-**TODO**: Document batch loading optimization strategy
-
-**TODO**: Explain index-aware planning (when to use `FindPkByIndex`)
-
-**TODO**: Document how the planner handles different database capabilities (SQL vs NoSQL)
+**In-memory operations:**
+- `Filter`, `Project` - Transform and filter results
+- `NestedMerge` - Merge child records into parent records
+- `Const` - Constant values
 
 ## Phase 4: Execution Planning
 
-**Location**: `engine/plan/execution.rs`
+**Location**: `engine::plan::execution`
 
 Execution planning converts the MIR logical plan into a concrete sequence of **actions** that can be executed. This phase:
 
