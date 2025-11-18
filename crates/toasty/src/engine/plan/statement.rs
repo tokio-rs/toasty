@@ -1,8 +1,5 @@
 use indexmap::IndexSet;
-use toasty_core::{
-    schema::db::TableId,
-    stmt::{self, visit, visit_mut, Condition},
-};
+use toasty_core::stmt::{self, visit, visit_mut, Condition};
 
 use crate::engine::{eval, hir, index, mir, plan::HirPlanner};
 
@@ -10,6 +7,9 @@ struct PlanStatement<'a, 'b> {
     planner: &'a mut HirPlanner<'b>,
     stmt_id: hir::StmtId,
     stmt_info: &'b hir::StatementInfo,
+
+    /// True if the statement's dependencies have been tracked
+    did_take_deps: bool,
 }
 
 impl HirPlanner<'_> {
@@ -32,12 +32,13 @@ impl HirPlanner<'_> {
             planner: self,
             stmt_id,
             stmt_info,
+            did_take_deps: false,
         };
         planner.plan();
     }
 }
 
-impl PlanStatement<'_, '_> {
+impl<'a, 'b> PlanStatement<'a, 'b> {
     fn plan(&mut self) {
         let mut stmt = self.stmt_info.stmt.as_deref().unwrap().clone();
 
@@ -68,16 +69,8 @@ impl PlanStatement<'_, '_> {
         // to batch load all records for a NestedMerge operation .
         let ref_source = self.process_ref_args(&mut stmt, &mut inputs);
 
-        let mut dependencies = Some(self.stmt_info.dependent_operations(self.planner.hir));
-
-        let exec_stmt_node_id = self.plan_execution(
-            stmt,
-            &mut columns,
-            inputs,
-            &returning,
-            ref_source,
-            &mut dependencies,
-        );
+        let exec_stmt_node_id =
+            self.plan_execution(stmt, &mut columns, inputs, &returning, ref_source);
 
         // Track the exec statement operation node.
         self.stmt_info.exec_statement.set(Some(exec_stmt_node_id));
@@ -96,13 +89,8 @@ impl PlanStatement<'_, '_> {
         self.plan_child_statements();
 
         // Plans a NestedMerge if one is needed
-        let output_node_id = self.plan_output_node(
-            exec_stmt_node_id,
-            returning,
-            dependencies,
-            single,
-            ref_source,
-        );
+        let output_node_id =
+            self.plan_output_node(exec_stmt_node_id, returning, single, ref_source);
 
         self.stmt_info.output.set(Some(output_node_id));
     }
@@ -114,21 +102,13 @@ impl PlanStatement<'_, '_> {
         inputs: IndexSet<mir::NodeId>,
         returning: &Option<stmt::Returning>,
         ref_source: Option<stmt::ExprArg>,
-        dependencies: &mut Option<impl Iterator<Item = mir::NodeId>>,
     ) -> mir::NodeId {
         if let Some(node_id) = self.plan_const_or_empty_statement(&stmt, returning, columns) {
             node_id
         } else if self.planner.engine.capability().sql || stmt.is_insert() {
-            self.plan_sql_execution(stmt, columns, inputs, returning, dependencies.take())
+            self.plan_sql_execution(stmt, columns, inputs, returning)
         } else {
-            self.plan_nosql_execution(
-                &stmt,
-                columns,
-                inputs,
-                dependencies.take(),
-                ref_source,
-                returning,
-            )
+            self.plan_nosql_execution(&stmt, columns, inputs, ref_source, returning)
         }
     }
 
@@ -137,14 +117,12 @@ impl PlanStatement<'_, '_> {
         stmt: &stmt::Statement,
         columns: &mut IndexSet<stmt::ExprReference>,
         inputs: IndexSet<mir::NodeId>,
-        mut dependencies: Option<impl Iterator<Item = mir::NodeId>>,
         ref_source: Option<stmt::ExprArg>,
         returning: &Option<stmt::Returning>,
     ) -> mir::NodeId {
         // Without SQL capability, we have to plan the execution of the
         // statement based on available indices.
         let mut index_plan = self.planner.engine.plan_index_path(stmt);
-        let table_id = self.planner.engine.resolve_table_for(stmt).id;
 
         let post_filter = index_plan.post_filter.clone();
         let pk_keys = self.try_build_pk_keys(stmt, &index_plan, &inputs, ref_source);
@@ -180,7 +158,6 @@ impl PlanStatement<'_, '_> {
                 columns,
                 &ty,
                 returning,
-                &mut dependencies,
             )
         } else {
             self.plan_secondary_index_execution(
@@ -192,7 +169,6 @@ impl PlanStatement<'_, '_> {
                 columns,
                 &ty,
                 returning,
-                &mut dependencies,
             )
         };
 
@@ -210,7 +186,6 @@ impl PlanStatement<'_, '_> {
         columns: &IndexSet<stmt::ExprReference>,
         ty: &stmt::Type,
         returning: &Option<stmt::Returning>,
-        dependencies: &mut Option<impl Iterator<Item = mir::NodeId>>,
     ) -> mir::NodeId {
         if let Some(keys) = pk_keys {
             let get_by_key_input =
@@ -219,42 +194,33 @@ impl PlanStatement<'_, '_> {
             match stmt {
                 stmt::Statement::Query(_) => {
                     debug_assert!(ty.is_list());
-                    self.planner.mir.insert_with_deps(
-                        mir::GetByKey {
-                            input: get_by_key_input,
-                            table: index_plan.table_id(),
-                            columns: columns.clone(),
-                            ty: ty.clone(),
-                        },
-                        dependencies.take().into_iter().flatten(),
-                    )
+                    self.insert_mir_with_deps(mir::GetByKey {
+                        input: get_by_key_input,
+                        table: index_plan.table_id(),
+                        columns: columns.clone(),
+                        ty: ty.clone(),
+                    })
                 }
                 stmt::Statement::Delete(_) => {
                     debug_assert!(
                         ty.is_unit(),
                         "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
                     );
-                    self.planner.mir.insert_with_deps(
-                        mir::DeleteByKey {
-                            input: get_by_key_input,
-                            table: index_plan.table_id(),
-                            filter: index_plan.result_filter.clone(),
-                            ty: stmt::Type::Unit,
-                        },
-                        dependencies.take().into_iter().flatten(),
-                    )
-                }
-                stmt::Statement::Update(stmt) => self.planner.mir.insert_with_deps(
-                    mir::UpdateByKey {
+                    self.insert_mir_with_deps(mir::DeleteByKey {
                         input: get_by_key_input,
                         table: index_plan.table_id(),
-                        assignments: stmt.assignments.clone(),
                         filter: index_plan.result_filter.clone(),
-                        condition: stmt.condition.expr.clone(),
-                        ty: ty.clone(),
-                    },
-                    dependencies.take().into_iter().flatten(),
-                ),
+                        ty: stmt::Type::Unit,
+                    })
+                }
+                stmt::Statement::Update(stmt) => self.insert_mir_with_deps(mir::UpdateByKey {
+                    input: get_by_key_input,
+                    table: index_plan.table_id(),
+                    assignments: stmt.assignments.clone(),
+                    filter: index_plan.result_filter.clone(),
+                    condition: stmt.condition.expr.clone(),
+                    ty: ty.clone(),
+                }),
                 _ => todo!("stmt={stmt:#?}"),
             }
         } else {
@@ -266,17 +232,14 @@ impl PlanStatement<'_, '_> {
                 todo!()
             };
 
-            self.planner.mir.insert_with_deps(
-                mir::QueryPk {
-                    input,
-                    table: index_plan.table_id(),
-                    columns: columns.clone(),
-                    pk_filter: index_plan.index_filter.clone(),
-                    row_filter: index_plan.result_filter.clone(),
-                    ty: ty.clone(),
-                },
-                dependencies.take().into_iter().flatten(),
-            )
+            self.insert_mir_with_deps(mir::QueryPk {
+                input,
+                table: index_plan.table_id(),
+                columns: columns.clone(),
+                pk_filter: index_plan.index_filter.clone(),
+                row_filter: index_plan.result_filter.clone(),
+                ty: ty.clone(),
+            })
         }
     }
 
@@ -290,7 +253,6 @@ impl PlanStatement<'_, '_> {
         columns: &IndexSet<stmt::ExprReference>,
         ty: &stmt::Type,
         returning: &Option<stmt::Returning>,
-        dependencies: &mut Option<impl Iterator<Item = mir::NodeId>>,
     ) -> mir::NodeId {
         assert!(index_plan.post_filter.is_none(), "TODO");
         assert!(inputs.len() <= 1, "TODO: inputs={inputs:#?}");
@@ -303,56 +265,44 @@ impl PlanStatement<'_, '_> {
             }
         });
 
-        let get_by_key_input = self.planner.mir.insert_with_deps(
-            mir::FindPkByIndex {
-                inputs,
-                table: index_plan.index.on,
-                index: index_plan.index.id,
-                filter: index_plan.index_filter.take(),
-                ty: index_key_ty,
-            },
-            dependencies.take().into_iter().flatten(),
-        );
+        let get_by_key_input = self.insert_mir_with_deps(mir::FindPkByIndex {
+            inputs,
+            table: index_plan.index.on,
+            index: index_plan.index.id,
+            filter: index_plan.index_filter.take(),
+            ty: index_key_ty,
+        });
 
         match stmt {
             stmt::Statement::Query(_) => {
                 debug_assert!(ty.is_list());
-                self.planner.mir.insert_with_deps(
-                    mir::GetByKey {
-                        input: get_by_key_input,
-                        table: index_plan.table_id(),
-                        columns: columns.clone(),
-                        ty: ty.clone(),
-                    },
-                    dependencies.take().into_iter().flatten(),
-                )
+                self.insert_mir_with_deps(mir::GetByKey {
+                    input: get_by_key_input,
+                    table: index_plan.table_id(),
+                    columns: columns.clone(),
+                    ty: ty.clone(),
+                })
             }
             stmt::Statement::Delete(_) => {
                 debug_assert!(
                     ty.is_unit(),
                     "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
                 );
-                self.planner.mir.insert_with_deps(
-                    mir::DeleteByKey {
-                        input: get_by_key_input,
-                        table: index_plan.table_id(),
-                        filter: index_plan.result_filter.clone(),
-                        ty: stmt::Type::Unit,
-                    },
-                    dependencies.take().into_iter().flatten(),
-                )
-            }
-            stmt::Statement::Update(stmt) => self.planner.mir.insert_with_deps(
-                mir::UpdateByKey {
+                self.insert_mir_with_deps(mir::DeleteByKey {
                     input: get_by_key_input,
                     table: index_plan.table_id(),
-                    assignments: stmt.assignments.clone(),
                     filter: index_plan.result_filter.clone(),
-                    condition: stmt.condition.expr.clone(),
-                    ty: ty.clone(),
-                },
-                dependencies.take().into_iter().flatten(),
-            ),
+                    ty: stmt::Type::Unit,
+                })
+            }
+            stmt::Statement::Update(stmt) => self.insert_mir_with_deps(mir::UpdateByKey {
+                input: get_by_key_input,
+                table: index_plan.table_id(),
+                assignments: stmt.assignments.clone(),
+                filter: index_plan.result_filter.clone(),
+                condition: stmt.condition.expr.clone(),
+                ty: ty.clone(),
+            }),
             _ => todo!("stmt={stmt:#?}"),
         }
     }
@@ -597,7 +547,6 @@ impl PlanStatement<'_, '_> {
         columns: &IndexSet<stmt::ExprReference>,
         inputs: IndexSet<mir::NodeId>,
         returning: &Option<stmt::Returning>,
-        dependencies: Option<impl Iterator<Item = mir::NodeId>>,
     ) -> mir::NodeId {
         if !columns.is_empty() {
             stmt.set_returning(
@@ -654,9 +603,8 @@ impl PlanStatement<'_, '_> {
 
         // With SQL capability, we can just punt the details of execution to
         // the database's query planner.
-        self.planner
-            .mir
-            .insert_with_deps(node, dependencies.unwrap())
+        debug_assert!(!self.did_take_deps);
+        self.insert_mir_with_deps(node)
     }
 
     fn process_ref_args(
@@ -822,7 +770,6 @@ impl PlanStatement<'_, '_> {
         &mut self,
         exec_stmt_node_id: mir::NodeId,
         returning: Option<stmt::Returning>,
-        mut dependencies: Option<impl Iterator<Item = mir::NodeId>>,
         single: bool,
         ref_source: Option<stmt::ExprArg>,
     ) -> mir::NodeId {
@@ -870,17 +817,15 @@ impl PlanStatement<'_, '_> {
                     };
 
                     // Plan the final projection to handle the returning clause.
-                    if let Some(deps) = dependencies.take() {
-                        self.planner.mir.insert_with_deps(node, deps)
-                    } else {
-                        self.planner.mir.insert(node)
-                    }
+                    self.insert_mir_with_deps(node)
                 }
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
             }
         } else {
-            if let Some(deps) = dependencies.take() {
-                self.planner.mir[exec_stmt_node_id].deps.extend(deps);
+            if let Some(dependencies) = self.take_dependencies() {
+                self.planner.mir[exec_stmt_node_id]
+                    .deps
+                    .extend(dependencies);
             }
 
             exec_stmt_node_id
@@ -1109,5 +1054,22 @@ impl PlanStatement<'_, '_> {
             value: value.unwrap_list(),
             ty,
         })
+    }
+
+    pub fn insert_mir_with_deps(&mut self, node: impl Into<mir::Node>) -> mir::NodeId {
+        if let Some(dependencies) = self.take_dependencies() {
+            self.planner.mir.insert_with_deps(node, dependencies)
+        } else {
+            self.planner.mir.insert(node)
+        }
+    }
+
+    pub fn take_dependencies(&mut self) -> Option<impl Iterator<Item = mir::NodeId> + 'a> {
+        if !self.did_take_deps {
+            self.did_take_deps = true;
+            Some(self.stmt_info.dependent_operations(self.planner.hir))
+        } else {
+            None
+        }
     }
 }
