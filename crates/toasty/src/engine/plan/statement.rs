@@ -177,7 +177,6 @@ impl PlanStatement<'_, '_> {
                 inputs,
                 ref_source,
                 index_key_ty,
-                table_id,
                 columns,
                 &ty,
                 returning,
@@ -190,7 +189,6 @@ impl PlanStatement<'_, '_> {
                 inputs,
                 ref_source,
                 index_key_ty,
-                table_id,
                 columns,
                 &ty,
                 returning,
@@ -209,7 +207,6 @@ impl PlanStatement<'_, '_> {
         inputs: IndexSet<mir::NodeId>,
         ref_source: Option<stmt::ExprArg>,
         index_key_ty: stmt::Type,
-        table_id: TableId,
         columns: &IndexSet<stmt::ExprReference>,
         ty: &stmt::Type,
         returning: &Option<stmt::Returning>,
@@ -225,7 +222,7 @@ impl PlanStatement<'_, '_> {
                     self.planner.mir.insert_with_deps(
                         mir::GetByKey {
                             input: get_by_key_input,
-                            table: table_id,
+                            table: index_plan.table_id(),
                             columns: columns.clone(),
                             ty: ty.clone(),
                         },
@@ -240,7 +237,7 @@ impl PlanStatement<'_, '_> {
                     self.planner.mir.insert_with_deps(
                         mir::DeleteByKey {
                             input: get_by_key_input,
-                            table: table_id,
+                            table: index_plan.table_id(),
                             filter: index_plan.result_filter.clone(),
                             ty: stmt::Type::Unit,
                         },
@@ -250,7 +247,7 @@ impl PlanStatement<'_, '_> {
                 stmt::Statement::Update(stmt) => self.planner.mir.insert_with_deps(
                     mir::UpdateByKey {
                         input: get_by_key_input,
-                        table: table_id,
+                        table: index_plan.table_id(),
                         assignments: stmt.assignments.clone(),
                         filter: index_plan.result_filter.clone(),
                         condition: stmt.condition.expr.clone(),
@@ -272,7 +269,7 @@ impl PlanStatement<'_, '_> {
             self.planner.mir.insert_with_deps(
                 mir::QueryPk {
                     input,
-                    table: table_id,
+                    table: index_plan.table_id(),
                     columns: columns.clone(),
                     pk_filter: index_plan.index_filter.clone(),
                     row_filter: index_plan.result_filter.clone(),
@@ -290,7 +287,6 @@ impl PlanStatement<'_, '_> {
         inputs: IndexSet<mir::NodeId>,
         ref_source: Option<stmt::ExprArg>,
         index_key_ty: stmt::Type,
-        table_id: TableId,
         columns: &IndexSet<stmt::ExprReference>,
         ty: &stmt::Type,
         returning: &Option<stmt::Returning>,
@@ -324,7 +320,7 @@ impl PlanStatement<'_, '_> {
                 self.planner.mir.insert_with_deps(
                     mir::GetByKey {
                         input: get_by_key_input,
-                        table: table_id,
+                        table: index_plan.table_id(),
                         columns: columns.clone(),
                         ty: ty.clone(),
                     },
@@ -339,7 +335,7 @@ impl PlanStatement<'_, '_> {
                 self.planner.mir.insert_with_deps(
                     mir::DeleteByKey {
                         input: get_by_key_input,
-                        table: table_id,
+                        table: index_plan.table_id(),
                         filter: index_plan.result_filter.clone(),
                         ty: stmt::Type::Unit,
                     },
@@ -349,7 +345,7 @@ impl PlanStatement<'_, '_> {
             stmt::Statement::Update(stmt) => self.planner.mir.insert_with_deps(
                 mir::UpdateByKey {
                     input: get_by_key_input,
-                    table: table_id,
+                    table: index_plan.table_id(),
                     assignments: stmt.assignments.clone(),
                     filter: index_plan.result_filter.clone(),
                     condition: stmt.condition.expr.clone(),
