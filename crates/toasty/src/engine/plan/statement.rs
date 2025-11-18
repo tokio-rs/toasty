@@ -6,10 +6,15 @@ use toasty_core::{
 
 use crate::engine::{eval, hir, index, mir, plan::HirPlanner};
 
+struct PlanStatement<'a, 'b> {
+    planner: &'a mut HirPlanner<'b>,
+    stmt_id: hir::StmtId,
+    stmt_info: &'b hir::StatementInfo,
+}
+
 impl HirPlanner<'_> {
     pub(super) fn plan_statement(&mut self, stmt_id: hir::StmtId) {
         let stmt_info = &self.hir[stmt_id];
-        let mut stmt = stmt_info.stmt.as_deref().unwrap().clone();
 
         // Check if the statement has already been planned
         if stmt_info.exec_statement.get().is_some() {
@@ -21,6 +26,20 @@ impl HirPlanner<'_> {
         for &dep_stmt_id in &stmt_info.deps {
             self.plan_statement(dep_stmt_id);
         }
+
+        // Delegate to PlanStatement
+        let mut planner = PlanStatement {
+            planner: self,
+            stmt_id,
+            stmt_info,
+        };
+        planner.plan();
+    }
+}
+
+impl PlanStatement<'_, '_> {
+    fn plan(&mut self) {
+        let mut stmt = self.stmt_info.stmt.as_deref().unwrap().clone();
 
         // Tracks if the original query is a single query.
         let single = stmt.as_query().map(|query| query.single).unwrap_or(false);
@@ -37,19 +56,19 @@ impl HirPlanner<'_> {
         let mut inputs = IndexSet::new();
 
         // Visit the main statement's returning clause to extract needed columns
-        self.extract_columns_from_returning(&mut returning, stmt_info, &mut columns, &mut inputs);
+        self.extract_columns_from_returning(&mut returning, &mut columns, &mut inputs);
 
         // Track sub-statement arguments from filter
-        self.extract_sub_statement_args_from_filter(&mut stmt, stmt_info, &mut inputs);
+        self.extract_sub_statement_args_from_filter(&mut stmt, &mut inputs);
 
         // For each back ref, include the needed columns
-        Self::collect_back_ref_columns(stmt_info, &mut columns);
+        self.collect_back_ref_columns(&mut columns);
 
         // If there are any ref args, then the statement needs to be rewritten
         // to batch load all records for a NestedMerge operation .
-        let ref_source = self.process_ref_args(&mut stmt, stmt_info, stmt_id, &mut inputs);
+        let ref_source = self.process_ref_args(&mut stmt, &mut inputs);
 
-        let mut dependencies = Some(stmt_info.dependent_operations(self.hir));
+        let mut dependencies = Some(self.stmt_info.dependent_operations(self.planner.hir));
 
         let exec_stmt_node_id = self.plan_execution(
             stmt,
@@ -61,22 +80,23 @@ impl HirPlanner<'_> {
         );
 
         // Track the exec statement operation node.
-        stmt_info.exec_statement.set(Some(exec_stmt_node_id));
+        self.stmt_info.exec_statement.set(Some(exec_stmt_node_id));
 
         // Now, for each back ref, we need to project the expression to what the
         // next statement expects.
-        self.process_back_ref_projections(stmt_info, exec_stmt_node_id, &columns);
+        self.process_back_ref_projections(exec_stmt_node_id, &columns);
 
         // Track the selection for later use.
-        stmt_info.exec_statement_selection.set(columns).unwrap();
+        self.stmt_info
+            .exec_statement_selection
+            .set(columns)
+            .unwrap();
 
         // Plan each child
-        self.plan_child_statements(stmt_info);
+        self.plan_child_statements();
 
         // Plans a NestedMerge if one is needed
         let output_node_id = self.plan_output_node(
-            stmt_id,
-            stmt_info,
             exec_stmt_node_id,
             returning,
             dependencies,
@@ -84,7 +104,7 @@ impl HirPlanner<'_> {
             ref_source,
         );
 
-        stmt_info.output.set(Some(output_node_id));
+        self.stmt_info.output.set(Some(output_node_id));
     }
 
     fn plan_execution(
@@ -98,7 +118,7 @@ impl HirPlanner<'_> {
     ) -> mir::NodeId {
         if let Some(node_id) = self.plan_const_or_empty_statement(&stmt, returning, columns) {
             node_id
-        } else if self.engine.capability().sql || stmt.is_insert() {
+        } else if self.planner.engine.capability().sql || stmt.is_insert() {
             self.plan_sql_execution(stmt, columns, inputs, returning, dependencies.take())
         } else {
             self.plan_nosql_execution(
@@ -123,8 +143,8 @@ impl HirPlanner<'_> {
     ) -> mir::NodeId {
         // Without SQL capability, we have to plan the execution of the
         // statement based on available indices.
-        let mut index_plan = self.engine.plan_index_path(stmt);
-        let table_id = self.engine.resolve_table_for(stmt).id;
+        let mut index_plan = self.planner.engine.plan_index_path(stmt);
+        let table_id = self.planner.engine.resolve_table_for(stmt).id;
 
         let post_filter = index_plan.post_filter.clone();
         let pk_keys = self.try_build_pk_keys(stmt, &index_plan, &inputs, ref_source);
@@ -141,12 +161,13 @@ impl HirPlanner<'_> {
         let ty = if columns.is_empty() {
             stmt::Type::Unit
         } else {
-            self.engine.infer_record_list_ty(stmt, &*columns)
+            self.planner.engine.infer_record_list_ty(stmt, &*columns)
         };
 
         // Type of the index key. Value for single index keys, record for
         // composite.
-        let index_key_ty = stmt::Type::list(self.engine.index_key_record_ty(index_plan.index));
+        let index_key_ty =
+            stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
 
         let node_id = if index_plan.index.primary_key {
             self.plan_primary_key_execution(
@@ -201,7 +222,7 @@ impl HirPlanner<'_> {
             match stmt {
                 stmt::Statement::Query(_) => {
                     debug_assert!(ty.is_list());
-                    self.mir.insert_with_deps(
+                    self.planner.mir.insert_with_deps(
                         mir::GetByKey {
                             input: get_by_key_input,
                             table: table_id,
@@ -216,7 +237,7 @@ impl HirPlanner<'_> {
                         ty.is_unit(),
                         "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
                     );
-                    self.mir.insert_with_deps(
+                    self.planner.mir.insert_with_deps(
                         mir::DeleteByKey {
                             input: get_by_key_input,
                             table: table_id,
@@ -226,7 +247,7 @@ impl HirPlanner<'_> {
                         dependencies.take().into_iter().flatten(),
                     )
                 }
-                stmt::Statement::Update(stmt) => self.mir.insert_with_deps(
+                stmt::Statement::Update(stmt) => self.planner.mir.insert_with_deps(
                     mir::UpdateByKey {
                         input: get_by_key_input,
                         table: table_id,
@@ -248,7 +269,7 @@ impl HirPlanner<'_> {
                 todo!()
             };
 
-            self.mir.insert_with_deps(
+            self.planner.mir.insert_with_deps(
                 mir::QueryPk {
                     input,
                     table: table_id,
@@ -286,7 +307,7 @@ impl HirPlanner<'_> {
             }
         });
 
-        let get_by_key_input = self.mir.insert_with_deps(
+        let get_by_key_input = self.planner.mir.insert_with_deps(
             mir::FindPkByIndex {
                 inputs,
                 table: index_plan.index.on,
@@ -300,7 +321,7 @@ impl HirPlanner<'_> {
         match stmt {
             stmt::Statement::Query(_) => {
                 debug_assert!(ty.is_list());
-                self.mir.insert_with_deps(
+                self.planner.mir.insert_with_deps(
                     mir::GetByKey {
                         input: get_by_key_input,
                         table: table_id,
@@ -315,7 +336,7 @@ impl HirPlanner<'_> {
                     ty.is_unit(),
                     "stmt={stmt:#?}; returning={returning:#?}; ty={ty:#?}"
                 );
-                self.mir.insert_with_deps(
+                self.planner.mir.insert_with_deps(
                     mir::DeleteByKey {
                         input: get_by_key_input,
                         table: table_id,
@@ -325,7 +346,7 @@ impl HirPlanner<'_> {
                     dependencies.take().into_iter().flatten(),
                 )
             }
-            stmt::Statement::Update(stmt) => self.mir.insert_with_deps(
+            stmt::Statement::Update(stmt) => self.planner.mir.insert_with_deps(
                 mir::UpdateByKey {
                     input: get_by_key_input,
                     table: table_id,
@@ -356,7 +377,7 @@ impl HirPlanner<'_> {
             debug_assert!(ref_source.is_some(), "TODO");
             let ty = stmt::Type::list(keys.ret.clone());
             // Gotta project
-            self.mir.insert(mir::Project {
+            self.planner.mir.insert(mir::Project {
                 input: inputs[0],
                 projection: keys,
                 ty,
@@ -379,19 +400,19 @@ impl HirPlanner<'_> {
 
         let pk_keys_project_args = if ref_source.is_some() {
             assert_eq!(inputs.len(), 1, "TODO");
-            let ty = self.mir[inputs[0]].ty();
+            let ty = self.planner.mir[inputs[0]].ty();
             vec![ty.unwrap_list_ref().clone()]
         } else {
             inputs
                 .iter()
-                .map(|node_id| self.mir[node_id].ty().clone())
+                .map(|node_id| self.planner.mir[node_id].ty().clone())
                 .collect()
         };
 
         // If using the primary key to find rows, try to convert the
         // filter expression to a set of primary-key keys.
-        let cx = self.engine.expr_cx_for(stmt);
-        self.engine.try_build_key_filter(
+        let cx = self.planner.engine.expr_cx_for(stmt);
+        self.planner.engine.try_build_key_filter(
             cx,
             index_plan.index,
             &index_plan.index_filter,
@@ -448,7 +469,7 @@ impl HirPlanner<'_> {
         // If there is a post filter, we need to apply a filter step on the returned rows.
         if let Some(post_filter) = post_filter {
             let item_ty = ty.unwrap_list_ref();
-            node_id = self.mir.insert(mir::Filter {
+            node_id = self.planner.mir.insert(mir::Filter {
                 input: node_id,
                 filter: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
                 ty,
@@ -458,20 +479,19 @@ impl HirPlanner<'_> {
         node_id
     }
 
-    fn plan_child_statements(&mut self, stmt_info: &hir::StatementInfo) {
-        for arg in &stmt_info.args {
+    fn plan_child_statements(&mut self) {
+        for arg in &self.stmt_info.args {
             let hir::Arg::Sub { stmt_id, .. } = arg else {
                 continue;
             };
 
-            self.plan_statement(*stmt_id);
+            self.planner.plan_statement(*stmt_id);
         }
     }
 
     fn extract_columns_from_returning(
         &mut self,
         returning: &mut Option<stmt::Returning>,
-        stmt_info: &hir::StatementInfo,
         columns: &mut IndexSet<stmt::ExprReference>,
         inputs: &mut IndexSet<mir::NodeId>,
     ) {
@@ -481,7 +501,7 @@ impl HirPlanner<'_> {
                     let (index, _) = columns.insert_full(*expr_reference);
                     *expr = stmt::Expr::arg_project(0, [index]);
                 }
-                stmt::Expr::Arg(expr_arg) => match &stmt_info.args[expr_arg.position] {
+                stmt::Expr::Arg(expr_arg) => match &self.stmt_info.args[expr_arg.position] {
                     hir::Arg::Ref { .. } => {
                         todo!("refs in returning is not yet supported");
                     }
@@ -493,11 +513,11 @@ impl HirPlanner<'_> {
                         // If there are back-refs, the exec statement is preloading
                         // data for a NestedMerge. Sub-statements will be loaded
                         // during the NestedMerge.
-                        if !stmt_info.back_refs.is_empty() {
+                        if !self.stmt_info.back_refs.is_empty() {
                             return;
                         }
 
-                        let node_id = self.hir[stmt_id].exec_statement.get().expect("bug");
+                        let node_id = self.planner.hir[stmt_id].exec_statement.get().expect("bug");
 
                         let (index, _) = inputs.insert_full(node_id);
                         input.set(Some(index));
@@ -512,7 +532,6 @@ impl HirPlanner<'_> {
     fn extract_sub_statement_args_from_filter(
         &mut self,
         stmt: &mut stmt::Statement,
-        stmt_info: &hir::StatementInfo,
         inputs: &mut IndexSet<mir::NodeId>,
     ) {
         visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| {
@@ -521,11 +540,11 @@ impl HirPlanner<'_> {
                     stmt_id: arg_stmt_id,
                     returning: false,
                     input,
-                } = &stmt_info.args[expr_arg.position]
+                } = &self.stmt_info.args[expr_arg.position]
                 {
-                    debug_assert!(!self.engine.capability().sql);
+                    debug_assert!(!self.planner.engine.capability().sql);
                     debug_assert!(input.get().is_none());
-                    let node_id = self.hir[arg_stmt_id].output.get().expect("bug");
+                    let node_id = self.planner.hir[arg_stmt_id].output.get().expect("bug");
 
                     let (index, _) = inputs.insert_full(node_id);
                     input.set(Some(index));
@@ -534,11 +553,8 @@ impl HirPlanner<'_> {
         });
     }
 
-    fn collect_back_ref_columns(
-        stmt_info: &hir::StatementInfo,
-        columns: &mut IndexSet<stmt::ExprReference>,
-    ) {
-        for back_ref in stmt_info.back_refs.values() {
+    fn collect_back_ref_columns(&mut self, columns: &mut IndexSet<stmt::ExprReference>) {
+        for back_ref in self.stmt_info.back_refs.values() {
             for expr in &back_ref.exprs {
                 columns.insert(*expr);
             }
@@ -556,7 +572,10 @@ impl HirPlanner<'_> {
                 todo!()
             };
 
-            return Some(self.insert_const(rows, self.engine.infer_record_list_ty(stmt, columns)));
+            return Some(self.insert_const(
+                rows,
+                self.planner.engine.infer_record_list_ty(stmt, columns),
+            ));
         }
 
         if stmt.assignments().map(|a| a.is_empty()).unwrap_or(false) {
@@ -597,17 +616,17 @@ impl HirPlanner<'_> {
 
         let input_args: Vec<_> = inputs
             .iter()
-            .map(|input| self.mir.ty(*input).clone())
+            .map(|input| self.planner.mir.ty(*input).clone())
             .collect();
 
-        let ty = self.engine.infer_ty(&stmt, &input_args[..]);
+        let ty = self.planner.engine.infer_ty(&stmt, &input_args[..]);
 
         let node = if stmt.condition().is_some() {
             if let stmt::Statement::Update(stmt) = stmt {
                 assert!(stmt.returning.is_none(), "TODO: stmt={stmt:#?}");
                 assert!(returning.is_none(), "TODO: returning={returning:#?}");
 
-                if self.engine.capability().cte_with_update {
+                if self.planner.engine.capability().cte_with_update {
                     mir::Operation::ExecStatement(Box::new(
                         self.plan_conditional_sql_query_as_cte(inputs, stmt, ty),
                     ))
@@ -639,19 +658,19 @@ impl HirPlanner<'_> {
 
         // With SQL capability, we can just punt the details of execution to
         // the database's query planner.
-        self.mir.insert_with_deps(node, dependencies.unwrap())
+        self.planner
+            .mir
+            .insert_with_deps(node, dependencies.unwrap())
     }
 
     fn process_ref_args(
         &mut self,
         stmt: &mut stmt::Statement,
-        stmt_info: &hir::StatementInfo,
-        stmt_id: hir::StmtId,
         inputs: &mut IndexSet<mir::NodeId>,
     ) -> Option<stmt::ExprArg> {
         let mut ref_source = None;
 
-        for arg in &stmt_info.args {
+        for arg in &self.stmt_info.args {
             let hir::Arg::Ref {
                 stmt_id: target_id,
                 input,
@@ -668,7 +687,7 @@ impl HirPlanner<'_> {
             );
 
             // Find the back-ref for this arg
-            let node_id = self.hir[target_id].back_refs[&stmt_id]
+            let node_id = self.planner.hir[target_id].back_refs[&self.stmt_id]
                 .node_id
                 .get()
                 .unwrap();
@@ -679,7 +698,7 @@ impl HirPlanner<'_> {
         }
 
         if let Some(ref_source) = ref_source {
-            self.rewrite_stmt_for_ref_source(stmt, stmt_info, ref_source);
+            self.rewrite_stmt_for_ref_source(stmt, ref_source);
         }
 
         ref_source
@@ -688,20 +707,18 @@ impl HirPlanner<'_> {
     fn rewrite_stmt_for_ref_source(
         &mut self,
         stmt: &mut stmt::Statement,
-        stmt_info: &hir::StatementInfo,
         ref_source: stmt::ExprArg,
     ) {
-        if self.engine.capability().sql {
-            self.rewrite_stmt_for_ref_source_sql(stmt, stmt_info, ref_source);
+        if self.planner.engine.capability().sql {
+            self.rewrite_stmt_for_ref_source_sql(stmt, ref_source);
         } else {
-            self.rewrite_stmt_for_ref_source_nosql(stmt, stmt_info, ref_source);
+            self.rewrite_stmt_for_ref_source_nosql(stmt, ref_source);
         }
     }
 
     fn rewrite_stmt_for_ref_source_sql(
         &mut self,
         stmt: &mut stmt::Statement,
-        stmt_info: &hir::StatementInfo,
         ref_source: stmt::ExprArg,
     ) {
         // If targeting SQL, leverage the SQL query engine to handle most of the rewrite details.
@@ -723,7 +740,7 @@ impl HirPlanner<'_> {
                         input,
                         batch_load_index: index,
                         ..
-                    } = &stmt_info.args[expr_arg.position]
+                    } = &self.stmt_info.args[expr_arg.position]
                     else {
                         todo!()
                     };
@@ -751,7 +768,6 @@ impl HirPlanner<'_> {
     fn rewrite_stmt_for_ref_source_nosql(
         &mut self,
         stmt: &mut stmt::Statement,
-        stmt_info: &hir::StatementInfo,
         ref_source: stmt::ExprArg,
     ) {
         let mut filter = stmt.filter_expr_mut();
@@ -763,7 +779,7 @@ impl HirPlanner<'_> {
                 let hir::Arg::Ref {
                     batch_load_index: index,
                     ..
-                } = &stmt_info.args[expr_arg.position]
+                } = &self.stmt_info.args[expr_arg.position]
                 else {
                     todo!()
                 };
@@ -781,21 +797,23 @@ impl HirPlanner<'_> {
 
     fn process_back_ref_projections(
         &mut self,
-        stmt_info: &hir::StatementInfo,
         exec_stmt_node_id: mir::NodeId,
         columns: &IndexSet<stmt::ExprReference>,
     ) {
-        for back_ref in stmt_info.back_refs.values() {
+        for back_ref in self.stmt_info.back_refs.values() {
             let projection = stmt::Expr::record(back_ref.exprs.iter().map(|expr_reference| {
                 let index = columns.get_index_of(expr_reference).unwrap();
                 stmt::Expr::arg_project(0, [index])
             }));
 
-            let arg_ty = self.mir[exec_stmt_node_id].ty().unwrap_list_ref().clone();
+            let arg_ty = self.planner.mir[exec_stmt_node_id]
+                .ty()
+                .unwrap_list_ref()
+                .clone();
             let projection = eval::Func::from_stmt(projection, vec![arg_ty]);
             let ty = stmt::Type::list(projection.ret.clone());
 
-            let project_node_id = self.mir.insert(mir::Project {
+            let project_node_id = self.planner.mir.insert(mir::Project {
                 input: exec_stmt_node_id,
                 projection,
                 ty,
@@ -806,8 +824,6 @@ impl HirPlanner<'_> {
 
     fn plan_output_node(
         &mut self,
-        stmt_id: hir::StmtId,
-        stmt_info: &hir::StatementInfo,
         exec_stmt_node_id: mir::NodeId,
         returning: Option<stmt::Returning>,
         mut dependencies: Option<impl Iterator<Item = mir::NodeId>>,
@@ -815,7 +831,7 @@ impl HirPlanner<'_> {
         ref_source: Option<stmt::ExprArg>,
     ) -> mir::NodeId {
         // First check for nested merge
-        if let Some(node_id) = self.plan_nested_merge(stmt_id) {
+        if let Some(node_id) = self.planner.plan_nested_merge(self.stmt_id) {
             return node_id;
         }
 
@@ -833,15 +849,16 @@ impl HirPlanner<'_> {
                     let stmt::Value::List(rows) = returning else {
                         todo!(
                             "unexpected returning type; returning={returning:#?}; stmt={:#?}",
-                            stmt_info.stmt
+                            self.stmt_info.stmt
                         )
                     };
 
-                    self.mir
+                    self.planner
+                        .mir
                         .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
                 }
                 stmt::Returning::Expr(returning) => {
-                    let arg_ty = match self.mir[exec_stmt_node_id].ty() {
+                    let arg_ty = match self.planner.mir[exec_stmt_node_id].ty() {
                         stmt::Type::List(ty) => vec![(**ty).clone()],
                         stmt::Type::Unit => vec![],
                         _ => todo!(),
@@ -858,16 +875,16 @@ impl HirPlanner<'_> {
 
                     // Plan the final projection to handle the returning clause.
                     if let Some(deps) = dependencies.take() {
-                        self.mir.insert_with_deps(node, deps)
+                        self.planner.mir.insert_with_deps(node, deps)
                     } else {
-                        self.mir.insert(node)
+                        self.planner.mir.insert(node)
                     }
                 }
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
             }
         } else {
             if let Some(deps) = dependencies.take() {
-                self.mir[exec_stmt_node_id].deps.extend(deps);
+                self.planner.mir[exec_stmt_node_id].deps.extend(deps);
             }
 
             exec_stmt_node_id
@@ -1055,7 +1072,7 @@ impl HirPlanner<'_> {
                 }
                 .into(),
             ])
-            .locks(if self.engine.capability().select_for_update {
+            .locks(if self.planner.engine.capability().select_for_update {
                 vec![stmt::Lock::Update]
             } else {
                 vec![]
@@ -1092,7 +1109,7 @@ impl HirPlanner<'_> {
             "const type mismatch; expected={ty:#?}; actual={value:#?}",
         );
 
-        self.mir.insert(mir::Const {
+        self.planner.mir.insert(mir::Const {
             value: value.unwrap_list(),
             ty,
         })
