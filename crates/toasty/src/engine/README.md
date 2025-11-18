@@ -6,9 +6,39 @@ pipeline that transforms user queries into database operations.
 
 ## Overview
 
-The Toasty engine is a multi-database query compiler and runtime that executes
-ORM operations across SQL and NoSQL databases. It uses multiple intermediate
-representations (IRs) and optimization passes:
+The Toasty engine is a multi-database query compiler and runtime that executes ORM operations across SQL and NoSQL databases. It transforms a user's query (represented as a Statement AST) into a sequence of executable actions through multiple compilation phases.
+
+### Execution Model
+
+The final output is a **mini program** executed by an interpreter. Think of it like a small virtual machine or bytecode interpreter, though there is no control flow (yet):
+
+- **Instructions (Actions)**: Operations like "execute this SQL", "filter these results", "merge child records into parents"
+- **Variables**: Storage slots, or registers, that hold intermediate results between instructions
+- **Linear Execution**: Instructions run in sequence (no control flow - no branches or loops, yet). Eventually, the interpreter will be smart about concurrency and execute independent operations in parallel when possible.
+- **Interpreter**: The engine executor reads each instruction, fetches inputs from variables, performs the operation, and stores outputs back to variables
+
+For example, loading users with their todos:
+
+```sql
+SELECT users.id, users.name, (
+    SELECT todos.id, todos.title 
+    FROM todos 
+    WHERE todos.user_id = users.id
+) FROM users WHERE ...
+```
+
+compiles to a program like:
+
+```
+$0 = ExecSQL("SELECT * FROM users WHERE ...")
+$1 = ExecSQL("SELECT * FROM todos WHERE user_id IN ...")
+$2 = NestedMerge($0, $1, by: user_id)
+return $2
+```
+
+The compilation pipeline below transforms user queries into this instruction/variable representation. Each phase brings the query closer to this final executable form.
+
+### Compilation Pipeline
 
 ```
 User Query (Statement AST)
@@ -19,11 +49,11 @@ User Query (Statement AST)
     ↓
 [Lowering] - Convert to HIR for dependency analysis
     ↓
-[Planning] - Build MIR operation graph (database operations and in-memory transforms)
+[Planning] - Build MIR operation graph
     ↓
-[Execution Planning] - Convert to executable action sequence
+[Execution Planning] - Convert to action sequence with variables
     ↓
-[Execution] - Execute against database driver
+[Execution] - Run actions against database driver
     ↓
 Result Stream
 ```
