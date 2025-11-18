@@ -86,10 +86,28 @@ impl LowerStatement<'_, '_> {
                 // If the field is defined to be auto-populated, then populate
                 // it here.
                 if let Some(auto) = &field.auto {
+                    let ty = match &field.ty {
+                        app::FieldTy::Primitive(primitive) => &primitive.ty,
+                        _ => panic!("#[auto] not allowed on non-primitive fields"),
+                    };
                     match auto {
                         app::Auto::Id => {
                             let id = uuid::Uuid::new_v4().to_string();
                             field_expr.insert(stmt::Id::from_string(model.id, id).into());
+                        }
+                        app::Auto::Uuid(version) => {
+                            let id = match version {
+                                app::UuidVersion::V4 => uuid::Uuid::new_v4(),
+                                app::UuidVersion::V7 => uuid::Uuid::now_v7(),
+                            };
+                            match ty {
+                                stmt::Type::String => field_expr.insert(stmt::Value::String(id.to_string()).into()),
+                                stmt::Type::Uuid => field_expr.insert(stmt::Value::Uuid(id).into()),
+                                _ => panic!("auto-generated UUID cannot be inserted into column of type {ty:?}"),
+                            };
+                        }
+                        app::Auto::Increment => {
+                            // Leave value as null and let the database handle it.
                         }
                     }
                 }

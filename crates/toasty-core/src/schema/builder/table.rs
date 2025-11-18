@@ -2,7 +2,7 @@ use super::BuildSchema;
 use crate::{
     driver,
     schema::{
-        app::{self, FieldId, FieldName, Model},
+        app::{self, Auto, FieldId, FieldName, Model},
         db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping, TableToModel},
         Name,
@@ -263,6 +263,7 @@ impl BuildTableFromModels<'_> {
                     storage_ty: db::Type::from_app(&ty, None, &self.db.storage_types).unwrap(),
                     nullable: false,
                     primary_key: true,
+                    auto_increment: false,
                 });
             }
         }
@@ -302,6 +303,7 @@ impl BuildTableFromModels<'_> {
                         &field.name,
                         prefix.as_deref(),
                         field.nullable,
+                        field.auto.as_ref(),
                     );
                 }
                 // HasMany/HasOne relationships do not have columns... for now?
@@ -371,6 +373,7 @@ impl BuildTableFromModels<'_> {
         name: &app::FieldName,
         prefix: Option<&str>,
         nullable: bool,
+        auto: Option<&Auto>,
     ) {
         let storage_name = if let Some(prefix) = prefix {
             let storage_name = name.storage_name();
@@ -396,6 +399,7 @@ impl BuildTableFromModels<'_> {
             storage_ty,
             nullable,
             primary_key: false,
+            auto_increment: auto.map(|auto| auto.is_increment()).unwrap_or(false),
         };
 
         self.mapping.model_mut(field_id.model).fields[field_id.index]

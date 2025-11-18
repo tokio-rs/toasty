@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::{Column, FieldTy, Name};
+use crate::schema::{Auto, Column, FieldTy, Name, UuidVersion};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -144,10 +144,12 @@ impl Expand<'_> {
             }
 
             let primary_key = self.model.primary_key.fields.contains(&index);
-            let auto = if field.attrs.auto {
-                quote!(Some(Auto::Id))
-            } else {
-                quote!(None)
+            let auto = match field.attrs.auto {
+                None => quote! { None },
+                Some(Auto::Unspecified) => quote! { Some(Auto::Id) },
+                Some(Auto::Uuid(UuidVersion::V4)) => quote! { Some(Auto::Uuid(UuidVersion::V4)) },
+                Some(Auto::Uuid(UuidVersion::V7)) => quote! { Some(Auto::Uuid(UuidVersion::V7)) },
+                Some(Auto::Increment) => quote! { Some(Auto::Increment) },
             };
 
             quote! {

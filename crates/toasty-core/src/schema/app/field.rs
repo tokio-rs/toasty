@@ -22,7 +22,7 @@ pub struct Field {
     /// True if the field is part of the primary key
     pub primary_key: bool,
 
-    /// True if toasty is responsible for populating the value of the field
+    /// Specified if and how Toasty should automatically populate this field for new values
     pub auto: Option<Auto>,
 
     /// Any additional field constraints

@@ -79,4 +79,4 @@ tokio-postgres = "0.7.13"
 tokio-stream = { version = "0.1.16", default-features = false }
 trybuild = { version = "1.0.89", features = ["diff"] }
 url = "2.5.4"
-uuid = { version = "1.11.0", features = ["v4", "fast-rng"] }
+uuid = { version = "1.11.0", features = ["v4", "v7", "fast-rng"] }
