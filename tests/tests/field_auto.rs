@@ -37,4 +37,20 @@ async fn auto_uuid_v7(test: &mut DbTest) {
     assert!(uuid::Uuid::parse_str(&u.auto_field.to_string()).is_ok());
 }
 
-tests!(auto_uuid_v4, auto_uuid_v7);
+async fn auto_increment(test: &mut DbTest) {
+    #[derive(toasty::Model)]
+    struct Foo {
+        #[key]
+        #[auto(increment)]
+        auto_field: i32,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+
+    for i in 0..10 {
+        let u = Foo::create().exec(&db).await.unwrap();
+        assert_eq!(u.auto_field, i);
+    }
+}
+
+tests!(auto_uuid_v4, auto_uuid_v7, auto_increment);

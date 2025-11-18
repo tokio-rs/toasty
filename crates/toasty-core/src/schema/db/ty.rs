@@ -69,6 +69,9 @@ pub enum Type {
     /// An unsigned integer of `n` bytes
     UnsignedInteger(u8),
 
+    /// An auto-incrementing unsigned integer of `n` bytes
+    Serial(u8),
+
     /// Unconstrained text type
     Text,
 

@@ -48,6 +48,7 @@ impl Capability {
             db::Type::Boolean
             | db::Type::Integer(_)
             | db::Type::UnsignedInteger(_)
+            | db::Type::Serial(_)
             | db::Type::Uuid
             | db::Type::Binary(_)
             | db::Type::Blob => {

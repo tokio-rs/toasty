@@ -230,13 +230,13 @@ impl BuildTableFromModels<'_> {
                     }
                 }
             } else {
-                // Get the column name
-                // TODO: this probably isn't right...
-                let name = model
+                let field = model
                     .primary_key
                     .fields
                     .get(i)
-                    .map(|field_id| model.field(*field_id).name.clone())
+                    .map(|field_id| model.field(*field_id));
+                let name = field
+                    .map(|field| field.name.clone())
                     .unwrap_or_else(|| FieldName {
                         app_name: format!("key_{i}"),
                         storage_name: None,
@@ -263,7 +263,10 @@ impl BuildTableFromModels<'_> {
                     storage_ty: db::Type::from_app(&ty, None, &self.db.storage_types).unwrap(),
                     nullable: false,
                     primary_key: true,
-                    auto_increment: false,
+                    auto_increment: field
+                        .and_then(|field| field.auto.as_ref())
+                        .map(|auto| auto.is_increment())
+                        .unwrap_or(false),
                 });
             }
         }

@@ -7,6 +7,8 @@ use toasty_core::{
 pub struct ColumnDef {
     pub name: String,
     pub ty: db::Type,
+    pub not_null: bool,
+    pub auto_increment: bool,
 }
 
 impl ColumnDef {
@@ -14,6 +16,8 @@ impl ColumnDef {
         Self {
             name: column.name.clone(),
             ty: column.storage_ty.clone(),
+            not_null: !column.nullable,
+            auto_increment: column.auto_increment,
         }
     }
 }
