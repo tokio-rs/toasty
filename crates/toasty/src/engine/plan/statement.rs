@@ -1,7 +1,12 @@
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit, visit_mut, Condition};
 
-use crate::engine::{eval, hir, index, mir, plan::HirPlanner};
+use crate::engine::{
+    eval, hir,
+    index::{self, IndexPlan},
+    mir,
+    plan::HirPlanner,
+};
 
 struct PlanStatement<'a, 'b> {
     planner: &'a mut HirPlanner<'b>,
@@ -142,11 +147,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             self.planner.engine.infer_record_list_ty(stmt, &*columns)
         };
 
-        // Type of the index key. Value for single index keys, record for
-        // composite.
-        let index_key_ty =
-            stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
-
         let node_id = if index_plan.index.primary_key {
             self.plan_primary_key_execution(
                 stmt,
@@ -154,7 +154,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 pk_keys,
                 inputs,
                 ref_source,
-                index_key_ty,
                 columns,
                 &ty,
                 returning,
@@ -165,7 +164,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 &mut index_plan,
                 inputs,
                 ref_source,
-                index_key_ty,
                 columns,
                 &ty,
                 returning,
@@ -182,14 +180,17 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         pk_keys: Option<eval::Func>,
         inputs: IndexSet<mir::NodeId>,
         ref_source: Option<stmt::ExprArg>,
-        index_key_ty: stmt::Type,
         columns: &IndexSet<stmt::ExprReference>,
         ty: &stmt::Type,
         returning: &Option<stmt::Returning>,
     ) -> mir::NodeId {
         if let Some(keys) = pk_keys {
-            let get_by_key_input =
-                self.build_get_by_key_input(keys, &inputs, ref_source, index_key_ty);
+            let get_by_key_input = self.build_get_by_key_input(
+                keys,
+                &inputs,
+                ref_source,
+                self.index_key_ty(index_plan),
+            );
 
             match stmt {
                 stmt::Statement::Query(_) => {
@@ -249,7 +250,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         index_plan: &mut index::IndexPlan,
         inputs: IndexSet<mir::NodeId>,
         ref_source: Option<stmt::ExprArg>,
-        index_key_ty: stmt::Type,
         columns: &IndexSet<stmt::ExprReference>,
         ty: &stmt::Type,
         returning: &Option<stmt::Returning>,
@@ -270,7 +270,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             table: index_plan.index.on,
             index: index_plan.index.id,
             filter: index_plan.index_filter.take(),
-            ty: index_key_ty,
+            ty: self.index_key_ty(index_plan),
         });
 
         match stmt {
@@ -1056,7 +1056,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         })
     }
 
-    pub fn insert_mir_with_deps(&mut self, node: impl Into<mir::Node>) -> mir::NodeId {
+    fn insert_mir_with_deps(&mut self, node: impl Into<mir::Node>) -> mir::NodeId {
         if let Some(dependencies) = self.take_dependencies() {
             self.planner.mir.insert_with_deps(node, dependencies)
         } else {
@@ -1064,12 +1064,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
     }
 
-    pub fn take_dependencies(&mut self) -> Option<impl Iterator<Item = mir::NodeId> + 'a> {
+    fn take_dependencies(&mut self) -> Option<impl Iterator<Item = mir::NodeId> + 'a> {
         if !self.did_take_deps {
             self.did_take_deps = true;
             Some(self.stmt_info.dependent_operations(self.planner.hir))
         } else {
             None
         }
+    }
+
+    fn index_key_ty(&self, index_plan: &IndexPlan) -> stmt::Type {
+        // Type of the index key. Value for single index keys, record for
+        // composite.
+        stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index))
     }
 }
