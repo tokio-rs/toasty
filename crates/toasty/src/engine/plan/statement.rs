@@ -13,6 +13,11 @@ struct Selection {
     returning: Option<stmt::Returning>,
 }
 
+struct LinkedStatement {
+    stmt: stmt::Statement,
+    inputs: IndexSet<mir::NodeId>,
+}
+
 struct PlanStatement<'a, 'b> {
     planner: &'a mut HirPlanner<'b>,
     stmt_id: hir::StmtId,
@@ -63,25 +68,27 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // Columns to select
         let columns = IndexSet::new();
 
-        // Operation nodes this one depends on and uses the output of.
-        let mut inputs = IndexSet::new();
+        let mut linked_stmt = LinkedStatement {
+            stmt,
+            inputs: IndexSet::new(),
+        };
 
         let mut selection = Selection { columns, returning };
 
         // Visit the main statement's returning clause to extract needed columns
-        self.extract_columns_from_returning(&mut selection, &mut inputs);
+        self.extract_columns_from_returning(&mut selection, &mut linked_stmt);
 
         // Track sub-statement arguments from filter
-        self.extract_sub_statement_args_from_filter(&mut stmt, &mut inputs);
+        self.extract_sub_statement_args_from_filter(&mut linked_stmt);
 
         // For each back ref, include the needed columns
         self.collect_back_ref_columns(&mut selection.columns);
 
         // If there are any ref args, then the statement needs to be rewritten
         // to batch load all records for a NestedMerge operation .
-        let ref_source = self.process_ref_args(&mut stmt, &mut inputs);
+        let ref_source = self.process_ref_args(&mut linked_stmt);
 
-        let exec_stmt_node_id = self.plan_execution(stmt, &mut selection, inputs, ref_source);
+        let exec_stmt_node_id = self.plan_execution(linked_stmt, &mut selection, ref_source);
 
         // Track the exec statement operation node.
         self.stmt_info.exec_statement.set(Some(exec_stmt_node_id));
@@ -108,39 +115,34 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_execution(
         &mut self,
-        stmt: stmt::Statement,
+        linked: LinkedStatement,
         selection: &mut Selection,
-        inputs: IndexSet<mir::NodeId>,
         ref_source: Option<stmt::ExprArg>,
     ) -> mir::NodeId {
-        if let Some(node_id) = self.plan_const_or_empty_statement(&stmt, selection) {
+        if let Some(node_id) = self.plan_const_or_empty_statement(&linked.stmt, selection) {
             node_id
-        } else if self.planner.engine.capability().sql || stmt.is_insert() {
-            self.plan_sql_execution(stmt, selection, inputs)
+        } else if self.planner.engine.capability().sql || linked.stmt.is_insert() {
+            self.plan_sql_execution(linked, selection)
         } else {
-            self.plan_nosql_execution(&stmt, selection, inputs, ref_source)
+            self.plan_nosql_execution(linked, selection, ref_source)
         }
     }
 
     fn plan_nosql_execution(
         &mut self,
-        stmt: &stmt::Statement,
+        linked: LinkedStatement,
         selection: &mut Selection,
-        inputs: IndexSet<mir::NodeId>,
         ref_source: Option<stmt::ExprArg>,
     ) -> mir::NodeId {
         // Without SQL capability, we have to plan the execution of the
         // statement based on available indices.
-        let mut index_plan = self.planner.engine.plan_index_path(stmt);
-
-        let post_filter = index_plan.post_filter.clone();
-        let pk_keys = self.try_build_pk_keys(stmt, &index_plan, &inputs, ref_source);
+        let mut index_plan = self.planner.engine.plan_index_path(&linked.stmt);
+        let pk_keys = self.try_build_pk_keys(&linked, &index_plan, ref_source);
 
         let post_filter = self.prepare_post_filter(
-            stmt,
+            &linked.stmt,
             &mut index_plan,
             pk_keys.is_some(),
-            post_filter,
             &mut selection.columns,
         );
 
@@ -150,24 +152,22 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         } else {
             self.planner
                 .engine
-                .infer_record_list_ty(stmt, &selection.columns)
+                .infer_record_list_ty(&linked.stmt, &selection.columns)
         };
 
         let node_id = if index_plan.index.primary_key {
             self.plan_primary_key_execution(
-                stmt,
                 &mut index_plan,
                 pk_keys,
-                inputs,
+                linked,
                 ref_source,
                 &selection,
                 &ty,
             )
         } else {
             self.plan_secondary_index_execution(
-                stmt,
                 &mut index_plan,
-                inputs,
+                linked,
                 ref_source,
                 &selection,
                 &ty,
@@ -179,10 +179,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_primary_key_execution(
         &mut self,
-        stmt: &stmt::Statement,
         index_plan: &mut index::IndexPlan,
         pk_keys: Option<eval::Func>,
-        inputs: IndexSet<mir::NodeId>,
+        linked: LinkedStatement,
         ref_source: Option<stmt::ExprArg>,
         selection: &Selection,
         ty: &stmt::Type,
@@ -190,12 +189,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         if let Some(keys) = pk_keys {
             let get_by_key_input = self.build_get_by_key_input(
                 keys,
-                &inputs,
+                &linked.inputs,
                 ref_source,
                 self.index_key_ty(index_plan),
             );
 
-            match stmt {
+            match &linked.stmt {
                 stmt::Statement::Query(_) => {
                     debug_assert!(ty.is_list());
                     self.insert_mir_with_deps(mir::GetByKey {
@@ -208,7 +207,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt::Statement::Delete(_) => {
                     debug_assert!(
                         ty.is_unit(),
-                        "stmt={stmt:#?}; returning={:#?}; ty={ty:#?}",
+                        "stmt={:#?}; returning={:#?}; ty={ty:#?}",
+                        linked.stmt,
                         selection.returning
                     );
                     self.insert_mir_with_deps(mir::DeleteByKey {
@@ -218,21 +218,23 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         ty: stmt::Type::Unit,
                     })
                 }
-                stmt::Statement::Update(stmt) => self.insert_mir_with_deps(mir::UpdateByKey {
-                    input: get_by_key_input,
-                    table: index_plan.table_id(),
-                    assignments: stmt.assignments.clone(),
-                    filter: index_plan.result_filter.take(),
-                    condition: stmt.condition.expr.clone(),
-                    ty: ty.clone(),
-                }),
-                _ => todo!("stmt={stmt:#?}"),
+                stmt::Statement::Update(update_stmt) => {
+                    self.insert_mir_with_deps(mir::UpdateByKey {
+                        input: get_by_key_input,
+                        table: index_plan.table_id(),
+                        assignments: update_stmt.assignments.clone(),
+                        filter: index_plan.result_filter.take(),
+                        condition: update_stmt.condition.expr.clone(),
+                        ty: ty.clone(),
+                    })
+                }
+                _ => todo!("stmt={:#?}", linked.stmt),
             }
         } else {
-            let input = if inputs.is_empty() {
+            let input = if linked.inputs.is_empty() {
                 None
-            } else if inputs.len() == 1 {
-                Some(inputs[0])
+            } else if linked.inputs.len() == 1 {
+                Some(linked.inputs[0])
             } else {
                 todo!()
             };
@@ -250,15 +252,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_secondary_index_execution(
         &mut self,
-        stmt: &stmt::Statement,
         index_plan: &mut index::IndexPlan,
-        inputs: IndexSet<mir::NodeId>,
+        linked: LinkedStatement,
         ref_source: Option<stmt::ExprArg>,
         selection: &Selection,
         ty: &stmt::Type,
     ) -> mir::NodeId {
         assert!(index_plan.post_filter.is_none(), "TODO");
-        assert!(inputs.len() <= 1, "TODO: inputs={inputs:#?}");
+        assert!(
+            linked.inputs.len() <= 1,
+            "TODO: inputs={:#?}",
+            linked.inputs
+        );
 
         // Args not supportd yet...
         visit::for_each_expr(&index_plan.index_filter, |expr| {
@@ -269,14 +274,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         });
 
         let get_by_key_input = self.insert_mir_with_deps(mir::FindPkByIndex {
-            inputs,
+            inputs: linked.inputs,
             table: index_plan.index.on,
             index: index_plan.index.id,
             filter: index_plan.index_filter.take(),
             ty: self.index_key_ty(index_plan),
         });
 
-        match stmt {
+        match &linked.stmt {
             stmt::Statement::Query(_) => {
                 debug_assert!(ty.is_list());
                 self.insert_mir_with_deps(mir::GetByKey {
@@ -289,7 +294,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             stmt::Statement::Delete(_) => {
                 debug_assert!(
                     ty.is_unit(),
-                    "stmt={stmt:#?}; returning={:#?}; ty={ty:#?}",
+                    "stmt={:#?}; returning={:#?}; ty={ty:#?}",
+                    linked.stmt,
                     selection.returning
                 );
                 self.insert_mir_with_deps(mir::DeleteByKey {
@@ -299,15 +305,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     ty: stmt::Type::Unit,
                 })
             }
-            stmt::Statement::Update(stmt) => self.insert_mir_with_deps(mir::UpdateByKey {
+            stmt::Statement::Update(update_stmt) => self.insert_mir_with_deps(mir::UpdateByKey {
                 input: get_by_key_input,
                 table: index_plan.table_id(),
-                assignments: stmt.assignments.clone(),
+                assignments: update_stmt.assignments.clone(),
                 filter: index_plan.result_filter.clone(),
-                condition: stmt.condition.expr.clone(),
+                condition: update_stmt.condition.expr.clone(),
                 ty: ty.clone(),
             }),
-            _ => todo!("stmt={stmt:#?}"),
+            _ => todo!("stmt={:#?}", linked.stmt),
         }
     }
 
@@ -337,9 +343,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn try_build_pk_keys(
         &mut self,
-        stmt: &stmt::Statement,
+        linked: &LinkedStatement,
         index_plan: &index::IndexPlan,
-        inputs: &IndexSet<mir::NodeId>,
         ref_source: Option<stmt::ExprArg>,
     ) -> Option<eval::Func> {
         // If the query can be reduced to fetching rows using a set of
@@ -349,11 +354,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
 
         let pk_keys_project_args = if ref_source.is_some() {
-            assert_eq!(inputs.len(), 1, "TODO");
-            let ty = self.planner.mir[inputs[0]].ty();
+            assert_eq!(linked.inputs.len(), 1, "TODO");
+            let ty = self.planner.mir[linked.inputs[0]].ty();
             vec![ty.unwrap_list_ref().clone()]
         } else {
-            inputs
+            linked
+                .inputs
                 .iter()
                 .map(|node_id| self.planner.mir[node_id].ty().clone())
                 .collect()
@@ -361,7 +367,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // If using the primary key to find rows, try to convert the
         // filter expression to a set of primary-key keys.
-        let cx = self.planner.engine.expr_cx_for(stmt);
+        let cx = self.planner.engine.expr_cx_for(&linked.stmt);
         self.planner.engine.try_build_key_filter(
             cx,
             index_plan.index,
@@ -375,9 +381,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         stmt: &stmt::Statement,
         index_plan: &mut index::IndexPlan,
         has_pk_keys: bool,
-        mut post_filter: Option<stmt::Expr>,
         columns: &mut IndexSet<stmt::ExprReference>,
     ) -> Option<stmt::Expr> {
+        let mut post_filter = index_plan.post_filter.clone();
+
         // If fetching rows using GetByKey, some databases do not support
         // applying additional filters to the rows before returning results.
         // In this case, the result_filter needs to be applied in-memory.
@@ -478,12 +485,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         });
     }
 
-    fn extract_sub_statement_args_from_filter(
-        &mut self,
-        stmt: &mut stmt::Statement,
-        inputs: &mut IndexSet<mir::NodeId>,
-    ) {
-        visit_mut::for_each_expr_mut(&mut stmt.filter_mut(), |expr| {
+    fn extract_sub_statement_args_from_filter(&mut self, linked_stmt: &mut LinkedStatement) {
+        visit_mut::for_each_expr_mut(&mut linked_stmt.stmt.filter_mut(), |expr| {
             if let stmt::Expr::Arg(expr_arg) = expr {
                 if let hir::Arg::Sub {
                     stmt_id: arg_stmt_id,
@@ -495,7 +498,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     debug_assert!(input.get().is_none());
                     let node_id = self.planner.hir[arg_stmt_id].output.get().expect("bug");
 
-                    let (index, _) = inputs.insert_full(node_id);
+                    let (index, _) = linked_stmt.inputs.insert_full(node_id);
                     input.set(Some(index));
                 }
             }
@@ -549,10 +552,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_sql_execution(
         &mut self,
-        mut stmt: stmt::Statement,
+        linked: LinkedStatement,
         selection: &mut Selection,
-        inputs: IndexSet<mir::NodeId>,
     ) -> mir::NodeId {
+        let LinkedStatement { mut stmt, inputs } = linked;
+
         if !selection.columns.is_empty() {
             stmt.set_returning(
                 stmt::Expr::record(
@@ -617,11 +621,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         self.insert_mir_with_deps(node)
     }
 
-    fn process_ref_args(
-        &mut self,
-        stmt: &mut stmt::Statement,
-        inputs: &mut IndexSet<mir::NodeId>,
-    ) -> Option<stmt::ExprArg> {
+    fn process_ref_args(&mut self, linked_stmt: &mut LinkedStatement) -> Option<stmt::ExprArg> {
         let mut ref_source = None;
 
         for arg in &self.stmt_info.args {
@@ -636,7 +636,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
             assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
             assert!(
-                !stmt.filter_or_default().is_false(),
+                !linked_stmt.stmt.filter_or_default().is_false(),
                 "TODO: handle const false filters"
             );
 
@@ -646,13 +646,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 .get()
                 .unwrap();
 
-            let (index, _) = inputs.insert_full(node_id);
+            let (index, _) = linked_stmt.inputs.insert_full(node_id);
             ref_source = Some(stmt::ExprArg::new(index));
             input.set(Some(0));
         }
 
         if let Some(ref_source) = ref_source {
-            self.rewrite_stmt_for_ref_source(stmt, ref_source);
+            self.rewrite_stmt_for_ref_source(&mut linked_stmt.stmt, ref_source);
         }
 
         ref_source
