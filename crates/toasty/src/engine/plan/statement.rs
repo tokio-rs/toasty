@@ -139,12 +139,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let mut index_plan = self.planner.engine.plan_index_path(&linked.stmt);
         let pk_keys = self.try_build_pk_keys(&linked, &index_plan, ref_source);
 
-        let post_filter = self.prepare_post_filter(
-            &linked.stmt,
-            &mut index_plan,
-            pk_keys.is_some(),
-            &mut selection.columns,
-        );
+        let post_filter =
+            self.prepare_post_filter(&linked, &mut index_plan, pk_keys.is_some(), selection);
 
         // Type of the final record.
         let ty = if selection.columns.is_empty() {
@@ -189,47 +185,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         if let Some(keys) = pk_keys {
             let get_by_key_input = self.build_get_by_key_input(
                 keys,
-                &linked.inputs,
+                &linked,
                 ref_source,
                 self.index_key_ty(index_plan),
             );
 
-            match &linked.stmt {
-                stmt::Statement::Query(_) => {
-                    debug_assert!(ty.is_list());
-                    self.insert_mir_with_deps(mir::GetByKey {
-                        input: get_by_key_input,
-                        table: index_plan.table_id(),
-                        columns: selection.columns.clone(),
-                        ty: ty.clone(),
-                    })
-                }
-                stmt::Statement::Delete(_) => {
-                    debug_assert!(
-                        ty.is_unit(),
-                        "stmt={:#?}; returning={:#?}; ty={ty:#?}",
-                        linked.stmt,
-                        selection.returning
-                    );
-                    self.insert_mir_with_deps(mir::DeleteByKey {
-                        input: get_by_key_input,
-                        table: index_plan.table_id(),
-                        filter: index_plan.result_filter.take(),
-                        ty: stmt::Type::Unit,
-                    })
-                }
-                stmt::Statement::Update(update_stmt) => {
-                    self.insert_mir_with_deps(mir::UpdateByKey {
-                        input: get_by_key_input,
-                        table: index_plan.table_id(),
-                        assignments: update_stmt.assignments.clone(),
-                        filter: index_plan.result_filter.take(),
-                        condition: update_stmt.condition.expr.clone(),
-                        ty: ty.clone(),
-                    })
-                }
-                _ => todo!("stmt={:#?}", linked.stmt),
-            }
+            self.build_key_operation(get_by_key_input, &linked, index_plan, selection, ty)
         } else {
             let input = if linked.inputs.is_empty() {
                 None
@@ -273,14 +234,59 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             }
         });
 
+        let index_key_ty = self.index_key_ty(index_plan);
+
+        let LinkedStatement { stmt, inputs } = linked;
+
         let get_by_key_input = self.insert_mir_with_deps(mir::FindPkByIndex {
-            inputs: linked.inputs,
+            inputs,
             table: index_plan.index.on,
             index: index_plan.index.id,
             filter: index_plan.index_filter.take(),
-            ty: self.index_key_ty(index_plan),
+            ty: index_key_ty,
         });
 
+        // Create a temporary LinkedStatement for the helper (inputs already consumed)
+        let linked = LinkedStatement {
+            stmt,
+            inputs: IndexSet::new(),
+        };
+
+        self.build_key_operation(get_by_key_input, &linked, index_plan, selection, ty)
+    }
+
+    fn build_get_by_key_input(
+        &mut self,
+        keys: eval::Func,
+        linked: &LinkedStatement,
+        ref_source: Option<stmt::ExprArg>,
+        index_key_ty: stmt::Type,
+    ) -> mir::NodeId {
+        if keys.is_const() {
+            self.insert_const(keys.eval_const(), index_key_ty)
+        } else if keys.is_identity() {
+            debug_assert_eq!(1, linked.inputs.len(), "TODO");
+            linked.inputs[0]
+        } else {
+            debug_assert!(ref_source.is_some(), "TODO");
+            let ty = stmt::Type::list(keys.ret.clone());
+            // Gotta project
+            self.planner.mir.insert(mir::Project {
+                input: linked.inputs[0],
+                projection: keys,
+                ty,
+            })
+        }
+    }
+
+    fn build_key_operation(
+        &mut self,
+        get_by_key_input: mir::NodeId,
+        linked: &LinkedStatement,
+        index_plan: &mut index::IndexPlan,
+        selection: &Selection,
+        ty: &stmt::Type,
+    ) -> mir::NodeId {
         match &linked.stmt {
             stmt::Statement::Query(_) => {
                 debug_assert!(ty.is_list());
@@ -301,7 +307,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 self.insert_mir_with_deps(mir::DeleteByKey {
                     input: get_by_key_input,
                     table: index_plan.table_id(),
-                    filter: index_plan.result_filter.clone(),
+                    filter: index_plan.result_filter.take(),
                     ty: stmt::Type::Unit,
                 })
             }
@@ -309,35 +315,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 input: get_by_key_input,
                 table: index_plan.table_id(),
                 assignments: update_stmt.assignments.clone(),
-                filter: index_plan.result_filter.clone(),
+                filter: index_plan.result_filter.take(),
                 condition: update_stmt.condition.expr.clone(),
                 ty: ty.clone(),
             }),
             _ => todo!("stmt={:#?}", linked.stmt),
-        }
-    }
-
-    fn build_get_by_key_input(
-        &mut self,
-        keys: eval::Func,
-        inputs: &IndexSet<mir::NodeId>,
-        ref_source: Option<stmt::ExprArg>,
-        index_key_ty: stmt::Type,
-    ) -> mir::NodeId {
-        if keys.is_const() {
-            self.insert_const(keys.eval_const(), index_key_ty)
-        } else if keys.is_identity() {
-            debug_assert_eq!(1, inputs.len(), "TODO");
-            inputs[0]
-        } else {
-            debug_assert!(ref_source.is_some(), "TODO");
-            let ty = stmt::Type::list(keys.ret.clone());
-            // Gotta project
-            self.planner.mir.insert(mir::Project {
-                input: inputs[0],
-                projection: keys,
-                ty,
-            })
         }
     }
 
@@ -378,17 +360,17 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn prepare_post_filter(
         &mut self,
-        stmt: &stmt::Statement,
+        linked: &LinkedStatement,
         index_plan: &mut index::IndexPlan,
         has_pk_keys: bool,
-        columns: &mut IndexSet<stmt::ExprReference>,
+        selection: &mut Selection,
     ) -> Option<stmt::Expr> {
         let mut post_filter = index_plan.post_filter.clone();
 
         // If fetching rows using GetByKey, some databases do not support
         // applying additional filters to the rows before returning results.
         // In this case, the result_filter needs to be applied in-memory.
-        if stmt.is_query() && (has_pk_keys || !index_plan.index.primary_key) {
+        if linked.stmt.is_query() && (has_pk_keys || !index_plan.index.primary_key) {
             if let Some(result_filter) = index_plan.result_filter.take() {
                 post_filter = Some(match post_filter {
                     Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
@@ -398,15 +380,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
 
         debug_assert!(
-            post_filter.is_none() || stmt.is_query(),
-            "stmt={stmt:#?}; post_filter={post_filter:#?}"
+            post_filter.is_none() || linked.stmt.is_query(),
+            "stmt={:#?}; post_filter={post_filter:#?}",
+            linked.stmt
         );
 
         // Make sure we are including columns needed to apply the post filter
         if let Some(post_filter) = &mut post_filter {
             visit_mut::for_each_expr_mut(post_filter, |expr| match expr {
                 stmt::Expr::Reference(expr_reference) => {
-                    let (index, _) = columns.insert_full(*expr_reference);
+                    let (index, _) = selection.columns.insert_full(*expr_reference);
                     *expr = stmt::Expr::arg_project(0, [index]);
                 }
                 stmt::Expr::Arg(_) => todo!("expr={expr:#?}"),
@@ -449,7 +432,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn extract_columns_from_returning(
         &mut self,
         selection: &mut Selection,
-        inputs: &mut IndexSet<mir::NodeId>,
+        linked_stmt: &mut LinkedStatement,
     ) {
         visit_mut::for_each_expr_mut(&mut selection.returning, |expr| {
             match expr {
@@ -475,7 +458,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
                         let node_id = self.planner.hir[stmt_id].exec_statement.get().expect("bug");
 
-                        let (index, _) = inputs.insert_full(node_id);
+                        let (index, _) = linked_stmt.inputs.insert_full(node_id);
                         input.set(Some(index));
                     }
                     _ => todo!(),
