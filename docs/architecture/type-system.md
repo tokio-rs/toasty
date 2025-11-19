@@ -2,7 +2,7 @@
 
 ## Overview
 
-Toasty connects compile-time Rust type safety with runtime query execution through a type system. Inside the query engine, the type system ensures correctness and catches bugs during statement processing, planning, and validation phases, though it is not required for runtime execution. This document describes the current architecture of Toasty's type system, how types flow through the system, and the key components involved.
+Toasty uses Rust's type system in the public API with both concrete types and generics. The query engine tracks the type of value each statement evaluates to using `stmt::Type`. This document describes how types flow through the system and the key components involved.
 
 ## Type System Boundaries
 
@@ -10,19 +10,23 @@ Toasty has two distinct type systems with different responsibilities:
 
 ### 1. Rust-Level Type System (Compile-Time Safety)
 
-At the Rust level, models are **real, distinct types** with compile-time guarantees:
+At the Rust level, each model is a distinct type:
 
 ```rust
 #[derive(Model)]
 struct User {
-    #[key] #[auto] id: Id<Self>,
+    #[key]
+    #[auto]
+    id: Id<Self>,
     name: String,
     email: String,
 }
 
 #[derive(Model)]
 struct Todo {
-    #[key] #[auto] id: Id<Self>,
+    #[key]
+    #[auto]
+    id: Id<Self>,
     user_id: Id<User>,
     title: String,
 }
@@ -37,248 +41,118 @@ User::filter_by_id(&user_id).filter(User::FIELDS.name().eq("John")).all(&db).awa
 // User::FIELDS.name().eq(&todo_id)  // ← Compile error! Id<Todo> doesn't match String
 ```
 
-The query builder API maintains this type safety through generics and traits, preventing you from accidentally mixing model types or referencing non-existent fields. The API uses generic wrapper types (`Statement<M>`, `Select<M>`, etc.) that wrap `toasty_core::stmt` types to provide compile-time safety while erasing to core types at runtime.
+The query builder API maintains this type safety through generics and traits, preventing you from accidentally mixing model types or referencing non-existent fields. The API uses generic types (`Statement<M>`, `Select<M>`, etc.) that wrap `toasty_core::stmt` types.
 
-### 2. Query Engine Type System (Runtime Model-level)
+### 2. Query Engine Type System (Runtime)
 
-When statements enter the query engine, models retain their model-level types:
-
-- `User` → `Type::Model(user_model_id)`
-- `Todo` → `Type::Model(todo_model_id)`
-- Associations → `Type::Model(target_model_id)` or `Type::List(Type::Model(target_model_id))`
-
-Models maintain distinct identities through their `ModelId` and preserve model-level information about relationships. The conversion to structural `Type::Record([...])` happens during the lowering phase, not at engine entry.
-
-## Type Flow Through the System
-
-The current query execution follows this pipeline:
-
-```
-Rust API → Query Builder → Engine Entry → Model Planning → Lowering → Execution
-    ↓           ↓              ↓              ↓              ↓           ↓
-Distinct    Type-Safe      Type::Model    Associations   Type::Record  Runtime
-Types       Generics       (no generics)  Subqueries     Structural    Values
-(compile)   (compile)      (runtime)      (runtime)      (runtime)     (runtime)
-```
-
-**The Generic Erasure Boundary**: When `db.exec(statement)` is called, the generic `<M>` parameter is discarded:
+When `db.exec(statement)` is called, the generic `<M>` parameter is erased:
 
 ```rust
-// User code - generic wrapper with compile-time safety
-let statement: Statement<User> = User::filter_by_id(&id).into();
+// Generated query builder returns a typed wrapper
+let query: FindUserById = User::find_by_id(&id);
 
-// At db.exec() - generic is stripped, .untyped is extracted
+// .into() converts to Statement<User>
+let statement: Statement<User> = query.into();
+
+// At db.exec() - generic is erased, .untyped is extracted
 pub async fn exec<M: Model>(&self, statement: Statement<M>) -> Result<ValueStream> {
     engine::exec(self, statement.untyped).await  // <- Only toasty_core::stmt::Statement
 }
 ```
 
-At this boundary, we transition from compile-time generic safety to runtime model-level types using `Type::Model(model_id)`. Model-level planning (associations, subqueries) happens before lowering converts these to structural `Type::Record` types.
+At this boundary, the statement becomes untyped (no Rust generic), but the engine tracks the type of value the statement evaluates to using `stmt::Type`. Initially, this remains at the model-level—a query for `User` evaluates to `Type::List(Type::Model(user_model_id))`. During lowering, these convert to structural record types for database execution.
+
+## Type Flow Through the System
+
+```
+Rust API → Query Builder → Engine Entry → Lowering/Planning → Execution
+    ↓           ↓              ↓               ↓                  ↓
+Distinct    Type-Safe      Type::Model     Type::Record       stmt::Value
+Types       Generics       (no generics)                      (typed)
+(compile)   (compile)      (runtime)       (runtime)          (runtime)
+```
+
+At lowering, statements that evaluate to `Type::Model(model_id)` are converted to evaluate to `Type::Record([field_types...])`. This conversion enables the engine to work with concrete field types for database operations.
 
 ## Detailed Architecture
 
-### Query Engine Entry Point (Model-Level Types)
+### Query Engine Entry Point
 
-When the engine receives a `toasty_core::stmt::Statement` (after generic erasure), models retain model-level type information:
+When the engine receives a `toasty_core::stmt::Statement`, it processes through verification, lowering, planning, and execution:
 
 ```rust
-// Query builder API (type-safe) - produces Statement<User>
-User::filter_by_id(&id).include(User::FIELDS.todos())
-    ↓
-// After generic erasure at db.exec() - becomes toasty_core::stmt::Statement
-// User is Type::Model(User::id())
-// Associations are Type::Model(target_id) or Type::List(Type::Model(target_id))
-// ModelId preserves model-level information about relationships
+pub(crate) async fn exec(&self, stmt: Statement) -> Result<ValueStream> {
+    if cfg!(debug_assertions) {
+        self.verify(&stmt);
+    }
+
+    // Lower the statement to High-level intermediate representation
+    let hir = self.lower_stmt(stmt)?;
+
+    // Translate into a series of driver operations
+    let plan = self.plan_hir_statement(hir)?;
+
+    // Execute the plan
+    self.exec_plan(plan).await
+}
 ```
 
-At this point, generics have been erased and we have model-level types that preserve relationship information through ModelId references. Initial verification and simplification work happens at this model level before planning begins.
+### Lowering Phase (Model-to-Table Transformation)
 
-### Model-Level Planning Phase
+The lowering phase transforms statements from model-level to table-level representations.
 
-Before lowering occurs, the planner performs model-level operations using `Type::Model` references:
+**Example 1: Simple query**
 
-**Association Resolution**: Determines how to handle relationships between models:
-- `BelongsTo` fields remain as `Type::Model(target_model_id)` references
-- `HasMany` fields remain as `Type::List(Type::Model(target_model_id))` references
-- Planning decisions are made about which associations to include
-
-**Subquery Handling**: Processes nested queries while maintaining model-level type information throughout the query tree.
-
-**Include Processing**: Analyzes which associations need to be loaded and plans the execution strategy, all while working with `Type::Model` references that preserve relationship semantics.
-
-### Lowering Step (Model-to-Table Type Transformation)
-
-The `lower_stmt_query()` function marks the boundary between model-level and table-level operations, transforming statements for database execution:
-
-**Type-Level Transformation:**
-- **Before lowering**: `Type::Model(model_id)` → **After lowering**: `Type::Record([primitive_types...])`
-- **Association types**: `Type::List(Type::Model(target_id))` becomes placeholders in the record structure
-- **Value-Level**: Values remain as `Value::Record(...)` regardless of type representation
-
-**Expression Lowering:**
 ```rust
-// Before lowering
-Returning::Star  // Semantic: "return the full User model"
+// Before lowering (toasty_core::stmt::Statement)
+SELECT MODEL FROM User WHERE id = ?
+// Evaluates to: Type::List(Type::Model(user_model_id))
+// Note: At model-level, no specific fields are selected
 
 // After lowering
-Returning::Expr(table_to_model)  // Structural: "return [id, name, null, null]"
+SELECT id, name, email FROM users WHERE id = ?
+// Evaluates to: Type::List(Type::Record([Type::Id, Type::String, Type::String]))
 ```
 
-**Static Mapping Construction:**
-The `table_to_model` mapping is pre-built during schema construction:
-```rust
-// In schema/builder/table.rs
-app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
-    self.table_to_model.push(stmt::Value::Null.into()); // Association fields become Null
-}
-```
-
-**Characteristics:**
-- *$$*Type flattening**: `Type::Model(id)` becomes `Type::Record([field_types...])`
-- **Association erasure**: Relationship fields become `Null` values in the structural record
-- **Context independent**: The mapping doesn't vary based on query context
-- **One-way transform**: Optimized for database execution, not reversibility
-- **Planning boundary**: Separates model-level planning from table-level execution
-
-### Table-Level Execution
-
-After lowering, all operations work with structural `Type::Record` types:
-
-**Type Inference**: The `partition_returning()` function infers types from lowered expressions:
-```rust
-pub(crate) fn partition_returning(&self, stmt: &mut stmt::Returning) -> eval::Func {
-    let ret = self.infer_expr_ty(stmt.as_expr(), &[]);  // Works with Type::Record
-    // ... rest of function
-}
-```
-
-**Variable Tracking**: The `VarTable` maintains type information for execution:
-```rust
-pub(crate) struct VarTable {
-    vars: Vec<stmt::Type>,  // All Type::Record or primitives after lowering
-}
-```
-
-**Include Reconstruction**: When includes are present, the runtime reconstructs associations by expanding `Null` placeholders:
-```rust
-// In planner/select.rs - Replace Null with actual types for includes
-app::FieldTy::HasMany(rel) => {
-    let target_record_type = self.infer_model_record_type(target_model);
-    fields[*field_idx] = stmt::Type::list(target_record_type);
-}
-```
-
-**Runtime Association Loading**: Execution fills in association data:
-```rust
-// Runtime association loading
-source_item[action.field.index] = stmt::ValueRecord::from_vec(associated).into();
-```
-
-All execution operations work exclusively with structural types, never with `Type::Model` references.
-
-## Key Components
-
-### stmt::Type Hierarchy
+**Example 2: Query with association**
 
 ```rust
-pub enum Type {
-    String,
-    I64,
-    Bool,
-    Null,
-    Record(Vec<Type>),
-    List(Box<Type>),
-    Model(ModelId),
-    // ... other variants
-}
+// Before lowering (toasty_core::stmt::Statement)
+SELECT MODEL FROM User INCLUDE todos WHERE id = ?
+// Evaluates to: Type::List(Type::Model(user_model_id))
+// where todos field is Type::List(Type::Model(todo_model_id))
+
+// After lowering
+SELECT id, name, email, (
+    SELECT id, title, user_id FROM todos WHERE todos.user_id = users.id
+) FROM users WHERE id = ?
+// Evaluates to: Type::List(Type::Record([
+//   Type::Id, Type::String, Type::String,
+//   Type::List(Type::Record([Type::Id, Type::String, Type::Id]))
+// ]))
 ```
 
-### Schema Mapping
+### Planning and Variable Types
 
-Each model has mapping information stored in `schema::mapping::Model`:
+During planning, the engine assigns variables to hold intermediate results (see [Query Engine Architecture](query-engine.md) for details on the execution model). Each variable is registered with its type, which is always `Type::List(...)` or `Type::Unit`.
+
+### Execution
+
+At execution time, the `VarStore` holds the type information from planning. When storing a value stream in a variable, the store associates the expected type with it. The value stream ensures each value it yields conforms to that type. This type information carries through to the final result returned to the user.
+
+### Type Inference
+
+While statements entering the engine have known types, planning constructs new expressions—projections, filters, and merge qualifications—whose types aren't explicitly declared. The engine must infer these types from the expression structure to register variables correctly.
+
+Type inference is handled by `ExprContext`, which walks expression trees and determines their result types based on the schema. For example, a column reference's type comes from the schema definition, and a record expression's type is built from its field types.
 
 ```rust
-pub struct Model {
-    pub id: ModelId,
-    pub table: TableId,
-    pub columns: Vec<ColumnId>,
-    pub fields: Vec<Option<Field>>,
-    pub model_to_table: stmt::ExprRecord,
-    pub model_pk_to_table: stmt::Expr,
-    pub table_to_model: stmt::ExprRecord,
-}
+// Create context for type inference
+let cx = stmt::ExprContext::new_with_target(&*self.engine.schema, stmt);
+
+// Infer type of an expression reference
+let ty = cx.infer_expr_reference_ty(expr_reference);
+
+// Infer type of a full expression with argument types
+let ret = ExprContext::new_free().infer_expr_ty(expr.as_expr(), &args);
 ```
-
-#### Type Expansion During Include Processing
-
-When associations are included in queries, the planner expands types from the lowered `Null` placeholders:
-
-**The Challenge**: Model associations can be cyclic (A → B → A → ...). Direct expansion would create infinite recursion.
-
-**The Solution**: Use semantic model types and expand only when included:
-
-```rust
-// Base model type uses semantic references
-User fields: [Id, String, List(Type::Model(TodoModelId))]
-Todo fields: [Id, String, Type::Model(UserModelId)]
-
-// During lowering, associations become Null in table_to_model
-User lowered: [id, name, null]  // Association field becomes Null
-
-// When includes are present, planner expands specific associations
-User with todos included: [Id, String, List(Record([Id, String, Type::Model(UserModelId)]))]
-```
-
-**Implementation**: The `infer_model_record_type()` function constructs full structural types when needed:
-
-```rust
-// In planner/select.rs - Include processing
-app::FieldTy::HasMany(rel) => {
-    let target_record_type = self.infer_model_record_type(target_model);
-    fields[*field_idx] = stmt::Type::list(target_record_type);
-}
-```
-
-This approach avoids infinite recursion while allowing precise typing of included relationships.
-
-### Field Expression Types
-
-Association fields store their expression types:
-
-```rust
-// BelongsTo
-pub struct BelongsTo {
-    pub target: ModelId,
-    pub expr_ty: stmt::Type,  // Type::Model(target_model_id)
-    // ...
-}
-
-// HasMany
-pub struct HasMany {
-    pub target: ModelId,
-    pub expr_ty: stmt::Type,  // Type::List(Box::new(Type::Model(target_model_id)))
-    // ...
-}
-```
-
-## Type System Characteristics
-
-- **Compile-time safety**: Rust type system prevents model confusion
-- **Model-level preservation**: `Type::Model` maintains relationship information until lowering
-- **Database optimization**: Lowering converts to `Type::Record` for efficient execution
-- **Include expansion**: Type system handles cyclic associations through selective expansion
-- **Two-phase typing**: Compile-time nominal types, runtime model-level then structural types
-- **Schema-driven**: Types derived from schema definitions
-- **Inference-based**: Runtime types determined through expression analysis
-- **Static mappings**: Pre-computed transformations for execution efficiency
-
-## Integration Points
-
-The type system connects with other Toasty subsystems:
-
-- **Codegen**: Generates schema definitions with type information
-- **Query Builder**: Creates type-safe query construction APIs
-- **Database Drivers**: Converts types to database-specific representations
-- **Execution Engine**: Uses type information for validation and optimization
-
-This architecture provides compile-time safety and runtime correctness while maintaining efficient query execution across different database backends.
