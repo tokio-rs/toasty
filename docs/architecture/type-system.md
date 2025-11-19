@@ -132,6 +132,14 @@ SELECT id, name, email, (
 // ]))
 ```
 
+### Planning and Variable Types
+
+During planning, the engine assigns variables to hold intermediate results (see [Query Engine Architecture](query-engine.md) for details on the execution model). Each variable is registered with its type, which is always `Type::List(...)` or `Type::Unit`.
+
+### Execution
+
+At execution time, the `VarStore` holds the type information from planning. When storing a value stream in a variable, the store associates the expected type with it. The value stream ensures each value it yields conforms to that type. This type information carries through to the final result returned to the user.
+
 ### Type Inference
 
 Type inference is handled by `ExprContext` which provides methods to infer the type a given expression evaluates to:
