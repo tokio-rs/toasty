@@ -184,7 +184,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 self.index_key_ty(index_plan),
             );
 
-            self.build_key_operation(&linked, index_plan, get_by_key_input, selection, ty)
+            self.build_key_operation(&linked.stmt, index_plan, get_by_key_input, selection, ty)
         } else {
             let input = if linked.inputs.is_empty() {
                 None
@@ -231,13 +231,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             ty: index_key_ty,
         });
 
-        // Create a temporary LinkedStatement for the helper (inputs already consumed)
-        let linked = LinkedStatement {
-            stmt,
-            inputs: IndexSet::new(),
-        };
-
-        self.build_key_operation(&linked, index_plan, get_by_key_input, selection, ty)
+        self.build_key_operation(&stmt, index_plan, get_by_key_input, selection, ty)
     }
 
     fn build_get_by_key_input(
@@ -266,13 +260,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn build_key_operation(
         &mut self,
-        linked: &LinkedStatement,
+        stmt: &stmt::Statement,
         index_plan: &mut index::IndexPlan,
         get_by_key_input: mir::NodeId,
         selection: &Selection,
         ty: &stmt::Type,
     ) -> mir::NodeId {
-        match &linked.stmt {
+        match stmt {
             stmt::Statement::Query(_) => {
                 debug_assert!(ty.is_list());
                 self.insert_mir_with_deps(mir::GetByKey {
@@ -285,8 +279,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             stmt::Statement::Delete(_) => {
                 debug_assert!(
                     ty.is_unit(),
-                    "stmt={:#?}; returning={:#?}; ty={ty:#?}",
-                    linked.stmt,
+                    "stmt={stmt:#?}; returning={:#?}; ty={ty:#?}",
                     selection.returning
                 );
                 self.insert_mir_with_deps(mir::DeleteByKey {
@@ -304,7 +297,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 condition: update_stmt.condition.expr.clone(),
                 ty: ty.clone(),
             }),
-            _ => todo!("stmt={:#?}", linked.stmt),
+            _ => todo!("stmt={stmt:#?}"),
         }
     }
 
