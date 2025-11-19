@@ -122,6 +122,59 @@ This lowering phase handles:
 - **Argument Extraction**: Identifying values passed between statements (e.g., a loaded model's ID used in a child query's filter)
 - **Relationship Handling**: Processing relationship loads and nested queries
 
+### Lowering Algorithm
+
+Lowering transforms model-level statements to table-level statements through a visitor pattern that rewrites each part of the statement AST:
+
+1. **Table Resolution**: `InsertTarget::Model`, `UpdateTarget::Model`, etc. become their corresponding table references
+2. **Returning Clause Transformation**: `Returning::Model` is replaced with `Returning::Expr` containing the expanded column expressions
+3. **Field Reference Resolution**: Model field references are converted to table column references
+4. **Include Expansion**: Association includes become subqueries in the returning clause
+
+The `TableToModel` mapping (built during schema construction) drives the transformation. It contains an expression for each model field that maps to its corresponding table column(s). This supports more than a 1-1 mapping—a model field can be derived from multiple columns or a column can map to multiple fields. Association fields are initialized to `Null` in this mapping.
+
+When lowering encounters a `Returning::Model { include }` clause:
+1. Call `table_to_model.lower_returning_model()` to get the base column expressions
+2. For each path in the include list, call `build_include_subquery()` to generate a subquery that selects the associated records
+3. Replace the `Null` placeholder in the returning expression with the generated subquery
+
+### Lowering Examples
+
+**Example 1: Simple query**
+
+Given a model with a renamed column:
+```rust
+#[derive(Model)]
+struct User {
+    #[key] id: Id<Self>,
+    #[column(name = "first_and_last_name")]
+    name: String,
+    email: String,
+}
+```
+
+```rust
+// Before lowering (toasty_core::stmt::Statement)
+SELECT MODEL FROM User WHERE id = ?
+// Note: At model-level, no specific fields are selected
+
+// After lowering
+SELECT id, first_and_last_name, email FROM users WHERE id = ?
+```
+
+**Example 2: Query with association**
+
+```rust
+// Before lowering (toasty_core::stmt::Statement)
+SELECT MODEL FROM User WHERE id = ?
+  INCLUDE todos
+
+// After lowering
+SELECT id, first_and_last_name, email, (
+    SELECT id, title, user_id FROM todos WHERE todos.user_id = users.id
+) FROM users WHERE id = ?
+```
+
 ## Phase 3: Planning
 
 **Location**: `engine/plan.rs`

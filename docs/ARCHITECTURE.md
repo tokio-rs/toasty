@@ -12,7 +12,7 @@ User-facing crate with query engine and runtime.
 **Key Components**:
 - `engine/`: Multi-phase query compilation and execution pipeline
   - See [Query Engine Architecture](architecture/query-engine.md) for detailed documentation
-- `stmt/`: Typed statement builders for representing Toasty queries
+- `stmt/`: Typed statement builders (wrappers around `toasty_core::stmt` types)
 - `relation/`: Relationship abstractions (HasMany, BelongsTo, HasOne)
 - `model.rs`: Model trait and ID generation
 
