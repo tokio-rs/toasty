@@ -156,7 +156,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let node_id = if index_plan.index.primary_key {
             self.plan_primary_key_execution(
                 stmt,
-                &index_plan,
+                &mut index_plan,
                 pk_keys,
                 inputs,
                 ref_source,
@@ -180,7 +180,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn plan_primary_key_execution(
         &mut self,
         stmt: &stmt::Statement,
-        index_plan: &index::IndexPlan,
+        index_plan: &mut index::IndexPlan,
         pk_keys: Option<eval::Func>,
         inputs: IndexSet<mir::NodeId>,
         ref_source: Option<stmt::ExprArg>,
@@ -214,7 +214,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     self.insert_mir_with_deps(mir::DeleteByKey {
                         input: get_by_key_input,
                         table: index_plan.table_id(),
-                        filter: index_plan.result_filter.clone(),
+                        filter: index_plan.result_filter.take(),
                         ty: stmt::Type::Unit,
                     })
                 }
@@ -222,7 +222,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     input: get_by_key_input,
                     table: index_plan.table_id(),
                     assignments: stmt.assignments.clone(),
-                    filter: index_plan.result_filter.clone(),
+                    filter: index_plan.result_filter.take(),
                     condition: stmt.condition.expr.clone(),
                     ty: ty.clone(),
                 }),
@@ -241,8 +241,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 input,
                 table: index_plan.table_id(),
                 columns: selection.columns.clone(),
-                pk_filter: index_plan.index_filter.clone(),
-                row_filter: index_plan.result_filter.clone(),
+                pk_filter: index_plan.index_filter.take(),
+                row_filter: index_plan.result_filter.take(),
                 ty: ty.clone(),
             })
         }
