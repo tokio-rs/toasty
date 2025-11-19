@@ -60,7 +60,7 @@ Result Stream
 
 ## Phase 1: Simplification
 
-**Location**: `engine::simplify`
+**Location**: `engine/simplify.rs`
 
 The simplification phase normalizes and optimizes the statement AST before planning.
 
@@ -95,7 +95,7 @@ Converting relationship navigation into explicit filters early means downstream 
 
 ## Phase 2: Lowering
 
-**Location**: `engine::lower`
+**Location**: `engine/lower.rs`
 
 Lowering converts a simplified statement into **HIR (High-level Intermediate
 Representation)** - a collection of related statements with tracked
@@ -124,7 +124,7 @@ This lowering phase handles:
 
 ## Phase 3: Planning
 
-**Location**: `engine::plan`
+**Location**: `engine/plan.rs`
 
 Planning converts HIR into **MIR (Middle-level Intermediate Representation)** - a directed acyclic graph of operations, both database queries and in-memory transformations. Edges represent data dependencies: an operation cannot execute until all operations it depends on have completed and produced their results.
 
@@ -132,7 +132,7 @@ Since the HIR graph can contain cycles, planning must break them to produce a DA
 
 ### Operation Types
 
-The MIR supports various operation types (see `engine::mir` for details):
+The MIR supports various operation types (see `engine/mir.rs` for details):
 
 **SQL operations:**
 - `ExecStatement` - Execute a SQL query (SELECT, INSERT, UPDATE, DELETE)
@@ -149,7 +149,7 @@ The MIR supports various operation types (see `engine::mir` for details):
 
 ## Phase 4: Execution Planning
 
-**Location**: `engine::plan::execution`
+**Location**: `engine/plan/execution.rs`
 
 Execution planning converts the MIR logical plan into a concrete sequence of **actions** that can be executed. This phase:
 
@@ -180,7 +180,7 @@ Actions mirror MIR operations but include concrete variable bindings:
 
 ## Phase 5: Execution
 
-**Location**: `engine::exec`
+**Location**: `engine/exec.rs`
 
 The execution phase is the interpreter that runs the compiled program. It iterates through actions, reading inputs from variables, performing operations, and storing outputs back to variables.
 
