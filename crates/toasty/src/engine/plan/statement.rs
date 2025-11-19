@@ -679,11 +679,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 &mut index_plan,
                 pk_keys,
                 ref_source,
-                &selection,
+                selection,
                 &ty,
             )
         } else {
-            self.plan_secondary_index_execution(linked, &mut index_plan, &selection, &ty)
+            self.plan_secondary_index_execution(linked, &mut index_plan, selection, &ty)
         };
 
         self.apply_post_filter(node_id, post_filter, ty)
