@@ -142,7 +142,9 @@ At execution time, the `VarStore` holds the type information from planning. When
 
 ### Type Inference
 
-Type inference is handled by `ExprContext` which provides methods to infer the type a given expression evaluates to:
+While statements entering the engine have known types, planning constructs new expressions—projections, filters, and merge qualifications—whose types aren't explicitly declared. The engine must infer these types from the expression structure to register variables correctly.
+
+Type inference is handled by `ExprContext`, which walks expression trees and determines their result types based on the schema. For example, a column reference's type comes from the schema definition, and a record expression's type is built from its field types.
 
 ```rust
 // Create context for type inference
@@ -154,70 +156,3 @@ let ty = cx.infer_expr_reference_ty(expr_reference);
 // Infer type of a full expression with argument types
 let ret = ExprContext::new_free().infer_expr_ty(expr.as_expr(), &args);
 ```
-
-## Key Components
-
-### stmt::Type Hierarchy
-
-The `stmt::Type` enum represents all types in the query engine (see `toasty-core/src/stmt/ty.rs` for complete definition). Key variants include:
-
-- Primitives: `Bool`, `String`, `I8`-`I64`, `U8`-`U64`, `Uuid`, `Bytes`
-- Model types: `Id(ModelId)`, `Key(ModelId)`, `Model(ModelId)`, `ForeignKey(FieldId)`
-- Compound: `List(Box<Type>)`, `Record(Vec<Type>)`, `Enum(TypeEnum)`
-- Special: `Null`, `Unit`, `Unknown`, `SparseRecord(PathFieldSet)`
-
-### Schema Mapping
-
-Each model has mapping information stored in `schema::mapping::Model`:
-
-```rust
-pub struct Model {
-    pub id: ModelId,
-    pub table: TableId,
-    pub columns: Vec<ColumnId>,
-    pub fields: Vec<Option<Field>>,
-    pub model_to_table: stmt::ExprRecord,
-    pub model_pk_to_table: stmt::Expr,
-    pub table_to_model: TableToModel,
-}
-```
-
-### Field Expression Types
-
-Association fields store their expression types:
-
-```rust
-// BelongsTo
-pub struct BelongsTo {
-    pub target: ModelId,
-    pub expr_ty: stmt::Type,  // Type::Model(target_model_id)
-    // ...
-}
-
-// HasMany
-pub struct HasMany {
-    pub target: ModelId,
-    pub expr_ty: stmt::Type,  // Type::List(Box::new(Type::Model(target_model_id)))
-    // ...
-}
-```
-
-## Type System Characteristics
-
-- **Compile-time safety**: Rust type system prevents model confusion
-- **Model-level preservation**: `Type::Model` maintains relationship information until lowering
-- **Database optimization**: Lowering converts to `Type::Record` for efficient execution
-- **Typed evaluation**: `eval::Func` captures argument and return types for runtime execution
-- **Schema-driven**: Types derived from schema definitions
-- **Inference-based**: Runtime types determined through `ExprContext` analysis
-
-## Integration Points
-
-The type system connects with other Toasty subsystems:
-
-- **Codegen**: Generates schema definitions with type information
-- **Query Builder**: Creates type-safe query construction APIs
-- **Database Drivers**: Converts types to database-specific representations
-- **Execution Engine**: Uses type information for validation and value typing
-
-This architecture provides compile-time safety and runtime correctness while maintaining efficient query execution across different database backends.
