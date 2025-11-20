@@ -76,7 +76,6 @@ Toasty aims to be an easy-to-use ORM for Rust that supports both SQL and NoSQL d
 - **Validations & Callbacks** 🔴
   - Field validations
   - Model validations
-  - Before/after hooks
   - Soft deletes
   - Optimistic locking
 
