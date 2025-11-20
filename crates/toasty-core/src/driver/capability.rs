@@ -17,6 +17,9 @@ pub struct Capability {
 
     /// DynamoDB does not support != predicates on the primary key.
     pub primary_key_ne_predicate: bool,
+
+    /// Whether the database has an auto increment modifier for integer columns.
+    pub has_auto_increment: bool,
 }
 
 #[derive(Debug)]
@@ -34,12 +37,6 @@ pub struct StorageTypes {
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
     pub max_unsigned_integer: Option<u64>,
-
-    /// Whether the database has an auto increment modifier for integer columns.
-    pub has_auto_increment: bool,
-
-    /// Whether the database supports integer types that auto-increment.
-    pub has_serial_integers: bool,
 }
 
 impl Capability {
@@ -54,7 +51,6 @@ impl Capability {
             db::Type::Boolean
             | db::Type::Integer(_)
             | db::Type::UnsignedInteger(_)
-            | db::Type::Serial(_)
             | db::Type::Uuid
             | db::Type::Binary(_)
             | db::Type::Blob => {
@@ -72,6 +68,7 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         primary_key_ne_predicate: true,
+        has_auto_increment: true,
     };
 
     /// PostgreSQL capabilities
@@ -79,6 +76,7 @@ impl Capability {
         cte_with_update: true,
         storage_types: StorageTypes::POSTGRESQL,
         select_for_update: true,
+        has_auto_increment: true,
         ..Self::SQLITE
     };
 
@@ -87,6 +85,7 @@ impl Capability {
         cte_with_update: false,
         storage_types: StorageTypes::MYSQL,
         select_for_update: true,
+        has_auto_increment: true,
         ..Self::SQLITE
     };
 
@@ -97,6 +96,7 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         primary_key_ne_predicate: false,
+        has_auto_increment: false,
     };
 }
 
@@ -122,11 +122,6 @@ impl StorageTypes {
         // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
         // are limited to i64::MAX to prevent overflow
         max_unsigned_integer: Some(i64::MAX as u64),
-
-        // SQLite has `AUTOINCREMENT` but this only changes the strictness of auto increment
-        // behavior which is not what is meant here.
-        has_auto_increment: false,
-        has_serial_integers: false,
     };
 
     pub const POSTGRESQL: StorageTypes = StorageTypes {
@@ -143,9 +138,6 @@ impl StorageTypes {
         // to i64::MAX. While NUMERIC could theoretically support larger values,
         // we prefer explicit limits over implicit type switching.
         max_unsigned_integer: Some(i64::MAX as u64),
-
-        has_auto_increment: false,
-        has_serial_integers: true,
     };
 
     pub const MYSQL: StorageTypes = StorageTypes {
@@ -163,9 +155,6 @@ impl StorageTypes {
 
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
-
-        has_auto_increment: true,
-        has_serial_integers: false,
     };
 
     pub const DYNAMODB: StorageTypes = StorageTypes {
@@ -178,8 +167,5 @@ impl StorageTypes {
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,
-
-        has_auto_increment: false,
-        has_serial_integers: false,
     };
 }

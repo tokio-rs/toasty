@@ -69,9 +69,6 @@ pub enum Type {
     /// An unsigned integer of `n` bytes
     UnsignedInteger(u8),
 
-    /// An auto-incrementing unsigned integer of `n` bytes
-    Serial(u8),
-
     /// Unconstrained text type
     Text,
 
@@ -96,41 +93,31 @@ impl Type {
     pub fn from_app(
         ty: &stmt::Type,
         hint: Option<&Type>,
-        auto_increment: bool,
         db: &driver::StorageTypes,
     ) -> Result<Type> {
         match hint {
             Some(ty) => Ok(ty.clone()),
-            None => match auto_increment {
-                true => match ty {
-                    stmt::Type::U8 => Ok(Type::Serial(1)),
-                    stmt::Type::U16 => Ok(Type::Serial(2)),
-                    stmt::Type::U32 => Ok(Type::Serial(4)),
-                    stmt::Type::U64 => Ok(Type::Serial(8)),
-                    _ => anyhow::bail!("auto increment not supported for type: {ty:?}"),
-                },
-                false => match ty {
-                    stmt::Type::Bool => Ok(Type::Boolean),
-                    stmt::Type::I8 => Ok(Type::Integer(1)),
-                    stmt::Type::I16 => Ok(Type::Integer(2)),
-                    stmt::Type::I32 => Ok(Type::Integer(4)),
-                    stmt::Type::I64 => Ok(Type::Integer(8)),
-                    // Map unsigned types to UnsignedInteger with appropriate byte width
-                    stmt::Type::U8 => Ok(Type::UnsignedInteger(1)),
-                    stmt::Type::U16 => Ok(Type::UnsignedInteger(2)),
-                    stmt::Type::U32 => Ok(Type::UnsignedInteger(4)),
-                    stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
-                    stmt::Type::String => Ok(db.default_string_type.clone()),
-                    stmt::Type::Uuid => Ok(db.default_uuid_type.clone()),
-                    // Gotta support some app-level types as well for now.
-                    //
-                    // TODO: not really correct, but we are getting rid of ID types
-                    // most likely.
-                    stmt::Type::Id(_) => Ok(db.default_string_type.clone()),
-                    // Enum types are stored as strings in the database
-                    stmt::Type::Enum(_) => Ok(db.default_string_type.clone()),
-                    _ => anyhow::bail!("unsupported type: {ty:?}"),
-                },
+            None => match ty {
+                stmt::Type::Bool => Ok(Type::Boolean),
+                stmt::Type::I8 => Ok(Type::Integer(1)),
+                stmt::Type::I16 => Ok(Type::Integer(2)),
+                stmt::Type::I32 => Ok(Type::Integer(4)),
+                stmt::Type::I64 => Ok(Type::Integer(8)),
+                // Map unsigned types to UnsignedInteger with appropriate byte width
+                stmt::Type::U8 => Ok(Type::UnsignedInteger(1)),
+                stmt::Type::U16 => Ok(Type::UnsignedInteger(2)),
+                stmt::Type::U32 => Ok(Type::UnsignedInteger(4)),
+                stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
+                stmt::Type::String => Ok(db.default_string_type.clone()),
+                stmt::Type::Uuid => Ok(db.default_uuid_type.clone()),
+                // Gotta support some app-level types as well for now.
+                //
+                // TODO: not really correct, but we are getting rid of ID types
+                // most likely.
+                stmt::Type::Id(_) => Ok(db.default_string_type.clone()),
+                // Enum types are stored as strings in the database
+                stmt::Type::Enum(_) => Ok(db.default_string_type.clone()),
+                _ => anyhow::bail!("unsupported type: {ty:?}"),
             },
         }
     }

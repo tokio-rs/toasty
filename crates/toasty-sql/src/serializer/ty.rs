@@ -36,16 +36,6 @@ impl ToSql for &db::Type {
                     }
                 }
             }
-            db::Type::Serial(size) => match f.serializer.flavor {
-                Flavor::Postgresql => match size {
-                    1..=2 => fmt!(cx, f, "SMALLSERIAL"),
-                    3..=4 => fmt!(cx, f, "SERIAL"),
-                    5..=8 => fmt!(cx, f, "BIGSERIAL"),
-                    _ => todo!("Unsupported serial size: {}", size),
-                },
-                Flavor::Mysql => todo!("Serial types not supported in MySQL"),
-                Flavor::Sqlite => todo!("Serial types not supported in SQLite"),
-            },
             db::Type::Text => fmt!(cx, f, "TEXT"),
             db::Type::VarChar(size) => fmt!(cx, f, "VARCHAR(" size ")"),
             db::Type::Uuid => {

@@ -264,16 +264,10 @@ impl BuildTableFromModels<'_> {
                     id: column_id,
                     name: name.storage_name().to_owned(),
                     ty: ty.clone(),
-                    storage_ty: db::Type::from_app(
-                        &ty,
-                        None,
-                        auto_increment,
-                        &self.db.storage_types,
-                    )
-                    .unwrap(),
+                    storage_ty: db::Type::from_app(&ty, None, &self.db.storage_types).unwrap(),
                     nullable: false,
                     primary_key: true,
-                    auto_increment: auto_increment && self.db.storage_types.has_auto_increment,
+                    auto_increment: auto_increment && self.db.has_auto_increment,
                 });
             }
         }
@@ -386,7 +380,6 @@ impl BuildTableFromModels<'_> {
         let storage_ty = db::Type::from_app(
             &primitive.ty,
             primitive.storage_ty.as_ref(),
-            auto_increment,
             &self.db.storage_types,
         )
         .expect("unsupported storage type");
@@ -401,7 +394,7 @@ impl BuildTableFromModels<'_> {
             storage_ty,
             nullable: field.nullable,
             primary_key: false,
-            auto_increment: auto_increment && self.db.storage_types.has_auto_increment,
+            auto_increment: auto_increment && self.db.has_auto_increment,
         };
 
         self.mapping.model_mut(field.id.model).fields[field.id.index]
