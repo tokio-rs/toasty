@@ -271,7 +271,7 @@ impl<'a> Simplify<'a> {
                     assert!(row.len() <= width);
 
                     while row.len() < width {
-                        row.push(stmt::Expr::default());
+                        row.push(stmt::Expr::null());
                     }
                 }
                 stmt::Expr::Value(stmt::Value::Record(row)) => {
