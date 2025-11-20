@@ -86,6 +86,10 @@ impl Field {
         self.auto.as_ref()
     }
 
+    pub fn is_auto_increment(&self) -> bool {
+        self.auto().map(|auto| auto.is_increment()).unwrap_or(false)
+    }
+
     pub fn is_relation(&self) -> bool {
         self.ty.is_relation()
     }

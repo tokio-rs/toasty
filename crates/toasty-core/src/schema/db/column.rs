@@ -24,7 +24,8 @@ pub struct Column {
     pub primary_key: bool,
 
     /// True if the column is an integer that should be auto-incremented
-    /// with each insertion of a new row.
+    /// with each insertion of a new row. This should be false if a `storage_ty`
+    /// of type `Serial` is used.
     pub auto_increment: bool,
 }
 

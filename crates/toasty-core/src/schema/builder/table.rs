@@ -2,7 +2,7 @@ use super::BuildSchema;
 use crate::{
     driver,
     schema::{
-        app::{self, Auto, FieldId, FieldName, Model},
+        app::{self, FieldId, FieldName, Model},
         db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping, TableToModel},
         Name,
@@ -255,18 +255,25 @@ impl BuildTableFromModels<'_> {
                     }
                 };
 
+                let auto_increment = field
+                    .map(|field| field.is_auto_increment())
+                    .unwrap_or(false);
+
                 assert_eq!(self.table.columns.len(), i);
                 self.table.columns.push(db::Column {
                     id: column_id,
                     name: name.storage_name().to_owned(),
                     ty: ty.clone(),
-                    storage_ty: db::Type::from_app(&ty, None, &self.db.storage_types).unwrap(),
+                    storage_ty: db::Type::from_app(
+                        &ty,
+                        None,
+                        auto_increment,
+                        &self.db.storage_types,
+                    )
+                    .unwrap(),
                     nullable: false,
                     primary_key: true,
-                    auto_increment: field
-                        .and_then(|field| field.auto.as_ref())
-                        .map(|auto| auto.is_increment())
-                        .unwrap_or(false),
+                    auto_increment: auto_increment && self.db.storage_types.has_auto_increment,
                 });
             }
         }
@@ -300,14 +307,7 @@ impl BuildTableFromModels<'_> {
 
             match &field.ty {
                 app::FieldTy::Primitive(simple) => {
-                    self.create_column_for_primitive(
-                        field.id,
-                        simple,
-                        &field.name,
-                        prefix.as_deref(),
-                        field.nullable,
-                        field.auto.as_ref(),
-                    );
+                    self.create_column_for_primitive(field, simple, prefix.as_deref());
                 }
                 // HasMany/HasOne relationships do not have columns... for now?
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
@@ -371,23 +371,22 @@ impl BuildTableFromModels<'_> {
 
     fn create_column_for_primitive(
         &mut self,
-        field_id: FieldId,
+        field: &app::Field,
         primitive: &app::FieldPrimitive,
-        name: &app::FieldName,
         prefix: Option<&str>,
-        nullable: bool,
-        auto: Option<&Auto>,
     ) {
         let storage_name = if let Some(prefix) = prefix {
-            let storage_name = name.storage_name();
+            let storage_name = field.name.storage_name();
             format!("{prefix}__{storage_name}")
         } else {
-            name.storage_name().to_owned()
+            field.name.storage_name().to_owned()
         };
 
+        let auto_increment = field.is_auto_increment();
         let storage_ty = db::Type::from_app(
             &primitive.ty,
             primitive.storage_ty.as_ref(),
+            auto_increment,
             &self.db.storage_types,
         )
         .expect("unsupported storage type");
@@ -400,12 +399,12 @@ impl BuildTableFromModels<'_> {
             name: storage_name,
             ty: storage_ty.bridge_type(&primitive.ty),
             storage_ty,
-            nullable,
+            nullable: field.nullable,
             primary_key: false,
-            auto_increment: auto.map(|auto| auto.is_increment()).unwrap_or(false),
+            auto_increment: auto_increment && self.db.storage_types.has_auto_increment,
         };
 
-        self.mapping.model_mut(field_id.model).fields[field_id.index]
+        self.mapping.model_mut(field.id.model).fields[field.id.index]
             .as_mut()
             .unwrap()
             .column = column.id;

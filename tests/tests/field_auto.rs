@@ -42,7 +42,7 @@ async fn auto_increment(test: &mut DbTest) {
     struct Foo {
         #[key]
         #[auto(increment)]
-        auto_field: i32,
+        auto_field: u32,
     }
 
     let db = test.setup_db(models!(Foo)).await;

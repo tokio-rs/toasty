@@ -121,10 +121,12 @@ impl Default for Builder {
 impl BuildSchema<'_> {
     fn build_model_constraints(&self, model: &mut app::Model) -> Result<()> {
         for field in model.fields.iter_mut() {
+            let auto_increment = field.is_auto_increment();
             if let app::FieldTy::Primitive(primitive) = &mut field.ty {
                 let storage_ty = db::Type::from_app(
                     &primitive.ty,
                     primitive.storage_ty.as_ref(),
+                    auto_increment,
                     &self.db.storage_types,
                 )?;
 
