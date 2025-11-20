@@ -207,8 +207,15 @@ When working on Toasty engine changes, follow this established pattern:
 
 - **docs/ARCHITECTURE.md**: System design and component relationships
 - **docs/CHANGE_GUIDE.md**: How to make common changes with examples
+- **docs/CONTEXT.md**: Writing style guidelines for documentation (load when editing docs/)
 - **Component CONTEXT.md files**: Deep dive into each component
 - **This file (CLAUDE.md)**: Navigation guide for using the documentation
+
+## Context Files
+
+When editing files in certain directories, load the corresponding CONTEXT.md:
+
+- **docs/**: Load `docs/CONTEXT.md` for documentation writing guidelines
 
 ## Remember
 
