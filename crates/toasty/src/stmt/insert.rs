@@ -68,7 +68,7 @@ impl<M: Model> Insert<M> {
         let row = self.current_mut();
 
         while row.fields.len() <= field {
-            row.fields.push(stmt::Expr::default());
+            row.fields.push(stmt::Expr::null());
         }
 
         &mut row[field]

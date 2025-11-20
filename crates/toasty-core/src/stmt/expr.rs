@@ -243,12 +243,6 @@ impl Expr {
     }
 }
 
-impl Default for Expr {
-    fn default() -> Self {
-        Self::Value(Value::default())
-    }
-}
-
 impl Node for Expr {
     fn visit<V: Visit>(&self, mut visit: V) {
         visit.visit_expr(self);
