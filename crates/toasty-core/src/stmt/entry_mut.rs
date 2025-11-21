@@ -40,6 +40,10 @@ impl EntryMut<'_> {
         )
     }
 
+    pub fn is_default(&self) -> bool {
+        matches!(self, EntryMut::Expr(Expr::Default))
+    }
+
     pub fn take(&mut self) -> Expr {
         match self {
             EntryMut::Expr(expr) => expr.take(),

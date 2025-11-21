@@ -9,7 +9,8 @@ pub struct Insert<M: ?Sized> {
 }
 
 impl<M: Model> Insert<M> {
-    /// Create an insertion statement that inserts an empty record (all fields are null).
+    /// Create an insertion statement that inserts an empty record
+    /// (fields without #[auto] as `Expr::Value(Value::Null)`, #[auto] fields as `Expr::Default`).
     ///
     /// This insertion statement is not guaranteed to be valid.
     ///
@@ -18,7 +19,17 @@ impl<M: Model> Insert<M> {
         Self {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::id()),
-                source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(vec![]).into()]),
+                source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(
+                    M::schema()
+                        .fields
+                        .iter()
+                        .map(|field| match field.auto() {
+                            Some(_) => stmt::Expr::Default,
+                            None => stmt::Expr::Value(stmt::Value::Null),
+                        })
+                        .collect(),
+                )
+                .into()]),
                 returning: Some(stmt::Returning::Model { include: vec![] }),
             },
             _p: PhantomData,
@@ -65,13 +76,7 @@ impl<M: Model> Insert<M> {
     }
 
     fn expr_mut(&mut self, field: usize) -> &mut stmt::Expr {
-        let row = self.current_mut();
-
-        while row.fields.len() <= field {
-            row.fields.push(stmt::Expr::default());
-        }
-
-        &mut row[field]
+        &mut self.current_mut()[field]
     }
 
     /// Returns the current record being updated

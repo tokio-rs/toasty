@@ -82,7 +82,7 @@ impl LowerStatement<'_, '_> {
         for field in &model.fields {
             let mut field_expr = expr.entry_mut(field.id.index);
 
-            if field_expr.is_value_null() {
+            if field_expr.is_default() {
                 // If the field is defined to be auto-populated, then populate
                 // it here.
                 if let Some(auto) = &field.auto {
@@ -182,7 +182,7 @@ impl ApplyInsertScope<'_> {
 
         let mut existing = self.expr.entry_mut(*index);
 
-        if !existing.is_value_null() {
+        if !existing.is_value_null() && !existing.is_default() {
             if let stmt::EntryMut::Value(existing) = existing {
                 assert_eq!(existing, val);
             } else {

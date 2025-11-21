@@ -3,7 +3,7 @@ use toasty_core::stmt::ResolvedRef;
 use super::{ColumnAlias, Comma, Delimited, Params, ToSql};
 
 use crate::{
-    serializer::{ExprContext, Ident},
+    serializer::{ExprContext, Flavor, Ident},
     stmt,
 };
 
@@ -99,6 +99,11 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, "(" stmt ")");
             }
             Value(expr) => expr.to_sql(cx, f),
+            Default => match f.serializer.flavor {
+                Flavor::Postgresql | Flavor::Mysql => fmt!(cx, f, "DEFAULT"),
+                // SQLite does not support the DEFAULT keyword but NULL acts similarly.
+                Flavor::Sqlite => fmt!(cx, f, "NULL"),
+            },
             _ => todo!("expr={:#?}", self),
         }
     }

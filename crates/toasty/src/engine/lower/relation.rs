@@ -73,7 +73,7 @@ impl LowerStatement<'_, '_> {
             if field.is_relation() {
                 let expr = row.entry_mut(i).take();
 
-                if expr.is_value_null() {
+                if expr.is_value_null() || expr.is_default() {
                     if !field.nullable && field.ty.is_has_one() {
                         panic!(
                             "Insert missing non-nullable field; model={}; name={:#?}; ty={:#?}; expr={:#?}",

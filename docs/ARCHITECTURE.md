@@ -74,4 +74,4 @@ Converts statement AST to SQL strings. Used by SQL-based drivers.
 ## Further Reading
 
 - [Query Engine Architecture](architecture/query-engine.md) - Query compilation and execution pipeline
-- [Change Patterns](architecture/change-patterns.md) - Where to make different types of changes
+- [Type System](architecture/type-system.md) - Type system design and conversions

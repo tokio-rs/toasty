@@ -89,7 +89,7 @@ impl Builder {
                         })
                         .collect(),
                     model_to_table: stmt::ExprRecord::default(),
-                    model_pk_to_table: stmt::Expr::default(),
+                    model_pk_to_table: stmt::Expr::null(),
                     table_to_model: TableToModel::default(),
                 },
             );

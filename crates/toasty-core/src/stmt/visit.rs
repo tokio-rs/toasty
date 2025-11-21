@@ -71,6 +71,10 @@ pub trait Visit {
         visit_expr_concat(self, i);
     }
 
+    fn visit_expr_default(&mut self) {
+        visit_expr_default(self);
+    }
+
     fn visit_expr_enum(&mut self, i: &ExprEnum) {
         visit_expr_enum(self, i);
     }
@@ -325,6 +329,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_concat(&mut **self, i);
     }
 
+    fn visit_expr_default(&mut self) {
+        Visit::visit_expr_default(&mut **self);
+    }
+
     fn visit_expr_enum(&mut self, i: &ExprEnum) {
         Visit::visit_expr_enum(&mut **self, i);
     }
@@ -571,6 +579,7 @@ where
         Expr::BinaryOp(expr) => v.visit_expr_binary_op(expr),
         Expr::Cast(expr) => v.visit_expr_cast(expr),
         Expr::Concat(expr) => v.visit_expr_concat(expr),
+        Expr::Default => v.visit_expr_default(),
         Expr::Enum(expr) => v.visit_expr_enum(expr),
         Expr::Exists(expr) => v.visit_expr_exists(expr),
         Expr::Func(expr) => v.visit_expr_func(expr),
@@ -657,6 +666,12 @@ where
     for expr in node {
         v.visit_expr(expr);
     }
+}
+
+pub fn visit_expr_default<V>(v: &mut V)
+where
+    V: Visit + ?Sized,
+{
 }
 
 pub fn visit_expr_enum<V>(v: &mut V, node: &ExprEnum)
