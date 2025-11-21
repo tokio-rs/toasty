@@ -18,7 +18,15 @@ impl<M: Model> Insert<M> {
         Self {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::id()),
-                source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(vec![]).into()]),
+                source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(vec![
+                    stmt::Expr::Value(
+                        stmt::Value::Null
+                    );
+                    M::schema()
+                        .fields
+                        .len()
+                ])
+                .into()]),
                 returning: Some(stmt::Returning::Model { include: vec![] }),
             },
             _p: PhantomData,
