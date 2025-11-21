@@ -32,6 +32,10 @@ pub enum Expr {
     /// Concat strings
     ConcatStr(ExprConcatStr),
 
+    /// Suggests that the database should use its default value. Useful for
+    /// auto-increment fields and other columns with default values.
+    Default,
+
     /// Return an enum value
     Enum(ExprEnum),
 
@@ -93,6 +97,7 @@ pub enum Expr {
 impl Expr {
     pub const TRUE: Expr = Expr::Value(Value::Bool(true));
     pub const FALSE: Expr = Expr::Value(Value::Bool(false));
+    pub const DEFAULT: Expr = Expr::Default;
 
     pub fn null() -> Self {
         Self::Value(Value::Null)
@@ -111,6 +116,11 @@ impl Expr {
     /// Returns `true` if the expression is the `false` boolean expression
     pub fn is_false(&self) -> bool {
         matches!(self, Self::Value(Value::Bool(false)))
+    }
+
+    /// Returns `true` if the expression is the default expression
+    pub fn is_default(&self) -> bool {
+        matches!(self, Self::Default)
     }
 
     /// Returns true if the expression is a constant value.
@@ -163,7 +173,8 @@ impl Expr {
             | Self::Stmt(_)
             | Self::Arg(_)
             | Self::InSubquery(_)
-            | Self::Exists(_) => false,
+            | Self::Exists(_)
+            | Self::Default => false,
 
             // Const if all children are const
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_const()),
@@ -317,6 +328,7 @@ impl fmt::Debug for Expr {
             Self::Cast(e) => e.fmt(f),
             Self::Concat(e) => e.fmt(f),
             Self::ConcatStr(e) => e.fmt(f),
+            Self::Default => write!(f, "Default"),
             Self::Enum(e) => e.fmt(f),
             Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),

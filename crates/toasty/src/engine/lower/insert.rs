@@ -164,7 +164,7 @@ impl ApplyInsertScope<'_> {
 
         let mut existing = self.expr.entry_mut(*index);
 
-        if !existing.is_value_null() {
+        if !existing.is_value_null() && !existing.is_default() {
             if let stmt::EntryMut::Value(existing) = existing {
                 assert_eq!(existing, val);
             } else {
