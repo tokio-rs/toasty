@@ -107,7 +107,7 @@ impl LowerStatement<'_, '_> {
                             };
                         }
                         app::Auto::Increment => {
-                            // Leave value as null and let the database handle it.
+                            // Leave value as `Expr::Default` and let the database handle it.
                         }
                     }
                 }
