@@ -9,7 +9,8 @@ pub struct Insert<M: ?Sized> {
 }
 
 impl<M: Model> Insert<M> {
-    /// Create an insertion statement that inserts an empty record (all fields are null).
+    /// Create an insertion statement that inserts an empty record
+    /// (fields without #[auto] as `Expr::Value(Value::Null)`, #[auto] fields as `Expr::Default`).
     ///
     /// This insertion statement is not guaranteed to be valid.
     ///
@@ -18,14 +19,16 @@ impl<M: Model> Insert<M> {
         Self {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::id()),
-                source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(vec![
-                    stmt::Expr::Value(
-                        stmt::Value::Null
-                    );
+                source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(
                     M::schema()
                         .fields
-                        .len()
-                ])
+                        .iter()
+                        .map(|field| match field.auto() {
+                            Some(_) => stmt::Expr::Default,
+                            None => stmt::Expr::Value(stmt::Value::Null),
+                        })
+                        .collect(),
+                )
                 .into()]),
                 returning: Some(stmt::Returning::Model { include: vec![] }),
             },
