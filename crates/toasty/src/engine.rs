@@ -45,7 +45,7 @@ impl Engine {
             self.verify(&stmt);
         }
 
-        if let stmt::Statement::Insert(stmt) = &stmt {
+        if let stmt::Statement::Insert(stmt) = dbg!(&stmt) {
             assert!(matches!(
                 stmt.returning,
                 Some(stmt::Returning::Model { .. })
