@@ -72,6 +72,7 @@ async fn auto_increment_with_associations(test: &mut DbTest) {
         #[auto(increment)]
         id: u32,
 
+        #[index]
         foo_id: u32,
 
         #[belongs_to(key = foo_id, references = id)]
@@ -79,7 +80,7 @@ async fn auto_increment_with_associations(test: &mut DbTest) {
         foo: toasty::BelongsTo<Foo>,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let db = test.setup_db(models!(Foo, Bar)).await;
 
     for i in 1..10 {
         let u = Foo::create()
