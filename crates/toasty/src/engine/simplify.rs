@@ -130,12 +130,15 @@ impl VisitMut for Simplify<'_> {
         // Create a new scope for the insert target
         let mut s = self.scope(&stmt.target);
 
+        eprintln!("simplify 1 {:#?}", stmt.source);
         // First, simplify the source
         s.visit_stmt_query_mut(&mut stmt.source);
+        eprintln!("simplify 2 {:#?}", stmt.source);
 
         if let stmt::ExprSet::Values(values) = &mut stmt.source.body {
             s.normalize_insertion_values(values, stmt.target.width(s.schema()));
         }
+        eprintln!("simplify 3 {:#?}", stmt.source);
 
         if let Some(returning) = &mut stmt.returning {
             s.visit_returning_mut(returning);
@@ -271,7 +274,7 @@ impl<'a> Simplify<'a> {
                     assert!(row.len() <= width);
 
                     while row.len() < width {
-                        row.push(stmt::Expr::null());
+                        row.push(stmt::Expr::DEFAULT);
                     }
                 }
                 stmt::Expr::Value(stmt::Value::Record(row)) => {

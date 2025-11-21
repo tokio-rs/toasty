@@ -102,6 +102,7 @@ impl Expr {
 
                 Ok(ret.into())
             }
+            Expr::Default => anyhow::bail!("default can only be evaluated by the database"),
             Expr::IsNull(expr_is_null) => {
                 let value = expr_is_null.expr.eval_ref(input)?;
                 Ok((value.is_null() != expr_is_null.negate).into())

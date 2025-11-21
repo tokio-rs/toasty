@@ -46,6 +46,7 @@ impl Engine {
         }
 
         if let stmt::Statement::Insert(stmt) = &stmt {
+            eprintln!("{stmt:#?}");
             assert!(matches!(
                 stmt.returning,
                 Some(stmt::Returning::Model { .. })
