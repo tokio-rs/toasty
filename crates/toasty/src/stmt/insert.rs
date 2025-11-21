@@ -73,13 +73,7 @@ impl<M: Model> Insert<M> {
     }
 
     fn expr_mut(&mut self, field: usize) -> &mut stmt::Expr {
-        let row = self.current_mut();
-
-        while row.fields.len() <= field {
-            row.fields.push(stmt::Expr::Default);
-        }
-
-        &mut row[field]
+        &mut self.current_mut()[field]
     }
 
     /// Returns the current record being updated
