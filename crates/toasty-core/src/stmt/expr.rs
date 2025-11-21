@@ -8,7 +8,7 @@ use super::{
 };
 use std::fmt;
 
-#[derive(Default, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Expr {
     /// AND a set of binary expressions
     And(ExprAnd),
@@ -34,7 +34,6 @@ pub enum Expr {
 
     /// Suggests that the database should use its default value. Useful for
     /// auto-increment fields and other columns with default values.
-    #[default]
     Default,
 
     /// Return an enum value

@@ -82,7 +82,7 @@ impl LowerStatement<'_, '_> {
         for field in &model.fields {
             let mut field_expr = expr.entry_mut(field.id.index);
 
-            if field_expr.is_default() {
+            if field_expr.is_value_null() {
                 // If the field is defined to be auto-populated, then populate
                 // it here.
                 if let Some(auto) = &field.auto {
@@ -104,7 +104,6 @@ impl LowerStatement<'_, '_> {
             }
 
             let field_expr = expr.entry(field.id.index);
-            eprintln!("kek {field:#?} {expr:#?}");
 
             if !field.nullable && field_expr.is_value_null() {
                 // Relations are handled differently
