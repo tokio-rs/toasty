@@ -18,7 +18,15 @@ impl<M: Model> Insert<M> {
         Self {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::id()),
-                source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(vec![]).into()]),
+                source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(vec![
+                    stmt::Expr::Value(
+                        stmt::Value::Null
+                    );
+                    M::schema()
+                        .fields
+                        .len()
+                ])
+                .into()]),
                 returning: Some(stmt::Returning::Model { include: vec![] }),
             },
             _p: PhantomData,
@@ -65,13 +73,7 @@ impl<M: Model> Insert<M> {
     }
 
     fn expr_mut(&mut self, field: usize) -> &mut stmt::Expr {
-        let row = self.current_mut();
-
-        while row.fields.len() <= field {
-            row.fields.push(stmt::Expr::null());
-        }
-
-        &mut row[field]
+        &mut self.current_mut()[field]
     }
 
     /// Returns the current record being updated

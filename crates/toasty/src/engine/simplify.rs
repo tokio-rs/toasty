@@ -133,10 +133,6 @@ impl VisitMut for Simplify<'_> {
         // First, simplify the source
         s.visit_stmt_query_mut(&mut stmt.source);
 
-        if let stmt::ExprSet::Values(values) = &mut stmt.source.body {
-            s.normalize_insertion_values(values, stmt.target.width(s.schema()));
-        }
-
         if let Some(returning) = &mut stmt.returning {
             s.visit_returning_mut(returning);
         }
@@ -260,28 +256,6 @@ impl<'a> Simplify<'a> {
                     operands.push(std::mem::take(expr_set));
                 }
                 _ => todo!("expr={:#?}", expr_set),
-            }
-        }
-    }
-
-    fn normalize_insertion_values(&mut self, values: &mut stmt::Values, width: usize) {
-        for row in &mut values.rows {
-            match row {
-                stmt::Expr::Record(row) => {
-                    assert!(row.len() <= width);
-
-                    while row.len() < width {
-                        row.push(stmt::Expr::null());
-                    }
-                }
-                stmt::Expr::Value(stmt::Value::Record(row)) => {
-                    assert!(row.len() <= width);
-
-                    while row.len() < width {
-                        row.fields.push(stmt::Value::default());
-                    }
-                }
-                _ => todo!("row={row:#?}"),
             }
         }
     }
