@@ -31,6 +31,7 @@ impl<M: Model> Insert<M> {
                 )
                 .into()]),
                 returning: Some(stmt::Returning::Model { include: vec![] }),
+                then: vec![],
             },
             _p: PhantomData,
         }

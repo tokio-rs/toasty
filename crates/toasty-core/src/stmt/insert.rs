@@ -11,6 +11,13 @@ pub struct Insert {
 
     /// Optionally return data from the insertion
     pub returning: Option<Returning>,
+
+    /// Statements to execute after the INSERT completes
+    ///
+    /// These statements can reference fields from the inserted record using
+    /// `Expr::ParentField`. They execute after the parent INSERT but do not
+    /// affect the returned results.
+    pub then: Vec<Statement>,
 }
 
 impl Insert {
@@ -28,6 +35,9 @@ impl Insert {
             }
             (self_source, other) => todo!("self={:#?}; other={:#?}", self_source, other),
         }
+
+        // Merge the then statements
+        self.then.extend(other.then);
     }
 }
 
