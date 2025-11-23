@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::{Expr, ExprSetOp, Select, SourceModel, Update, Values};
+use super::{Expr, ExprSetOp, Insert, Select, SourceModel, Update, Values};
 use crate::schema::db::TableId;
 
 #[derive(Clone, PartialEq)]
@@ -16,6 +16,9 @@ pub enum ExprSet {
 
     /// Explicitly listed values (as expressions)
     Values(Values),
+
+    /// An insert statement (used for UNION-style batch inserts)
+    Insert(Box<Insert>),
 }
 
 impl ExprSet {
@@ -48,6 +51,7 @@ impl ExprSet {
                 .all(|operand| operand.is_const()),
             ExprSet::Update(..) => false,
             ExprSet::Values(values) => values.is_const(),
+            ExprSet::Insert(..) => false,
         }
     }
 }
@@ -59,6 +63,7 @@ impl fmt::Debug for ExprSet {
             Self::SetOp(e) => e.fmt(f),
             Self::Update(e) => e.fmt(f),
             Self::Values(e) => e.fmt(f),
+            Self::Insert(e) => e.fmt(f),
         }
     }
 }
@@ -78,6 +83,12 @@ impl From<Select> for ExprSet {
 impl From<Update> for ExprSet {
     fn from(value: Update) -> Self {
         Self::Update(Box::new(value))
+    }
+}
+
+impl From<Insert> for ExprSet {
+    fn from(value: Insert) -> Self {
+        Self::Insert(Box::new(value))
     }
 }
 

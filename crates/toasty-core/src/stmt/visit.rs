@@ -802,6 +802,7 @@ where
         ExprSet::SetOp(expr) => v.visit_expr_set_op(expr),
         ExprSet::Update(expr) => v.visit_stmt_update(expr),
         ExprSet::Values(expr) => v.visit_values(expr),
+        ExprSet::Insert(expr) => v.visit_stmt_insert(expr),
     }
 }
 
@@ -1029,6 +1030,10 @@ where
 
     if let Some(returning) = &node.returning {
         v.visit_returning(returning);
+    }
+
+    for stmt in &node.then {
+        v.visit_stmt(stmt);
     }
 }
 

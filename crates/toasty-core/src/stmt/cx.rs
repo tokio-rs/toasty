@@ -294,6 +294,11 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 ExprSet::SetOp(_body) => todo!(),
                 ExprSet::Update(_body) => todo!(),
                 ExprSet::Values(_body) => todo!(),
+                ExprSet::Insert(body) => body
+                    .returning
+                    .as_ref()
+                    .map(|returning| cx.infer_returning_ty(returning, args, stmt.single))
+                    .unwrap_or(Type::Unit),
             },
             Statement::Update(stmt) => stmt
                 .returning
@@ -585,6 +590,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a ExprSet {
             ExprSet::SetOp(_) => todo!(),
             ExprSet::Update(update) => update.into_expr_target(schema),
             ExprSet::Values(_) => ExprTarget::Free,
+            ExprSet::Insert(insert) => insert.into_expr_target(schema),
         }
     }
 }
