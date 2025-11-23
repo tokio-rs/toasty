@@ -45,18 +45,21 @@ impl Engine {
             self.verify(&stmt);
         }
 
-        if let stmt::Statement::Insert(stmt) = dbg!(&stmt) {
+        if let stmt::Statement::Insert(stmt) = &stmt {
             assert!(matches!(
                 stmt.returning,
                 Some(stmt::Returning::Model { .. })
             ));
         }
+        dbg!(&stmt);
 
         // Lower the statement to High-level intermediate representation
         let hir = self.lower_stmt(stmt)?;
+        dbg!(&hir);
 
         // Translate the optimized statement into a series of driver operations.
         let plan = self.plan_hir_statement(hir)?;
+        dbg!(&plan);
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).

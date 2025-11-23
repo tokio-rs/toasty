@@ -425,7 +425,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         let mut lower = self.lower_insert(&stmt.target);
 
         // Preprocess the insertion source (values usually);
-        lower.preprocess_insert_values(&mut stmt.source);
+        // This may populate stmt.then with child inserts when the parent has
+        // database-generated fields (Expr::Default) that children need to reference.
+        lower.preprocess_insert_values(&mut stmt.source, &mut stmt.then);
 
         // Lower the insertion source
         lower.visit_stmt_query_mut(&mut stmt.source);

@@ -34,7 +34,11 @@ impl LowerStatement<'_, '_> {
         *target = stmt::InsertTarget::Model(scope.source.model_id_unwrap());
     }
 
-    pub(super) fn preprocess_insert_values(&mut self, source: &mut stmt::Query) {
+    pub(super) fn preprocess_insert_values(
+        &mut self,
+        source: &mut stmt::Query,
+        then: &mut Vec<stmt::Statement>,
+    ) {
         let stmt::ExprSet::Values(values) = &mut source.body else {
             todo!()
         };
@@ -45,7 +49,7 @@ impl LowerStatement<'_, '_> {
 
         for row in &mut values.rows {
             self.apply_app_level_insertion_defaults(model, row);
-            self.plan_stmt_insert_relations(row);
+            self.plan_stmt_insert_relations(row, then);
             self.verify_field_constraints(model, row);
         }
     }
