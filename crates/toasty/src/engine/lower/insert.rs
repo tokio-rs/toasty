@@ -37,6 +37,7 @@ impl LowerStatement<'_, '_> {
     pub(super) fn preprocess_insert_values(
         &mut self,
         source: &mut stmt::Query,
+        returning: &mut Option<stmt::Returning>,
         then: &mut Vec<stmt::Statement>,
     ) {
         let stmt::ExprSet::Values(values) = &mut source.body else {
@@ -49,7 +50,7 @@ impl LowerStatement<'_, '_> {
 
         for row in &mut values.rows {
             self.apply_app_level_insertion_defaults(model, row);
-            self.plan_stmt_insert_relations(row, then);
+            self.plan_stmt_insert_relations(row, returning, then);
             self.verify_field_constraints(model, row);
         }
     }
@@ -159,17 +160,35 @@ impl ApplyInsertScope<'_> {
             stmt::Expr::BinaryOp(e) if e.op.is_eq() => match (&*e.lhs, &*e.rhs) {
                 (
                     stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }),
-                    stmt::Expr::Value(rhs),
+                    rhs @ stmt::Expr::Value(..),
                 ) => {
-                    self.apply_eq_const(expr_ref, rhs);
+                    self.apply_eq_constraint(expr_ref, rhs);
                 }
                 (
-                    stmt::Expr::Value(lhs),
+                    lhs @ stmt::Expr::Value(..),
                     stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }),
                 ) => {
-                    self.apply_eq_const(expr_ref, lhs);
+                    self.apply_eq_constraint(expr_ref, lhs);
                 }
-                _ => todo!(),
+                (
+                    lhs_expr @ stmt::Expr::Reference(
+                        lhs @ stmt::ExprReference::Field {
+                            nesting: nesting_lhs,
+                            ..
+                        },
+                    ),
+                    rhs_expr @ stmt::Expr::Reference(
+                        rhs @ stmt::ExprReference::Field {
+                            nesting: nesting_rhs,
+                            ..
+                        },
+                    ),
+                ) => match (nesting_lhs, nesting_rhs) {
+                    (0, _) if *nesting_rhs > 0 => self.apply_eq_constraint(lhs, rhs_expr),
+                    (_, 0) if *nesting_lhs > 0 => self.apply_eq_constraint(rhs, lhs_expr),
+                    _ => panic!("exactly one field must reference parent"),
+                },
+                _ => todo!("EXPR = {:#?}", stmt),
             },
             // Constants are ignored
             stmt::Expr::Value(_) => {}
@@ -177,7 +196,7 @@ impl ApplyInsertScope<'_> {
         }
     }
 
-    fn apply_eq_const(&mut self, expr_ref: &stmt::ExprReference, val: &stmt::Value) {
+    fn apply_eq_constraint(&mut self, expr_ref: &stmt::ExprReference, val: &stmt::Expr) {
         let stmt::ExprReference::Field { nesting, index } = expr_ref else {
             todo!("handle non-field reference");
         };
@@ -188,12 +207,16 @@ impl ApplyInsertScope<'_> {
 
         if !existing.is_value_null() && !existing.is_default() {
             if let stmt::EntryMut::Value(existing) = existing {
-                assert_eq!(existing, val);
+                if let stmt::Expr::Value(val) = val {
+                    assert_eq!(existing, val);
+                } else {
+                    todo!()
+                }
             } else {
                 todo!()
             }
         } else {
-            existing.insert(val.clone().into());
+            existing.insert(val.clone());
         }
     }
 }

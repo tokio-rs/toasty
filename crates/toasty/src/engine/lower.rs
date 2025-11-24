@@ -424,15 +424,21 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // *except* the target field (since it is borrowed).
         let mut lower = self.lower_insert(&stmt.target);
 
+        if let Some(returning) = &mut stmt.returning {
+            lower.visit_returning_mut(returning);
+        }
+
         // Preprocess the insertion source (values usually);
         // This may populate stmt.then with child inserts when the parent has
         // database-generated fields (Expr::Default) that children need to reference.
-        lower.preprocess_insert_values(&mut stmt.source, &mut stmt.then);
+        lower.preprocess_insert_values(&mut stmt.source, &mut stmt.returning, &mut stmt.then);
+        dbg!(&stmt);
 
         // Lower the insertion source
         lower.visit_stmt_query_mut(&mut stmt.source);
 
         if let Some(returning) = &mut stmt.returning {
+            // TODO: preprocess_insert_values
             lower.visit_returning_mut(returning);
             lower.constantize_insert_returning(returning, &stmt.source);
         }
