@@ -757,7 +757,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 assert!(assignment.op.is_set(), "TODO");
                 assignment.expr.clone()
             }
-            LoweringContext::InsertRow(row) => row.entry(index).to_expr(),
+            LoweringContext::InsertRow(row) => {
+                // If nesting > 0, this references a parent scope, not the current row
+                if nesting > 0 {
+                    // Use Statement context to properly handle cross-statement references
+                    let mapping = self.mapping_at_unwrap(nesting);
+                    let result = mapping.table_to_model.lower_expr_reference(nesting, index);
+                    return result;
+                } else {
+                    row.entry(index).to_expr()
+                }
+            }
             _ => todo!("cx={:#?}", self.cx),
         }
     }
