@@ -384,6 +384,7 @@ impl LowerStatement<'_, '_> {
         debug_assert!(stmt.target.is_model());
 
         stmt.target = self.relation_pair_scope(pair.id, source).into();
+        stmt.returning = Some(stmt::Returning::Model { include: vec![] });
         self.state.engine.simplify_stmt(&mut stmt);
         source.set_returning_field(_field.id, stmt.into());
     }
