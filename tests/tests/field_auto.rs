@@ -90,7 +90,7 @@ async fn auto_increment_with_associations(test: &mut DbTest) {
             .await
             .unwrap();
         assert_eq!(u.id, i);
-        assert_eq!(u.bars.get()[0].foo.get().id, i);
+        assert_eq!(u.bars.get()[0].foo_id, i);
         assert_eq!(u.bars.get()[1].foo_id, i);
         assert_eq!(u.bars.get()[0].id, i * 2 - 1);
         assert_eq!(u.bars.get()[1].id, i * 2);
