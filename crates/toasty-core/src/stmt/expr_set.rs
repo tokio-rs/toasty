@@ -26,6 +26,19 @@ impl ExprSet {
         ExprSet::Values(values.into())
     }
 
+    /// Returns a reference to the inner [`Values`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not an [`ExprSet::Values`].
+    #[track_caller]
+    pub fn as_values_unwrap(&self) -> &Values {
+        match self {
+            Self::Values(values) => values,
+            v => panic!("expected `Values`, found {v:#?}"),
+        }
+    }
+
     #[track_caller]
     pub fn as_values_mut(&mut self) -> &mut Values {
         match self {
