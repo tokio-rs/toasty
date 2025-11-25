@@ -106,60 +106,72 @@ impl NestedMergePlanner<'_> {
         let stmt_state = &self.hir[stmt_id];
         let selection = stmt_state.exec_statement_selection.get().unwrap();
 
-        let query = stmt_state.stmt.as_deref().unwrap().as_query().unwrap();
-        let select = query.body.as_select_unwrap();
+        let ret = match stmt_state.stmt.as_deref().unwrap() {
+            stmt::Statement::Query(query) => {
+                let select = query.body.as_select_unwrap();
 
-        // Extract the qualification. For now, we will just re-run the
-        // entire where clause, but that can be improved later.
-        let mut filter = select.filter.clone();
+                // Extract the qualification. For now, we will just re-run the
+                // entire where clause, but that can be improved later.
+                let mut filter = select.filter.clone();
 
-        visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
-            stmt::Expr::Arg(expr_arg) => {
-                let hir::Arg::Ref {
-                    nesting,
-                    stmt_id: target_id,
-                    batch_load_index,
-                    ..
-                } = &stmt_state.args[expr_arg.position]
-                else {
-                    todo!()
-                };
+                visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
+                    stmt::Expr::Arg(expr_arg) => {
+                        let hir::Arg::Ref {
+                            nesting,
+                            stmt_id: target_id,
+                            batch_load_index,
+                            ..
+                        } = &stmt_state.args[expr_arg.position]
+                        else {
+                            todo!()
+                        };
 
-                debug_assert!(*nesting > 0);
+                        debug_assert!(*nesting > 0);
 
-                // This is a bit of a roundabout way to get the data. We may
-                // want to find a better way to track the info for more direct
-                // access.
-                let target_stmt = &self.hir[target_id];
-                // The ExprReference based on the target's "self"
-                let target_expr_reference =
-                    &target_stmt.back_refs[&stmt_id].exprs[*batch_load_index];
+                        // This is a bit of a roundabout way to get the data. We may
+                        // want to find a better way to track the info for more direct
+                        // access.
+                        let target_stmt = &self.hir[target_id];
+                        // The ExprReference based on the target's "self"
+                        let target_expr_reference =
+                            &target_stmt.back_refs[&stmt_id].exprs[*batch_load_index];
 
-                let target_exec_statement_index = target_stmt
-                    .exec_statement_selection
-                    .get()
-                    .unwrap()
-                    .get_index_of(target_expr_reference)
-                    .unwrap();
+                        let target_exec_statement_index = target_stmt
+                            .exec_statement_selection
+                            .get()
+                            .unwrap()
+                            .get_index_of(target_expr_reference)
+                            .unwrap();
 
-                let _ = self.hir[target_id].exec_statement_selection.get().unwrap();
+                        let _ = self.hir[target_id].exec_statement_selection.get().unwrap();
 
-                *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
+                        *expr = stmt::Expr::arg_project(
+                            depth - *nesting,
+                            [target_exec_statement_index],
+                        );
+                    }
+                    stmt::Expr::Reference(expr_reference) => {
+                        let index = selection.get_index_of(expr_reference).unwrap();
+                        *expr = stmt::Expr::arg_project(depth, [index]);
+                    }
+                    _ => {}
+                });
+
+                let filter_arg_tys = self.build_filter_arg_tys();
+                let filter = eval::Func::from_stmt(filter.into_expr(), filter_arg_tys);
+
+                NestedChild {
+                    level,
+                    qualification: MergeQualification::Predicate(filter),
+                    single: query.single,
+                }
             }
-            stmt::Expr::Reference(expr_reference) => {
-                let index = selection.get_index_of(expr_reference).unwrap();
-                *expr = stmt::Expr::arg_project(depth, [index]);
-            }
-            _ => {}
-        });
-
-        let filter_arg_tys = self.build_filter_arg_tys();
-        let filter = eval::Func::from_stmt(filter.into_expr(), filter_arg_tys);
-
-        let ret = NestedChild {
-            level,
-            qualification: MergeQualification::Predicate(filter),
-            single: query.single,
+            stmt::Statement::Insert(..) => NestedChild {
+                level,
+                qualification: MergeQualification::All,
+                single: false,
+            },
+            stmt => todo!("stmt={stmt:#?}"),
         };
 
         self.stack.pop();
