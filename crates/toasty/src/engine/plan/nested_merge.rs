@@ -176,12 +176,12 @@ impl NestedMergePlanner<'_> {
             .inputs
             .insert_full(stmt_state.exec_statement.get().unwrap());
 
-        let select = stmt_state.stmt.as_deref().unwrap().as_select_unwrap();
+        let returning = stmt_state.stmt.as_deref().unwrap().returning_unwrap();
 
         let mut nested = vec![];
 
         // Map the returning clause to projection expression
-        let mut projection = select.returning.as_expr_unwrap().clone();
+        let mut projection = returning.as_expr_unwrap().clone();
 
         visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
             stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
