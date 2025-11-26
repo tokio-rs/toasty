@@ -18,6 +18,10 @@ impl Entry<'_> {
         }
     }
 
+    pub fn is_expr_default(&self) -> bool {
+        matches!(self, Entry::Expr(Expr::Default))
+    }
+
     pub fn is_value(&self) -> bool {
         matches!(self, Entry::Value(_) | Entry::Expr(Expr::Value(_)))
     }

@@ -646,12 +646,13 @@ impl RelationSource for InsertRelationSource<'_> {
 
         for pk_field in self.model.primary_key_fields() {
             let entry = self.row.entry(pk_field.id.index);
-            match entry {
-                stmt::Entry::Value(value) => args.push(stmt::Expr::Value(value.clone())),
-                stmt::Entry::Expr(stmt::Expr::Default) => {
-                    args.push(stmt::Expr::ref_parent_field(pk_field.id))
-                }
-                _ => todo!("{entry:#?}"),
+
+            if entry.is_value() {
+                args.push(entry.to_expr());
+            } else if entry.is_expr_default() {
+                args.push(stmt::Expr::ref_parent_field(pk_field.id))
+            } else {
+                todo!("{entry:#?}");
             }
         }
 
