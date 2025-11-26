@@ -49,13 +49,16 @@ impl Simplify<'_> {
         maybe_expr
     }
 
-    /// Optimizes queries by lifting BelongsTo relation constraints out of subqueries when possible.
+    /// Optimizes queries by lifting BelongsTo relation constraints out of
+    /// subqueries when possible.
     ///
-    /// This is an app-level optimization that operates on the application schema before
-    /// statements are lowered to database-specific representations.
+    /// This is an app-level optimization that operates on the application
+    /// schema before statements are lowered to database-specific
+    /// representations.
     ///
-    /// This method analyzes a subquery that filters a related model and determines if the query
-    /// can be rewritten to avoid the subquery by directly comparing foreign key fields.
+    /// This method analyzes a subquery that filters a related model and
+    /// determines if the query can be rewritten to avoid the subquery by
+    /// directly comparing foreign key fields.
     ///
     /// For example, transforms:
     /// ```sql
@@ -67,17 +70,22 @@ impl Simplify<'_> {
     /// ```
     ///
     /// The optimization works by:
-    /// 1. Verifying the subquery targets the same model as the BelongsTo relation
-    /// 2. Analyzing the subquery's WHERE clause to find constraints on foreign key fields
-    /// 3. If all constraints can be lifted, rewriting them as direct field comparisons
-    /// 4. If constraints reference non-foreign-key fields, falling back to an IN subquery
+    /// 1. Verifying the subquery targets the same model as the BelongsTo
+    ///    relation
+    /// 2. Analyzing the subquery's WHERE clause to find constraints on foreign
+    ///    key fields
+    /// 3. If all constraints can be lifted, rewriting them as direct field
+    ///    comparisons
+    /// 4. If constraints reference non-foreign-key fields, falling back to an
+    ///    IN subquery
     ///
     /// Returns `None` if the subquery cannot be optimized (wrong target model).
     /// Returns `Some(expr)` containing either:
     /// - Direct field comparison expressions (when optimization succeeds)
     /// - An IN subquery expression (when partial optimization is possible)
     ///
-    /// Currently only supports single-field foreign keys; composite keys are not yet implemented.
+    /// Currently only supports single-field foreign keys; composite keys are
+    /// not yet implemented.
     fn lift_belongs_to_in_subquery(
         &self,
         belongs_to: &BelongsTo,
@@ -130,7 +138,8 @@ impl Simplify<'_> {
         }
     }
 
-    /// Rewrite the `HasOne` in subquery expression to reference the foreign key.
+    /// Rewrite the `HasOne` in subquery expression to reference the foreign
+    /// key.
     fn lift_has_one_in_subquery(
         &self,
         has_one: &HasOne,
@@ -213,5 +222,263 @@ impl LiftBelongsTo<'_> {
         }
 
         self.fail = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use toasty_core::{
+        driver::Capability,
+        schema::{
+            app::{
+                BelongsTo, Field, FieldName, FieldPrimitive, ForeignKey, ForeignKeyField, HasMany,
+                Index, IndexField, IndexId, Model, ModelId, PrimaryKey,
+            },
+            db::{IndexOp, IndexScope},
+            Builder, Name,
+        },
+        stmt::{Expr, ExprBinaryOp, Query, Type, Value},
+    };
+
+    /// Schema with `User` and `Post` models in a `HasMany`/`BelongsTo`
+    /// relationship.
+    struct UserPostSchema {
+        schema: toasty_core::Schema,
+        user_model: ModelId,
+        user_id: FieldId,
+        post_model: ModelId,
+        post_author: FieldId,
+    }
+
+    impl UserPostSchema {
+        fn new() -> Self {
+            let user_model = ModelId(0);
+            let post_model = ModelId(1);
+
+            let user_id = FieldId {
+                model: user_model,
+                index: 0,
+            };
+            let user_posts = FieldId {
+                model: user_model,
+                index: 1,
+            };
+
+            let post_id = FieldId {
+                model: post_model,
+                index: 0,
+            };
+            let post_user_id = FieldId {
+                model: post_model,
+                index: 1,
+            };
+            let post_author = FieldId {
+                model: post_model,
+                index: 2,
+            };
+
+            let user_model_def = Model {
+                id: user_model,
+                name: Name::new("User"),
+                fields: vec![
+                    Field {
+                        id: user_id,
+                        name: FieldName {
+                            app_name: "id".to_string(),
+                            storage_name: None,
+                        },
+                        ty: FieldTy::Primitive(FieldPrimitive {
+                            ty: Type::I64,
+                            storage_ty: None,
+                        }),
+                        nullable: false,
+                        primary_key: true,
+                        auto: None,
+                        constraints: vec![],
+                    },
+                    Field {
+                        id: user_posts,
+                        name: FieldName {
+                            app_name: "posts".to_string(),
+                            storage_name: None,
+                        },
+                        ty: FieldTy::HasMany(HasMany {
+                            target: post_model,
+                            expr_ty: Type::List(Box::new(Type::Model(post_model))),
+                            singular: Name::new("post"),
+                            pair: post_author,
+                        }),
+                        nullable: false,
+                        primary_key: false,
+                        auto: None,
+                        constraints: vec![],
+                    },
+                ],
+                primary_key: PrimaryKey {
+                    fields: vec![user_id],
+                    index: IndexId {
+                        model: user_model,
+                        index: 0,
+                    },
+                },
+                indices: vec![Index {
+                    id: IndexId {
+                        model: user_model,
+                        index: 0,
+                    },
+                    fields: vec![IndexField {
+                        field: user_id,
+                        op: IndexOp::Eq,
+                        scope: IndexScope::Local,
+                    }],
+                    unique: true,
+                    primary_key: true,
+                }],
+                table_name: None,
+            };
+
+            let post_model_def = Model {
+                id: post_model,
+                name: Name::new("Post"),
+                fields: vec![
+                    Field {
+                        id: post_id,
+                        name: FieldName {
+                            app_name: "id".to_string(),
+                            storage_name: None,
+                        },
+                        ty: FieldTy::Primitive(FieldPrimitive {
+                            ty: Type::I64,
+                            storage_ty: None,
+                        }),
+                        nullable: false,
+                        primary_key: true,
+                        auto: None,
+                        constraints: vec![],
+                    },
+                    Field {
+                        id: post_user_id,
+                        name: FieldName {
+                            app_name: "user_id".to_string(),
+                            storage_name: None,
+                        },
+                        ty: FieldTy::Primitive(FieldPrimitive {
+                            ty: Type::I64,
+                            storage_ty: None,
+                        }),
+                        nullable: false,
+                        primary_key: false,
+                        auto: None,
+                        constraints: vec![],
+                    },
+                    Field {
+                        id: post_author,
+                        name: FieldName {
+                            app_name: "author".to_string(),
+                            storage_name: None,
+                        },
+                        ty: FieldTy::BelongsTo(BelongsTo {
+                            target: user_model,
+                            expr_ty: Type::Model(user_model),
+                            pair: Some(user_posts),
+                            foreign_key: ForeignKey {
+                                fields: vec![ForeignKeyField {
+                                    source: post_user_id,
+                                    target: user_id,
+                                }],
+                            },
+                        }),
+                        nullable: false,
+                        primary_key: false,
+                        auto: None,
+                        constraints: vec![],
+                    },
+                ],
+                primary_key: PrimaryKey {
+                    fields: vec![post_id],
+                    index: IndexId {
+                        model: post_model,
+                        index: 0,
+                    },
+                },
+                indices: vec![
+                    Index {
+                        id: IndexId {
+                            model: post_model,
+                            index: 0,
+                        },
+                        fields: vec![IndexField {
+                            field: post_id,
+                            op: IndexOp::Eq,
+                            scope: IndexScope::Local,
+                        }],
+                        unique: true,
+                        primary_key: true,
+                    },
+                    Index {
+                        id: IndexId {
+                            model: post_model,
+                            index: 1,
+                        },
+                        fields: vec![IndexField {
+                            field: post_user_id,
+                            op: IndexOp::Eq,
+                            scope: IndexScope::Local,
+                        }],
+                        unique: false,
+                        primary_key: false,
+                    },
+                ],
+                table_name: None,
+            };
+
+            let mut app_schema = toasty_core::schema::app::Schema::default();
+            app_schema.models.insert(user_model, user_model_def);
+            app_schema.models.insert(post_model, post_model_def);
+
+            let schema = Builder::new()
+                .build(app_schema, &Capability::SQLITE)
+                .expect("schema should build");
+
+            Self {
+                schema,
+                user_model,
+                user_id,
+                post_model,
+                post_author,
+            }
+        }
+    }
+
+    #[test]
+    fn belongs_to_lifts_fk_constraint_to_direct_eq() {
+        let s = UserPostSchema::new();
+        let simplify = Simplify::new(&s.schema);
+
+        let post_source: stmt::Source = s.post_model.into();
+        let mut scoped_simplify = simplify.scope(&post_source);
+
+        // `lift_in_subquery(author, select(User, eq(id, 42))) → eq(user_id, 42)`
+        let expr = Expr::ref_self_field(s.post_author);
+        let filter = Expr::eq(
+            Expr::ref_self_field(s.user_id),
+            Expr::Value(Value::from(42i64)),
+        );
+        let query = Query::new_select(s.user_model, filter);
+
+        let result = scoped_simplify.lift_in_subquery(&expr, &query);
+
+        assert!(result.is_some());
+        let lifted = result.unwrap();
+        let Expr::BinaryOp(ExprBinaryOp { op, lhs, rhs }) = lifted else {
+            panic!("expected result to be an `Expr::BinaryOp`");
+        };
+        assert!(op.is_eq());
+        assert!(matches!(
+            *lhs,
+            Expr::Reference(stmt::ExprReference::Field { index: 1, .. })
+        ));
+        assert!(matches!(*rhs, Expr::Value(Value::I64(42))));
     }
 }

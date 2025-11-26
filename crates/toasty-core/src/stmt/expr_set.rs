@@ -3,18 +3,29 @@ use std::fmt;
 use super::{Expr, ExprSetOp, Select, SourceModel, Update, Values};
 use crate::schema::db::TableId;
 
+/// A set of rows produced by a query, set operation, or explicit values.
+///
+/// Represents the different ways to produce a collection of rows in SQL.
+///
+/// # Examples
+///
+/// ```text
+/// SELECT * FROM users           // ExprSet::Select
+/// SELECT ... UNION SELECT ...   // ExprSet::SetOp
+/// VALUES (1, 'a'), (2, 'b')     // ExprSet::Values
+/// ```
 #[derive(Clone, PartialEq)]
 pub enum ExprSet {
     /// A select query, possibly with a filter.
     Select(Box<Select>),
 
-    /// A set operation (union, intersection, ...) on two queries
+    /// A set operation (union, intersection, ...) on two queries.
     SetOp(ExprSetOp),
 
-    /// An update expression
+    /// An update expression.
     Update(Box<Update>),
 
-    /// Explicitly listed values (as expressions)
+    /// Explicitly listed values (as expressions).
     Values(Values),
 }
 

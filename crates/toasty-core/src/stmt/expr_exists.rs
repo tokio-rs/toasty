@@ -1,8 +1,22 @@
 use crate::stmt::{Expr, Query};
 
+/// Tests whether a subquery returns any rows.
+///
+/// Returns `true` if the subquery produces at least one row (or no rows when
+/// negated).
+///
+/// # Examples
+///
+/// ```text
+/// exists(subquery)      // returns `true` if subquery has results
+/// not_exists(subquery)  // returns `true` if subquery has no results
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprExists {
+    /// The subquery to check.
     pub subquery: Box<Query>,
+
+    /// When `true`, this is a "not exists" check.
     pub negated: bool,
 }
 

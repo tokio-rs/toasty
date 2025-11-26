@@ -1,9 +1,27 @@
 use super::{BinaryOp, Expr};
 
+/// A binary operation between two expressions.
+///
+/// Applies an operator to a left-hand side and right-hand side expression.
+/// Supported operators include equality, comparison, and type checking.
+///
+/// # Examples
+///
+/// ```text
+/// eq(a, b)   // a == b
+/// ne(a, b)   // a != b
+/// lt(a, b)   // a < b
+/// gt(a, b)   // a > b
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprBinaryOp {
+    /// The left-hand side expression.
     pub lhs: Box<Expr>,
+
+    /// The operator to apply.
     pub op: BinaryOp,
+
+    /// The right-hand side expression.
     pub rhs: Box<Expr>,
 }
 
