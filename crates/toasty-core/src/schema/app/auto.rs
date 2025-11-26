@@ -2,4 +2,22 @@
 #[derive(Debug, Clone)]
 pub enum Auto {
     Id,
+    Uuid(UuidVersion),
+    Increment,
+}
+
+#[derive(Debug, Clone)]
+pub enum UuidVersion {
+    V4,
+    V7,
+}
+
+impl Auto {
+    /// Returns `true` if the auto is [`Increment`].
+    ///
+    /// [`Increment`]: Auto::Increment
+    #[must_use]
+    pub fn is_increment(&self) -> bool {
+        matches!(self, Self::Increment)
+    }
 }

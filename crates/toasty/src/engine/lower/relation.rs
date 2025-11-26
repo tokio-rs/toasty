@@ -34,13 +34,20 @@ trait RelationSource {
     /// Return a query representing the source selection
     fn selection(&self) -> stmt::Query;
 
-    /// Update a field expression
-    fn set(&mut self, field: FieldId, expr: stmt::Expr);
+    /// Update a source field expression
+    fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr);
+
+    /// Update a returning field expression
+    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr);
+
+    /// Try to downcast to InsertRelationSource for checking Expr::Default fields
+    fn as_insert_source(&self) -> Option<&InsertRelationSource<'_>>;
 }
 
 struct InsertRelationSource<'a> {
     model: &'a app::Model,
     row: &'a mut stmt::Expr,
+    returning: &'a mut Option<stmt::Returning>,
 }
 
 struct UpdateRelationSource<'a> {
@@ -57,16 +64,23 @@ impl LowerStatement<'_, '_> {
         };
 
         // Handle any cascading deletes
+        let mut unused_then = vec![];
         for field in model.fields.iter() {
             self.plan_mut_relation_field(
                 field,
                 Mutation::DisassociateAll { delete: true },
                 &mut stmt,
+                &mut unused_then,
             );
         }
     }
 
-    pub(super) fn plan_stmt_insert_relations(&mut self, row: &mut stmt::Expr) {
+    pub(super) fn plan_stmt_insert_relations(
+        &mut self,
+        row: &mut stmt::Expr,
+        returning: &mut Option<stmt::Returning>,
+        then: &mut Vec<stmt::Statement>,
+    ) {
         let model = self.expr_cx.target().as_model_unwrap();
 
         for (i, field) in model.fields.iter().enumerate() {
@@ -93,7 +107,12 @@ impl LowerStatement<'_, '_> {
                         expr,
                         exclusive: field.ty.is_belongs_to(),
                     },
-                    &mut InsertRelationSource { model, row },
+                    &mut InsertRelationSource {
+                        model,
+                        row,
+                        returning,
+                    },
+                    then,
                 );
             }
         }
@@ -105,6 +124,7 @@ impl LowerStatement<'_, '_> {
         filter: &stmt::Filter,
     ) {
         let model = self.expr_cx.target().as_model_unwrap();
+        let mut unused_then = vec![];
 
         for (i, field) in model.fields.iter().enumerate() {
             if !field.is_relation() {
@@ -148,6 +168,7 @@ impl LowerStatement<'_, '_> {
                     filter,
                     assignments: &mut *assignments,
                 },
+                &mut unused_then,
             );
         }
     }
@@ -157,33 +178,50 @@ impl LowerStatement<'_, '_> {
         field: &app::Field,
         op: Mutation,
         source: &mut dyn RelationSource,
+        then: &mut Vec<stmt::Statement>,
     ) {
         match &field.ty {
             FieldTy::HasOne(..) => {
-                self.relation_step(field, |lower| lower.plan_mut_has_one(field, op, source));
+                self.relation_step(field, |lower| {
+                    lower.plan_mut_has_one(field, op, source, then)
+                });
             }
             FieldTy::HasMany(..) => {
-                self.relation_step(field, |lower| lower.plan_mut_has_many(field, op, source));
+                self.relation_step(field, |lower| {
+                    lower.plan_mut_has_many(field, op, source, then)
+                });
             }
             FieldTy::BelongsTo(_) => {
-                self.plan_mut_belongs_to(field, op, source);
+                self.plan_mut_belongs_to(field, op, source, then);
             }
             _ => (),
         }
     }
 
-    fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
+    fn plan_mut_has_many(
+        &mut self,
+        field: &Field,
+        op: Mutation,
+        source: &mut dyn RelationSource,
+        then: &mut Vec<stmt::Statement>,
+    ) {
         let has_many = field.ty.expect_has_many();
         let pair = self.field(has_many.pair);
 
-        self.plan_mut_has_n(field, pair, op, source);
+        self.plan_mut_has_n(field, pair, op, source, then);
     }
 
-    fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
+    fn plan_mut_has_one(
+        &mut self,
+        field: &Field,
+        op: Mutation,
+        source: &mut dyn RelationSource,
+        then: &mut Vec<stmt::Statement>,
+    ) {
         let has_one = field.ty.expect_has_one();
         let pair = self.field(has_one.pair);
 
-        self.plan_mut_has_n(field, pair, op, source);
+        self.plan_mut_has_n(field, pair, op, source, then);
     }
 
     fn plan_mut_has_n(
@@ -192,6 +230,7 @@ impl LowerStatement<'_, '_> {
         pair: &Field,
         op: Mutation,
         source: &mut dyn RelationSource,
+        then: &mut Vec<stmt::Statement>,
     ) {
         match op {
             Mutation::DisassociateAll { .. } => {
@@ -205,7 +244,7 @@ impl LowerStatement<'_, '_> {
                 });
 
                 self.with_dependencies(deps, |lower| {
-                    lower.plan_mut_has_n_associate_expr(field, pair, expr, source);
+                    lower.plan_mut_has_n_associate_expr(field, pair, expr, source, then);
                 });
             }
             Mutation::Disassociate { expr } => {
@@ -221,15 +260,16 @@ impl LowerStatement<'_, '_> {
         pair: &Field,
         expr: stmt::Expr,
         source: &mut dyn RelationSource,
+        then: &mut Vec<stmt::Statement>,
     ) {
         match expr {
             stmt::Expr::List(expr_list) => {
                 for expr in expr_list.items {
-                    self.plan_mut_has_n_associate_expr(field, pair, expr, source);
+                    self.plan_mut_has_n_associate_expr(field, pair, expr, source, then);
                 }
             }
             stmt::Expr::Stmt(expr_stmt) => {
-                self.plan_mut_has_n_associate_stmt(field, pair, *expr_stmt.stmt, source);
+                self.plan_mut_has_n_associate_stmt(field, pair, *expr_stmt.stmt, source, then);
             }
             stmt::Expr::Value(stmt::Value::List(value_list)) => {
                 for value in value_list {
@@ -318,11 +358,12 @@ impl LowerStatement<'_, '_> {
         field: &Field,
         pair: &Field,
         stmt: stmt::Statement,
-        source: &dyn RelationSource,
+        source: &mut dyn RelationSource,
+        then: &mut Vec<stmt::Statement>,
     ) {
         match stmt {
             stmt::Statement::Insert(stmt) => {
-                self.plan_mut_has_n_associate_insert(field, pair, stmt, source)
+                self.plan_mut_has_n_associate_insert(field, pair, stmt, source, then)
             }
             _ => todo!("stmt={:#?}", stmt),
         }
@@ -333,16 +374,15 @@ impl LowerStatement<'_, '_> {
         _field: &Field,
         pair: &Field,
         mut stmt: stmt::Insert,
-        source: &dyn RelationSource,
+        source: &mut dyn RelationSource,
+        then: &mut Vec<stmt::Statement>,
     ) {
-        // Returning does nothing in this context.
-        stmt.returning = None;
-
         debug_assert_eq!(stmt.target.as_model_unwrap(), pair.id.model);
         debug_assert!(stmt.target.is_model());
 
         stmt.target = self.relation_pair_scope(pair.id, source).into();
-        self.new_dependency(stmt);
+        self.state.engine.simplify_stmt(&mut stmt);
+        source.set_returning_field(_field.id, stmt.into());
     }
 
     fn plan_mut_belongs_to(
@@ -350,7 +390,9 @@ impl LowerStatement<'_, '_> {
         field: &Field,
         op: Mutation,
         source: &mut dyn RelationSource,
+        _then: &mut Vec<stmt::Statement>,
     ) {
+        // BelongsTo doesn't create child inserts, so `then` is unused
         match op {
             Mutation::Associate { expr, .. } => {
                 self.plan_mut_belongs_to_associate(field, expr, source)
@@ -389,7 +431,7 @@ impl LowerStatement<'_, '_> {
 
         if !delete {
             for fk_field in &belongs_to.foreign_key.fields {
-                source.set(fk_field.source, stmt::Expr::null());
+                source.set_source_field(fk_field.source, stmt::Expr::null());
             }
         }
     }
@@ -553,11 +595,11 @@ impl LowerStatement<'_, '_> {
             let fk_values = expr.into_record_items().unwrap();
 
             for (fk_field, fk_value) in fk_fields.iter().zip(fk_values) {
-                source.set(fk_field.source, fk_value);
+                source.set_source_field(fk_field.source, fk_value);
             }
         } else {
             let [fk_field] = &fk_fields[..] else { todo!() };
-            source.set(fk_field.source, expr);
+            source.set_source_field(fk_field.source, expr);
         }
     }
 }
@@ -567,8 +609,16 @@ impl RelationSource for &stmt::Delete {
         stmt::Delete::selection(self)
     }
 
-    fn set(&mut self, _field: FieldId, _expr: stmt::Expr) {
+    fn set_source_field(&mut self, _field: FieldId, _expr: stmt::Expr) {
         unimplemented!("delete statements do not need to update field values");
+    }
+
+    fn set_returning_field(&mut self, _field: FieldId, _expr: stmt::Expr) {
+        unimplemented!("delete statements do not need to update field values");
+    }
+
+    fn as_insert_source(&self) -> Option<&InsertRelationSource<'_>> {
+        None
     }
 }
 
@@ -577,8 +627,16 @@ impl RelationSource for UpdateRelationSource<'_> {
         stmt::Query::new_select(self.model, self.filter.clone())
     }
 
-    fn set(&mut self, field: FieldId, expr: stmt::Expr) {
+    fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
         self.assignments.set(field, expr);
+    }
+
+    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
+        todo!()
+    }
+
+    fn as_insert_source(&self) -> Option<&InsertRelationSource<'_>> {
+        None
     }
 }
 
@@ -587,14 +645,39 @@ impl RelationSource for InsertRelationSource<'_> {
         let mut args = vec![];
 
         for pk_field in self.model.primary_key_fields() {
-            args.push(self.row.entry(pk_field.id.index).to_value());
+            let entry = self.row.entry(pk_field.id.index);
+
+            if entry.is_value() {
+                args.push(entry.to_expr());
+            } else if entry.is_expr_default() {
+                args.push(stmt::Expr::ref_parent_field(pk_field.id))
+            } else {
+                todo!("{entry:#?}");
+            }
         }
 
-        self.model.find_by_id(&args)
+        self.model.find_by_id(&args[..])
     }
 
-    fn set(&mut self, field: FieldId, expr: stmt::Expr) {
+    fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
         assert_eq!(self.model.id, field.model);
         self.row.as_record_mut()[field.index] = expr;
+    }
+
+    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
+        if let Some(stmt::Returning::Expr(stmt::Expr::Record(record))) = self.returning {
+            assert!(
+                record.fields[field.index].is_value_null(),
+                "TODO: probably need to merge instead of overwrite; actual={:#?}",
+                record.fields[field.index]
+            );
+            record.fields[field.index] = expr;
+        } else {
+            todo!();
+        }
+    }
+
+    fn as_insert_source(&self) -> Option<&InsertRelationSource<'_>> {
+        Some(self)
     }
 }

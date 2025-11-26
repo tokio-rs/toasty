@@ -17,6 +17,9 @@ pub struct Capability {
 
     /// DynamoDB does not support != predicates on the primary key.
     pub primary_key_ne_predicate: bool,
+
+    /// Whether the database has an auto increment modifier for integer columns.
+    pub has_auto_increment: bool,
 }
 
 #[derive(Debug)]
@@ -65,6 +68,7 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         primary_key_ne_predicate: true,
+        has_auto_increment: true,
     };
 
     /// PostgreSQL capabilities
@@ -72,6 +76,7 @@ impl Capability {
         cte_with_update: true,
         storage_types: StorageTypes::POSTGRESQL,
         select_for_update: true,
+        has_auto_increment: true,
         ..Self::SQLITE
     };
 
@@ -80,6 +85,7 @@ impl Capability {
         cte_with_update: false,
         storage_types: StorageTypes::MYSQL,
         select_for_update: true,
+        has_auto_increment: true,
         ..Self::SQLITE
     };
 
@@ -90,6 +96,7 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         primary_key_ne_predicate: false,
+        has_auto_increment: false,
     };
 }
 

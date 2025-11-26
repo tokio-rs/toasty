@@ -4,7 +4,7 @@ mod arg;
 pub use arg::Arg;
 
 mod auto;
-pub use auto::Auto;
+pub use auto::{Auto, UuidVersion};
 
 mod constraint;
 pub use constraint::{Constraint, ConstraintLength};

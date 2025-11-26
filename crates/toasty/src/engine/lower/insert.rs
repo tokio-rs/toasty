@@ -34,7 +34,12 @@ impl LowerStatement<'_, '_> {
         *target = stmt::InsertTarget::Model(scope.source.model_id_unwrap());
     }
 
-    pub(super) fn preprocess_insert_values(&mut self, source: &mut stmt::Query) {
+    pub(super) fn preprocess_insert_values(
+        &mut self,
+        source: &mut stmt::Query,
+        returning: &mut Option<stmt::Returning>,
+        then: &mut Vec<stmt::Statement>,
+    ) {
         let stmt::ExprSet::Values(values) = &mut source.body else {
             todo!()
         };
@@ -45,7 +50,7 @@ impl LowerStatement<'_, '_> {
 
         for row in &mut values.rows {
             self.apply_app_level_insertion_defaults(model, row);
-            self.plan_stmt_insert_relations(row);
+            self.plan_stmt_insert_relations(row, returning, then);
             self.verify_field_constraints(model, row);
         }
     }
@@ -86,10 +91,28 @@ impl LowerStatement<'_, '_> {
                 // If the field is defined to be auto-populated, then populate
                 // it here.
                 if let Some(auto) = &field.auto {
+                    let ty = match &field.ty {
+                        app::FieldTy::Primitive(primitive) => &primitive.ty,
+                        _ => panic!("#[auto] not allowed on non-primitive fields"),
+                    };
                     match auto {
                         app::Auto::Id => {
                             let id = uuid::Uuid::new_v4().to_string();
                             field_expr.insert(stmt::Id::from_string(model.id, id).into());
+                        }
+                        app::Auto::Uuid(version) => {
+                            let id = match version {
+                                app::UuidVersion::V4 => uuid::Uuid::new_v4(),
+                                app::UuidVersion::V7 => uuid::Uuid::now_v7(),
+                            };
+                            match ty {
+                                stmt::Type::String => field_expr.insert(stmt::Value::String(id.to_string()).into()),
+                                stmt::Type::Uuid => field_expr.insert(stmt::Value::Uuid(id).into()),
+                                _ => panic!("auto-generated UUID cannot be inserted into column of type {ty:?}"),
+                            };
+                        }
+                        app::Auto::Increment => {
+                            // Leave value as `Expr::Default` and let the database handle it.
                         }
                     }
                 }
@@ -107,7 +130,7 @@ impl LowerStatement<'_, '_> {
 
             if !field.nullable && field_expr.is_value_null() {
                 // Relations are handled differently
-                if !field.ty.is_relation() {
+                if !field.ty.is_relation() && field.auto.is_none() {
                     panic!(
                         "Insert missing non-nullable field; model={}; field={:#?}; expr={:#?}",
                         model.name.upper_camel_case(),
@@ -137,17 +160,35 @@ impl ApplyInsertScope<'_> {
             stmt::Expr::BinaryOp(e) if e.op.is_eq() => match (&*e.lhs, &*e.rhs) {
                 (
                     stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }),
-                    stmt::Expr::Value(rhs),
+                    rhs @ stmt::Expr::Value(..),
                 ) => {
-                    self.apply_eq_const(expr_ref, rhs);
+                    self.apply_eq_constraint(expr_ref, rhs);
                 }
                 (
-                    stmt::Expr::Value(lhs),
+                    lhs @ stmt::Expr::Value(..),
                     stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }),
                 ) => {
-                    self.apply_eq_const(expr_ref, lhs);
+                    self.apply_eq_constraint(expr_ref, lhs);
                 }
-                _ => todo!(),
+                (
+                    lhs_expr @ stmt::Expr::Reference(
+                        lhs @ stmt::ExprReference::Field {
+                            nesting: nesting_lhs,
+                            ..
+                        },
+                    ),
+                    rhs_expr @ stmt::Expr::Reference(
+                        rhs @ stmt::ExprReference::Field {
+                            nesting: nesting_rhs,
+                            ..
+                        },
+                    ),
+                ) => match (nesting_lhs, nesting_rhs) {
+                    (0, _) if *nesting_rhs > 0 => self.apply_eq_constraint(lhs, rhs_expr),
+                    (_, 0) if *nesting_lhs > 0 => self.apply_eq_constraint(rhs, lhs_expr),
+                    _ => panic!("exactly one field must reference parent"),
+                },
+                _ => todo!("EXPR = {:#?}", stmt),
             },
             // Constants are ignored
             stmt::Expr::Value(_) => {}
@@ -155,7 +196,7 @@ impl ApplyInsertScope<'_> {
         }
     }
 
-    fn apply_eq_const(&mut self, expr_ref: &stmt::ExprReference, val: &stmt::Value) {
+    fn apply_eq_constraint(&mut self, expr_ref: &stmt::ExprReference, val: &stmt::Expr) {
         let stmt::ExprReference::Field { nesting, index } = expr_ref else {
             todo!("handle non-field reference");
         };
@@ -166,12 +207,16 @@ impl ApplyInsertScope<'_> {
 
         if !existing.is_value_null() && !existing.is_default() {
             if let stmt::EntryMut::Value(existing) = existing {
-                assert_eq!(existing, val);
+                if let stmt::Expr::Value(val) = val {
+                    assert_eq!(existing, val);
+                } else {
+                    todo!()
+                }
             } else {
                 todo!()
             }
         } else {
-            existing.insert(val.clone().into());
+            existing.insert(val.clone());
         }
     }
 }

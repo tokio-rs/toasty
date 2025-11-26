@@ -66,7 +66,7 @@ impl Expand<'_> {
             impl Default for #create_struct_ident {
                 fn default() -> #create_struct_ident {
                     #create_struct_ident {
-                        stmt: #toasty::stmt::Insert::blank(),
+                        stmt: #toasty::stmt::Insert::blank_single(),
                     }
                 }
             }

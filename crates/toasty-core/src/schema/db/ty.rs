@@ -126,9 +126,8 @@ impl Type {
     /// as an intermediate conversion step to lessen the work done by each individual driver.
     pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {
         match (self, ty) {
-            (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
-            (Self::Text | Self::VarChar(_), stmt::Type::Uuid) => stmt::Type::String,
-            (Self::Text | Self::VarChar(_), stmt::Type::Id(_)) => stmt::Type::String,
+            (Self::Blob | Self::Binary(_), _) => stmt::Type::Bytes,
+            (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
             _ => ty.clone(),
         }
     }

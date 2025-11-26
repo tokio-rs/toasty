@@ -312,6 +312,18 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                             let source_id = self.scope_stmt_id();
                             let target_id = self.resolve_stmt_id(expr_column.nesting);
 
+                            // The statement is not independent. Walk up the
+                            // scope stack until the referened target statement
+                            // and flag any intermediate statements as also not
+                            // indepdnendent.
+                            for scope in self.state.scopes.iter().rev() {
+                                if scope.stmt_id == target_id {
+                                    break;
+                                }
+
+                                self.state.hir[scope.stmt_id].independent = false;
+                            }
+
                             let position = self.new_ref(source_id, target_id, *expr_reference);
 
                             // Using ExprArg as a placeholder. It will be rewritten
@@ -338,6 +350,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
 
                 let position = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
+
+                if self.state.hir[target_id].independent {
+                    self.curr_stmt_info().deps.insert(target_id);
+                }
+
                 *expr = stmt::Expr::arg(position);
             }
             _ => {
@@ -424,13 +441,21 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // *except* the target field (since it is borrowed).
         let mut lower = self.lower_insert(&stmt.target);
 
+        if let Some(returning) = &mut stmt.returning {
+            lower.visit_returning_mut(returning);
+        }
+
         // Preprocess the insertion source (values usually);
-        lower.preprocess_insert_values(&mut stmt.source);
+        // This may populate stmt.then with child inserts when the parent has
+        // database-generated fields (Expr::Default) that children need to reference.
+        lower.preprocess_insert_values(&mut stmt.source, &mut stmt.returning, &mut stmt.then);
+        dbg!(&stmt);
 
         // Lower the insertion source
         lower.visit_stmt_query_mut(&mut stmt.source);
 
         if let Some(returning) = &mut stmt.returning {
+            // TODO: preprocess_insert_values
             lower.visit_returning_mut(returning);
             lower.constantize_insert_returning(returning, &stmt.source);
         }
@@ -749,7 +774,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 assert!(assignment.op.is_set(), "TODO");
                 assignment.expr.clone()
             }
-            LoweringContext::InsertRow(row) => row.entry(index).to_expr(),
+            LoweringContext::InsertRow(row) => {
+                // If nesting > 0, this references a parent scope, not the current row
+                if nesting > 0 {
+                    // Use Statement context to properly handle cross-statement references
+                    let mapping = self.mapping_at_unwrap(nesting);
+                    let result = mapping.table_to_model.lower_expr_reference(nesting, index);
+                    return result;
+                } else {
+                    row.entry(index).to_expr()
+                }
+            }
             _ => todo!("cx={:#?}", self.cx),
         }
     }
@@ -857,6 +892,24 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
         // Create an argument for inputing the expr reference's value into the statement.
         let source = &mut self.state.hir[source_id];
+
+        // See if an arg already exists
+        for (i, arg) in source.args.iter().enumerate() {
+            let hir::Arg::Ref {
+                stmt_id: s,
+                nesting: n,
+                batch_load_index: b,
+                ..
+            } = arg
+            else {
+                continue;
+            };
+
+            if *s == target_id && *n == nesting && *b == batch_load_index {
+                return i;
+            }
+        }
+
         let arg = source.args.len();
 
         source.args.push(hir::Arg::Ref {

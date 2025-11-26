@@ -230,13 +230,13 @@ impl BuildTableFromModels<'_> {
                     }
                 }
             } else {
-                // Get the column name
-                // TODO: this probably isn't right...
-                let name = model
+                let field = model
                     .primary_key
                     .fields
                     .get(i)
-                    .map(|field_id| model.field(*field_id).name.clone())
+                    .map(|field_id| model.field(*field_id));
+                let name = field
+                    .map(|field| field.name.clone())
                     .unwrap_or_else(|| FieldName {
                         app_name: format!("key_{i}"),
                         storage_name: None,
@@ -255,6 +255,10 @@ impl BuildTableFromModels<'_> {
                     }
                 };
 
+                let auto_increment = field
+                    .map(|field| field.is_auto_increment())
+                    .unwrap_or(false);
+
                 assert_eq!(self.table.columns.len(), i);
                 self.table.columns.push(db::Column {
                     id: column_id,
@@ -263,6 +267,7 @@ impl BuildTableFromModels<'_> {
                     storage_ty: db::Type::from_app(&ty, None, &self.db.storage_types).unwrap(),
                     nullable: false,
                     primary_key: true,
+                    auto_increment: auto_increment && self.db.has_auto_increment,
                 });
             }
         }
@@ -296,13 +301,7 @@ impl BuildTableFromModels<'_> {
 
             match &field.ty {
                 app::FieldTy::Primitive(simple) => {
-                    self.create_column_for_primitive(
-                        field.id,
-                        simple,
-                        &field.name,
-                        prefix.as_deref(),
-                        field.nullable,
-                    );
+                    self.create_column_for_primitive(field, simple, prefix.as_deref());
                 }
                 // HasMany/HasOne relationships do not have columns... for now?
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
@@ -366,19 +365,18 @@ impl BuildTableFromModels<'_> {
 
     fn create_column_for_primitive(
         &mut self,
-        field_id: FieldId,
+        field: &app::Field,
         primitive: &app::FieldPrimitive,
-        name: &app::FieldName,
         prefix: Option<&str>,
-        nullable: bool,
     ) {
         let storage_name = if let Some(prefix) = prefix {
-            let storage_name = name.storage_name();
+            let storage_name = field.name.storage_name();
             format!("{prefix}__{storage_name}")
         } else {
-            name.storage_name().to_owned()
+            field.name.storage_name().to_owned()
         };
 
+        let auto_increment = field.is_auto_increment();
         let storage_ty = db::Type::from_app(
             &primitive.ty,
             primitive.storage_ty.as_ref(),
@@ -394,11 +392,12 @@ impl BuildTableFromModels<'_> {
             name: storage_name,
             ty: storage_ty.bridge_type(&primitive.ty),
             storage_ty,
-            nullable,
+            nullable: field.nullable,
             primary_key: false,
+            auto_increment: auto_increment && self.db.has_auto_increment,
         };
 
-        self.mapping.model_mut(field_id.model).fields[field_id.index]
+        self.mapping.model_mut(field.id.model).fields[field.id.index]
             .as_mut()
             .unwrap()
             .column = column.id;
