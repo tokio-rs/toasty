@@ -875,6 +875,24 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
         // Create an argument for inputing the expr reference's value into the statement.
         let source = &mut self.state.hir[source_id];
+
+        // See if an arg already exists
+        for (i, arg) in source.args.iter().enumerate() {
+            let hir::Arg::Ref {
+                stmt_id: s,
+                nesting: n,
+                batch_load_index: b,
+                ..
+            } = arg
+            else {
+                continue;
+            };
+
+            if *s == target_id && *n == nesting && *b == batch_load_index {
+                return i;
+            }
+        }
+
         let arg = source.args.len();
 
         source.args.push(hir::Arg::Ref {

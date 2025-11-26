@@ -197,7 +197,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 continue;
             };
 
-            assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
+            assert!(
+                ref_source.is_none(),
+                "TODO: handle more complex ref cases; stmt={:#?}; arg={arg:#?}",
+                linked_stmt.stmt
+            );
             assert!(
                 !linked_stmt.stmt.filter_or_default().is_false(),
                 "TODO: handle const false filters"
@@ -949,10 +953,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt::Expr::arg_project(0, [index])
             }));
 
-            let arg_ty = self.planner.mir[exec_stmt_node_id]
-                .ty()
-                .unwrap_list_ref()
-                .clone();
+            let arg_ty = match self.planner.mir[exec_stmt_node_id].ty() {
+                // Lists are flattened
+                stmt::Type::List(ty) => (**ty).clone(),
+                ty => ty.clone(),
+            };
+
             let projection = eval::Func::from_stmt(projection, vec![arg_ty]);
             let ty = stmt::Type::list(projection.ret.clone());
 

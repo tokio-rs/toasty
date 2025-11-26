@@ -377,14 +377,10 @@ impl LowerStatement<'_, '_> {
         source: &mut dyn RelationSource,
         then: &mut Vec<stmt::Statement>,
     ) {
-        // Returning does nothing in this context.
-        stmt.returning = None;
-
         debug_assert_eq!(stmt.target.as_model_unwrap(), pair.id.model);
         debug_assert!(stmt.target.is_model());
 
         stmt.target = self.relation_pair_scope(pair.id, source).into();
-        stmt.returning = Some(stmt::Returning::Model { include: vec![] });
         self.state.engine.simplify_stmt(&mut stmt);
         source.set_returning_field(_field.id, stmt.into());
     }
@@ -669,6 +665,11 @@ impl RelationSource for InsertRelationSource<'_> {
 
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
         if let Some(stmt::Returning::Expr(stmt::Expr::Record(record))) = self.returning {
+            assert!(
+                record.fields[field.index].is_value_null(),
+                "TODO: probably need to merge instead of overwrite; actual={:#?}",
+                record.fields[field.index]
+            );
             record.fields[field.index] = expr;
         } else {
             todo!();
