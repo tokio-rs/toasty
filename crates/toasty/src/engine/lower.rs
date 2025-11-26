@@ -312,6 +312,18 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                             let source_id = self.scope_stmt_id();
                             let target_id = self.resolve_stmt_id(expr_column.nesting);
 
+                            // The statement is not independent. Walk up the
+                            // scope stack until the referened target statement
+                            // and flag any intermediate statements as also not
+                            // indepdnendent.
+                            for scope in self.state.scopes.iter().rev() {
+                                if scope.stmt_id == target_id {
+                                    break;
+                                }
+
+                                self.state.hir[scope.stmt_id].independent = false;
+                            }
+
                             let position = self.new_ref(source_id, target_id, *expr_reference);
 
                             // Using ExprArg as a placeholder. It will be rewritten
@@ -338,6 +350,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
 
                 let position = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
+
+                if self.state.hir[target_id].independent {
+                    self.curr_stmt_info().deps.insert(target_id);
+                }
+
                 *expr = stmt::Expr::arg(position);
             }
             _ => {

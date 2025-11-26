@@ -65,8 +65,12 @@ impl HirPlanner<'_> {
                 arg,
                 hir::Arg::Sub {
                     returning: true,
+                    stmt_id,
                     ..
                 }
+                // If the sub-statement is independent, then there is no need to
+                // perform a nested merge
+                if !self.hir[stmt_id].independent
             )
         });
         if !need_nested_merge {

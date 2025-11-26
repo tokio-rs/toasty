@@ -144,7 +144,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             return;
                         }
 
-                        let node_id = self.planner.hir[stmt_id].exec_statement.get().expect("bug");
+                        let node_id = if self.planner.hir[stmt_id].independent {
+                            self.planner.hir[stmt_id].output.get().expect("bug")
+                        } else {
+                            assert!(
+                                self.planner.hir[stmt_id].output.get().is_none(),
+                                "TODO: what is going on?"
+                            );
+                            self.planner.hir[stmt_id].exec_statement.get().expect("bug")
+                        };
 
                         let (index, _) = linked_stmt.inputs.insert_full(node_id);
                         input.set(Some(index));

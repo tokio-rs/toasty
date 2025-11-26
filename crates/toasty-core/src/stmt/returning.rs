@@ -61,8 +61,10 @@ impl Returning {
 
     #[track_caller]
     pub fn as_expr_unwrap(&self) -> &Expr {
-        self.as_expr()
-            .unwrap_or_else(|| panic!("expected stmt::Returning::Expr; actual={self:#?}"))
+        match self {
+            Self::Expr(expr) => expr,
+            _ => panic!("expected stmt::Returning::Expr; actual={self:#?}"),
+        }
     }
 
     pub fn as_expr_mut(&mut self) -> Option<&mut Expr> {
