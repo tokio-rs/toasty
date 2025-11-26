@@ -84,6 +84,18 @@ pub enum Type {
     /// Fixed-size binary type of `n` bytes
     Binary(u8),
 
+    /// An instant in time.
+    Timestamp,
+
+    /// A representation of a civil date in the Gregorian calendar.
+    Date,
+
+    /// A representation of civil “wall clock” time.
+    Time,
+
+    /// A representation of a civil datetime in the Gregorian calendar.
+    DateTime,
+
     /// User-specified unrecognized type
     Custom(String),
 }
