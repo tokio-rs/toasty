@@ -4,11 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = []
+default = ["jiff"]
 dynamodb = ["dep:toasty-driver-dynamodb"]
 mysql = ["dep:toasty-driver-mysql"]
 postgresql = ["dep:toasty-driver-postgresql"]
 sqlite = ["dep:toasty-driver-sqlite"]
+jiff = ["dep:jiff", "toasty-core/jiff"]
 serde = ["dep:serde_core"]
 
 
@@ -26,6 +27,7 @@ serde_core = { version = "1.0.221", optional = true }
 by_address.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
+jiff = { workspace = true, optional = true }
 tokio-stream.workspace = true
 uuid.workspace = true
 indexmap.workspace = true
