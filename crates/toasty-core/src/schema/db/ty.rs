@@ -122,6 +122,17 @@ impl Type {
                 stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
                 stmt::Type::Uuid => Ok(db.default_uuid_type.clone()),
+                // Date/time types from jiff
+                #[cfg(feature = "jiff")]
+                stmt::Type::Timestamp => Ok(db.default_timestamp_type.clone()),
+                #[cfg(feature = "jiff")]
+                stmt::Type::Zoned => Ok(db.default_zoned_type.clone()),
+                #[cfg(feature = "jiff")]
+                stmt::Type::Date => Ok(db.default_date_type.clone()),
+                #[cfg(feature = "jiff")]
+                stmt::Type::Time => Ok(db.default_time_type.clone()),
+                #[cfg(feature = "jiff")]
+                stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
                 // Gotta support some app-level types as well for now.
                 //
                 // TODO: not really correct, but we are getting rid of ID types
