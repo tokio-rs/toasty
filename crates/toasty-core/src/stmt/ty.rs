@@ -220,6 +220,11 @@ impl Type {
             return Ok(value);
         }
 
+        #[cfg(feature = "jiff")]
+        if let Some(value) = self.cast_jiff(&value)? {
+            return Ok(value);
+        }
+
         Ok(match (value, self) {
             // Identity
             (value @ Value::String(_), Self::String) => value,
