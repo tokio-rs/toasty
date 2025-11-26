@@ -124,6 +124,31 @@ pub enum Type {
     // An array of bytes that is more efficient than List(u8)
     Bytes,
 
+    /// An instant in time represented as the number of nanoseconds since the Unix epoch.
+    /// See [`jiff::Timestamp`].
+    #[cfg(feature = "jiff")]
+    Timestamp,
+
+    /// A time zone aware instant in time.
+    /// See [`jiff::Zoned`]
+    #[cfg(feature = "jiff")]
+    Zoned,
+
+    /// A representation of a civil date in the Gregorian calendar.
+    /// See [`jiff::civil::Date`].
+    #[cfg(feature = "jiff")]
+    Date,
+
+    /// A representation of civil “wall clock” time.
+    /// See [`jiff::civil::Time`].
+    #[cfg(feature = "jiff")]
+    Time,
+
+    /// A representation of a civil datetime in the Gregorian calendar.
+    /// See [`jiff::civil::DateTime`].
+    #[cfg(feature = "jiff")]
+    DateTime,
+
     /// The null type can be cast to any type.
     ///
     /// TODO: we should get rid of this.
