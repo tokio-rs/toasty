@@ -260,18 +260,20 @@ fn mysql_to_toasty(
                     second,
                     microsecond,
                 )) => {
+                    let dt = jiff::civil::DateTime::constant(
+                        year as i16,
+                        month as i8,
+                        day as i8,
+                        hour as i8,
+                        minute as i8,
+                        second as i8,
+                        (microsecond * 1000) as i32, // Convert microseconds to nanoseconds
+                    );
                     match ty {
-                        stmt::Type::DateTime => {
-                            stmt::Value::DateTime(jiff::civil::DateTime::constant(
-                                year as i16,
-                                month as i8,
-                                day as i8,
-                                hour as i8,
-                                minute as i8,
-                                second as i8,
-                                (microsecond * 1000) as i32, // Convert microseconds to nanoseconds
-                            ))
-                        }
+                        stmt::Type::DateTime => stmt::Value::DateTime(dt),
+                        stmt::Type::Timestamp => stmt::Value::Timestamp(
+                            dt.to_zoned(jiff::tz::TimeZone::UTC).unwrap().into(),
+                        ),
                         _ => todo!("unexpected type for DATETIME: {ty:#?}"),
                     }
                 }
@@ -294,7 +296,7 @@ fn mysql_to_toasty(
             match row.take_opt(i).expect("value missing") {
                 Ok(mysql_async::Value::Time(
                     _is_negative,
-                    days,
+                    _days,
                     hour,
                     minute,
                     second,

@@ -84,17 +84,17 @@ pub enum Type {
     /// Fixed-size binary type of `n` bytes
     Binary(u8),
 
-    /// An instant in time.
-    Timestamp,
+    /// An instant in time with fractional seconds precision (0-9 digits).
+    Timestamp(u8),
 
     /// A representation of a civil date in the Gregorian calendar.
     Date,
 
-    /// A representation of civil “wall clock” time.
-    Time,
+    /// A representation of civil "wall clock" time with fractional seconds precision (0-9 digits).
+    Time(u8),
 
-    /// A representation of a civil datetime in the Gregorian calendar.
-    DateTime,
+    /// A representation of a civil datetime in the Gregorian calendar with fractional seconds precision (0-9 digits).
+    DateTime(u8),
 
     /// User-specified unrecognized type
     Custom(String),
@@ -152,7 +152,7 @@ impl Type {
             (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
             (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
             // Let engine handle UTC conversion
-            (Self::Timestamp, stmt::Type::Zoned) => stmt::Type::Timestamp,
+            (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,
             _ => ty.clone(),
         }
     }

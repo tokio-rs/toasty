@@ -19,7 +19,7 @@ async fn ty_timestamp(test: &mut DbTest) {
         Timestamp::from_second(946684800).unwrap(), // 2000-01-01T00:00:00Z
         Timestamp::from_second(1609459200).unwrap(), // 2021-01-01T00:00:00Z
         Timestamp::from_second(1735689600).unwrap(), // 2025-01-01T00:00:00Z
-        Timestamp::from_second(978307200).unwrap(),  // 2001-01-01T00:00:00Z
+        Timestamp::from_second(978307200).unwrap(), // 2001-01-01T00:00:00Z
         Timestamp::from_second(1577836800).unwrap(), // 2020-01-01T00:00:00Z
         Timestamp::from_second(1893456000).unwrap(), // 2030-01-01T00:00:00Z
         Timestamp::from_second(2051222400).unwrap(), // 2035-01-01T00:00:00Z

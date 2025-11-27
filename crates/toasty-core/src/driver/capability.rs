@@ -139,12 +139,12 @@ impl StorageTypes {
 
         default_uuid_type: db::Type::Uuid,
 
-        // PostgreSQL has native support for temporal types
-        default_timestamp_type: db::Type::Timestamp,
-        default_zoned_type: db::Type::Timestamp,
+        // PostgreSQL has native support for temporal types with microsecond precision (6 digits)
+        default_timestamp_type: db::Type::Timestamp(6),
+        default_zoned_type: db::Type::Timestamp(6),
         default_date_type: db::Type::Date,
-        default_time_type: db::Type::Time,
-        default_datetime_type: db::Type::DateTime,
+        default_time_type: db::Type::Time(6),
+        default_datetime_type: db::Type::DateTime(6),
 
         // PostgreSQL BIGINT is signed 64-bit, so unsigned integers are limited
         // to i64::MAX. While NUMERIC could theoretically support larger values,
@@ -165,12 +165,14 @@ impl StorageTypes {
         // difficult to read than Text but likely has better performance characteristics.
         default_uuid_type: db::Type::Binary(16),
 
-        // MySQL has native support for temporal types
-        default_timestamp_type: db::Type::Timestamp,
-        default_zoned_type: db::Type::Timestamp,
+        // MySQL has native support for temporal types with microsecond precision (6 digits)
+        // The `TIMESTAMP` time only supports a limited range (1970-2038), so we default to
+        // DATETIME and let Toasty do the UTC conversion.
+        default_timestamp_type: db::Type::DateTime(6),
+        default_zoned_type: db::Type::DateTime(6),
         default_date_type: db::Type::Date,
-        default_time_type: db::Type::Time,
-        default_datetime_type: db::Type::DateTime,
+        default_time_type: db::Type::Time(6),
+        default_datetime_type: db::Type::DateTime(6),
 
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
