@@ -16,7 +16,7 @@ tokio-stream.workspace = true
 uuid.workspace = true
 
 [features]
-default = ["jiff"]
+default = []
 assert-struct = ["dep:assert-struct"]
 jiff = ["dep:jiff"]
 

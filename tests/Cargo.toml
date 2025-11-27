@@ -16,8 +16,8 @@ postgresql = ["toasty/postgresql"]
 assert-struct.workspace = true
 async-trait.workspace = true
 jiff.workspace = true
-toasty.workspace = true
-toasty-core = { workspace = true, features = ["assert-struct", "jiff"] }
+toasty = { workspace = true, features = ["jiff"] }
+toasty-core = { workspace = true, features = ["assert-struct"] }
 toasty-macros.workspace = true
 tokio.workspace = true
 
