@@ -151,6 +151,8 @@ impl Type {
         match (self, ty) {
             (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
             (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
+            // Let engine handle UTC conversion
+            (Self::Timestamp, stmt::Type::Zoned) => stmt::Type::Timestamp,
             _ => ty.clone(),
         }
     }

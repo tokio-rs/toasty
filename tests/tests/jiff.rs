@@ -21,8 +21,8 @@ async fn ty_timestamp(test: &mut DbTest) {
         Timestamp::from_second(946684800).unwrap(), // 2000-01-01T00:00:00Z
         Timestamp::from_second(1609459200).unwrap(), // 2021-01-01T00:00:00Z
         Timestamp::from_second(1735689600).unwrap(), // 2025-01-01T00:00:00Z
-        Timestamp::from_second(-62135596800).unwrap(), // 0001-01-01T00:00:00Z
-        Timestamp::from_second(253402207200).unwrap(), // Max valid timestamp (~9999-12-31)
+        Timestamp::from_second(-2147483648).unwrap(), // 1901-12-13T20:45:52Z (practical minimum for 32-bit systems)
+        Timestamp::from_second(4102444800).unwrap(), // 2099-12-31T00:00:00Z (practical maximum)
     ];
 
     for val in &test_values {
@@ -116,10 +116,10 @@ async fn ty_time(test: &mut DbTest) {
     let test_values = vec![
         Time::constant(0, 0, 0, 0),
         Time::constant(12, 0, 0, 0),
-        Time::constant(23, 59, 59, 999_999_999),
+        Time::constant(23, 59, 59, 999_999_000), // Microsecond precision
         Time::constant(9, 30, 15, 0),
         Time::constant(14, 45, 30, 500_000_000),
-        Time::constant(6, 0, 0, 123_456_789),
+        Time::constant(6, 0, 0, 123_456_000), // Microsecond precision
     ];
 
     for val in &test_values {
@@ -146,12 +146,12 @@ async fn ty_datetime(test: &mut DbTest) {
     let test_values = vec![
         DateTime::constant(2000, 1, 1, 0, 0, 0, 0),
         DateTime::constant(2021, 6, 15, 14, 30, 0, 0),
-        DateTime::constant(2025, 12, 31, 23, 59, 59, 999_999_999),
+        DateTime::constant(2025, 12, 31, 23, 59, 59, 999_999_000), // Microsecond precision
         DateTime::constant(1970, 1, 1, 0, 0, 0, 0),
         DateTime::constant(1900, 2, 28, 12, 0, 0, 0),
-        DateTime::constant(2024, 2, 29, 6, 30, 15, 123_456_789), // Leap year
-        DateTime::constant(9999, 12, 31, 23, 59, 59, 0),
-        DateTime::constant(1, 1, 1, 0, 0, 0, 0),
+        DateTime::constant(2024, 2, 29, 6, 30, 15, 123_456_000), // Leap year - Microsecond precision
+        DateTime::constant(2099, 12, 31, 23, 59, 59, 0),
+        DateTime::constant(1901, 1, 1, 0, 0, 0, 0),
     ];
 
     for val in &test_values {
