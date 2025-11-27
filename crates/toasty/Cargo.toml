@@ -9,7 +9,12 @@ dynamodb = ["dep:toasty-driver-dynamodb"]
 mysql = ["dep:toasty-driver-mysql"]
 postgresql = ["dep:toasty-driver-postgresql"]
 sqlite = ["dep:toasty-driver-sqlite"]
-jiff = ["dep:jiff", "toasty-core/jiff", "toasty-driver-postgresql/jiff"]
+jiff = [
+	"dep:jiff",
+	"toasty-core/jiff",
+	"toasty-driver-postgresql/jiff",
+	"toasty-driver-mysql/jiff",
+]
 serde = ["dep:serde_core"]
 
 

@@ -3,11 +3,15 @@ name = "toasty-driver-mysql"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+jiff = ["dep:jiff", "toasty-core/jiff"]
+
 [dependencies]
 toasty-core.workspace = true
 toasty-sql.workspace = true
 
 anyhow.workspace = true
+jiff = { workspace = true, optional = true }
 mysql_async.workspace = true
 tokio.workspace = true
 url.workspace = true
