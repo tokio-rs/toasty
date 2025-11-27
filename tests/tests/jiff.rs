@@ -182,20 +182,26 @@ async fn ty_timestamp_precision_2(test: &mut DbTest) {
     let db = test.setup_db(models!(Foo)).await;
 
     // Test value with nanosecond precision
-    let original = Timestamp::from_second(946684800).unwrap()
+    let original = Timestamp::from_second(946684800)
+        .unwrap()
         .checked_add(jiff::Span::new().nanoseconds(123_456_789))
         .unwrap();
 
     // Expected value truncated to 2 decimal places (centiseconds = 10ms precision)
     // 123_456_789 ns -> 120_000_000 ns (truncated to centiseconds)
-    let expected = Timestamp::from_second(946684800).unwrap()
+    let expected = Timestamp::from_second(946684800)
+        .unwrap()
         .checked_add(jiff::Span::new().nanoseconds(120_000_000))
         .unwrap();
 
     let created = Foo::create().val(original).exec(&db).await.unwrap();
     let read = Foo::get_by_id(&db, &created.id).await.unwrap();
 
-    assert_eq!(read.val, expected, "Precision truncation failed: original={}, read={}, expected={}", original, read.val, expected);
+    assert_eq!(
+        read.val, expected,
+        "Precision truncation failed: original={}, read={}, expected={}",
+        original, read.val, expected
+    );
 }
 
 async fn ty_time_precision_2(test: &mut DbTest) {
@@ -228,7 +234,11 @@ async fn ty_time_precision_2(test: &mut DbTest) {
     let created = Foo::create().val(original).exec(&db).await.unwrap();
     let read = Foo::get_by_id(&db, &created.id).await.unwrap();
 
-    assert_eq!(read.val, expected, "Precision truncation failed: original={}, read={}, expected={}", original, read.val, expected);
+    assert_eq!(
+        read.val, expected,
+        "Precision truncation failed: original={}, read={}, expected={}",
+        original, read.val, expected
+    );
 }
 
 async fn ty_datetime_precision_2(test: &mut DbTest) {
@@ -261,7 +271,11 @@ async fn ty_datetime_precision_2(test: &mut DbTest) {
     let created = Foo::create().val(original).exec(&db).await.unwrap();
     let read = Foo::get_by_id(&db, &created.id).await.unwrap();
 
-    assert_eq!(read.val, expected, "Precision truncation failed: original={}, read={}, expected={}", original, read.val, expected);
+    assert_eq!(
+        read.val, expected,
+        "Precision truncation failed: original={}, read={}, expected={}",
+        original, read.val, expected
+    );
 }
 
 async fn ty_timestamp_as_text(test: &mut DbTest) {
