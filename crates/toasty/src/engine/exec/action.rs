@@ -10,7 +10,7 @@ pub(crate) enum Action {
     DeleteByKey(DeleteByKey),
 
     /// Execute a statement
-    ExecStatement(ExecStatement),
+    ExecStatement(Box<ExecStatement>),
 
     /// Filter a value stream
     Filter(Filter),
