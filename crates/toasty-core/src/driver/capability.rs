@@ -159,7 +159,7 @@ impl StorageTypes {
 
         // PostgreSQL has native support for temporal types with microsecond precision (6 digits)
         default_timestamp_type: db::Type::Timestamp(6),
-        default_zoned_type: db::Type::Timestamp(6),
+        default_zoned_type: db::Type::Text,
         default_date_type: db::Type::Date,
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),
@@ -193,7 +193,7 @@ impl StorageTypes {
         // The `TIMESTAMP` time only supports a limited range (1970-2038), so we default to
         // DATETIME and let Toasty do the UTC conversion.
         default_timestamp_type: db::Type::DateTime(6),
-        default_zoned_type: db::Type::DateTime(6),
+        default_zoned_type: db::Type::Text,
         default_date_type: db::Type::Date,
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),

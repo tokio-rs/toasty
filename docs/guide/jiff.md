@@ -54,9 +54,11 @@ struct Appointment {
 }
 ```
 
-**Important:** When stored in databases with native temporal types (PostgreSQL, MySQL), `Zoned` values are **converted to UTC** and stored as `TIMESTAMPTZ` or `DATETIME`. The timezone information is not preserved in the database. When reading back, the value is returned as a UTC timestamp.
-
-If you need to preserve timezone information, consider storing it in a separate field or using TEXT storage (see below).
+**Database Storage:**
+- **PostgreSQL**: `TEXT` - to preserve timezone
+- **MySQL**: `TEXT` - to preserve timezone
+- **SQLite**: `TEXT`
+- **DynamoDB**: `TEXT`
 
 ### 3. Date - Civil Date
 
@@ -204,18 +206,6 @@ MySQL's `TIMESTAMP` type only supports dates from 1970-01-01 00:00:01 UTC to 203
 
 3. **Consider TEXT storage for portability**: If you need your schema to work identically across all databases, consider using `#[column(type = text)]` for temporal types. This ensures consistent behavior and full precision everywhere.
 
-4. **Separate timezone storage**: If you need to preserve timezone information, consider storing the timezone separately from the timestamp:
-
-```rust
-#[derive(toasty::Model)]
-struct Appointment {
-    #[key]
-    id: Id<Self>,
-    timestamp: jiff::Timestamp,  // UTC instant
-    timezone: String,             // e.g., "America/New_York"
-}
-```
-
 ## Example: Complete Model
 
 ```rust
@@ -231,7 +221,7 @@ struct Event {
     // Standard timestamp (microsecond precision on PostgreSQL/MySQL)
     created_at: Timestamp,
 
-    // Timezone-aware (converted to UTC on native types)
+    // Timezone-aware
     scheduled_at: Zoned,
 
     // Event date (no time component)
