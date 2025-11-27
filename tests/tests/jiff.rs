@@ -264,6 +264,119 @@ async fn ty_datetime_precision_2(test: &mut DbTest) {
     assert_eq!(read.val, expected, "Precision truncation failed: original={}, read={}, expected={}", original, read.val, expected);
 }
 
+async fn ty_timestamp_as_text(test: &mut DbTest) {
+    use jiff::Timestamp;
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+        #[column(type = text)]
+        val: Timestamp,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+
+    let test_values = vec![
+        Timestamp::from_second(946684800).unwrap(), // 2000-01-01T00:00:00Z
+        Timestamp::from_second(1609459200).unwrap(), // 2021-01-01T00:00:00Z
+        Timestamp::from_second(1735689600).unwrap(), // 2025-01-01T00:00:00Z
+    ];
+
+    for val in &test_values {
+        let created = Foo::create().val(*val).exec(&db).await.unwrap();
+        let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+        assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
+    }
+}
+
+async fn ty_date_as_text(test: &mut DbTest) {
+    use jiff::civil::Date;
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+        #[column(type = text)]
+        val: Date,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+
+    let test_values = vec![
+        Date::constant(2000, 1, 1),
+        Date::constant(2021, 6, 15),
+        Date::constant(2025, 12, 31),
+    ];
+
+    for val in &test_values {
+        let created = Foo::create().val(*val).exec(&db).await.unwrap();
+        let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+        assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
+    }
+}
+
+async fn ty_time_as_text(test: &mut DbTest) {
+    use jiff::civil::Time;
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+        #[column(type = text)]
+        val: Time,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+
+    let test_values = vec![
+        Time::constant(0, 0, 0, 0),
+        Time::constant(12, 0, 0, 0),
+        Time::constant(23, 59, 59, 999_999_000), // Microsecond precision
+        Time::constant(9, 30, 15, 0),
+    ];
+
+    for val in &test_values {
+        let created = Foo::create().val(*val).exec(&db).await.unwrap();
+        let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+        assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
+    }
+}
+
+async fn ty_datetime_as_text(test: &mut DbTest) {
+    use jiff::civil::DateTime;
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+        #[column(type = text)]
+        val: DateTime,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+
+    let test_values = vec![
+        DateTime::constant(2000, 1, 1, 0, 0, 0, 0),
+        DateTime::constant(2021, 6, 15, 14, 30, 0, 0),
+        DateTime::constant(2025, 12, 31, 23, 59, 59, 999_999_000), // Microsecond precision
+    ];
+
+    for val in &test_values {
+        let created = Foo::create().val(*val).exec(&db).await.unwrap();
+        let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+        assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
+    }
+}
+
 tests!(
     ty_timestamp,
     ty_zoned,
@@ -272,5 +385,9 @@ tests!(
     ty_datetime,
     ty_timestamp_precision_2,
     ty_time_precision_2,
-    ty_datetime_precision_2
+    ty_datetime_precision_2,
+    ty_timestamp_as_text,
+    ty_date_as_text,
+    ty_time_as_text,
+    ty_datetime_as_text
 );
