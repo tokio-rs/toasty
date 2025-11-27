@@ -208,6 +208,16 @@ impl Value {
             Self::String(_) => ty.is_string(),
             Self::Bytes(_) => ty.is_bytes(),
             Self::Uuid(_) => ty.is_uuid(),
+            #[cfg(feature = "jiff")]
+            Value::Timestamp(_) => *ty == Type::Timestamp,
+            #[cfg(feature = "jiff")]
+            Value::Zoned(_) => *ty == Type::Zoned,
+            #[cfg(feature = "jiff")]
+            Value::Date(_) => *ty == Type::Date,
+            #[cfg(feature = "jiff")]
+            Value::Time(_) => *ty == Type::Time,
+            #[cfg(feature = "jiff")]
+            Value::DateTime(_) => *ty == Type::DateTime,
             _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
     }

@@ -22,7 +22,7 @@ async fn ty_timestamp(test: &mut DbTest) {
         Timestamp::from_second(1609459200).unwrap(), // 2021-01-01T00:00:00Z
         Timestamp::from_second(1735689600).unwrap(), // 2025-01-01T00:00:00Z
         Timestamp::from_second(-62135596800).unwrap(), // 0001-01-01T00:00:00Z
-        Timestamp::from_second(253402300799).unwrap(), // 9999-12-31T23:59:59Z
+        Timestamp::from_second(253402207200).unwrap(), // Max valid timestamp (~9999-12-31)
     ];
 
     for val in &test_values {
@@ -47,17 +47,17 @@ async fn ty_zoned(test: &mut DbTest) {
     let db = test.setup_db(models!(Foo)).await;
 
     let test_values = vec![
-        "2000-01-01T00:00:00Z".parse::<Zoned>().unwrap(),
+        "2000-01-01T00:00:00+00:00[UTC]".parse::<Zoned>().unwrap(),
         "2021-06-15T14:30:00-04:00[America/New_York]"
             .parse::<Zoned>()
             .unwrap(),
         "2025-12-31T23:59:59+09:00[Asia/Tokyo]"
             .parse::<Zoned>()
             .unwrap(),
-        "1970-01-01T00:00:00Z".parse::<Zoned>().unwrap(),
-        "2024-03-10T02:30:00-05:00[America/New_York]"
+        "1970-01-01T00:00:00+00:00[UTC]".parse::<Zoned>().unwrap(),
+        "2024-11-03T01:30:00-04:00[America/New_York]"
             .parse::<Zoned>()
-            .unwrap(), // DST transition
+            .unwrap(), // Before DST fall-back
     ];
 
     for val in &test_values {
