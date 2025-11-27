@@ -65,6 +65,10 @@ mod kw {
     syn::custom_keyword!(varchar);
     syn::custom_keyword!(binary);
     syn::custom_keyword!(blob);
+    syn::custom_keyword!(timestamp);
+    syn::custom_keyword!(date);
+    syn::custom_keyword!(time);
+    syn::custom_keyword!(datetime);
 }
 
 #[derive(Debug)]
@@ -76,6 +80,10 @@ pub enum ColumnType {
     VarChar(u64),
     Binary(u64),
     Blob,
+    Timestamp(u8),
+    Date,
+    Time(u8),
+    DateTime(u8),
     Custom(syn::LitStr),
 }
 
@@ -117,6 +125,27 @@ impl syn::parse::Parse for ColumnType {
         } else if lookahead.peek(kw::blob) {
             let _kw: kw::blob = input.parse()?;
             Ok(Self::Blob)
+        } else if lookahead.peek(kw::timestamp) {
+            let _kw: kw::timestamp = input.parse()?;
+            let content;
+            parenthesized!(content in input);
+            let lit: syn::LitInt = content.parse()?;
+            Ok(Self::Timestamp(lit.base10_parse()?))
+        } else if lookahead.peek(kw::date) {
+            let _kw: kw::date = input.parse()?;
+            Ok(Self::Date)
+        } else if lookahead.peek(kw::time) {
+            let _kw: kw::time = input.parse()?;
+            let content;
+            parenthesized!(content in input);
+            let lit: syn::LitInt = content.parse()?;
+            Ok(Self::Time(lit.base10_parse()?))
+        } else if lookahead.peek(kw::datetime) {
+            let _kw: kw::datetime = input.parse()?;
+            let content;
+            parenthesized!(content in input);
+            let lit: syn::LitInt = content.parse()?;
+            Ok(Self::DateTime(lit.base10_parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -133,6 +162,10 @@ impl quote::ToTokens for ColumnType {
             Self::VarChar(size) => quote! { db::Type::VarChar(#size) },
             Self::Binary(size) => quote! { db::Type::Binary(#size) },
             Self::Blob => quote! { db::Type::Blob },
+            Self::Timestamp(precision) => quote! { db::Type::Timestamp(#precision) },
+            Self::Date => quote! { db::Type::Date },
+            Self::Time(precision) => quote! { db::Type::Time(#precision) },
+            Self::DateTime(precision) => quote! { db::Type::DateTime(#precision) },
             Self::Custom(custom) => quote! { db::Type::Custom(#custom) },
         }
         .to_tokens(tokens);

@@ -46,6 +46,18 @@ pub struct StorageTypes {
     /// The default storage type for a DateTime (civil datetime).
     pub default_datetime_type: db::Type,
 
+    /// Whether the database has native support for Timestamp types.
+    pub native_timestamp: bool,
+
+    /// Whether the database has native support for Date types.
+    pub native_date: bool,
+
+    /// Whether the database has native support for Time types.
+    pub native_time: bool,
+
+    /// Whether the database has native support for DateTime types.
+    pub native_datetime: bool,
+
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
     pub max_unsigned_integer: Option<u64>,
@@ -124,6 +136,12 @@ impl StorageTypes {
         default_time_type: db::Type::Text,
         default_datetime_type: db::Type::Text,
 
+        // SQLite does not have native date/time types
+        native_timestamp: false,
+        native_date: false,
+        native_time: false,
+        native_datetime: false,
+
         // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
         // are limited to i64::MAX to prevent overflow
         max_unsigned_integer: Some(i64::MAX as u64),
@@ -145,6 +163,12 @@ impl StorageTypes {
         default_date_type: db::Type::Date,
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),
+
+        // PostgreSQL has native date/time types
+        native_timestamp: true,
+        native_date: true,
+        native_time: true,
+        native_datetime: true,
 
         // PostgreSQL BIGINT is signed 64-bit, so unsigned integers are limited
         // to i64::MAX. While NUMERIC could theoretically support larger values,
@@ -174,6 +198,12 @@ impl StorageTypes {
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),
 
+        // MySQL has native date/time types
+        native_timestamp: true,
+        native_date: true,
+        native_time: true,
+        native_datetime: true,
+
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
     };
@@ -192,6 +222,12 @@ impl StorageTypes {
         default_date_type: db::Type::Text,
         default_time_type: db::Type::Text,
         default_datetime_type: db::Type::Text,
+
+        // DynamoDB does not have native date/time types
+        native_timestamp: false,
+        native_date: false,
+        native_time: false,
+        native_datetime: false,
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,

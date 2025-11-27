@@ -161,4 +161,116 @@ async fn ty_datetime(test: &mut DbTest) {
     }
 }
 
-tests!(ty_timestamp, ty_zoned, ty_date, ty_time, ty_datetime);
+async fn ty_timestamp_precision_2(test: &mut DbTest) {
+    use jiff::Timestamp;
+
+    // Skip if database doesn't have native timestamp support
+    if !test.capability().storage_types.native_timestamp {
+        return;
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+        #[column(type = timestamp(2))]
+        val: Timestamp,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+
+    // Test value with nanosecond precision
+    let original = Timestamp::from_second(946684800).unwrap()
+        .checked_add(jiff::Span::new().nanoseconds(123_456_789))
+        .unwrap();
+
+    // Expected value truncated to 2 decimal places (centiseconds = 10ms precision)
+    // 123_456_789 ns -> 120_000_000 ns (truncated to centiseconds)
+    let expected = Timestamp::from_second(946684800).unwrap()
+        .checked_add(jiff::Span::new().nanoseconds(120_000_000))
+        .unwrap();
+
+    let created = Foo::create().val(original).exec(&db).await.unwrap();
+    let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+
+    assert_eq!(read.val, expected, "Precision truncation failed: original={}, read={}, expected={}", original, read.val, expected);
+}
+
+async fn ty_time_precision_2(test: &mut DbTest) {
+    use jiff::civil::Time;
+
+    // Skip if database doesn't have native time support
+    if !test.capability().storage_types.native_time {
+        return;
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+        #[column(type = time(2))]
+        val: Time,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+
+    // Test value with nanosecond precision
+    let original = Time::constant(14, 30, 45, 123_456_789);
+
+    // Expected value truncated to 2 decimal places (centiseconds = 10ms precision)
+    // 123_456_789 ns -> 120_000_000 ns
+    let expected = Time::constant(14, 30, 45, 120_000_000);
+
+    let created = Foo::create().val(original).exec(&db).await.unwrap();
+    let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+
+    assert_eq!(read.val, expected, "Precision truncation failed: original={}, read={}, expected={}", original, read.val, expected);
+}
+
+async fn ty_datetime_precision_2(test: &mut DbTest) {
+    use jiff::civil::DateTime;
+
+    // Skip if database doesn't have native datetime support
+    if !test.capability().storage_types.native_datetime {
+        return;
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+        #[column(type = datetime(2))]
+        val: DateTime,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+
+    // Test value with nanosecond precision
+    let original = DateTime::constant(2024, 6, 15, 14, 30, 45, 123_456_789);
+
+    // Expected value truncated to 2 decimal places (centiseconds = 10ms precision)
+    // 123_456_789 ns -> 120_000_000 ns
+    let expected = DateTime::constant(2024, 6, 15, 14, 30, 45, 120_000_000);
+
+    let created = Foo::create().val(original).exec(&db).await.unwrap();
+    let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+
+    assert_eq!(read.val, expected, "Precision truncation failed: original={}, read={}, expected={}", original, read.val, expected);
+}
+
+tests!(
+    ty_timestamp,
+    ty_zoned,
+    ty_date,
+    ty_time,
+    ty_datetime,
+    ty_timestamp_precision_2,
+    ty_time_precision_2,
+    ty_datetime_precision_2
+);
