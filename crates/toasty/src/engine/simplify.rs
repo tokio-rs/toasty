@@ -260,3 +260,18 @@ impl<'a> Simplify<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use toasty_core::{
+        driver::Capability,
+        schema::{app, Builder},
+    };
+
+    /// Creates an empty schema for testing simplification.
+    pub fn test_schema() -> toasty_core::Schema {
+        Builder::new()
+            .build(app::Schema::default(), &Capability::SQLITE)
+            .expect("empty schema should build")
+    }
+}

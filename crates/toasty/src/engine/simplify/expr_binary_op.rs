@@ -97,3 +97,148 @@ impl Simplify<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use toasty_core::{
+        driver::Capability,
+        schema::{
+            app::{
+                Field, FieldId, FieldName, FieldPrimitive, Index, IndexField, IndexId, Model,
+                ModelId, PrimaryKey,
+            },
+            db::{IndexOp, IndexScope},
+            Builder, Name,
+        },
+        stmt::{BinaryOp, ExprCast, Id, Type, Value},
+    };
+
+    fn test_schema() -> (toasty_core::Schema, Model) {
+        let model_id = ModelId(0);
+        let field_id = FieldId {
+            model: model_id,
+            index: 0,
+        };
+        let index_id = IndexId {
+            model: model_id,
+            index: 0,
+        };
+
+        let model = Model {
+            id: model_id,
+            name: Name::new("User"),
+            fields: vec![Field {
+                id: field_id,
+                name: FieldName {
+                    app_name: "id".to_string(),
+                    storage_name: None,
+                },
+                ty: FieldTy::Primitive(FieldPrimitive {
+                    ty: Type::String,
+                    storage_ty: None,
+                }),
+                nullable: false,
+                primary_key: true,
+                auto: None,
+                constraints: vec![],
+            }],
+            primary_key: PrimaryKey {
+                fields: vec![field_id],
+                index: index_id,
+            },
+            indices: vec![Index {
+                id: index_id,
+                fields: vec![IndexField {
+                    field: field_id,
+                    op: IndexOp::Eq,
+                    scope: IndexScope::Local,
+                }],
+                unique: true,
+                primary_key: true,
+            }],
+            table_name: None,
+        };
+
+        let mut app_schema = toasty_core::schema::app::Schema::default();
+        app_schema.models.insert(model_id, model.clone());
+
+        let schema = Builder::new()
+            .build(app_schema, &Capability::SQLITE)
+            .expect("schema should build");
+
+        (schema, model)
+    }
+
+    #[test]
+    fn cast_id_on_lhs_unwrapped() {
+        let (schema, _) = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `eq(cast(arg(0), Id), Id("abc")) → eq(arg(0), "abc")`
+        let mut lhs = Expr::Cast(ExprCast {
+            expr: Box::new(Expr::arg(0)),
+            ty: Type::Id(ModelId(0)),
+        });
+        let mut rhs = Expr::Value(Value::Id(Id::from_string(ModelId(0), "abc".to_string())));
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+        assert!(result.is_none());
+        assert!(matches!(lhs, Expr::Arg(_)));
+        assert!(matches!(rhs, Expr::Value(Value::String(s)) if s == "abc"));
+    }
+
+    #[test]
+    fn cast_id_on_rhs_unwrapped() {
+        let (schema, _model) = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `eq(Id("xyz"), cast(arg(0), Id)) → eq("xyz", arg(0))`
+        let mut lhs = Expr::Value(Value::Id(Id::from_string(ModelId(0), "xyz".to_string())));
+        let mut rhs = Expr::Cast(ExprCast {
+            expr: Box::new(Expr::arg(0)),
+            ty: Type::Id(ModelId(0)),
+        });
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+        assert!(result.is_none());
+        assert!(matches!(lhs, Expr::Value(Value::String(s)) if s == "xyz"));
+        assert!(matches!(rhs, Expr::Arg(_)));
+    }
+
+    #[test]
+    fn non_id_cast_not_unwrapped() {
+        let (schema, _model) = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `eq(cast(arg(0), String), "test")`, non-Id cast is not unwrapped
+        let mut lhs = Expr::Cast(ExprCast {
+            expr: Box::new(Expr::arg(0)),
+            ty: Type::String,
+        });
+        let mut rhs = Expr::Value(Value::from("test"));
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+        assert!(result.is_none());
+        assert!(matches!(lhs, Expr::Cast(_)));
+    }
+
+    #[test]
+    fn plain_values_unchanged() {
+        let (schema, _model) = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `eq(1, 2)`, plain values are unchanged
+        let mut lhs = Expr::Value(Value::from(1i64));
+        let mut rhs = Expr::Value(Value::from(2i64));
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+        assert!(result.is_none());
+        assert!(matches!(lhs, Expr::Value(Value::I64(1))));
+        assert!(matches!(rhs, Expr::Value(Value::I64(2))));
+    }
+}
