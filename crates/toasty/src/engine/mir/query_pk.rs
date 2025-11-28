@@ -9,21 +9,28 @@ use crate::engine::{
     mir::{self, LogicalPlan},
 };
 
+/// Queries records using a primary key filter.
+///
+/// Used with NoSQL drivers to query a table's primary key index with optional
+/// additional row filtering.
 #[derive(Debug)]
 pub(crate) struct QueryPk {
+    /// Optional node providing input arguments for the filter.
     pub(crate) input: Option<mir::NodeId>,
 
+    /// The table to query.
     pub(crate) table: TableId,
 
-    /// Columns to get
+    /// The columns to include in the returned records.
     pub(crate) columns: IndexSet<stmt::ExprReference>,
 
-    /// How to filter the index
+    /// Filter expression for the primary key index.
     pub(crate) pk_filter: stmt::Expr,
 
-    /// Additional filter to pass to the database
+    /// Additional filter applied to matching rows.
     pub(crate) row_filter: Option<stmt::Expr>,
 
+    /// The return type.
     pub(crate) ty: stmt::Type,
 }
 

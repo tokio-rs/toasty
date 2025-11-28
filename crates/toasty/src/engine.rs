@@ -22,9 +22,21 @@ use toasty_core::{
     Driver, Schema,
 };
 
+/// The query execution engine.
+///
+/// [`Engine`] orchestrates the multi-phase compilation pipeline that transforms
+/// user queries into database operations. It owns the schema and driver, and
+/// provides the main entry point ([`exec`](Self::exec)) for executing statements.
+///
+/// The execution pipeline follows this process:
+///
+/// 1. **Verification.** Validate statement structure (debug builds only).
+/// 2. **Lowering.** Convert to HIR with dependency tracking.
+/// 3. **Planning.** Build MIR operation graph.
+/// 4. **Execution.** Run actions against the database driver.
 #[derive(Debug, Clone)]
 pub(crate) struct Engine {
-    /// Schema being managed by this DB instance.
+    /// The schema being managed by this database instance.
     pub(crate) schema: Arc<Schema>,
 
     /// Handle to the underlying database driver.
@@ -32,14 +44,21 @@ pub(crate) struct Engine {
 }
 
 impl Engine {
+    /// Creates a new [`Engine`] with the given schema and driver.
     pub(crate) fn new(schema: Arc<Schema>, driver: Arc<dyn Driver>) -> Engine {
         Engine { schema, driver }
     }
 
+    /// Returns the driver's capabilities.
     pub(crate) fn capability(&self) -> &Capability {
         self.driver.capability()
     }
 
+    /// Executes a statement and returns the result as a value stream.
+    ///
+    /// This is the main entry point for query execution. The statement passes
+    /// through the full compilation pipeline (lowering → planning → execution)
+    /// before being sent to the database driver.
     pub(crate) async fn exec(&self, stmt: Statement) -> Result<ValueStream> {
         if cfg!(debug_assertions) {
             self.verify(&stmt);
@@ -63,12 +82,12 @@ impl Engine {
         self.exec_plan(plan).await
     }
 
-    /// Returns a new ExprContext
+    /// Returns a new [`ExprContext`](stmt::ExprContext) for this engine's schema.
     fn expr_cx(&self) -> stmt::ExprContext<'_> {
         stmt::ExprContext::new(&self.schema)
     }
 
-    /// Returns a new ExprContext for a specific target
+    /// Returns a new [`ExprContext`](stmt::ExprContext) for a specific target.
     fn expr_cx_for<'a>(&'a self, target: impl stmt::IntoExprTarget<'a>) -> stmt::ExprContext<'a> {
         stmt::ExprContext::new_with_target(&self.schema, target)
     }
