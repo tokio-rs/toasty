@@ -2,8 +2,8 @@ use super::Expr;
 
 /// Returns `true` if any item in a collection evaluates to `true`.
 ///
-/// [`ExprAny`] evaluates its inner expression and returns `true` if at least one
-/// item is truthy. Returns `false` for an empty collection.
+/// Evaluates its inner expression and returns `true` if at least one item is
+/// truthy. Returns `false` for an empty collection.
 ///
 /// # Examples
 ///
