@@ -1,0 +1,32 @@
+[package]
+name = "toasty-driver-mongodb"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+toasty-core = { workspace = true }
+
+# MongoDB driver
+mongodb = "3"
+bson = "2"
+
+# Async runtime
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+async-stream = { workspace = true }
+futures = "0.3"
+
+# Error handling
+anyhow = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+url = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full"] }

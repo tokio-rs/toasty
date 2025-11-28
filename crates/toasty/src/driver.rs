@@ -16,6 +16,9 @@ pub(crate) enum Flavor {
     #[cfg(feature = "dynamodb")]
     DynamoDb(toasty_driver_dynamodb::DynamoDb),
 
+    #[cfg(feature = "mongodb")]
+    MongoDb(toasty_driver_mongodb::MongoDb),
+
     #[cfg(feature = "mysql")]
     MySQL(toasty_driver_mysql::MySQL),
 
@@ -36,6 +39,7 @@ impl Connection {
 
         match url.scheme() {
             "dynamodb" => Self::connect_dynamodb(&url).await,
+            "mongodb" => Self::connect_mongodb(&url).await,
             "mysql" => Self::connect_mysql(&url).await,
             "postgresql" => Self::connect_postgresql(&url).await,
             "sqlite" => Self::connect_sqlite(&url),
@@ -54,6 +58,17 @@ impl Connection {
     #[cfg(not(feature = "dynamodb"))]
     async fn connect_dynamodb(_url: &Url) -> Result<Self> {
         Err(anyhow::anyhow!("`dynamodb` feature not enabled"))
+    }
+
+    #[cfg(feature = "mongodb")]
+    async fn connect_mongodb(url: &Url) -> Result<Connection> {
+        let driver = toasty_driver_mongodb::MongoDb::connect(url.as_str()).await?;
+        Ok(Connection(Flavor::MongoDb(driver)))
+    }
+
+    #[cfg(not(feature = "mongodb"))]
+    async fn connect_mongodb(_url: &Url) -> Result<Self> {
+        Err(anyhow::anyhow!("`mongodb` feature not enabled"))
     }
 
     #[cfg(feature = "mysql")]
@@ -95,6 +110,9 @@ macro_rules! match_db {
         match $self.0 {
             #[cfg(feature = "dynamodb")]
             Flavor::DynamoDb($driver) => $e,
+
+            #[cfg(feature = "mongodb")]
+            Flavor::MongoDb($driver) => $e,
 
             #[cfg(feature = "mysql")]
             Flavor::MySQL($driver) => $e,
