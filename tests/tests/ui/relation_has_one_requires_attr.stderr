@@ -11,6 +11,6 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Pr
             i64
             i8
             isize
-            std::string::String
-            toasty::stmt::Id<T>
+            jiff::civil::date::Date
+            jiff::civil::datetime::DateTime
           and $N others

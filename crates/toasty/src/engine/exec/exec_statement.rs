@@ -137,6 +137,6 @@ impl Exec<'_> {
 
 impl From<ExecStatement> for Action {
     fn from(value: ExecStatement) -> Self {
-        Self::ExecStatement(value)
+        Self::ExecStatement(value.into())
     }
 }

@@ -58,6 +58,7 @@ clap = { version = "4.5.20", features = ["derive"] }
 heck = "0.5.0"
 indexmap = "2.6.0"
 index_vec = "0.1.4"
+jiff = "0.2.16"
 mysql_async = { version = "0.35.1", default-features = false, features = [
     "minimal",
     "native-tls-tls",

@@ -57,6 +57,25 @@ impl ToSql for &db::Type {
                 Flavor::Mysql => fmt!(cx, f, "BLOB"),
                 Flavor::Sqlite => fmt!(cx, f, "BLOB"),
             },
+            db::Type::Timestamp(precision) => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, "TIMESTAMPTZ(" precision ")"),
+                Flavor::Mysql => fmt!(cx, f, "TIMESTAMP(" precision ")"),
+                Flavor::Sqlite => todo!("SQLite does not support Timestamp"),
+            },
+            db::Type::Date => match f.serializer.flavor {
+                Flavor::Postgresql | Flavor::Mysql => fmt!(cx, f, "DATE"),
+                Flavor::Sqlite => todo!("SQLite does not support Date"),
+            },
+            db::Type::Time(precision) => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, "TIME(" precision ")"),
+                Flavor::Mysql => fmt!(cx, f, "TIME(" precision ")"),
+                Flavor::Sqlite => todo!("SQLite does not support Time"),
+            },
+            db::Type::DateTime(precision) => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, "TIMESTAMP(" precision ")"),
+                Flavor::Mysql => fmt!(cx, f, "DATETIME(" precision ")"),
+                Flavor::Sqlite => todo!("SQLite does not support DateTime"),
+            },
             db::Type::Custom(custom) => fmt!(cx, f, custom.as_str()),
         }
     }
