@@ -49,16 +49,13 @@ impl Simplify<'_> {
         maybe_expr
     }
 
-    /// Optimizes queries by lifting BelongsTo relation constraints out of
-    /// subqueries when possible.
+    /// Optimizes queries by lifting BelongsTo relation constraints out of subqueries when possible.
     ///
-    /// This is an app-level optimization that operates on the application
-    /// schema before statements are lowered to database-specific
-    /// representations.
+    /// This is an app-level optimization that operates on the application schema before
+    /// statements are lowered to database-specific representations.
     ///
-    /// This method analyzes a subquery that filters a related model and
-    /// determines if the query can be rewritten to avoid the subquery by
-    /// directly comparing foreign key fields.
+    /// This method analyzes a subquery that filters a related model and determines if the query
+    /// can be rewritten to avoid the subquery by directly comparing foreign key fields.
     ///
     /// For example, transforms:
     /// ```sql
@@ -70,22 +67,17 @@ impl Simplify<'_> {
     /// ```
     ///
     /// The optimization works by:
-    /// 1. Verifying the subquery targets the same model as the BelongsTo
-    ///    relation
-    /// 2. Analyzing the subquery's WHERE clause to find constraints on foreign
-    ///    key fields
-    /// 3. If all constraints can be lifted, rewriting them as direct field
-    ///    comparisons
-    /// 4. If constraints reference non-foreign-key fields, falling back to an
-    ///    IN subquery
+    /// 1. Verifying the subquery targets the same model as the BelongsTo relation
+    /// 2. Analyzing the subquery's WHERE clause to find constraints on foreign key fields
+    /// 3. If all constraints can be lifted, rewriting them as direct field comparisons
+    /// 4. If constraints reference non-foreign-key fields, falling back to an IN subquery
     ///
     /// Returns `None` if the subquery cannot be optimized (wrong target model).
     /// Returns `Some(expr)` containing either:
     /// - Direct field comparison expressions (when optimization succeeds)
     /// - An IN subquery expression (when partial optimization is possible)
     ///
-    /// Currently only supports single-field foreign keys; composite keys are
-    /// not yet implemented.
+    /// Currently only supports single-field foreign keys; composite keys are not yet implemented.
     fn lift_belongs_to_in_subquery(
         &self,
         belongs_to: &BelongsTo,
@@ -138,8 +130,7 @@ impl Simplify<'_> {
         }
     }
 
-    /// Rewrite the `HasOne` in subquery expression to reference the foreign
-    /// key.
+    /// Rewrite the `HasOne` in subquery expression to reference the foreign key.
     fn lift_has_one_in_subquery(
         &self,
         has_one: &HasOne,

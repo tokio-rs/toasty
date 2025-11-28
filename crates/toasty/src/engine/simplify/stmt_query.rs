@@ -53,9 +53,9 @@ impl Simplify<'_> {
                 .any(|join| matches!(join.constraint, stmt::JoinOp::Left(_)));
         }
 
-        // Check if any non-optional join has empty VALUES Currently only LEFT
-        // joins exist, so any other join would be INNER For now, this is
-        // conservative - we'd add INNER/CROSS join detection here
+        // Check if any non-optional join has empty VALUES
+        // Currently only LEFT joins exist, so any other join would be INNER
+        // For now, this is conservative - we'd add INNER/CROSS join detection here
         false
     }
 
