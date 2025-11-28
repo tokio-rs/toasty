@@ -5,9 +5,14 @@ use toasty_core::stmt;
 
 use super::Node;
 
+/// Storage for MIR operation nodes.
+///
+/// [`Store`] is an arena that holds all [`Node`]s in the operation graph,
+/// indexed by [`NodeId`]. It provides insertion and lookup operations used
+/// during planning to build the graph incrementally.
 #[derive(Debug)]
 pub(crate) struct Store {
-    /// Nodes in the graph
+    /// All nodes in the graph, indexed by [`NodeId`].
     pub(crate) store: IndexVec<NodeId, Node>,
 }
 

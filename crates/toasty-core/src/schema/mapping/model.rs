@@ -7,44 +7,93 @@ use crate::{
     stmt,
 };
 
+/// Defines the bidirectional mapping between a single model and its backing
+/// table.
+///
+/// This struct contains the expression templates used during lowering to
+/// translate between model-level field references and table-level column
+/// references. The mapping supports scenarios where field names differ from
+/// column names, where type conversions are required (e.g., `Id<T>` to
+/// `String`), and where multiple models share a single table.
 #[derive(Debug, Clone)]
 pub struct Model {
-    /// Model identiier
+    /// The model this mapping applies to.
     pub id: ModelId,
 
-    /// Table that the model maps to
+    /// The database table that stores this model's data.
     pub table: TableId,
 
-    /// Table columns used to represent the model.
+    /// Ordered list of columns that comprise this model's storage
+    /// representation.
+    ///
+    /// The order corresponds to the `model_to_table` expression record: the
+    /// i-th expression in `model_to_table` produces the value for the i-th
+    /// column here.
     pub columns: Vec<ColumnId>,
 
-    /// Primitive fields map to column fields
+    /// Per-field mappings for primitive fields.
+    ///
+    /// Indexed by field index within the model. Contains `None` for relation
+    /// fields (`BelongsTo`, `HasMany`, `HasOne`) since they do not map directly
+    /// to columns.
     pub fields: Vec<Option<Field>>,
 
-    /// How to map a model expression to a table expression
+    /// Expression template for converting model field values to table column
+    /// values.
+    ///
+    /// Used during `INSERT` and `UPDATE` lowering. Each expression in the
+    /// record references model fields (via `Expr::Reference`) and produces a
+    /// column value. May include type casts (e.g., `Id<T>` to `String`) or
+    /// concatenations for discriminated storage formats.
     pub model_to_table: stmt::ExprRecord,
 
-    /// How to map the model's primary key to the table's primary key
+    /// Expression template for converting the model's primary key to table
+    /// columns.
+    ///
+    /// A specialized subset of `model_to_table` containing only the expressions
+    /// needed to produce the table's primary key columns from the model's key
+    /// fields.
     pub model_pk_to_table: stmt::Expr,
 
-    /// How to map a table record to a model record
+    /// Expression template for converting table column values to model field
+    /// values.
+    ///
+    /// Used during `SELECT` lowering to construct the `RETURNING` clause. Each
+    /// expression references table columns (via `Expr::Reference`) and produces
+    /// a model field value. Relation fields are initialized to `Null` and
+    /// replaced with subqueries when `include()` is used.
     pub table_to_model: TableToModel,
 }
 
+/// Expression template for converting table rows into model records.
+///
+/// Contains one expression per model field. Each expression references table
+/// columns and produces the corresponding model field value. During lowering,
+/// these expressions construct `SELECT` clauses that return model-shaped data.
 #[derive(Debug, Default, Clone)]
 pub struct TableToModel {
+    /// One expression per model field, indexed by field position.
     expr: stmt::ExprRecord,
 }
 
 impl TableToModel {
+    /// Creates a new `TableToModel` from the given expression record.
     pub fn new(expr: stmt::ExprRecord) -> TableToModel {
         TableToModel { expr }
     }
 
+    /// Returns the complete expression record for use in a `RETURNING` clause.
     pub fn lower_returning_model(&self) -> stmt::Expr {
         self.expr.clone().into()
     }
 
+    /// Returns the expression for a single field reference.
+    ///
+    /// # Arguments
+    ///
+    /// * `nesting` - The scope nesting level. Non-zero when the reference
+    ///   appears in a subquery relative to the table source.
+    /// * `index` - The field index within the model.
     pub fn lower_expr_reference(&self, nesting: usize, index: usize) -> stmt::Expr {
         let mut expr = self.expr[index].clone();
         let n = nesting;

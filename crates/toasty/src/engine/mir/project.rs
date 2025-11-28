@@ -5,14 +5,19 @@ use crate::engine::{
     mir::{self, LogicalPlan},
 };
 
+/// Transforms records by applying a projection function.
+///
+/// Used to reshape records, extract specific fields, or compute derived values
+/// from input records.
 #[derive(Debug)]
 pub(crate) struct Project {
-    /// Input required to perform the projection
+    /// The node producing the records to transform.
     pub(crate) input: mir::NodeId,
 
-    /// Projection expression
+    /// The projection function mapping input records to output records.
     pub(crate) projection: eval::Func,
 
+    /// The output type after projection.
     pub(crate) ty: stmt::Type,
 }
 
