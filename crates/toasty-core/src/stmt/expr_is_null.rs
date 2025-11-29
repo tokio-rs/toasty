@@ -1,11 +1,22 @@
 use super::Expr;
 
+/// Tests whether an expression is null.
+///
+/// Returns `true` if the expression evaluates to null (or not null when
+/// negated).
+///
+/// # Examples
+///
+/// ```text
+/// is_null(x)      // returns `true` if x is null
+/// is_not_null(x)  // returns `true` if x is not null
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprIsNull {
-    /// IS NOT NULL
+    /// When `true`, this is an "is not null" check.
     pub negate: bool,
 
-    /// Expression to check for null
+    /// The expression to check for null.
     pub expr: Box<Expr>,
 }
 

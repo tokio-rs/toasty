@@ -1,7 +1,18 @@
 use super::Expr;
 
+/// Concatenates multiple string expressions.
+///
+/// Joins the string values of each expression together. Each expression must
+/// evaluate to a string.
+///
+/// # Examples
+///
+/// ```text
+/// concat_str("hello", " ", "world")  // returns `"hello world"`
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprConcatStr {
+    /// The string expressions to concatenate.
     pub exprs: Vec<Expr>,
 }
 

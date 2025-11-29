@@ -59,6 +59,31 @@ pub enum Value {
 
     /// 128-bit universally unique identifier (UUID)
     Uuid(uuid::Uuid),
+
+    /// An instant in time represented as the number of nanoseconds since the Unix epoch.
+    /// See [`jiff::Timestamp`].
+    #[cfg(feature = "jiff")]
+    Timestamp(jiff::Timestamp),
+
+    /// A time zone aware instant in time.
+    /// See [`jiff::Zoned`]
+    #[cfg(feature = "jiff")]
+    Zoned(jiff::Zoned),
+
+    /// A representation of a civil date in the Gregorian calendar.
+    /// See [`jiff::civil::Date`].
+    #[cfg(feature = "jiff")]
+    Date(jiff::civil::Date),
+
+    /// A representation of civil “wall clock” time.
+    /// See [`jiff::civil::Time`].
+    #[cfg(feature = "jiff")]
+    Time(jiff::civil::Time),
+
+    /// A representation of a civil datetime in the Gregorian calendar.
+    /// See [`jiff::civil::DateTime`].
+    #[cfg(feature = "jiff")]
+    DateTime(jiff::civil::DateTime),
 }
 
 impl Value {
@@ -183,6 +208,16 @@ impl Value {
             Self::String(_) => ty.is_string(),
             Self::Bytes(_) => ty.is_bytes(),
             Self::Uuid(_) => ty.is_uuid(),
+            #[cfg(feature = "jiff")]
+            Value::Timestamp(_) => *ty == Type::Timestamp,
+            #[cfg(feature = "jiff")]
+            Value::Zoned(_) => *ty == Type::Zoned,
+            #[cfg(feature = "jiff")]
+            Value::Date(_) => *ty == Type::Date,
+            #[cfg(feature = "jiff")]
+            Value::Time(_) => *ty == Type::Time,
+            #[cfg(feature = "jiff")]
+            Value::DateTime(_) => *ty == Type::DateTime,
             _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
     }
@@ -208,6 +243,16 @@ impl Value {
             Value::U64(_) => Type::U64,
             Value::Bytes(_) => Type::Bytes,
             Value::Uuid(_) => Type::Uuid,
+            #[cfg(feature = "jiff")]
+            Value::Timestamp(_) => Type::Timestamp,
+            #[cfg(feature = "jiff")]
+            Value::Zoned(_) => Type::Zoned,
+            #[cfg(feature = "jiff")]
+            Value::Date(_) => Type::Date,
+            #[cfg(feature = "jiff")]
+            Value::Time(_) => Type::Time,
+            #[cfg(feature = "jiff")]
+            Value::DateTime(_) => Type::DateTime,
         }
     }
 

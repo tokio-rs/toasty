@@ -84,6 +84,18 @@ pub enum Type {
     /// Fixed-size binary type of `n` bytes
     Binary(u8),
 
+    /// An instant in time with fractional seconds precision (0-9 digits).
+    Timestamp(u8),
+
+    /// A representation of a civil date in the Gregorian calendar.
+    Date,
+
+    /// A representation of civil "wall clock" time with fractional seconds precision (0-9 digits).
+    Time(u8),
+
+    /// A representation of a civil datetime in the Gregorian calendar with fractional seconds precision (0-9 digits).
+    DateTime(u8),
+
     /// User-specified unrecognized type
     Custom(String),
 }
@@ -110,6 +122,17 @@ impl Type {
                 stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
                 stmt::Type::Uuid => Ok(db.default_uuid_type.clone()),
+                // Date/time types from jiff
+                #[cfg(feature = "jiff")]
+                stmt::Type::Timestamp => Ok(db.default_timestamp_type.clone()),
+                #[cfg(feature = "jiff")]
+                stmt::Type::Zoned => Ok(db.default_zoned_type.clone()),
+                #[cfg(feature = "jiff")]
+                stmt::Type::Date => Ok(db.default_date_type.clone()),
+                #[cfg(feature = "jiff")]
+                stmt::Type::Time => Ok(db.default_time_type.clone()),
+                #[cfg(feature = "jiff")]
+                stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
                 // Gotta support some app-level types as well for now.
                 //
                 // TODO: not really correct, but we are getting rid of ID types
@@ -127,8 +150,10 @@ impl Type {
     pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {
         match (self, ty) {
             (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
-            (Self::Text | Self::VarChar(_), stmt::Type::Uuid) => stmt::Type::String,
-            (Self::Text | Self::VarChar(_), stmt::Type::Id(_)) => stmt::Type::String,
+            (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
+            // Let engine handle UTC conversion
+            #[cfg(feature = "jiff")]
+            (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,
             _ => ty.clone(),
         }
     }

@@ -77,6 +77,10 @@ mod kw {
 
     syn::custom_keyword!(binary);
     syn::custom_keyword!(blob);
+    syn::custom_keyword!(timestamp);
+    syn::custom_keyword!(date);
+    syn::custom_keyword!(time);
+    syn::custom_keyword!(datetime);
 }
 
 #[derive(Debug)]
@@ -88,6 +92,10 @@ pub enum ColumnType {
     VarChar(u64),
     Binary(u64),
     Blob,
+    Timestamp(u8),
+    Date,
+    Time(u8),
+    DateTime(u8),
     Custom(syn::LitStr),
 }
 
@@ -138,6 +146,11 @@ impl syn::parse::Parse for ColumnType {
         peek_ident_paren_int!(binary, Binary);
         peek_ident!(blob, Blob);
 
+        peek_ident_paren_int!(timestamp, Timestamp);
+        peek_ident!(date, Date);
+        peek_ident_paren_int!(time, Time);
+        peek_ident_paren_int!(datetime, DateTime);
+
         Err(lookahead.error())
     }
 }
@@ -152,6 +165,10 @@ impl quote::ToTokens for ColumnType {
             Self::VarChar(size) => quote! { db::Type::VarChar(#size) },
             Self::Binary(size) => quote! { db::Type::Binary(#size) },
             Self::Blob => quote! { db::Type::Blob },
+            Self::Timestamp(precision) => quote! { db::Type::Timestamp(#precision) },
+            Self::Date => quote! { db::Type::Date },
+            Self::Time(precision) => quote! { db::Type::Time(#precision) },
+            Self::DateTime(precision) => quote! { db::Type::DateTime(#precision) },
             Self::Custom(custom) => quote! { db::Type::Custom(#custom) },
         }
         .to_tokens(tokens);

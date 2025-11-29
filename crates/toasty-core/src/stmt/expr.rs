@@ -8,6 +8,7 @@ use super::{
 };
 use std::fmt;
 
+/// An expression.
 #[derive(Clone, PartialEq)]
 pub enum Expr {
     /// AND a set of binary expressions

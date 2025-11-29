@@ -29,16 +29,27 @@ use toasty_core::{
 
 use crate::engine::Engine;
 
+/// Statement and expression simplifier.
+///
+/// [`Simplify`] implements the [`VisitMut`] trait to traverse and transform
+/// statement ASTs. It applies optimization and normalization rules defined in
+/// submodules of [`engine::simplify`](self).
+///
+/// Simplification runs twice during query compilation: once before lowering
+/// (to normalize the input) and once after (to clean up generated expressions).
 pub(crate) struct Simplify<'a> {
+    /// Expression context providing schema access and type information.
     cx: stmt::ExprContext<'a>,
 }
 
 impl Engine {
+    /// Simplifies a statement or expression in place.
     pub(crate) fn simplify_stmt<T: Node>(&self, stmt: &mut T) {
         Simplify::new(&self.schema).visit_mut(stmt);
     }
 }
 
+/// Simplifies an expression in place using the given context.
 pub(crate) fn simplify_expr(cx: stmt::ExprContext<'_>, expr: &mut stmt::Expr) {
     Simplify { cx }.visit_expr_mut(expr);
 }
@@ -258,5 +269,20 @@ impl<'a> Simplify<'a> {
                 _ => todo!("expr={:#?}", expr_set),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use toasty_core::{
+        driver::Capability,
+        schema::{app, Builder},
+    };
+
+    /// Creates an empty schema for testing simplification.
+    pub fn test_schema() -> toasty_core::Schema {
+        Builder::new()
+            .build(app::Schema::default(), &Capability::SQLITE)
+            .expect("empty schema should build")
     }
 }

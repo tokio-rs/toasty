@@ -3,8 +3,20 @@ use crate::stmt::{self, Value};
 
 use std::{fmt, ops};
 
+/// A record of expressions.
+///
+/// Represents a fixed-size collection of expressions accessed by position,
+/// similar to a tuple or row.
+///
+/// # Examples
+///
+/// ```text
+/// record(a, b, c)  // a record with three fields
+/// record[0]        // access the first field
+/// ```
 #[derive(Clone, Default, PartialEq)]
 pub struct ExprRecord {
+    /// The field expressions in positional order.
     pub fields: Vec<Expr>,
 }
 
