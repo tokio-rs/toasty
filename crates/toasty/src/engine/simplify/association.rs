@@ -76,18 +76,36 @@ impl Simplify<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate as toasty;
+    use crate::Model as _;
     use toasty_core::{
         driver::Capability,
-        schema::{
-            app::{
-                BelongsTo, Field, FieldId, FieldName, FieldPrimitive, FieldTy, ForeignKey,
-                ForeignKeyField, HasMany, Index, IndexField, IndexId, Model, ModelId, PrimaryKey,
-            },
-            db::{IndexOp, IndexScope},
-            Builder, Name,
-        },
-        stmt::{Association, Expr, ExprInSubquery, Path, Query, SourceModel, Type, Value},
+        schema::{app, app::FieldId, app::ModelId, Builder},
+        stmt::{Association, Expr, ExprInSubquery, Path, Query, SourceModel, Value},
     };
+
+    #[allow(dead_code)]
+    #[derive(toasty::Model)]
+    struct User {
+        #[key]
+        id: i64,
+
+        #[has_many(pair = author)]
+        posts: toasty::HasMany<Post>,
+    }
+
+    #[allow(dead_code)]
+    #[derive(toasty::Model)]
+    struct Post {
+        #[key]
+        id: i64,
+
+        #[index]
+        user_id: i64,
+
+        #[belongs_to(key = user_id, references = id)]
+        author: toasty::BelongsTo<User>,
+    }
 
     struct UserPostSchema {
         schema: toasty_core::Schema,
@@ -100,193 +118,43 @@ mod tests {
 
     impl UserPostSchema {
         fn new() -> Self {
-            let user_model = ModelId(0);
-            let post_model = ModelId(1);
-
-            let user_id = FieldId {
-                model: user_model,
-                index: 0,
-            };
-            let user_posts = FieldId {
-                model: user_model,
-                index: 1,
-            };
-
-            let post_id = FieldId {
-                model: post_model,
-                index: 0,
-            };
-            let post_user_id = FieldId {
-                model: post_model,
-                index: 1,
-            };
-            let post_author = FieldId {
-                model: post_model,
-                index: 2,
-            };
-
-            let user_model_def = Model {
-                id: user_model,
-                name: Name::new("User"),
-                fields: vec![
-                    Field {
-                        id: user_id,
-                        name: FieldName {
-                            app_name: "id".to_string(),
-                            storage_name: None,
-                        },
-                        ty: FieldTy::Primitive(FieldPrimitive {
-                            ty: Type::I64,
-                            storage_ty: None,
-                        }),
-                        nullable: false,
-                        primary_key: true,
-                        auto: None,
-                        constraints: vec![],
-                    },
-                    Field {
-                        id: user_posts,
-                        name: FieldName {
-                            app_name: "posts".to_string(),
-                            storage_name: None,
-                        },
-                        ty: FieldTy::HasMany(HasMany {
-                            target: post_model,
-                            expr_ty: Type::List(Box::new(Type::Model(post_model))),
-                            singular: Name::new("post"),
-                            pair: post_author,
-                        }),
-                        nullable: false,
-                        primary_key: false,
-                        auto: None,
-                        constraints: vec![],
-                    },
-                ],
-                primary_key: PrimaryKey {
-                    fields: vec![user_id],
-                    index: IndexId {
-                        model: user_model,
-                        index: 0,
-                    },
-                },
-                indices: vec![Index {
-                    id: IndexId {
-                        model: user_model,
-                        index: 0,
-                    },
-                    fields: vec![IndexField {
-                        field: user_id,
-                        op: IndexOp::Eq,
-                        scope: IndexScope::Local,
-                    }],
-                    unique: true,
-                    primary_key: true,
-                }],
-                table_name: None,
-            };
-
-            let post_model_def = Model {
-                id: post_model,
-                name: Name::new("Post"),
-                fields: vec![
-                    Field {
-                        id: post_id,
-                        name: FieldName {
-                            app_name: "id".to_string(),
-                            storage_name: None,
-                        },
-                        ty: FieldTy::Primitive(FieldPrimitive {
-                            ty: Type::I64,
-                            storage_ty: None,
-                        }),
-                        nullable: false,
-                        primary_key: true,
-                        auto: None,
-                        constraints: vec![],
-                    },
-                    Field {
-                        id: post_user_id,
-                        name: FieldName {
-                            app_name: "user_id".to_string(),
-                            storage_name: None,
-                        },
-                        ty: FieldTy::Primitive(FieldPrimitive {
-                            ty: Type::I64,
-                            storage_ty: None,
-                        }),
-                        nullable: false,
-                        primary_key: false,
-                        auto: None,
-                        constraints: vec![],
-                    },
-                    Field {
-                        id: post_author,
-                        name: FieldName {
-                            app_name: "author".to_string(),
-                            storage_name: None,
-                        },
-                        ty: FieldTy::BelongsTo(BelongsTo {
-                            target: user_model,
-                            expr_ty: Type::Model(user_model),
-                            pair: Some(user_posts),
-                            foreign_key: ForeignKey {
-                                fields: vec![ForeignKeyField {
-                                    source: post_user_id,
-                                    target: user_id,
-                                }],
-                            },
-                        }),
-                        nullable: false,
-                        primary_key: false,
-                        auto: None,
-                        constraints: vec![],
-                    },
-                ],
-                primary_key: PrimaryKey {
-                    fields: vec![post_id],
-                    index: IndexId {
-                        model: post_model,
-                        index: 0,
-                    },
-                },
-                indices: vec![
-                    Index {
-                        id: IndexId {
-                            model: post_model,
-                            index: 0,
-                        },
-                        fields: vec![IndexField {
-                            field: post_id,
-                            op: IndexOp::Eq,
-                            scope: IndexScope::Local,
-                        }],
-                        unique: true,
-                        primary_key: true,
-                    },
-                    Index {
-                        id: IndexId {
-                            model: post_model,
-                            index: 1,
-                        },
-                        fields: vec![IndexField {
-                            field: post_user_id,
-                            op: IndexOp::Eq,
-                            scope: IndexScope::Local,
-                        }],
-                        unique: false,
-                        primary_key: false,
-                    },
-                ],
-                table_name: None,
-            };
-
-            let mut app_schema = toasty_core::schema::app::Schema::default();
-            app_schema.models.insert(user_model, user_model_def);
-            app_schema.models.insert(post_model, post_model_def);
+            let app_schema = app::Schema::from_macro(&[User::schema(), Post::schema()])
+                .expect("schema should build from macro");
 
             let schema = Builder::new()
                 .build(app_schema, &Capability::SQLITE)
                 .expect("schema should build");
+
+            let user_model = User::id();
+            let post_model = Post::id();
+
+            // Find field IDs by name from the generated schema
+            let user_id = schema
+                .app
+                .model(user_model)
+                .fields
+                .iter()
+                .find(|f| f.name.app_name == "id")
+                .unwrap()
+                .id;
+
+            let user_posts = schema
+                .app
+                .model(user_model)
+                .fields
+                .iter()
+                .find(|f| f.name.app_name == "posts")
+                .unwrap()
+                .id;
+
+            let post_author = schema
+                .app
+                .model(post_model)
+                .fields
+                .iter()
+                .find(|f| f.name.app_name == "author")
+                .unwrap()
+                .id;
 
             Self {
                 schema,
