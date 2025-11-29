@@ -4,7 +4,7 @@ use toasty_core::stmt;
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_and(&mut self, expr: &mut stmt::ExprAnd) -> Option<stmt::Expr> {
-        // First, flatten any nested ands
+        // Flatten any nested ands
         for i in 0..expr.operands.len() {
             if let stmt::Expr::And(and) = &mut expr.operands[i] {
                 let mut nested = mem::take(&mut and.operands);
@@ -13,6 +13,12 @@ impl Simplify<'_> {
             }
         }
 
+        // `and(..., false, ...) → false`
+        if expr.operands.iter().any(|e| e.is_false()) {
+            return Some(false.into());
+        }
+
+        // `and(..., true, ...) → and(..., ...)`
         expr.operands.retain(|expr| !expr.is_true());
 
         if expr.operands.is_empty() {
@@ -31,7 +37,8 @@ mod tests {
     use crate::engine::simplify::test::test_schema;
     use toasty_core::stmt::{Expr, ExprAnd};
 
-    /// Builds `and(a, and(b, c))`, a nested AND structure for testing flattening.
+    /// Builds `and(a, and(b, c))`, a nested AND structure for testing
+    /// flattening.
     fn nested_and(a: Expr, b: Expr, c: Expr) -> ExprAnd {
         ExprAnd {
             operands: vec![
@@ -144,19 +151,16 @@ mod tests {
     }
 
     #[test]
-    fn flatten_with_false_preserved() {
+    fn flatten_with_false_in_outer() {
         let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
-        // `and(false, and(B, C)) → and(false, B, C)`, false is NOT removed
+        // `and(false, and(B, C)) → false`
         let mut expr = nested_and(false.into(), Expr::arg(1), Expr::arg(2));
         let result = simplify.simplify_expr_and(&mut expr);
 
-        assert!(result.is_none());
-        assert_eq!(expr.operands.len(), 3);
-        assert!(expr.operands[0].is_false());
-        assert_eq!(expr.operands[1], Expr::arg(1));
-        assert_eq!(expr.operands[2], Expr::arg(2));
+        assert!(result.is_some());
+        assert!(result.unwrap().is_false());
     }
 
     #[test]
@@ -164,15 +168,12 @@ mod tests {
         let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
-        // `and(A, and(false, C)) → and(A, false, C)`
+        // `and(A, and(false, C)) → false`
         let mut expr = nested_and(Expr::arg(0), false.into(), Expr::arg(2));
         let result = simplify.simplify_expr_and(&mut expr);
 
-        assert!(result.is_none());
-        assert_eq!(expr.operands.len(), 3);
-        assert_eq!(expr.operands[0], Expr::arg(0));
-        assert!(expr.operands[1].is_false());
-        assert_eq!(expr.operands[2], Expr::arg(2));
+        assert!(result.is_some());
+        assert!(result.unwrap().is_false());
     }
 
     #[test]
