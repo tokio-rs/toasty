@@ -163,6 +163,7 @@ impl Field {
             if let Err(validation_error) = validate_column_type_compatibility(
                 &field.ty,
                 attrs.column.as_ref().unwrap(),
+                &field.ident.as_ref().unwrap().to_string(),
                 field.span(),
             ) {
                 errs.push(validation_error);
@@ -223,6 +224,7 @@ fn rewrite_self(ty: &mut syn::Type, model: &syn::Ident) {
 fn validate_column_type_compatibility(
     field_type: &syn::Type,
     column_type: &Column,
+    field_name: &str,
     field_span: proc_macro2::Span,
 ) -> syn::Result<()> {
     // Only validate if a column type is explicitly specified
@@ -240,42 +242,24 @@ fn validate_column_type_compatibility(
             _ => Err(syn::Error::new(
                 field_span,
                 format!(
-                    "Invalid column type '{}' for field of type 'String'. \
-                     String fields are compatible with: text, varchar(n). \
-                     Did you mean: #[column(type = text)]?",
+                    "Invalid column type '{}' for field of type 'String'\n\n\
+                     = note: String fields are compatible with: text, varchar(n)\n\
+                     = help: Did you mean: #[column(type = text)]?",
                     format_column_type(col_ty)
                 ),
             )),
         }
-    } else if is_integer_type(&base_type, "i8") {
-        validate_integer_type(col_ty, 1, true, field_span)
-    } else if is_integer_type(&base_type, "i16") {
-        validate_integer_type(col_ty, 2, true, field_span)
-    } else if is_integer_type(&base_type, "i32") {
-        validate_integer_type(col_ty, 4, true, field_span)
-    } else if is_integer_type(&base_type, "i64") {
-        validate_integer_type(col_ty, 8, true, field_span)
-    } else if is_integer_type(&base_type, "u8") {
-        validate_integer_type(col_ty, 1, false, field_span)
-    } else if is_integer_type(&base_type, "u16") {
-        validate_integer_type(col_ty, 2, false, field_span)
-    } else if is_integer_type(&base_type, "u32") {
-        validate_integer_type(col_ty, 4, false, field_span)
-    } else if is_integer_type(&base_type, "u64") {
-        validate_integer_type(col_ty, 8, false, field_span)
-    } else if is_integer_type(&base_type, "isize") {
-        validate_integer_type(col_ty, 8, true, field_span) // Maps to i64
-    } else if is_integer_type(&base_type, "usize") {
-        validate_integer_type(col_ty, 8, false, field_span) // Maps to u64
+    } else if let Some((size, is_signed)) = get_integer_info(&base_type) {
+        validate_integer_type(col_ty, size, is_signed, &extract_type_name(&base_type), field_name, field_span)
     } else if is_uuid_type(&base_type) {
         match col_ty {
             ColumnType::Text | ColumnType::Blob | ColumnType::Binary(16) => Ok(()),
             _ => Err(syn::Error::new(
                 field_span,
                 format!(
-                    "Invalid column type '{}' for field of type 'uuid::Uuid'. \
-                     UUID fields are compatible with: text, blob, binary(16). \
-                     Did you mean: #[column(type = text)]?",
+                    "Invalid column type '{}' for field of type 'uuid::Uuid'\n\n\
+                     = note: UUID fields are compatible with: text, blob, binary(16)\n\
+                     = help: Did you mean: #[column(type = text)]?",
                     format_column_type(col_ty)
                 ),
             )),
@@ -286,9 +270,9 @@ fn validate_column_type_compatibility(
             _ => Err(syn::Error::new(
                 field_span,
                 format!(
-                    "Invalid column type '{}' for field of type 'bool'. \
-                     Boolean fields are compatible with: boolean. \
-                     Did you mean: #[column(type = boolean)]?",
+                    "Invalid column type '{}' for field of type 'bool'\n\n\
+                     = note: Boolean fields are compatible with: boolean\n\
+                     = help: Did you mean: #[column(type = boolean)]?",
                     format_column_type(col_ty)
                 ),
             )),
@@ -300,11 +284,54 @@ fn validate_column_type_compatibility(
     }
 }
 
+/// Returns integer type information (size in bytes, is_signed) for known integer types
+fn get_integer_info(ty: &syn::Type) -> Option<(u8, bool)> {
+    if let syn::Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            if type_path.path.segments.len() == 1 {
+                match segment.ident.to_string().as_str() {
+                    "i8" => Some((1, true)),
+                    "i16" => Some((2, true)),
+                    "i32" => Some((4, true)),
+                    "i64" => Some((8, true)),
+                    "isize" => Some((8, true)), // Maps to i64
+                    "u8" => Some((1, false)),
+                    "u16" => Some((2, false)),
+                    "u32" => Some((4, false)),
+                    "u64" => Some((8, false)),
+                    "usize" => Some((8, false)), // Maps to u64
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+/// Extracts the type name from a syn::Type for error messages
+fn extract_type_name(ty: &syn::Type) -> String {
+    if let syn::Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            if type_path.path.segments.len() == 1 {
+                return segment.ident.to_string();
+            }
+        }
+    }
+    "unknown".to_string()
+}
+
 /// Validates integer type compatibility with size requirements
 fn validate_integer_type(
     col_ty: &ColumnType,
     min_bytes: u8,
     is_signed: bool,
+    type_name: &str,
+    field_name: &str,
     field_span: proc_macro2::Span,
 ) -> syn::Result<()> {
     match col_ty {
@@ -313,10 +340,15 @@ fn validate_integer_type(
                 Err(syn::Error::new(
                     field_span,
                     format!(
-                        "Invalid column type 'integer({})' for field requiring at least {} bytes of storage. \
-                         Valid storage types: {}",
+                        "Invalid column type 'integer({})' for field '{}: {}'\n\n\
+                         = note: {} requires at least {} bytes of storage\n\
+                         = help: Valid storage types for {}: {}",
                         size,
+                        field_name,
+                        type_name,
+                        type_name,
                         min_bytes,
+                        type_name,
                         generate_valid_integer_suggestions(min_bytes, true)
                     ),
                 ))
@@ -329,10 +361,15 @@ fn validate_integer_type(
                 Err(syn::Error::new(
                     field_span,
                     format!(
-                        "Invalid column type 'unsignedinteger({})' for field requiring at least {} bytes of storage. \
-                         Valid storage types: {}",
+                        "Invalid column type 'unsignedinteger({})' for field '{}: {}'\n\n\
+                         = note: {} requires at least {} bytes of storage\n\
+                         = help: Valid storage types for {}: {}",
                         size,
+                        field_name,
+                        type_name,
+                        type_name,
                         min_bytes,
+                        type_name,
                         generate_valid_integer_suggestions(min_bytes, false)
                     ),
                 ))
@@ -343,9 +380,9 @@ fn validate_integer_type(
         ColumnType::Integer(_) if !is_signed => Err(syn::Error::new(
             field_span,
             format!(
-                "Invalid column type '{}' for unsigned integer field. \
-                 Unsigned integer types are not compatible with signed storage. \
-                 Valid storage types: {}",
+                "Invalid column type '{}' for unsigned integer field\n\n\
+                 = note: Unsigned integer types are not compatible with signed storage\n\
+                 = help: Valid storage types: {}",
                 format_column_type(col_ty),
                 generate_valid_integer_suggestions(min_bytes, false)
             ),
@@ -353,18 +390,21 @@ fn validate_integer_type(
         ColumnType::UnsignedInteger(_) if is_signed => Err(syn::Error::new(
             field_span,
             format!(
-                "Invalid column type '{}' for signed integer field. \
-                 Signed integer types are not compatible with unsigned storage. \
-                 Valid storage types: {}",
+                "Invalid column type '{}' for field '{}: {}'\n\n\
+                 = note: Signed integer types are not compatible with unsigned storage\n\
+                 = help: Valid storage types for {}: {}",
                 format_column_type(col_ty),
+                field_name,
+                type_name,
+                type_name,
                 generate_valid_integer_suggestions(min_bytes, true)
             ),
         )),
         _ => Err(syn::Error::new(
             field_span,
             format!(
-                "Invalid column type '{}' for integer field. \
-                 Valid storage types: {}",
+                "Invalid column type '{}' for integer field\n\n\
+                 = help: Valid storage types: {}",
                 format_column_type(col_ty),
                 generate_valid_integer_suggestions(min_bytes, is_signed)
             ),
@@ -443,15 +483,6 @@ fn is_string_type(ty: &syn::Type) -> bool {
     false
 }
 
-/// Checks if the type is a specific integer type using direct AST pattern matching
-fn is_integer_type(ty: &syn::Type, expected: &str) -> bool {
-    if let syn::Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == expected && type_path.path.segments.len() == 1;
-        }
-    }
-    false
-}
 
 /// Checks if the type is uuid::Uuid using direct AST pattern matching
 fn is_uuid_type(ty: &syn::Type) -> bool {

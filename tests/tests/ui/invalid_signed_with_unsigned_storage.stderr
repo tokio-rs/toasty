@@ -1,8 +1,8 @@
 error: Invalid column type 'unsignedinteger(4)' for field 'price: i32'
- --> tests/ui/invalid_signed_with_unsigned_storage.rs:9:5
-  |
-9 |     #[column(type = unsignedinteger(4))]
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = note: Signed integer types are not compatible with unsigned storage
-  = help: Valid storage types for i32: integer(4), integer(8)
+
+       = note: Signed integer types are not compatible with unsigned storage
+       = help: Valid storage types for i32: integer(4), integer(8)
+  --> tests/ui/invalid_signed_with_unsigned_storage.rs:10:5
+   |
+10 |     #[column(type = unsignedinteger(4))]
+   |     ^
