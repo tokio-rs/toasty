@@ -5,8 +5,8 @@ use std::{fmt, ops};
 
 /// A record of expressions.
 ///
-/// Represents a fixed-size collection of expressions accessed by position,
-/// similar to a tuple or row.
+/// Represents a fixed-size, heterogeneous collection of expressions accessed by
+/// position. Like Rust tuples, each field can have a different type.
 ///
 /// # Examples
 ///
