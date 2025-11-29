@@ -119,6 +119,60 @@ async fn valid_uuid_column_types(test: &mut DbTest) {
     assert_eq!(retrieved.uuid_as_blob, uuid2);
 }
 
+async fn valid_bool_column_types(test: &mut DbTest) {
+    #[derive(toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        // Valid: bool with boolean storage
+        #[column(type = boolean)]
+        is_active: bool,
+
+        // Valid: bool without explicit column type (should default to boolean)
+        is_verified: bool,
+
+        // Valid: Option<bool> with boolean storage
+        #[column(type = boolean)]
+        is_premium: Option<bool>,
+    }
+
+    let db = test.setup_db(models!(User)).await;
+
+    // Test with all bool combinations
+    let user = User::create()
+        .is_active(true)
+        .is_verified(false)
+        .is_premium(Some(true))
+        .exec(&db)
+        .await
+        .unwrap();
+
+    assert_eq!(user.is_active, true);
+    assert_eq!(user.is_verified, false);
+    assert_eq!(user.is_premium, Some(true));
+
+    // Test retrieval
+    let retrieved = User::get_by_id(&db, &user.id).await.unwrap();
+    assert_eq!(retrieved.is_active, true);
+    assert_eq!(retrieved.is_verified, false);
+    assert_eq!(retrieved.is_premium, Some(true));
+
+    // Test with None optional bool
+    let user2 = User::create()
+        .is_active(false)
+        .is_verified(true)
+        .is_premium(None)
+        .exec(&db)
+        .await
+        .unwrap();
+
+    assert_eq!(user2.is_active, false);
+    assert_eq!(user2.is_verified, true);
+    assert_eq!(user2.is_premium, None);
+}
+
 async fn valid_optional_column_types(test: &mut DbTest) {
     #[derive(toasty::Model)]
     struct User {
@@ -172,5 +226,6 @@ tests!(
     valid_string_column_types,
     valid_integer_column_types,
     valid_uuid_column_types,
+    valid_bool_column_types,
     valid_optional_column_types,
 );

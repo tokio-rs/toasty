@@ -233,10 +233,9 @@ fn validate_column_type_compatibility(
     // Extract the base type from the Rust field type (handles Option<T>, etc.)
     let base_type = extract_base_type(field_type);
 
-    // Check compatibility based on the base type
-    let type_string = quote::quote!(#base_type).to_string();
-    match type_string.as_str() {
-        "String" => match col_ty {
+    // Check compatibility based on the base type using direct AST pattern matching
+    if is_string_type(&base_type) {
+        match col_ty {
             ColumnType::Text | ColumnType::VarChar(_) => Ok(()),
             _ => Err(syn::Error::new(
                 field_span,
@@ -247,18 +246,29 @@ fn validate_column_type_compatibility(
                     format_column_type(col_ty)
                 ),
             )),
-        },
-        "i8" => validate_integer_type(col_ty, 1, true, field_span),
-        "i16" => validate_integer_type(col_ty, 2, true, field_span),
-        "i32" => validate_integer_type(col_ty, 4, true, field_span),
-        "i64" => validate_integer_type(col_ty, 8, true, field_span),
-        "u8" => validate_integer_type(col_ty, 1, false, field_span),
-        "u16" => validate_integer_type(col_ty, 2, false, field_span),
-        "u32" => validate_integer_type(col_ty, 4, false, field_span),
-        "u64" => validate_integer_type(col_ty, 8, false, field_span),
-        "isize" => validate_integer_type(col_ty, 8, true, field_span), // Maps to i64
-        "usize" => validate_integer_type(col_ty, 8, false, field_span), // Maps to u64
-        "Uuid" => match col_ty {
+        }
+    } else if is_integer_type(&base_type, "i8") {
+        validate_integer_type(col_ty, 1, true, field_span)
+    } else if is_integer_type(&base_type, "i16") {
+        validate_integer_type(col_ty, 2, true, field_span)
+    } else if is_integer_type(&base_type, "i32") {
+        validate_integer_type(col_ty, 4, true, field_span)
+    } else if is_integer_type(&base_type, "i64") {
+        validate_integer_type(col_ty, 8, true, field_span)
+    } else if is_integer_type(&base_type, "u8") {
+        validate_integer_type(col_ty, 1, false, field_span)
+    } else if is_integer_type(&base_type, "u16") {
+        validate_integer_type(col_ty, 2, false, field_span)
+    } else if is_integer_type(&base_type, "u32") {
+        validate_integer_type(col_ty, 4, false, field_span)
+    } else if is_integer_type(&base_type, "u64") {
+        validate_integer_type(col_ty, 8, false, field_span)
+    } else if is_integer_type(&base_type, "isize") {
+        validate_integer_type(col_ty, 8, true, field_span) // Maps to i64
+    } else if is_integer_type(&base_type, "usize") {
+        validate_integer_type(col_ty, 8, false, field_span) // Maps to u64
+    } else if is_uuid_type(&base_type) {
+        match col_ty {
             ColumnType::Text | ColumnType::Blob | ColumnType::Binary(16) => Ok(()),
             _ => Err(syn::Error::new(
                 field_span,
@@ -269,14 +279,24 @@ fn validate_column_type_compatibility(
                     format_column_type(col_ty)
                 ),
             )),
-        },
-        // Note: bool is not yet supported as a Primitive type in Toasty
-        // When it becomes supported, add validation here
-        _ => {
-            // For unknown or unsupported types, we don't validate
-            // This allows custom types and future type additions
-            Ok(())
         }
+    } else if is_bool_type(&base_type) {
+        match col_ty {
+            ColumnType::Boolean => Ok(()),
+            _ => Err(syn::Error::new(
+                field_span,
+                format!(
+                    "Invalid column type '{}' for field of type 'bool'. \
+                     Boolean fields are compatible with: boolean. \
+                     Did you mean: #[column(type = boolean)]?",
+                    format_column_type(col_ty)
+                ),
+            )),
+        }
+    } else {
+        // For unknown or unsupported types, we don't validate
+        // This allows custom types and future type additions
+        Ok(())
     }
 }
 
@@ -411,4 +431,49 @@ fn generate_valid_integer_suggestions(min_bytes: u8, is_signed: bool) -> String 
         .map(|size| format!("{}({})", prefix, size))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// Checks if the type is String using direct AST pattern matching
+fn is_string_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            return segment.ident == "String" && type_path.path.segments.len() == 1;
+        }
+    }
+    false
+}
+
+/// Checks if the type is a specific integer type using direct AST pattern matching
+fn is_integer_type(ty: &syn::Type, expected: &str) -> bool {
+    if let syn::Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            return segment.ident == expected && type_path.path.segments.len() == 1;
+        }
+    }
+    false
+}
+
+/// Checks if the type is uuid::Uuid using direct AST pattern matching
+fn is_uuid_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty {
+        let path = &type_path.path;
+        if path.segments.len() == 2 {
+            return path.segments[0].ident == "uuid" && path.segments[1].ident == "Uuid";
+        }
+        // Also check for the bare "Uuid" type that extract_base_type produces
+        if path.segments.len() == 1 {
+            return path.segments[0].ident == "Uuid";
+        }
+    }
+    false
+}
+
+/// Checks if the type is bool using direct AST pattern matching
+fn is_bool_type(ty: &syn::Type) -> bool {
+    if let syn::Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            return segment.ident == "bool" && type_path.path.segments.len() == 1;
+        }
+    }
+    false
 }

@@ -363,13 +363,24 @@ impl From<uuid::Uuid> for Value {
     }
 }
 
+impl TryFrom<Value> for bool {
+    type Error = crate::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bool(value) => Ok(value),
+            _ => anyhow::bail!("cannot convert value to bool; value={value:#?}"),
+        }
+    }
+}
+
 impl TryFrom<Value> for uuid::Uuid {
     type Error = crate::Error;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::Uuid(value) => Ok(value),
-            _ => Err(anyhow!("value is not of type UUID")),
+            _ => anyhow::bail!("cannot convert value to uuid::Uuid; value={value:#?}"),
         }
     }
 }
