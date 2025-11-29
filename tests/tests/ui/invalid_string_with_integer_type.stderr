@@ -1,0 +1,8 @@
+error: Invalid column type 'integer(4)' for field of type 'String'
+
+       = note: String fields are compatible with: text, varchar(n)
+       = help: Did you mean: #[column(type = text)]?
+  --> tests/ui/invalid_string_with_integer_type.rs:10:5
+   |
+10 |     #[column(type = integer(4))]
+   |     ^

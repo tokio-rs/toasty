@@ -1,0 +1,8 @@
+error: Invalid column type 'integer(4)' for field of type 'bool'
+
+       = note: Boolean fields are compatible with: boolean
+       = help: Did you mean: #[column(type = boolean)]?
+  --> tests/ui/invalid_bool_with_integer_type.rs:10:5
+   |
+10 |     #[column(type = integer(4))]
+   |     ^
