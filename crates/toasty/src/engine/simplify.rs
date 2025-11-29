@@ -9,6 +9,7 @@ mod expr_in_list;
 mod expr_is_null;
 mod expr_list;
 mod expr_map;
+mod expr_or;
 mod expr_record;
 mod stmt_query;
 mod value;
@@ -61,22 +62,19 @@ impl VisitMut for Simplify<'_> {
 
         // If an in-subquery expression, then try lifting it.
         let maybe_expr = match i {
-            Expr::Any(expr_any) => self.simplify_expr_any(expr_any),
-            Expr::And(expr_and) => self.simplify_expr_and(expr_and),
-            Expr::BinaryOp(expr_binary_op) => self.simplify_expr_binary_op(
-                expr_binary_op.op,
-                &mut expr_binary_op.lhs,
-                &mut expr_binary_op.rhs,
-            ),
+            Expr::Any(expr) => self.simplify_expr_any(expr),
+            Expr::And(expr) => self.simplify_expr_and(expr),
+            Expr::BinaryOp(expr) => {
+                self.simplify_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
+            }
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
             Expr::ConcatStr(expr) => self.simplify_expr_concat_str(expr),
-            Expr::Exists(expr_exists) => self.simplify_expr_exists(expr_exists),
+            Expr::Exists(expr) => self.simplify_expr_exists(expr),
             Expr::InList(expr) => self.simplify_expr_in_list(expr),
-            Expr::InSubquery(expr_in_subquery) => {
-                self.lift_in_subquery(&expr_in_subquery.expr, &expr_in_subquery.query)
-            }
+            Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
+            Expr::Or(expr) => self.simplify_expr_or(expr),
             Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
             _ => None,
