@@ -1,4 +1,5 @@
 use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
+use super::column::ColumnType;
 
 use syn::spanned::Spanned;
 
@@ -157,6 +158,17 @@ impl Field {
             ));
         }
 
+        // Validate column type compatibility for primitive fields
+        if ty.is_none() && attrs.column.is_some() {
+            if let Err(validation_error) = validate_column_type_compatibility(
+                &field.ty,
+                attrs.column.as_ref().unwrap(),
+                field.span(),
+            ) {
+                errs.push(validation_error);
+            }
+        }
+
         if let Some(err) = errs.collect() {
             return Err(err);
         }
@@ -205,4 +217,198 @@ fn rewrite_self(ty: &mut syn::Type, model: &syn::Ident) {
     }
 
     RewriteSelf(model).visit_type_mut(ty);
+}
+
+/// Validates that the specified column type is compatible with the Rust field type
+fn validate_column_type_compatibility(
+    field_type: &syn::Type,
+    column_type: &Column,
+    field_span: proc_macro2::Span,
+) -> syn::Result<()> {
+    // Only validate if a column type is explicitly specified
+    let Some(ref col_ty) = column_type.ty else {
+        return Ok(());
+    };
+
+    // Extract the base type from the Rust field type (handles Option<T>, etc.)
+    let base_type = extract_base_type(field_type);
+
+    // Check compatibility based on the base type
+    let type_string = quote::quote!(#base_type).to_string();
+    match type_string.as_str() {
+        "String" => match col_ty {
+            ColumnType::Text | ColumnType::VarChar(_) => Ok(()),
+            _ => Err(syn::Error::new(
+                field_span,
+                format!(
+                    "Invalid column type '{}' for field of type 'String'. \
+                     String fields are compatible with: text, varchar(n). \
+                     Did you mean: #[column(type = text)]?",
+                    format_column_type(col_ty)
+                ),
+            )),
+        },
+        "i8" => validate_integer_type(col_ty, 1, true, field_span),
+        "i16" => validate_integer_type(col_ty, 2, true, field_span),
+        "i32" => validate_integer_type(col_ty, 4, true, field_span),
+        "i64" => validate_integer_type(col_ty, 8, true, field_span),
+        "u8" => validate_integer_type(col_ty, 1, false, field_span),
+        "u16" => validate_integer_type(col_ty, 2, false, field_span),
+        "u32" => validate_integer_type(col_ty, 4, false, field_span),
+        "u64" => validate_integer_type(col_ty, 8, false, field_span),
+        "isize" => validate_integer_type(col_ty, 8, true, field_span), // Maps to i64
+        "usize" => validate_integer_type(col_ty, 8, false, field_span), // Maps to u64
+        "Uuid" => match col_ty {
+            ColumnType::Text | ColumnType::Blob | ColumnType::Binary(16) => Ok(()),
+            _ => Err(syn::Error::new(
+                field_span,
+                format!(
+                    "Invalid column type '{}' for field of type 'uuid::Uuid'. \
+                     UUID fields are compatible with: text, blob, binary(16). \
+                     Did you mean: #[column(type = text)]?",
+                    format_column_type(col_ty)
+                ),
+            )),
+        },
+        // Note: bool is not yet supported as a Primitive type in Toasty
+        // When it becomes supported, add validation here
+        _ => {
+            // For unknown or unsupported types, we don't validate
+            // This allows custom types and future type additions
+            Ok(())
+        }
+    }
+}
+
+/// Validates integer type compatibility with size requirements
+fn validate_integer_type(
+    col_ty: &ColumnType,
+    min_bytes: u8,
+    is_signed: bool,
+    field_span: proc_macro2::Span,
+) -> syn::Result<()> {
+    match col_ty {
+        ColumnType::Integer(size) if is_signed => {
+            if *size < min_bytes {
+                Err(syn::Error::new(
+                    field_span,
+                    format!(
+                        "Invalid column type 'integer({})' for field requiring at least {} bytes of storage. \
+                         Valid storage types: {}",
+                        size,
+                        min_bytes,
+                        generate_valid_integer_suggestions(min_bytes, true)
+                    ),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+        ColumnType::UnsignedInteger(size) if !is_signed => {
+            if *size < min_bytes {
+                Err(syn::Error::new(
+                    field_span,
+                    format!(
+                        "Invalid column type 'unsignedinteger({})' for field requiring at least {} bytes of storage. \
+                         Valid storage types: {}",
+                        size,
+                        min_bytes,
+                        generate_valid_integer_suggestions(min_bytes, false)
+                    ),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+        ColumnType::Integer(_) if !is_signed => Err(syn::Error::new(
+            field_span,
+            format!(
+                "Invalid column type '{}' for unsigned integer field. \
+                 Unsigned integer types are not compatible with signed storage. \
+                 Valid storage types: {}",
+                format_column_type(col_ty),
+                generate_valid_integer_suggestions(min_bytes, false)
+            ),
+        )),
+        ColumnType::UnsignedInteger(_) if is_signed => Err(syn::Error::new(
+            field_span,
+            format!(
+                "Invalid column type '{}' for signed integer field. \
+                 Signed integer types are not compatible with unsigned storage. \
+                 Valid storage types: {}",
+                format_column_type(col_ty),
+                generate_valid_integer_suggestions(min_bytes, true)
+            ),
+        )),
+        _ => Err(syn::Error::new(
+            field_span,
+            format!(
+                "Invalid column type '{}' for integer field. \
+                 Valid storage types: {}",
+                format_column_type(col_ty),
+                generate_valid_integer_suggestions(min_bytes, is_signed)
+            ),
+        )),
+    }
+}
+
+/// Extracts the base type from a potentially wrapped type like Option<T>
+fn extract_base_type(ty: &syn::Type) -> syn::Type {
+    match ty {
+        syn::Type::Path(type_path) => {
+            let path = &type_path.path;
+            if let Some(segment) = path.segments.last() {
+                // Handle Option<T>
+                if segment.ident == "Option" {
+                    if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                        if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
+                            return extract_base_type(inner_type);
+                        }
+                    }
+                }
+                // Handle uuid::Uuid
+                if path.segments.len() == 2
+                    && path.segments[0].ident == "uuid"
+                    && path.segments[1].ident == "Uuid"
+                {
+                    return syn::parse_quote!(Uuid);
+                }
+            }
+            ty.clone()
+        }
+        _ => ty.clone(),
+    }
+}
+
+/// Formats a ColumnType for display in error messages
+fn format_column_type(col_ty: &ColumnType) -> String {
+    match col_ty {
+        ColumnType::Boolean => "boolean".to_string(),
+        ColumnType::Integer(size) => format!("integer({})", size),
+        ColumnType::UnsignedInteger(size) => format!("unsignedinteger({})", size),
+        ColumnType::Text => "text".to_string(),
+        ColumnType::VarChar(size) => format!("varchar({})", size),
+        ColumnType::Binary(size) => format!("binary({})", size),
+        ColumnType::Blob => "blob".to_string(),
+        ColumnType::Timestamp(precision) => format!("timestamp({})", precision),
+        ColumnType::Date => "date".to_string(),
+        ColumnType::Time(precision) => format!("time({})", precision),
+        ColumnType::DateTime(precision) => format!("datetime({})", precision),
+        ColumnType::Custom(custom) => custom.value(),
+    }
+}
+
+/// Generates helpful suggestions for valid integer storage types
+fn generate_valid_integer_suggestions(min_bytes: u8, is_signed: bool) -> String {
+    let prefix = if is_signed { "integer" } else { "unsignedinteger" };
+    let valid_sizes: Vec<u8> = [1, 2, 4, 8]
+        .into_iter()
+        .filter(|&size| size >= min_bytes)
+        .collect();
+    
+    valid_sizes
+        .into_iter()
+        .map(|size| format!("{}({})", prefix, size))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
