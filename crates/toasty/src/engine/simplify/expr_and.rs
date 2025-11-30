@@ -21,6 +21,18 @@ impl Simplify<'_> {
         // `and(..., true, ...) → and(..., ...)`
         expr.operands.retain(|expr| !expr.is_true());
 
+        // Idempotent law, `a and a` → `a`
+        // Note: O(n) lookups are acceptable here since operand lists are typically small.
+        let mut seen = Vec::new();
+        expr.operands.retain(|operand| {
+            if seen.contains(operand) {
+                false
+            } else {
+                seen.push(operand.clone());
+                true
+            }
+        });
+
         if expr.operands.is_empty() {
             Some(true.into())
         } else if expr.operands.len() == 1 {
@@ -217,5 +229,52 @@ mod tests {
 
         assert!(result.is_some());
         assert!(result.unwrap().is_true());
+    }
+
+    #[test]
+    fn idempotent_two_identical() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `and(a, a) → a`
+        let mut expr = ExprAnd {
+            operands: vec![Expr::arg(0), Expr::arg(0)],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), Expr::arg(0));
+    }
+
+    #[test]
+    fn idempotent_three_identical() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `and(a, a, a) → a`
+        let mut expr = ExprAnd {
+            operands: vec![Expr::arg(0), Expr::arg(0), Expr::arg(0)],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), Expr::arg(0));
+    }
+
+    #[test]
+    fn idempotent_with_different() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `and(a, b, a) → and(a, b)`
+        let mut expr = ExprAnd {
+            operands: vec![Expr::arg(0), Expr::arg(1), Expr::arg(0)],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+        assert_eq!(expr.operands[0], Expr::arg(0));
+        assert_eq!(expr.operands[1], Expr::arg(1));
     }
 }
