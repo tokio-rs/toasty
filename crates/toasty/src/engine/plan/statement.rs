@@ -147,11 +147,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         let node_id = if self.planner.hir[stmt_id].independent {
                             self.planner.hir[stmt_id].output.get().expect("bug")
                         } else {
-                            assert!(
-                                self.planner.hir[stmt_id].output.get().is_none(),
-                                "TODO: what is going on?"
-                            );
-                            self.planner.hir[stmt_id].exec_statement.get().expect("bug")
+                            // self.planner.hir[stmt_id].exec_statement.get().expect("bug")
+                            todo!("what is going on?");
                         };
 
                         let (index, _) = linked_stmt.inputs.insert_full(node_id);
@@ -350,6 +347,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ref_source: Option<stmt::ExprArg>,
     ) -> mir::NodeId {
         if let Some(node_id) = self.plan_const_or_empty_statement(&linked, selection) {
+            assert!(
+                linked.stmt.is_query(),
+                "planned a mutable statement as const; stmt={:#?}",
+                linked.stmt
+            );
             node_id
         } else if self.planner.engine.capability().sql || linked.stmt.is_insert() {
             self.plan_sql_execution(linked, selection)

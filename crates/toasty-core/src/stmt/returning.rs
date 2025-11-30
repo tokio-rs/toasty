@@ -86,6 +86,10 @@ impl Returning {
         *self = Returning::Expr(expr.into());
     }
 
+    pub fn is_value(&self) -> bool {
+        matches!(self, Self::Value(..))
+    }
+
     /// Replaces this value with `Returning::Expr(null)` and returns the original value.
     pub fn take(&mut self) -> Returning {
         std::mem::replace(self, Returning::Expr(stmt::Expr::null()))
