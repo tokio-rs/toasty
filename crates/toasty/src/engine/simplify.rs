@@ -9,6 +9,7 @@ mod expr_in_list;
 mod expr_is_null;
 mod expr_list;
 mod expr_map;
+mod expr_not;
 mod expr_record;
 mod stmt_query;
 mod value;
@@ -77,6 +78,7 @@ impl VisitMut for Simplify<'_> {
             }
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
+            Expr::Not(expr) => self.simplify_expr_not(expr),
             Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
             _ => None,

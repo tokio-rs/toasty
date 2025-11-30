@@ -87,6 +87,9 @@ pub use expr_list::ExprList;
 mod expr_map;
 pub use expr_map::ExprMap;
 
+mod expr_not;
+pub use expr_not::ExprNot;
+
 mod expr_or;
 pub use expr_or::ExprOr;
 
