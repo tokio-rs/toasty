@@ -57,6 +57,23 @@ impl Simplify<'_> {
         }
 
         match (&mut *lhs, &mut *rhs) {
+            // Self-comparison, e.g.,
+            //
+            //  - `x = x` → `true`
+            //  - `x != x` → `false`
+            //
+            // Only applied for non-nullable field references.
+            (Expr::Reference(lhs), Expr::Reference(rhs))
+                if lhs == rhs && (op.is_eq() || op.is_ne()) =>
+            {
+                if lhs.is_field() {
+                    let field = self.cx.resolve_expr_reference(lhs).expect_field();
+                    if !field.nullable() {
+                        return Some(op.is_eq().into());
+                    }
+                }
+                None
+            }
             (Expr::Cast(cast), Expr::Value(val)) if cast.ty.is_id() => {
                 *lhs = cast.expr.take();
                 self.uncast_value_id(val);
@@ -106,13 +123,16 @@ mod tests {
     use toasty_core::{
         driver::Capability,
         schema::{app, Builder},
-        stmt::{BinaryOp, ExprCast, Id, Type, Value},
+        stmt::{BinaryOp, ExprCast, ExprReference, Id, Type, Value},
     };
 
+    #[allow(dead_code)]
     #[derive(toasty::Model)]
     struct User {
         #[key]
         id: String,
+
+        name: Option<String>,
     }
 
     fn test_schema() -> toasty_core::Schema {
@@ -194,5 +214,93 @@ mod tests {
         assert!(result.is_none());
         assert!(matches!(lhs, Expr::Value(Value::I64(1))));
         assert!(matches!(rhs, Expr::Value(Value::I64(2))));
+    }
+
+    #[test]
+    fn self_comparison_eq_non_nullable_becomes_true() {
+        let schema = test_schema();
+        let model = schema.app.model(User::id());
+        let simplify = Simplify::new(&schema);
+        let mut simplify = simplify.scope(model);
+
+        // `id = id` → `true` (non-nullable field)
+        let mut lhs = Expr::Reference(ExprReference::Field {
+            nesting: 0,
+            index: 0,
+        });
+        let mut rhs = Expr::Reference(ExprReference::Field {
+            nesting: 0,
+            index: 0,
+        });
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+        assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
+    }
+
+    #[test]
+    fn self_comparison_ne_non_nullable_becomes_false() {
+        let schema = test_schema();
+        let model = schema.app.model(User::id());
+        let simplify = Simplify::new(&schema);
+        let mut simplify = simplify.scope(model);
+
+        // `id != id` → `false` (non-nullable field)
+        let mut lhs = Expr::Reference(ExprReference::Field {
+            nesting: 0,
+            index: 0,
+        });
+        let mut rhs = Expr::Reference(ExprReference::Field {
+            nesting: 0,
+            index: 0,
+        });
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Ne, &mut lhs, &mut rhs);
+
+        assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
+    }
+
+    #[test]
+    fn self_comparison_nullable_not_simplified() {
+        let schema = test_schema();
+        let model = schema.app.model(User::id());
+        let simplify = Simplify::new(&schema);
+        let mut simplify = simplify.scope(model);
+
+        // `name = name` is not simplified (nullable field)
+        let mut lhs = Expr::Reference(ExprReference::Field {
+            nesting: 0,
+            index: 1,
+        });
+        let mut rhs = Expr::Reference(ExprReference::Field {
+            nesting: 0,
+            index: 1,
+        });
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn different_fields_not_simplified() {
+        let schema = test_schema();
+        let model = schema.app.model(User::id());
+        let simplify = Simplify::new(&schema);
+        let mut simplify = simplify.scope(model);
+
+        // `id = name` is not simplified (different fields)
+        let mut lhs = Expr::Reference(ExprReference::Field {
+            nesting: 0,
+            index: 0,
+        });
+        let mut rhs = Expr::Reference(ExprReference::Field {
+            nesting: 0,
+            index: 1,
+        });
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+        assert!(result.is_none());
     }
 }
