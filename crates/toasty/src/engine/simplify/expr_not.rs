@@ -21,6 +21,26 @@ impl Simplify<'_> {
             }
         }
 
+        // De Morgan's law, `not(a and b)` → `not(a) or not(b)`
+        if let Expr::And(expr_and) = expr_not.expr.as_mut() {
+            let negated = expr_and
+                .operands
+                .drain(..)
+                .map(Expr::not)
+                .collect::<Vec<_>>();
+            return Some(Expr::or_from_vec(negated));
+        }
+
+        // De Morgan's law, `not(a or b)` → `not(a) and not(b)`
+        if let Expr::Or(expr_or) = expr_not.expr.as_mut() {
+            let negated = expr_or
+                .operands
+                .drain(..)
+                .map(Expr::not)
+                .collect::<Vec<_>>();
+            return Some(Expr::and_from_vec(negated));
+        }
+
         None
     }
 }
@@ -243,5 +263,89 @@ mod tests {
         let result = simplify.simplify_expr_not(&mut expr);
 
         assert!(result.is_none());
+    }
+
+    // De Morgan's law tests
+
+    #[test]
+    fn not_and_becomes_or_of_nots() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `not(a and b)` → `not(a) or not(b)`
+        let mut expr = not_expr(Expr::and(Expr::arg(0), Expr::arg(1)));
+
+        let result = simplify.simplify_expr_not(&mut expr);
+
+        let Some(Expr::Or(or_expr)) = result else {
+            panic!("expected `Or`");
+        };
+        assert_eq!(or_expr.operands.len(), 2);
+        assert!(matches!(&or_expr.operands[0], Expr::Not(_)));
+        assert!(matches!(&or_expr.operands[1], Expr::Not(_)));
+    }
+
+    #[test]
+    fn not_or_becomes_and_of_nots() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `not(a or b)` → `not(a) and not(b)`
+        let mut expr = not_expr(Expr::or(Expr::arg(0), Expr::arg(1)));
+
+        let result = simplify.simplify_expr_not(&mut expr);
+
+        let Some(Expr::And(and_expr)) = result else {
+            panic!("expected `And`");
+        };
+        assert_eq!(and_expr.operands.len(), 2);
+        assert!(matches!(&and_expr.operands[0], Expr::Not(_)));
+        assert!(matches!(&and_expr.operands[1], Expr::Not(_)));
+    }
+
+    #[test]
+    fn not_and_with_three_operands() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `not(a and b and c)` → `not(a) or not(b) or not(c)`
+        let mut expr = not_expr(Expr::and_from_vec(vec![
+            Expr::arg(0),
+            Expr::arg(1),
+            Expr::arg(2),
+        ]));
+
+        let result = simplify.simplify_expr_not(&mut expr);
+
+        let Some(Expr::Or(or_expr)) = result else {
+            panic!("expected `Or`");
+        };
+        assert_eq!(or_expr.operands.len(), 3);
+        for operand in &or_expr.operands {
+            assert!(matches!(operand, Expr::Not(_)));
+        }
+    }
+
+    #[test]
+    fn not_or_with_three_operands() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `not(a or b or c)` → `not(a) and not(b) and not(c)`
+        let mut expr = not_expr(Expr::or_from_vec(vec![
+            Expr::arg(0),
+            Expr::arg(1),
+            Expr::arg(2),
+        ]));
+
+        let result = simplify.simplify_expr_not(&mut expr);
+
+        let Some(Expr::And(and_expr)) = result else {
+            panic!("expected `And`");
+        };
+        assert_eq!(and_expr.operands.len(), 3);
+        for operand in &and_expr.operands {
+            assert!(matches!(operand, Expr::Not(_)));
+        }
     }
 }
