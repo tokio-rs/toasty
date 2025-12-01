@@ -9,6 +9,7 @@ mod expr_in_list;
 mod expr_is_null;
 mod expr_list;
 mod expr_map;
+mod expr_not;
 mod expr_or;
 mod expr_record;
 mod stmt_query;
@@ -74,7 +75,6 @@ impl VisitMut for Simplify<'_> {
             Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
-            Expr::Or(expr) => self.simplify_expr_or(expr),
             Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
             _ => None,

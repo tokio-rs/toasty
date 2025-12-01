@@ -2,8 +2,7 @@ use super::Expr;
 
 /// Tests whether an expression is null.
 ///
-/// Returns `true` if the expression evaluates to null (or not null when
-/// negated).
+/// Returns `true` if the expression evaluates to null.
 ///
 /// # Examples
 ///
@@ -13,9 +12,6 @@ use super::Expr;
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprIsNull {
-    /// When `true`, this is an "is not null" check.
-    pub negate: bool,
-
     /// The expression to check for null.
     pub expr: Box<Expr>,
 }
@@ -23,18 +19,13 @@ pub struct ExprIsNull {
 impl Expr {
     pub fn is_null(expr: impl Into<Self>) -> Self {
         ExprIsNull {
-            negate: false,
             expr: Box::new(expr.into()),
         }
         .into()
     }
 
     pub fn is_not_null(expr: impl Into<Self>) -> Self {
-        ExprIsNull {
-            negate: true,
-            expr: Box::new(expr.into()),
-        }
-        .into()
+        Self::not(Self::is_null(expr))
     }
 }
 

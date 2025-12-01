@@ -19,20 +19,19 @@ mod tests {
     use super::*;
     use crate::engine::simplify::test::test_schema;
     use toasty_core::schema::app::ModelId;
-    use toasty_core::stmt::{Expr, ExprArg, ExprCast, ExprIsNull, Type};
+    use toasty_core::stmt::{Expr, ExprArg, ExprCast, ExprIsNull, Type, VisitMut as _};
 
     #[test]
     fn cast_to_id_unwrapped() {
         let schema = test_schema();
         let simplify = Simplify::new(&schema);
 
-        // `is_null(cast(arg(0), Id)) → is_null(arg(0))`
+        // `is_null(cast(arg(0), Id))` → `is_null(arg(0))`
         let mut expr = ExprIsNull {
             expr: Box::new(Expr::Cast(ExprCast {
                 expr: Box::new(Expr::arg(0)),
                 ty: Type::Id(ModelId(0)),
             })),
-            negate: false,
         };
         let result = simplify.simplify_expr_is_null(&mut expr);
 
@@ -51,7 +50,6 @@ mod tests {
                 expr: Box::new(Expr::arg(0)),
                 ty: Type::String,
             })),
-            negate: false,
         };
         let result = simplify.simplify_expr_is_null(&mut expr);
 
@@ -73,7 +71,6 @@ mod tests {
         // `is_null(arg(0))`, non-cast, not simplified
         let mut expr = ExprIsNull {
             expr: Box::new(Expr::arg(0)),
-            negate: false,
         };
         let result = simplify.simplify_expr_is_null(&mut expr);
 
@@ -82,22 +79,27 @@ mod tests {
     }
 
     #[test]
-    fn negated_cast_to_id_unwrapped() {
+    fn not_is_null_cast_to_id_unwrapped() {
         let schema = test_schema();
-        let simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema);
 
-        // `is_not_null(cast(arg(0), Id)) → is_not_null(arg(0))`
-        let mut expr = ExprIsNull {
+        // `not(is_null(cast(arg(0), Id)))` → `not(is_null(arg(0)))`
+        let mut expr = Expr::not(Expr::IsNull(ExprIsNull {
             expr: Box::new(Expr::Cast(ExprCast {
                 expr: Box::new(Expr::arg(0)),
                 ty: Type::Id(ModelId(0)),
             })),
-            negate: true,
-        };
-        let result = simplify.simplify_expr_is_null(&mut expr);
+        }));
+        simplify.visit_expr_mut(&mut expr);
 
-        assert!(result.is_none());
-        assert!(matches!(*expr.expr, Expr::Arg(ExprArg { position: 0 })));
-        assert!(expr.negate);
+        if let Expr::Not(not) = &expr {
+            if let Expr::IsNull(is_null) = not.expr.as_ref() {
+                assert!(matches!(*is_null.expr, Expr::Arg(ExprArg { position: 0 })));
+            } else {
+                panic!("expected `IsNull` inside `Not` expression");
+            }
+        } else {
+            panic!("expected `Not` expression");
+        }
     }
 }
