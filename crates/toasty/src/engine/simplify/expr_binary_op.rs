@@ -126,7 +126,6 @@ mod tests {
         stmt::{BinaryOp, ExprCast, ExprReference, Id, Type, Value},
     };
 
-    #[allow(dead_code)]
     #[derive(toasty::Model)]
     struct User {
         #[key]
