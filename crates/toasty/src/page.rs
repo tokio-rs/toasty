@@ -11,6 +11,7 @@ pub struct Page<M> {
     pub items: Vec<M>,
 
     /// Base query (without cursors/offsets)
+    #[allow(unused)] // TODO: Add `.next(db).await` and `.previous(db).await`
     query: Select<M>,
 
     /// Cursor for fetching next page (derived from last item)
