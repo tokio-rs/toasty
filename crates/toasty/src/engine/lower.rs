@@ -455,7 +455,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         lower.visit_stmt_query_mut(&mut stmt.source);
 
         if let Some(returning) = &mut stmt.returning {
-            // TODO: preprocess_insert_values
             lower.visit_returning_mut(returning);
             lower.constantize_insert_returning(returning, &stmt.source);
         }
@@ -501,34 +500,49 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
         let mut lower = self.scope_expr(&stmt.target);
 
-        // Plan relations
-        lower.plan_stmt_update_relations(&mut stmt.assignments, &stmt.filter);
+        let mut returning_changed = false;
 
         // Before lowering children, convert the "Changed" returning statement
         // to an expression referencing changed fields.
         if let Some(returning) = &mut stmt.returning {
             if returning.is_changed() {
+                returning_changed = true;
+
                 if let Some(model) = lower.model() {
                     let mut fields = vec![];
 
-                    for i in stmt.assignments.keys() {
+                    // TODO: Really gotta either fix SparseRecord or get rid of it... It does not maintain key order.
+                    let field_set: stmt::PathFieldSet = stmt.assignments.keys().collect();
+
+                    for i in field_set.iter() {
                         let field = &model.fields[i];
 
-                        assert!(field.ty.is_primitive(), "field={field:#?}");
-
-                        fields.push(stmt::Expr::ref_self_field(app::FieldId {
-                            model: model.id,
-                            index: i,
-                        }));
+                        if field.ty.is_primitive() {
+                            fields.push(stmt::Expr::ref_self_field(app::FieldId {
+                                model: model.id,
+                                index: i,
+                            }));
+                        } else {
+                            // This will be populated later during relation planning
+                            fields.push(stmt::Expr::null());
+                        }
                     }
 
                     *returning = stmt::Returning::Expr(stmt::Expr::cast(
                         stmt::ExprRecord::from_vec(fields),
-                        stmt::Type::SparseRecord(stmt.assignments.keys().collect()),
+                        stmt::Type::SparseRecord(field_set),
                     ));
                 }
             }
         }
+
+        // Plan relations
+        lower.plan_stmt_update_relations(
+            &mut stmt.assignments,
+            &stmt.filter,
+            &mut stmt.returning,
+            returning_changed,
+        );
 
         lower.visit_assignments_mut(&mut stmt.assignments);
         lower.visit_filter_mut(&mut stmt.filter);

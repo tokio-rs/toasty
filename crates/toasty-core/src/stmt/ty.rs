@@ -187,6 +187,10 @@ impl Type {
         matches!(self, Self::Uuid)
     }
 
+    pub fn is_sparse_record(&self) -> bool {
+        matches!(self, Self::SparseRecord(..))
+    }
+
     pub fn cast(&self, value: Value) -> Result<Value> {
         use stmt::Value;
 

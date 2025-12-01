@@ -44,16 +44,20 @@ trait RelationSource {
     fn as_insert_source(&self) -> Option<&InsertRelationSource<'_>>;
 }
 
+#[derive(Debug)]
 struct InsertRelationSource<'a> {
     model: &'a app::Model,
     row: &'a mut stmt::Expr,
     returning: &'a mut Option<stmt::Returning>,
 }
 
+#[derive(Debug)]
 struct UpdateRelationSource<'a> {
     model: &'a app::Model,
     filter: &'a stmt::Filter,
     assignments: &'a mut stmt::Assignments,
+    returning: &'a mut Option<stmt::Returning>,
+    returning_changed: bool,
 }
 
 impl LowerStatement<'_, '_> {
@@ -122,6 +126,8 @@ impl LowerStatement<'_, '_> {
         &mut self,
         assignments: &mut stmt::Assignments,
         filter: &stmt::Filter,
+        returning: &mut Option<stmt::Returning>,
+        returning_changed: bool,
     ) {
         let model = self.expr_cx.target().as_model_unwrap();
         let mut unused_then = vec![];
@@ -167,6 +173,8 @@ impl LowerStatement<'_, '_> {
                     model,
                     filter,
                     assignments: &mut *assignments,
+                    returning,
+                    returning_changed,
                 },
                 &mut unused_then,
             );
@@ -632,7 +640,31 @@ impl RelationSource for UpdateRelationSource<'_> {
     }
 
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
-        todo!()
+        debug_assert!(self.returning_changed, "TODO");
+
+        let Some(stmt::Returning::Expr(stmt::Expr::Cast(expr_cast))) = self.returning else {
+            todo!("UpdateRelationSource={self:#?}")
+        };
+
+        let stmt::Type::SparseRecord(path_field_set) = &mut expr_cast.ty else {
+            todo!("expr={expr:#?}")
+        };
+
+        let position = path_field_set
+            .iter()
+            .position(|field_id| field_id == field.index)
+            .unwrap();
+
+        let stmt::Expr::Record(record) = &mut *expr_cast.expr else {
+            todo!()
+        };
+
+        assert!(
+            record.fields[position].is_value_null(),
+            "TODO: probably need to merge instead of overwrite; field={field:#?}; expr={expr:#?}; self={self:#?}"
+        );
+
+        record.fields[position] = expr;
     }
 
     fn as_insert_source(&self) -> Option<&InsertRelationSource<'_>> {
@@ -673,7 +705,7 @@ impl RelationSource for InsertRelationSource<'_> {
             );
             record.fields[field.index] = expr;
         } else {
-            todo!();
+            todo!("InsertRelationSource={self:#?}");
         }
     }
 
