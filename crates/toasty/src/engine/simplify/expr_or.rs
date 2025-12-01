@@ -33,6 +33,27 @@ impl Simplify<'_> {
             }
         });
 
+        // Absorption law, `x or (x and y)` → `x`
+        // If an operand is an AND that contains another operand of the OR, remove the AND.
+        let non_and_operands: Vec<_> = expr
+            .operands
+            .iter()
+            .filter(|op| !matches!(op, stmt::Expr::And(_)))
+            .cloned()
+            .collect();
+
+        expr.operands.retain(|operand| {
+            if let stmt::Expr::And(and_expr) = operand {
+                // Remove this AND if any of its operands appears as a direct operand of the OR
+                !and_expr
+                    .operands
+                    .iter()
+                    .any(|op| non_and_operands.contains(op))
+            } else {
+                true
+            }
+        });
+
         if expr.operands.is_empty() {
             Some(false.into())
         } else if expr.operands.len() == 1 {
@@ -225,6 +246,78 @@ mod tests {
         // `or(a, b, a) → or(a, b)`
         let mut expr = ExprOr {
             operands: vec![Expr::arg(0), Expr::arg(1), Expr::arg(0)],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+        assert_eq!(expr.operands[0], Expr::arg(0));
+        assert_eq!(expr.operands[1], Expr::arg(1));
+    }
+
+    #[test]
+    fn absorption_or_and() {
+        use toasty_core::stmt::ExprAnd;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `or(a, and(a, b))` → `a`
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::arg(0),
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(0), Expr::arg(1)],
+                }),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), Expr::arg(0));
+    }
+
+    #[test]
+    fn absorption_with_multiple_operands() {
+        use toasty_core::stmt::ExprAnd;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `or(a, b, and(a, c))` → `or(a, b)`
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::arg(0),
+                Expr::arg(1),
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(0), Expr::arg(2)],
+                }),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+        assert_eq!(expr.operands[0], Expr::arg(0));
+        assert_eq!(expr.operands[1], Expr::arg(1));
+    }
+
+    #[test]
+    fn absorption_two_or_three_and() {
+        use toasty_core::stmt::ExprAnd;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `or(a, b, and(a, c, d))` → `or(a, b)`
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::arg(0),
+                Expr::arg(1),
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(0), Expr::arg(2), Expr::arg(3)],
+                }),
+            ],
         };
         let result = simplify.simplify_expr_or(&mut expr);
 
