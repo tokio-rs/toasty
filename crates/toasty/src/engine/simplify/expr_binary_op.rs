@@ -206,7 +206,7 @@ mod tests {
 
     #[test]
     fn constant_eq_same_values_becomes_true() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `eq(5, 5)` → `true`
@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn constant_eq_different_values_becomes_false() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `eq(1, 2)` → `false`
@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn constant_ne_same_values_becomes_false() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `ne(5, 5)` → `false`
@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn constant_ne_different_values_becomes_true() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `ne("abc", "def")` → `true`
@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn constant_eq_with_null_not_simplified() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `eq(null, 5)` is not simplified (`null` comparisons have special semantics)
@@ -276,7 +276,7 @@ mod tests {
 
     #[test]
     fn constant_eq_null_with_null_not_simplified() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `eq(null, null)` is not simplified (`null` comparisons have special semantics)
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn constant_lt_becomes_true() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `1 < 5` → `true`
@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn constant_lt_becomes_false() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `5 < 1` → `false`
@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn constant_le_equal_becomes_true() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `5 <= 5` → `true`
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn constant_le_becomes_false() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `10 <= 5` → `false`
@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn constant_gt_becomes_true() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `10 > 5` → `true`
@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn constant_gt_becomes_false() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `1 > 5` → `false`
@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn constant_ge_equal_becomes_true() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `5 >= 5` → `true`
@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn constant_ge_becomes_false() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `1 >= 5` → `false`
@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn constant_lt_string_lexicographic() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `"abc" < "def"` → `true` (lexicographic)
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn constant_lt_different_types_not_simplified() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `5 < "abc"` is not simplified (incompatible types)
@@ -430,7 +430,7 @@ mod tests {
 
     #[test]
     fn constant_lt_with_null_not_simplified() {
-        let (schema, _model) = test_schema();
+        let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
         // `5 < null` is not simplified
