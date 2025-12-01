@@ -54,6 +54,12 @@ impl Simplify<'_> {
             }
         });
 
+        // Factoring, `(a and b) or (a and c)` → `a and (b or c)`
+        // Find common factors across all AND operands and factor them out.
+        if let Some(factored) = self.try_factor_or(expr) {
+            return Some(factored);
+        }
+
         if expr.operands.is_empty() {
             Some(false.into())
         } else if expr.operands.len() == 1 {
@@ -61,6 +67,71 @@ impl Simplify<'_> {
         } else {
             None
         }
+    }
+
+    /// Attempts to factor common terms from AND expressions within an OR.
+    /// `(a and b) or (a and c)` → `a and (b or c)`
+    /// `(a and b and c) or (a and b and d)` → `a and b and (c or d)`
+    fn try_factor_or(&self, expr: &mut stmt::ExprOr) -> Option<stmt::Expr> {
+        // Need at least 2 operands, all must be ANDs
+        if expr.operands.len() < 2 {
+            return None;
+        }
+
+        if !expr
+            .operands
+            .iter()
+            .all(|op| matches!(op, stmt::Expr::And(_)))
+        {
+            return None;
+        }
+
+        // Find all common factors by checking which operands from the first AND
+        // appear in all other ANDs
+        let first_and = match &expr.operands[0] {
+            stmt::Expr::And(and) => and,
+            _ => unreachable!(),
+        };
+
+        let common: Vec<_> = first_and
+            .operands
+            .iter()
+            .filter(|op| {
+                expr.operands[1..].iter().all(|other| {
+                    if let stmt::Expr::And(other_and) = other {
+                        other_and.operands.contains(op)
+                    } else {
+                        false
+                    }
+                })
+            })
+            .cloned()
+            .collect();
+
+        if common.is_empty() {
+            return None;
+        }
+
+        // Remove all common factors from each AND
+        for operand in &mut expr.operands {
+            if let stmt::Expr::And(and) = operand {
+                and.operands.retain(|op| !common.contains(op));
+                // If only one operand left, unwrap the AND
+                if and.operands.len() == 1 {
+                    *operand = and.operands.pop().unwrap();
+                } else if and.operands.is_empty() {
+                    *operand = true.into();
+                }
+            }
+        }
+
+        // Common factors AND (the modified OR)
+        let mut result = common;
+        let or_expr = stmt::ExprOr {
+            operands: mem::take(&mut expr.operands),
+        };
+        result.push(stmt::Expr::Or(or_expr));
+        Some(stmt::Expr::and_from_vec(result))
     }
 }
 
@@ -325,5 +396,138 @@ mod tests {
         assert_eq!(expr.operands.len(), 2);
         assert_eq!(expr.operands[0], Expr::arg(0));
         assert_eq!(expr.operands[1], Expr::arg(1));
+    }
+
+    #[test]
+    fn factoring_basic() {
+        use toasty_core::stmt::ExprAnd;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `(a and b) or (a and c)` → `a and (b or c)`
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(0), Expr::arg(1)],
+                }),
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(0), Expr::arg(2)],
+                }),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        // Result should be `a and (b or c)`
+        let Some(Expr::And(and_expr)) = result else {
+            panic!("expected And");
+        };
+        assert_eq!(and_expr.operands.len(), 2);
+        assert_eq!(and_expr.operands[0], Expr::arg(0));
+
+        let Expr::Or(or_expr) = &and_expr.operands[1] else {
+            panic!("expected Or");
+        };
+        assert_eq!(or_expr.operands.len(), 2);
+        assert_eq!(or_expr.operands[0], Expr::arg(1));
+        assert_eq!(or_expr.operands[1], Expr::arg(2));
+    }
+
+    #[test]
+    fn factoring_multiple_common() {
+        use toasty_core::stmt::ExprAnd;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `(a and b and c) or (a and b and d)` → `a and b and (c or d)`
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(0), Expr::arg(1), Expr::arg(2)],
+                }),
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(0), Expr::arg(1), Expr::arg(3)],
+                }),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        // Result should be `a and b and (c or d)`
+        let Some(Expr::And(and_expr)) = result else {
+            panic!("expected And");
+        };
+        assert_eq!(and_expr.operands.len(), 3);
+        assert_eq!(and_expr.operands[0], Expr::arg(0));
+        assert_eq!(and_expr.operands[1], Expr::arg(1));
+
+        let Expr::Or(or_expr) = &and_expr.operands[2] else {
+            panic!("expected Or");
+        };
+        assert_eq!(or_expr.operands.len(), 2);
+        assert_eq!(or_expr.operands[0], Expr::arg(2));
+        assert_eq!(or_expr.operands[1], Expr::arg(3));
+    }
+
+    #[test]
+    fn factoring_three_ands() {
+        use toasty_core::stmt::ExprAnd;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `(a and b) or (a and c) or (a and d)` → `a and (b or c or d)`
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(0), Expr::arg(1)],
+                }),
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(0), Expr::arg(2)],
+                }),
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(0), Expr::arg(3)],
+                }),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        // Result should be `a and (b or c or d)`
+        let Some(Expr::And(and_expr)) = result else {
+            panic!("expected And");
+        };
+        assert_eq!(and_expr.operands.len(), 2);
+        assert_eq!(and_expr.operands[0], Expr::arg(0));
+
+        let Expr::Or(or_expr) = &and_expr.operands[1] else {
+            panic!("expected Or");
+        };
+        assert_eq!(or_expr.operands.len(), 3);
+        assert_eq!(or_expr.operands[0], Expr::arg(1));
+        assert_eq!(or_expr.operands[1], Expr::arg(2));
+        assert_eq!(or_expr.operands[2], Expr::arg(3));
+    }
+
+    #[test]
+    fn factoring_no_common() {
+        use toasty_core::stmt::ExprAnd;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `(a and b) or (c and d)` → no change (no common factor)
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(0), Expr::arg(1)],
+                }),
+                Expr::And(ExprAnd {
+                    operands: vec![Expr::arg(2), Expr::arg(3)],
+                }),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_none());
     }
 }
