@@ -1,6 +1,6 @@
 use toasty_core::{
     schema::{app::ModelId, Schema},
-    stmt::{self, Statement, Visit},
+    stmt::{self, Limit, Statement, Visit},
 };
 
 use crate::engine::Engine;
@@ -67,11 +67,10 @@ impl stmt::Visit for Verify<'_> {
 
 impl Verify<'_> {
     fn verify_offset_key_matches_order_by(&self, i: &stmt::Query) {
-        let Some(limit) = i.limit.as_ref() else {
-            return;
-        };
-
-        let Some(stmt::Offset::After(offset)) = limit.offset.as_ref() else {
+        let Some(Limit::PaginateForward {
+            after: Some(after), ..
+        }) = &i.limit
+        else {
             return;
         };
 
@@ -79,7 +78,7 @@ impl Verify<'_> {
             todo!("specified offset but no order; stmt={i:#?}");
         };
 
-        match offset {
+        match after {
             stmt::Expr::Value(stmt::Value::Record(record)) => {
                 assert!(
                     order_by.exprs.len() == record.fields.len(),

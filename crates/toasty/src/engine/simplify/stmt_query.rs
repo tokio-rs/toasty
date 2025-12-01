@@ -116,9 +116,9 @@ mod tests {
                 order: Some(Direction::Asc),
             }],
         });
-        query.limit = Some(Limit {
+        query.limit = Some(Limit::PaginateForward {
             limit: stmt::Expr::Value(stmt::Value::from(10i64)),
-            offset: None,
+            after: None,
         });
 
         simplify.simplify_stmt_query_when_empty(&mut query);
@@ -143,9 +143,9 @@ mod tests {
                 order: Some(Direction::Desc),
             }],
         });
-        query.limit = Some(Limit {
+        query.limit = Some(Limit::PaginateForward {
             limit: stmt::Expr::Value(stmt::Value::from(10i64)),
-            offset: None,
+            after: None,
         });
 
         simplify.simplify_stmt_query_when_empty(&mut query);

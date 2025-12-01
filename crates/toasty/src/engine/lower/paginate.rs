@@ -1,4 +1,4 @@
-use toasty_core::stmt;
+use toasty_core::stmt::{self, Limit};
 
 use super::LowerStatement;
 
@@ -9,33 +9,41 @@ impl LowerStatement<'_, '_> {
             return;
         }
 
-        let Some(limit) = &mut stmt.limit else {
-            return;
-        };
-
-        let Some(stmt::Offset::After(offset)) = limit.offset.take() else {
+        let Some(Limit::PaginateForward { limit, after }) = &stmt.limit else {
             return;
         };
 
         let Some(order_by) = &mut stmt.order_by else {
-            return;
+            panic!("Cursor-based pagination requires `order by` clause");
         };
 
         let stmt::ExprSet::Select(body) = &mut stmt.body else {
             todo!("stmt={stmt:#?}");
         };
 
-        match offset {
-            stmt::Expr::Value(stmt::Value::Record(_)) => {
+        match after {
+            Some(stmt::Expr::Value(stmt::Value::Record(_))) => {
                 todo!()
             }
-            stmt::Expr::Value(value) => {
-                let expr =
-                    self.rewrite_offset_after_field_as_filter(&order_by.exprs[0], value, true);
+            Some(stmt::Expr::Value(value)) => {
+                let expr = self.rewrite_offset_after_field_as_filter(
+                    &order_by.exprs[0],
+                    value.clone(),
+                    true,
+                );
                 body.filter.add_filter(expr);
+            }
+            None => {
+                // No filter necessary.
             }
             _ => todo!(),
         }
+
+        // Lower `limit` clause to SQL compatible `Limit::Offset`.
+        stmt.limit = Some(Limit::Offset {
+            limit: limit.clone(),
+            offset: None,
+        })
     }
 
     fn rewrite_offset_after_field_as_filter(

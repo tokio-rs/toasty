@@ -2,7 +2,7 @@ use super::Select;
 
 use crate::{cursor::FromCursor, Db, Model, Result};
 
-use toasty_core::stmt;
+use toasty_core::stmt::{self, Limit};
 
 #[derive(Debug)]
 pub struct Paginate<M> {
@@ -21,9 +21,9 @@ impl<M: Model> Paginate<M> {
             "pagination requires an order_by clause"
         );
 
-        query.untyped.limit = Some(stmt::Limit {
+        query.untyped.limit = Some(stmt::Limit::PaginateForward {
             limit: stmt::Value::from(per_page as i64).into(),
-            offset: None,
+            after: None,
         });
 
         Self { query }
@@ -31,11 +31,11 @@ impl<M: Model> Paginate<M> {
 
     /// Set the key-based offset for pagination.
     pub fn after(mut self, key: impl Into<stmt::Expr>) -> Self {
-        let Some(limit) = self.query.untyped.limit.as_mut() else {
-            panic!("pagination requires a limit clause");
+        let Some(Limit::PaginateForward { after, .. }) = self.query.untyped.limit.as_mut() else {
+            panic!("expected cursor-based pagination in query");
         };
 
-        limit.offset = Some(stmt::Offset::After(key.into()));
+        *after = Some(key.into());
 
         self
     }
