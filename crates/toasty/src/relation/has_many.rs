@@ -43,6 +43,10 @@ impl<T: Model> HasMany<T> {
     pub fn is_unloaded(&self) -> bool {
         self.values.is_none()
     }
+
+    pub fn unload(&mut self) {
+        self.values = None;
+    }
 }
 
 impl<T: Relation> Relation for HasMany<T> {

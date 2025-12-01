@@ -28,6 +28,10 @@ impl<T: Model> HasOne<T> {
     pub fn is_unloaded(&self) -> bool {
         self.value.is_none()
     }
+
+    pub fn unload(&mut self) {
+        self.value = None;
+    }
 }
 
 impl<T: Relation> Relation for HasOne<T> {
