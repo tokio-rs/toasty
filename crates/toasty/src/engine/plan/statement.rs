@@ -347,8 +347,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ref_source: Option<stmt::ExprArg>,
     ) -> mir::NodeId {
         if let Some(node_id) = self.plan_const_or_empty_statement(&linked, selection) {
-            assert!(
-                linked.stmt.is_query(),
+            debug_assert!(
+                linked.stmt.is_query()
+                    || linked
+                        .stmt
+                        .assignments()
+                        .map(|a| a.is_empty())
+                        .unwrap_or(false),
                 "planned a mutable statement as const; stmt={:#?}",
                 linked.stmt
             );
