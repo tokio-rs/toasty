@@ -72,73 +72,34 @@ impl Simplify<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate as toasty;
+    use crate::Model as _;
     use toasty_core::{
         driver::Capability,
-        schema::{
-            app::{
-                Field, FieldName, FieldPrimitive, FieldTy, Index, IndexField, IndexId, Model,
-                ModelId, PrimaryKey,
-            },
-            db::{IndexOp, IndexScope},
-            Builder, Name,
-        },
-        stmt::{Expr, Query, Type, Value, Values},
+        schema::{app, Builder},
+        stmt::{Expr, Query, Value, Values},
     };
+
+    #[derive(toasty::Model)]
+    struct User {
+        #[key]
+        id: i64,
+    }
 
     /// Creates a schema with a single `User` model containing an `id` primary
     /// key field.
     fn test_schema() -> (toasty_core::Schema, FieldId) {
-        let model_id = ModelId(0);
-        let field_id = FieldId {
-            model: model_id,
-            index: 0,
-        };
-        let index_id = IndexId {
-            model: model_id,
-            index: 0,
-        };
-
-        let model = Model {
-            id: model_id,
-            name: Name::new("User"),
-            fields: vec![Field {
-                id: field_id,
-                name: FieldName {
-                    app_name: "id".to_string(),
-                    storage_name: None,
-                },
-                ty: FieldTy::Primitive(FieldPrimitive {
-                    ty: Type::I64,
-                    storage_ty: None,
-                }),
-                nullable: false,
-                primary_key: true,
-                auto: None,
-                constraints: vec![],
-            }],
-            primary_key: PrimaryKey {
-                fields: vec![field_id],
-                index: index_id,
-            },
-            indices: vec![Index {
-                id: index_id,
-                fields: vec![IndexField {
-                    field: field_id,
-                    op: IndexOp::Eq,
-                    scope: IndexScope::Local,
-                }],
-                unique: true,
-                primary_key: true,
-            }],
-            table_name: None,
-        };
-
-        let mut app_schema = toasty_core::schema::app::Schema::default();
-        app_schema.models.insert(model_id, model);
+        let app_schema =
+            app::Schema::from_macro(&[User::schema()]).expect("schema should build from macro");
 
         let schema = Builder::new()
             .build(app_schema, &Capability::SQLITE)
             .expect("schema should build");
+
+        let field_id = FieldId {
+            model: User::id(),
+            index: 0,
+        };
 
         (schema, field_id)
     }
@@ -153,7 +114,7 @@ mod tests {
             Expr::ref_self_field(field_id),
             Expr::Value(Value::from(42i64)),
         );
-        let query = Query::new_select(ModelId(0), filter);
+        let query = Query::new_select(User::id(), filter);
         let result = simplify.extract_key_value(&[field_id], &query);
 
         assert!(result.is_some());
@@ -170,7 +131,7 @@ mod tests {
             Expr::Value(Value::from(99i64)),
             Expr::ref_self_field(field_id),
         );
-        let query = Query::new_select(ModelId(0), filter);
+        let query = Query::new_select(User::id(), filter);
         let result = simplify.extract_key_value(&[field_id], &query);
 
         assert!(result.is_some());
@@ -200,9 +161,9 @@ mod tests {
             Expr::ref_self_field(field_id),
             Expr::Value(Value::from(42i64)),
         );
-        let query = Query::new_select(ModelId(0), filter);
+        let query = Query::new_select(User::id(), filter);
         let field_id2 = FieldId {
-            model: ModelId(0),
+            model: User::id(),
             index: 1,
         };
         let result = simplify.extract_key_value(&[field_id, field_id2], &query);
