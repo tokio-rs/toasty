@@ -937,9 +937,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     fn new_statement_info(&mut self) -> hir::StmtId {
-        self.state
-            .hir
-            .new_statement_info(self.state.dependencies.clone())
+        let mut deps = self.state.dependencies.clone();
+        deps.extend(&self.curr_stmt_info().deps);
+
+        self.state.hir.new_statement_info(deps)
     }
 
     /// Create a new sub-statement. Returns the argument position
