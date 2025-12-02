@@ -1,4 +1,4 @@
-pub mod eval;
+pub(crate) mod eval;
 mod exec;
 
 mod hir;
