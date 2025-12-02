@@ -274,7 +274,10 @@ impl<'a> Simplify<'a> {
 mod test {
     use toasty_core::{
         driver::Capability,
-        schema::{app, Builder},
+        schema::{
+            app::{self, Model},
+            Builder,
+        },
     };
 
     /// Creates an empty schema for testing simplification.
@@ -282,5 +285,13 @@ mod test {
         Builder::new()
             .build(app::Schema::default(), &Capability::SQLITE)
             .expect("empty schema should build")
+    }
+
+    pub fn test_schema_with(models: &[Model]) -> toasty_core::Schema {
+        let app_schema = app::Schema::from_macro(models).expect("schema should build from macro");
+
+        Builder::new()
+            .build(app_schema, &Capability::SQLITE)
+            .expect("schema should build")
     }
 }
