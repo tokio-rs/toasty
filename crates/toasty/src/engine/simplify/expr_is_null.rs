@@ -8,12 +8,13 @@ impl Simplify<'_> {
                 *expr.expr = expr_cast.expr.take();
                 None
             }
-            stmt::Expr::Reference(f @ stmt::ExprReference::Field { .. }) if expr.negate => {
+            stmt::Expr::Reference(f @ stmt::ExprReference::Field { .. }) => {
                 let field = self.cx.resolve_expr_reference(f).expect_field();
 
                 if !field.nullable() {
                     // Is not null on a non nullable field evaluates to `true`.
-                    return Some(stmt::Expr::Value(stmt::Value::Bool(true)));
+                    // Is null on a non nullable field evaluates to `false`.
+                    return Some(stmt::Expr::Value(stmt::Value::Bool(expr.negate)));
                 }
 
                 None
@@ -144,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    fn is_not_null_nullable_field() {
+    fn is_null_non_nullable_field() {
         use crate as toasty;
         use crate::Model as _;
 
@@ -153,7 +154,7 @@ mod tests {
         struct User {
             #[key]
             id: String,
-            emailadres: Option<String>,
+            emailadres: String,
         }
 
         let schema = test_schema_with(&[User::schema()]);
@@ -161,9 +162,9 @@ mod tests {
         let simplify = Simplify::new(&schema);
         let simplify = simplify.scope(model);
 
-        // `is_not_null(field)` →  `is_not_null(field)` (nullable field)
+        // `is_null(field)` → `false` (non-nullable field)
         let mut field = ExprIsNull {
-            negate: true,
+            negate: false,
             expr: Box::new(Expr::Reference(ExprReference::Field {
                 nesting: 0,
                 index: 1,
@@ -172,13 +173,6 @@ mod tests {
 
         let result = simplify.simplify_expr_is_null(&mut field);
 
-        assert!(result.is_none());
-        assert!(matches!(
-            *field.expr,
-            Expr::Reference(ExprReference::Field {
-                nesting: 0,
-                index: 1
-            })
-        ));
+        assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
     }
 }
