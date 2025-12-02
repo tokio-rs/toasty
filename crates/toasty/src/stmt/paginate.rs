@@ -1,8 +1,10 @@
 use super::Select;
 
-use crate::{engine::eval::Func, Db, Model, Result};
+use crate::{engine::eval::Func, Cursor, Db, Model, Result};
 
-use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
+use toasty_core::stmt::{
+    self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Type, Value, ValueStream, VisitMut,
+};
 
 #[derive(Debug)]
 pub struct Paginate<M> {
@@ -66,16 +68,14 @@ impl<M: Model> Paginate<M> {
             *limit = stmt::Value::from((page_size + 1) as i64).into();
         }
 
-        let mut items: Vec<M> = db.all(query_with_extra).await?.collect().await?;
+        let mut items: Vec<_> = db.exec(query_with_extra.into()).await?.collect().await?;
         let has_next = items.len() > page_size;
         items.truncate(page_size);
 
         // Create cursor from the last item if there's a next page
         let next_cursor = match items.last() {
             Some(last_item) if has_next => {
-                dbg!(&self.query.untyped.order_by);
-                let kek = 5;
-                let cursor_expr = extract_cursor(
+                let cursor = extract_cursor(
                     self.query
                         .untyped
                         .order_by
@@ -83,15 +83,17 @@ impl<M: Model> Paginate<M> {
                         .expect("pagination requires order by clause"),
                     last_item,
                 );
-                dbg!(&cursor_expr);
+                dbg!(&cursor);
 
-                Some(stmt::Value::from(0_i64).into())
+                Some(cursor.into())
             }
             _ => None,
         };
 
         Ok(crate::Page::new(
-            items,
+            Cursor::new(db.engine.schema.clone(), items.into())
+                .collect()
+                .await?,
             self.query,
             next_cursor,
             None, // prev_cursor not implemented yet
@@ -114,10 +116,9 @@ impl<M> From<Select<M>> for Paginate<M> {
     }
 }
 
-fn extract_cursor<M: Model>(order_by: &OrderBy, item: &M) -> Value {
+fn extract_cursor(order_by: &OrderBy, item: &Value) -> Value {
     let record = ExprRecord::from_iter(order_by.exprs.iter().map(|order_by_expr| {
-        struct Visitor {}
-
+        struct Visitor;
         impl VisitMut for Visitor {
             fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
                 match i {
@@ -132,10 +133,10 @@ fn extract_cursor<M: Model>(order_by: &OrderBy, item: &M) -> Value {
         }
 
         let mut expr = order_by_expr.expr.clone();
-        Visitor {}.visit_mut(&mut expr);
+        Visitor.visit_mut(&mut expr);
         expr
     }));
-    Func::from_stmt(Expr::Record(record), vec![M::id().into()])
-        .eval(&[item.into()])
+    Func::from_stmt(Expr::Record(record), vec![item.infer_ty()])
+        .eval(&[item])
         .unwrap()
 }

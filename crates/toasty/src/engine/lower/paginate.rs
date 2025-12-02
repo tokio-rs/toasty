@@ -26,8 +26,15 @@ impl LowerStatement<'_, '_> {
         };
 
         match offset {
-            stmt::Expr::Value(stmt::Value::Record(_)) => {
-                todo!()
+            stmt::Expr::Value(stmt::Value::Record(value)) => {
+                for (index, value) in value.fields.into_iter().enumerate() {
+                    let expr = self.rewrite_offset_after_field_as_filter(
+                        &order_by.exprs[index],
+                        value,
+                        true,
+                    );
+                    body.filter.add_filter(expr);
+                }
             }
             stmt::Expr::Value(value) => {
                 let expr =
