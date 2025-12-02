@@ -62,17 +62,7 @@ impl Table {
                     index: 0,
                 },
             },
-            indices: vec![Index {
-                id: IndexId {
-                    table: id,
-                    index: 0,
-                },
-                name: String::new(),
-                on: id,
-                columns: vec![],
-                unique: true,
-                primary_key: true,
-            }],
+            indices: vec![],
         }
     }
 }
