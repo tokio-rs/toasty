@@ -1,8 +1,8 @@
 use super::Select;
 
-use crate::{Db, Model, Result};
+use crate::{engine::eval::Func, Db, Model, Result};
 
-use toasty_core::stmt;
+use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 
 #[derive(Debug)]
 pub struct Paginate<M> {
@@ -71,12 +71,23 @@ impl<M: Model> Paginate<M> {
         items.truncate(page_size);
 
         // Create cursor from the last item if there's a next page
-        let next_cursor = if has_next && !items.is_empty() {
-            // TODO: Implement proper cursor extraction from the last item
-            // For now, use a placeholder cursor value to indicate there's a next page
-            Some(stmt::Value::from(0_i64).into())
-        } else {
-            None
+        let next_cursor = match items.last() {
+            Some(last_item) if has_next => {
+                dbg!(&self.query.untyped.order_by);
+                let kek = 5;
+                let cursor_expr = extract_cursor(
+                    self.query
+                        .untyped
+                        .order_by
+                        .as_ref()
+                        .expect("pagination requires order by clause"),
+                    last_item,
+                );
+                dbg!(&cursor_expr);
+
+                Some(stmt::Value::from(0_i64).into())
+            }
+            _ => None,
         };
 
         Ok(crate::Page::new(
@@ -86,4 +97,45 @@ impl<M: Model> Paginate<M> {
             None, // prev_cursor not implemented yet
         ))
     }
+}
+
+impl<M> From<Select<M>> for Paginate<M> {
+    fn from(value: Select<M>) -> Self {
+        assert!(
+            value.untyped.limit.is_some(),
+            "pagination requires a limit clause"
+        );
+        assert!(
+            value.untyped.order_by.is_some(),
+            "pagination requires an order_by clause"
+        );
+
+        Paginate { query: value }
+    }
+}
+
+fn extract_cursor<M: Model>(order_by: &OrderBy, item: &M) -> Value {
+    let record = ExprRecord::from_iter(order_by.exprs.iter().map(|order_by_expr| {
+        struct Visitor {}
+
+        impl VisitMut for Visitor {
+            fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
+                match i {
+                    stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index })
+                        if *nesting == 0 =>
+                    {
+                        *i = Expr::arg_project(0, Projection::from_index(*index))
+                    }
+                    _ => visit_mut::visit_expr_mut(self, i),
+                }
+            }
+        }
+
+        let mut expr = order_by_expr.expr.clone();
+        Visitor {}.visit_mut(&mut expr);
+        expr
+    }));
+    Func::from_stmt(Expr::Record(record), vec![M::id().into()])
+        .eval(&[item.into()])
+        .unwrap()
 }
