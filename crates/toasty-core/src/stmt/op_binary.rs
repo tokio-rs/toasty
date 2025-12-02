@@ -30,6 +30,27 @@ impl BinaryOp {
             _ => todo!(),
         }
     }
+
+    /// Returns the logical negation of this operator, if one exists.
+    ///
+    /// - `=` → `!=`
+    /// - `!=` → `=`
+    /// - `<` → `>=`
+    /// - `>=` → `<`
+    /// - `>` → `<=`
+    /// - `<=` → `>`
+    /// - `IsA` → `None`
+    pub fn negate(self) -> Option<Self> {
+        match self {
+            Self::Eq => Some(Self::Ne),
+            Self::Ne => Some(Self::Eq),
+            Self::Lt => Some(Self::Ge),
+            Self::Ge => Some(Self::Lt),
+            Self::Gt => Some(Self::Le),
+            Self::Le => Some(Self::Gt),
+            Self::IsA => None,
+        }
+    }
 }
 
 impl fmt::Display for BinaryOp {
