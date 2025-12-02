@@ -2,9 +2,7 @@ use super::Select;
 
 use crate::{engine::eval::Func, Cursor, Db, Model, Result};
 
-use toasty_core::stmt::{
-    self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Type, Value, ValueStream, VisitMut,
-};
+use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 
 #[derive(Debug)]
 pub struct Paginate<M> {
