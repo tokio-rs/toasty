@@ -81,7 +81,6 @@ impl<M: Model> Paginate<M> {
                         .expect("pagination requires order by clause"),
                     last_item,
                 );
-                dbg!(&cursor);
 
                 Some(cursor.into())
             }
