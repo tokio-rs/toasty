@@ -1,14 +1,12 @@
 #!/bin/bash
 
-# Exit on error and unset variable usage, and print each command before
-# executing it
-set -euo pipefail
+# Exit on error and unset variable usage
+set -eu
 
 # Define an array of directory components
 directories=(
     "hello-toasty"
     "composite-key"
-    "cratehub"
     "user-has-one-profile"
 )
 
