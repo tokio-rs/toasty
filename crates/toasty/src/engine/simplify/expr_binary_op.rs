@@ -136,6 +136,11 @@ impl Simplify<'_> {
 
                 Some(self.rewrite_root_path_expr(model, other.take()))
             }
+            // Canonicalization, `literal <op> col` → `col <op_commuted> literal`
+            (Expr::Value(_), rhs) if !rhs.is_value() => {
+                std::mem::swap(lhs, rhs);
+                Some(Expr::binary_op(lhs.take(), op.commute(), rhs.take()))
+            }
             _ => {
                 // For now, just make sure there are no relations in the expression
                 stmt::visit::for_each_expr(lhs, |expr| {
@@ -635,5 +640,114 @@ mod tests {
         let result = simplify.simplify_expr_binary_op(BinaryOp::Ne, &mut lhs, &mut rhs);
 
         assert!(matches!(result, Some(Expr::Arg(_))));
+    }
+
+    #[test]
+    fn canonicalize_eq_literal_on_left() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `5 = x` → `x = 5`
+        let mut lhs = Expr::Value(Value::from(5i64));
+        let mut rhs = Expr::arg(0);
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+        let Some(Expr::BinaryOp(binary_op)) = result else {
+            panic!("expected BinaryOp");
+        };
+        assert_eq!(binary_op.op, BinaryOp::Eq);
+        assert!(matches!(*binary_op.lhs, Expr::Arg(_)));
+        assert!(matches!(*binary_op.rhs, Expr::Value(Value::I64(5))));
+    }
+
+    #[test]
+    fn canonicalize_lt_literal_on_left() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `5 < x` → `x > 5`
+        let mut lhs = Expr::Value(Value::from(5i64));
+        let mut rhs = Expr::arg(0);
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Lt, &mut lhs, &mut rhs);
+
+        let Some(Expr::BinaryOp(binary_op)) = result else {
+            panic!("expected BinaryOp");
+        };
+        assert_eq!(binary_op.op, BinaryOp::Gt);
+        assert!(matches!(*binary_op.lhs, Expr::Arg(_)));
+        assert!(matches!(*binary_op.rhs, Expr::Value(Value::I64(5))));
+    }
+
+    #[test]
+    fn canonicalize_gt_literal_on_left() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `5 > x` → `x < 5`
+        let mut lhs = Expr::Value(Value::from(5i64));
+        let mut rhs = Expr::arg(0);
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Gt, &mut lhs, &mut rhs);
+
+        let Some(Expr::BinaryOp(binary_op)) = result else {
+            panic!("expected BinaryOp");
+        };
+        assert_eq!(binary_op.op, BinaryOp::Lt);
+        assert!(matches!(*binary_op.lhs, Expr::Arg(_)));
+        assert!(matches!(*binary_op.rhs, Expr::Value(Value::I64(5))));
+    }
+
+    #[test]
+    fn canonicalize_le_literal_on_left() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `5 <= x` → `x >= 5`
+        let mut lhs = Expr::Value(Value::from(5i64));
+        let mut rhs = Expr::arg(0);
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Le, &mut lhs, &mut rhs);
+
+        let Some(Expr::BinaryOp(binary_op)) = result else {
+            panic!("expected BinaryOp");
+        };
+        assert_eq!(binary_op.op, BinaryOp::Ge);
+        assert!(matches!(*binary_op.lhs, Expr::Arg(_)));
+        assert!(matches!(*binary_op.rhs, Expr::Value(Value::I64(5))));
+    }
+
+    #[test]
+    fn canonicalize_ge_literal_on_left() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `5 >= x` → `x <= 5`
+        let mut lhs = Expr::Value(Value::from(5i64));
+        let mut rhs = Expr::arg(0);
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Ge, &mut lhs, &mut rhs);
+
+        let Some(Expr::BinaryOp(binary_op)) = result else {
+            panic!("expected BinaryOp");
+        };
+        assert_eq!(binary_op.op, BinaryOp::Le);
+        assert!(matches!(*binary_op.lhs, Expr::Arg(_)));
+        assert!(matches!(*binary_op.rhs, Expr::Value(Value::I64(5))));
+    }
+
+    #[test]
+    fn no_canonicalize_when_literal_on_right() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `x < 5` is already canonical, no change
+        let mut lhs = Expr::arg(0);
+        let mut rhs = Expr::Value(Value::from(5i64));
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Lt, &mut lhs, &mut rhs);
+
+        assert!(result.is_none());
     }
 }
