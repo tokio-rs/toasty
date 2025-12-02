@@ -2,7 +2,7 @@ use super::BuildSchema;
 use crate::{
     driver,
     schema::{
-        app::{self, FieldId, FieldName, Model},
+        app::{self, FieldId, Model},
         db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping, TableToModel},
         Name,
@@ -73,7 +73,7 @@ impl BuildSchema<'_> {
                 mapping: &mut self.mapping,
                 prefix_table_names: models.len() > 1,
             }
-            .build(&models[0]);
+            .build(models[0]);
         }
     }
 
@@ -103,55 +103,7 @@ impl BuildTableFromModels<'_> {
         // Populate the rest of the columns
         self.map_model_fields(model);
 
-        // Hax
-        for column in &mut self.table.columns {
-            if let stmt::Type::Enum(_) = column.ty {
-                column.ty = stmt::Type::String;
-            }
-        }
-
         self.update_index_names();
-    }
-
-    fn build_placeholder_primary_key(&mut self, models: &[&Model]) {
-        let num_pk_fields = models
-            .iter()
-            .map(|model| model.primary_key_primitives().count())
-            .max()
-            .unwrap();
-
-        for i in 0..num_pk_fields {
-            let column_id = ColumnId {
-                table: self.table.id,
-                index: i,
-            };
-
-            let mut scope = None;
-
-            for model in models {
-                let pk_index = &model.indices[0];
-                assert!(pk_index.primary_key);
-
-                let Some(pk_field) = pk_index.fields.get(i) else {
-                    continue;
-                };
-
-                match scope {
-                    None => scope = Some(pk_field.scope),
-                    Some(scope) => {
-                        assert_eq!(scope, pk_field.scope);
-                    }
-                }
-            }
-
-            self.table.primary_key.columns.push(column_id);
-            self.table.indices[0].columns.push(db::IndexColumn {
-                column: column_id,
-                // TODO: we don't actually know what the columns will be yet...
-                op: db::IndexOp::Eq,
-                scope: scope.unwrap(),
-            });
-        }
     }
 
     fn map_model_fields(&mut self, model: &Model) {
@@ -440,22 +392,5 @@ impl BuildMapping<'_> {
             // If the types do not match, attempt casting as a fallback.
             _ => stmt::Expr::cast(expr_column, &primitive.ty),
         }
-    }
-}
-
-fn stmt_ty_to_table(ty: stmt::Type) -> stmt::Type {
-    match ty {
-        stmt::Type::I8 => stmt::Type::I8,
-        stmt::Type::I16 => stmt::Type::I16,
-        stmt::Type::I32 => stmt::Type::I32,
-        stmt::Type::I64 => stmt::Type::I64,
-        stmt::Type::U8 => stmt::Type::U8,
-        stmt::Type::U16 => stmt::Type::U16,
-        stmt::Type::U32 => stmt::Type::U32,
-        stmt::Type::U64 => stmt::Type::U64,
-        stmt::Type::String => stmt::Type::String,
-        stmt::Type::Uuid => stmt::Type::Uuid,
-        stmt::Type::Id(_) => stmt::Type::String,
-        _ => todo!("{ty:#?}"),
     }
 }
