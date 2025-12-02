@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 
 use super::{sparse_record::SparseRecord, Entry, EntryPath, Id, Type, ValueEnum, ValueRecord};
+use std::cmp::Ordering;
 use std::hash::Hash;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
@@ -278,6 +279,61 @@ impl Value {
 impl AsRef<Self> for Value {
     fn as_ref(&self) -> &Self {
         self
+    }
+}
+
+impl PartialOrd for Value {
+    /// Compares two values if they are of the same type.
+    ///
+    /// Returns `None` for:
+    ///
+    /// - `null` values (SQL semantics, e.g., `null` comparisons are undefined)
+    /// - Comparisons across different types
+    /// - Types without natural ordering (records, lists, etc.)
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            // `null` comparisons are undefined.
+            (Value::Null, _) | (_, Value::Null) => None,
+
+            // Booleans.
+            (Value::Bool(a), Value::Bool(b)) => a.partial_cmp(b),
+
+            // Signed integers.
+            (Value::I8(a), Value::I8(b)) => a.partial_cmp(b),
+            (Value::I16(a), Value::I16(b)) => a.partial_cmp(b),
+            (Value::I32(a), Value::I32(b)) => a.partial_cmp(b),
+            (Value::I64(a), Value::I64(b)) => a.partial_cmp(b),
+
+            // Unsigned integers.
+            (Value::U8(a), Value::U8(b)) => a.partial_cmp(b),
+            (Value::U16(a), Value::U16(b)) => a.partial_cmp(b),
+            (Value::U32(a), Value::U32(b)) => a.partial_cmp(b),
+            (Value::U64(a), Value::U64(b)) => a.partial_cmp(b),
+
+            // Strings: lexicographic ordering.
+            (Value::String(a), Value::String(b)) => a.partial_cmp(b),
+
+            // Bytes: lexicographic ordering.
+            (Value::Bytes(a), Value::Bytes(b)) => a.partial_cmp(b),
+
+            // UUIDs.
+            (Value::Uuid(a), Value::Uuid(b)) => a.partial_cmp(b),
+
+            // Date/time types.
+            #[cfg(feature = "jiff")]
+            (Value::Timestamp(a), Value::Timestamp(b)) => a.partial_cmp(b),
+            #[cfg(feature = "jiff")]
+            (Value::Zoned(a), Value::Zoned(b)) => a.partial_cmp(b),
+            #[cfg(feature = "jiff")]
+            (Value::Date(a), Value::Date(b)) => a.partial_cmp(b),
+            #[cfg(feature = "jiff")]
+            (Value::Time(a), Value::Time(b)) => a.partial_cmp(b),
+            #[cfg(feature = "jiff")]
+            (Value::DateTime(a), Value::DateTime(b)) => a.partial_cmp(b),
+
+            // Types without natural ordering or different types.
+            _ => None,
+        }
     }
 }
 
