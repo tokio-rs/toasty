@@ -114,7 +114,9 @@ impl<M> From<Select<M>> for Paginate<M> {
     }
 }
 
+/// Determines the next cursor of a paginated query from an [`OrderBy`] clause and an item [`Value`] in the result set.
 fn extract_cursor(order_by: &OrderBy, item: &Value) -> Value {
+    // Rewrite ExprReference::Field to ExprArg and pass the item value as the argument.
     let record = ExprRecord::from_iter(order_by.exprs.iter().map(|order_by_expr| {
         struct Visitor;
         impl VisitMut for Visitor {
