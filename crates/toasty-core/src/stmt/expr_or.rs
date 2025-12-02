@@ -1,8 +1,20 @@
 use super::Expr;
 use std::ops;
 
+/// A logical "or" of multiple expressions.
+///
+/// Returns `true` if at least one operand evaluates to `true`. An `ExprOr`
+/// always has at least two operands; use [`Expr::or_from_vec`] which returns
+/// `Expr::Value(false)` for empty input and unwraps single-element input.
+///
+/// # Examples
+///
+/// ```text
+/// or(a, b, c)  // returns `true` if any of `a`, `b`, or `c` is `true`
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprOr {
+    /// The expressions to "or" together.
     pub operands: Vec<Expr>,
 }
 

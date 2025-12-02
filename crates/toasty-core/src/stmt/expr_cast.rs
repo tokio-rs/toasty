@@ -1,11 +1,21 @@
 use super::{Expr, Type};
 
+/// A type cast expression.
+///
+/// Converts an expression's value to a different type.
+///
+/// # Examples
+///
+/// ```text
+/// cast(x, i64)     // cast `x` to `i64`
+/// cast(y, string)  // cast `y` to `string`
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprCast {
-    /// Expression to cast
+    /// The expression to cast.
     pub expr: Box<Expr>,
 
-    /// Type to cast to
+    /// The target type.
     pub ty: Type,
 }
 

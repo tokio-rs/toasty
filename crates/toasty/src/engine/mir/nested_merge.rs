@@ -6,12 +6,17 @@ use crate::engine::{
     mir::{self, LogicalPlan},
 };
 
+/// Merges child records into parent records.
+///
+/// Used to combine the results of parent and child queries when loading
+/// associations (e.g., users with their todos). The merge produces nested
+/// records where each parent contains its associated children.
 #[derive(Debug)]
 pub(crate) struct NestedMerge {
-    /// Inputs needed to reify the statement
+    /// The nodes providing parent and child data to merge.
     pub(crate) inputs: IndexSet<mir::NodeId>,
 
-    /// The root nested merge level
+    /// Configuration for how to perform the merge at each nesting level.
     pub(crate) root: exec::NestedLevel,
 }
 

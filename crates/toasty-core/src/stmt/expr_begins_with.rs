@@ -1,8 +1,20 @@
 use super::{Expr, ExprPattern};
 
+/// Tests if a string expression starts with a prefix.
+///
+/// Returns `true` if `expr` begins with `pattern`.
+///
+/// # Examples
+///
+/// ```text
+/// begins_with(name, "foo")  // returns `true` if `name` starts with "foo"
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprBeginsWith {
+    /// The string expression to test.
     pub expr: Box<Expr>,
+
+    /// The prefix to match.
     pub pattern: Box<Expr>,
 }
 

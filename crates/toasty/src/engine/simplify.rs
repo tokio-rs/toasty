@@ -9,6 +9,7 @@ mod expr_in_list;
 mod expr_is_null;
 mod expr_list;
 mod expr_map;
+mod expr_or;
 mod expr_record;
 mod stmt_query;
 mod value;
@@ -29,16 +30,27 @@ use toasty_core::{
 
 use crate::engine::Engine;
 
+/// Statement and expression simplifier.
+///
+/// [`Simplify`] implements the [`VisitMut`] trait to traverse and transform
+/// statement ASTs. It applies optimization and normalization rules defined in
+/// submodules of [`engine::simplify`](self).
+///
+/// Simplification runs twice during query compilation: once before lowering
+/// (to normalize the input) and once after (to clean up generated expressions).
 pub(crate) struct Simplify<'a> {
+    /// Expression context providing schema access and type information.
     cx: stmt::ExprContext<'a>,
 }
 
 impl Engine {
+    /// Simplifies a statement or expression in place.
     pub(crate) fn simplify_stmt<T: Node>(&self, stmt: &mut T) {
         Simplify::new(&self.schema).visit_mut(stmt);
     }
 }
 
+/// Simplifies an expression in place using the given context.
 pub(crate) fn simplify_expr(cx: stmt::ExprContext<'_>, expr: &mut stmt::Expr) {
     Simplify { cx }.visit_expr_mut(expr);
 }
@@ -50,22 +62,19 @@ impl VisitMut for Simplify<'_> {
 
         // If an in-subquery expression, then try lifting it.
         let maybe_expr = match i {
-            Expr::Any(expr_any) => self.simplify_expr_any(expr_any),
-            Expr::And(expr_and) => self.simplify_expr_and(expr_and),
-            Expr::BinaryOp(expr_binary_op) => self.simplify_expr_binary_op(
-                expr_binary_op.op,
-                &mut expr_binary_op.lhs,
-                &mut expr_binary_op.rhs,
-            ),
+            Expr::Any(expr) => self.simplify_expr_any(expr),
+            Expr::And(expr) => self.simplify_expr_and(expr),
+            Expr::BinaryOp(expr) => {
+                self.simplify_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
+            }
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
             Expr::ConcatStr(expr) => self.simplify_expr_concat_str(expr),
-            Expr::Exists(expr_exists) => self.simplify_expr_exists(expr_exists),
+            Expr::Exists(expr) => self.simplify_expr_exists(expr),
             Expr::InList(expr) => self.simplify_expr_in_list(expr),
-            Expr::InSubquery(expr_in_subquery) => {
-                self.lift_in_subquery(&expr_in_subquery.expr, &expr_in_subquery.query)
-            }
+            Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
+            Expr::Or(expr) => self.simplify_expr_or(expr),
             Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
             _ => None,
@@ -258,5 +267,20 @@ impl<'a> Simplify<'a> {
                 _ => todo!("expr={:#?}", expr_set),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use toasty_core::{
+        driver::Capability,
+        schema::{app, Builder},
+    };
+
+    /// Creates an empty schema for testing simplification.
+    pub fn test_schema() -> toasty_core::Schema {
+        Builder::new()
+            .build(app::Schema::default(), &Capability::SQLITE)
+            .expect("empty schema should build")
     }
 }

@@ -3,11 +3,15 @@ name = "toasty-driver-postgresql"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+jiff = ["dep:jiff", "toasty-core/jiff", "postgres-types/with-jiff-0_2"]
+
 [dependencies]
 toasty-core.workspace = true
 toasty-sql.workspace = true
 
 anyhow.workspace = true
+jiff = { workspace = true, optional = true }
 postgres.workspace = true
 postgres-types.workspace = true
 tokio.workspace = true

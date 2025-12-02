@@ -31,6 +31,9 @@ pub use path::Path;
 mod primitive;
 pub use primitive::Primitive;
 
+#[cfg(feature = "jiff")]
+mod primitive_jiff;
+
 mod select;
 pub use select::Select;
 

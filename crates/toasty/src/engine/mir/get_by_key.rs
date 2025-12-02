@@ -9,19 +9,25 @@ use crate::engine::{
     mir::{self, LogicalPlan},
 };
 
+/// Batch fetches records by primary key.
+///
+/// Used with NoSQL drivers to retrieve multiple records given a list of
+/// primary key values.
+///
+/// Keys are always specified as an input node, whether a [`Const`] or the
+/// output of a dependent operation.
 #[derive(Debug)]
 pub(crate) struct GetByKey {
-    /// Keys are always specified as an input, whether const or a set of
-    /// dependent operations.
+    /// The node producing the list of primary keys to fetch.
     pub(crate) input: mir::NodeId,
 
-    /// The table to get keys from
+    /// The table to fetch records from.
     pub(crate) table: TableId,
 
-    /// Columns to get
+    /// The columns to include in the returned records.
     pub(crate) columns: IndexSet<stmt::ExprReference>,
 
-    /// Return type
+    /// The return type.
     pub(crate) ty: stmt::Type,
 }
 

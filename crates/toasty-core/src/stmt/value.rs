@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 
 use super::{sparse_record::SparseRecord, Entry, EntryPath, Id, Type, ValueEnum, ValueRecord};
+use std::cmp::Ordering;
 use std::hash::Hash;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
@@ -59,6 +60,31 @@ pub enum Value {
 
     /// 128-bit universally unique identifier (UUID)
     Uuid(uuid::Uuid),
+
+    /// An instant in time represented as the number of nanoseconds since the Unix epoch.
+    /// See [`jiff::Timestamp`].
+    #[cfg(feature = "jiff")]
+    Timestamp(jiff::Timestamp),
+
+    /// A time zone aware instant in time.
+    /// See [`jiff::Zoned`]
+    #[cfg(feature = "jiff")]
+    Zoned(jiff::Zoned),
+
+    /// A representation of a civil date in the Gregorian calendar.
+    /// See [`jiff::civil::Date`].
+    #[cfg(feature = "jiff")]
+    Date(jiff::civil::Date),
+
+    /// A representation of civil “wall clock” time.
+    /// See [`jiff::civil::Time`].
+    #[cfg(feature = "jiff")]
+    Time(jiff::civil::Time),
+
+    /// A representation of a civil datetime in the Gregorian calendar.
+    /// See [`jiff::civil::DateTime`].
+    #[cfg(feature = "jiff")]
+    DateTime(jiff::civil::DateTime),
 }
 
 impl Value {
@@ -183,6 +209,16 @@ impl Value {
             Self::String(_) => ty.is_string(),
             Self::Bytes(_) => ty.is_bytes(),
             Self::Uuid(_) => ty.is_uuid(),
+            #[cfg(feature = "jiff")]
+            Value::Timestamp(_) => *ty == Type::Timestamp,
+            #[cfg(feature = "jiff")]
+            Value::Zoned(_) => *ty == Type::Zoned,
+            #[cfg(feature = "jiff")]
+            Value::Date(_) => *ty == Type::Date,
+            #[cfg(feature = "jiff")]
+            Value::Time(_) => *ty == Type::Time,
+            #[cfg(feature = "jiff")]
+            Value::DateTime(_) => *ty == Type::DateTime,
             _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
     }
@@ -208,6 +244,16 @@ impl Value {
             Value::U64(_) => Type::U64,
             Value::Bytes(_) => Type::Bytes,
             Value::Uuid(_) => Type::Uuid,
+            #[cfg(feature = "jiff")]
+            Value::Timestamp(_) => Type::Timestamp,
+            #[cfg(feature = "jiff")]
+            Value::Zoned(_) => Type::Zoned,
+            #[cfg(feature = "jiff")]
+            Value::Date(_) => Type::Date,
+            #[cfg(feature = "jiff")]
+            Value::Time(_) => Type::Time,
+            #[cfg(feature = "jiff")]
+            Value::DateTime(_) => Type::DateTime,
         }
     }
 
@@ -233,6 +279,61 @@ impl Value {
 impl AsRef<Self> for Value {
     fn as_ref(&self) -> &Self {
         self
+    }
+}
+
+impl PartialOrd for Value {
+    /// Compares two values if they are of the same type.
+    ///
+    /// Returns `None` for:
+    ///
+    /// - `null` values (SQL semantics, e.g., `null` comparisons are undefined)
+    /// - Comparisons across different types
+    /// - Types without natural ordering (records, lists, etc.)
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            // `null` comparisons are undefined.
+            (Value::Null, _) | (_, Value::Null) => None,
+
+            // Booleans.
+            (Value::Bool(a), Value::Bool(b)) => a.partial_cmp(b),
+
+            // Signed integers.
+            (Value::I8(a), Value::I8(b)) => a.partial_cmp(b),
+            (Value::I16(a), Value::I16(b)) => a.partial_cmp(b),
+            (Value::I32(a), Value::I32(b)) => a.partial_cmp(b),
+            (Value::I64(a), Value::I64(b)) => a.partial_cmp(b),
+
+            // Unsigned integers.
+            (Value::U8(a), Value::U8(b)) => a.partial_cmp(b),
+            (Value::U16(a), Value::U16(b)) => a.partial_cmp(b),
+            (Value::U32(a), Value::U32(b)) => a.partial_cmp(b),
+            (Value::U64(a), Value::U64(b)) => a.partial_cmp(b),
+
+            // Strings: lexicographic ordering.
+            (Value::String(a), Value::String(b)) => a.partial_cmp(b),
+
+            // Bytes: lexicographic ordering.
+            (Value::Bytes(a), Value::Bytes(b)) => a.partial_cmp(b),
+
+            // UUIDs.
+            (Value::Uuid(a), Value::Uuid(b)) => a.partial_cmp(b),
+
+            // Date/time types.
+            #[cfg(feature = "jiff")]
+            (Value::Timestamp(a), Value::Timestamp(b)) => a.partial_cmp(b),
+            #[cfg(feature = "jiff")]
+            (Value::Zoned(a), Value::Zoned(b)) => a.partial_cmp(b),
+            #[cfg(feature = "jiff")]
+            (Value::Date(a), Value::Date(b)) => a.partial_cmp(b),
+            #[cfg(feature = "jiff")]
+            (Value::Time(a), Value::Time(b)) => a.partial_cmp(b),
+            #[cfg(feature = "jiff")]
+            (Value::DateTime(a), Value::DateTime(b)) => a.partial_cmp(b),
+
+            // Types without natural ordering or different types.
+            _ => None,
+        }
     }
 }
 

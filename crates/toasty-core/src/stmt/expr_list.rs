@@ -1,7 +1,18 @@
 use super::{Expr, Value};
 
+/// A list of expressions.
+///
+/// Represents an ordered collection of expressions that evaluate to a list of
+/// values.
+///
+/// # Examples
+///
+/// ```text
+/// list(a, b, c)  // a list containing expressions a, b, and c
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprList {
+    /// The expressions in the list.
     pub items: Vec<Expr>,
 }
 

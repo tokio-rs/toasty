@@ -2,8 +2,20 @@ use super::Expr;
 
 use std::ops;
 
+/// A logical "and" of multiple expressions.
+///
+/// Returns `true` only if all operands evaluate to `true`. An `ExprAnd` always
+/// has at least two operands; use [`Expr::and_from_vec`] which returns
+/// `Expr::Value(true)` for empty input and unwraps single-element input.
+///
+/// # Examples
+///
+/// ```text
+/// and(a, b, c)  // returns `true` if `a`, `b`, and `c` are all `true`
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprAnd {
+    /// The expressions to "and" together.
     pub operands: Vec<Expr>,
 }
 

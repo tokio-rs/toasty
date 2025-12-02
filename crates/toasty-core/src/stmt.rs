@@ -215,6 +215,9 @@ pub use ty::Type;
 mod ty_enum;
 pub use ty_enum::{EnumVariant, TypeEnum};
 
+#[cfg(feature = "jiff")]
+mod ty_jiff;
+
 mod update;
 pub use update::{Update, UpdateTarget};
 
@@ -228,6 +231,9 @@ pub use values::Values;
 
 mod value_enum;
 pub use value_enum::ValueEnum;
+
+#[cfg(feature = "jiff")]
+mod value_jiff;
 
 mod value_record;
 pub use value_record::ValueRecord;

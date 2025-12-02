@@ -5,18 +5,30 @@ use crate::engine::{
     mir::{self, LogicalPlan},
 };
 
+/// Updates records by primary key.
+///
+/// Used with NoSQL drivers to update records given a list of primary key values.
+///
+/// Keys are always specified as an input node, whether a [`Const`] or the
+/// output of a dependent operation.
 #[derive(Debug)]
 pub(crate) struct UpdateByKey {
+    /// The node producing the list of primary keys to update.
     pub(crate) input: mir::NodeId,
 
+    /// The table to update records in.
     pub(crate) table: TableId,
 
+    /// The field assignments to apply.
     pub(crate) assignments: stmt::Assignments,
 
+    /// Optional additional filter applied before update.
     pub(crate) filter: Option<stmt::Expr>,
 
+    /// Optional condition for optimistic locking.
     pub(crate) condition: Option<stmt::Expr>,
 
+    /// The return type.
     pub(crate) ty: stmt::Type,
 }
 

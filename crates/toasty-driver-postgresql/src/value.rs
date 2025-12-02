@@ -130,10 +130,31 @@ impl ToSql for Value {
                 Type::VARCHAR => value.to_string().to_sql(ty, out),
                 _ => todo!("Unsupported PostgreSQL type for UUID: {:?}", ty),
             },
+            #[cfg(feature = "jiff")]
+            stmt::Value::Timestamp(value) => value.to_sql(ty, out),
+            #[cfg(feature = "jiff")]
+            stmt::Value::Date(value) => value.to_sql(ty, out),
+            #[cfg(feature = "jiff")]
+            stmt::Value::Time(value) => value.to_sql(ty, out),
+            #[cfg(feature = "jiff")]
+            stmt::Value::DateTime(value) => value.to_sql(ty, out),
             value => todo!("{value:#?}"),
         }
     }
 
-    accepts!(BOOL, INT2, INT4, INT8, TEXT, VARCHAR, BYTEA, UUID);
+    accepts!(
+        BOOL,
+        INT2,
+        INT4,
+        INT8,
+        TEXT,
+        VARCHAR,
+        BYTEA,
+        UUID,
+        TIMESTAMP,
+        TIMESTAMPTZ,
+        DATE,
+        TIME
+    );
     to_sql_checked!();
 }

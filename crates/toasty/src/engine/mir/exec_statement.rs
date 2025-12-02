@@ -6,18 +6,22 @@ use crate::engine::{
     mir::{self, LogicalPlan},
 };
 
+/// Executes a SQL statement against the database.
+///
+/// Used with SQL-capable drivers to delegate query execution to the database's
+/// query engine. The statement may reference inputs from other nodes.
 #[derive(Debug)]
 pub(crate) struct ExecStatement {
-    /// Inputs needed to reify the statement
+    /// Nodes whose outputs are passed as arguments to the statement.
     pub(crate) inputs: IndexSet<mir::NodeId>,
 
-    /// The database query to execute
+    /// The SQL statement to execute.
     pub(crate) stmt: stmt::Statement,
 
-    /// Node return type
+    /// The return type of this operation.
     pub(crate) ty: stmt::Type,
 
-    /// When true, the statement is a conditional update with no returning
+    /// When `true`, this is a conditional update that returns status, not rows.
     pub(crate) conditional_update_with_no_returning: bool,
 }
 

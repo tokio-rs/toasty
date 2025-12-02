@@ -95,42 +95,6 @@ default, a toasty application schema will map 1-1 with a database schema.
 However, additional annotations may be specified to customize how the
 application data model maps to the database schema.
 
-For example, the [crate-hub](examples/cratehub/src/main.rs) examples shows how
-to map multiple application models to a single database table.
-
-```rust
-#[derive(Debug)]
-#[toasty::model(table = user_and_packages)]
-struct User {
-    #[key]
-    #[auto]
-    id: Id<Self>,
-
-    name: String,
-
-    #[unique]
-    email: String,
-
-    #[has_many]
-    packages: [Package],
-}
-
-#[derive(Debug)]
-#[toasty::model(table = user_and_packages)]
-#[key(partition = user_id, local = id)]
-struct Package {
-    #[belongs_to(key = user_id, references = id)]
-    user: User,
-
-    user_id: Id<User>,
-
-    #[auto]
-    id: Id<Self>,
-
-    name: String,
-}
-```
-
 ## Current status and roadmap
 
 Toasty is still in the early development stages and is considered
@@ -153,5 +117,5 @@ This project is licensed under the [MIT license].
 ### Contribution
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Tokio by you, shall be licensed as MIT, without any additional
+for inclusion in Toasty by you, shall be licensed as MIT, without any additional
 terms or conditions.

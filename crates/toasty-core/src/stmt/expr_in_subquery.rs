@@ -2,9 +2,21 @@ use crate::stmt::{Node, Visit, VisitMut};
 
 use super::{Expr, Query};
 
+/// Tests whether a value is in the results of a subquery.
+///
+/// Returns `true` if `expr` matches any row returned by `query`.
+///
+/// # Examples
+///
+/// ```text
+/// in_subquery(x, select(...))  // returns `true` if `x` is in the subquery results
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprInSubquery {
+    /// The value to search for.
     pub expr: Box<Expr>,
+
+    /// The subquery to search within.
     pub query: Box<Query>,
 }
 

@@ -25,9 +25,9 @@ impl syn::parse::Parse for Column {
         // Allowed syntax:
         //
         // #[column("name")]
-        // #[column(type = "type")]
-        // #[column("name", type = "type")]
-        // #[column(type = "type", "name")]
+        // #[column(type = <type>)]
+        // #[column("name", type = <type>)]
+        // #[column(type = <type>, "name")]
         loop {
             let lookahead = input.lookahead1();
 
@@ -59,12 +59,28 @@ impl syn::parse::Parse for Column {
 
 mod kw {
     syn::custom_keyword!(boolean);
-    syn::custom_keyword!(integer);
-    syn::custom_keyword!(unsignedinteger);
+
+    syn::custom_keyword!(int);
+    syn::custom_keyword!(i8);
+    syn::custom_keyword!(i16);
+    syn::custom_keyword!(i32);
+    syn::custom_keyword!(i64);
+
+    syn::custom_keyword!(uint);
+    syn::custom_keyword!(u8);
+    syn::custom_keyword!(u16);
+    syn::custom_keyword!(u32);
+    syn::custom_keyword!(u64);
+
     syn::custom_keyword!(text);
     syn::custom_keyword!(varchar);
+
     syn::custom_keyword!(binary);
     syn::custom_keyword!(blob);
+    syn::custom_keyword!(timestamp);
+    syn::custom_keyword!(date);
+    syn::custom_keyword!(time);
+    syn::custom_keyword!(datetime);
 }
 
 #[derive(Debug)]
@@ -76,6 +92,10 @@ pub enum ColumnType {
     VarChar(u64),
     Binary(u64),
     Blob,
+    Timestamp(u8),
+    Date,
+    Time(u8),
+    DateTime(u8),
     Custom(syn::LitStr),
 }
 
@@ -83,43 +103,55 @@ impl syn::parse::Parse for ColumnType {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::LitStr) {
-            Ok(Self::Custom(input.parse()?))
-        } else if lookahead.peek(kw::boolean) {
-            let _kw: kw::boolean = input.parse()?;
-            Ok(Self::Boolean)
-        } else if lookahead.peek(kw::integer) {
-            let _kw: kw::integer = input.parse()?;
-            let content;
-            parenthesized!(content in input);
-            let lit: syn::LitInt = content.parse()?;
-            Ok(Self::Integer(lit.base10_parse()?))
-        } else if lookahead.peek(kw::unsignedinteger) {
-            let _kw: kw::unsignedinteger = input.parse()?;
-            let content;
-            parenthesized!(content in input);
-            let lit: syn::LitInt = content.parse()?;
-            Ok(Self::UnsignedInteger(lit.base10_parse()?))
-        } else if lookahead.peek(kw::text) {
-            let _kw: kw::text = input.parse()?;
-            Ok(Self::Text)
-        } else if lookahead.peek(kw::varchar) {
-            let _kw: kw::varchar = input.parse()?;
-            let content;
-            parenthesized!(content in input);
-            let lit: syn::LitInt = content.parse()?;
-            Ok(Self::VarChar(lit.base10_parse()?))
-        } else if lookahead.peek(kw::binary) {
-            let _kw: kw::binary = input.parse()?;
-            let content;
-            parenthesized!(content in input);
-            let lit: syn::LitInt = content.parse()?;
-            Ok(Self::Binary(lit.base10_parse()?))
-        } else if lookahead.peek(kw::blob) {
-            let _kw: kw::blob = input.parse()?;
-            Ok(Self::Blob)
-        } else {
-            Err(lookahead.error())
+            return Ok(Self::Custom(input.parse()?));
         }
+
+        macro_rules! peek_ident {
+            ($kw:ident, $($ty:tt)*) => {
+                if lookahead.peek(kw::$kw) {
+                    let _kw: kw::$kw = input.parse()?;
+                    return Ok(Self::$($ty)*);
+                }
+            };
+        }
+        macro_rules! peek_ident_paren_int {
+            ($kw:ident, $ty:ident) => {
+                if lookahead.peek(kw::$kw) {
+                    let _kw: kw::$kw = input.parse()?;
+                    let content;
+                    parenthesized!(content in input);
+                    let lit: syn::LitInt = content.parse()?;
+                    return Ok(Self::$ty(lit.base10_parse()?));
+                }
+            };
+        }
+
+        peek_ident!(boolean, Boolean);
+
+        peek_ident_paren_int!(int, Integer);
+        peek_ident!(i8, Integer(1));
+        peek_ident!(i16, Integer(2));
+        peek_ident!(i32, Integer(4));
+        peek_ident!(i64, Integer(8));
+
+        peek_ident_paren_int!(uint, UnsignedInteger);
+        peek_ident!(u8, UnsignedInteger(1));
+        peek_ident!(u16, UnsignedInteger(2));
+        peek_ident!(u32, UnsignedInteger(4));
+        peek_ident!(u64, UnsignedInteger(8));
+
+        peek_ident!(text, Text);
+        peek_ident_paren_int!(varchar, VarChar);
+
+        peek_ident_paren_int!(binary, Binary);
+        peek_ident!(blob, Blob);
+
+        peek_ident_paren_int!(timestamp, Timestamp);
+        peek_ident!(date, Date);
+        peek_ident_paren_int!(time, Time);
+        peek_ident_paren_int!(datetime, DateTime);
+
+        Err(lookahead.error())
     }
 }
 
@@ -133,6 +165,10 @@ impl quote::ToTokens for ColumnType {
             Self::VarChar(size) => quote! { db::Type::VarChar(#size) },
             Self::Binary(size) => quote! { db::Type::Binary(#size) },
             Self::Blob => quote! { db::Type::Blob },
+            Self::Timestamp(precision) => quote! { db::Type::Timestamp(#precision) },
+            Self::Date => quote! { db::Type::Date },
+            Self::Time(precision) => quote! { db::Type::Time(#precision) },
+            Self::DateTime(precision) => quote! { db::Type::DateTime(#precision) },
             Self::Custom(custom) => quote! { db::Type::Custom(#custom) },
         }
         .to_tokens(tokens);

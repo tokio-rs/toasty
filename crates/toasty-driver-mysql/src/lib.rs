@@ -247,6 +247,73 @@ fn mysql_to_toasty(
             stmt::Type::U64 => extract_or_null(row, i, stmt::Value::U64),
             _ => todo!("ty={ty:#?}"),
         },
+
+        #[cfg(feature = "jiff")]
+        MYSQL_TYPE_TIMESTAMP | MYSQL_TYPE_DATETIME => {
+            match row.take_opt(i).expect("value missing") {
+                Ok(mysql_async::Value::Date(
+                    year,
+                    month,
+                    day,
+                    hour,
+                    minute,
+                    second,
+                    microsecond,
+                )) => {
+                    let dt = jiff::civil::DateTime::constant(
+                        year as i16,
+                        month as i8,
+                        day as i8,
+                        hour as i8,
+                        minute as i8,
+                        second as i8,
+                        (microsecond * 1000) as i32, // Convert microseconds to nanoseconds
+                    );
+                    match ty {
+                        stmt::Type::DateTime => stmt::Value::DateTime(dt),
+                        stmt::Type::Timestamp => stmt::Value::Timestamp(
+                            dt.to_zoned(jiff::tz::TimeZone::UTC).unwrap().into(),
+                        ),
+                        _ => todo!("unexpected type for DATETIME: {ty:#?}"),
+                    }
+                }
+                Ok(mysql_async::Value::NULL) | Err(_) => stmt::Value::Null,
+                Ok(v) => panic!("unexpected MySQL value for TIMESTAMP/DATETIME: {v:#?}"),
+            }
+        }
+
+        #[cfg(feature = "jiff")]
+        MYSQL_TYPE_DATE => match row.take_opt(i).expect("value missing") {
+            Ok(mysql_async::Value::Date(year, month, day, _, _, _, _)) => stmt::Value::Date(
+                jiff::civil::Date::constant(year as i16, month as i8, day as i8),
+            ),
+            Ok(mysql_async::Value::NULL) | Err(_) => stmt::Value::Null,
+            Ok(v) => panic!("unexpected MySQL value for DATE: {v:#?}"),
+        },
+
+        #[cfg(feature = "jiff")]
+        MYSQL_TYPE_TIME => {
+            match row.take_opt(i).expect("value missing") {
+                Ok(mysql_async::Value::Time(
+                    _is_negative,
+                    _days,
+                    hour,
+                    minute,
+                    second,
+                    microsecond,
+                )) => {
+                    stmt::Value::Time(jiff::civil::Time::constant(
+                        hour as i8,
+                        minute as i8,
+                        second as i8,
+                        (microsecond * 1000) as i32, // Convert microseconds to nanoseconds
+                    ))
+                }
+                Ok(mysql_async::Value::NULL) | Err(_) => stmt::Value::Null,
+                Ok(v) => panic!("unexpected MySQL value for TIME: {v:#?}"),
+            }
+        }
+
         _ => todo!(
             "implement MySQL to toasty conversion for `{:#?}`; {:#?}; ty={:#?}",
             column.column_type(),

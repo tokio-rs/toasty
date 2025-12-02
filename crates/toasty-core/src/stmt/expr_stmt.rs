@@ -1,7 +1,18 @@
 use super::{Expr, Insert, Statement};
 
+/// A statement used as an expression.
+///
+/// Wraps a statement (such as a subquery) so it can be used in expression
+/// contexts.
+///
+/// # Examples
+///
+/// ```text
+/// (SELECT max(age) FROM users)   // subquery as expression
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprStmt {
+    /// The wrapped statement.
     pub stmt: Box<Statement>,
 }
 

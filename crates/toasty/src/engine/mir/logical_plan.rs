@@ -2,15 +2,20 @@ use std::ops;
 
 use crate::engine::mir::{Node, NodeId, Store};
 
+/// The complete operation graph for a query.
+///
+/// [`LogicalPlan`] is a directed acyclic graph of operations produced by the
+/// planning phase. It contains all nodes, their topologically sorted execution
+/// order, and the final completion node whose output is returned to the user.
 #[derive(Debug)]
 pub(crate) struct LogicalPlan {
-    /// Nodes in the operation graph
+    /// All nodes in the operation graph.
     store: Store,
 
-    /// Order in which to execute the operations
+    /// Topologically sorted order in which to execute operations.
     execution_order: Vec<NodeId>,
 
-    /// Final node representing the completion of the query
+    /// The final node whose output is the query result.
     completion: NodeId,
 }
 

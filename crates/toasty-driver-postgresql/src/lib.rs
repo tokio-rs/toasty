@@ -317,6 +317,50 @@ fn postgres_to_toasty(
                 ),
             })
             .unwrap_or(stmt::Value::Null)
+    } else if column.type_() == &Type::TIMESTAMPTZ {
+        #[cfg(feature = "jiff")]
+        {
+            row.get::<usize, Option<jiff::Timestamp>>(index)
+                .map(stmt::Value::Timestamp)
+                .unwrap_or(stmt::Value::Null)
+        }
+        #[cfg(not(feature = "jiff"))]
+        {
+            panic!("TIMESTAMPTZ requires jiff feature to be enabled")
+        }
+    } else if column.type_() == &Type::TIMESTAMP {
+        #[cfg(feature = "jiff")]
+        {
+            row.get::<usize, Option<jiff::civil::DateTime>>(index)
+                .map(stmt::Value::DateTime)
+                .unwrap_or(stmt::Value::Null)
+        }
+        #[cfg(not(feature = "jiff"))]
+        {
+            panic!("TIMESTAMP requires jiff feature to be enabled")
+        }
+    } else if column.type_() == &Type::DATE {
+        #[cfg(feature = "jiff")]
+        {
+            row.get::<usize, Option<jiff::civil::Date>>(index)
+                .map(stmt::Value::Date)
+                .unwrap_or(stmt::Value::Null)
+        }
+        #[cfg(not(feature = "jiff"))]
+        {
+            panic!("DATE requires jiff feature to be enabled")
+        }
+    } else if column.type_() == &Type::TIME {
+        #[cfg(feature = "jiff")]
+        {
+            row.get::<usize, Option<jiff::civil::Time>>(index)
+                .map(stmt::Value::Time)
+                .unwrap_or(stmt::Value::Null)
+        }
+        #[cfg(not(feature = "jiff"))]
+        {
+            panic!("TIME requires jiff feature to be enabled")
+        }
     } else {
         todo!(
             "implement PostgreSQL to toasty conversion for `{:#?}`",
@@ -340,6 +384,14 @@ fn postgres_ty_for_value(value: &stmt::Value) -> Type {
         stmt::Value::String(_) => Type::TEXT,
         stmt::Value::Uuid(_) => Type::UUID,
         stmt::Value::Null => Type::TEXT, // Default for NULL values
+        #[cfg(feature = "jiff")]
+        stmt::Value::Timestamp(_) => Type::TIMESTAMPTZ,
+        #[cfg(feature = "jiff")]
+        stmt::Value::Date(_) => Type::DATE,
+        #[cfg(feature = "jiff")]
+        stmt::Value::Time(_) => Type::TIME,
+        #[cfg(feature = "jiff")]
+        stmt::Value::DateTime(_) => Type::TIMESTAMP,
         _ => todo!("postgres_ty_for_value: {value:#?}"),
     }
 }

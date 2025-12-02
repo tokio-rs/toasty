@@ -5,15 +5,19 @@ use crate::engine::{
     mir::{self, LogicalPlan},
 };
 
+/// Applies an in-memory filter predicate to a list of records.
+///
+/// Used when the database cannot apply all filter conditions natively (e.g.,
+/// NoSQL drivers with limited query capabilities).
 #[derive(Debug)]
 pub(crate) struct Filter {
-    /// Input needed to reify the statement
+    /// The node producing the records to filter.
     pub(crate) input: mir::NodeId,
 
-    /// Filter
+    /// The predicate function to apply to each record.
     pub(crate) filter: eval::Func,
 
-    /// Row type
+    /// The output type (same as input, but potentially fewer rows).
     pub(crate) ty: stmt::Type,
 }
 

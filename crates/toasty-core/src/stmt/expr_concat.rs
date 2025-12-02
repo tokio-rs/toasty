@@ -2,8 +2,18 @@ use super::Expr;
 
 use std::ops;
 
+/// Concatenates multiple expressions into one.
+///
+/// Combines a sequence of expressions by concatenating their values.
+///
+/// # Examples
+///
+/// ```text
+/// concat(a, b, c)  // concatenates `a`, `b`, and `c`
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprConcat {
+    /// The expressions to concatenate.
     pub exprs: Vec<Expr>,
 }
 

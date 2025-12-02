@@ -36,6 +36,15 @@ impl_into_expr_for_copy! {
     Uuid(uuid::Uuid);
 }
 
+#[cfg(feature = "jiff")]
+impl_into_expr_for_copy! {
+    Timestamp(jiff::Timestamp);
+    Zoned(jiff::Zoned);
+    Date(jiff::civil::Date);
+    Time(jiff::civil::Time);
+    DateTime(jiff::civil::DateTime);
+}
+
 // Pointer-sized integers convert through their fixed-size equivalents
 impl IntoExpr<isize> for isize {
     fn into_expr(self) -> Expr<isize> {

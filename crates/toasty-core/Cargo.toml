@@ -10,12 +10,15 @@ assert-struct = { workspace = true, optional = true }
 async-trait.workspace = true
 bit-set = "0.8.0"
 indexmap.workspace = true
+jiff = { workspace = true, optional = true }
 std-util.workspace = true
 tokio-stream.workspace = true
 uuid.workspace = true
 
 [features]
+default = []
 assert-struct = ["dep:assert-struct"]
+jiff = ["dep:jiff"]
 
 [dev-dependencies]
 pretty_assertions.workspace = true

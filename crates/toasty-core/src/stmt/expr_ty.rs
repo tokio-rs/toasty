@@ -1,11 +1,21 @@
 use super::{Expr, Type};
 
+/// A type expression.
+///
+/// Represents a type, optionally with a specific enum variant.
+///
+/// # Examples
+///
+/// ```text
+/// type(String)       // the String type
+/// type(Status, 0)    // variant 0 of the Status enum
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprTy {
-    /// The type
+    /// The type.
     pub ty: Type,
 
-    /// Optionally, if the type is an enum, this references a variant.
+    /// If the type is an enum, the specific variant index.
     pub variant: Option<usize>,
 }
 

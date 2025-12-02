@@ -1,5 +1,5 @@
 use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
+use toasty::{stmt::Id, Page};
 
 #[derive(toasty::Model)]
 struct Foo {
@@ -58,7 +58,7 @@ async fn paginate(test: &mut DbTest) {
         Foo::create().order(i).exec(&db).await.unwrap();
     }
 
-    let foos: Vec<_> = Foo::all()
+    let foos: Page<_> = Foo::all()
         .order_by(Foo::FIELDS.order().desc())
         .paginate(10)
         .collect(&db)
@@ -70,7 +70,7 @@ async fn paginate(test: &mut DbTest) {
         assert_eq!(foos[i].order, order);
     }
 
-    let foos: Vec<_> = Foo::all()
+    let foos: Page<_> = Foo::all()
         .order_by(Foo::FIELDS.order().desc())
         .paginate(10)
         .after(90)

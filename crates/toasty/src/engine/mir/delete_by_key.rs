@@ -5,18 +5,24 @@ use crate::engine::{
     mir::{self, LogicalPlan},
 };
 
+/// Deletes records by primary key.
+///
+/// Used with NoSQL drivers to delete records given a list of primary key values.
+///
+/// Keys are always specified as an input node, whether a [`Const`] or the
+/// output of a dependent operation.
 #[derive(Debug)]
 pub(crate) struct DeleteByKey {
-    /// Keys are always specified as an input, whether const or a set of
-    /// dependent operations.
+    /// The node producing the list of primary keys to delete.
     pub(crate) input: mir::NodeId,
 
-    /// The table to get keys from
+    /// The table to delete records from.
     pub(crate) table: TableId,
 
+    /// Optional additional filter applied before deletion.
     pub(crate) filter: Option<stmt::Expr>,
 
-    /// Return type
+    /// The return type.
     pub(crate) ty: stmt::Type,
 }
 

@@ -3,6 +3,19 @@ use crate::{
     stmt::Expr,
 };
 
+/// A reference to a model, field, or column.
+///
+/// References use scope-based nesting to support subqueries. A nesting level of
+/// `0` refers to the current query scope, while higher levels reference higher
+/// scope queries.
+///
+/// # Examples
+///
+/// ```text
+/// ref(field: 0, nesting: 0)  // field 0 in current query
+/// ref(field: 2, nesting: 1)  // field 2 in parent query
+/// ref(column: 0, table: 1)   // column 0 in table 1
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum ExprReference {
     /// Reference a model at a specific nesting level.
@@ -30,9 +43,12 @@ pub enum ExprReference {
     Column(ExprColumn),
 }
 
+/// A reference to a database column.
+///
+/// Used after lowering from the application schema to the database schema.
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub struct ExprColumn {
-    /// Query scope nesting level: 0 = current query, 1+ = higher scope queries
+    /// Query scope nesting level: `0` = current query, `1`+ = higher scope queries.
     pub nesting: usize,
 
     /// Index into the table references vector for this column's source relation.

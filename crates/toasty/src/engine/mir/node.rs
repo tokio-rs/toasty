@@ -7,22 +7,33 @@ use crate::engine::exec;
 
 use super::{LogicalPlan, NodeId, Operation};
 
+/// A single node in the MIR operation graph.
+///
+/// Each [`Node`] represents one operation to execute. It contains the operation
+/// itself, its dependencies on other nodes, and metadata used during execution
+/// planning (variable assignment, reference counting, traversal state).
 #[derive(Debug)]
 pub(crate) struct Node {
-    /// Operation kind
+    /// The operation this node performs.
     pub(crate) op: Operation,
 
-    /// Nodes that must execute *before* the current one. This should be a
-    /// superset of the node's inputs.
+    /// Nodes that must execute before this one.
+    ///
+    /// This is a superset of the node's data inputs; it may include additional
+    /// ordering dependencies (e.g., an `UPDATE` depending on a prior `INSERT`).
     pub(crate) deps: IndexSet<NodeId>,
 
-    /// Variable where the output is stored
+    /// Variable slot where this node's output is stored during execution.
+    ///
+    /// Set during execution planning when converting MIR to actions.
     pub(crate) var: Cell<Option<exec::VarId>>,
 
-    /// Number of nodes that use this one as input.
+    /// Number of downstream nodes that consume this node's output.
+    ///
+    /// Used for reference counting; the output is freed after the last use.
     pub(crate) num_uses: Cell<usize>,
 
-    /// Used for topo-sort
+    /// Whether this node has been visited during topological sort.
     pub(crate) visited: Cell<bool>,
 }
 
