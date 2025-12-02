@@ -62,6 +62,11 @@ impl BuildSchema<'_> {
                 .filter(|model| self.mapping.model(model.id).table == table.id)
                 .collect::<Vec<_>>();
 
+            assert!(
+                models.len() == 1,
+                "TODO: handle mapping many models to one table"
+            );
+
             BuildTableFromModels {
                 db,
                 table,
