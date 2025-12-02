@@ -82,7 +82,7 @@ impl<M: Model> Paginate<M> {
                     last_item,
                 );
 
-                Some(cursor.into())
+                cursor.map(|cursor| cursor.into())
             }
             _ => None,
         };
@@ -114,7 +114,7 @@ impl<M> From<Select<M>> for Paginate<M> {
 }
 
 /// Determines the next cursor of a paginated query from an [`OrderBy`] clause and an item [`Value`] in the result set.
-fn extract_cursor(order_by: &OrderBy, item: &Value) -> Value {
+fn extract_cursor(order_by: &OrderBy, item: &Value) -> Option<Value> {
     // Rewrite ExprReference::Field to ExprArg and pass the item value as the argument.
     let record = ExprRecord::from_iter(order_by.exprs.iter().map(|order_by_expr| {
         struct Visitor;
@@ -137,5 +137,5 @@ fn extract_cursor(order_by: &OrderBy, item: &Value) -> Value {
     }));
     Func::from_stmt(Expr::Record(record), vec![item.infer_ty()])
         .eval(&[item])
-        .unwrap()
+        .ok()
 }
