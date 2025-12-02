@@ -155,6 +155,7 @@ mod tests {
         #[key]
         id: String,
 
+        #[allow(dead_code)]
         name: Option<String>,
     }
 
