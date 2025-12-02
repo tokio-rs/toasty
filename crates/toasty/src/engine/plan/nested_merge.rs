@@ -173,10 +173,10 @@ impl NestedMergePlanner<'_> {
                     single: query.single,
                 }
             }
-            stmt::Statement::Insert(..) => NestedChild {
+            stmt::Statement::Insert(insert) => NestedChild {
                 level,
                 qualification: MergeQualification::All,
-                single: false,
+                single: insert.source.single,
             },
             stmt => todo!("stmt={stmt:#?}"),
         };

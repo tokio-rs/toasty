@@ -16,7 +16,7 @@ impl<T: Model> HasOne<T> {
             Value::Record(record) => Self {
                 value: Some(Box::new(T::load(record)?)),
             },
-            _ => todo!(),
+            _ => todo!("value={input:#?}"),
         })
     }
 
