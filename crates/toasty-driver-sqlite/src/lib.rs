@@ -92,23 +92,23 @@ impl Driver for Sqlite {
         let width = match &sql {
             sql::Statement::Query(stmt) => match &stmt.body {
                 stmt::ExprSet::Select(stmt) => {
-                    Some(stmt.returning.as_expr_unwrap().as_record().len())
+                    Some(stmt.returning.as_expr_unwrap().as_record_unwrap().len())
                 }
                 _ => todo!(),
             },
             sql::Statement::Insert(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| returning.as_expr_unwrap().as_record().len()),
+                .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
             sql::Statement::Delete(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| returning.as_expr_unwrap().as_record().len()),
+                .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
             sql::Statement::Update(stmt) => {
                 assert!(stmt.condition.is_none(), "stmt={stmt:#?}");
                 stmt.returning
                     .as_ref()
-                    .map(|returning| returning.as_expr_unwrap().as_record().len())
+                    .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len())
             }
             _ => None,
         };

@@ -17,6 +17,10 @@ impl<'a> Serializer<'a> {
         }
     }
 
+    pub fn is_sqlite(&self) -> bool {
+        matches!(self.flavor, Flavor::Sqlite)
+    }
+
     pub fn postgresql(schema: &'a db::Schema) -> Self {
         Serializer {
             schema,

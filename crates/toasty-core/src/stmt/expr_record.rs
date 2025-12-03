@@ -36,7 +36,14 @@ impl Expr {
         matches!(self, Self::Record(_))
     }
 
-    pub fn as_record(&self) -> &ExprRecord {
+    pub fn as_record(&self) -> Option<&ExprRecord> {
+        match self {
+            Self::Record(expr_record) => Some(expr_record),
+            _ => None,
+        }
+    }
+
+    pub fn as_record_unwrap(&self) -> &ExprRecord {
         match self {
             Self::Record(expr_record) => expr_record,
             _ => panic!("self={self:#?}"),
