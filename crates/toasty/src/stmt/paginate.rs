@@ -92,8 +92,8 @@ impl<M: Model> Paginate<M> {
         }
 
         let mut items: Vec<_> = db.exec(query_with_extra.into()).await?.collect().await?;
-        let has_next = (items.len() > page_size) && !self.reverse;
-        let has_prev = (items.len() > page_size) && self.reverse;
+        let has_next = (items.len() > page_size) || self.reverse;
+        let has_prev = (items.len() > page_size) || !self.reverse;
         items.truncate(page_size);
         if self.reverse {
             items.reverse();
