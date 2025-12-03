@@ -24,15 +24,10 @@ impl BinaryOp {
         matches!(self, Self::IsA)
     }
 
-    pub fn reverse(&self) -> Option<Self> {
-        match self {
-            Self::Eq => Some(Self::Ne),
-            Self::Ne => Some(Self::Eq),
-            Self::Ge => Some(Self::Le),
-            Self::Gt => Some(Self::Lt),
-            Self::Le => Some(Self::Ge),
-            Self::Lt => Some(Self::Gt),
-            Self::IsA => None,
+    pub fn reverse(&mut self) {
+        match *self {
+            Self::Eq => {}
+            _ => todo!(),
         }
     }
 
