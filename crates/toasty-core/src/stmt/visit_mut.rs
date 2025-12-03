@@ -916,7 +916,6 @@ where
 {
     match node {
         Offset::After(expr) => v.visit_expr_mut(expr),
-        Offset::Before(expr) => v.visit_expr_mut(expr),
         Offset::Count(expr) => v.visit_expr_mut(expr),
     }
 }

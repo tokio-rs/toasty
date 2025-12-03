@@ -17,9 +17,8 @@ impl LowerStatement<'_, '_> {
             return;
         };
 
-        let (offset_expr, reverse) = match limit.offset.take() {
-            Some(Offset::After(expr)) => (expr, false),
-            Some(Offset::Before(expr)) => (expr, true),
+        let offset = match limit.offset.take() {
+            Some(Offset::After(expr)) => expr,
             _ => return,
         };
 
@@ -27,25 +26,20 @@ impl LowerStatement<'_, '_> {
             todo!("stmt={stmt:#?}");
         };
 
-        match offset_expr {
+        match offset {
             stmt::Expr::Value(stmt::Value::Record(value)) => {
                 for (index, value) in value.fields.into_iter().enumerate() {
                     let expr = self.rewrite_offset_after_field_as_filter(
                         &order_by.exprs[index],
                         value,
                         true,
-                        reverse,
                     );
                     body.filter.add_filter(expr);
                 }
             }
             stmt::Expr::Value(value) => {
-                let expr = self.rewrite_offset_after_field_as_filter(
-                    &order_by.exprs[0],
-                    value,
-                    true,
-                    reverse,
-                );
+                let expr =
+                    self.rewrite_offset_after_field_as_filter(&order_by.exprs[0], value, true);
                 body.filter.add_filter(expr);
             }
             _ => todo!(),
@@ -58,17 +52,12 @@ impl LowerStatement<'_, '_> {
         order_by: &stmt::OrderByExpr,
         value: stmt::Value,
         last: bool,
-        reverse: bool,
     ) -> stmt::Expr {
         let op = match (order_by.order, last) {
             (Some(stmt::Direction::Desc), true) => stmt::BinaryOp::Lt,
             (Some(stmt::Direction::Desc), false) => stmt::BinaryOp::Le,
             (_, true) => stmt::BinaryOp::Gt,
             (_, false) => stmt::BinaryOp::Ge,
-        };
-        let op = match reverse {
-            true => op.reverse().unwrap(),
-            false => op,
         };
 
         stmt::Expr::binary_op(order_by.expr.clone(), op, value)

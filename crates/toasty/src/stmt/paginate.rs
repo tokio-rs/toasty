@@ -8,6 +8,12 @@ use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, 
 pub struct Paginate<M> {
     /// How to query the data
     query: Select<M>,
+
+    /// Whether we are currently paginating backwards.
+    ///
+    /// Because the sort order has to be reversed during backwards pagination,
+    /// we need to reverse the result set again to go back to the expected order.
+    reverse: bool,
 }
 
 impl<M: Model> Paginate<M> {
@@ -26,7 +32,10 @@ impl<M: Model> Paginate<M> {
             offset: None,
         });
 
-        Self { query }
+        Self {
+            query,
+            reverse: false,
+        }
     }
 
     /// Set the key-based offset for forwards pagination.
@@ -35,15 +44,18 @@ impl<M: Model> Paginate<M> {
             panic!("pagination requires a limit clause");
         };
         limit.offset = Some(stmt::Offset::After(key.into()));
+        self.reverse = false;
         self
     }
 
     /// Set the key-based offset for backwards pagination.
     pub fn before(mut self, key: impl Into<stmt::Expr>) -> Self {
-        let Some(limit) = self.query.untyped.limit.as_mut() else {
-            panic!("pagination requires a limit clause");
+        let Some(order_by) = self.query.untyped.order_by.as_mut() else {
+            panic!("pagination requires order by clause");
         };
-        limit.offset = Some(stmt::Offset::Before(key.into()));
+        order_by.reverse();
+        self = self.after(key);
+        self.reverse = true;
         self
     }
 
@@ -97,10 +109,15 @@ impl<M: Model> Paginate<M> {
             _ => None,
         };
 
+        let mut items: Vec<_> = Cursor::new(db.engine.schema.clone(), items.into())
+            .collect()
+            .await?;
+        if self.reverse {
+            items.reverse();
+        }
+
         Ok(crate::Page::new(
-            Cursor::new(db.engine.schema.clone(), items.into())
-                .collect()
-                .await?,
+            items,
             self.query,
             next_cursor,
             prev_cursor,
@@ -119,7 +136,10 @@ impl<M> From<Select<M>> for Paginate<M> {
             "pagination requires an order_by clause"
         );
 
-        Paginate { query: value }
+        Paginate {
+            query: value,
+            reverse: false,
+        }
     }
 }
 
