@@ -1,3 +1,5 @@
+use std::{rc::Rc, sync::Arc};
+
 use crate::{stmt::Id, Model, Result};
 
 use toasty_core::stmt;
@@ -111,5 +113,35 @@ impl Primitive for uuid::Uuid {
             stmt::Value::Uuid(v) => Ok(v),
             _ => anyhow::bail!("cannot convert value to uuid::Uuid {value:#?}"),
         }
+    }
+}
+
+impl<T: Primitive> Primitive for Arc<T> {
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Primitive>::load(value).map(Arc::new)
+    }
+}
+
+impl<T: Primitive> Primitive for Rc<T> {
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Primitive>::load(value).map(Rc::new)
+    }
+}
+
+impl<T: Primitive> Primitive for Box<T> {
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Primitive>::load(value).map(Box::new)
     }
 }
