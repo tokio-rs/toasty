@@ -1,5 +1,6 @@
 use crate::{stmt::Id, Model, Result};
 
+use std::borrow::Cow;
 use toasty_core::stmt;
 
 pub trait Primitive: Sized {
@@ -70,6 +71,16 @@ impl Primitive for String {
             stmt::Value::String(v) => Ok(v),
             _ => anyhow::bail!("cannot convert value to String {value:#?}"),
         }
+    }
+}
+
+impl Primitive for Cow<'_, str> {
+    fn ty() -> stmt::Type {
+        <String as Primitive>::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <String as Primitive>::load(value).map(Cow::Owned)
     }
 }
 
