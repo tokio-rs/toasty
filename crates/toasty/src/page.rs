@@ -90,9 +90,14 @@ impl<M: Model> Page<M> {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn prev(&self, _db: &Db) -> Result<Option<Page<M>>> {
-        match &self.next_cursor {
-            Some(_cursor) => todo!("backwards pagination"),
+    pub async fn prev(&self, db: &Db) -> Result<Option<Page<M>>> {
+        match &self.prev_cursor {
+            Some(cursor) => Ok(Some(
+                Paginate::from(self.query.clone())
+                    .before(cursor.clone())
+                    .collect(db)
+                    .await?,
+            )),
             None => Ok(None),
         }
     }
