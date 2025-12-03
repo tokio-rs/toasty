@@ -38,7 +38,7 @@ impl ToSql for ColumnsWithConstraints<'_> {
                 _ => panic!("Toasty should catch this case earlier"),
             }
         } else {
-            false
+            true
         };
 
         let columns = Comma(&self.0.columns);
