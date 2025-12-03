@@ -134,6 +134,10 @@ impl ToSql for &stmt::Insert {
             .as_ref()
             .map(|returning| ("RETURNING ", returning));
 
+        if returning.is_some() && f.serializer.is_mysql() {
+            panic!("MySQL does not support the RETURNING clause with INSERT statements");
+        }
+
         // Set flag to indicate we're in INSERT context (VALUES shouldn't use ROW())
         let prev_in_insert = f.in_insert;
         f.in_insert = true;
