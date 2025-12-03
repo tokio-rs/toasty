@@ -813,12 +813,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ty: &stmt::Type,
     ) -> mir::NodeId {
         if let Some(keys) = pk_keys {
-            let get_by_key_input = self.build_get_by_key_input(
-                keys,
-                &linked,
-                ref_source,
-                self.index_key_ty(index_plan),
-            );
+            let get_by_key_input =
+                self.build_get_by_key_input(keys, &linked, self.index_key_ty(index_plan));
 
             self.build_key_operation(&linked.stmt, index_plan, get_by_key_input, selection, ty)
         } else {
@@ -970,7 +966,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         &mut self,
         keys: eval::Func,
         linked: &LinkedStatement,
-        ref_source: Option<stmt::ExprArg>,
         index_key_ty: stmt::Type,
     ) -> mir::NodeId {
         if keys.is_const() {
@@ -979,7 +974,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             debug_assert_eq!(1, linked.inputs.len(), "TODO");
             linked.inputs[0]
         } else {
-            debug_assert!(ref_source.is_some(), "TODO");
             let ty = stmt::Type::list(keys.ret.clone());
             // Gotta project
             self.planner.mir.insert(mir::Project {
