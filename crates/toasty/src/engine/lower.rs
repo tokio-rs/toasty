@@ -796,7 +796,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     let result = mapping.table_to_model.lower_expr_reference(nesting, index);
                     return result;
                 } else {
-                    row.entry(index).to_expr()
+                    row.entry(index).unwrap().to_expr()
                 }
             }
             _ => todo!("cx={:#?}", self.cx),

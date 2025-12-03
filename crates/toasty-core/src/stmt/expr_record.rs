@@ -39,7 +39,7 @@ impl Expr {
     pub fn as_record(&self) -> &ExprRecord {
         match self {
             Self::Record(expr_record) => expr_record,
-            _ => panic!(),
+            _ => panic!("self={self:#?}"),
         }
     }
 

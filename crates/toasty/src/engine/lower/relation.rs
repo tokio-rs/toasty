@@ -677,7 +677,7 @@ impl RelationSource for InsertRelationSource<'_> {
         let mut args = vec![];
 
         for pk_field in self.model.primary_key_fields() {
-            let entry = self.row.entry(pk_field.id.index);
+            let entry = self.row.entry(pk_field.id.index).unwrap();
 
             if entry.is_value() {
                 args.push(entry.to_expr());

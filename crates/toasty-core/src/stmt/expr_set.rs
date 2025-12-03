@@ -37,6 +37,17 @@ impl ExprSet {
         ExprSet::Values(values.into())
     }
 
+    /// Returns a reference to the inner [`Values`] if this is an [`ExprSet::Values`].
+    ///
+    /// Returns `None` for all other [`ExprSet`] variants.
+    #[track_caller]
+    pub fn as_values(&self) -> Option<&Values> {
+        match self {
+            Self::Values(values) => Some(values),
+            _ => None,
+        }
+    }
+
     /// Returns a reference to the inner [`Values`].
     ///
     /// # Panics

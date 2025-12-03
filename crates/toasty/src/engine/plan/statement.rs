@@ -8,11 +8,13 @@ use crate::engine::{
     plan::HirPlanner,
 };
 
+#[derive(Debug)]
 struct Selection {
     columns: IndexSet<stmt::ExprReference>,
     returning: Option<stmt::Returning>,
 }
 
+#[derive(Debug)]
 struct LinkedStatement {
     stmt: stmt::Statement,
     inputs: IndexSet<mir::NodeId>,
@@ -416,7 +418,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> mir::NodeId {
         let LinkedStatement { mut stmt, inputs } = linked;
 
-        if !selection.columns.is_empty() {
+        let const_returning = self.extract_insert_returning_as_const(&stmt, &selection.columns);
+
+        if const_returning.is_none() && !selection.columns.is_empty() {
             stmt.set_returning(
                 stmt::Expr::record(
                     selection
@@ -477,7 +481,77 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // With SQL capability, we can just punt the details of execution to
         // the database's query planner.
         debug_assert!(!self.did_take_deps);
-        self.insert_mir_with_deps(node)
+        let mut exec_statement_node = self.insert_mir_with_deps(node);
+
+        if let Some((const_value, const_ty)) = const_returning {
+            exec_statement_node = self.planner.mir.insert_with_deps(
+                mir::Const {
+                    value: const_value,
+                    ty: const_ty,
+                },
+                [exec_statement_node],
+            );
+        }
+
+        exec_statement_node
+    }
+
+    fn extract_insert_returning_as_const(
+        &mut self,
+        stmt: &stmt::Statement,
+        expr_refs: &IndexSet<stmt::ExprReference>,
+    ) -> Option<(Vec<stmt::Value>, stmt::Type)> {
+        let stmt::Statement::Insert(insert) = stmt else {
+            return None;
+        };
+
+        if expr_refs.is_empty() {
+            return None;
+        }
+
+        let target = insert.target.as_table_unwrap();
+        let Some(values) = insert.source.body.as_values() else {
+            return None;
+        };
+
+        let mut indices = vec![];
+
+        for expr_ref in expr_refs {
+            let expr_col = expr_ref.as_expr_column_unwrap();
+            debug_assert!(expr_col.nesting == 0, "expr_column={expr_col:#?}");
+
+            let Some(index) = target
+                .columns
+                .iter()
+                .enumerate()
+                .find(|(_, column_id)| column_id.index == expr_col.column)
+                .map(|(index, _)| index)
+            else {
+                return None;
+            };
+
+            indices.push(index);
+        }
+
+        // Now extract the values for each row
+        let mut result = Vec::with_capacity(values.rows.len());
+
+        for row in &values.rows {
+            // Build a record with only the requested fields
+            let mut fields = Vec::with_capacity(indices.len());
+
+            for &index in &indices {
+                // Try to evaluate the expression to a constant value
+                let value = row.entry(index)?.eval_const().ok()?;
+                fields.push(value);
+            }
+
+            result.push(stmt::Value::record_from_vec(fields));
+        }
+
+        let ty = self.planner.engine.infer_record_list_ty(stmt, expr_refs);
+
+        Some((result, ty))
     }
 
     fn plan_conditional_sql_query_as_cte(
@@ -692,6 +766,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         selection: &mut Selection,
         ref_source: Option<stmt::ExprArg>,
     ) -> mir::NodeId {
+        if linked.stmt.is_insert() {
+            debug_assert!(selection.columns.is_empty());
+        }
+
         // Without SQL capability, we have to plan the execution of the
         // statement based on available indices.
         let mut index_plan = self.planner.engine.plan_index_path(&linked.stmt);

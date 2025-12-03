@@ -187,6 +187,14 @@ impl ExprReference {
     pub fn is_column(&self) -> bool {
         matches!(self, ExprReference::Column(..))
     }
+
+    #[track_caller]
+    pub fn as_expr_column_unwrap(&self) -> &ExprColumn {
+        match self {
+            ExprReference::Column(expr_column) => expr_column,
+            _ => panic!("expected ExprColumn; actual={self:#?}"),
+        }
+    }
 }
 
 impl From<ExprColumn> for ExprReference {

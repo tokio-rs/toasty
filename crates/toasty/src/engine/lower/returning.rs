@@ -87,7 +87,9 @@ impl stmt::Input for ConstantizeReturning<'_> {
             ConstantizeSource::InsertValues { values, columns } => {
                 let index = columns.iter().position(|column| needle.id == *column)?;
                 match values {
-                    stmt::Expr::Record(row) => Some(row[index].entry(projection).to_expr()),
+                    stmt::Expr::Record(row) => {
+                        Some(row[index].entry(projection).unwrap().to_expr())
+                    }
                     stmt::Expr::Value(stmt::Value::Record(row)) => {
                         Some(row[index].entry(projection).to_expr())
                     }

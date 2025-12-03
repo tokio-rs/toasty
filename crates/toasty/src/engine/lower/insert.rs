@@ -126,7 +126,7 @@ impl LowerStatement<'_, '_> {
                 continue;
             }
 
-            let field_expr = expr.entry(field.id.index);
+            let field_expr = expr.entry(field.id.index).unwrap();
 
             if !field.nullable && field_expr.is_value_null() {
                 // Relations are handled differently
