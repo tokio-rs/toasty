@@ -1,5 +1,6 @@
 use crate::{stmt::Id, Model, Result};
 
+use std::borrow::Cow;
 use toasty_core::stmt;
 
 pub trait Primitive: Sized {
@@ -98,6 +99,20 @@ impl<T: Primitive> Primitive for Option<T> {
         } else {
             Ok(Some(T::load(value)?))
         }
+    }
+}
+
+impl<T> Primitive for Cow<'_, T>
+where
+    T: ToOwned + ?Sized,
+    T::Owned: Primitive,
+{
+    fn ty() -> stmt::Type {
+        <T::Owned as Primitive>::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T::Owned as Primitive>::load(value).map(Cow::Owned)
     }
 }
 

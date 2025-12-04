@@ -5,6 +5,7 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Pr
   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `toasty::stmt::Primitive` is not implemented for `toasty::HasOne<Option<Profile>>`
   |
   = help: the following other types implement trait `toasty::stmt::Primitive`:
+            Cow<'_, T>
             Option<T>
             i16
             i32
@@ -12,5 +13,4 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Pr
             i8
             isize
             jiff::civil::date::Date
-            jiff::civil::datetime::DateTime
           and $N others
