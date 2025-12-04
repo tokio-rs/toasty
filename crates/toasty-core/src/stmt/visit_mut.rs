@@ -946,7 +946,7 @@ where
         }
         Returning::Changed => {}
         Returning::Expr(expr) => v.visit_expr_mut(expr),
-        Returning::Value(value) => v.visit_value_mut(value),
+        Returning::Value(expr) => v.visit_expr_mut(expr),
     }
 }
 

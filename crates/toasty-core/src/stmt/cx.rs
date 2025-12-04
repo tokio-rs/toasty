@@ -333,7 +333,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     Type::list(ty)
                 }
             }
-            Returning::Value(value) => value.infer_ty(),
+            Returning::Value(expr) => self.infer_expr_ty(expr, args),
         }
     }
 

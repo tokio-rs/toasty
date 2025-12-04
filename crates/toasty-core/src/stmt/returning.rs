@@ -14,8 +14,8 @@ pub enum Returning {
     /// Return an expression.
     Expr(Expr),
 
-    /// Return a constant list of rows
-    Value(Value),
+    /// Return a value instead of a projection of the statement source.
+    Value(Expr),
 }
 
 impl Returning {

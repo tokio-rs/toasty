@@ -539,15 +539,20 @@ impl LowerStatement<'_, '_> {
                 let stmt_info = &self.state.hir[stmt_id];
 
                 let returning = stmt_info.stmt.as_ref().unwrap().returning().expect("bug");
-                let stmt::Returning::Value(value) = returning.clone() else {
-                    todo!()
-                };
-                let stmt::Value::List(rows) = value else {
-                    todo!()
-                };
-                assert_eq!(1, rows.len());
 
-                self.set_relation_field(field, rows.into_iter().next().unwrap().into(), source);
+                let expr = match returning.clone() {
+                    stmt::Returning::Value(stmt::Expr::Value(stmt::Value::List(rows))) => {
+                        assert_eq!(1, rows.len());
+                        rows.into_iter().next().unwrap().into()
+                    }
+                    stmt::Returning::Value(stmt::Expr::List(rows)) => {
+                        assert_eq!(1, rows.items.len());
+                        rows.items.into_iter().next().unwrap()
+                    }
+                    returning => todo!("returning={returning:#?}"),
+                };
+
+                self.set_relation_field(field, expr, source);
             }
             stmt::Statement::Query(query) => {
                 // Try to extract the FK from the select without performing the query

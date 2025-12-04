@@ -49,7 +49,7 @@ impl LowerStatement<'_, '_> {
             constantized.push(row);
         }
 
-        *returning = stmt::Returning::Value(stmt::Value::List(constantized));
+        *returning = stmt::Returning::Value(stmt::Value::List(constantized).into());
     }
 
     pub(super) fn constantize_update_returning(

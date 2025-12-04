@@ -1194,19 +1194,23 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             );
 
             match returning {
-                stmt::Returning::Value(returning) => {
-                    let ty = returning.infer_ty();
+                stmt::Returning::Value(expr) => {
+                    // Value variant contains a constant expression that can be evaluated
+                    if let Ok(value) = expr.eval_const() {
+                        let ty = value.infer_ty();
+                        let stmt::Value::List(rows) = value else {
+                            todo!(
+                                "unexpected returning type; value={value:#?}; stmt={:#?}",
+                                self.stmt_info.stmt
+                            )
+                        };
 
-                    let stmt::Value::List(rows) = returning else {
-                        todo!(
-                            "unexpected returning type; returning={returning:#?}; stmt={:#?}",
-                            self.stmt_info.stmt
-                        )
-                    };
-
-                    self.planner
-                        .mir
-                        .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
+                        self.planner
+                            .mir
+                            .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
+                    } else {
+                        todo!("handle this");
+                    }
                 }
                 stmt::Returning::Expr(returning) => {
                     let arg_ty = match self.planner.mir[exec_stmt_node_id].ty() {
