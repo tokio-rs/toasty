@@ -59,6 +59,36 @@ impl Entry<'_> {
         }
     }
 
+    /// Returns `true` if the entry is a constant expression.
+    ///
+    /// An entry is considered constant if it does not reference any external data:
+    /// - `Entry::Value` is always constant
+    /// - `Entry::Expr` is constant if the expression itself is constant
+    ///   (see [`Expr::is_const`] for details)
+    ///
+    /// Constant entries can be evaluated without any input context.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::{Entry, Value, Expr};
+    /// // Values are always constant
+    /// let value = Value::from(42);
+    /// let entry = Entry::from(&value);
+    /// assert!(entry.is_const());
+    ///
+    /// // Constant expressions
+    /// let expr = Expr::from(Value::from("hello"));
+    /// let entry = Entry::from(&expr);
+    /// assert!(entry.is_const());
+    /// ```
+    pub fn is_const(&self) -> bool {
+        match self {
+            Entry::Value(_) => true,
+            Entry::Expr(expr) => expr.is_const(),
+        }
+    }
+
     pub fn is_expr(&self) -> bool {
         matches!(self, Entry::Expr(_))
     }

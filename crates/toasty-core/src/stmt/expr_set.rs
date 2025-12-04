@@ -37,6 +37,22 @@ impl ExprSet {
         ExprSet::Values(values.into())
     }
 
+    /// Returns `true` if this is an [`ExprSet::Values`] variant.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::{ExprSet, Values};
+    /// let values = ExprSet::values(Values::default());
+    /// assert!(values.is_values());
+    ///
+    /// let select = ExprSet::from(toasty_core::schema::db::TableId(0));
+    /// assert!(!select.is_values());
+    /// ```
+    pub fn is_values(&self) -> bool {
+        matches!(self, ExprSet::Values(_))
+    }
+
     /// Returns a reference to the inner [`Values`] if this is an [`ExprSet::Values`].
     ///
     /// Returns `None` for all other [`ExprSet`] variants.

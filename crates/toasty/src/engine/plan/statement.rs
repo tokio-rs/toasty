@@ -79,6 +79,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let mut selection = Selection { columns, returning };
 
+        // Track sub-statements referenced in the returning clause as inputs, so their
+        // results are available when building the return value.
+        self.extract_inputs_from_returning(&mut selection, &mut linked_stmt);
+
         // Visit the main statement's returning clause to extract needed columns
         self.extract_columns_from_returning(&mut selection, &mut linked_stmt);
 
@@ -119,18 +123,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     // ===== Setup helpers =====
 
-    fn extract_columns_from_returning(
+    fn extract_inputs_from_returning(
         &mut self,
         selection: &mut Selection,
         linked_stmt: &mut LinkedStatement,
     ) {
         visit_mut::for_each_expr_mut(&mut selection.returning, |expr| {
-            match expr {
-                stmt::Expr::Reference(expr_reference) => {
-                    let (index, _) = selection.columns.insert_full(*expr_reference);
-                    *expr = stmt::Expr::arg_project(0, [index]);
-                }
-                stmt::Expr::Arg(expr_arg) => match &self.stmt_info.args[expr_arg.position] {
+            if let stmt::Expr::Arg(expr_arg) = expr {
+                match &self.stmt_info.args[expr_arg.position] {
                     hir::Arg::Ref { .. } => {
                         todo!("refs in returning is not yet supported");
                     }
@@ -157,10 +157,84 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         input.set(Some(index));
                     }
                     _ => todo!(),
-                },
-                _ => {}
+                }
             }
         });
+    }
+
+    fn extract_columns_from_returning(
+        &mut self,
+        selection: &mut Selection,
+        linked_stmt: &mut LinkedStatement,
+    ) {
+        if let stmt::Statement::Insert(insert) = &linked_stmt.stmt {
+            if insert.source.body.is_values() {
+                self.extract_columns_from_insert_returning(selection, insert);
+                return;
+            }
+        }
+
+        self.extract_columns_from_stmt_returning(selection)
+    }
+
+    fn extract_columns_from_insert_returning(
+        &mut self,
+        selection: &mut Selection,
+        stmt: &stmt::Insert,
+    ) {
+        visit_mut::for_each_expr_mut(&mut selection.returning, |expr| {
+            if let stmt::Expr::Reference(expr_reference) = expr {
+                let (index, _) = selection.columns.insert_full(*expr_reference);
+                *expr = stmt::Expr::arg_project(0, [index]);
+            }
+        });
+    }
+
+    fn extract_columns_from_stmt_returning(&mut self, selection: &mut Selection) {
+        visit_mut::for_each_expr_mut(&mut selection.returning, |expr| {
+            if let stmt::Expr::Reference(expr_reference) = expr {
+                let (index, _) = selection.columns.insert_full(*expr_reference);
+                *expr = stmt::Expr::arg_project(0, [index]);
+            }
+        });
+    }
+
+    /// If the ExprReference in the returning clause of an Insert references a
+    /// known value provided during insertion, then we do not need the database
+    /// to provide that value and can extract it during planning.
+    ///
+    /// TODO: Instead of checking all the values first, then extracting them
+    /// later, do it in one pass.
+    fn returning_expr_ref_needs_db(
+        &self,
+        expr_reference: &stmt::ExprReference,
+        stmt: &stmt::Statement,
+    ) -> bool {
+        let expr_column = expr_reference.as_expr_column_unwrap();
+
+        if expr_column.nesting > 0 {
+            return true;
+        }
+
+        let stmt::Statement::Insert(insert) = stmt else {
+            return true;
+        };
+
+        let Some(values) = insert.source.body.as_values() else {
+            return true;
+        };
+
+        for row in &values.rows {
+            let Some(entry) = row.entry(expr_column.column) else {
+                return true;
+            };
+
+            if !entry.is_const() {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn extract_sub_statement_args_from_filter(&mut self, linked_stmt: &mut LinkedStatement) {
@@ -451,7 +525,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let const_returning = self.extract_insert_returning_as_const(&stmt, &selection.columns);
 
-        if const_returning.is_none() && !selection.columns.is_empty() {
+        if !selection.columns.is_empty() {
             stmt.set_returning(
                 stmt::Expr::record(
                     selection
@@ -558,7 +632,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 .find(|(_, column_id)| column_id.index == expr_col.column)
                 .map(|(index, _)| index)
             else {
-                return None;
+                todo!("insert returning referencing parent statement");
+                // return None;
             };
 
             indices.push(index);
