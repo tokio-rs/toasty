@@ -74,16 +74,6 @@ impl Primitive for String {
     }
 }
 
-impl Primitive for Cow<'_, str> {
-    fn ty() -> stmt::Type {
-        <String as Primitive>::ty()
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        <String as Primitive>::load(value).map(Cow::Owned)
-    }
-}
-
 impl<T: Model> Primitive for Id<T> {
     fn ty() -> stmt::Type {
         stmt::Type::Id(T::id())
@@ -109,6 +99,20 @@ impl<T: Primitive> Primitive for Option<T> {
         } else {
             Ok(Some(T::load(value)?))
         }
+    }
+}
+
+impl<T> Primitive for Cow<'_, T>
+where
+    T: ToOwned + ?Sized,
+    T::Owned: Primitive,
+{
+    fn ty() -> stmt::Type {
+        <T::Owned as Primitive>::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T::Owned as Primitive>::load(value).map(Cow::Owned)
     }
 }
 
