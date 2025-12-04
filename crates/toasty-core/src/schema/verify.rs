@@ -30,6 +30,7 @@ impl Verify<'_> {
         }
 
         self.verify_model_indices_are_scoped_correctly();
+        self.verify_each_table_has_one_primary_key();
         self.verify_indices_have_columns();
         self.verify_index_names_are_unique().unwrap();
         self.verify_table_indices_and_nullable();
@@ -95,7 +96,11 @@ impl Verify<'_> {
     fn verify_indices_have_columns(&self) {
         for table in &self.schema.db.tables {
             for index in &table.indices {
-                assert!(!index.columns.is_empty(), "TABLE={table:#?}");
+                assert!(
+                    !index.columns.is_empty(),
+                    "table={table:#?}; schema={:#?}",
+                    self.schema
+                );
             }
         }
     }
@@ -132,6 +137,12 @@ impl Verify<'_> {
                     );
                 }
             }
+        }
+    }
+
+    fn verify_each_table_has_one_primary_key(&self) {
+        for table in &self.schema.db.tables {
+            assert_eq!(1, table.indices.iter().filter(|i| i.primary_key).count());
         }
     }
 }

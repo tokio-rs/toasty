@@ -7,10 +7,9 @@ impl Simplify<'_> {
         &self,
         expr_exists: &stmt::ExprExists,
     ) -> Option<stmt::Expr> {
-        // EXISTS (empty query) -> false
-        // NOT EXISTS (empty query) -> true
+        // `exists(empty_query)` → `false`
         if self.stmt_query_is_empty(&expr_exists.subquery) {
-            return Some(stmt::Expr::from(expr_exists.negated));
+            return Some(stmt::Expr::FALSE);
         }
 
         None
@@ -21,7 +20,7 @@ impl Simplify<'_> {
 mod tests {
     use super::*;
     use crate::engine::simplify::test::test_schema;
-    use toasty_core::stmt::{ExprExists, Query, Values};
+    use toasty_core::stmt::{Expr, ExprExists, Query, Values, VisitMut as _};
 
     /// Creates a query with no rows (empty VALUES clause).
     fn empty_query() -> Box<Query> {
@@ -40,10 +39,9 @@ mod tests {
         let schema = test_schema();
         let simplify = Simplify::new(&schema);
 
-        // `exists(empty_query) → false`
+        // `exists(empty_query)` → `false`
         let expr = ExprExists {
             subquery: empty_query(),
-            negated: false,
         };
         let result = simplify.simplify_expr_exists(&expr);
 
@@ -59,7 +57,6 @@ mod tests {
         // `exists(non_empty_query)`, non-empty, not simplified
         let expr = ExprExists {
             subquery: non_empty_query(),
-            negated: false,
         };
         let result = simplify.simplify_expr_exists(&expr);
 
@@ -69,31 +66,28 @@ mod tests {
     #[test]
     fn not_exists_empty_query_becomes_true() {
         let schema = test_schema();
-        let simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema);
 
-        // `not_exists(empty_query) → true`
-        let expr = ExprExists {
+        // `not(exists(empty_query))` → `not(false)` → `true`
+        let mut expr = Expr::not(Expr::Exists(ExprExists {
             subquery: empty_query(),
-            negated: true,
-        };
-        let result = simplify.simplify_expr_exists(&expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_true());
+        }));
+        simplify.visit_expr_mut(&mut expr);
+        assert!(expr.is_true());
     }
 
     #[test]
     fn not_exists_non_empty_query_not_simplified() {
         let schema = test_schema();
-        let simplify = Simplify::new(&schema);
+        let mut simplify = Simplify::new(&schema);
 
-        // `not_exists(non_empty_query)`, non-empty, not simplified
-        let expr = ExprExists {
+        // `not(exists(non_empty_query))`, non-empty, not simplified
+        let mut expr = Expr::not(Expr::Exists(ExprExists {
             subquery: non_empty_query(),
-            negated: true,
-        };
-        let result = simplify.simplify_expr_exists(&expr);
+        }));
+        simplify.visit_expr_mut(&mut expr);
 
-        assert!(result.is_none());
+        // Should remain as `not(exists(...))`
+        assert!(matches!(expr, Expr::Not(_)));
     }
 }
