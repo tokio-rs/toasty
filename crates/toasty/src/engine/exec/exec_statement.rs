@@ -48,11 +48,14 @@ impl Exec<'_> {
                     .await?;
                 input_values.push(stmt::Value::List(values));
             }
+            println!("action_exec_stmt; action={action:#?}; input={input_values:#?}");
 
             stmt.substitute(&input_values);
 
             self.engine.simplify_stmt(&mut stmt);
         }
+
+        println!("action_exec_statement; stmt={stmt:#?}");
 
         debug_assert!(
             stmt.returning()

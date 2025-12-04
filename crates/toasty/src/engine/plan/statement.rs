@@ -226,42 +226,33 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
 
         if let Some(ref_source) = ref_source {
-            if linked_stmt.stmt.is_insert() {
-                let hir::Arg::Ref { stmt_id, .. } = &self.stmt_info.args[ref_source.position]
-                else {
+            if let stmt::Statement::Insert(stmt) = &mut linked_stmt.stmt {
+                if self.planner.engine.capability().sql {
+                    self.rewrite_stmt_insert_for_ref_source_nosql(stmt, ref_source);
+                } else {
                     todo!()
-                };
-
-                let target_stmt = &self.planner.hir[stmt_id];
-                let target_stmt = target_stmt.stmt.as_deref().unwrap();
-
-                assert!(target_stmt.is_insert(), "TODO");
-
-                // For now, an insert statement referencing a parent is only supported when the
-                // targeted insert statement is also an insert with a single row being inserted.
-                let values = target_stmt.insert_source_unwrap().body.as_values_unwrap();
-                assert_eq!(1, values.rows.len(), "TODO");
+                }
             } else {
-                self.rewrite_stmt_for_ref_source(&mut linked_stmt.stmt, ref_source);
+                self.rewrite_stmt_query_for_ref_source(&mut linked_stmt.stmt, ref_source);
             }
         }
 
         ref_source
     }
 
-    fn rewrite_stmt_for_ref_source(
+    fn rewrite_stmt_query_for_ref_source(
         &mut self,
         stmt: &mut stmt::Statement,
         ref_source: stmt::ExprArg,
     ) {
         if self.planner.engine.capability().sql {
-            self.rewrite_stmt_for_ref_source_sql(stmt, ref_source);
+            self.rewrite_stmt_query_for_ref_source_sql(stmt, ref_source);
         } else {
-            self.rewrite_stmt_for_ref_source_nosql(stmt, ref_source);
+            self.rewrite_stmt_query_for_ref_source_nosql(stmt, ref_source);
         }
     }
 
-    fn rewrite_stmt_for_ref_source_sql(
+    fn rewrite_stmt_query_for_ref_source_sql(
         &mut self,
         stmt: &mut stmt::Statement,
         ref_source: stmt::ExprArg,
@@ -310,7 +301,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
     }
 
-    fn rewrite_stmt_for_ref_source_nosql(
+    fn rewrite_stmt_query_for_ref_source_nosql(
         &mut self,
         stmt: &mut stmt::Statement,
         ref_source: stmt::ExprArg,
@@ -337,6 +328,46 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         if let Some(filter) = filter {
             let expr = filter.take();
             *filter = stmt::Expr::any(stmt::Expr::map(ref_source, expr));
+        }
+    }
+
+    fn rewrite_stmt_insert_for_ref_source_nosql(
+        &mut self,
+        stmt: &mut stmt::Insert,
+        ref_source: stmt::ExprArg,
+    ) {
+        let hir::Arg::Ref { stmt_id, .. } = &self.stmt_info.args[ref_source.position] else {
+            todo!()
+        };
+
+        let target_stmt = &self.planner.hir[stmt_id];
+        let target_stmt = target_stmt.stmt.as_deref().unwrap();
+
+        assert!(target_stmt.is_insert(), "TODO");
+
+        // For now, an insert statement referencing a parent is only supported when the
+        // targeted insert statement is also an insert with a single row being inserted.
+        let values = target_stmt.insert_source_unwrap().body.as_values_unwrap();
+        assert_eq!(1, values.rows.len(), "TODO");
+
+        let stmt::ExprSet::Values(values) = &mut stmt.source.body else {
+            todo!()
+        };
+
+        for row in &mut values.rows {
+            visit_mut::for_each_expr_mut(row, |expr| {
+                if let stmt::Expr::Arg(expr_arg) = expr {
+                    let hir::Arg::Ref {
+                        batch_load_index: index,
+                        ..
+                    } = &self.stmt_info.args[expr_arg.position]
+                    else {
+                        todo!()
+                    };
+
+                    *expr = stmt::Expr::arg_project(*expr_arg, [0, *index])
+                }
+            })
         }
     }
 
