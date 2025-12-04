@@ -8,6 +8,12 @@ use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, 
 pub struct Paginate<M> {
     /// How to query the data
     query: Select<M>,
+
+    /// Whether we are currently paginating backwards.
+    ///
+    /// Because the sort order has to be reversed during backwards pagination,
+    /// we need to reverse the result set again to go back to the expected order.
+    reverse: bool,
 }
 
 impl<M: Model> Paginate<M> {
@@ -26,21 +32,33 @@ impl<M: Model> Paginate<M> {
             offset: None,
         });
 
-        Self { query }
+        Self {
+            query,
+            reverse: false,
+        }
     }
 
-    /// Set the key-based offset for pagination.
+    /// Set the key-based offset for forwards pagination.
     pub fn after(mut self, key: impl Into<stmt::Expr>) -> Self {
         let Some(limit) = self.query.untyped.limit.as_mut() else {
             panic!("pagination requires a limit clause");
         };
-
         limit.offset = Some(stmt::Offset::After(key.into()));
-
+        self.reverse = false;
         self
     }
 
-    pub async fn collect(self, db: &Db) -> Result<crate::Page<M>> {
+    /// Set the key-based offset for backwards pagination.
+    pub fn before(mut self, key: impl Into<stmt::Expr>) -> Self {
+        let Some(limit) = self.query.untyped.limit.as_mut() else {
+            panic!("pagination requires a limit clause");
+        };
+        limit.offset = Some(stmt::Offset::After(key.into()));
+        self.reverse = true;
+        self
+    }
+
+    pub async fn collect(mut self, db: &Db) -> Result<crate::Page<M>> {
         // Extract the limit from the query to determine page size
         let page_size = match &self.query.untyped.limit {
             Some(stmt::Limit { limit, .. }) => {
@@ -66,23 +84,35 @@ impl<M: Model> Paginate<M> {
             *limit = stmt::Value::from((page_size + 1) as i64).into();
         }
 
-        let mut items: Vec<_> = db.exec(query_with_extra.into()).await?.collect().await?;
-        let has_next = items.len() > page_size;
-        items.truncate(page_size);
+        let Some(order_by) = query_with_extra.untyped.order_by.as_mut() else {
+            panic!("pagination requires order by clause");
+        };
+        if self.reverse {
+            order_by.reverse();
+        }
 
-        // Create cursor from the last item if there's a next page
+        let mut items: Vec<_> = db.exec(query_with_extra.into()).await?.collect().await?;
+        let has_next = (items.len() > page_size) || self.reverse;
+        let has_prev = (items.len() > page_size) || !self.reverse;
+        items.truncate(page_size);
+        if self.reverse {
+            items.reverse();
+        }
+
+        let Some(order_by) = self.query.untyped.order_by.as_mut() else {
+            panic!("pagination requires order by clause");
+        };
+        // Create cursor from the first item for backwards pagination.
+        let prev_cursor = match items.first() {
+            Some(first_item) if has_prev => {
+                extract_cursor(order_by, first_item).map(|cursor| cursor.into())
+            }
+            _ => None,
+        };
+        // Create cursor from the last item if there's a next for forwards page.
         let next_cursor = match items.last() {
             Some(last_item) if has_next => {
-                let cursor = extract_cursor(
-                    self.query
-                        .untyped
-                        .order_by
-                        .as_ref()
-                        .expect("pagination requires order by clause"),
-                    last_item,
-                );
-
-                cursor.map(|cursor| cursor.into())
+                extract_cursor(order_by, last_item).map(|cursor| cursor.into())
             }
             _ => None,
         };
@@ -93,7 +123,7 @@ impl<M: Model> Paginate<M> {
                 .await?,
             self.query,
             next_cursor,
-            None, // prev_cursor not implemented yet
+            prev_cursor,
         ))
     }
 }
@@ -109,7 +139,10 @@ impl<M> From<Select<M>> for Paginate<M> {
             "pagination requires an order_by clause"
         );
 
-        Paginate { query: value }
+        Paginate {
+            query: value,
+            reverse: false,
+        }
     }
 }
 

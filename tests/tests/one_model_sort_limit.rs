@@ -84,7 +84,18 @@ async fn paginate(test: &mut DbTest) {
     }
 
     let foos: Page<_> = foos.next(&db).await.unwrap().unwrap();
+    assert_eq!(foos.len(), 10);
+    for (i, order) in (70..80).rev().enumerate() {
+        assert_eq!(foos[i].order, order);
+    }
 
+    let foos: Page<_> = foos.prev(&db).await.unwrap().unwrap();
+    assert_eq!(foos.len(), 10);
+    for (i, order) in (80..90).rev().enumerate() {
+        assert_eq!(foos[i].order, order);
+    }
+
+    let foos: Page<_> = foos.next(&db).await.unwrap().unwrap();
     assert_eq!(foos.len(), 10);
     for (i, order) in (70..80).rev().enumerate() {
         assert_eq!(foos[i].order, order);
