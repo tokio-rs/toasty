@@ -9,6 +9,12 @@ dynamodb = ["dep:toasty-driver-dynamodb"]
 mysql = ["dep:toasty-driver-mysql"]
 postgresql = ["dep:toasty-driver-postgresql"]
 sqlite = ["dep:toasty-driver-sqlite"]
+bigdecimal = [
+	"dep:bigdecimal",
+	"toasty-core/bigdecimal",
+	"toasty-driver-postgresql/bigdecimal",
+	"toasty-driver-mysql/bigdecimal",
+]
 jiff = [
 	"dep:jiff",
 	"toasty-core/jiff",
@@ -32,6 +38,7 @@ serde_core = { version = "1.0.221", optional = true }
 by_address.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
+bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
 tokio-stream.workspace = true
 uuid.workspace = true

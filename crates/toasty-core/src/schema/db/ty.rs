@@ -78,6 +78,11 @@ pub enum Type {
     /// 128-bit universally unique identifier (UUID)
     Uuid,
 
+    /// Decimal number with optional precision and scale.
+    /// - `None`: Arbitrary-precision decimal
+    /// - `Some((precision, scale))`: Fixed precision and scale
+    Numeric(Option<(u32, u32)>),
+
     /// Unconstrained binary type
     Blob,
 
@@ -122,6 +127,9 @@ impl Type {
                 stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
                 stmt::Type::Uuid => Ok(db.default_uuid_type.clone()),
+                // BigDecimal type
+                #[cfg(feature = "bigdecimal")]
+                stmt::Type::BigDecimal => Ok(db.default_bigdecimal_type.clone()),
                 // Date/time types from jiff
                 #[cfg(feature = "jiff")]
                 stmt::Type::Timestamp => Ok(db.default_timestamp_type.clone()),

@@ -86,4 +86,4 @@ macro_rules! fmt_numeric {
     };
 }
 
-fmt_numeric!(u8, u64, usize);
+fmt_numeric!(u8, u16, u32, u64, usize);
