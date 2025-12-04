@@ -8,6 +8,16 @@ impl Simplify<'_> {
                 *expr.expr = expr_cast.expr.take();
                 None
             }
+            stmt::Expr::Reference(f @ stmt::ExprReference::Field { .. }) => {
+                let field = self.cx.resolve_expr_reference(f).expect_field();
+
+                if !field.nullable() {
+                    // Is null on a non nullable field evaluates to `false`.
+                    return Some(stmt::Expr::Value(stmt::Value::Bool(false)));
+                }
+
+                None
+            }
             stmt::Expr::Value(_) => todo!("expr={expr:#?}"),
             _ => None,
         }
@@ -17,9 +27,11 @@ impl Simplify<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::simplify::test::test_schema;
+    use crate::engine::simplify::test::{test_schema, test_schema_with};
     use toasty_core::schema::app::ModelId;
-    use toasty_core::stmt::{Expr, ExprArg, ExprCast, ExprIsNull, Type, VisitMut as _};
+    use toasty_core::stmt::{
+        Expr, ExprArg, ExprCast, ExprIsNull, ExprReference, Type, Value, VisitMut as _,
+    };
 
     #[test]
     fn cast_to_id_unwrapped() {
@@ -101,5 +113,36 @@ mod tests {
         } else {
             panic!("expected `Not` expression");
         }
+    }
+
+    #[test]
+    fn is_null_non_nullable_field() {
+        use crate as toasty;
+        use crate::Model as _;
+
+        #[allow(dead_code)]
+        #[derive(toasty::Model)]
+        struct User {
+            #[key]
+            id: String,
+            emailadres: String,
+        }
+
+        let schema = test_schema_with(&[User::schema()]);
+        let model = schema.app.model(User::id());
+        let simplify = Simplify::new(&schema);
+        let simplify = simplify.scope(model);
+
+        // `is_null(field)` → `false` (non-nullable field)
+        let mut field = ExprIsNull {
+            expr: Box::new(Expr::Reference(ExprReference::Field {
+                nesting: 0,
+                index: 1,
+            })),
+        };
+
+        let result = simplify.simplify_expr_is_null(&mut field);
+
+        assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
     }
 }
