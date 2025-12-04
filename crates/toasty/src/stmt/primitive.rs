@@ -113,3 +113,17 @@ impl Primitive for uuid::Uuid {
         }
     }
 }
+
+#[cfg(feature = "bigdecimal")]
+impl Primitive for bigdecimal::BigDecimal {
+    fn ty() -> stmt::Type {
+        stmt::Type::BigDecimal
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::BigDecimal(v) => Ok(v),
+            _ => anyhow::bail!("cannot convert value to bigdecimal::BigDecimal {value:#?}"),
+        }
+    }
+}

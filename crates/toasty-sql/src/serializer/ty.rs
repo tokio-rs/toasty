@@ -48,6 +48,16 @@ impl ToSql for &db::Type {
                     }
                 );
             }
+            db::Type::Numeric(None) => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, "NUMERIC"),
+                Flavor::Mysql => todo!("MySQL does not support arbitrary-precision NUMERIC; precision and scale must be specified"),
+                Flavor::Sqlite => todo!("SQLite does not support NUMERIC type"),
+            },
+            db::Type::Numeric(Some((precision, scale))) => match f.serializer.flavor {
+                Flavor::Postgresql => fmt!(cx, f, "NUMERIC(" precision ", " scale ")"),
+                Flavor::Mysql => fmt!(cx, f, "DECIMAL(" precision ", " scale ")"),
+                Flavor::Sqlite => todo!("SQLite does not support NUMERIC type"),
+            },
             db::Type::Binary(size) => match f.serializer.flavor {
                 Flavor::Mysql => fmt!(cx, f, "BINARY(" size ")"),
                 _ => todo!("Unsupported fixed size binary type"),
