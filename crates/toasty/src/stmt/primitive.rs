@@ -131,6 +131,19 @@ impl Primitive for uuid::Uuid {
     }
 }
 
+impl Primitive for bool {
+    fn ty() -> stmt::Type {
+        stmt::Type::Bool
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::Bool(v) => Ok(v),
+            _ => anyhow::bail!("cannot convert value to bool: {value:#?}"),
+        }
+    }
+}
+
 impl<T: Primitive> Primitive for Arc<T> {
     fn ty() -> stmt::Type {
         T::ty()
