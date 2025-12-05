@@ -105,7 +105,11 @@ impl Expr {
             Expr::Default => anyhow::bail!("default can only be evaluated by the database"),
             Expr::IsNull(expr_is_null) => {
                 let value = expr_is_null.expr.eval_ref(input)?;
-                Ok((value.is_null() != expr_is_null.negate).into())
+                Ok(value.is_null().into())
+            }
+            Expr::Not(expr_not) => {
+                let value = expr_not.expr.eval_ref_bool(input)?;
+                Ok((!value).into())
             }
             Expr::List(exprs) => {
                 let mut ret = vec![];

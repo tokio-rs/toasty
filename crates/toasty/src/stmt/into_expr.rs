@@ -180,6 +180,17 @@ impl IntoExpr<Self> for String {
     }
 }
 
+#[cfg(feature = "bigdecimal")]
+impl IntoExpr<Self> for bigdecimal::BigDecimal {
+    fn into_expr(self) -> Expr<Self> {
+        Expr::from_value(self.into())
+    }
+
+    fn by_ref(&self) -> Expr<Self> {
+        Expr::from_value(self.clone().into())
+    }
+}
+
 impl<T, U, const N: usize> IntoExpr<[T]> for [U; N]
 where
     U: IntoExpr<T>,

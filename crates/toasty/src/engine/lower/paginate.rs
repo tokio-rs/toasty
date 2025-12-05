@@ -1,4 +1,4 @@
-use toasty_core::stmt;
+use toasty_core::stmt::{self, Offset};
 
 use super::LowerStatement;
 
@@ -9,16 +9,17 @@ impl LowerStatement<'_, '_> {
             return;
         }
 
+        let Some(order_by) = &mut stmt.order_by else {
+            return;
+        };
+
         let Some(limit) = &mut stmt.limit else {
             return;
         };
 
-        let Some(stmt::Offset::After(offset)) = limit.offset.take() else {
-            return;
-        };
-
-        let Some(order_by) = &mut stmt.order_by else {
-            return;
+        let offset = match limit.offset.take() {
+            Some(Offset::After(expr)) => expr,
+            _ => return,
         };
 
         let stmt::ExprSet::Select(body) = &mut stmt.body else {
@@ -26,8 +27,15 @@ impl LowerStatement<'_, '_> {
         };
 
         match offset {
-            stmt::Expr::Value(stmt::Value::Record(_)) => {
-                todo!()
+            stmt::Expr::Value(stmt::Value::Record(value)) => {
+                for (index, value) in value.fields.into_iter().enumerate() {
+                    let expr = self.rewrite_offset_after_field_as_filter(
+                        &order_by.exprs[index],
+                        value,
+                        true,
+                    );
+                    body.filter.add_filter(expr);
+                }
             }
             stmt::Expr::Value(value) => {
                 let expr =
@@ -36,6 +44,7 @@ impl LowerStatement<'_, '_> {
             }
             _ => todo!(),
         }
+        dbg!(&body.filter);
     }
 
     fn rewrite_offset_after_field_as_filter(

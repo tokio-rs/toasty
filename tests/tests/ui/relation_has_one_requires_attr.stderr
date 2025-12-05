@@ -7,10 +7,10 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Pr
   = help: the following other types implement trait `toasty::stmt::Primitive`:
             Arc<T>
             Box<T>
+            Cow<'_, T>
             Option<T>
             Rc<T>
+            bigdecimal::BigDecimal
             i16
             i32
-            i64
-            i8
           and $N others
