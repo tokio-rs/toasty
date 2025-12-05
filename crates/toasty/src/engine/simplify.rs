@@ -289,7 +289,8 @@ mod test {
             .expect("empty schema should build")
     }
 
-    pub fn test_schema_with(models: &[Model]) -> toasty_core::Schema {
+    #[cfg(test)]
+    pub(crate) fn test_schema_with(models: &[Model]) -> toasty_core::Schema {
         let app_schema = app::Schema::from_macro(models).expect("schema should build from macro");
 
         Builder::new()
