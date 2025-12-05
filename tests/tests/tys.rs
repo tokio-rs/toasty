@@ -1,3 +1,5 @@
+use std::{rc::Rc, sync::Arc};
+
 use tests::{models, tests, DbTest};
 use toasty::stmt::Id;
 
@@ -176,7 +178,46 @@ async fn ty_uuid(test: &mut DbTest) {
     }
 }
 
+async fn ty_smart_ptrs(test: &mut DbTest) {
+    #[derive(Debug, toasty::Model)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+        arced: Arc<i32>,
+        rced: Rc<i32>,
+        boxed: Box<i32>,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+
+    let created = Foo::create()
+        .arced(1i32)
+        .rced(2i32)
+        .boxed(3i32)
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+    assert_eq!(created.id, read.id);
+    assert_eq!(created.arced, read.arced);
+    assert_eq!(created.rced, read.rced);
+    assert_eq!(created.boxed, read.boxed);
+}
+
 tests!(
-    ty_i8, ty_i16, ty_i32, ty_i64, ty_isize, ty_u8, ty_u16, ty_u32, ty_u64, ty_usize, ty_str,
-    ty_uuid
+    ty_i8,
+    ty_i16,
+    ty_i32,
+    ty_i64,
+    ty_isize,
+    ty_u8,
+    ty_u16,
+    ty_u32,
+    ty_u64,
+    ty_usize,
+    ty_str,
+    ty_uuid,
+    ty_smart_ptrs
 );

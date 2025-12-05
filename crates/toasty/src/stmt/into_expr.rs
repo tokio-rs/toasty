@@ -1,3 +1,5 @@
+use std::{rc::Rc, sync::Arc};
+
 use super::{Expr, Value};
 use toasty_core::stmt;
 
@@ -253,6 +255,27 @@ where
         ))
     }
 }
+
+macro_rules! forward_impl {
+    ( $( $ty:ty ,) *) => {
+        $(
+            impl<T> IntoExpr<$ty> for T
+            where
+                T: IntoExpr<T>,
+            {
+                fn into_expr(self) -> Expr<$ty> {
+                    <Self as IntoExpr<Self>>::into_expr(self).cast()
+                }
+
+                fn by_ref(&self) -> Expr<$ty> {
+                    <Self as IntoExpr<Self>>::by_ref(self).cast()
+                }
+            }
+        ) *
+    };
+}
+
+forward_impl!(Arc<T>, Box<T>, Rc<T>,);
 
 macro_rules! impl_into_expr_for_tuple {
     (! $( $n:tt $t:ident $e:ident )* ) => {
