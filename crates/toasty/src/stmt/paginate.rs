@@ -1,13 +1,19 @@
 use super::Select;
 
-use crate::{Db, Model, Result};
+use crate::{engine::eval::Func, Cursor, Db, Model, Result};
 
-use toasty_core::stmt;
+use toasty_core::stmt::{self, visit_mut, Expr, ExprRecord, OrderBy, Projection, Value, VisitMut};
 
 #[derive(Debug)]
 pub struct Paginate<M> {
     /// How to query the data
     query: Select<M>,
+
+    /// Whether we are currently paginating backwards.
+    ///
+    /// Because the sort order has to be reversed during backwards pagination,
+    /// we need to reverse the result set again to go back to the expected order.
+    reverse: bool,
 }
 
 impl<M: Model> Paginate<M> {
@@ -26,21 +32,33 @@ impl<M: Model> Paginate<M> {
             offset: None,
         });
 
-        Self { query }
+        Self {
+            query,
+            reverse: false,
+        }
     }
 
-    /// Set the key-based offset for pagination.
+    /// Set the key-based offset for forwards pagination.
     pub fn after(mut self, key: impl Into<stmt::Expr>) -> Self {
         let Some(limit) = self.query.untyped.limit.as_mut() else {
             panic!("pagination requires a limit clause");
         };
-
         limit.offset = Some(stmt::Offset::After(key.into()));
-
+        self.reverse = false;
         self
     }
 
-    pub async fn collect(self, db: &Db) -> Result<crate::Page<M>> {
+    /// Set the key-based offset for backwards pagination.
+    pub fn before(mut self, key: impl Into<stmt::Expr>) -> Self {
+        let Some(limit) = self.query.untyped.limit.as_mut() else {
+            panic!("pagination requires a limit clause");
+        };
+        limit.offset = Some(stmt::Offset::After(key.into()));
+        self.reverse = true;
+        self
+    }
+
+    pub async fn collect(mut self, db: &Db) -> Result<crate::Page<M>> {
         // Extract the limit from the query to determine page size
         let page_size = match &self.query.untyped.limit {
             Some(stmt::Limit { limit, .. }) => {
@@ -66,24 +84,91 @@ impl<M: Model> Paginate<M> {
             *limit = stmt::Value::from((page_size + 1) as i64).into();
         }
 
-        let mut items: Vec<M> = db.all(query_with_extra).await?.collect().await?;
-        let has_next = items.len() > page_size;
-        items.truncate(page_size);
+        let Some(order_by) = query_with_extra.untyped.order_by.as_mut() else {
+            panic!("pagination requires order by clause");
+        };
+        if self.reverse {
+            order_by.reverse();
+        }
 
-        // Create cursor from the last item if there's a next page
-        let next_cursor = if has_next && !items.is_empty() {
-            // TODO: Implement proper cursor extraction from the last item
-            // For now, use a placeholder cursor value to indicate there's a next page
-            Some(stmt::Value::from(0_i64).into())
-        } else {
-            None
+        let mut items: Vec<_> = db.exec(query_with_extra.into()).await?.collect().await?;
+        let has_next = (items.len() > page_size) || self.reverse;
+        let has_prev = (items.len() > page_size) || !self.reverse;
+        items.truncate(page_size);
+        if self.reverse {
+            items.reverse();
+        }
+
+        let Some(order_by) = self.query.untyped.order_by.as_mut() else {
+            panic!("pagination requires order by clause");
+        };
+        // Create cursor from the first item for backwards pagination.
+        let prev_cursor = match items.first() {
+            Some(first_item) if has_prev => {
+                extract_cursor(order_by, first_item).map(|cursor| cursor.into())
+            }
+            _ => None,
+        };
+        // Create cursor from the last item if there's a next for forwards page.
+        let next_cursor = match items.last() {
+            Some(last_item) if has_next => {
+                extract_cursor(order_by, last_item).map(|cursor| cursor.into())
+            }
+            _ => None,
         };
 
         Ok(crate::Page::new(
-            items,
+            Cursor::new(db.engine.schema.clone(), items.into())
+                .collect()
+                .await?,
             self.query,
             next_cursor,
-            None, // prev_cursor not implemented yet
+            prev_cursor,
         ))
     }
+}
+
+impl<M> From<Select<M>> for Paginate<M> {
+    fn from(value: Select<M>) -> Self {
+        assert!(
+            value.untyped.limit.is_some(),
+            "pagination requires a limit clause"
+        );
+        assert!(
+            value.untyped.order_by.is_some(),
+            "pagination requires an order_by clause"
+        );
+
+        Paginate {
+            query: value,
+            reverse: false,
+        }
+    }
+}
+
+/// Determines the next cursor of a paginated query from an [`OrderBy`] clause and an item [`Value`] in the result set.
+fn extract_cursor(order_by: &OrderBy, item: &Value) -> Option<Value> {
+    // Rewrite ExprReference::Field to ExprArg and pass the item value as the argument.
+    let record = ExprRecord::from_iter(order_by.exprs.iter().map(|order_by_expr| {
+        struct Visitor;
+        impl VisitMut for Visitor {
+            fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
+                match i {
+                    stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index })
+                        if *nesting == 0 =>
+                    {
+                        *i = Expr::arg_project(0, Projection::from_index(*index))
+                    }
+                    _ => visit_mut::visit_expr_mut(self, i),
+                }
+            }
+        }
+
+        let mut expr = order_by_expr.expr.clone();
+        Visitor.visit_mut(&mut expr);
+        expr
+    }));
+    Func::from_stmt(Expr::Record(record), vec![item.infer_ty()])
+        .eval(&[item])
+        .ok()
 }

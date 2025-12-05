@@ -31,6 +31,9 @@ pub struct StorageTypes {
     /// The default storage type for a UUID.
     pub default_uuid_type: db::Type,
 
+    /// The default storage type for a BigDecimal (arbitrary-precision decimal).
+    pub default_bigdecimal_type: db::Type,
+
     /// The default storage type for a Timestamp (instant in time).
     pub default_timestamp_type: db::Type,
 
@@ -129,6 +132,9 @@ impl StorageTypes {
         // difficult to read than Text but likely has better performance characteristics.
         default_uuid_type: db::Type::Blob,
 
+        // SQLite does not have a native decimal type. Store as TEXT.
+        default_bigdecimal_type: db::Type::Text,
+
         // SQLite does not have native date/time types. Store as TEXT in ISO 8601 format.
         default_timestamp_type: db::Type::Text,
         default_zoned_type: db::Type::Text,
@@ -156,6 +162,10 @@ impl StorageTypes {
         varchar: Some(10_485_760),
 
         default_uuid_type: db::Type::Uuid,
+
+        // TODO: PostgreSQL has native NUMERIC type for arbitrary-precision decimals,
+        // but the encoding is complicated and has to be done separately in the future.
+        default_bigdecimal_type: db::Type::Text,
 
         // PostgreSQL has native support for temporal types with microsecond precision (6 digits)
         default_timestamp_type: db::Type::Timestamp(6),
@@ -189,6 +199,10 @@ impl StorageTypes {
         // difficult to read than Text but likely has better performance characteristics.
         default_uuid_type: db::Type::Binary(16),
 
+        // MySQL does not have an arbitrary-precision decimal type. The DECIMAL type
+        // requires a fixed precision and scale to be specified upfront. Store as TEXT.
+        default_bigdecimal_type: db::Type::Text,
+
         // MySQL has native support for temporal types with microsecond precision (6 digits)
         // The `TIMESTAMP` time only supports a limited range (1970-2038), so we default to
         // DATETIME and let Toasty do the UTC conversion.
@@ -215,6 +229,9 @@ impl StorageTypes {
         varchar: None,
 
         default_uuid_type: db::Type::Blob,
+
+        // DynamoDB does not have a native decimal type. Store as TEXT.
+        default_bigdecimal_type: db::Type::Text,
 
         // DynamoDB does not have native date/time types. Store as TEXT (strings).
         default_timestamp_type: db::Type::Text,

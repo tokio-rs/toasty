@@ -11,6 +11,7 @@ async-trait.workspace = true
 bit-set = "0.8.0"
 indexmap.workspace = true
 jiff = { workspace = true, optional = true }
+bigdecimal = { workspace = true, optional = true }
 std-util.workspace = true
 tokio-stream.workspace = true
 uuid.workspace = true
@@ -18,6 +19,7 @@ uuid.workspace = true
 [features]
 default = []
 assert-struct = ["dep:assert-struct"]
+bigdecimal = ["dep:bigdecimal"]
 jiff = ["dep:jiff"]
 
 [dev-dependencies]

@@ -2,7 +2,7 @@ use super::BuildSchema;
 use crate::{
     driver,
     schema::{
-        app::{self, FieldId, FieldName, Model},
+        app::{self, FieldId, Model},
         db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping, TableToModel},
         Name,
@@ -62,13 +62,18 @@ impl BuildSchema<'_> {
                 .filter(|model| self.mapping.model(model.id).table == table.id)
                 .collect::<Vec<_>>();
 
+            assert!(
+                models.len() == 1,
+                "TODO: handle mapping many models to one table"
+            );
+
             BuildTableFromModels {
                 db,
                 table,
                 mapping: &mut self.mapping,
                 prefix_table_names: models.len() > 1,
             }
-            .build(&models);
+            .build(models[0]);
         }
     }
 
@@ -94,190 +99,11 @@ impl BuildSchema<'_> {
 }
 
 impl BuildTableFromModels<'_> {
-    fn build(&mut self, models: &[&Model]) {
-        assert!(!models.is_empty());
-
-        // Stub out the table primary key with enough fields to cover all models
-        // being lowered. The table primary key will be populated with specifics
-        // later.
-        self.build_placeholder_primary_key(models);
-
-        // Lower each model's primary key to the table.
-        for model in models {
-            self.map_model_primary_key(model);
-        }
-
-        // Sanity checks
-        debug_assert_eq!(
-            self.table.primary_key.columns.len(),
-            self.table.indices[0].columns.len()
-        );
-
+    fn build(&mut self, model: &Model) {
         // Populate the rest of the columns
-        for model in models {
-            self.map_model_fields(model);
-        }
-
-        // Hax
-        for column in &mut self.table.columns {
-            if let stmt::Type::Enum(_) = column.ty {
-                column.ty = stmt::Type::String;
-            }
-        }
+        self.map_model_fields(model);
 
         self.update_index_names();
-    }
-
-    fn build_placeholder_primary_key(&mut self, models: &[&Model]) {
-        let num_pk_fields = models
-            .iter()
-            .map(|model| model.primary_key_primitives().count())
-            .max()
-            .unwrap();
-
-        for i in 0..num_pk_fields {
-            let column_id = ColumnId {
-                table: self.table.id,
-                index: i,
-            };
-
-            let mut scope = None;
-
-            for model in models {
-                let pk_index = &model.indices[0];
-                assert!(pk_index.primary_key);
-
-                let Some(pk_field) = pk_index.fields.get(i) else {
-                    continue;
-                };
-
-                match scope {
-                    None => scope = Some(pk_field.scope),
-                    Some(scope) => {
-                        assert_eq!(scope, pk_field.scope);
-                    }
-                }
-            }
-
-            self.table.primary_key.columns.push(column_id);
-            self.table.indices[0].columns.push(db::IndexColumn {
-                column: column_id,
-                // TODO: we don't actually know what the columns will be yet...
-                op: db::IndexOp::Eq,
-                scope: scope.unwrap(),
-            });
-        }
-    }
-
-    fn map_model_primary_key(&mut self, model: &Model) {
-        let tys = model
-            .primary_key_primitives()
-            .map(|primitive| Some(primitive.ty.clone()))
-            .chain(std::iter::repeat(None))
-            .take(self.table.primary_key.columns.len());
-
-        // Compute the column type
-        for (i, ty) in tys.enumerate() {
-            let column_id = ColumnId {
-                table: self.table.id,
-                index: i,
-            };
-
-            if let Some(column) = self.table.columns.get_mut(i) {
-                column.name = format!("key_{i}");
-                column.name = column.name.clone();
-
-                match &mut column.ty {
-                    stmt::Type::Enum(ty_enum) => {
-                        for variant in &ty_enum.variants {
-                            match &variant.fields[..] {
-                                [] => {
-                                    assert!(ty.is_some());
-                                }
-                                [variant_ty] => {
-                                    assert!(ty.is_none() || ty.as_ref().unwrap() == variant_ty);
-                                }
-                                _ => todo!(),
-                            }
-                        }
-
-                        let variant = ty_enum.insert_variant();
-
-                        if let Some(ty) = ty {
-                            variant.fields.push(ty.clone());
-                        }
-                    }
-                    _ => {
-                        if let Some(ty) = ty {
-                            if column.ty != ty {
-                                let mut ty_enum = stmt::TypeEnum::default();
-                                // Insert a variant for the current previous column type
-                                ty_enum.insert_variant().fields.push(column.ty.clone());
-
-                                // Insert a variant for the new type
-                                ty_enum.insert_variant().fields.push(ty);
-
-                                column.ty = ty_enum.into();
-                            }
-                        } else {
-                            assert_eq!(column.ty, stmt::Type::Null);
-
-                            // Go straight to an enum
-                            let mut ty_enum = stmt::TypeEnum::default();
-                            ty_enum.insert_variant();
-                            column.ty = ty_enum.into();
-                        }
-                    }
-                }
-            } else {
-                // Get the column name
-                // TODO: this probably isn't right...
-                let name = model
-                    .primary_key
-                    .fields
-                    .get(i)
-                    .map(|field_id| model.field(*field_id).name.clone())
-                    .unwrap_or_else(|| FieldName {
-                        app_name: format!("key_{i}"),
-                        storage_name: None,
-                    });
-
-                // If unit type, go straight to enum
-                //
-                // TODO: null probably isn't the right type... maybe `ty` should
-                // be Option<Type> if we don't know what it is yet.
-                let ty = match ty {
-                    Some(ty) => stmt_ty_to_table(ty),
-                    None => {
-                        let mut ty_enum = stmt::TypeEnum::default();
-                        ty_enum.insert_variant();
-                        ty_enum.into()
-                    }
-                };
-
-                assert_eq!(self.table.columns.len(), i);
-                self.table.columns.push(db::Column {
-                    id: column_id,
-                    name: name.storage_name().to_owned(),
-                    ty: ty.clone(),
-                    storage_ty: db::Type::from_app(&ty, None, &self.db.storage_types).unwrap(),
-                    nullable: false,
-                    primary_key: true,
-                });
-            }
-        }
-
-        let mapping = self.mapping.model_mut(model);
-
-        for (i, field) in model.primary_key_fields().enumerate() {
-            let Some(mapping) = &mut mapping.fields[field.id.index] else {
-                todo!()
-            };
-            mapping.column = ColumnId {
-                table: self.table.id,
-                index: i,
-            };
-        }
     }
 
     fn map_model_fields(&mut self, model: &Model) {
@@ -289,11 +115,6 @@ impl BuildTableFromModels<'_> {
 
         // First, populate columns
         for field in &model.fields {
-            // Skip PK fields
-            if field.primary_key {
-                continue;
-            }
-
             match &field.ty {
                 app::FieldTy::Primitive(simple) => {
                     self.create_column_for_primitive(
@@ -325,11 +146,6 @@ impl BuildTableFromModels<'_> {
 
     fn populate_model_indices(&mut self, model: &Model) {
         for model_index in &model.indices {
-            // Skip the primary key index
-            if model_index.primary_key {
-                continue;
-            }
-
             let mut index = db::Index {
                 id: IndexId {
                     table: self.table.id,
@@ -339,7 +155,7 @@ impl BuildTableFromModels<'_> {
                 on: self.table.id,
                 columns: vec![],
                 unique: model_index.unique,
-                primary_key: false,
+                primary_key: model_index.primary_key,
             };
 
             for index_field in &model_index.fields {
@@ -357,6 +173,10 @@ impl BuildTableFromModels<'_> {
                     app::FieldTy::BelongsTo(_) => todo!(),
                     app::FieldTy::HasMany(_) => todo!(),
                     app::FieldTy::HasOne(_) => todo!(),
+                }
+
+                if model_index.primary_key {
+                    self.table.primary_key.columns.push(column);
                 }
             }
 
@@ -427,29 +247,6 @@ impl BuildTableFromModels<'_> {
 impl BuildMapping<'_> {
     fn build_mapping(mut self, model: &Model) {
         self.map_model_fields_to_columns(model);
-
-        // The primary key columns are always featured in model lowerings,
-        // even if the model does not have an equivalent (in which case, we
-        // generate a placeholder value).
-        for pk in &self.table.primary_key.columns {
-            if !self.lowering_columns.contains(pk) {
-                let ty_enum = match &self.table.column(*pk).ty {
-                    stmt::Type::Enum(ty_enum) => ty_enum,
-                    _ => todo!(),
-                };
-
-                let variant = ty_enum
-                    .variants
-                    .iter()
-                    .find(|variant| variant.fields.is_empty())
-                    .unwrap();
-
-                self.lowering_columns.push(*pk);
-                // TODO: this should not be hard coded
-                self.model_to_table
-                    .push(format!("{}#", variant.discriminant).into());
-            }
-        }
 
         assert!(!self.model_to_table.is_empty());
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
@@ -564,19 +361,6 @@ impl BuildMapping<'_> {
 
         match &column.ty {
             column_ty if column_ty == ty => expr,
-            stmt::Type::Enum(ty_enum) => {
-                let variant = ty_enum
-                    .variants
-                    .iter()
-                    .find(|variant| matches!(&variant.fields[..], [field_ty] if field_ty == ty))
-                    .unwrap();
-
-                stmt::Expr::concat_str((
-                    variant.discriminant.to_string(),
-                    "#",
-                    stmt::Expr::cast(expr, stmt::Type::String),
-                ))
-            }
             // If the types do not match, attempt casting as a fallback.
             _ => stmt::Expr::cast(expr, &column.ty),
         }
@@ -584,21 +368,9 @@ impl BuildMapping<'_> {
 
     /// Maps table columns to model field expressions during query lowering.
     ///
-    /// Called during query planning to replace model field references with the appropriate
-    /// table column expressions. Handles type conversions between table storage and model types.
-    ///
-    /// # Type Conversions
-    /// - **Direct**: `user.name` → `SELECT user.name`
-    /// - **Enum decode**: `post.status` → `DECODE_ENUM(post.status_enum, 'bool', 1)`
-    /// - **ID cast**: `user.id` → `SELECT user.id_str::UserId`
-    ///
-    /// # Usage
-    /// The lowering process swaps field references with these generated expressions:
-    /// ```text
-    /// Field reference: post.published (bool)
-    /// Table storage: post.status_enum (enum with bool variant)
-    /// Generated expr: DECODE_ENUM(post.status_enum, 'bool', 1)
-    /// ```
+    /// Called during query planning to replace model field references with the
+    /// appropriate table column expressions. Handles type conversions between
+    /// table storage and model types.
     fn map_table_column_to_model(
         &mut self,
         field_id: FieldId,
@@ -617,42 +389,8 @@ impl BuildMapping<'_> {
 
         match &column.ty {
             c_ty if *c_ty == primitive.ty => expr_column,
-            stmt::Type::Enum(ty_enum) => {
-                let variant = ty_enum
-                    .variants
-                    .iter()
-                    .find(|variant| match &variant.fields[..] {
-                        [field_ty] => *field_ty == primitive.ty,
-                        _ => false,
-                    })
-                    .unwrap();
-
-                stmt::Expr::DecodeEnum(
-                    Box::new(expr_column),
-                    primitive.ty.clone(),
-                    variant.discriminant,
-                )
-            }
             // If the types do not match, attempt casting as a fallback.
             _ => stmt::Expr::cast(expr_column, &primitive.ty),
         }
-    }
-}
-
-fn stmt_ty_to_table(ty: stmt::Type) -> stmt::Type {
-    match ty {
-        stmt::Type::Bool => stmt::Type::Bool,
-        stmt::Type::I8 => stmt::Type::I8,
-        stmt::Type::I16 => stmt::Type::I16,
-        stmt::Type::I32 => stmt::Type::I32,
-        stmt::Type::I64 => stmt::Type::I64,
-        stmt::Type::U8 => stmt::Type::U8,
-        stmt::Type::U16 => stmt::Type::U16,
-        stmt::Type::U32 => stmt::Type::U32,
-        stmt::Type::U64 => stmt::Type::U64,
-        stmt::Type::String => stmt::Type::String,
-        stmt::Type::Uuid => stmt::Type::Uuid,
-        stmt::Type::Id(_) => stmt::Type::String,
-        _ => todo!("{ty:#?}"),
     }
 }
