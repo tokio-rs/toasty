@@ -13,5 +13,4 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Pr
             i64
             i8
             isize
-            jiff::civil::date::Date
           and $N others
