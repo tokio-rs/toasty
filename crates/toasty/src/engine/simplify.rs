@@ -9,6 +9,7 @@ mod expr_in_list;
 mod expr_is_null;
 mod expr_list;
 mod expr_map;
+mod expr_not;
 mod expr_or;
 mod expr_record;
 mod stmt_query;
@@ -74,6 +75,7 @@ impl VisitMut for Simplify<'_> {
             Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
+            Expr::Not(expr) => self.simplify_expr_not(expr),
             Expr::Or(expr) => self.simplify_expr_or(expr),
             Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
@@ -274,7 +276,10 @@ impl<'a> Simplify<'a> {
 mod test {
     use toasty_core::{
         driver::Capability,
-        schema::{app, Builder},
+        schema::{
+            app::{self, Model},
+            Builder,
+        },
     };
 
     /// Creates an empty schema for testing simplification.
@@ -282,5 +287,14 @@ mod test {
         Builder::new()
             .build(app::Schema::default(), &Capability::SQLITE)
             .expect("empty schema should build")
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_schema_with(models: &[Model]) -> toasty_core::Schema {
+        let app_schema = app::Schema::from_macro(models).expect("schema should build from macro");
+
+        Builder::new()
+            .build(app_schema, &Capability::SQLITE)
+            .expect("schema should build")
     }
 }

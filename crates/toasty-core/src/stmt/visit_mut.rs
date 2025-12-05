@@ -3,7 +3,7 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
     ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
-    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
     ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
     Filter, FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
     OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
@@ -113,6 +113,10 @@ pub trait VisitMut {
 
     fn visit_expr_map_mut(&mut self, i: &mut ExprMap) {
         visit_expr_map_mut(self, i);
+    }
+
+    fn visit_expr_not_mut(&mut self, i: &mut ExprNot) {
+        visit_expr_not_mut(self, i);
     }
 
     fn visit_expr_or_mut(&mut self, i: &mut ExprOr) {
@@ -373,6 +377,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_map_mut(&mut **self, i);
     }
 
+    fn visit_expr_not_mut(&mut self, i: &mut ExprNot) {
+        VisitMut::visit_expr_not_mut(&mut **self, i);
+    }
+
     fn visit_expr_or_mut(&mut self, i: &mut ExprOr) {
         VisitMut::visit_expr_or_mut(&mut **self, i);
     }
@@ -588,6 +596,7 @@ where
         Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),
         Expr::Key(expr) => v.visit_expr_key_mut(expr),
         Expr::Map(expr) => v.visit_expr_map_mut(expr),
+        Expr::Not(expr) => v.visit_expr_not_mut(expr),
         Expr::Or(expr) => v.visit_expr_or_mut(expr),
         Expr::Pattern(expr) => v.visit_expr_pattern_mut(expr),
         Expr::Project(expr) => v.visit_expr_project_mut(expr),
@@ -753,6 +762,13 @@ where
 {
     v.visit_expr_mut(&mut node.base);
     v.visit_expr_mut(&mut node.map);
+}
+
+pub fn visit_expr_not_mut<V>(v: &mut V, node: &mut ExprNot)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
 }
 
 pub fn visit_expr_or_mut<V>(v: &mut V, node: &mut ExprOr)

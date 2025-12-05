@@ -3,7 +3,7 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
     ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
-    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprOr,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
     ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
     Filter, FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
     OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
@@ -113,6 +113,10 @@ pub trait Visit {
 
     fn visit_expr_map(&mut self, i: &ExprMap) {
         visit_expr_map(self, i);
+    }
+
+    fn visit_expr_not(&mut self, i: &ExprNot) {
+        visit_expr_not(self, i);
     }
 
     fn visit_expr_or(&mut self, i: &ExprOr) {
@@ -373,6 +377,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_map(&mut **self, i);
     }
 
+    fn visit_expr_not(&mut self, i: &ExprNot) {
+        Visit::visit_expr_not(&mut **self, i);
+    }
+
     fn visit_expr_or(&mut self, i: &ExprOr) {
         Visit::visit_expr_or(&mut **self, i);
     }
@@ -588,6 +596,7 @@ where
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
         Expr::Key(expr) => v.visit_expr_key(expr),
         Expr::Map(expr) => v.visit_expr_map(expr),
+        Expr::Not(expr) => v.visit_expr_not(expr),
         Expr::Or(expr) => v.visit_expr_or(expr),
         Expr::Pattern(expr) => v.visit_expr_pattern(expr),
         Expr::Project(expr) => v.visit_expr_project(expr),
@@ -753,6 +762,13 @@ where
 {
     v.visit_expr(&node.base);
     v.visit_expr(&node.map);
+}
+
+pub fn visit_expr_not<V>(v: &mut V, node: &ExprNot)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
 }
 
 pub fn visit_expr_or<V>(v: &mut V, node: &ExprOr)

@@ -3,8 +3,9 @@ use crate::stmt::{ExprExists, Input};
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
     ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprOr, ExprPattern, ExprProject,
-    ExprRecord, ExprStmt, ExprTy, Node, Projection, Substitute, Type, Value, Visit, VisitMut,
+    ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr, ExprPattern,
+    ExprProject, ExprRecord, ExprStmt, ExprTy, Node, Projection, Substitute, Type, Value, Visit,
+    VisitMut,
 };
 use std::fmt;
 
@@ -63,7 +64,10 @@ pub enum Expr {
     /// Apply an expression to each item in a list
     Map(ExprMap),
 
-    /// OR a set of binary expressi5nos
+    /// Negates a boolean expression
+    Not(ExprNot),
+
+    /// OR a set of binary expressions
     Or(ExprOr),
 
     /// Checks if an expression matches a pattern.
@@ -184,6 +188,7 @@ impl Expr {
             Self::BinaryOp(expr_binary) => expr_binary.lhs.is_const() && expr_binary.rhs.is_const(),
             Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_const()),
             Self::Any(expr_any) => expr_any.expr.is_const(),
+            Self::Not(expr_not) => expr_not.expr.is_const(),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const()),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_const(),
             Self::InList(expr_in_list) => {
@@ -338,6 +343,7 @@ impl fmt::Debug for Expr {
             Self::IsNull(e) => e.fmt(f),
             Self::Key(e) => e.fmt(f),
             Self::Map(e) => e.fmt(f),
+            Self::Not(e) => e.fmt(f),
             Self::Or(e) => e.fmt(f),
             Self::Pattern(e) => e.fmt(f),
             Self::Project(e) => e.fmt(f),

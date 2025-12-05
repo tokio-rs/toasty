@@ -7,7 +7,6 @@ set -eu
 directories=(
     "hello-toasty"
     "composite-key"
-    "cratehub"
     "user-has-one-profile"
 )
 

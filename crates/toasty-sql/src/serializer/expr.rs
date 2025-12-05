@@ -23,11 +23,7 @@ impl ToSql for &stmt::Expr {
             }
             Exists(expr) => {
                 f.depth += 1;
-                if expr.negated {
-                    fmt!(cx, f, "NOT EXISTS (" expr.subquery ")");
-                } else {
-                    fmt!(cx, f, "EXISTS (" expr.subquery ")");
-                }
+                fmt!(cx, f, "EXISTS (" expr.subquery ")");
                 f.depth -= 1;
             }
             Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
@@ -46,11 +42,10 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, expr.expr " IN (" expr.query ")");
             }
             IsNull(expr) => {
-                if expr.negate {
-                    fmt!(cx, f, expr.expr " IS NOT NULL");
-                } else {
-                    fmt!(cx, f, expr.expr " IS NULL");
-                }
+                fmt!(cx, f, expr.expr " IS NULL");
+            }
+            Not(expr) => {
+                fmt!(cx, f, "NOT (" expr.expr ")");
             }
             Or(expr) => {
                 fmt!(cx, f, Delimited(&expr.operands, " OR "));
