@@ -5,13 +5,12 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Pr
   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `toasty::stmt::Primitive` is not implemented for `toasty::HasOne<Option<Profile>>`
   |
   = help: the following other types implement trait `toasty::stmt::Primitive`:
+            Arc<T>
+            Box<T>
             Cow<'_, T>
             Option<T>
+            Rc<T>
             bigdecimal::BigDecimal
             i16
             i32
-            i64
-            i8
-            isize
-            jiff::civil::date::Date
           and $N others
