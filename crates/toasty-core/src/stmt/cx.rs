@@ -199,9 +199,10 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     /// match index columns, and key extraction to identify column IDs.
     pub fn resolve_expr_reference(&self, expr_reference: &ExprReference) -> ResolvedRef<'a> {
         let nesting = match expr_reference {
-            ExprReference::Model { nesting } => *nesting,
-            ExprReference::Field { nesting, .. } => *nesting,
             ExprReference::Column(expr_column) => expr_column.nesting,
+            ExprReference::Context => todo!(),
+            ExprReference::Field { nesting, .. } => *nesting,
+            ExprReference::Model { nesting } => *nesting,
         };
 
         let target = self.target_at(nesting);
@@ -211,6 +212,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             ExprTarget::Model(model) => match expr_reference {
                 ExprReference::Model { .. } => ResolvedRef::Model(model),
                 ExprReference::Field { index, .. } => ResolvedRef::Field(&model.fields[*index]),
+                ExprReference::Context => todo!(),
                 ExprReference::Column(expr_column) => {
                     assert_eq!(expr_column.table, 0, "TODO: is this true?");
 
@@ -227,6 +229,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 ExprReference::Field {.. } => panic!(
                     "Cannot resolve ExprReference::Field in Table target context - use ExprReference::Column instead"
                 ),
+                ExprReference::Context => todo!(),
                 ExprReference::Column(expr_column) => ResolvedRef::Column(&table.columns[expr_column.column]),
             },
             ExprTarget::Source(source_table) => {
@@ -270,6 +273,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     ExprReference::Field { .. } => panic!(
                         "Cannot resolve ExprReference::Field in Source::Table context - use ExprReference::Column instead"
                     ),
+                    ExprReference::Context => todo!(),
                 }
             }
         }

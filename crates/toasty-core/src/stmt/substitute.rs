@@ -18,33 +18,34 @@ where
 {
     fn visit_expr_mut(&mut self, expr: &mut Expr) {
         // Substitute first
-        match expr {
-            Expr::Project(expr_project) => {
-                if let Expr::Arg(expr_arg) = &*expr_project.base {
-                    *expr = self
-                        .input
-                        .resolve_arg(expr_arg, &expr_project.projection)
-                        .unwrap();
+        let maybe_substitute = match expr {
+            Expr::Project(expr_project) => match &*expr_project.base {
+                Expr::Arg(expr_arg) => self.input.resolve_arg(expr_arg, &expr_project.projection),
+                Expr::Reference(expr_ref) => {
+                    self.input.resolve_ref(expr_ref, &expr_project.projection)
                 }
-            }
-            Expr::Arg(expr_arg) => {
-                *expr = self
-                    .input
-                    .resolve_arg(expr_arg, &Projection::identity())
-                    .unwrap();
-            }
-            _ => {}
-        }
+                _ => None,
+            },
+            Expr::Reference(expr_reference) => self
+                .input
+                .resolve_ref(expr_reference, &Projection::identity()),
+            Expr::Arg(expr_arg) => self.input.resolve_arg(expr_arg, &Projection::identity()),
+            _ => None,
+        };
 
-        // Recurse into child expressions
-        match expr {
-            Expr::Map(expr_map) => {
-                // Only recurse into the base expression as arguments
-                // reference the base.
-                self.visit_expr_mut(&mut expr_map.base);
-            }
-            _ => {
-                visit_mut::visit_expr_mut(self, expr);
+        if let Some(substitute) = maybe_substitute {
+            *expr = substitute;
+        } else {
+            // Recurse into child expressions
+            match expr {
+                Expr::Map(expr_map) => {
+                    // Only recurse into the base expression as arguments
+                    // reference the base.
+                    self.visit_expr_mut(&mut expr_map.base);
+                }
+                _ => {
+                    visit_mut::visit_expr_mut(self, expr);
+                }
             }
         }
     }

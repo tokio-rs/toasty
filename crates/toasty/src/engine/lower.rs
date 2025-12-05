@@ -306,6 +306,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         *expr = self.lower_expr_field(*nesting, *index);
                         self.visit_expr_mut(expr);
                     }
+                    stmt::ExprReference::Context => {}
                     stmt::ExprReference::Model { .. } => todo!(),
                     stmt::ExprReference::Column(expr_column) => {
                         if expr_column.nesting > 0 {
@@ -448,7 +449,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // Preprocess the insertion source (values usually);
         // This may populate stmt.then with child inserts when the parent has
         // database-generated fields (Expr::Default) that children need to reference.
-        lower.preprocess_insert_values(&mut stmt.source, &mut stmt.returning, &mut stmt.then);
+        lower.preprocess_insert_values(&mut stmt.source, &mut stmt.returning);
         dbg!(&stmt);
 
         // Lower the insertion source

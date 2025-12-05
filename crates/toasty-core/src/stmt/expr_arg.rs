@@ -22,13 +22,6 @@ impl Expr {
     pub fn arg(expr_arg: impl Into<ExprArg>) -> Self {
         Self::Arg(expr_arg.into())
     }
-
-    pub fn arg_project(
-        expr_arg: impl Into<ExprArg>,
-        projection: impl Into<stmt::Projection>,
-    ) -> Self {
-        Self::project(Self::arg(expr_arg), projection)
-    }
 }
 
 impl ExprArg {

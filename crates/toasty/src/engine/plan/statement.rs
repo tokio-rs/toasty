@@ -184,6 +184,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) {
         visit_mut::for_each_expr_mut(&mut selection.returning, |expr| {
             if let stmt::Expr::Reference(expr_reference) = expr {
+                assert!(
+                    expr_reference.is_column(),
+                    "TODO: expr_reference = {expr:#?}"
+                );
                 let (index, _) = selection.columns.insert_full(*expr_reference);
                 *expr = stmt::Expr::arg_project(0, [index]);
             }
@@ -621,6 +625,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let mut indices = vec![];
 
+        println!("expr_refs={expr_refs:#?}");
         for expr_ref in expr_refs {
             let expr_col = expr_ref.as_expr_column_unwrap();
             debug_assert!(expr_col.nesting == 0, "expr_column={expr_col:#?}");

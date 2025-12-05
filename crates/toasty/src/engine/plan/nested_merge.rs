@@ -229,7 +229,8 @@ impl NestedMergePlanner<'_> {
                         hir::Arg::Ref { .. } => todo!(),
                     },
                     stmt::Expr::Reference(expr_reference) => {
-                        debug_assert_eq!(0, expr_reference.nesting());
+                        let expr_column = expr_reference.as_expr_column_unwrap();
+                        debug_assert_eq!(0, expr_column.nesting);
                         let index = selection.get_index_of(expr_reference).unwrap();
                         *expr = stmt::Expr::arg_project(0, [index]);
                     }

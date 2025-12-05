@@ -179,6 +179,10 @@ impl FieldTy {
         )
     }
 
+    pub fn is_has_n(&self) -> bool {
+        matches!(self, Self::HasMany(..) | Self::HasOne(..))
+    }
+
     pub fn is_has_many(&self) -> bool {
         matches!(self, Self::HasMany(..))
     }

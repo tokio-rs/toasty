@@ -1,3 +1,4 @@
+use bit_set::BitSet;
 use toasty_core::{schema::app, stmt};
 
 use crate::engine::lower::LowerStatement;
@@ -38,7 +39,6 @@ impl LowerStatement<'_, '_> {
         &mut self,
         source: &mut stmt::Query,
         returning: &mut Option<stmt::Returning>,
-        then: &mut Vec<stmt::Statement>,
     ) {
         let stmt::ExprSet::Values(values) = &mut source.body else {
             todo!()
@@ -48,15 +48,31 @@ impl LowerStatement<'_, '_> {
             return;
         };
 
+        let mut set_fields: BitSet<usize> = BitSet::default();
+
+        // First, apply any defaults while also tracking all the fields that are set.
         for row in &mut values.rows {
-            self.apply_app_level_insertion_defaults(model, row);
-            self.plan_stmt_insert_relations(row, returning, then);
+            self.apply_app_level_insertion_defaults(model, row, &mut set_fields);
+        }
+
+        // If there are any has_n associations included in the insertion, the
+        // statement returning has to be transformed to accomodate the nested
+        // structure.
+        self.convert_returning_for_insert_with_has_n(model, &set_fields, values, returning);
+
+        for (index, row) in values.rows.iter_mut().enumerate() {
+            self.plan_stmt_insert_relations(row, returning, index);
             self.verify_field_constraints(model, row);
         }
     }
 
     // Checks all fields of a record and handles nulls
-    fn apply_app_level_insertion_defaults(&mut self, model: &app::Model, expr: &mut stmt::Expr) {
+    fn apply_app_level_insertion_defaults(
+        &mut self,
+        model: &app::Model,
+        expr: &mut stmt::Expr,
+        set_fields: &mut BitSet<usize>,
+    ) {
         // First, we pad the record to account for all fields
         if let stmt::Expr::Record(expr_record) = expr {
             // TODO: get rid of this
@@ -117,7 +133,80 @@ impl LowerStatement<'_, '_> {
                     }
                 }
             }
+
+            if !field_expr.is_value_null() {
+                set_fields.insert(field.id.index);
+            }
         }
+    }
+
+    fn convert_returning_for_insert_with_has_n(
+        &mut self,
+        model: &app::Model,
+        set_fields: &BitSet<usize>,
+        values: &stmt::Values,
+        returning: &mut Option<stmt::Returning>,
+    ) {
+        // If there is no returning statement, there is nothing to convert
+        let Some(stmt::Returning::Expr(projection)) = returning else {
+            return;
+        };
+
+        // Only perform the conversion if there are any has_n fields included in the
+        if !model
+            .fields
+            .iter()
+            .any(|f| f.ty.is_has_n() && set_fields.contains(f.id.index))
+        {
+            return;
+        }
+
+        #[derive(Debug)]
+        struct Input<'a>(usize, &'a stmt::ExprRecord);
+
+        impl stmt::Input for Input<'_> {
+            fn resolve_arg(
+                &mut self,
+                expr_arg: &stmt::ExprArg,
+                projection: &stmt::Projection,
+            ) -> Option<stmt::Expr> {
+                todo!("self={self:#?}; expr_arg={expr_arg:#?}; projection={projection:#?}");
+            }
+
+            fn resolve_ref(
+                &mut self,
+                expr_reference: &stmt::ExprReference,
+                projection: &stmt::Projection,
+            ) -> Option<stmt::Expr> {
+                let Some(expr_column) = expr_reference.as_expr_column() else {
+                    return None;
+                };
+
+                assert!(
+                    expr_column.nesting == 0 && expr_column.table == 0,
+                    "expr_reference={expr_reference:#?}"
+                );
+                assert!(projection.is_identity(), "TODO");
+
+                match &self.1[expr_column.column] {
+                    stmt::Expr::Default => {
+                        Some(stmt::Expr::context_project([self.0, expr_column.column]))
+                    }
+                    e @ stmt::Expr::Value(_) => Some(e.clone()),
+                    e => todo!("expr={e:#?}"),
+                }
+            }
+        }
+
+        let mut converted = vec![];
+
+        for (i, row) in values.rows.iter().enumerate() {
+            let mut converted_row = projection.clone();
+            converted_row.substitute(Input(i, row.as_record_unwrap()));
+            converted.push(converted_row);
+        }
+
+        *returning = Some(stmt::Returning::Value(stmt::Expr::list_from_vec(converted)));
     }
 
     fn verify_field_constraints(&mut self, model: &app::Model, expr: &mut stmt::Expr) {

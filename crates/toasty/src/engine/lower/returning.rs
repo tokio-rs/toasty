@@ -31,6 +31,10 @@ impl LowerStatement<'_, '_> {
             panic!("not currently lowering an insert statement")
         };
 
+        let stmt::Returning::Expr(project) = returning else {
+            return;
+        };
+
         let mut constantized = vec![];
 
         for row in &values.rows {
@@ -42,7 +46,7 @@ impl LowerStatement<'_, '_> {
                 },
             };
 
-            let Ok(row) = returning.as_expr_unwrap().eval(input) else {
+            let Ok(row) = project.eval(input) else {
                 return;
             };
 
@@ -76,7 +80,7 @@ impl stmt::Input for ConstantizeReturning<'_> {
         expr_reference: &stmt::ExprReference,
         projection: &stmt::Projection,
     ) -> Option<stmt::Expr> {
-        assert_eq!(0, expr_reference.nesting(), "TODO");
+        debug_assert_eq!(0, expr_reference.as_expr_column_unwrap().nesting, "TODO");
 
         let needle = self
             .cx
