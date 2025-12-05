@@ -641,6 +641,7 @@ impl BuildMapping<'_> {
 
 fn stmt_ty_to_table(ty: stmt::Type) -> stmt::Type {
     match ty {
+        stmt::Type::Bool => stmt::Type::Bool,
         stmt::Type::I8 => stmt::Type::I8,
         stmt::Type::I16 => stmt::Type::I16,
         stmt::Type::I32 => stmt::Type::I32,
