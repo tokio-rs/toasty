@@ -11,6 +11,7 @@ async-trait.workspace = true
 bit-set = "0.8.0"
 indexmap.workspace = true
 jiff = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
 bigdecimal = { workspace = true, optional = true }
 std-util.workspace = true
 tokio-stream.workspace = true
@@ -21,6 +22,7 @@ default = []
 assert-struct = ["dep:assert-struct"]
 bigdecimal = ["dep:bigdecimal"]
 jiff = ["dep:jiff"]
+chrono = ["dep:chrono"]
 
 [dev-dependencies]
 pretty_assertions.workspace = true

@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal"]
 jiff = ["dep:jiff", "toasty-core/jiff", "postgres-types/with-jiff-0_2"]
+chrono = ["dep:chrono", "toasty-core/chrono", "postgres-types/with-chrono-0_4"]
 
 [dependencies]
 toasty-core.workspace = true
@@ -14,6 +15,7 @@ toasty-sql.workspace = true
 anyhow.workspace = true
 bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
 postgres.workspace = true
 postgres-types.workspace = true
 tokio.workspace = true

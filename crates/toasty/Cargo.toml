@@ -21,6 +21,12 @@ jiff = [
 	"toasty-driver-postgresql/jiff",
 	"toasty-driver-mysql/jiff",
 ]
+chrono = [
+	"dep:chrono",
+	"toasty-core/chrono",
+	"toasty-driver-postgresql/chrono",
+	"toasty-driver-mysql/chrono",
+]
 serde = ["dep:serde_core"]
 
 
@@ -40,6 +46,7 @@ anyhow.workspace = true
 async-stream.workspace = true
 bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
 tokio-stream.workspace = true
 uuid.workspace = true
 indexmap.workspace = true
