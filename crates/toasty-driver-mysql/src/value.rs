@@ -28,7 +28,7 @@ impl ToValue for Value {
             CoreValue::Bytes(value) => value.to_value(),
             CoreValue::Uuid(value) => value.to_value(),
             #[cfg(feature = "jiff")]
-            CoreValue::Timestamp(value) => {
+            CoreValue::JiffTimestamp(value) => {
                 // Convert jiff::Timestamp to MySQL TIMESTAMP
                 let dt = value.to_zoned(jiff::tz::TimeZone::UTC).datetime();
                 mysql_async::Value::Date(
@@ -42,7 +42,7 @@ impl ToValue for Value {
                 )
             }
             #[cfg(feature = "jiff")]
-            CoreValue::Date(value) => mysql_async::Value::Date(
+            CoreValue::JiffDate(value) => mysql_async::Value::Date(
                 value.year() as u16,
                 value.month() as u8,
                 value.day() as u8,
@@ -52,7 +52,7 @@ impl ToValue for Value {
                 0,
             ),
             #[cfg(feature = "jiff")]
-            CoreValue::Time(value) => {
+            CoreValue::JiffTime(value) => {
                 mysql_async::Value::Time(
                     false, // is_negative
                     0,     // days
@@ -63,7 +63,7 @@ impl ToValue for Value {
                 )
             }
             #[cfg(feature = "jiff")]
-            CoreValue::DateTime(value) => {
+            CoreValue::JiffDateTime(value) => {
                 mysql_async::Value::Date(
                     value.year() as u16,
                     value.month() as u8,

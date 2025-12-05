@@ -270,8 +270,8 @@ fn mysql_to_toasty(
                         (microsecond * 1000) as i32, // Convert microseconds to nanoseconds
                     );
                     match ty {
-                        stmt::Type::DateTime => stmt::Value::DateTime(dt),
-                        stmt::Type::Timestamp => stmt::Value::Timestamp(
+                        stmt::Type::JiffDateTime => stmt::Value::JiffDateTime(dt),
+                        stmt::Type::JiffTimestamp => stmt::Value::JiffTimestamp(
                             dt.to_zoned(jiff::tz::TimeZone::UTC).unwrap().into(),
                         ),
                         _ => todo!("unexpected type for DATETIME: {ty:#?}"),
@@ -284,7 +284,7 @@ fn mysql_to_toasty(
 
         #[cfg(feature = "jiff")]
         MYSQL_TYPE_DATE => match row.take_opt(i).expect("value missing") {
-            Ok(mysql_async::Value::Date(year, month, day, _, _, _, _)) => stmt::Value::Date(
+            Ok(mysql_async::Value::Date(year, month, day, _, _, _, _)) => stmt::Value::JiffDate(
                 jiff::civil::Date::constant(year as i16, month as i8, day as i8),
             ),
             Ok(mysql_async::Value::NULL) | Err(_) => stmt::Value::Null,
@@ -302,7 +302,7 @@ fn mysql_to_toasty(
                     second,
                     microsecond,
                 )) => {
-                    stmt::Value::Time(jiff::civil::Time::constant(
+                    stmt::Value::JiffTime(jiff::civil::Time::constant(
                         hour as i8,
                         minute as i8,
                         second as i8,

@@ -132,15 +132,15 @@ impl Type {
                 stmt::Type::BigDecimal => Ok(db.default_bigdecimal_type.clone()),
                 // Date/time types from jiff
                 #[cfg(feature = "jiff")]
-                stmt::Type::Timestamp => Ok(db.default_timestamp_type.clone()),
+                stmt::Type::JiffTimestamp => Ok(db.default_timestamp_type.clone()),
                 #[cfg(feature = "jiff")]
-                stmt::Type::Zoned => Ok(db.default_zoned_type.clone()),
+                stmt::Type::JiffZoned => Ok(db.default_zoned_type.clone()),
                 #[cfg(feature = "jiff")]
-                stmt::Type::Date => Ok(db.default_date_type.clone()),
+                stmt::Type::JiffDate => Ok(db.default_date_type.clone()),
                 #[cfg(feature = "jiff")]
-                stmt::Type::Time => Ok(db.default_time_type.clone()),
+                stmt::Type::JiffTime => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
-                stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
+                stmt::Type::JiffDateTime => Ok(db.default_datetime_type.clone()),
                 // Gotta support some app-level types as well for now.
                 //
                 // TODO: not really correct, but we are getting rid of ID types
@@ -161,7 +161,9 @@ impl Type {
             (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
             // Let engine handle UTC conversion
             #[cfg(feature = "jiff")]
-            (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,
+            (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::JiffZoned) => {
+                stmt::Type::JiffTimestamp
+            }
             _ => ty.clone(),
         }
     }

@@ -321,7 +321,7 @@ fn postgres_to_toasty(
         #[cfg(feature = "jiff")]
         {
             row.get::<usize, Option<jiff::Timestamp>>(index)
-                .map(stmt::Value::Timestamp)
+                .map(stmt::Value::JiffTimestamp)
                 .unwrap_or(stmt::Value::Null)
         }
         #[cfg(not(feature = "jiff"))]
@@ -332,7 +332,7 @@ fn postgres_to_toasty(
         #[cfg(feature = "jiff")]
         {
             row.get::<usize, Option<jiff::civil::DateTime>>(index)
-                .map(stmt::Value::DateTime)
+                .map(stmt::Value::JiffDateTime)
                 .unwrap_or(stmt::Value::Null)
         }
         #[cfg(not(feature = "jiff"))]
@@ -343,7 +343,7 @@ fn postgres_to_toasty(
         #[cfg(feature = "jiff")]
         {
             row.get::<usize, Option<jiff::civil::Date>>(index)
-                .map(stmt::Value::Date)
+                .map(stmt::Value::JiffDate)
                 .unwrap_or(stmt::Value::Null)
         }
         #[cfg(not(feature = "jiff"))]
@@ -354,7 +354,7 @@ fn postgres_to_toasty(
         #[cfg(feature = "jiff")]
         {
             row.get::<usize, Option<jiff::civil::Time>>(index)
-                .map(stmt::Value::Time)
+                .map(stmt::Value::JiffTime)
                 .unwrap_or(stmt::Value::Null)
         }
         #[cfg(not(feature = "jiff"))]
@@ -385,13 +385,13 @@ fn postgres_ty_for_value(value: &stmt::Value) -> Type {
         stmt::Value::Uuid(_) => Type::UUID,
         stmt::Value::Null => Type::TEXT, // Default for NULL values
         #[cfg(feature = "jiff")]
-        stmt::Value::Timestamp(_) => Type::TIMESTAMPTZ,
+        stmt::Value::JiffTimestamp(_) => Type::TIMESTAMPTZ,
         #[cfg(feature = "jiff")]
-        stmt::Value::Date(_) => Type::DATE,
+        stmt::Value::JiffDate(_) => Type::DATE,
         #[cfg(feature = "jiff")]
-        stmt::Value::Time(_) => Type::TIME,
+        stmt::Value::JiffTime(_) => Type::TIME,
         #[cfg(feature = "jiff")]
-        stmt::Value::DateTime(_) => Type::TIMESTAMP,
+        stmt::Value::JiffDateTime(_) => Type::TIMESTAMP,
         _ => todo!("postgres_ty_for_value: {value:#?}"),
     }
 }

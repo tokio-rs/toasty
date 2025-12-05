@@ -21,8 +21,8 @@ macro_rules! impl_jiff_primitive {
     };
 }
 
-impl_jiff_primitive!(jiff::Timestamp, Timestamp, "jiff::Timestamp");
-impl_jiff_primitive!(jiff::Zoned, Zoned, "jiff::Zoned");
-impl_jiff_primitive!(jiff::civil::Date, Date, "jiff::civil::Date");
-impl_jiff_primitive!(jiff::civil::Time, Time, "jiff::civil::Time");
-impl_jiff_primitive!(jiff::civil::DateTime, DateTime, "jiff::civil::DateTime");
+impl_jiff_primitive!(jiff::Timestamp, JiffTimestamp, "jiff::Timestamp");
+impl_jiff_primitive!(jiff::Zoned, JiffZoned, "jiff::Zoned");
+impl_jiff_primitive!(jiff::civil::Date, JiffDate, "jiff::civil::Date");
+impl_jiff_primitive!(jiff::civil::Time, JiffTime, "jiff::civil::Time");
+impl_jiff_primitive!(jiff::civil::DateTime, JiffDateTime, "jiff::civil::DateTime");
