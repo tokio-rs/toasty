@@ -11,6 +11,13 @@ pub struct Insert {
 
     /// Optionally return data from the insertion
     pub returning: Option<Returning>,
+
+    /// Statements to execute after the INSERT completes
+    ///
+    /// These statements can reference fields from the inserted record using
+    /// `Expr::ParentField`. They execute after the parent INSERT but do not
+    /// affect the returned results.
+    pub then: Vec<Statement>,
 }
 
 impl Insert {
@@ -28,6 +35,9 @@ impl Insert {
             }
             (self_source, other) => todo!("self={:#?}; other={:#?}", self_source, other),
         }
+
+        // Merge the then statements
+        self.then.extend(other.then);
     }
 }
 
@@ -68,6 +78,29 @@ impl Statement {
     pub fn unwrap_insert(self) -> Insert {
         match self {
             Self::Insert(insert) => insert,
+            v => panic!("expected `Insert`, found {v:#?}"),
+        }
+    }
+
+    /// Attempts to return a reference to the insert statement's source query.
+    ///
+    /// Returns `None` if the statement is not an [`Statement::Insert`].
+    pub fn insert_source(&self) -> Option<&Query> {
+        match self {
+            Statement::Insert(insert) => Some(&insert.source),
+            _ => None,
+        }
+    }
+
+    /// Returns a reference to the insert statement's source query.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the statement is not a [`Statement::Insert`].
+    #[track_caller]
+    pub fn insert_source_unwrap(&self) -> &Query {
+        match self {
+            Statement::Insert(insert) => &insert.source,
             v => panic!("expected `Insert`, found {v:#?}"),
         }
     }

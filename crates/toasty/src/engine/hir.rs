@@ -87,6 +87,10 @@ pub(super) struct StatementInfo {
     /// (e.g., filtering, projection, or nested merge). Dependent statements
     /// reference this node to establish execution order.
     pub(super) output: Cell<Option<mir::NodeId>>,
+
+    /// When true, the statement is independent. An independent statement does
+    /// not depend on any anestors itself nor do any of its sub-dependencies.
+    pub(super) independent: bool,
 }
 
 index_vec::define_index_type! {
@@ -107,6 +111,7 @@ impl StatementInfo {
             exec_statement: Cell::new(None),
             exec_statement_selection: OnceCell::new(),
             output: Cell::new(None),
+            independent: true,
         }
     }
 

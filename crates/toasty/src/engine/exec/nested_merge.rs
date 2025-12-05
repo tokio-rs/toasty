@@ -75,6 +75,12 @@ pub(crate) struct NestedChild {
 /// How to filter nested records for a parent record
 #[derive(Debug, Clone)]
 pub(crate) enum MergeQualification {
+    /// Parent selects all records provided from sub statements.
+    ///
+    /// This is typically used when the parent query returns only one row, so all
+    /// nested records end up associated with that single parent record.
+    All,
+
     /// General predicate evaluation (uses nested loop)
     /// Args: [ancestor_stack..., nested_record] -> bool
     ///
@@ -230,6 +236,7 @@ impl Exec<'_> {
         row: &RowStack<'_>,
     ) -> Result<bool> {
         match qual {
+            MergeQualification::All => Ok(true),
             MergeQualification::Predicate(func) => func.eval_bool(row),
         }
     }

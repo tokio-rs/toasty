@@ -806,6 +806,7 @@ where
         ExprReference::Model { .. } => {}
         ExprReference::Field { .. } => {}
         ExprReference::Column(expr_column) => v.visit_expr_column_mut(expr_column),
+        ExprReference::Context => {}
     }
 }
 
@@ -818,6 +819,7 @@ where
         ExprSet::SetOp(expr) => v.visit_expr_set_op_mut(expr),
         ExprSet::Update(expr) => v.visit_stmt_update_mut(expr),
         ExprSet::Values(expr) => v.visit_values_mut(expr),
+        ExprSet::Insert(expr) => v.visit_stmt_insert_mut(expr),
     }
 }
 
@@ -961,7 +963,7 @@ where
         }
         Returning::Changed => {}
         Returning::Expr(expr) => v.visit_expr_mut(expr),
-        Returning::Value(value) => v.visit_value_mut(value),
+        Returning::Value(expr) => v.visit_expr_mut(expr),
     }
 }
 
@@ -1043,6 +1045,10 @@ where
 
     if let Some(returning) = &mut node.returning {
         v.visit_returning_mut(returning);
+    }
+
+    for stmt in &mut node.then {
+        v.visit_stmt_mut(stmt);
     }
 }
 

@@ -12,7 +12,12 @@ impl<M: Model> CreateMany<M> {
     }
 
     pub fn item(mut self, item: impl stmt::IntoInsert<Model = M>) -> Self {
-        self.stmts.push(item.into_insert());
+        let stmt = item.into_insert();
+        assert!(
+            stmt.untyped.source.single,
+            "BUG: insert statement should have `single` flag set"
+        );
+        self.stmts.push(stmt);
         self
     }
 

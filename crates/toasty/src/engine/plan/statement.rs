@@ -8,11 +8,13 @@ use crate::engine::{
     plan::HirPlanner,
 };
 
+#[derive(Debug)]
 struct Selection {
     columns: IndexSet<stmt::ExprReference>,
     returning: Option<stmt::Returning>,
 }
 
+#[derive(Debug)]
 struct LinkedStatement {
     stmt: stmt::Statement,
     inputs: IndexSet<mir::NodeId>,
@@ -77,6 +79,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let mut selection = Selection { columns, returning };
 
+        // Track sub-statements referenced in the returning clause as inputs, so their
+        // results are available when building the return value.
+        self.extract_inputs_from_returning(&mut selection, &mut linked_stmt);
+
         // Visit the main statement's returning clause to extract needed columns
         self.extract_columns_from_returning(&mut selection, &mut linked_stmt);
 
@@ -117,18 +123,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     // ===== Setup helpers =====
 
-    fn extract_columns_from_returning(
+    fn extract_inputs_from_returning(
         &mut self,
         selection: &mut Selection,
         linked_stmt: &mut LinkedStatement,
     ) {
         visit_mut::for_each_expr_mut(&mut selection.returning, |expr| {
-            match expr {
-                stmt::Expr::Reference(expr_reference) => {
-                    let (index, _) = selection.columns.insert_full(*expr_reference);
-                    *expr = stmt::Expr::arg_project(0, [index]);
-                }
-                stmt::Expr::Arg(expr_arg) => match &self.stmt_info.args[expr_arg.position] {
+            if let stmt::Expr::Arg(expr_arg) = expr {
+                match &self.stmt_info.args[expr_arg.position] {
                     hir::Arg::Ref { .. } => {
                         todo!("refs in returning is not yet supported");
                     }
@@ -144,16 +146,99 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             return;
                         }
 
-                        let node_id = self.planner.hir[stmt_id].exec_statement.get().expect("bug");
+                        let node_id = if self.planner.hir[stmt_id].independent {
+                            self.planner.hir[stmt_id].output.get().expect("bug")
+                        } else {
+                            // self.planner.hir[stmt_id].exec_statement.get().expect("bug")
+                            todo!("what is going on?");
+                        };
 
                         let (index, _) = linked_stmt.inputs.insert_full(node_id);
                         input.set(Some(index));
                     }
                     _ => todo!(),
-                },
-                _ => {}
+                }
             }
         });
+    }
+
+    fn extract_columns_from_returning(
+        &mut self,
+        selection: &mut Selection,
+        linked_stmt: &mut LinkedStatement,
+    ) {
+        if let stmt::Statement::Insert(insert) = &linked_stmt.stmt {
+            if insert.source.body.is_values() {
+                self.extract_columns_from_insert_returning(selection, insert);
+                return;
+            }
+        }
+
+        self.extract_columns_from_stmt_returning(selection)
+    }
+
+    fn extract_columns_from_insert_returning(
+        &mut self,
+        selection: &mut Selection,
+        stmt: &stmt::Insert,
+    ) {
+        visit_mut::for_each_expr_mut(&mut selection.returning, |expr| {
+            if let stmt::Expr::Reference(expr_reference) = expr {
+                assert!(
+                    expr_reference.is_column(),
+                    "TODO: expr_reference = {expr:#?}"
+                );
+                let (index, _) = selection.columns.insert_full(*expr_reference);
+                *expr = stmt::Expr::arg_project(0, [index]);
+            }
+        });
+    }
+
+    fn extract_columns_from_stmt_returning(&mut self, selection: &mut Selection) {
+        visit_mut::for_each_expr_mut(&mut selection.returning, |expr| {
+            if let stmt::Expr::Reference(expr_reference) = expr {
+                let (index, _) = selection.columns.insert_full(*expr_reference);
+                *expr = stmt::Expr::arg_project(0, [index]);
+            }
+        });
+    }
+
+    /// If the ExprReference in the returning clause of an Insert references a
+    /// known value provided during insertion, then we do not need the database
+    /// to provide that value and can extract it during planning.
+    ///
+    /// TODO: Instead of checking all the values first, then extracting them
+    /// later, do it in one pass.
+    fn returning_expr_ref_needs_db(
+        &self,
+        expr_reference: &stmt::ExprReference,
+        stmt: &stmt::Statement,
+    ) -> bool {
+        let expr_column = expr_reference.as_expr_column_unwrap();
+
+        if expr_column.nesting > 0 {
+            return true;
+        }
+
+        let stmt::Statement::Insert(insert) = stmt else {
+            return true;
+        };
+
+        let Some(values) = insert.source.body.as_values() else {
+            return true;
+        };
+
+        for row in &values.rows {
+            let Some(entry) = row.entry(expr_column.column) else {
+                return true;
+            };
+
+            if !entry.is_const() {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn extract_sub_statement_args_from_filter(&mut self, linked_stmt: &mut LinkedStatement) {
@@ -197,7 +282,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 continue;
             };
 
-            assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
+            assert!(
+                ref_source.is_none(),
+                "TODO: handle more complex ref cases; stmt={:#?}; arg={arg:#?}",
+                linked_stmt.stmt
+            );
             assert!(
                 !linked_stmt.stmt.filter_or_default().is_false(),
                 "TODO: handle const false filters"
@@ -215,25 +304,33 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
 
         if let Some(ref_source) = ref_source {
-            self.rewrite_stmt_for_ref_source(&mut linked_stmt.stmt, ref_source);
+            if let stmt::Statement::Insert(stmt) = &mut linked_stmt.stmt {
+                if self.planner.engine.capability().sql {
+                    self.rewrite_stmt_insert_for_ref_source_nosql(stmt, ref_source);
+                } else {
+                    todo!()
+                }
+            } else {
+                self.rewrite_stmt_query_for_ref_source(&mut linked_stmt.stmt, ref_source);
+            }
         }
 
         ref_source
     }
 
-    fn rewrite_stmt_for_ref_source(
+    fn rewrite_stmt_query_for_ref_source(
         &mut self,
         stmt: &mut stmt::Statement,
         ref_source: stmt::ExprArg,
     ) {
         if self.planner.engine.capability().sql {
-            self.rewrite_stmt_for_ref_source_sql(stmt, ref_source);
+            self.rewrite_stmt_query_for_ref_source_sql(stmt, ref_source);
         } else {
-            self.rewrite_stmt_for_ref_source_nosql(stmt, ref_source);
+            self.rewrite_stmt_query_for_ref_source_nosql(stmt, ref_source);
         }
     }
 
-    fn rewrite_stmt_for_ref_source_sql(
+    fn rewrite_stmt_query_for_ref_source_sql(
         &mut self,
         stmt: &mut stmt::Statement,
         ref_source: stmt::ExprArg,
@@ -282,7 +379,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
     }
 
-    fn rewrite_stmt_for_ref_source_nosql(
+    fn rewrite_stmt_query_for_ref_source_nosql(
         &mut self,
         stmt: &mut stmt::Statement,
         ref_source: stmt::ExprArg,
@@ -312,6 +409,46 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
     }
 
+    fn rewrite_stmt_insert_for_ref_source_nosql(
+        &mut self,
+        stmt: &mut stmt::Insert,
+        ref_source: stmt::ExprArg,
+    ) {
+        let hir::Arg::Ref { stmt_id, .. } = &self.stmt_info.args[ref_source.position] else {
+            todo!()
+        };
+
+        let target_stmt = &self.planner.hir[stmt_id];
+        let target_stmt = target_stmt.stmt.as_deref().unwrap();
+
+        assert!(target_stmt.is_insert(), "TODO");
+
+        // For now, an insert statement referencing a parent is only supported when the
+        // targeted insert statement is also an insert with a single row being inserted.
+        let values = target_stmt.insert_source_unwrap().body.as_values_unwrap();
+        assert_eq!(1, values.rows.len(), "TODO");
+
+        let stmt::ExprSet::Values(values) = &mut stmt.source.body else {
+            todo!()
+        };
+
+        for row in &mut values.rows {
+            visit_mut::for_each_expr_mut(row, |expr| {
+                if let stmt::Expr::Arg(expr_arg) = expr {
+                    let hir::Arg::Ref {
+                        batch_load_index: index,
+                        ..
+                    } = &self.stmt_info.args[expr_arg.position]
+                    else {
+                        todo!()
+                    };
+
+                    *expr = stmt::Expr::arg_project(*expr_arg, [0, *index])
+                }
+            })
+        }
+    }
+
     // ===== Execution dispatch =====
 
     fn plan_execution(
@@ -321,6 +458,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ref_source: Option<stmt::ExprArg>,
     ) -> mir::NodeId {
         if let Some(node_id) = self.plan_const_or_empty_statement(&linked, selection) {
+            debug_assert!(
+                linked.stmt.is_query()
+                    || linked
+                        .stmt
+                        .assignments()
+                        .map(|a| a.is_empty())
+                        .unwrap_or(false),
+                "planned a mutable statement as const; stmt={:#?}",
+                linked.stmt
+            );
             node_id
         } else if self.planner.engine.capability().sql || linked.stmt.is_insert() {
             self.plan_sql_execution(linked, selection)
@@ -379,6 +526,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         selection: &mut Selection,
     ) -> mir::NodeId {
         let LinkedStatement { mut stmt, inputs } = linked;
+
+        let const_returning = self.extract_insert_returning_as_const(&stmt, &selection.columns);
 
         if !selection.columns.is_empty() {
             stmt.set_returning(
@@ -441,7 +590,79 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // With SQL capability, we can just punt the details of execution to
         // the database's query planner.
         debug_assert!(!self.did_take_deps);
-        self.insert_mir_with_deps(node)
+        let mut exec_statement_node = self.insert_mir_with_deps(node);
+
+        if let Some((const_value, const_ty)) = const_returning {
+            exec_statement_node = self.planner.mir.insert_with_deps(
+                mir::Const {
+                    value: const_value,
+                    ty: const_ty,
+                },
+                [exec_statement_node],
+            );
+        }
+
+        exec_statement_node
+    }
+
+    fn extract_insert_returning_as_const(
+        &mut self,
+        stmt: &stmt::Statement,
+        expr_refs: &IndexSet<stmt::ExprReference>,
+    ) -> Option<(Vec<stmt::Value>, stmt::Type)> {
+        let stmt::Statement::Insert(insert) = stmt else {
+            return None;
+        };
+
+        if expr_refs.is_empty() {
+            return None;
+        }
+
+        let target = insert.target.as_table_unwrap();
+        let Some(values) = insert.source.body.as_values() else {
+            return None;
+        };
+
+        let mut indices = vec![];
+
+        println!("expr_refs={expr_refs:#?}");
+        for expr_ref in expr_refs {
+            let expr_col = expr_ref.as_expr_column_unwrap();
+            debug_assert!(expr_col.nesting == 0, "expr_column={expr_col:#?}");
+
+            let Some(index) = target
+                .columns
+                .iter()
+                .enumerate()
+                .find(|(_, column_id)| column_id.index == expr_col.column)
+                .map(|(index, _)| index)
+            else {
+                todo!("insert returning referencing parent statement");
+                // return None;
+            };
+
+            indices.push(index);
+        }
+
+        // Now extract the values for each row
+        let mut result = Vec::with_capacity(values.rows.len());
+
+        for row in &values.rows {
+            // Build a record with only the requested fields
+            let mut fields = Vec::with_capacity(indices.len());
+
+            for &index in &indices {
+                // Try to evaluate the expression to a constant value
+                let value = row.entry(index)?.eval_const().ok()?;
+                fields.push(value);
+            }
+
+            result.push(stmt::Value::record_from_vec(fields));
+        }
+
+        let ty = self.planner.engine.infer_record_list_ty(stmt, expr_refs);
+
+        Some((result, ty))
     }
 
     fn plan_conditional_sql_query_as_cte(
@@ -656,6 +877,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         selection: &mut Selection,
         ref_source: Option<stmt::ExprArg>,
     ) -> mir::NodeId {
+        if linked.stmt.is_insert() {
+            debug_assert!(selection.columns.is_empty());
+        }
+
         // Without SQL capability, we have to plan the execution of the
         // statement based on available indices.
         let mut index_plan = self.planner.engine.plan_index_path(&linked.stmt);
@@ -699,12 +924,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ty: &stmt::Type,
     ) -> mir::NodeId {
         if let Some(keys) = pk_keys {
-            let get_by_key_input = self.build_get_by_key_input(
-                keys,
-                &linked,
-                ref_source,
-                self.index_key_ty(index_plan),
-            );
+            let get_by_key_input =
+                self.build_get_by_key_input(keys, &linked, self.index_key_ty(index_plan));
 
             self.build_key_operation(&linked.stmt, index_plan, get_by_key_input, selection, ty)
         } else {
@@ -856,7 +1077,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         &mut self,
         keys: eval::Func,
         linked: &LinkedStatement,
-        ref_source: Option<stmt::ExprArg>,
         index_key_ty: stmt::Type,
     ) -> mir::NodeId {
         if keys.is_const() {
@@ -865,7 +1085,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             debug_assert_eq!(1, linked.inputs.len(), "TODO");
             linked.inputs[0]
         } else {
-            debug_assert!(ref_source.is_some(), "TODO");
             let ty = stmt::Type::list(keys.ret.clone());
             // Gotta project
             self.planner.mir.insert(mir::Project {
@@ -932,10 +1151,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt::Expr::arg_project(0, [index])
             }));
 
-            let arg_ty = self.planner.mir[exec_stmt_node_id]
-                .ty()
-                .unwrap_list_ref()
-                .clone();
+            let arg_ty = match self.planner.mir[exec_stmt_node_id].ty() {
+                // Lists are flattened
+                stmt::Type::List(ty) => (**ty).clone(),
+                ty => ty.clone(),
+            };
+
             let projection = eval::Func::from_stmt(projection, vec![arg_ty]);
             let ty = stmt::Type::list(projection.ret.clone());
 
@@ -978,19 +1199,23 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             );
 
             match returning {
-                stmt::Returning::Value(returning) => {
-                    let ty = returning.infer_ty();
+                stmt::Returning::Value(expr) => {
+                    // Value variant contains a constant expression that can be evaluated
+                    if let Ok(value) = expr.eval_const() {
+                        let ty = value.infer_ty();
+                        let stmt::Value::List(rows) = value else {
+                            todo!(
+                                "unexpected returning type; value={value:#?}; stmt={:#?}",
+                                self.stmt_info.stmt
+                            )
+                        };
 
-                    let stmt::Value::List(rows) = returning else {
-                        todo!(
-                            "unexpected returning type; returning={returning:#?}; stmt={:#?}",
-                            self.stmt_info.stmt
-                        )
-                    };
-
-                    self.planner
-                        .mir
-                        .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
+                        self.planner
+                            .mir
+                            .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
+                    } else {
+                        todo!("handle this");
+                    }
                 }
                 stmt::Returning::Expr(returning) => {
                     let arg_ty = match self.planner.mir[exec_stmt_node_id].ty() {

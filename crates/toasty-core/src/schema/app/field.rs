@@ -22,7 +22,7 @@ pub struct Field {
     /// True if the field is part of the primary key
     pub primary_key: bool,
 
-    /// True if toasty is responsible for populating the value of the field
+    /// Specified if and how Toasty should automatically populate this field for new values
     pub auto: Option<Auto>,
 
     /// Any additional field constraints
@@ -84,6 +84,10 @@ impl Field {
     /// Gets the [`Auto`].
     pub fn auto(&self) -> Option<&Auto> {
         self.auto.as_ref()
+    }
+
+    pub fn is_auto_increment(&self) -> bool {
+        self.auto().map(|auto| auto.is_increment()).unwrap_or(false)
     }
 
     pub fn is_relation(&self) -> bool {
@@ -173,6 +177,10 @@ impl FieldTy {
             self,
             Self::BelongsTo(..) | Self::HasMany(..) | Self::HasOne(..)
         )
+    }
+
+    pub fn is_has_n(&self) -> bool {
+        matches!(self, Self::HasMany(..) | Self::HasOne(..))
     }
 
     pub fn is_has_many(&self) -> bool {

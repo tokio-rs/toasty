@@ -273,6 +273,7 @@ impl Value {
         for step in path.step_iter() {
             ret = match ret {
                 Entry::Value(Self::Record(record)) => Entry::Value(&record[step]),
+                Entry::Value(Self::List(items)) => Entry::Value(&items[step]),
                 _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
             }
         }

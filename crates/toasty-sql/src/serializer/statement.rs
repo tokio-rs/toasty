@@ -9,12 +9,45 @@ struct ColumnsWithConstraints<'a>(&'a stmt::CreateTable);
 
 impl ToSql for ColumnsWithConstraints<'_> {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        // SQLite needs the PK specified with the auto increment
+        let trailing_pk = if f.serializer.is_sqlite() {
+            // Sqlite only supports auto incrementing columns if they are the only primary key.
+            match self.0.columns.iter().filter(|c| c.auto_increment).count() {
+                0 => true,
+                1 => {
+                    // In this case, the primary key **must** be the auto incrementing column
+                    let Some(pk) = self.0.primary_key.as_deref().and_then(|pk| pk.as_record())
+                    else {
+                        todo!("Toasty should catch this earlier")
+                    };
+
+                    let [stmt::Expr::Reference(pk)] = &pk.fields[..] else {
+                        todo!("Toasty should catch this earlier")
+                    };
+
+                    let pk = pk.as_expr_column_unwrap();
+
+                    assert_eq!(0, pk.nesting);
+                    assert!(
+                        self.0.columns[pk.column].auto_increment,
+                        "Toasty should catch this earlier"
+                    );
+
+                    false
+                }
+                _ => panic!("Toasty should catch this case earlier"),
+            }
+        } else {
+            true
+        };
+
         let columns = Comma(&self.0.columns);
 
-        if let Some(pk) = &self.0.primary_key {
-            fmt!(cx, f, columns ", PRIMARY KEY " pk);
-        } else {
-            fmt!(cx, f, columns);
+        match &self.0.primary_key {
+            Some(pk) if trailing_pk => {
+                fmt!(cx, f, columns ", PRIMARY KEY " pk);
+            }
+            _ => fmt!(cx, f, columns),
         }
     }
 }
@@ -100,6 +133,10 @@ impl ToSql for &stmt::Insert {
             .returning
             .as_ref()
             .map(|returning| ("RETURNING ", returning));
+
+        if returning.is_some() && f.serializer.is_mysql() {
+            panic!("MySQL does not support the RETURNING clause with INSERT statements");
+        }
 
         // Set flag to indicate we're in INSERT context (VALUES shouldn't use ROW())
         let prev_in_insert = f.in_insert;

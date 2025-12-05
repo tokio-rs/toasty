@@ -79,7 +79,10 @@ impl Expand<'_> {
                 FieldTy::Primitive(ty) => {
                     quote!(#i => self.model.#field_ident = <#ty as #toasty::stmt::Primitive>::load(value)?,)
                 }
-                _ => quote!(#i => todo!("should not be set; {} = {value:#?}", #i),)
+                _ => {
+                    // TODO: Actually implement this
+                    quote!(#i => self.model.#field_ident.unload(),)
+                }
             }
 
         }).collect()

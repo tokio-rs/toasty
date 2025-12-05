@@ -14,8 +14,8 @@ pub enum Returning {
     /// Return an expression.
     Expr(Expr),
 
-    /// Return a constant list of rows
-    Value(Value),
+    /// Return a value instead of a projection of the statement source.
+    Value(Expr),
 }
 
 impl Returning {
@@ -61,8 +61,10 @@ impl Returning {
 
     #[track_caller]
     pub fn as_expr_unwrap(&self) -> &Expr {
-        self.as_expr()
-            .unwrap_or_else(|| panic!("expected stmt::Returning::Expr; actual={self:#?}"))
+        match self {
+            Self::Expr(expr) => expr,
+            _ => panic!("expected stmt::Returning::Expr; actual={self:#?}"),
+        }
     }
 
     pub fn as_expr_mut(&mut self) -> Option<&mut Expr> {
@@ -82,6 +84,10 @@ impl Returning {
 
     pub fn set_expr(&mut self, expr: impl Into<Expr>) {
         *self = Returning::Expr(expr.into());
+    }
+
+    pub fn is_value(&self) -> bool {
+        matches!(self, Self::Value(..))
     }
 
     /// Replaces this value with `Returning::Expr(null)` and returns the original value.

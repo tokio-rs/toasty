@@ -135,6 +135,7 @@ fn ddb_ty(ty: &stmt::Type) -> ScalarAttributeType {
         Bool => N,
         String | Enum(..) => S,
         I8 | I16 | I32 | I64 => N,
+        Bytes => B,
         Id(_) => S,
         _ => todo!("ddb_ty; ty={:#?}", ty),
     }

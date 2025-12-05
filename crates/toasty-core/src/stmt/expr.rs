@@ -218,19 +218,23 @@ impl Expr {
     }
 
     #[track_caller]
-    pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
+    pub fn entry(&self, path: impl EntryPath) -> Option<Entry<'_>> {
         let mut ret = Entry::Expr(self);
 
         for step in path.step_iter() {
             ret = match ret {
                 Entry::Expr(Self::Record(expr)) => Entry::Expr(&expr[step]),
+                Entry::Expr(Self::List(expr)) => Entry::Expr(&expr.items[step]),
                 Entry::Value(Value::Record(record))
                 | Entry::Expr(Self::Value(Value::Record(record))) => Entry::Value(&record[step]),
-                _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
+                Entry::Value(Value::List(items)) | Entry::Expr(Self::Value(Value::List(items))) => {
+                    Entry::Value(&items[step])
+                }
+                _ => return None,
             }
         }
 
-        ret
+        Some(ret)
     }
 
     #[track_caller]

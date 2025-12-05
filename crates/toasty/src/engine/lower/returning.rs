@@ -31,6 +31,10 @@ impl LowerStatement<'_, '_> {
             panic!("not currently lowering an insert statement")
         };
 
+        let stmt::Returning::Expr(project) = returning else {
+            return;
+        };
+
         let mut constantized = vec![];
 
         for row in &values.rows {
@@ -42,14 +46,14 @@ impl LowerStatement<'_, '_> {
                 },
             };
 
-            let Ok(row) = returning.as_expr_unwrap().eval(input) else {
+            let Ok(row) = project.eval(input) else {
                 return;
             };
 
             constantized.push(row);
         }
 
-        *returning = stmt::Returning::Value(stmt::Value::List(constantized));
+        *returning = stmt::Returning::Value(stmt::Value::List(constantized).into());
     }
 
     pub(super) fn constantize_update_returning(
@@ -76,7 +80,7 @@ impl stmt::Input for ConstantizeReturning<'_> {
         expr_reference: &stmt::ExprReference,
         projection: &stmt::Projection,
     ) -> Option<stmt::Expr> {
-        assert_eq!(0, expr_reference.nesting(), "TODO");
+        debug_assert_eq!(0, expr_reference.as_expr_column_unwrap().nesting, "TODO");
 
         let needle = self
             .cx
@@ -87,7 +91,9 @@ impl stmt::Input for ConstantizeReturning<'_> {
             ConstantizeSource::InsertValues { values, columns } => {
                 let index = columns.iter().position(|column| needle.id == *column)?;
                 match values {
-                    stmt::Expr::Record(row) => Some(row[index].entry(projection).to_expr()),
+                    stmt::Expr::Record(row) => {
+                        Some(row[index].entry(projection).unwrap().to_expr())
+                    }
                     stmt::Expr::Value(stmt::Value::Record(row)) => {
                         Some(row[index].entry(projection).to_expr())
                     }

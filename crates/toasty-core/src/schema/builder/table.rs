@@ -117,13 +117,7 @@ impl BuildTableFromModels<'_> {
         for field in &model.fields {
             match &field.ty {
                 app::FieldTy::Primitive(simple) => {
-                    self.create_column_for_primitive(
-                        field.id,
-                        simple,
-                        &field.name,
-                        prefix.as_deref(),
-                        field.nullable,
-                    );
+                    self.create_column_for_primitive(field, simple, prefix.as_deref());
                 }
                 // HasMany/HasOne relationships do not have columns... for now?
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
@@ -186,19 +180,18 @@ impl BuildTableFromModels<'_> {
 
     fn create_column_for_primitive(
         &mut self,
-        field_id: FieldId,
+        field: &app::Field,
         primitive: &app::FieldPrimitive,
-        name: &app::FieldName,
         prefix: Option<&str>,
-        nullable: bool,
     ) {
         let storage_name = if let Some(prefix) = prefix {
-            let storage_name = name.storage_name();
+            let storage_name = field.name.storage_name();
             format!("{prefix}__{storage_name}")
         } else {
-            name.storage_name().to_owned()
+            field.name.storage_name().to_owned()
         };
 
+        let auto_increment = field.is_auto_increment();
         let storage_ty = db::Type::from_app(
             &primitive.ty,
             primitive.storage_ty.as_ref(),
@@ -214,11 +207,12 @@ impl BuildTableFromModels<'_> {
             name: storage_name,
             ty: storage_ty.bridge_type(&primitive.ty),
             storage_ty,
-            nullable,
+            nullable: field.nullable,
             primary_key: false,
+            auto_increment: auto_increment && self.db.has_auto_increment,
         };
 
-        self.mapping.model_mut(field_id.model).fields[field_id.index]
+        self.mapping.model_mut(field.id.model).fields[field.id.index]
             .as_mut()
             .unwrap()
             .column = column.id;

@@ -1,3 +1,5 @@
+use crate::schema::Auto;
+
 use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
 
 use syn::spanned::Spanned;
@@ -28,8 +30,8 @@ pub(crate) struct FieldAttr {
     /// True if the field is annotated with `#[unique]`
     pub(crate) unique: bool,
 
-    /// True if toasty should automatically set the value
-    pub(crate) auto: bool,
+    /// Specifies if and how Toasty should automatically set values of newly created rows
+    pub(crate) auto: Option<Auto>,
 
     /// True if the field is indexed
     pub(crate) index: bool,
@@ -64,7 +66,7 @@ impl Field {
         let mut attrs = FieldAttr {
             key: None,
             unique: false,
-            auto: false,
+            auto: None,
             index: false,
             column: None,
         };
@@ -79,10 +81,10 @@ impl Field {
                     attrs.key = Some(attr.clone());
                 }
             } else if attr.path().is_ident("auto") {
-                if attrs.auto {
+                if attrs.auto.is_some() {
                     errs.push(syn::Error::new_spanned(attr, "duplicate #[auto] attribute"));
                 } else {
-                    attrs.auto = true;
+                    attrs.auto = Some(Auto::from_ast(attr)?);
                 }
             } else if attr.path().is_ident("unique") {
                 if attrs.unique {

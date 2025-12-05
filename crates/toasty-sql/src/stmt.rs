@@ -37,21 +37,21 @@ impl Statement {
             Self::Delete(delete) => delete
                 .returning
                 .as_ref()
-                .map(|ret| ret.as_expr_unwrap().as_record().len()),
+                .map(|ret| ret.as_expr_unwrap().as_record_unwrap().len()),
             Self::Insert(insert) => insert
                 .returning
                 .as_ref()
-                .map(|ret| ret.as_expr_unwrap().as_record().len()),
+                .map(|ret| ret.as_expr_unwrap().as_record_unwrap().len()),
             Self::Query(query) => match &query.body {
                 ExprSet::Select(select) => {
-                    Some(select.returning.as_expr_unwrap().as_record().len())
+                    Some(select.returning.as_expr_unwrap().as_record_unwrap().len())
                 }
                 stmt => todo!("returning_len, stmt={stmt:#?}"),
             },
             Self::Update(update) => update
                 .returning
                 .as_ref()
-                .map(|ret| ret.as_expr_unwrap().as_record().len()),
+                .map(|ret| ret.as_expr_unwrap().as_record_unwrap().len()),
             _ => None,
         }
     }
