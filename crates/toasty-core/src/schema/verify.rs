@@ -215,6 +215,29 @@ impl Verify<'_> {
             #[cfg(feature = "bigdecimal")]
             (Type::BigDecimal, DbType::Text) => true,
 
+            // Jiff date/time types: compatible with TEXT and native types
+            #[cfg(feature = "jiff")]
+            (Type::Timestamp, DbType::Text) => true,
+            #[cfg(feature = "jiff")]
+            (Type::Timestamp, DbType::Timestamp(_)) => true,
+            #[cfg(feature = "jiff")]
+            (Type::Timestamp, DbType::DateTime(_)) => true, // MySQL uses DATETIME for timestamp
+            
+            #[cfg(feature = "jiff")]
+            (Type::Date, DbType::Text) => true,
+            #[cfg(feature = "jiff")]
+            (Type::Date, DbType::Date) => true,
+            
+            #[cfg(feature = "jiff")]
+            (Type::Time, DbType::Text) => true,
+            #[cfg(feature = "jiff")]
+            (Type::Time, DbType::Time(_)) => true,
+            
+            #[cfg(feature = "jiff")]
+            (Type::DateTime, DbType::Text) => true,
+            #[cfg(feature = "jiff")]
+            (Type::DateTime, DbType::DateTime(_)) => true,
+
             // Handle custom type strings
             (Type::String, DbType::Custom(s)) => s == "text" || s.starts_with("varchar("),
             (Type::Bool, DbType::Custom(s)) => s == "boolean" || s.starts_with("integer("),
@@ -233,6 +256,18 @@ impl Verify<'_> {
             }
             #[cfg(feature = "bigdecimal")]
             (Type::BigDecimal, DbType::Custom(s)) => s == "text",
+            
+            // Jiff date/time types with custom storage types
+            #[cfg(feature = "jiff")]
+            (Type::Timestamp, DbType::Custom(s)) => {
+                s == "text" || s.starts_with("timestamp(") || s.starts_with("datetime(")
+            }
+            #[cfg(feature = "jiff")]
+            (Type::Date, DbType::Custom(s)) => s == "text" || s == "date",
+            #[cfg(feature = "jiff")]
+            (Type::Time, DbType::Custom(s)) => s == "text" || s.starts_with("time("),
+            #[cfg(feature = "jiff")]
+            (Type::DateTime, DbType::Custom(s)) => s == "text" || s.starts_with("datetime("),
 
             // All other combinations are incompatible
             _ => false,
@@ -272,6 +307,14 @@ impl Verify<'_> {
             Type::Uuid => "Uuid",
             #[cfg(feature = "bigdecimal")]
             Type::BigDecimal => "BigDecimal",
+            #[cfg(feature = "jiff")]
+            Type::Timestamp => "Timestamp",
+            #[cfg(feature = "jiff")]
+            Type::Date => "Date",
+            #[cfg(feature = "jiff")]
+            Type::Time => "Time",
+            #[cfg(feature = "jiff")]
+            Type::DateTime => "DateTime",
             _ => "unknown",
         }
     }
@@ -293,6 +336,14 @@ impl Verify<'_> {
             Type::Uuid => "TEXT, VARCHAR, UUID, BLOB, BINARY",
             #[cfg(feature = "bigdecimal")]
             Type::BigDecimal => "TEXT",
+            #[cfg(feature = "jiff")]
+            Type::Timestamp => "TEXT, TIMESTAMP, DATETIME",
+            #[cfg(feature = "jiff")]
+            Type::Date => "TEXT, DATE",
+            #[cfg(feature = "jiff")]
+            Type::Time => "TEXT, TIME",
+            #[cfg(feature = "jiff")]
+            Type::DateTime => "TEXT, DATETIME",
             _ => "none",
         }
     }
@@ -323,6 +374,22 @@ impl Verify<'_> {
             #[cfg(feature = "bigdecimal")]
             Type::BigDecimal => {
                 "BigDecimal fields use TEXT storage by default. You can remove the column_type annotation."
+            }
+            #[cfg(feature = "jiff")]
+            Type::Timestamp => {
+                "Timestamp fields use database-native types by default (TEXT for SQLite/DynamoDB, TIMESTAMP/DATETIME for PostgreSQL/MySQL). You can remove the column_type annotation."
+            }
+            #[cfg(feature = "jiff")]
+            Type::Date => {
+                "Date fields use database-native types by default (TEXT for SQLite/DynamoDB, DATE for PostgreSQL/MySQL). You can remove the column_type annotation."
+            }
+            #[cfg(feature = "jiff")]
+            Type::Time => {
+                "Time fields use database-native types by default (TEXT for SQLite/DynamoDB, TIME for PostgreSQL/MySQL). You can remove the column_type annotation."
+            }
+            #[cfg(feature = "jiff")]
+            Type::DateTime => {
+                "DateTime fields use database-native types by default (TEXT for SQLite/DynamoDB, DATETIME for PostgreSQL/MySQL). You can remove the column_type annotation."
             }
             _ => "Remove the column_type annotation to use the default type mapping.",
         }
