@@ -208,6 +208,8 @@ impl Verify<'_> {
             (Type::Uuid, DbType::Text) => true,
             (Type::Uuid, DbType::VarChar(_)) => true,
             (Type::Uuid, DbType::Uuid) => true,
+            (Type::Uuid, DbType::Blob) => true,
+            (Type::Uuid, DbType::Binary(_)) => true,
 
             // BigDecimal: arbitrary-precision decimal numbers
             #[cfg(feature = "bigdecimal")]
@@ -223,7 +225,7 @@ impl Verify<'_> {
                 s.starts_with("integer(") || s.starts_with("unsignedinteger(")
             }
             (Type::Uuid, DbType::Custom(s)) => {
-                s == "uuid" || s == "text" || s.starts_with("varchar(")
+                s == "uuid" || s == "text" || s.starts_with("varchar(") || s == "blob" || s.starts_with("binary(")
             }
             #[cfg(feature = "bigdecimal")]
             (Type::BigDecimal, DbType::Custom(s)) => s == "text",
@@ -242,6 +244,8 @@ impl Verify<'_> {
             DbType::VarChar(len) => format!("VARCHAR({})", len),
             DbType::Boolean => "BOOLEAN".to_string(),
             DbType::Uuid => "UUID".to_string(),
+            DbType::Blob => "BLOB".to_string(),
+            DbType::Binary(size) => format!("BINARY({})", size),
             DbType::Custom(s) => s.to_uppercase(),
             _ => "UNKNOWN".to_string(),
         }
@@ -282,7 +286,7 @@ impl Verify<'_> {
             | Type::U64 => "INTEGER, UNSIGNED_INTEGER",
             Type::String => "TEXT, VARCHAR",
             Type::Bool => "BOOLEAN, INTEGER",
-            Type::Uuid => "TEXT, VARCHAR, UUID",
+            Type::Uuid => "TEXT, VARCHAR, UUID, BLOB, BINARY",
             #[cfg(feature = "bigdecimal")]
             Type::BigDecimal => "TEXT",
             _ => "none",
@@ -310,7 +314,7 @@ impl Verify<'_> {
                 "Consider using `column_type = boolean` or remove the column_type annotation."
             }
             Type::Uuid => {
-                "Consider using `column_type = uuid` or remove the column_type annotation."
+                "Consider using `column_type = uuid`, `column_type = blob`, or remove the column_type annotation."
             }
             #[cfg(feature = "bigdecimal")]
             Type::BigDecimal => {
