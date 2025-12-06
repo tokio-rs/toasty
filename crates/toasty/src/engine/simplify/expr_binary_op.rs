@@ -98,6 +98,23 @@ impl Simplify<'_> {
                     _ => None,
                 }
             }
+            // Boolean constant comparisons:
+            //
+            //  - `x = true` → `x`
+            //  - `x = false` → `not(x)`
+            //  - `x != true` → `not(x)`
+            //  - `x != false` → `x`
+            (expr, Expr::Value(stmt::Value::Bool(b)))
+            | (Expr::Value(stmt::Value::Bool(b)), expr)
+                if op.is_eq() || op.is_ne() =>
+            {
+                let is_eq_true = (op.is_eq() && *b) || (op.is_ne() && !*b);
+                if is_eq_true {
+                    Some(expr.take())
+                } else {
+                    Some(Expr::not(expr.take()))
+                }
+            }
             (Expr::Cast(cast), Expr::Value(val)) if cast.ty.is_id() => {
                 *lhs = cast.expr.take();
                 self.uncast_value_id(val);
@@ -548,5 +565,75 @@ mod tests {
         let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
 
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn x_eq_true_becomes_x() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `x = true` → `x`
+        let mut lhs = Expr::arg(0);
+        let mut rhs = Expr::Value(Value::Bool(true));
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+        assert!(matches!(result, Some(Expr::Arg(_))));
+    }
+
+    #[test]
+    fn true_eq_x_becomes_x() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `true = x` → `x`
+        let mut lhs = Expr::Value(Value::Bool(true));
+        let mut rhs = Expr::arg(0);
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+        assert!(matches!(result, Some(Expr::Arg(_))));
+    }
+
+    #[test]
+    fn x_eq_false_becomes_not_x() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `x = false` → `not(x)`
+        let mut lhs = Expr::arg(0);
+        let mut rhs = Expr::Value(Value::Bool(false));
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+        assert!(matches!(result, Some(Expr::Not(_))));
+    }
+
+    #[test]
+    fn x_ne_true_becomes_not_x() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `x != true` → `not(x)`
+        let mut lhs = Expr::arg(0);
+        let mut rhs = Expr::Value(Value::Bool(true));
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Ne, &mut lhs, &mut rhs);
+
+        assert!(matches!(result, Some(Expr::Not(_))));
+    }
+
+    #[test]
+    fn x_ne_false_becomes_x() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `x != false` → `x`
+        let mut lhs = Expr::arg(0);
+        let mut rhs = Expr::Value(Value::Bool(false));
+
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Ne, &mut lhs, &mut rhs);
+
+        assert!(matches!(result, Some(Expr::Arg(_))));
     }
 }
