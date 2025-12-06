@@ -63,6 +63,16 @@ impl Primitive for usize {
     }
 }
 
+impl Primitive for bool {
+    fn ty() -> stmt::Type {
+        stmt::Type::Bool
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
 impl Primitive for String {
     fn ty() -> stmt::Type {
         stmt::Type::String
