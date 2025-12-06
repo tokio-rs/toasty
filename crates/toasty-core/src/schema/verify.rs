@@ -179,6 +179,31 @@ impl Verify<'_> {
     }
 
     /// Check if a statement primitive type is compatible with a storage type
+    /// 
+    /// This validation ensures that the storage type specified in a `#[column(type = ...)]`
+    /// annotation is compatible with the Rust field type. The validation is based on the
+    /// default storage type mappings defined in driver capabilities:
+    /// 
+    /// - **SQLite/DynamoDB**: Use TEXT for most custom types (no native date/time support)
+    /// - **PostgreSQL**: Native support for TIMESTAMP, DATE, TIME, DATETIME with precision
+    /// - **MySQL**: Native support similar to PostgreSQL, uses DATETIME for timestamps
+    /// 
+    /// # Database Compatibility Matrix
+    /// 
+    /// | Rust Type | SQLite | PostgreSQL | MySQL | DynamoDB |
+    /// |-----------|--------|------------|-------|----------|
+    /// | String    | TEXT   | TEXT       | TEXT  | TEXT     |
+    /// | bool      | INTEGER| BOOLEAN    | BOOLEAN| TEXT     |
+    /// | i32/i64   | INTEGER| INTEGER    | INTEGER| TEXT     |
+    /// | Uuid      | TEXT   | UUID       | TEXT  | TEXT     |
+    /// | Timestamp | TEXT   | TIMESTAMP  | DATETIME| TEXT    |
+    /// | Date      | TEXT   | DATE       | DATE  | TEXT     |
+    /// | Time      | TEXT   | TIME       | TIME  | TEXT     |
+    /// | DateTime  | TEXT   | DATETIME   | DATETIME| TEXT    |
+    /// 
+    /// Note: This hardcodes database knowledge that ideally should come from
+    /// driver capabilities, but requires architectural changes to pass capabilities
+    /// through to schema validation. See issue for future improvements.
     fn is_storage_compatible(&self, stmt_ty: &stmt::Type, storage_ty: &DbType) -> bool {
         use stmt::Type;
         match (stmt_ty, storage_ty) {
@@ -215,61 +240,80 @@ impl Verify<'_> {
             #[cfg(feature = "bigdecimal")]
             (Type::BigDecimal, DbType::Text) => true,
 
-            // Jiff date/time types: compatible with TEXT and native types
+            // Jiff date/time types: use helper method for maintainability
             #[cfg(feature = "jiff")]
-            (Type::Timestamp, DbType::Text) => true,
-            #[cfg(feature = "jiff")]
-            (Type::Timestamp, DbType::Timestamp(_)) => true,
-            #[cfg(feature = "jiff")]
-            (Type::Timestamp, DbType::DateTime(_)) => true, // MySQL uses DATETIME for timestamp
-            
-            #[cfg(feature = "jiff")]
-            (Type::Date, DbType::Text) => true,
-            #[cfg(feature = "jiff")]
-            (Type::Date, DbType::Date) => true,
-            
-            #[cfg(feature = "jiff")]
-            (Type::Time, DbType::Text) => true,
-            #[cfg(feature = "jiff")]
-            (Type::Time, DbType::Time(_)) => true,
-            
-            #[cfg(feature = "jiff")]
-            (Type::DateTime, DbType::Text) => true,
-            #[cfg(feature = "jiff")]
-            (Type::DateTime, DbType::DateTime(_)) => true,
+            (Type::Timestamp | Type::Date | Type::Time | Type::DateTime, _) => {
+                self.is_jiff_type_compatible(stmt_ty, storage_ty)
+            }
 
-            // Handle custom type strings
-            (Type::String, DbType::Custom(s)) => s == "text" || s.starts_with("varchar("),
-            (Type::Bool, DbType::Custom(s)) => s == "boolean" || s.starts_with("integer("),
+            // Handle custom type strings (case-insensitive)
+            (Type::String, DbType::Custom(s)) => {
+                let s_lower = s.to_lowercase();
+                s_lower == "text" || s_lower.starts_with("varchar(")
+            }
+            (Type::Bool, DbType::Custom(s)) => {
+                let s_lower = s.to_lowercase();
+                s_lower == "boolean" || s_lower.starts_with("integer(")
+            }
             (Type::I8 | Type::I16 | Type::I32 | Type::I64, DbType::Custom(s)) => {
-                s.starts_with("integer(")
+                let s_lower = s.to_lowercase();
+                s_lower.starts_with("integer(")
             }
             (Type::U8 | Type::U16 | Type::U32 | Type::U64, DbType::Custom(s)) => {
-                s.starts_with("integer(") || s.starts_with("unsignedinteger(")
+                let s_lower = s.to_lowercase();
+                s_lower.starts_with("integer(") || s_lower.starts_with("unsignedinteger(")
             }
             (Type::Uuid, DbType::Custom(s)) => {
-                s == "uuid"
-                    || s == "text"
-                    || s.starts_with("varchar(")
-                    || s == "blob"
-                    || s.starts_with("binary(")
+                let s_lower = s.to_lowercase();
+                s_lower == "uuid"
+                    || s_lower == "text"
+                    || s_lower.starts_with("varchar(")
+                    || s_lower == "blob"
+                    || s_lower.starts_with("binary(")
             }
             #[cfg(feature = "bigdecimal")]
-            (Type::BigDecimal, DbType::Custom(s)) => s == "text",
-            
-            // Jiff date/time types with custom storage types
-            #[cfg(feature = "jiff")]
-            (Type::Timestamp, DbType::Custom(s)) => {
-                s == "text" || s.starts_with("timestamp(") || s.starts_with("datetime(")
+            (Type::BigDecimal, DbType::Custom(s)) => {
+                let s_lower = s.to_lowercase();
+                s_lower == "text"
             }
-            #[cfg(feature = "jiff")]
-            (Type::Date, DbType::Custom(s)) => s == "text" || s == "date",
-            #[cfg(feature = "jiff")]
-            (Type::Time, DbType::Custom(s)) => s == "text" || s.starts_with("time("),
-            #[cfg(feature = "jiff")]
-            (Type::DateTime, DbType::Custom(s)) => s == "text" || s.starts_with("datetime("),
 
             // All other combinations are incompatible
+            _ => false,
+        }
+    }
+
+    /// Helper to check if a jiff date/time type is compatible with a database storage type
+    #[cfg(feature = "jiff")]
+    fn is_jiff_type_compatible(&self, stmt_ty: &stmt::Type, storage_ty: &DbType) -> bool {
+        match (stmt_ty, storage_ty) {
+            // All jiff types support TEXT storage (universal fallback)
+            (stmt::Type::Timestamp | stmt::Type::Date | stmt::Type::Time | stmt::Type::DateTime, DbType::Text) => true,
+            
+            // Native database type support
+            (stmt::Type::Timestamp, DbType::Timestamp(_)) => true,
+            (stmt::Type::Timestamp, DbType::DateTime(_)) => true, // MySQL uses DATETIME for timestamp
+            (stmt::Type::Date, DbType::Date) => true,
+            (stmt::Type::Time, DbType::Time(_)) => true,
+            (stmt::Type::DateTime, DbType::DateTime(_)) => true,
+            
+            // Custom type strings (case-insensitive)
+            (stmt::Type::Timestamp, DbType::Custom(s)) => {
+                let s_lower = s.to_lowercase();
+                s_lower == "text" || s_lower.starts_with("timestamp(") || s_lower.starts_with("datetime(")
+            }
+            (stmt::Type::Date, DbType::Custom(s)) => {
+                let s_lower = s.to_lowercase();
+                s_lower == "text" || s_lower == "date"
+            }
+            (stmt::Type::Time, DbType::Custom(s)) => {
+                let s_lower = s.to_lowercase();
+                s_lower == "text" || s_lower.starts_with("time(")
+            }
+            (stmt::Type::DateTime, DbType::Custom(s)) => {
+                let s_lower = s.to_lowercase();
+                s_lower == "text" || s_lower.starts_with("datetime(")
+            }
+            
             _ => false,
         }
     }

@@ -161,9 +161,174 @@ async fn type_alias_detection(test: &mut DbTest) {
 
     let error_message = result.unwrap_err().to_string();
     // The error should reflect that it's a u32 field, not String field
-    assert!(error_message.contains("Invalid column type 'text' for field 'name' of type 'u32'"));
-    assert!(error_message
-        .contains("u32 fields are compatible with: unsignedinteger(4), unsignedinteger(8)"));
+    assert!(error_message.contains("Invalid column type 'TEXT' for field 'name' of type 'u32'"));
+    assert!(error_message.contains("u32 fields are compatible with: INTEGER, UNSIGNED_INTEGER"));
+}
+
+// Jiff date/time type validation tests
+#[cfg(feature = "jiff")]
+async fn valid_jiff_timestamp_text(test: &mut DbTest) {
+    #[derive(toasty::Model)]
+    #[allow(dead_code)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        // Valid: Timestamp with text storage (works on all databases)
+        #[column(type = text)]
+        created_at: jiff::Timestamp,
+    }
+
+    let result = test.try_setup_db(models!(Event)).await;
+    assert!(
+        result.is_ok(),
+        "Expected Timestamp with text storage to succeed: {:?}",
+        result
+    );
+}
+
+#[cfg(feature = "jiff")]
+async fn valid_jiff_date_native(test: &mut DbTest) {
+    #[derive(toasty::Model)]
+    #[allow(dead_code)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        // Valid: Date with default native storage (varies by database)
+        event_date: jiff::civil::Date,
+    }
+
+    let result = test.try_setup_db(models!(Event)).await;
+    assert!(
+        result.is_ok(),
+        "Expected Date with native storage to succeed: {:?}",
+        result
+    );
+}
+
+#[cfg(feature = "jiff")]
+async fn valid_jiff_time_precision(test: &mut DbTest) {
+    #[derive(toasty::Model)]
+    #[allow(dead_code)]
+    struct Schedule {
+        #[key]
+        #[auto]  
+        id: Id<Self>,
+
+        // Valid: Time with precision (supported on PostgreSQL/MySQL)
+        #[column(type = time(6))]
+        start_time: jiff::civil::Time,
+    }
+
+    let result = test.try_setup_db(models!(Schedule)).await;
+    assert!(
+        result.is_ok(),
+        "Expected Time with precision to succeed: {:?}",
+        result
+    );
+}
+
+#[cfg(feature = "jiff")]
+async fn valid_jiff_datetime_text(test: &mut DbTest) {
+    #[derive(toasty::Model)]
+    #[allow(dead_code)]
+    struct Appointment {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        // Valid: DateTime with text storage (works on all databases)
+        #[column(type = text)]
+        scheduled_at: jiff::civil::DateTime,
+    }
+
+    let result = test.try_setup_db(models!(Appointment)).await;
+    assert!(
+        result.is_ok(),
+        "Expected DateTime with text storage to succeed: {:?}",
+        result
+    );
+}
+
+#[cfg(feature = "jiff")]
+async fn invalid_jiff_timestamp_with_integer(test: &mut DbTest) {
+    #[derive(toasty::Model)]
+    #[allow(dead_code)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        // Invalid: Timestamp field with integer storage (type mismatch)
+        #[column(type = integer)]
+        created_at: jiff::Timestamp,
+    }
+
+    let result = test.try_setup_db(models!(Event)).await;
+    assert!(
+        result.is_err(),
+        "Expected schema validation to fail for Timestamp field with integer storage"
+    );
+
+    let error_message = result.unwrap_err().to_string();
+    assert!(error_message.contains("Invalid column type"));
+    assert!(error_message.contains("field 'created_at' of type 'Timestamp'"));
+    assert!(error_message.contains("Timestamp fields are compatible with"));
+}
+
+#[cfg(feature = "jiff")]
+async fn invalid_jiff_date_with_boolean(test: &mut DbTest) {
+    #[derive(toasty::Model)]
+    #[allow(dead_code)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        // Invalid: Date field with boolean storage (type mismatch)  
+        #[column(type = boolean)]
+        event_date: jiff::civil::Date,
+    }
+
+    let result = test.try_setup_db(models!(Event)).await;
+    assert!(
+        result.is_err(),
+        "Expected schema validation to fail for Date field with boolean storage"
+    );
+
+    let error_message = result.unwrap_err().to_string();
+    assert!(error_message.contains("Invalid column type"));
+    assert!(error_message.contains("field 'event_date' of type 'Date'"));
+    assert!(error_message.contains("Date fields are compatible with"));
+}
+
+#[cfg(feature = "jiff")]
+async fn case_insensitive_jiff_types(test: &mut DbTest) {
+    #[derive(toasty::Model)]
+    #[allow(dead_code)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+
+        // Should work with uppercase TEXT
+        #[column(type = TEXT)]
+        created_at: jiff::Timestamp,
+        
+        // Should work with mixed case Date  
+        #[column(type = Date)]
+        event_date: jiff::civil::Date,
+    }
+
+    let result = test.try_setup_db(models!(Event)).await;
+    assert!(
+        result.is_ok(),
+        "Expected case insensitive type matching to work: {:?}",
+        result
+    );
 }
 
 tests!(
@@ -173,4 +338,18 @@ tests!(
     invalid_bool_with_text_storage,
     valid_compatible_types,
     type_alias_detection,
+    #[cfg(feature = "jiff")]
+    valid_jiff_timestamp_text,
+    #[cfg(feature = "jiff")]
+    valid_jiff_date_native,
+    #[cfg(feature = "jiff")]
+    valid_jiff_time_precision,
+    #[cfg(feature = "jiff")]
+    valid_jiff_datetime_text,
+    #[cfg(feature = "jiff")]
+    invalid_jiff_timestamp_with_integer,
+    #[cfg(feature = "jiff")]
+    invalid_jiff_date_with_boolean,
+    #[cfg(feature = "jiff")]
+    case_insensitive_jiff_types,
 );
