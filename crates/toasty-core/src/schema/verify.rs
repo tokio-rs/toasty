@@ -225,7 +225,11 @@ impl Verify<'_> {
                 s.starts_with("integer(") || s.starts_with("unsignedinteger(")
             }
             (Type::Uuid, DbType::Custom(s)) => {
-                s == "uuid" || s == "text" || s.starts_with("varchar(") || s == "blob" || s.starts_with("binary(")
+                s == "uuid"
+                    || s == "text"
+                    || s.starts_with("varchar(")
+                    || s == "blob"
+                    || s.starts_with("binary(")
             }
             #[cfg(feature = "bigdecimal")]
             (Type::BigDecimal, DbType::Custom(s)) => s == "text",
