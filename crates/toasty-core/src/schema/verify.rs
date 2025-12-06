@@ -209,6 +209,10 @@ impl Verify<'_> {
             (Type::Uuid, DbType::VarChar(_)) => true,
             (Type::Uuid, DbType::Uuid) => true,
 
+            // BigDecimal: arbitrary-precision decimal numbers
+            #[cfg(feature = "bigdecimal")]
+            (Type::BigDecimal, DbType::Text) => true,
+
             // Handle custom type strings
             (Type::String, DbType::Custom(s)) => s == "text" || s.starts_with("varchar("),
             (Type::Bool, DbType::Custom(s)) => s == "boolean" || s.starts_with("integer("),
@@ -221,6 +225,8 @@ impl Verify<'_> {
             (Type::Uuid, DbType::Custom(s)) => {
                 s == "uuid" || s == "text" || s.starts_with("varchar(")
             }
+            #[cfg(feature = "bigdecimal")]
+            (Type::BigDecimal, DbType::Custom(s)) => s == "text",
 
             // All other combinations are incompatible
             _ => false,
@@ -256,6 +262,8 @@ impl Verify<'_> {
             Type::String => "String",
             Type::Bool => "bool",
             Type::Uuid => "Uuid",
+            #[cfg(feature = "bigdecimal")]
+            Type::BigDecimal => "BigDecimal",
             _ => "unknown",
         }
     }
@@ -275,6 +283,8 @@ impl Verify<'_> {
             Type::String => "TEXT, VARCHAR",
             Type::Bool => "BOOLEAN, INTEGER",
             Type::Uuid => "TEXT, VARCHAR, UUID",
+            #[cfg(feature = "bigdecimal")]
+            Type::BigDecimal => "TEXT",
             _ => "none",
         }
     }
@@ -301,6 +311,10 @@ impl Verify<'_> {
             }
             Type::Uuid => {
                 "Consider using `column_type = uuid` or remove the column_type annotation."
+            }
+            #[cfg(feature = "bigdecimal")]
+            Type::BigDecimal => {
+                "BigDecimal fields use TEXT storage by default. You can remove the column_type annotation."
             }
             _ => "Remove the column_type annotation to use the default type mapping.",
         }
