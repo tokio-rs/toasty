@@ -76,25 +76,33 @@ impl Simplify<'_> {
                 }
                 None
             }
-            // Constant folding, e.g.
+            // Constant folding and null propagation,
             //
             //   - `5 = 5` → `true`
             //   - `1 < 5` → `true`
             //   - `"a" >= "b"` → `false`
-            //   - `null < 5` is not modified
+            //   - `null <op> x` → `null`
+            //   - `x <op> null` → `null`
             (Expr::Value(lhs_val), Expr::Value(rhs_val)) => {
-                // Skip if either side is `null` (`null` comparisons have special semantics).
                 if lhs_val.is_null() || rhs_val.is_null() {
-                    return None;
+                    return Some(Expr::null());
                 }
 
                 match op {
-                    stmt::BinaryOp::Eq => Some((lhs_val == rhs_val).into()),
-                    stmt::BinaryOp::Ne => Some((lhs_val != rhs_val).into()),
-                    stmt::BinaryOp::Lt => lhs_val.partial_cmp(&rhs_val).map(|o| o.is_lt().into()),
-                    stmt::BinaryOp::Le => lhs_val.partial_cmp(&rhs_val).map(|o| o.is_le().into()),
-                    stmt::BinaryOp::Gt => lhs_val.partial_cmp(&rhs_val).map(|o| o.is_gt().into()),
-                    stmt::BinaryOp::Ge => lhs_val.partial_cmp(&rhs_val).map(|o| o.is_ge().into()),
+                    stmt::BinaryOp::Eq => Some((*lhs_val == *rhs_val).into()),
+                    stmt::BinaryOp::Ne => Some((*lhs_val != *rhs_val).into()),
+                    stmt::BinaryOp::Lt => {
+                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_lt().into())
+                    }
+                    stmt::BinaryOp::Le => {
+                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_le().into())
+                    }
+                    stmt::BinaryOp::Gt => {
+                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_gt().into())
+                    }
+                    stmt::BinaryOp::Ge => {
+                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_ge().into())
+                    }
                     _ => None,
                 }
             }
@@ -322,31 +330,31 @@ mod tests {
     }
 
     #[test]
-    fn constant_eq_with_null_not_simplified() {
+    fn constant_eq_with_null_becomes_null() {
         let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
-        // `eq(null, 5)` is not simplified (`null` comparisons have special semantics)
+        // `eq(null, 5)` → `null`
         let mut lhs = Expr::Value(Value::Null);
         let mut rhs = Expr::Value(Value::from(5i64));
 
         let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
 
-        assert!(result.is_none());
+        assert!(matches!(result, Some(Expr::Value(Value::Null))));
     }
 
     #[test]
-    fn constant_eq_null_with_null_not_simplified() {
+    fn constant_eq_null_with_null_becomes_null() {
         let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
-        // `eq(null, null)` is not simplified (`null` comparisons have special semantics)
+        // `eq(null, null)` → `null`
         let mut lhs = Expr::Value(Value::Null);
         let mut rhs = Expr::Value(Value::Null);
 
         let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
 
-        assert!(result.is_none());
+        assert!(matches!(result, Some(Expr::Value(Value::Null))));
     }
 
     #[test]
@@ -490,13 +498,13 @@ mod tests {
     }
 
     #[test]
-    fn constant_lt_with_null_not_simplified() {
+    fn lt_with_non_constant_not_simplified() {
         let schema = test_schema();
         let mut simplify = Simplify::new(&schema);
 
-        // `5 < null` is not simplified
-        let mut lhs = Expr::Value(Value::from(5i64));
-        let mut rhs = Expr::Value(Value::Null);
+        // `arg(0) < 5` is not simplified (non-constant lhs)
+        let mut lhs = Expr::arg(0);
+        let mut rhs = Expr::Value(Value::from(5i64));
 
         let result = simplify.simplify_expr_binary_op(BinaryOp::Lt, &mut lhs, &mut rhs);
 
