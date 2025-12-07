@@ -111,7 +111,8 @@ async fn ty_bigdecimal_as_numeric_fixed_precision(test: &mut DbTest) {
 
     // Only test on databases that support native decimal types
     // Skip PostgreSQL as BigDecimal support is not yet implemented
-    if !test.capability().storage_types.native_decimal || !test.capability().bigdecimal_implemented {
+    if !test.capability().storage_types.native_decimal || !test.capability().bigdecimal_implemented
+    {
         return;
     }
 
