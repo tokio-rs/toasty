@@ -17,6 +17,11 @@ pub struct Capability {
 
     /// DynamoDB does not support != predicates on the primary key.
     pub primary_key_ne_predicate: bool,
+
+    /// Whether BigDecimal driver support is implemented.
+    /// TODO: Remove this flag when PostgreSQL BigDecimal support is implemented.
+    /// Currently only MySQL has implemented BigDecimal driver support.
+    pub bigdecimal_implemented: bool,
 }
 
 #[derive(Debug)]
@@ -98,6 +103,7 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         primary_key_ne_predicate: true,
+        bigdecimal_implemented: false,
     };
 
     /// PostgreSQL capabilities
@@ -105,6 +111,7 @@ impl Capability {
         cte_with_update: true,
         storage_types: StorageTypes::POSTGRESQL,
         select_for_update: true,
+        bigdecimal_implemented: false,
         ..Self::SQLITE
     };
 
@@ -113,6 +120,7 @@ impl Capability {
         cte_with_update: false,
         storage_types: StorageTypes::MYSQL,
         select_for_update: true,
+        bigdecimal_implemented: true,
         ..Self::SQLITE
     };
 
@@ -123,6 +131,7 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         primary_key_ne_predicate: false,
+        bigdecimal_implemented: false,
     };
 }
 
