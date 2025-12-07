@@ -18,7 +18,11 @@ impl Simplify<'_> {
 
                 None
             }
-            stmt::Expr::Value(_) => todo!("expr={expr:#?}"),
+            // Null constant folding,
+            //
+            //  - `null is null` → `true`
+            //  - `<non-null const> is null` → `false`
+            stmt::Expr::Value(value) => Some(value.is_null().into()),
             _ => None,
         }
     }
@@ -144,5 +148,57 @@ mod tests {
         let result = simplify.simplify_expr_is_null(&mut field);
 
         assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
+    }
+
+    #[test]
+    fn null_is_null_becomes_true() {
+        let schema = test_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `null is null` → `true`
+        let mut expr = ExprIsNull {
+            expr: Box::new(Expr::null()),
+        };
+        let result = simplify.simplify_expr_is_null(&mut expr);
+
+        assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
+    }
+
+    #[test]
+    fn non_null_const_is_null_becomes_false() {
+        let schema = test_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `5 is null` → `false`
+        let mut expr = ExprIsNull {
+            expr: Box::new(Expr::from(5i64)),
+        };
+        let result = simplify.simplify_expr_is_null(&mut expr);
+
+        assert!(matches!(result, Some(Expr::Value(Value::Bool(false)))));
+    }
+
+    #[test]
+    fn null_is_not_null_becomes_false() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `not(is_null(null))` → `not(true)` → `false`
+        let mut expr = Expr::is_not_null(Expr::null());
+        simplify.visit_expr_mut(&mut expr);
+
+        assert!(matches!(expr, Expr::Value(Value::Bool(false))));
+    }
+
+    #[test]
+    fn non_null_const_is_not_null_becomes_true() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `not(is_null(5))` → `not(false)` → `true`
+        let mut expr = Expr::is_not_null(Expr::from(5i64));
+        simplify.visit_expr_mut(&mut expr);
+
+        assert!(matches!(expr, Expr::Value(Value::Bool(true))));
     }
 }
