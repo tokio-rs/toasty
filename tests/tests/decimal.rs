@@ -26,7 +26,7 @@ async fn ty_decimal(test: &mut DbTest) {
         Decimal::from_str("-0.0000000001").unwrap(), // Small negative
         Decimal::from_str("99999999999999999999.99999999").unwrap(), // Large with precision
         Decimal::from_str("-99999999999999999999.99999999").unwrap(), // Large negative with precision
-        Decimal::from_str("3.141592653589793238").unwrap(), // Pi approximation
+        Decimal::from_str("3.141592653589793238").unwrap(),           // Pi approximation
     ];
 
     for val in &test_values {

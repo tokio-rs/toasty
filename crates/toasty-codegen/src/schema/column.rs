@@ -185,7 +185,9 @@ impl quote::ToTokens for ColumnType {
             Self::Text => quote! { db::Type::Text },
             Self::VarChar(size) => quote! { db::Type::VarChar(#size) },
             Self::Numeric(None) => quote! { db::Type::Numeric(None) },
-            Self::Numeric(Some((precision, scale))) => quote! { db::Type::Numeric(Some((#precision, #scale))) },
+            Self::Numeric(Some((precision, scale))) => {
+                quote! { db::Type::Numeric(Some((#precision, #scale))) }
+            }
             Self::Binary(size) => quote! { db::Type::Binary(#size) },
             Self::Blob => quote! { db::Type::Blob },
             Self::Timestamp(precision) => quote! { db::Type::Timestamp(#precision) },
