@@ -315,11 +315,9 @@ fn mysql_to_toasty(
         }
 
         #[cfg(feature = "rust_decimal")]
-        MYSQL_TYPE_NEWDECIMAL | MYSQL_TYPE_DECIMAL => {
-            extract_or_null(row, i, |s: String| {
-                stmt::Value::Decimal(s.parse().expect("failed to parse Decimal from MySQL"))
-            })
-        }
+        MYSQL_TYPE_NEWDECIMAL | MYSQL_TYPE_DECIMAL => extract_or_null(row, i, |s: String| {
+            stmt::Value::Decimal(s.parse().expect("failed to parse Decimal from MySQL"))
+        }),
 
         _ => todo!(
             "implement MySQL to toasty conversion for `{:#?}`; {:#?}; ty={:#?}",
