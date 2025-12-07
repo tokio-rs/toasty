@@ -31,6 +31,9 @@ pub struct StorageTypes {
     /// The default storage type for a UUID.
     pub default_uuid_type: db::Type,
 
+    /// The default storage type for a Decimal (fixed-precision decimal).
+    pub default_decimal_type: db::Type,
+
     /// The default storage type for a BigDecimal (arbitrary-precision decimal).
     pub default_bigdecimal_type: db::Type,
 
@@ -133,6 +136,7 @@ impl StorageTypes {
         default_uuid_type: db::Type::Blob,
 
         // SQLite does not have a native decimal type. Store as TEXT.
+        default_decimal_type: db::Type::Text,
         default_bigdecimal_type: db::Type::Text,
 
         // SQLite does not have native date/time types. Store as TEXT in ISO 8601 format.
@@ -163,6 +167,8 @@ impl StorageTypes {
 
         default_uuid_type: db::Type::Uuid,
 
+        // PostgreSQL has native NUMERIC type for fixed and arbitrary-precision decimals.
+        default_decimal_type: db::Type::Numeric(None),
         // TODO: PostgreSQL has native NUMERIC type for arbitrary-precision decimals,
         // but the encoding is complicated and has to be done separately in the future.
         default_bigdecimal_type: db::Type::Text,
@@ -201,6 +207,7 @@ impl StorageTypes {
 
         // MySQL does not have an arbitrary-precision decimal type. The DECIMAL type
         // requires a fixed precision and scale to be specified upfront. Store as TEXT.
+        default_decimal_type: db::Type::Text,
         default_bigdecimal_type: db::Type::Text,
 
         // MySQL has native support for temporal types with microsecond precision (6 digits)
@@ -231,6 +238,7 @@ impl StorageTypes {
         default_uuid_type: db::Type::Blob,
 
         // DynamoDB does not have a native decimal type. Store as TEXT.
+        default_decimal_type: db::Type::Text,
         default_bigdecimal_type: db::Type::Text,
 
         // DynamoDB does not have native date/time types. Store as TEXT (strings).

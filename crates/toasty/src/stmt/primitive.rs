@@ -161,6 +161,20 @@ impl<T: Primitive> Primitive for Box<T> {
     }
 }
 
+#[cfg(feature = "rust_decimal")]
+impl Primitive for rust_decimal::Decimal {
+    fn ty() -> stmt::Type {
+        stmt::Type::Decimal
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::Decimal(v) => Ok(v),
+            _ => anyhow::bail!("cannot convert value to rust_decimal::Decimal {value:#?}"),
+        }
+    }
+}
+
 #[cfg(feature = "bigdecimal")]
 impl Primitive for bigdecimal::BigDecimal {
     fn ty() -> stmt::Type {
