@@ -64,6 +64,16 @@ pub struct StorageTypes {
     /// Whether the database has native support for DateTime types.
     pub native_datetime: bool,
 
+    /// Whether the database has native support for Decimal types.
+    pub native_decimal: bool,
+
+    /// Whether the database's decimal type supports arbitrary precision.
+    /// When false, the decimal type requires fixed precision and scale to be specified upfront.
+    /// - PostgreSQL: true (NUMERIC supports arbitrary precision)
+    /// - MySQL: false (DECIMAL requires fixed precision/scale)
+    /// - SQLite/DynamoDB: false (no native decimal support, stored as TEXT)
+    pub decimal_arbitrary_precision: bool,
+
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
     pub max_unsigned_integer: Option<u64>,
@@ -152,6 +162,10 @@ impl StorageTypes {
         native_time: false,
         native_datetime: false,
 
+        // SQLite does not have native decimal types
+        native_decimal: false,
+        decimal_arbitrary_precision: false,
+
         // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
         // are limited to i64::MAX to prevent overflow
         max_unsigned_integer: Some(i64::MAX as u64),
@@ -185,6 +199,10 @@ impl StorageTypes {
         native_date: true,
         native_time: true,
         native_datetime: true,
+
+        // PostgreSQL has native NUMERIC type with arbitrary precision
+        native_decimal: true,
+        decimal_arbitrary_precision: true,
 
         // PostgreSQL BIGINT is signed 64-bit, so unsigned integers are limited
         // to i64::MAX. While NUMERIC could theoretically support larger values,
@@ -225,6 +243,10 @@ impl StorageTypes {
         native_time: true,
         native_datetime: true,
 
+        // MySQL has DECIMAL type but requires fixed precision/scale upfront
+        native_decimal: true,
+        decimal_arbitrary_precision: false,
+
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
     };
@@ -253,6 +275,10 @@ impl StorageTypes {
         native_date: false,
         native_time: false,
         native_datetime: false,
+
+        // DynamoDB does not have native decimal types
+        native_decimal: false,
+        decimal_arbitrary_precision: false,
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,
