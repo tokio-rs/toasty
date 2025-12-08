@@ -111,6 +111,9 @@ pub use expr_set::ExprSet;
 mod expr_set_op;
 pub use expr_set_op::ExprSetOp;
 
+mod expr_unary_op;
+pub use expr_unary_op::ExprUnaryOp;
+
 mod expr_stmt;
 pub use expr_stmt::ExprStmt;
 
@@ -160,6 +163,9 @@ pub use offset::Offset;
 
 mod op_binary;
 pub use op_binary::BinaryOp;
+
+mod op_unary;
+pub use op_unary::UnaryOp;
 
 mod order_by;
 pub use order_by::OrderBy;

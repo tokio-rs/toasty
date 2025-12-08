@@ -4,8 +4,8 @@ use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
     ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc, ExprInList,
     ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr, ExprPattern,
-    ExprProject, ExprRecord, ExprStmt, ExprTy, Node, Projection, Substitute, Type, Value, Visit,
-    VisitMut,
+    ExprProject, ExprRecord, ExprStmt, ExprTy, ExprUnaryOp, Node, Projection, Substitute, Type,
+    Value, Visit, VisitMut,
 };
 use std::fmt;
 
@@ -21,7 +21,7 @@ pub enum Expr {
     /// An argument when the expression is a function body
     Arg(ExprArg),
 
-    /// Binary expression
+    /// Binary operation expression
     BinaryOp(ExprBinaryOp),
 
     /// Cast an expression to a different type
@@ -91,6 +91,9 @@ pub enum Expr {
 
     /// A type reference. This is used by the "is a" expression
     Type(ExprTy),
+
+    /// Unary operation expression
+    UnaryOp(ExprUnaryOp),
 
     /// Evaluates to a constant value reference
     Value(Value),
@@ -432,6 +435,7 @@ impl fmt::Debug for Expr {
             Self::List(e) => e.fmt(f),
             Self::Stmt(e) => e.fmt(f),
             Self::Type(e) => e.fmt(f),
+            Self::UnaryOp(e) => e.fmt(f),
             Self::Value(e) => e.fmt(f),
             Self::DecodeEnum(expr, ty, variant) => f
                 .debug_tuple("DecodeEnum")

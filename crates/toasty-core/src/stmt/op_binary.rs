@@ -9,6 +9,11 @@ pub enum BinaryOp {
     Le,
     Lt,
     IsA,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
 }
 
 impl BinaryOp {
@@ -24,6 +29,22 @@ impl BinaryOp {
         matches!(self, Self::IsA)
     }
 
+    /// Returns true if this is a comparison operator.
+    pub fn is_comparison(self) -> bool {
+        matches!(
+            self,
+            Self::Eq | Self::Ne | Self::Ge | Self::Gt | Self::Le | Self::Lt | Self::IsA
+        )
+    }
+
+    /// Returns true if this is an arithmetic operator.
+    pub fn is_arithmetic(self) -> bool {
+        matches!(
+            self,
+            Self::Add | Self::Sub | Self::Mul | Self::Div | Self::Mod
+        )
+    }
+
     pub fn reverse(&mut self) {
         match *self {
             Self::Eq => {}
@@ -33,13 +54,16 @@ impl BinaryOp {
 
     /// Returns the logical negation of this operator, if one exists.
     ///
+    /// Only comparison operators can be negated:
+    ///
     /// - `=` → `!=`
     /// - `!=` → `=`
     /// - `<` → `>=`
     /// - `>=` → `<`
     /// - `>` → `<=`
     /// - `<=` → `>`
-    /// - `IsA` → `None`
+    ///
+    /// Returns `None` for `IsA` and arithmetic operators.
     pub fn negate(self) -> Option<Self> {
         match self {
             Self::Eq => Some(Self::Ne),
@@ -48,24 +72,36 @@ impl BinaryOp {
             Self::Ge => Some(Self::Lt),
             Self::Gt => Some(Self::Le),
             Self::Le => Some(Self::Gt),
-            Self::IsA => None,
+            Self::IsA | Self::Add | Self::Sub | Self::Mul | Self::Div | Self::Mod => None,
         }
     }
 
-    /// Returns the operator that represents an equivalent comparison when the
-    /// operands are commuted (swapped).
+    /// Returns the operator that represents an equivalent expression when the
+    /// operands are commuted (swapped) or `None` if the operator cannot be
+    /// commuted.
     ///
-    /// For example, `5 < x` becomes `x > 5`, so `Lt.commute()` returns `Gt`.
-    /// Symmetric operators like `Eq` and `Ne` return themselves.
-    pub fn commute(self) -> Self {
+    /// For comparisons, `5 < x` becomes `x > 5`, so `Lt.commute()` returns
+    /// `Some(Gt)`. Symmetric operators like `Eq`, `Ne`, `Add`, and `Mul` return
+    /// themselves.
+    ///
+    /// Non-commutative operators (`Sub`, `Div`, `Mod`) return `None` since
+    /// there is no equivalent operator for commuted operands.
+    pub fn commute(self) -> Option<Self> {
         match self {
-            Self::Eq => Self::Eq,
-            Self::Ne => Self::Ne,
-            Self::Ge => Self::Le,
-            Self::Gt => Self::Lt,
-            Self::Le => Self::Ge,
-            Self::Lt => Self::Gt,
-            Self::IsA => Self::IsA,
+            // Symmetric comparison operators
+            Self::Eq => Some(Self::Eq),
+            Self::Ne => Some(Self::Ne),
+            Self::IsA => Some(Self::IsA),
+            // Asymmetric comparison operators
+            Self::Ge => Some(Self::Le),
+            Self::Gt => Some(Self::Lt),
+            Self::Le => Some(Self::Ge),
+            Self::Lt => Some(Self::Gt),
+            // Commutative arithmetic operators
+            Self::Add => Some(Self::Add),
+            Self::Mul => Some(Self::Mul),
+            // Non-commutative arithmetic operators
+            Self::Sub | Self::Div | Self::Mod => None,
         }
     }
 }
@@ -80,6 +116,11 @@ impl fmt::Display for BinaryOp {
             BinaryOp::Le => "<=".fmt(f),
             BinaryOp::Lt => "<".fmt(f),
             BinaryOp::IsA => "is a".fmt(f),
+            BinaryOp::Add => "+".fmt(f),
+            BinaryOp::Sub => "-".fmt(f),
+            BinaryOp::Mul => "*".fmt(f),
+            BinaryOp::Div => "/".fmt(f),
+            BinaryOp::Mod => "%".fmt(f),
         }
     }
 }

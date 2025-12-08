@@ -83,6 +83,7 @@ impl Simplify<'_> {
             //   - `5 = 5` → `true`
             //   - `1 < 5` → `true`
             //   - `"a" >= "b"` → `false`
+            //   - `2 + 3` → `5`
             //   - `null <op> x` → `null`
             //   - `x <op> null` → `null`
             (Expr::Value(lhs_val), Expr::Value(rhs_val)) => {
@@ -105,9 +106,16 @@ impl Simplify<'_> {
                     stmt::BinaryOp::Ge => {
                         PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_ge().into())
                     }
+                    stmt::BinaryOp::Add => fold_add(lhs_val, rhs_val),
+                    stmt::BinaryOp::Sub => fold_sub(lhs_val, rhs_val),
+                    stmt::BinaryOp::Mul => fold_mul(lhs_val, rhs_val),
+                    stmt::BinaryOp::Div => fold_div(lhs_val, rhs_val),
+                    stmt::BinaryOp::Mod => fold_mod(lhs_val, rhs_val),
                     _ => None,
                 }
             }
+            // Arithmetic identity and annihilator rules
+            _ if op.is_arithmetic() => self.simplify_arithmetic_identity(op, lhs, rhs),
             // Boolean constant comparisons:
             //
             //  - `x = true` → `x`
@@ -167,8 +175,12 @@ impl Simplify<'_> {
             }
             // Canonicalization, `literal <op> col` → `col <op_commuted> literal`
             (Expr::Value(_), rhs) if !rhs.is_value() => {
-                std::mem::swap(lhs, rhs);
-                Some(Expr::binary_op(lhs.take(), op.commute(), rhs.take()))
+                if let Some(commuted_op) = op.commute() {
+                    std::mem::swap(lhs, rhs);
+                    Some(Expr::binary_op(lhs.take(), commuted_op, rhs.take()))
+                } else {
+                    None
+                }
             }
             _ => {
                 // For now, just make sure there are no relations in the expression
@@ -188,7 +200,141 @@ impl Simplify<'_> {
             }
         }
     }
+
+    /// Simplifies arithmetic identity and annihilator rules.
+    fn simplify_arithmetic_identity(
+        &self,
+        op: stmt::BinaryOp,
+        lhs: &mut Expr,
+        rhs: &mut Expr,
+    ) -> Option<Expr> {
+        match op {
+            stmt::BinaryOp::Add => {
+                // `x + 0` → `x`, `0 + x` → `x`
+                if is_zero(rhs) {
+                    return Some(lhs.take());
+                }
+                if is_zero(lhs) {
+                    return Some(rhs.take());
+                }
+                None
+            }
+            stmt::BinaryOp::Sub => {
+                // `x - 0` → `x`
+                if is_zero(rhs) {
+                    return Some(lhs.take());
+                }
+                None
+            }
+            stmt::BinaryOp::Mul => {
+                // `x * 1` → `x`, `1 * x` → `x`
+                if is_one(rhs) {
+                    return Some(lhs.take());
+                }
+                if is_one(lhs) {
+                    return Some(rhs.take());
+                }
+                // `x * 0` → `0`, `0 * x` → `0`
+                if is_zero(rhs) {
+                    return Some(rhs.take());
+                }
+                if is_zero(lhs) {
+                    return Some(lhs.take());
+                }
+                None
+            }
+            stmt::BinaryOp::Div => {
+                // `x / 1` → `x`
+                if is_one(rhs) {
+                    return Some(lhs.take());
+                }
+                // `0 / x` → `0`
+                if is_zero(lhs) {
+                    return Some(lhs.take());
+                }
+                None
+            }
+            stmt::BinaryOp::Mod => {
+                // `x % 1` → `0`
+                if is_one(rhs) {
+                    if let Expr::Value(val) = lhs {
+                        let val = match val {
+                            stmt::Value::I8(_) => stmt::Value::I8(0),
+                            stmt::Value::I16(_) => stmt::Value::I16(0),
+                            stmt::Value::I32(_) => stmt::Value::I32(0),
+                            stmt::Value::I64(_) => stmt::Value::I64(0),
+                            stmt::Value::U8(_) => stmt::Value::U8(0),
+                            stmt::Value::U16(_) => stmt::Value::U16(0),
+                            stmt::Value::U32(_) => stmt::Value::U32(0),
+                            stmt::Value::U64(_) => stmt::Value::U64(0),
+                            _ => todo!(),
+                        };
+
+                        return Some(Expr::Value(val));
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
 }
+
+/// Checks if an expression is the provided value.
+macro_rules! is_integer_value {
+    ($expr:expr, $val:literal) => {
+        matches!(
+            $expr,
+            Expr::Value(stmt::Value::I8($val))
+                | Expr::Value(stmt::Value::I16($val))
+                | Expr::Value(stmt::Value::I32($val))
+                | Expr::Value(stmt::Value::I64($val))
+                | Expr::Value(stmt::Value::U8($val))
+                | Expr::Value(stmt::Value::U16($val))
+                | Expr::Value(stmt::Value::U32($val))
+                | Expr::Value(stmt::Value::U64($val))
+        )
+    };
+}
+
+/// Checks whether the expression is a zero.
+fn is_zero(expr: &Expr) -> bool {
+    is_integer_value!(expr, 0)
+}
+
+/// Checks whether the expression is a one.
+fn is_one(expr: &Expr) -> bool {
+    is_integer_value!(expr, 1)
+}
+
+/// Generates constant folding functions for arithmetic operations using checked
+/// arithmetic.
+///
+/// Returns `None` if the operation would overflow or is otherwise invalid.
+macro_rules! fold_arithmetic {
+    ($name:ident, $method:ident) => {
+        fn $name(lhs: &stmt::Value, rhs: &stmt::Value) -> Option<Expr> {
+            let result = match (lhs, rhs) {
+                (stmt::Value::I8(a), stmt::Value::I8(b)) => stmt::Value::I8(a.$method(*b)?),
+                (stmt::Value::I16(a), stmt::Value::I16(b)) => stmt::Value::I16(a.$method(*b)?),
+                (stmt::Value::I32(a), stmt::Value::I32(b)) => stmt::Value::I32(a.$method(*b)?),
+                (stmt::Value::I64(a), stmt::Value::I64(b)) => stmt::Value::I64(a.$method(*b)?),
+                (stmt::Value::U8(a), stmt::Value::U8(b)) => stmt::Value::U8(a.$method(*b)?),
+                (stmt::Value::U16(a), stmt::Value::U16(b)) => stmt::Value::U16(a.$method(*b)?),
+                (stmt::Value::U32(a), stmt::Value::U32(b)) => stmt::Value::U32(a.$method(*b)?),
+                (stmt::Value::U64(a), stmt::Value::U64(b)) => stmt::Value::U64(a.$method(*b)?),
+                _ => return None,
+            };
+            Some(Expr::Value(result))
+        }
+    };
+}
+
+fold_arithmetic!(fold_add, checked_add);
+fold_arithmetic!(fold_sub, checked_sub);
+fold_arithmetic!(fold_mul, checked_mul);
+fold_arithmetic!(fold_div, checked_div);
+fold_arithmetic!(fold_mod, checked_rem);
 
 #[cfg(test)]
 mod tests {
@@ -846,5 +992,242 @@ mod tests {
 
         let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
         assert!(matches!(result, Some(Expr::BinaryOp(op)) if op.op.is_eq()));
+    }
+
+    macro_rules! test_constant_fold {
+        ($name:ident, $op:ident, $ty:ident, $lhs:expr, $rhs:expr, $expected:expr) => {
+            #[test]
+            fn $name() {
+                let schema = test_schema();
+                let mut simplify = Simplify::new(&schema);
+                let mut lhs = Expr::Value(Value::$ty($lhs));
+                let mut rhs = Expr::Value(Value::$ty($rhs));
+                let result = simplify.simplify_expr_binary_op(BinaryOp::$op, &mut lhs, &mut rhs);
+                assert!(matches!(result, Some(Expr::Value(Value::$ty(v))) if v == $expected));
+            }
+        };
+    }
+
+    test_constant_fold!(add_i64_constant_folding, Add, I64, 2, 3, 5);
+    test_constant_fold!(add_i32_constant_folding, Add, I32, 10, 20, 30);
+    test_constant_fold!(add_i16_constant_folding, Add, I16, 100, 200, 300);
+    test_constant_fold!(add_i8_constant_folding, Add, I8, 10, 20, 30);
+    test_constant_fold!(add_u64_constant_folding, Add, U64, 100, 200, 300);
+    test_constant_fold!(add_u32_constant_folding, Add, U32, 50, 75, 125);
+    test_constant_fold!(add_u16_constant_folding, Add, U16, 1000, 2000, 3000);
+    test_constant_fold!(add_u8_constant_folding, Add, U8, 10, 20, 30);
+    test_constant_fold!(sub_i64_constant_folding, Sub, I64, 10, 3, 7);
+    test_constant_fold!(sub_negative_result, Sub, I64, 3, 10, -7);
+    test_constant_fold!(mul_i64_constant_folding, Mul, I64, 6, 7, 42);
+    test_constant_fold!(mul_negative_values, Mul, I64, -3, 4, -12);
+    test_constant_fold!(mul_two_negatives, Mul, I64, -3, -4, 12);
+    test_constant_fold!(div_i64_constant_folding, Div, I64, 20, 4, 5);
+    test_constant_fold!(div_truncates_toward_zero, Div, I64, 7, 3, 2);
+    test_constant_fold!(mod_i64_constant_folding, Mod, I64, 17, 5, 2);
+    test_constant_fold!(mod_exact_divisor, Mod, I64, 20, 5, 0);
+    test_constant_fold!(mod_negative_by_one, Mod, I64, -17, 1, 0);
+
+    macro_rules! test_not_simplified {
+        ($name:ident, $op:ident, $lhs:expr, $rhs:expr) => {
+            #[test]
+            fn $name() {
+                let schema = test_schema();
+                let mut simplify = Simplify::new(&schema);
+                let mut lhs = $lhs;
+                let mut rhs = $rhs;
+                let result = simplify.simplify_expr_binary_op(BinaryOp::$op, &mut lhs, &mut rhs);
+                assert!(result.is_none());
+            }
+        };
+    }
+
+    test_not_simplified!(
+        div_by_zero_not_simplified,
+        Div,
+        Expr::Value(Value::I64(10)),
+        Expr::Value(Value::I64(0))
+    );
+    test_not_simplified!(
+        mod_by_zero_not_simplified,
+        Mod,
+        Expr::Value(Value::I64(10)),
+        Expr::Value(Value::I64(0))
+    );
+    test_not_simplified!(
+        add_mismatched_types_not_simplified,
+        Add,
+        Expr::Value(Value::I32(10)),
+        Expr::Value(Value::I64(20))
+    );
+    test_not_simplified!(
+        add_string_not_simplified,
+        Add,
+        Expr::Value(Value::from("a")),
+        Expr::Value(Value::from("b"))
+    );
+    test_not_simplified!(
+        add_overflow_not_simplified,
+        Add,
+        Expr::Value(Value::I64(i64::MAX)),
+        Expr::Value(Value::I64(1))
+    );
+    test_not_simplified!(
+        add_i8_overflow_not_simplified,
+        Add,
+        Expr::Value(Value::I8(127)),
+        Expr::Value(Value::I8(1))
+    );
+    test_not_simplified!(
+        sub_underflow_not_simplified,
+        Sub,
+        Expr::Value(Value::I64(i64::MIN)),
+        Expr::Value(Value::I64(1))
+    );
+    test_not_simplified!(
+        sub_u64_underflow_not_simplified,
+        Sub,
+        Expr::Value(Value::U64(0)),
+        Expr::Value(Value::U64(1))
+    );
+    test_not_simplified!(
+        mul_overflow_not_simplified,
+        Mul,
+        Expr::Value(Value::I64(i64::MAX)),
+        Expr::Value(Value::I64(2))
+    );
+    test_not_simplified!(
+        div_min_by_neg_one_not_simplified,
+        Div,
+        Expr::Value(Value::I64(i64::MIN)),
+        Expr::Value(Value::I64(-1))
+    );
+    test_not_simplified!(
+        sub_literal_left_not_canonicalized,
+        Sub,
+        Expr::Value(Value::I64(5)),
+        Expr::arg(0)
+    );
+    test_not_simplified!(
+        div_literal_left_not_canonicalized,
+        Div,
+        Expr::Value(Value::I64(10)),
+        Expr::arg(0)
+    );
+    test_not_simplified!(
+        mod_literal_left_not_canonicalized,
+        Mod,
+        Expr::Value(Value::I64(10)),
+        Expr::arg(0)
+    );
+    test_not_simplified!(
+        sub_zero_left_not_identity,
+        Sub,
+        Expr::Value(Value::I64(0)),
+        Expr::arg(0)
+    );
+    test_not_simplified!(
+        div_one_left_not_identity,
+        Div,
+        Expr::Value(Value::I64(1)),
+        Expr::arg(0)
+    );
+
+    macro_rules! test_identity_to_arg {
+        ($name:ident, $op:ident, $val:expr) => {
+            #[test]
+            fn $name() {
+                let schema = test_schema();
+                let mut simplify = Simplify::new(&schema);
+                let mut lhs = Expr::arg(0);
+                let mut rhs = $val;
+                let result = simplify.simplify_expr_binary_op(BinaryOp::$op, &mut lhs, &mut rhs);
+                assert!(matches!(result, Some(Expr::Arg(_))));
+            }
+        };
+        ($name:ident, $op:ident, $val:expr, left) => {
+            #[test]
+            fn $name() {
+                let schema = test_schema();
+                let mut simplify = Simplify::new(&schema);
+                let mut lhs = $val;
+                let mut rhs = Expr::arg(0);
+                let result = simplify.simplify_expr_binary_op(BinaryOp::$op, &mut lhs, &mut rhs);
+                assert!(matches!(result, Some(Expr::Arg(_))));
+            }
+        };
+    }
+
+    test_identity_to_arg!(add_zero_right_identity, Add, Expr::Value(Value::I64(0)));
+    test_identity_to_arg!(
+        add_zero_left_identity,
+        Add,
+        Expr::Value(Value::I64(0)),
+        left
+    );
+    test_identity_to_arg!(add_zero_i32_identity, Add, Expr::Value(Value::I32(0)));
+    test_identity_to_arg!(add_zero_u64_identity, Add, Expr::Value(Value::U64(0)));
+    test_identity_to_arg!(sub_zero_identity, Sub, Expr::Value(Value::I64(0)));
+    test_identity_to_arg!(mul_one_right_identity, Mul, Expr::Value(Value::I64(1)));
+    test_identity_to_arg!(mul_one_left_identity, Mul, Expr::Value(Value::I64(1)), left);
+    test_identity_to_arg!(mul_one_i8_identity, Mul, Expr::Value(Value::I8(1)));
+    test_identity_to_arg!(div_one_identity, Div, Expr::Value(Value::I64(1)));
+
+    macro_rules! test_annihilator {
+        ($name:ident, $op:ident, $ty:ident, $zero_pos:ident) => {
+            #[test]
+            fn $name() {
+                let schema = test_schema();
+                let mut simplify = Simplify::new(&schema);
+                let (mut lhs, mut rhs) = match stringify!($zero_pos) {
+                    "right" => (Expr::arg(0), Expr::Value(Value::$ty(0))),
+                    "left" => (Expr::Value(Value::$ty(0)), Expr::arg(0)),
+                    _ => panic!("invalid zero_pos"),
+                };
+                let result = simplify.simplify_expr_binary_op(BinaryOp::$op, &mut lhs, &mut rhs);
+                assert!(matches!(result, Some(Expr::Value(Value::$ty(0)))));
+            }
+        };
+    }
+
+    test_annihilator!(mul_zero_right_annihilator, Mul, I64, right);
+    test_annihilator!(mul_zero_left_annihilator, Mul, I64, left);
+    test_annihilator!(mul_zero_u32_annihilator, Mul, U32, right);
+    test_annihilator!(div_zero_numerator_annihilator, Div, I64, left);
+    test_annihilator!(div_zero_numerator_u16_annihilator, Div, U16, left);
+
+    macro_rules! test_null_propagation {
+        ($name:ident, $op:ident, $null_pos:ident) => {
+            #[test]
+            fn $name() {
+                let schema = test_schema();
+                let mut simplify = Simplify::new(&schema);
+                let (mut lhs, mut rhs) = match stringify!($null_pos) {
+                    "left" => (Expr::Value(Value::Null), Expr::Value(Value::I64(5))),
+                    "right" => (Expr::Value(Value::I64(5)), Expr::Value(Value::Null)),
+                    "both" => (Expr::Value(Value::Null), Expr::Value(Value::Null)),
+                    _ => panic!("invalid null_pos"),
+                };
+                let result = simplify.simplify_expr_binary_op(BinaryOp::$op, &mut lhs, &mut rhs);
+                assert!(matches!(result, Some(Expr::Value(Value::Null))));
+            }
+        };
+    }
+
+    test_null_propagation!(add_null_left_becomes_null, Add, left);
+    test_null_propagation!(add_null_right_becomes_null, Add, right);
+    test_null_propagation!(sub_null_becomes_null, Sub, left);
+    test_null_propagation!(mul_null_becomes_null, Mul, left);
+    test_null_propagation!(div_null_becomes_null, Div, left);
+    test_null_propagation!(mod_null_becomes_null, Mod, left);
+    test_null_propagation!(null_null_arithmetic_becomes_null, Add, both);
+
+    #[test]
+    fn mod_by_one_constant_becomes_zero() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+        let mut lhs = Expr::Value(Value::I64(17));
+        let mut rhs = Expr::Value(Value::I64(1));
+        let result = simplify.simplify_expr_binary_op(BinaryOp::Mod, &mut lhs, &mut rhs);
+        assert!(matches!(result, Some(Expr::Value(Value::I64(0)))));
     }
 }
