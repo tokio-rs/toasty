@@ -81,6 +81,7 @@ impl Simplify<'_> {
             //   - `5 = 5` → `true`
             //   - `1 < 5` → `true`
             //   - `"a" >= "b"` → `false`
+            //   - `2 + 3` → `5`
             //   - `null <op> x` → `null`
             //   - `x <op> null` → `null`
             (Expr::Value(lhs_val), Expr::Value(rhs_val)) => {
@@ -103,9 +104,16 @@ impl Simplify<'_> {
                     stmt::BinaryOp::Ge => {
                         PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_ge().into())
                     }
+                    stmt::BinaryOp::Add => fold_add(lhs_val, rhs_val),
+                    stmt::BinaryOp::Sub => fold_sub(lhs_val, rhs_val),
+                    stmt::BinaryOp::Mul => fold_mul(lhs_val, rhs_val),
+                    stmt::BinaryOp::Div => fold_div(lhs_val, rhs_val),
+                    stmt::BinaryOp::Mod => fold_mod(lhs_val, rhs_val),
                     _ => None,
                 }
             }
+            // Arithmetic identity and annihilator rules
+            _ if op.is_arithmetic() => self.simplify_arithmetic_identity(op, lhs, rhs),
             // Boolean constant comparisons:
             //
             //  - `x = true` → `x`
@@ -165,8 +173,12 @@ impl Simplify<'_> {
             }
             // Canonicalization, `literal <op> col` → `col <op_commuted> literal`
             (Expr::Value(_), rhs) if !rhs.is_value() => {
-                std::mem::swap(lhs, rhs);
-                Some(Expr::binary_op(lhs.take(), op.commute(), rhs.take()))
+                if let Some(commuted_op) = op.commute() {
+                    std::mem::swap(lhs, rhs);
+                    Some(Expr::binary_op(lhs.take(), commuted_op, rhs.take()))
+                } else {
+                    None
+                }
             }
             _ => {
                 // For now, just make sure there are no relations in the expression
@@ -186,7 +198,141 @@ impl Simplify<'_> {
             }
         }
     }
+
+    /// Simplifies arithmetic identity and annihilator rules.
+    fn simplify_arithmetic_identity(
+        &self,
+        op: stmt::BinaryOp,
+        lhs: &mut Expr,
+        rhs: &mut Expr,
+    ) -> Option<Expr> {
+        match op {
+            stmt::BinaryOp::Add => {
+                // `x + 0` → `x`, `0 + x` → `x`
+                if is_zero(rhs) {
+                    return Some(lhs.take());
+                }
+                if is_zero(lhs) {
+                    return Some(rhs.take());
+                }
+                None
+            }
+            stmt::BinaryOp::Sub => {
+                // `x - 0` → `x`
+                if is_zero(rhs) {
+                    return Some(lhs.take());
+                }
+                None
+            }
+            stmt::BinaryOp::Mul => {
+                // `x * 1` → `x`, `1 * x` → `x`
+                if is_one(rhs) {
+                    return Some(lhs.take());
+                }
+                if is_one(lhs) {
+                    return Some(rhs.take());
+                }
+                // `x * 0` → `0`, `0 * x` → `0`
+                if is_zero(rhs) {
+                    return Some(rhs.take());
+                }
+                if is_zero(lhs) {
+                    return Some(lhs.take());
+                }
+                None
+            }
+            stmt::BinaryOp::Div => {
+                // `x / 1` → `x`
+                if is_one(rhs) {
+                    return Some(lhs.take());
+                }
+                // `0 / x` → `0`
+                if is_zero(lhs) {
+                    return Some(lhs.take());
+                }
+                None
+            }
+            stmt::BinaryOp::Mod => {
+                // `x % 1` → `0`
+                if is_one(rhs) {
+                    if let Expr::Value(val) = lhs {
+                        let val = match val {
+                            stmt::Value::I8(_) => stmt::Value::I8(0),
+                            stmt::Value::I16(_) => stmt::Value::I16(0),
+                            stmt::Value::I32(_) => stmt::Value::I32(0),
+                            stmt::Value::I64(_) => stmt::Value::I64(0),
+                            stmt::Value::U8(_) => stmt::Value::U8(0),
+                            stmt::Value::U16(_) => stmt::Value::U16(0),
+                            stmt::Value::U32(_) => stmt::Value::U32(0),
+                            stmt::Value::U64(_) => stmt::Value::U64(0),
+                            _ => todo!(),
+                        };
+
+                        return Some(Expr::Value(val));
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
 }
+
+/// Checks if an expression is the provided value.
+macro_rules! is_integer_value {
+    ($expr:expr, $val:literal) => {
+        matches!(
+            $expr,
+            Expr::Value(stmt::Value::I8($val))
+                | Expr::Value(stmt::Value::I16($val))
+                | Expr::Value(stmt::Value::I32($val))
+                | Expr::Value(stmt::Value::I64($val))
+                | Expr::Value(stmt::Value::U8($val))
+                | Expr::Value(stmt::Value::U16($val))
+                | Expr::Value(stmt::Value::U32($val))
+                | Expr::Value(stmt::Value::U64($val))
+        )
+    };
+}
+
+/// Checks whether the expression is a zero.
+fn is_zero(expr: &Expr) -> bool {
+    is_integer_value!(expr, 0)
+}
+
+/// Checks whether the expression is a one.
+fn is_one(expr: &Expr) -> bool {
+    is_integer_value!(expr, 1)
+}
+
+/// Generates constant folding functions for arithmetic operations using checked
+/// arithmetic.
+///
+/// Returns `None` if the operation would overflow or is otherwise invalid.
+macro_rules! fold_arithmetic {
+    ($name:ident, $method:ident) => {
+        fn $name(lhs: &stmt::Value, rhs: &stmt::Value) -> Option<Expr> {
+            let result = match (lhs, rhs) {
+                (stmt::Value::I8(a), stmt::Value::I8(b)) => stmt::Value::I8(a.$method(*b)?),
+                (stmt::Value::I16(a), stmt::Value::I16(b)) => stmt::Value::I16(a.$method(*b)?),
+                (stmt::Value::I32(a), stmt::Value::I32(b)) => stmt::Value::I32(a.$method(*b)?),
+                (stmt::Value::I64(a), stmt::Value::I64(b)) => stmt::Value::I64(a.$method(*b)?),
+                (stmt::Value::U8(a), stmt::Value::U8(b)) => stmt::Value::U8(a.$method(*b)?),
+                (stmt::Value::U16(a), stmt::Value::U16(b)) => stmt::Value::U16(a.$method(*b)?),
+                (stmt::Value::U32(a), stmt::Value::U32(b)) => stmt::Value::U32(a.$method(*b)?),
+                (stmt::Value::U64(a), stmt::Value::U64(b)) => stmt::Value::U64(a.$method(*b)?),
+                _ => return None,
+            };
+            Some(Expr::Value(result))
+        }
+    };
+}
+
+fold_arithmetic!(fold_add, checked_add);
+fold_arithmetic!(fold_sub, checked_sub);
+fold_arithmetic!(fold_mul, checked_mul);
+fold_arithmetic!(fold_div, checked_div);
+fold_arithmetic!(fold_mod, checked_rem);
 
 #[cfg(test)]
 mod tests {

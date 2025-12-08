@@ -5,10 +5,10 @@ use super::{
     ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
     ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
-    Filter, FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
-    OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
-    SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
-    UpdateTarget, Value, ValueRecord, Values, With,
+    ExprUnaryOp, Filter, FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
+    OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel,
+    SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins,
+    Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait Visit {
@@ -149,6 +149,10 @@ pub trait Visit {
 
     fn visit_expr_ty(&mut self, i: &ExprTy) {
         visit_expr_ty(self, i);
+    }
+
+    fn visit_expr_unary_op(&mut self, i: &ExprUnaryOp) {
+        visit_expr_unary_op(self, i);
     }
 
     fn visit_expr_pattern(&mut self, i: &ExprPattern) {
@@ -413,6 +417,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_ty(&mut **self, i);
     }
 
+    fn visit_expr_unary_op(&mut self, i: &ExprUnaryOp) {
+        Visit::visit_expr_unary_op(&mut **self, i);
+    }
+
     fn visit_expr_pattern(&mut self, i: &ExprPattern) {
         Visit::visit_expr_pattern(&mut **self, i);
     }
@@ -605,6 +613,7 @@ where
         Expr::List(expr) => v.visit_expr_list(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt(expr),
         Expr::Type(expr) => v.visit_expr_ty(expr),
+        Expr::UnaryOp(expr) => v.visit_expr_unary_op(expr),
         Expr::Value(expr) => v.visit_value(expr),
         // HAX
         Expr::ConcatStr(expr) => {
@@ -842,6 +851,13 @@ where
     V: Visit + ?Sized,
 {
     v.visit_type(&node.ty);
+}
+
+pub fn visit_expr_unary_op<V>(v: &mut V, node: &ExprUnaryOp)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
 }
 
 pub fn visit_expr_pattern<V>(v: &mut V, node: &ExprPattern)
