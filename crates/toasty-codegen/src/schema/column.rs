@@ -75,6 +75,8 @@ mod kw {
     syn::custom_keyword!(text);
     syn::custom_keyword!(varchar);
 
+    syn::custom_keyword!(numeric);
+
     syn::custom_keyword!(binary);
     syn::custom_keyword!(blob);
     syn::custom_keyword!(timestamp);
@@ -90,6 +92,7 @@ pub enum ColumnType {
     UnsignedInteger(u8),
     Text,
     VarChar(u64),
+    Numeric(Option<(u32, u32)>),
     Binary(u64),
     Blob,
     Timestamp(u8),
@@ -143,6 +146,24 @@ impl syn::parse::Parse for ColumnType {
         peek_ident!(text, Text);
         peek_ident_paren_int!(varchar, VarChar);
 
+        // numeric or numeric(precision, scale)
+        if lookahead.peek(kw::numeric) {
+            let _kw: kw::numeric = input.parse()?;
+            if input.peek(syn::token::Paren) {
+                let content;
+                parenthesized!(content in input);
+                let precision: syn::LitInt = content.parse()?;
+                let _comma: syn::Token![,] = content.parse()?;
+                let scale: syn::LitInt = content.parse()?;
+                return Ok(Self::Numeric(Some((
+                    precision.base10_parse()?,
+                    scale.base10_parse()?,
+                ))));
+            } else {
+                return Ok(Self::Numeric(None));
+            }
+        }
+
         peek_ident_paren_int!(binary, Binary);
         peek_ident!(blob, Blob);
 
@@ -163,6 +184,10 @@ impl quote::ToTokens for ColumnType {
             Self::UnsignedInteger(size) => quote! { db::Type::UnsignedInteger(#size) },
             Self::Text => quote! { db::Type::Text },
             Self::VarChar(size) => quote! { db::Type::VarChar(#size) },
+            Self::Numeric(None) => quote! { db::Type::Numeric(None) },
+            Self::Numeric(Some((precision, scale))) => {
+                quote! { db::Type::Numeric(Some((#precision, #scale))) }
+            }
             Self::Binary(size) => quote! { db::Type::Binary(#size) },
             Self::Blob => quote! { db::Type::Blob },
             Self::Timestamp(precision) => quote! { db::Type::Timestamp(#precision) },
