@@ -2,7 +2,6 @@ use std::fmt;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
-    // Comparison operators
     Eq,
     Ne,
     Ge,
@@ -10,8 +9,6 @@ pub enum BinaryOp {
     Le,
     Lt,
     IsA,
-
-    // Arithmetic operators
     Add,
     Sub,
     Mul,
@@ -42,7 +39,10 @@ impl BinaryOp {
 
     /// Returns true if this is an arithmetic operator.
     pub fn is_arithmetic(self) -> bool {
-        matches!(self, Self::Add | Self::Sub | Self::Mul | Self::Div | Self::Mod)
+        matches!(
+            self,
+            Self::Add | Self::Sub | Self::Mul | Self::Div | Self::Mod
+        )
     }
 
     pub fn reverse(&mut self) {
@@ -55,6 +55,7 @@ impl BinaryOp {
     /// Returns the logical negation of this operator, if one exists.
     ///
     /// Only comparison operators can be negated:
+    ///
     /// - `=` → `!=`
     /// - `!=` → `=`
     /// - `<` → `>=`
@@ -76,12 +77,12 @@ impl BinaryOp {
     }
 
     /// Returns the operator that represents an equivalent expression when the
-    /// operands are commuted (swapped), or `None` if the operator cannot be
+    /// operands are commuted (swapped) or `None` if the operator cannot be
     /// commuted.
     ///
     /// For comparisons, `5 < x` becomes `x > 5`, so `Lt.commute()` returns
-    /// `Some(Gt)`. Symmetric operators like `Eq`, `Ne`, `Add`, and `Mul`
-    /// return themselves.
+    /// `Some(Gt)`. Symmetric operators like `Eq`, `Ne`, `Add`, and `Mul` return
+    /// themselves.
     ///
     /// Non-commutative operators (`Sub`, `Div`, `Mod`) return `None` since
     /// there is no equivalent operator for commuted operands.

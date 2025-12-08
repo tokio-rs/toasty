@@ -74,8 +74,6 @@ impl Expr {
         Expr::binary_op(lhs, BinaryOp::IsA, rhs)
     }
 
-    // Arithmetic operators
-
     pub fn add(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         Expr::binary_op(lhs, BinaryOp::Add, rhs)
     }
