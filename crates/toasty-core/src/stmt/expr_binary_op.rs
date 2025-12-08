@@ -73,6 +73,26 @@ impl Expr {
     pub fn is_a(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         Expr::binary_op(lhs, BinaryOp::IsA, rhs)
     }
+
+    pub fn add(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
+        Expr::binary_op(lhs, BinaryOp::Add, rhs)
+    }
+
+    pub fn sub(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
+        Expr::binary_op(lhs, BinaryOp::Sub, rhs)
+    }
+
+    pub fn mul(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
+        Expr::binary_op(lhs, BinaryOp::Mul, rhs)
+    }
+
+    pub fn div(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
+        Expr::binary_op(lhs, BinaryOp::Div, rhs)
+    }
+
+    pub fn modulo(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
+        Expr::binary_op(lhs, BinaryOp::Mod, rhs)
+    }
 }
 
 impl From<ExprBinaryOp> for Expr {
