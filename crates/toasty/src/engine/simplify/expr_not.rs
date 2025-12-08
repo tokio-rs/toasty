@@ -8,9 +8,19 @@ impl Simplify<'_> {
             return Some(inner.expr.take());
         }
 
-        // Constant folding, `not(true)` → `false`, `not(false)` → `true`
-        if let Expr::Value(stmt::Value::Bool(b)) = expr_not.expr.as_ref() {
-            return Some(Expr::Value(stmt::Value::Bool(!b)));
+        // Constant folding,
+        //
+        //   - `not(true)` → `false`
+        //   - `not(false)` → `true`
+        //   - `not(null)` → `null`
+        match expr_not.expr.as_ref() {
+            Expr::Value(stmt::Value::Bool(b)) => {
+                return Some(Expr::Value(stmt::Value::Bool(!b)));
+            }
+            Expr::Value(stmt::Value::Null) => {
+                return Some(Expr::null());
+            }
+            _ => {}
         }
 
         // Negation of comparisons, `not(x = y)` → `x != y`, etc.
@@ -112,6 +122,19 @@ mod tests {
         let result = simplify.simplify_expr_not(&mut expr);
 
         assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
+    }
+
+    #[test]
+    fn not_null_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `not(null)` → `null`
+        let mut expr = not_expr(Expr::null());
+
+        let result = simplify.simplify_expr_not(&mut expr);
+
+        assert!(matches!(result, Some(Expr::Value(Value::Null))));
     }
 
     // Negation of comparison tests
