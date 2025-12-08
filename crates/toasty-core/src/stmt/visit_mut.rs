@@ -790,7 +790,6 @@ where
         ExprReference::Model { .. } => {}
         ExprReference::Field { .. } => {}
         ExprReference::Column(expr_column) => v.visit_expr_column_mut(expr_column),
-        ExprReference::Context => {}
     }
 }
 

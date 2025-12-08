@@ -200,7 +200,6 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     pub fn resolve_expr_reference(&self, expr_reference: &ExprReference) -> ResolvedRef<'a> {
         let nesting = match expr_reference {
             ExprReference::Column(expr_column) => expr_column.nesting,
-            ExprReference::Context => todo!(),
             ExprReference::Field { nesting, .. } => *nesting,
             ExprReference::Model { nesting } => *nesting,
         };
@@ -212,7 +211,6 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             ExprTarget::Model(model) => match expr_reference {
                 ExprReference::Model { .. } => ResolvedRef::Model(model),
                 ExprReference::Field { index, .. } => ResolvedRef::Field(&model.fields[*index]),
-                ExprReference::Context => todo!(),
                 ExprReference::Column(expr_column) => {
                     assert_eq!(expr_column.table, 0, "TODO: is this true?");
 
@@ -229,7 +227,6 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 ExprReference::Field {.. } => panic!(
                     "Cannot resolve ExprReference::Field in Table target context - use ExprReference::Column instead"
                 ),
-                ExprReference::Context => todo!(),
                 ExprReference::Column(expr_column) => ResolvedRef::Column(&table.columns[expr_column.column]),
             },
             ExprTarget::Source(source_table) => {
@@ -273,7 +270,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     ExprReference::Field { .. } => panic!(
                         "Cannot resolve ExprReference::Field in Source::Table context - use ExprReference::Column instead"
                     ),
-                    ExprReference::Context => todo!(),
+
                 }
             }
         }
@@ -329,7 +326,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             }
             Returning::Changed => todo!(),
             Returning::Expr(expr) => {
-                let ty = self.infer_expr_ty(expr, args);
+                let ty = self.infer_expr_ty2(expr, args, false);
 
                 if single {
                     ty
@@ -337,26 +334,51 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     Type::list(ty)
                 }
             }
-            Returning::Value(expr) => self.infer_expr_ty(expr, args),
+            Returning::Value(expr) => self.infer_expr_ty2(expr, args, true),
         }
     }
 
     pub fn infer_expr_ty(&self, expr: &Expr, args: &[Type]) -> Type {
+        self.infer_expr_ty2(expr, args, false)
+    }
+
+    fn infer_expr_ty2(&self, expr: &Expr, args: &[Type], returning_expr: bool) -> Type {
         match expr {
             Expr::Arg(e) => args[e.position].clone(),
             Expr::And(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
-            Expr::Reference(expr_ref) => self.infer_expr_reference_ty(expr_ref),
+            Expr::Reference(expr_ref) => {
+                assert!(
+                    !returning_expr,
+                    "should have been handled in Expr::Project. Invalid expr?"
+                );
+                self.infer_expr_reference_ty(expr_ref)
+            }
             Expr::IsNull(_) => Type::Bool,
+            Expr::List(e) => {
+                debug_assert!(!e.items.is_empty());
+                Type::list(self.infer_expr_ty2(&e.items[0], args, returning_expr))
+            }
             Expr::Map(e) => {
-                let base = self.infer_expr_ty(&e.base, args);
-                let ty = self.infer_expr_ty(&e.map, &[base]);
+                let base = self.infer_expr_ty2(&e.base, args, returning_expr);
+                let ty = self.infer_expr_ty2(&e.map, &[base], returning_expr);
                 Type::list(ty)
             }
             Expr::Or(_) => Type::Bool,
             Expr::Project(e) => {
-                let mut base = self.infer_expr_ty(&e.base, args);
+                if returning_expr && e.base.is_expr_reference() {
+                    if let Expr::Reference(expr_reference) = &*e.base {
+                        // When `returning_expr` is `true`, the expression is being
+                        // evaluated from a RETURNING EXPR clause. In this case, the
+                        // returning expression is *not* a projection. Referencing a
+                        // column implies a *list* of
+                        assert!(e.projection.as_slice().len() == 1);
+                        return self.infer_expr_reference_ty(expr_reference);
+                    }
+                }
+
+                let mut base = self.infer_expr_ty2(&e.base, args, returning_expr);
 
                 for step in e.projection.iter() {
                     base = match &mut base {
@@ -370,7 +392,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::Record(e) => Type::Record(
                 e.fields
                     .iter()
-                    .map(|field| self.infer_expr_ty(field, args))
+                    .map(|field| self.infer_expr_ty2(field, args, returning_expr))
                     .collect(),
             ),
             Expr::Value(value) => value.infer_ty(),

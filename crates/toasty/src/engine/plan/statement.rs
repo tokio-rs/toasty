@@ -546,6 +546,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .map(|input| self.planner.mir.ty(*input).clone())
             .collect();
 
+        println!("STMT={stmt:#?}; input_args={input_args:#?}");
         let ty = self.planner.engine.infer_ty(&stmt, &input_args[..]);
 
         let node = if stmt.condition().is_some() {

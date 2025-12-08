@@ -306,7 +306,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         *expr = self.lower_expr_field(*nesting, *index);
                         self.visit_expr_mut(expr);
                     }
-                    stmt::ExprReference::Context => {}
                     stmt::ExprReference::Model { .. } => todo!(),
                     stmt::ExprReference::Column(expr_column) => {
                         if expr_column.nesting > 0 {

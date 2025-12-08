@@ -83,8 +83,6 @@ impl HirPlanner<'_> {
             stack: vec![],
         };
 
-        println!("MIR={:#?}", self.mir);
-
         let node_id = nested_merge_planner.plan_nested_merge(&mut self.mir, stmt_id);
         Some(node_id)
     }
@@ -196,11 +194,14 @@ impl NestedMergePlanner<'_> {
         // exec_statement node, and mark exec_statement as a dependency.
         let returning = stmt.returning_unwrap();
 
-        let source = if returning.is_value() {
-            // For nested children with constant returning, the output node contains
-            // the constant value, and the exec_statement must run first (as a dependency).
+        let source = if let Some(output_node_id) = stmt_state.output.get() {
+            debug_assert!(returning.is_value());
+
+            // If the output node is set, then the nested child has const
+            // returning. Make sure there is a dependency on the execution
+            // though.
             self.deps.insert(stmt_state.exec_statement.get().unwrap());
-            let (source, _) = self.inputs.insert_full(stmt_state.output.get().unwrap());
+            let (source, _) = self.inputs.insert_full(output_node_id);
             source
         } else {
             // Normal case: use the exec_statement as the source
@@ -243,6 +244,7 @@ impl NestedMergePlanner<'_> {
             // stmt::Returning::Value(value) => stmt::Expr::Value(value.clone()),
             stmt::Returning::Value(..) => {
                 let projection = stmt::Expr::arg(0);
+                println!("stmt={stmt:#?}; args={:#?}", stmt_state.args);
                 let stmt::Type::List(record_ty) = self.engine.infer_ty(stmt, &[]) else {
                     todo!()
                 };

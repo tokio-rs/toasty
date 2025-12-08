@@ -1,6 +1,6 @@
 use crate::{
     schema::{app::FieldId, db::ColumnId},
-    stmt::{expr_concat, Expr},
+    stmt::Expr,
 };
 
 /// A reference to a model, field, or column.
@@ -25,14 +25,6 @@ pub enum ExprReference {
     /// similar to ExprReference::Field, referencing a specific column within a target
     /// at a given nesting level.
     Column(ExprColumn),
-
-    /// References the current context directly.
-    ///
-    /// This reference type references the expression context directly. This is
-    /// compared to the other reference types that reference a field projection
-    /// of self. This reference type does not have a SQL analogue so will need
-    /// to be transformed before passing to a database.
-    Context,
 
     /// Reference a specific field in a query's relation.
     ///

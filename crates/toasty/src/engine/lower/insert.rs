@@ -189,9 +189,7 @@ impl LowerStatement<'_, '_> {
                 assert!(projection.is_identity(), "TODO");
 
                 match &self.1[expr_column.column] {
-                    stmt::Expr::Default => {
-                        Some(stmt::Expr::context_project([self.0, expr_column.column]))
-                    }
+                    stmt::Expr::Default => Some(stmt::Expr::project(*expr_reference, self.0)),
                     e @ stmt::Expr::Value(_) => Some(e.clone()),
                     e => todo!("expr={e:#?}"),
                 }

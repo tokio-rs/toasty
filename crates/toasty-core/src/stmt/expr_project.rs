@@ -1,4 +1,4 @@
-use crate::stmt::{ExprArg, ExprReference};
+use crate::stmt::ExprArg;
 
 use super::{Expr, Projection};
 
@@ -35,10 +35,6 @@ impl Expr {
 
     pub fn arg_project(expr_arg: impl Into<ExprArg>, projection: impl Into<Projection>) -> Self {
         Self::project(Self::arg(expr_arg), projection)
-    }
-
-    pub fn context_project(projection: impl Into<Projection>) -> Self {
-        Self::project(Self::Reference(ExprReference::Context), projection)
     }
 
     pub fn is_project(&self) -> bool {
