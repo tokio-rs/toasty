@@ -58,7 +58,7 @@ impl Setup for SetupDynamoDb {
     }
 
     fn capability(&self) -> &Capability {
-        &Capability::DYNAMODB
+        &DynamoDB::CAPABILITY
     }
 
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {

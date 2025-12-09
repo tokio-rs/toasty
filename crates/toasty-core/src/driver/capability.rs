@@ -96,200 +96,39 @@ impl Capability {
         }
     }
 
-    /// SQLite capabilities.
-    pub const SQLITE: Self = Self {
+    /// A set of capabilities used for predictable unit tests, e.g. those testing schema building,
+    /// that do not require an actual running database instance.
+    pub const TEST_CAPABILITY: Self = Self {
         sql: true,
-        storage_types: StorageTypes::SQLITE,
         cte_with_update: false,
         select_for_update: false,
         primary_key_ne_predicate: true,
         bigdecimal_implemented: false,
-    };
+        storage_types: StorageTypes {
+            default_string_type: db::Type::Text,
 
-    /// PostgreSQL capabilities
-    pub const POSTGRESQL: Self = Self {
-        cte_with_update: true,
-        storage_types: StorageTypes::POSTGRESQL,
-        select_for_update: true,
-        bigdecimal_implemented: false,
-        ..Self::SQLITE
-    };
+            varchar: Some(1_000_000_000),
 
-    /// MySQL capabilities
-    pub const MYSQL: Self = Self {
-        cte_with_update: false,
-        storage_types: StorageTypes::MYSQL,
-        select_for_update: true,
-        bigdecimal_implemented: true,
-        ..Self::SQLITE
-    };
+            default_uuid_type: db::Type::Blob,
 
-    /// DynamoDB capabilities
-    pub const DYNAMODB: Self = Self {
-        sql: false,
-        storage_types: StorageTypes::DYNAMODB,
-        cte_with_update: false,
-        select_for_update: false,
-        primary_key_ne_predicate: false,
-        bigdecimal_implemented: false,
-    };
-}
+            default_decimal_type: db::Type::Text,
+            default_bigdecimal_type: db::Type::Text,
 
-impl StorageTypes {
-    /// SQLite storage types
-    pub const SQLITE: StorageTypes = StorageTypes {
-        default_string_type: db::Type::Text,
+            default_timestamp_type: db::Type::Text,
+            default_zoned_type: db::Type::Text,
+            default_date_type: db::Type::Text,
+            default_time_type: db::Type::Text,
+            default_datetime_type: db::Type::Text,
 
-        // SQLite doesn't really enforce the "N" in VARCHAR(N) at all – it
-        // treats any type containing "CHAR", "CLOB", or "TEXT" as having TEXT
-        // affinity, and simply ignores the length specifier. In other words,
-        // whether you declare a column as VARCHAR(10), VARCHAR(1000000), or
-        // just TEXT, SQLite won't truncate or complain based on that number.
-        //
-        // Instead, the only hard limit on how big a string (or BLOB) can be is
-        // the SQLITE_MAX_LENGTH parameter, which is set to 1 billion by default.
-        varchar: Some(1_000_000_000),
+            native_timestamp: false,
+            native_date: false,
+            native_time: false,
+            native_datetime: false,
+            native_decimal: false,
 
-        // SQLite does not have an inbuilt UUID type. The binary blob type is more
-        // difficult to read than Text but likely has better performance characteristics.
-        default_uuid_type: db::Type::Blob,
+            decimal_arbitrary_precision: false,
 
-        // SQLite does not have a native decimal type. Store as TEXT.
-        default_decimal_type: db::Type::Text,
-        default_bigdecimal_type: db::Type::Text,
-
-        // SQLite does not have native date/time types. Store as TEXT in ISO 8601 format.
-        default_timestamp_type: db::Type::Text,
-        default_zoned_type: db::Type::Text,
-        default_date_type: db::Type::Text,
-        default_time_type: db::Type::Text,
-        default_datetime_type: db::Type::Text,
-
-        // SQLite does not have native date/time types
-        native_timestamp: false,
-        native_date: false,
-        native_time: false,
-        native_datetime: false,
-
-        // SQLite does not have native decimal types
-        native_decimal: false,
-        decimal_arbitrary_precision: false,
-
-        // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
-        // are limited to i64::MAX to prevent overflow
-        max_unsigned_integer: Some(i64::MAX as u64),
-    };
-
-    pub const POSTGRESQL: StorageTypes = StorageTypes {
-        default_string_type: db::Type::Text,
-
-        // The maximum n you can specify is 10 485 760 characters. Attempts to
-        // declare varchar with a larger typmod will be rejected at
-        // table‐creation time.
-        varchar: Some(10_485_760),
-
-        default_uuid_type: db::Type::Uuid,
-
-        // PostgreSQL has native NUMERIC type for fixed and arbitrary-precision decimals.
-        default_decimal_type: db::Type::Numeric(None),
-        // TODO: PostgreSQL has native NUMERIC type for arbitrary-precision decimals,
-        // but the encoding is complicated and has to be done separately in the future.
-        default_bigdecimal_type: db::Type::Text,
-
-        // PostgreSQL has native support for temporal types with microsecond precision (6 digits)
-        default_timestamp_type: db::Type::Timestamp(6),
-        default_zoned_type: db::Type::Text,
-        default_date_type: db::Type::Date,
-        default_time_type: db::Type::Time(6),
-        default_datetime_type: db::Type::DateTime(6),
-
-        // PostgreSQL has native date/time types
-        native_timestamp: true,
-        native_date: true,
-        native_time: true,
-        native_datetime: true,
-
-        // PostgreSQL has native NUMERIC type with arbitrary precision
-        native_decimal: true,
-        decimal_arbitrary_precision: true,
-
-        // PostgreSQL BIGINT is signed 64-bit, so unsigned integers are limited
-        // to i64::MAX. While NUMERIC could theoretically support larger values,
-        // we prefer explicit limits over implicit type switching.
-        max_unsigned_integer: Some(i64::MAX as u64),
-    };
-
-    pub const MYSQL: StorageTypes = StorageTypes {
-        default_string_type: db::Type::VarChar(191),
-
-        // Values in VARCHAR columns are variable-length strings. The length can
-        // be specified as a value from 0 to 65,535. The effective maximum
-        // length of a VARCHAR is subject to the maximum row size (65,535 bytes,
-        // which is shared among all columns) and the character set used.
-        varchar: Some(65_535),
-
-        // MySQL does not have an inbuilt UUID type. The binary blob type is more
-        // difficult to read than Text but likely has better performance characteristics.
-        default_uuid_type: db::Type::Binary(16),
-
-        // MySQL does not have an arbitrary-precision decimal type. The DECIMAL type
-        // requires a fixed precision and scale to be specified upfront. Store as TEXT.
-        default_decimal_type: db::Type::Text,
-        default_bigdecimal_type: db::Type::Text,
-
-        // MySQL has native support for temporal types with microsecond precision (6 digits)
-        // The `TIMESTAMP` time only supports a limited range (1970-2038), so we default to
-        // DATETIME and let Toasty do the UTC conversion.
-        default_timestamp_type: db::Type::DateTime(6),
-        default_zoned_type: db::Type::Text,
-        default_date_type: db::Type::Date,
-        default_time_type: db::Type::Time(6),
-        default_datetime_type: db::Type::DateTime(6),
-
-        // MySQL has native date/time types
-        native_timestamp: true,
-        native_date: true,
-        native_time: true,
-        native_datetime: true,
-
-        // MySQL has DECIMAL type but requires fixed precision/scale upfront
-        native_decimal: true,
-        decimal_arbitrary_precision: false,
-
-        // MySQL supports full u64 range via BIGINT UNSIGNED
-        max_unsigned_integer: None,
-    };
-
-    pub const DYNAMODB: StorageTypes = StorageTypes {
-        default_string_type: db::Type::Text,
-
-        // DynamoDB does not support varchar types
-        varchar: None,
-
-        default_uuid_type: db::Type::Blob,
-
-        // DynamoDB does not have a native decimal type. Store as TEXT.
-        default_decimal_type: db::Type::Text,
-        default_bigdecimal_type: db::Type::Text,
-
-        // DynamoDB does not have native date/time types. Store as TEXT (strings).
-        default_timestamp_type: db::Type::Text,
-        default_zoned_type: db::Type::Text,
-        default_date_type: db::Type::Text,
-        default_time_type: db::Type::Text,
-        default_datetime_type: db::Type::Text,
-
-        // DynamoDB does not have native date/time types
-        native_timestamp: false,
-        native_date: false,
-        native_time: false,
-        native_datetime: false,
-
-        // DynamoDB does not have native decimal types
-        native_decimal: false,
-        decimal_arbitrary_precision: false,
-
-        // DynamoDB supports full u64 range (numbers stored as strings)
-        max_unsigned_integer: None,
+            max_unsigned_integer: Some(i64::MAX as u64),
+        },
     };
 }

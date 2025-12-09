@@ -205,7 +205,7 @@ mod tests {
             app::Schema::from_macro(&[User::schema()]).expect("schema should build from macro");
 
         Builder::new()
-            .build(app_schema, &Capability::SQLITE)
+            .build(app_schema, &Capability::TEST_CAPABILITY)
             .expect("schema should build")
     }
 

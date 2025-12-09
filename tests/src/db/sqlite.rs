@@ -123,7 +123,7 @@ impl Setup for SetupSqlite {
     }
 
     fn capability(&self) -> &Capability {
-        &Capability::SQLITE
+        &Capability::TEST_CAPABILITY
     }
 
     // Temporary file cleanup is handled automatically by NamedTempFile::drop()

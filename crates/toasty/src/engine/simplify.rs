@@ -285,7 +285,7 @@ mod test {
     /// Creates an empty schema for testing simplification.
     pub fn test_schema() -> toasty_core::Schema {
         Builder::new()
-            .build(app::Schema::default(), &Capability::SQLITE)
+            .build(app::Schema::default(), &Capability::TEST_CAPABILITY)
             .expect("empty schema should build")
     }
 
@@ -294,7 +294,7 @@ mod test {
         let app_schema = app::Schema::from_macro(models).expect("schema should build from macro");
 
         Builder::new()
-            .build(app_schema, &Capability::SQLITE)
+            .build(app_schema, &Capability::TEST_CAPABILITY)
             .expect("schema should build")
     }
 }

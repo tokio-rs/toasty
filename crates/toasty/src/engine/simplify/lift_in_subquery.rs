@@ -266,7 +266,7 @@ mod tests {
                 .expect("schema should build from macro");
 
             let schema = Builder::new()
-                .build(app_schema, &Capability::SQLITE)
+                .build(app_schema, &Capability::TEST_CAPABILITY)
                 .expect("schema should build");
 
             let user_model = User::id();
