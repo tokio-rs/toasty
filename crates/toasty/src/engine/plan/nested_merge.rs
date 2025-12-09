@@ -176,7 +176,6 @@ impl NestedMergePlanner<'_> {
             stmt::Returning::Value(expr) => {
                 if stmt_state.args.is_empty() {
                     let projection = stmt::Expr::arg(0);
-                    println!("stmt={stmt:#?}; args={:#?}", stmt_state.args);
                     let stmt::Type::List(record_ty) = self.engine.infer_ty(stmt, &[]) else {
                         todo!()
                     };
@@ -265,9 +264,6 @@ impl NestedMergePlanner<'_> {
         });
 
         let projection_arg_tys = self.build_projection_arg_tys(nested);
-        println!(
-            "projection={projection:#?}; args={projection_arg_tys:#?}; stmt_state={stmt_state:#?}"
-        );
         eval::Func::from_stmt(projection, projection_arg_tys)
     }
 

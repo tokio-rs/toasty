@@ -56,7 +56,6 @@ impl VarStore {
         entry.rows.dup().await
     }
 
-    #[track_caller]
     pub(crate) fn store(&mut self, var: VarId, count: usize, rows: Rows) {
         while self.slots.len() <= var.0 {
             self.slots.push(None);

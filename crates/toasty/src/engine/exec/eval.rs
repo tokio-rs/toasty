@@ -5,7 +5,7 @@ use crate::{
     },
     Result,
 };
-use toasty_core::driver::Rows;
+use toasty_core::{driver::Rows, stmt};
 
 #[derive(Debug)]
 pub(crate) struct Eval {
@@ -21,7 +21,35 @@ pub(crate) struct Eval {
 
 impl Exec<'_> {
     pub(super) async fn action_eval(&mut self, action: &Eval) -> Result<()> {
-        todo!("action={action:#?}");
+        // Load all input data upfront
+        let mut input = Vec::with_capacity(action.inputs.len());
+
+        for var_id in &action.inputs {
+            let data = self
+                .vars
+                .load(*var_id)
+                .await?
+                .into_values()
+                .collect()
+                .await?;
+            input.push(stmt::Value::List(data));
+        }
+
+        // Evaluate the function with the collected inputs
+        let result = action.eval.eval(&input)?;
+
+        let stmt::Value::List(items) = result else {
+            todo!("result={result:#?}")
+        };
+
+        // Store the result in the output variable
+        self.vars.store(
+            action.output.var,
+            action.output.num_uses,
+            Rows::value_stream(items),
+        );
+
+        Ok(())
     }
 }
 

@@ -662,7 +662,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let mut indices = vec![];
 
-        println!("expr_refs={expr_refs:#?}");
         for expr_ref in expr_refs {
             let expr_col = expr_ref.as_expr_column_unwrap();
             debug_assert!(expr_col.nesting == 0, "expr_column={expr_col:#?}");
@@ -1277,29 +1276,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         }
 
                         // todo!("expr={expr:#?}; args={:#?}", self.returning_args);
+                        let eval = eval::Func::from_stmt(expr, arg_tys);
 
-                        self.insert_mir_with_deps(mir::Eval {
-                            inputs,
-                            eval: eval::Func::from_stmt(expr, arg_tys),
-                        })
-
-                        /*
-                        let projection = eval::Func::from_stmt(returning, arg_ty);
-                        let ty = stmt::Type::list(projection.ret.clone());
-
-                        let node = mir::Project {
-                            input: exec_stmt_node_id,
-                            projection,
-                            ty,
-                        };
-
-                        // Plan the final projection to handle the returning clause.
-                        self.insert_mir_with_deps(node)
-
-                        let stmt_state = self.stmt_info;
-                        let exec_stmt = &self.planner.mir[exec_stmt_node_id];
-                        todo!("handle this; ref_source={ref_source:#?}; exec_stmt={exec_stmt:#?}; stmt={stmt_state:#?}; mir={:#?}", self.planner.mir);
-                        */
+                        self.insert_mir_with_deps(mir::Eval { inputs, eval })
                     }
                 }
                 stmt::Returning::Expr(returning) => {

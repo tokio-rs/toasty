@@ -33,7 +33,7 @@ impl Eval {
             input_vars.push(var);
         }
 
-        let output = var_table.register_var(stmt::Type::list(self.eval.ret.clone()));
+        let output = var_table.register_var(self.eval.ret.clone());
         node.var.set(Some(output));
 
         exec::Eval {

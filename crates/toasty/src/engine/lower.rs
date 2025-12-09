@@ -449,7 +449,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // This may populate stmt.then with child inserts when the parent has
         // database-generated fields (Expr::Default) that children need to reference.
         lower.preprocess_insert_values(&mut stmt.source, &mut stmt.returning);
-        dbg!(&stmt);
 
         // Lower the insertion source
         lower.visit_stmt_query_mut(&mut stmt.source);
