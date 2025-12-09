@@ -21,6 +21,12 @@ impl Simplify<'_> {
         // `or(..., false, ...) → or(..., ...)`
         expr.operands.retain(|expr| !expr.is_false());
 
+        // Null propagation, `null or null` → `null`
+        // After removing false values, if all operands are null, return null.
+        if !expr.operands.is_empty() && expr.operands.iter().all(|e| e.is_value_null()) {
+            return Some(stmt::Expr::null());
+        }
+
         // Idempotent law, `a or a` → `a`
         // Note: O(n) lookups are acceptable here since operand lists are typically small.
         let mut seen = Vec::new();
@@ -649,5 +655,112 @@ mod tests {
 
         assert!(result.is_some());
         assert!(result.unwrap().is_true());
+    }
+
+    // Null propagation tests
+
+    #[test]
+    fn null_or_null_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or null` → `null`
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), Expr::null()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn null_or_false_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or false` → `null` (false is removed, leaving only null)
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), false.into()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn false_or_null_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `false or null` → `null` (false is removed, leaving only null)
+        let mut expr = ExprOr {
+            operands: vec![false.into(), Expr::null()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn null_or_true_becomes_true() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or true` → `true`
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), true.into()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_true());
+    }
+
+    #[test]
+    fn null_or_symbolic_not_simplified() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or a` → no change (symbolic operand present)
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), Expr::arg(0)],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+    }
+
+    #[test]
+    fn multiple_nulls_become_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or null or null` → `null`
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), Expr::null(), Expr::null()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn multiple_nulls_and_false_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or false or null or false` → `null`
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), false.into(), Expr::null(), false.into()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
     }
 }
