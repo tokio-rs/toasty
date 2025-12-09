@@ -131,6 +131,19 @@ impl Primitive for uuid::Uuid {
     }
 }
 
+impl Primitive for bool {
+    fn ty() -> stmt::Type {
+        stmt::Type::Bool
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::Bool(v) => Ok(v),
+            _ => anyhow::bail!("cannot convert value to bool: {value:#?}"),
+        }
+    }
+}
+
 impl<T: Primitive> Primitive for Arc<T> {
     fn ty() -> stmt::Type {
         T::ty()
@@ -158,6 +171,20 @@ impl<T: Primitive> Primitive for Box<T> {
 
     fn load(value: stmt::Value) -> Result<Self> {
         <T as Primitive>::load(value).map(Box::new)
+    }
+}
+
+#[cfg(feature = "rust_decimal")]
+impl Primitive for rust_decimal::Decimal {
+    fn ty() -> stmt::Type {
+        stmt::Type::Decimal
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::Decimal(v) => Ok(v),
+            _ => anyhow::bail!("cannot convert value to rust_decimal::Decimal {value:#?}"),
+        }
     }
 }
 
