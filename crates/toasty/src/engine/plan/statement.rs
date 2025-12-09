@@ -2,7 +2,8 @@ use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit_mut, Condition};
 
 use crate::engine::{
-    eval, hir,
+    eval,
+    hir::{self, Arg},
     index::{self, IndexPlan},
     mir,
     plan::HirPlanner,
@@ -20,10 +21,25 @@ struct LinkedStatement {
     inputs: IndexSet<mir::NodeId>,
 }
 
+#[derive(Debug)]
+enum ReturningArg {
+    /// The result of the current statement's execution
+    Curr,
+
+    /// The result of a sub statement
+    Sub(usize),
+}
+
 struct PlanStatement<'a, 'b> {
     planner: &'a mut HirPlanner<'b>,
     stmt_id: hir::StmtId,
     stmt_info: &'b hir::StatementInfo,
+
+    // Tracks arg sources in returning clause
+    returning_args: Vec<ReturningArg>,
+
+    // Tracks the argument position representing ReturningArg::Curr
+    returning_arg_curr: Option<usize>,
 
     /// True if the statement's dependencies have been tracked
     did_take_deps: bool,
@@ -49,6 +65,8 @@ impl HirPlanner<'_> {
             planner: self,
             stmt_id,
             stmt_info,
+            returning_args: vec![],
+            returning_arg_curr: None,
             did_take_deps: false,
         };
         planner.plan();
@@ -182,15 +200,34 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         selection: &mut Selection,
         stmt: &stmt::Insert,
     ) {
-        visit_mut::for_each_expr_mut(&mut selection.returning, |expr| {
-            if let stmt::Expr::Reference(expr_reference) = expr {
+        visit_mut::for_each_expr_mut(&mut selection.returning, |expr| match expr {
+            stmt::Expr::Reference(expr_reference) => {
+                let position = *self.returning_arg_curr.get_or_insert_with(|| {
+                    let position = self.returning_args.len();
+                    self.returning_args.push(ReturningArg::Curr);
+                    position
+                });
+
                 assert!(
                     expr_reference.is_column(),
                     "TODO: expr_reference = {expr:#?}"
                 );
                 let (index, _) = selection.columns.insert_full(*expr_reference);
-                *expr = stmt::Expr::arg_project(0, [index]);
+                *expr = stmt::Expr::arg_project(position, [index]);
             }
+            stmt::Expr::Arg(expr_arg) => {
+                match self.stmt_info.args[expr_arg.position] {
+                    hir::Arg::Sub { .. } => {}
+                    _ => todo!(),
+                }
+
+                let position = self.returning_args.len();
+                self.returning_args
+                    .push(ReturningArg::Sub(expr_arg.position));
+
+                *expr = stmt::Expr::arg(position);
+            }
+            _ => {}
         });
     }
 
@@ -546,7 +583,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .map(|input| self.planner.mir.ty(*input).clone())
             .collect();
 
-        println!("STMT={stmt:#?}; input_args={input_args:#?}");
         let ty = self.planner.engine.infer_ty(&stmt, &input_args[..]);
 
         let node = if stmt.condition().is_some() {
@@ -1215,7 +1251,55 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             .mir
                             .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
                     } else {
-                        todo!("handle this");
+                        let mut arg_tys = vec![];
+                        let mut inputs = IndexSet::new();
+
+                        for arg in &self.returning_args {
+                            match arg {
+                                ReturningArg::Curr => {
+                                    arg_tys.push(self.planner.mir[exec_stmt_node_id].ty().clone());
+                                    inputs.insert(exec_stmt_node_id);
+                                }
+                                ReturningArg::Sub(position) => {
+                                    let hir::Arg::Sub { stmt_id, .. } =
+                                        &self.stmt_info.args[*position]
+                                    else {
+                                        todo!()
+                                    };
+
+                                    let sub_target = &self.planner.hir[stmt_id];
+                                    let sub_output = sub_target.output.get().unwrap();
+
+                                    arg_tys.push(self.planner.mir[sub_output].ty().clone());
+                                    inputs.insert(sub_output);
+                                }
+                            }
+                        }
+
+                        // todo!("expr={expr:#?}; args={:#?}", self.returning_args);
+
+                        self.insert_mir_with_deps(mir::Eval {
+                            inputs,
+                            eval: eval::Func::from_stmt(expr, arg_tys),
+                        })
+
+                        /*
+                        let projection = eval::Func::from_stmt(returning, arg_ty);
+                        let ty = stmt::Type::list(projection.ret.clone());
+
+                        let node = mir::Project {
+                            input: exec_stmt_node_id,
+                            projection,
+                            ty,
+                        };
+
+                        // Plan the final projection to handle the returning clause.
+                        self.insert_mir_with_deps(node)
+
+                        let stmt_state = self.stmt_info;
+                        let exec_stmt = &self.planner.mir[exec_stmt_node_id];
+                        todo!("handle this; ref_source={ref_source:#?}; exec_stmt={exec_stmt:#?}; stmt={stmt_state:#?}; mir={:#?}", self.planner.mir);
+                        */
                     }
                 }
                 stmt::Returning::Expr(returning) => {

@@ -42,6 +42,7 @@ impl Node {
         match &self.op {
             Operation::Const(m) => &m.ty,
             Operation::DeleteByKey(m) => &m.ty,
+            Operation::Eval(m) => &m.eval.ret,
             Operation::ExecStatement(m) => &m.ty,
             Operation::Filter(m) => &m.ty,
             Operation::FindPkByIndex(m) => &m.ty,
@@ -62,6 +63,7 @@ impl Node {
         match &self.op {
             Operation::Const(op) => op.to_exec(self, var_table).into(),
             Operation::DeleteByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::Eval(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::ExecStatement(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::Filter(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::FindPkByIndex(op) => op.to_exec(logical_plan, self, var_table).into(),

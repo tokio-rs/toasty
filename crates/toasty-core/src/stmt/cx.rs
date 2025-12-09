@@ -4,8 +4,9 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query, Returning,
-        Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, Update, UpdateTarget,
+        expr_reference, Delete, Expr, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget,
+        Query, Returning, Select, Source, SourceTable, Statement, TableFactor, TableRef, Type,
+        Update, UpdateTarget,
     },
     Schema,
 };
@@ -367,23 +368,39 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             }
             Expr::Or(_) => Type::Bool,
             Expr::Project(e) => {
-                if returning_expr && e.base.is_expr_reference() {
-                    if let Expr::Reference(expr_reference) = &*e.base {
-                        // When `returning_expr` is `true`, the expression is being
-                        // evaluated from a RETURNING EXPR clause. In this case, the
-                        // returning expression is *not* a projection. Referencing a
-                        // column implies a *list* of
-                        assert!(e.projection.as_slice().len() == 1);
-                        return self.infer_expr_reference_ty(expr_reference);
+                if returning_expr {
+                    match &*e.base {
+                        Expr::Arg(expr_arg) => {
+                            // When `returning_expr` is `true`, the expression is being
+                            // evaluated from a RETURNING EXPR clause. In this case, the
+                            // returning expression is *not* a projection. Referencing a
+                            // column implies a *list* of
+                            assert!(e.projection.as_slice().len() == 1);
+                            return args[expr_arg.position].clone();
+                        }
+                        Expr::Reference(expr_reference) => {
+                            // When `returning_expr` is `true`, the expression is being
+                            // evaluated from a RETURNING EXPR clause. In this case, the
+                            // returning expression is *not* a projection. Referencing a
+                            // column implies a *list* of
+                            assert!(e.projection.as_slice().len() == 1);
+                            return self.infer_expr_reference_ty(expr_reference);
+                        }
+                        _ => {}
                     }
                 }
 
                 let mut base = self.infer_expr_ty2(&e.base, args, returning_expr);
 
                 for step in e.projection.iter() {
-                    base = match &mut base {
-                        Type::Record(fields) => std::mem::replace(&mut fields[*step], Type::Null),
-                        expr => todo!("expr={expr:#?}"),
+                    base = match base {
+                        Type::Record(mut fields) => {
+                            std::mem::replace(&mut fields[*step], Type::Null)
+                        }
+                        Type::List(items) => *items,
+                        expr => todo!(
+                            "returning_expr={returning_expr:#?}; expr={expr:#?}; project={e:#?}"
+                        ),
                     }
                 }
 

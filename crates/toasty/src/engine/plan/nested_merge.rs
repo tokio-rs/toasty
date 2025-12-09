@@ -75,6 +75,11 @@ impl HirPlanner<'_> {
             return None;
         }
 
+        if stmt_state.stmt.as_ref().unwrap().is_insert() {
+            // todo!("stmt_state={stmt_state:#?}");
+            return None;
+        }
+
         let nested_merge_planner = NestedMergePlanner {
             engine: self.engine,
             hir: self.hir,
@@ -113,57 +118,7 @@ impl NestedMergePlanner<'_> {
 
         let ret = match stmt_state.stmt.as_deref().unwrap() {
             stmt::Statement::Query(query) => {
-                let select = query.body.as_select_unwrap();
-
-                // Extract the qualification. For now, we will just re-run the
-                // entire where clause, but that can be improved later.
-                let mut filter = select.filter.clone();
-
-                visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
-                    stmt::Expr::Arg(expr_arg) => {
-                        let hir::Arg::Ref {
-                            nesting,
-                            stmt_id: target_id,
-                            batch_load_index,
-                            ..
-                        } = &stmt_state.args[expr_arg.position]
-                        else {
-                            todo!()
-                        };
-
-                        debug_assert!(*nesting > 0);
-
-                        // This is a bit of a roundabout way to get the data. We may
-                        // want to find a better way to track the info for more direct
-                        // access.
-                        let target_stmt = &self.hir[target_id];
-                        // The ExprReference based on the target's "self"
-                        let target_expr_reference =
-                            &target_stmt.back_refs[&stmt_id].exprs[*batch_load_index];
-
-                        let target_exec_statement_index = target_stmt
-                            .exec_statement_selection
-                            .get()
-                            .unwrap()
-                            .get_index_of(target_expr_reference)
-                            .unwrap();
-
-                        let _ = self.hir[target_id].exec_statement_selection.get().unwrap();
-
-                        *expr = stmt::Expr::arg_project(
-                            depth - *nesting,
-                            [target_exec_statement_index],
-                        );
-                    }
-                    stmt::Expr::Reference(expr_reference) => {
-                        let index = selection.get_index_of(expr_reference).unwrap();
-                        *expr = stmt::Expr::arg_project(depth, [index]);
-                    }
-                    _ => {}
-                });
-
-                let filter_arg_tys = self.build_filter_arg_tys();
-                let filter = eval::Func::from_stmt(filter.into_expr(), filter_arg_tys);
+                let filter = self.build_filter_for_nested_child(stmt_id, &selection, depth);
 
                 NestedChild {
                     level,
@@ -187,7 +142,6 @@ impl NestedMergePlanner<'_> {
     fn plan_nested_level(&mut self, stmt_id: hir::StmtId, depth: usize) -> NestedLevel {
         let stmt_state = &self.hir[stmt_id];
         let stmt = stmt_state.stmt.as_deref().unwrap();
-        let selection = stmt_state.exec_statement_selection.get().unwrap();
 
         // For child statements, check if the returning clause is a constant value.
         // If so, use the output node (which contains the constant) instead of the
@@ -195,7 +149,7 @@ impl NestedMergePlanner<'_> {
         let returning = stmt.returning_unwrap();
 
         let source = if let Some(output_node_id) = stmt_state.output.get() {
-            debug_assert!(returning.is_value());
+            // debug_assert!(returning.is_value(), "stmt_state={stmt_state:#?}");
 
             // If the output node is set, then the nested child has const
             // returning. Make sure there is a dependency on the execution
@@ -216,40 +170,21 @@ impl NestedMergePlanner<'_> {
         // Map the returning clause to projection expression
         let projection = match returning {
             stmt::Returning::Expr(expr) => {
-                let mut projection = expr.clone();
-
-                visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
-                    stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
-                        hir::Arg::Sub { stmt_id, .. } => {
-                            let nested_child = self.plan_nested_child(*stmt_id, depth + 1);
-                            nested.push(nested_child);
-
-                            // Taking the
-                            *expr = stmt::Expr::arg(nested.len());
-                        }
-                        hir::Arg::Ref { .. } => todo!(),
-                    },
-                    stmt::Expr::Reference(expr_reference) => {
-                        let expr_column = expr_reference.as_expr_column_unwrap();
-                        debug_assert_eq!(0, expr_column.nesting);
-                        let index = selection.get_index_of(expr_reference).unwrap();
-                        *expr = stmt::Expr::arg_project(0, [index]);
-                    }
-                    _ => {}
-                });
-
-                let projection_arg_tys = self.build_projection_arg_tys(&nested);
-                eval::Func::from_stmt(projection, projection_arg_tys)
+                self.build_projection_from_expr(stmt_id, expr, depth, &mut nested)
             }
             // stmt::Returning::Value(value) => stmt::Expr::Value(value.clone()),
-            stmt::Returning::Value(..) => {
-                let projection = stmt::Expr::arg(0);
-                println!("stmt={stmt:#?}; args={:#?}", stmt_state.args);
-                let stmt::Type::List(record_ty) = self.engine.infer_ty(stmt, &[]) else {
-                    todo!()
-                };
-                let projection_arg_tys = vec![*record_ty];
-                eval::Func::from_stmt(projection, projection_arg_tys)
+            stmt::Returning::Value(expr) => {
+                if stmt_state.args.is_empty() {
+                    let projection = stmt::Expr::arg(0);
+                    println!("stmt={stmt:#?}; args={:#?}", stmt_state.args);
+                    let stmt::Type::List(record_ty) = self.engine.infer_ty(stmt, &[]) else {
+                        todo!()
+                    };
+                    let projection_arg_tys = vec![*record_ty];
+                    eval::Func::from_stmt(projection, projection_arg_tys)
+                } else {
+                    self.build_projection_from_expr(stmt_id, expr, depth, &mut nested)
+                }
             }
             _ => todo!(),
         };
@@ -296,5 +231,103 @@ impl NestedMergePlanner<'_> {
         }
 
         stmt::Type::Record(fields)
+    }
+
+    fn build_projection_from_expr(
+        &mut self,
+        stmt_id: hir::StmtId,
+        expr: &stmt::Expr,
+        depth: usize,
+        nested: &mut Vec<NestedChild>,
+    ) -> eval::Func {
+        let stmt_state = &self.hir[stmt_id];
+        let selection = stmt_state.exec_statement_selection.get().unwrap();
+        let mut projection = expr.clone();
+
+        visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
+            stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
+                hir::Arg::Sub { stmt_id, .. } => {
+                    let nested_child = self.plan_nested_child(*stmt_id, depth + 1);
+                    nested.push(nested_child);
+
+                    // Taking the
+                    *expr = stmt::Expr::arg(nested.len());
+                }
+                hir::Arg::Ref { .. } => todo!(),
+            },
+            stmt::Expr::Reference(expr_reference) => {
+                let expr_column = expr_reference.as_expr_column_unwrap();
+                debug_assert_eq!(0, expr_column.nesting);
+                let index = selection.get_index_of(expr_reference).unwrap();
+                *expr = stmt::Expr::arg_project(0, [index]);
+            }
+            _ => {}
+        });
+
+        let projection_arg_tys = self.build_projection_arg_tys(nested);
+        println!(
+            "projection={projection:#?}; args={projection_arg_tys:#?}; stmt_state={stmt_state:#?}"
+        );
+        eval::Func::from_stmt(projection, projection_arg_tys)
+    }
+
+    fn build_filter_for_nested_child(
+        &self,
+        stmt_id: hir::StmtId,
+        selection: &IndexSet<stmt::ExprReference>,
+        depth: usize,
+    ) -> eval::Func {
+        let stmt_state = &self.hir[stmt_id];
+        let stmt::Statement::Query(query) = stmt_state.stmt.as_deref().unwrap() else {
+            unreachable!()
+        };
+        let select = query.body.as_select_unwrap();
+
+        // Extract the qualification. For now, we will just re-run the
+        // entire where clause, but that can be improved later.
+        let mut filter = select.filter.clone();
+
+        visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
+            stmt::Expr::Arg(expr_arg) => {
+                let hir::Arg::Ref {
+                    nesting,
+                    stmt_id: target_id,
+                    batch_load_index,
+                    ..
+                } = &stmt_state.args[expr_arg.position]
+                else {
+                    todo!()
+                };
+
+                debug_assert!(*nesting > 0);
+
+                // This is a bit of a roundabout way to get the data. We may
+                // want to find a better way to track the info for more direct
+                // access.
+                let target_stmt = &self.hir[target_id];
+                // The ExprReference based on the target's "self"
+                let target_expr_reference =
+                    &target_stmt.back_refs[&stmt_id].exprs[*batch_load_index];
+
+                let target_exec_statement_index = target_stmt
+                    .exec_statement_selection
+                    .get()
+                    .unwrap()
+                    .get_index_of(target_expr_reference)
+                    .unwrap();
+
+                let _ = self.hir[target_id].exec_statement_selection.get().unwrap();
+
+                *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
+            }
+            stmt::Expr::Reference(expr_reference) => {
+                let index = selection.get_index_of(expr_reference).unwrap();
+                *expr = stmt::Expr::arg_project(depth, [index]);
+            }
+            _ => {}
+        });
+
+        let filter_arg_tys = self.build_filter_arg_tys();
+        eval::Func::from_stmt(filter.into_expr(), filter_arg_tys)
     }
 }

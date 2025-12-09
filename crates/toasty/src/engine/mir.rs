@@ -7,6 +7,9 @@ pub(crate) use delete_by_key::DeleteByKey;
 mod exec_statement;
 pub(crate) use exec_statement::ExecStatement;
 
+mod eval;
+pub(crate) use eval::Eval;
+
 mod filter;
 pub(crate) use filter::Filter;
 

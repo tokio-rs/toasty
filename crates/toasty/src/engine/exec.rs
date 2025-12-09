@@ -4,6 +4,9 @@ pub(crate) use action::Action;
 mod delete_by_key;
 pub(crate) use delete_by_key::DeleteByKey;
 
+mod eval;
+pub(crate) use eval::Eval;
+
 mod exec_statement;
 pub(crate) use exec_statement::{ExecStatement, ExecStatementOutput};
 
@@ -80,6 +83,7 @@ impl Exec<'_> {
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,
+            Action::Eval(action) => self.action_eval(action).await,
             Action::ExecStatement(action) => self.action_exec_statement(action).await,
             Action::Filter(action) => self.action_filter(action).await,
             Action::FindPkByIndex(action) => self.action_find_pk_by_index(action).await,
