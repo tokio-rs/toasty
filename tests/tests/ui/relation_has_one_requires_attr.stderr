@@ -11,6 +11,6 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Pr
             Option<T>
             Rc<T>
             bigdecimal::BigDecimal
+            bool
             i16
-            i32
           and $N others
