@@ -130,6 +130,8 @@ impl ToSql for Value {
                 Type::VARCHAR => value.to_string().to_sql(ty, out),
                 _ => todo!("Unsupported PostgreSQL type for UUID: {:?}", ty),
             },
+            #[cfg(feature = "rust_decimal")]
+            stmt::Value::Decimal(value) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
             stmt::Value::Timestamp(value) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
@@ -151,6 +153,7 @@ impl ToSql for Value {
         VARCHAR,
         BYTEA,
         UUID,
+        NUMERIC,
         TIMESTAMP,
         TIMESTAMPTZ,
         DATE,

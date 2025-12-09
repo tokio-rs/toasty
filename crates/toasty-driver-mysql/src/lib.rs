@@ -314,6 +314,18 @@ fn mysql_to_toasty(
             }
         }
 
+        MYSQL_TYPE_NEWDECIMAL | MYSQL_TYPE_DECIMAL => match ty {
+            #[cfg(feature = "rust_decimal")]
+            stmt::Type::Decimal => extract_or_null(row, i, |s: String| {
+                stmt::Value::Decimal(s.parse().expect("failed to parse Decimal from MySQL"))
+            }),
+            #[cfg(feature = "bigdecimal")]
+            stmt::Type::BigDecimal => extract_or_null(row, i, |s: String| {
+                stmt::Value::BigDecimal(s.parse().expect("failed to parse BigDecimal from MySQL"))
+            }),
+            _ => todo!("unexpected type for DECIMAL: {ty:#?}"),
+        },
+
         _ => todo!(
             "implement MySQL to toasty conversion for `{:#?}`; {:#?}; ty={:#?}",
             column.column_type(),

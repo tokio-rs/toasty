@@ -180,6 +180,17 @@ impl IntoExpr<Self> for String {
     }
 }
 
+#[cfg(feature = "rust_decimal")]
+impl IntoExpr<Self> for rust_decimal::Decimal {
+    fn into_expr(self) -> Expr<Self> {
+        Expr::from_value(self.into())
+    }
+
+    fn by_ref(&self) -> Expr<Self> {
+        Expr::from_value((*self).into())
+    }
+}
+
 #[cfg(feature = "bigdecimal")]
 impl IntoExpr<Self> for bigdecimal::BigDecimal {
     fn into_expr(self) -> Expr<Self> {
