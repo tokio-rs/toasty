@@ -989,6 +989,7 @@ async fn assign_todo_to_user_on_update_query(test: &mut DbTest) {
 
     let user = User::create().exec(&db).await.unwrap();
 
+    println!("~~~~~~~ START ~~~~~~~~~");
     User::filter_by_id(&user.id)
         .update()
         .todo(Todo::create().title("hello"))
@@ -996,6 +997,7 @@ async fn assign_todo_to_user_on_update_query(test: &mut DbTest) {
         .await
         .unwrap();
 
+    println!("~~~~~~~~ END ~~~~~~~~");
     let todos: Vec<_> = user.todos().collect(&db).await.unwrap();
     assert_eq!(1, todos.len());
     assert_eq!("hello", todos[0].title);

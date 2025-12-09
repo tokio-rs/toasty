@@ -231,7 +231,8 @@ impl NestedMergePlanner<'_> {
                         debug_assert!(returning_expr.is_const(), "this block is assuming, at this point, `Returning::Value` is always constant.");
 
                         // For consistency, make sure the child statement's execution happens before this one.
-                        self.deps.insert(stmt_state.exec_statement.get().unwrap());
+                        self.deps
+                            .insert(child_stmt_state.exec_statement.get().unwrap());
                         *expr = returning_expr.clone();
                     } else {
                         let nested_child = self.plan_nested_child(*stmt_id, depth + 1);

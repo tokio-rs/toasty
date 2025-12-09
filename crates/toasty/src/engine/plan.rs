@@ -39,6 +39,8 @@ impl Engine {
         }
         .build_logical_plan();
 
+        dbg!(&logical_plan);
+
         // Build the execution plan from the logical plan
         Ok(self.plan_execution(logical_plan))
     }
