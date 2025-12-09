@@ -148,22 +148,9 @@ impl NestedMergePlanner<'_> {
         // exec_statement node, and mark exec_statement as a dependency.
         let returning = stmt.returning_unwrap();
 
-        let source = if let Some(output_node_id) = stmt_state.output.get() {
-            // debug_assert!(returning.is_value(), "stmt_state={stmt_state:#?}");
-
-            // If the output node is set, then the nested child has const
-            // returning. Make sure there is a dependency on the execution
-            // though.
-            self.deps.insert(stmt_state.exec_statement.get().unwrap());
-            let (source, _) = self.inputs.insert_full(output_node_id);
-            source
-        } else {
-            // Normal case: use the exec_statement as the source
-            let (source, _) = self
-                .inputs
-                .insert_full(stmt_state.exec_statement.get().unwrap());
-            source
-        };
+        let (source, _) = self
+            .inputs
+            .insert_full(stmt_state.exec_statement.get().unwrap());
 
         let mut nested = vec![];
 
@@ -171,19 +158,6 @@ impl NestedMergePlanner<'_> {
         let projection = match returning {
             stmt::Returning::Expr(expr) => {
                 self.build_projection_from_expr(stmt_id, expr, depth, &mut nested)
-            }
-            // stmt::Returning::Value(value) => stmt::Expr::Value(value.clone()),
-            stmt::Returning::Value(expr) => {
-                if stmt_state.args.is_empty() {
-                    let projection = stmt::Expr::arg(0);
-                    let stmt::Type::List(record_ty) = self.engine.infer_ty(stmt, &[]) else {
-                        todo!()
-                    };
-                    let projection_arg_tys = vec![*record_ty];
-                    eval::Func::from_stmt(projection, projection_arg_tys)
-                } else {
-                    self.build_projection_from_expr(stmt_id, expr, depth, &mut nested)
-                }
             }
             _ => todo!(),
         };
@@ -246,11 +220,26 @@ impl NestedMergePlanner<'_> {
         visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
             stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
                 hir::Arg::Sub { stmt_id, .. } => {
-                    let nested_child = self.plan_nested_child(*stmt_id, depth + 1);
-                    nested.push(nested_child);
+                    let child_stmt_state = &self.hir[stmt_id];
+                    let child_stmt = child_stmt_state.stmt.as_deref().unwrap();
+                    let child_returning = child_stmt.returning_unwrap();
 
-                    // Taking the
-                    *expr = stmt::Expr::arg(nested.len());
+                    // If the child statement has a constant returning clause,
+                    // then the nested merge can inline the returning directly
+                    // instead of having to get the values from the expression.
+                    if let stmt::Returning::Value(returning_expr) = child_returning {
+                        debug_assert!(returning_expr.is_const(), "this block is assuming, at this point, `Returning::Value` is always constant.");
+
+                        // For consistency, make sure the child statement's execution happens before this one.
+                        self.deps.insert(stmt_state.exec_statement.get().unwrap());
+                        *expr = returning_expr.clone();
+                    } else {
+                        let nested_child = self.plan_nested_child(*stmt_id, depth + 1);
+                        nested.push(nested_child);
+
+                        // Taking the
+                        *expr = stmt::Expr::arg(nested.len());
+                    }
                 }
                 hir::Arg::Ref { .. } => todo!(),
             },
