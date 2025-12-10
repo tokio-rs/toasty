@@ -522,6 +522,7 @@ impl LowerStatement<'_, '_> {
                         assert_eq!(1, rows.items.len());
                         rows.items.into_iter().next().unwrap()
                     }
+                    stmt::Returning::Value(row) => row,
                     returning => todo!("returning={returning:#?}"),
                 };
 

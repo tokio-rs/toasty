@@ -72,7 +72,8 @@ impl Engine {
             match exec.vars.load(returning).await? {
                 Rows::Count(_) => ValueStream::default(),
                 Rows::Value(stmt::Value::List(items)) => ValueStream::from_vec(items),
-                Rows::Value(_) => panic!("should have been a list"),
+                // TODO have the public API be able to handle single rows
+                Rows::Value(value) => ValueStream::from_vec(vec![value]),
                 Rows::Stream(value_stream) => value_stream,
             }
         } else {
