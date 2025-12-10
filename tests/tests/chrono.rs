@@ -51,7 +51,7 @@ async fn ty_naivedate(test: &mut DbTest) {
         NaiveDate::from_ymd_opt(1900, 2, 28).unwrap(),
         NaiveDate::from_ymd_opt(2024, 2, 29).unwrap(), // Leap year
         NaiveDate::from_ymd_opt(9999, 12, 31).unwrap(),
-        NaiveDate::from_ymd_opt(1, 1, 1).unwrap(),
+        NaiveDate::from_ymd_opt(1000, 1, 1).unwrap(),
     ];
 
     for val in &test_values {

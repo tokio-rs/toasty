@@ -266,7 +266,9 @@ fn mysql_to_toasty(
             stmt::Type::ChronoNaiveDateTime => {
                 extract_or_null(row, i, stmt::Value::ChronoNaiveDateTime)
             }
-            _ => todo!(),
+            _ => {
+                panic!("TIMESTAMP/DATETIME require either the jiff or chrono feature to be enabled")
+            }
         },
 
         #[cfg(any(feature = "jiff", feature = "chrono"))]
@@ -285,7 +287,7 @@ fn mysql_to_toasty(
             },
             #[cfg(feature = "chrono")]
             stmt::Type::ChronoNaiveDate => extract_or_null(row, i, stmt::Value::ChronoNaiveDate),
-            _ => todo!(),
+            _ => panic!("DATE requires either the jiff or chrono feature to be enabled"),
         },
 
         #[cfg(any(feature = "jiff", feature = "chrono"))]
@@ -317,7 +319,7 @@ fn mysql_to_toasty(
                 stmt::Type::ChronoNaiveTime => {
                     extract_or_null(row, i, stmt::Value::ChronoNaiveTime)
                 }
-                _ => todo!(),
+                _ => panic!("TIME requires either the jiff or chrono feature to be enabled"),
             }
         }
 

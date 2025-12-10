@@ -332,14 +332,12 @@ fn postgres_to_toasty(
             _ => panic!("TIMESTAMPTZ requires the jiff or chrono feature to be enabled"),
         }
     } else if column.type_() == &Type::TIMESTAMP {
-        {
-            match expected_ty {
-                #[cfg(feature = "jiff")]
-                stmt::Type::JiffDate => get_from_row::<jiff::civil::DateTime>(row, index),
-                #[cfg(feature = "chrono")]
-                stmt::Type::ChronoNaiveDate => get_from_row::<chrono::NaiveDate>(row, index),
-                _ => panic!("TIMESTAMP requires the jiff or chrono feature to be enabled"),
-            }
+        match expected_ty {
+            #[cfg(feature = "jiff")]
+            stmt::Type::JiffDateTime => get_from_row::<jiff::civil::DateTime>(row, index),
+            #[cfg(feature = "chrono")]
+            stmt::Type::ChronoNaiveDateTime => get_from_row::<chrono::NaiveDateTime>(row, index),
+            _ => panic!("TIMESTAMP requires the jiff or chrono feature to be enabled"),
         }
     } else if column.type_() == &Type::DATE {
         match expected_ty {
@@ -354,7 +352,7 @@ fn postgres_to_toasty(
             #[cfg(feature = "jiff")]
             stmt::Type::JiffTime => get_from_row::<jiff::civil::Time>(row, index),
             #[cfg(feature = "chrono")]
-            stmt::Type::ChronoNaiveDate => get_from_row::<chrono::NaiveDate>(row, index),
+            stmt::Type::ChronoNaiveTime => get_from_row::<chrono::NaiveTime>(row, index),
             _ => panic!("TIME requires the jiff or chrono feature to be enabled"),
         }
     } else if column.type_() == &Type::NUMERIC {
