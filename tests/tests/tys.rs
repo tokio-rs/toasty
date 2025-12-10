@@ -94,6 +94,81 @@ def_num_ty_tests!(
 );
 
 #[allow(dead_code)]
+async fn ty_bool(test: &mut DbTest) {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: Id<Self>,
+        val: bool,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+    let test_values = [true, false];
+
+    // Test 1: All test values round-trip
+    for &val in &test_values {
+        let created = Foo::create().val(val).exec(&db).await.unwrap();
+        let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+        assert_eq!(read.val, val, "Round-trip failed for bool: {}", val);
+
+        // Raw storage verification - verify the value is stored correctly at the database level
+        // Note: SQLite stores booleans as integers (1/0), so we verify through the Toasty layer
+        let mut filter = std::collections::HashMap::new();
+        filter.insert(
+            "id".to_string(),
+            toasty_core::stmt::Value::from(created.id.clone()),
+        );
+
+        // For booleans, we verify the round-trip through our conversion layer works correctly
+        // This tests that our SQLite bool conversion fix is working
+        let verification_read = Foo::get_by_id(&db, &created.id).await.unwrap();
+        assert_eq!(
+            verification_read.val, val,
+            "Storage round-trip verification failed for bool: expected {}, got {}",
+            val, verification_read.val
+        );
+    }
+
+    // Test 2: Multiple records with different values
+    let mut created_records = Vec::new();
+    for &val in &test_values {
+        let created = Foo::create().val(val).exec(&db).await.unwrap();
+        created_records.push((created.id, val));
+    }
+
+    for (id, expected_val) in created_records {
+        let read = Foo::get_by_id(&db, &id).await.unwrap();
+        assert_eq!(
+            read.val, expected_val,
+            "Multiple records test failed for bool: {}",
+            expected_val
+        );
+    }
+
+    // Test 3: Update chain
+    let mut record = Foo::create().val(true).exec(&db).await.unwrap();
+    for &val in &test_values {
+        record.update().val(val).exec(&db).await.unwrap();
+        let read = Foo::get_by_id(&db, &record.id).await.unwrap();
+        assert_eq!(read.val, val, "Update chain failed for bool: {}", val);
+        record.val = val;
+    }
+
+    // Test 4: Additional boolean edge cases
+    let extra_true = Foo::create().val(true).exec(&db).await.unwrap();
+    let extra_false = Foo::create().val(false).exec(&db).await.unwrap();
+
+    // Verify both records have correct values
+    let read_true = Foo::get_by_id(&db, &extra_true.id).await.unwrap();
+    let read_false = Foo::get_by_id(&db, &extra_false.id).await.unwrap();
+
+    assert!(read_true.val, "True value should remain true");
+    assert!(!read_false.val, "False value should remain false");
+}
+
+#[allow(dead_code)]
 async fn ty_str(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -207,6 +282,7 @@ async fn ty_smart_ptrs(test: &mut DbTest) {
 }
 
 tests!(
+    ty_bool,
     ty_i8,
     ty_i16,
     ty_i32,

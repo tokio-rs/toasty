@@ -124,11 +124,6 @@ pub enum Type {
     // An array of bytes that is more efficient than List(u8)
     Bytes,
 
-    /// A fixed-precision decimal number.
-    /// See [`rust_decimal::Decimal`].
-    #[cfg(feature = "rust_decimal")]
-    Decimal,
-
     /// An arbitrary-precision decimal number.
     /// See [`bigdecimal::BigDecimal`].
     #[cfg(feature = "bigdecimal")]
@@ -218,17 +213,6 @@ impl Type {
         matches!(self, Self::Bytes)
     }
 
-    pub fn is_decimal(&self) -> bool {
-        #[cfg(feature = "rust_decimal")]
-        {
-            matches!(self, Self::Decimal)
-        }
-        #[cfg(not(feature = "rust_decimal"))]
-        {
-            false
-        }
-    }
-
     pub fn is_big_decimal(&self) -> bool {
         #[cfg(feature = "bigdecimal")]
         {
@@ -271,13 +255,6 @@ impl Type {
             // Bytes <-> Uuid
             (Value::Uuid(value), Self::Bytes) => Value::Bytes(value.as_bytes().to_vec()),
             (Value::Bytes(value), Self::Uuid) => Value::Uuid(value.try_into()?),
-            // String <-> Decimal
-            #[cfg(feature = "rust_decimal")]
-            (Value::Decimal(value), Self::String) => Value::String(value.to_string()),
-            #[cfg(feature = "rust_decimal")]
-            (Value::String(value), Self::Decimal) => {
-                Value::Decimal(value.parse().expect("could not parse Decimal"))
-            }
             // String <-> BigDecimal
             #[cfg(feature = "bigdecimal")]
             (Value::BigDecimal(value), Self::String) => Value::String(value.to_string()),

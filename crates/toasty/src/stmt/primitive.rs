@@ -1,8 +1,5 @@
-use std::{rc::Rc, sync::Arc};
-
 use crate::{stmt::Id, Model, Result};
 
-use std::borrow::Cow;
 use toasty_core::stmt;
 
 pub trait Primitive: Sized {
@@ -63,6 +60,16 @@ impl Primitive for usize {
     }
 }
 
+impl Primitive for bool {
+    fn ty() -> stmt::Type {
+        stmt::Type::Bool
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+}
+
 impl Primitive for String {
     fn ty() -> stmt::Type {
         stmt::Type::String
@@ -104,20 +111,6 @@ impl<T: Primitive> Primitive for Option<T> {
     }
 }
 
-impl<T> Primitive for Cow<'_, T>
-where
-    T: ToOwned + ?Sized,
-    T::Owned: Primitive,
-{
-    fn ty() -> stmt::Type {
-        <T::Owned as Primitive>::ty()
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T::Owned as Primitive>::load(value).map(Cow::Owned)
-    }
-}
-
 impl Primitive for uuid::Uuid {
     fn ty() -> stmt::Type {
         stmt::Type::Uuid
@@ -127,63 +120,6 @@ impl Primitive for uuid::Uuid {
         match value {
             stmt::Value::Uuid(v) => Ok(v),
             _ => anyhow::bail!("cannot convert value to uuid::Uuid {value:#?}"),
-        }
-    }
-}
-
-impl Primitive for bool {
-    fn ty() -> stmt::Type {
-        stmt::Type::Bool
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::Bool(v) => Ok(v),
-            _ => anyhow::bail!("cannot convert value to bool: {value:#?}"),
-        }
-    }
-}
-
-impl<T: Primitive> Primitive for Arc<T> {
-    fn ty() -> stmt::Type {
-        T::ty()
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T as Primitive>::load(value).map(Arc::new)
-    }
-}
-
-impl<T: Primitive> Primitive for Rc<T> {
-    fn ty() -> stmt::Type {
-        T::ty()
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T as Primitive>::load(value).map(Rc::new)
-    }
-}
-
-impl<T: Primitive> Primitive for Box<T> {
-    fn ty() -> stmt::Type {
-        T::ty()
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        <T as Primitive>::load(value).map(Box::new)
-    }
-}
-
-#[cfg(feature = "rust_decimal")]
-impl Primitive for rust_decimal::Decimal {
-    fn ty() -> stmt::Type {
-        stmt::Type::Decimal
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::Decimal(v) => Ok(v),
-            _ => anyhow::bail!("cannot convert value to rust_decimal::Decimal {value:#?}"),
         }
     }
 }
@@ -199,5 +135,50 @@ impl Primitive for bigdecimal::BigDecimal {
             stmt::Value::BigDecimal(v) => Ok(v),
             _ => anyhow::bail!("cannot convert value to bigdecimal::BigDecimal {value:#?}"),
         }
+    }
+}
+
+// Smart pointer wrappers - placed last to minimize impact on error message display
+impl<T: Primitive> Primitive for std::sync::Arc<T> {
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Primitive>::load(value).map(std::sync::Arc::new)
+    }
+}
+
+impl<T: Primitive> Primitive for std::rc::Rc<T> {
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Primitive>::load(value).map(std::rc::Rc::new)
+    }
+}
+
+impl<T: Primitive> Primitive for Box<T> {
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Primitive>::load(value).map(Box::new)
+    }
+}
+
+impl<T> Primitive for std::borrow::Cow<'_, T>
+where
+    T: ToOwned + ?Sized,
+    T::Owned: Primitive,
+{
+    fn ty() -> stmt::Type {
+        <T::Owned as Primitive>::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T::Owned as Primitive>::load(value).map(std::borrow::Cow::Owned)
     }
 }

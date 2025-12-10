@@ -27,10 +27,6 @@ impl ToValue for Value {
             CoreValue::String(value) => value.to_value(),
             CoreValue::Bytes(value) => value.to_value(),
             CoreValue::Uuid(value) => value.to_value(),
-            #[cfg(feature = "rust_decimal")]
-            CoreValue::Decimal(value) => value.to_string().to_value(),
-            #[cfg(feature = "bigdecimal")]
-            CoreValue::BigDecimal(value) => value.to_string().to_value(),
             #[cfg(feature = "jiff")]
             CoreValue::Timestamp(value) => {
                 // Convert jiff::Timestamp to MySQL TIMESTAMP
