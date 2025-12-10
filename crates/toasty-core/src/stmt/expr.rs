@@ -146,33 +146,6 @@ impl Expr {
         matches!(self, Self::Arg(_))
     }
 
-    /// Returns true if the expression is always non-nullable.
-    ///
-    /// This method is conservative and only returns true for expressions we can
-    /// prove are non-nullable.
-    pub fn is_always_non_nullable(&self) -> bool {
-        match self {
-            // A constant value is non-nullable if it's not null.
-            Self::Value(value) => !value.is_null(),
-            // Boolean logic expressions always evaluate to true or false.
-            Self::And(_) | Self::Or(_) | Self::Not(_) => true,
-            // ANY returns true if any item matches, always boolean.
-            Self::Any(_) => true,
-            // Comparisons always evaluate to true or false.
-            Self::BinaryOp(_) => true,
-            // IS NULL checks always evaluate to true or false.
-            Self::IsNull(_) => true,
-            // EXISTS checks always evaluate to true or false.
-            Self::Exists(_) => true,
-            // IN expressions always evaluate to true or false.
-            Self::InList(_) | Self::InSubquery(_) => true,
-            // Pattern matching always evaluates to true or false.
-            Self::Pattern(_) => true,
-            // For other expressions, we cannot prove non-nullability.
-            _ => false,
-        }
-    }
-
     pub fn into_value(self) -> Value {
         match self {
             Self::Value(value) => value,

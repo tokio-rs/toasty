@@ -60,11 +60,6 @@ impl Simplify<'_> {
             return Some(factored);
         }
 
-        // Complement law, `a or not(a)` → `true` (only if `a` is non-nullable)
-        if self.try_complement_or(expr) {
-            return Some(true.into());
-        }
-
         if expr.operands.is_empty() {
             Some(false.into())
         } else if expr.operands.len() == 1 {
@@ -137,39 +132,6 @@ impl Simplify<'_> {
         };
         result.push(stmt::Expr::Or(or_expr));
         Some(stmt::Expr::and_from_vec(result))
-    }
-
-    /// Checks for complement law: `a or not(a)` → `true`
-    ///
-    /// Returns true if a complementary pair is found and both are non-nullable.
-    fn try_complement_or(&self, expr: &stmt::ExprOr) -> bool {
-        // Collect all NOT expressions and their inner expressions
-        let negated: Vec<_> = expr
-            .operands
-            .iter()
-            .filter_map(|op| {
-                if let stmt::Expr::Not(not_expr) = op {
-                    Some(not_expr.expr.as_ref())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        // Check if any operand has its negation also present
-        for operand in &expr.operands {
-            // Skip NOT expressions themselves
-            if matches!(operand, stmt::Expr::Not(_)) {
-                continue;
-            }
-
-            // Check if not(operand) exists and operand is non-nullable
-            if negated.contains(&operand) && operand.is_always_non_nullable() {
-                return true;
-            }
-        }
-
-        false
     }
 }
 
@@ -567,87 +529,5 @@ mod tests {
         let result = simplify.simplify_expr_or(&mut expr);
 
         assert!(result.is_none());
-    }
-
-    #[test]
-    fn complement_basic() {
-        use toasty_core::stmt::ExprNot;
-
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a or not(a)` → `true` (where a is a non-nullable comparison)
-        let a = Expr::eq(Expr::arg(0), Expr::arg(1));
-        let mut expr = ExprOr {
-            operands: vec![a.clone(), Expr::Not(ExprNot { expr: Box::new(a) })],
-        };
-        let result = simplify.simplify_expr_or(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_true());
-    }
-
-    #[test]
-    fn complement_with_other_operands() {
-        use toasty_core::stmt::ExprNot;
-
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a or b or not(a)` → `true`
-        let a = Expr::eq(Expr::arg(0), Expr::arg(1));
-        let mut expr = ExprOr {
-            operands: vec![
-                a.clone(),
-                Expr::arg(2),
-                Expr::Not(ExprNot { expr: Box::new(a) }),
-            ],
-        };
-        let result = simplify.simplify_expr_or(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_true());
-    }
-
-    #[test]
-    fn complement_nullable_not_simplified() {
-        use toasty_core::stmt::ExprNot;
-
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a or not(a)` where `a` is an arg (nullable) → no change
-        let a = Expr::arg(0);
-        let mut expr = ExprOr {
-            operands: vec![a.clone(), Expr::Not(ExprNot { expr: Box::new(a) })],
-        };
-        let result = simplify.simplify_expr_or(&mut expr);
-
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn complement_multiple_repetitions() {
-        use toasty_core::stmt::ExprNot;
-
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `a or a or not(a) or not(a)` → `true`
-        let a = Expr::eq(Expr::arg(0), Expr::arg(1));
-        let mut expr = ExprOr {
-            operands: vec![
-                a.clone(),
-                a.clone(),
-                Expr::Not(ExprNot {
-                    expr: Box::new(a.clone()),
-                }),
-                Expr::Not(ExprNot { expr: Box::new(a) }),
-            ],
-        };
-        let result = simplify.simplify_expr_or(&mut expr);
-
-        assert!(result.is_some());
-        assert!(result.unwrap().is_true());
     }
 }
