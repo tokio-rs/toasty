@@ -5,7 +5,6 @@ use crate::{
 
 impl Type {
     pub(crate) fn cast_chrono(&self, value: &Value) -> Result<Option<Value>> {
-        dbg!(&self, &value);
         Ok(Some(match (value, self) {
             // String -> chrono
             (Value::String(value), Type::ChronoDateTimeUtc) => {
@@ -19,7 +18,9 @@ impl Type {
 
             // chrono -> String
             (Value::ChronoDateTimeUtc(value), Type::String) => Value::String(value.to_string()),
-            (Value::ChronoNaiveDateTime(value), Type::String) => Value::String(value.to_string()),
+            (Value::ChronoNaiveDateTime(value), Type::String) => {
+                Value::String(value.format("%Y-%m-%dT%H:%M:%S%.f").to_string())
+            }
             (Value::ChronoNaiveDate(value), Type::String) => Value::String(value.to_string()),
             (Value::ChronoNaiveTime(value), Type::String) => Value::String(value.to_string()),
 

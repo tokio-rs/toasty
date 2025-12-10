@@ -9,6 +9,12 @@ dynamodb = ["dep:toasty-driver-dynamodb"]
 mysql = ["dep:toasty-driver-mysql"]
 postgresql = ["dep:toasty-driver-postgresql"]
 sqlite = ["dep:toasty-driver-sqlite"]
+rust_decimal = [
+	"dep:rust_decimal",
+	"toasty-core/rust_decimal",
+	"toasty-driver-postgresql/rust_decimal",
+	"toasty-driver-mysql/rust_decimal",
+]
 bigdecimal = [
 	"dep:bigdecimal",
 	"toasty-core/bigdecimal",
@@ -44,6 +50,7 @@ serde_core = { version = "1.0.221", optional = true }
 by_address.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
+rust_decimal = { workspace = true, optional = true }
 bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }

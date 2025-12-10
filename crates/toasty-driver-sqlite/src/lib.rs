@@ -256,6 +256,7 @@ fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt:
     match value {
         Some(SqlValue::Null) => stmt::Value::Null,
         Some(SqlValue::Integer(value)) => match ty {
+            stmt::Type::Bool => stmt::Value::Bool(value != 0),
             stmt::Type::I8 => stmt::Value::I8(value as i8),
             stmt::Type::I16 => stmt::Value::I16(value as i16),
             stmt::Type::I32 => stmt::Value::I32(value as i32),

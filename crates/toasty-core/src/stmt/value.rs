@@ -61,6 +61,11 @@ pub enum Value {
     /// 128-bit universally unique identifier (UUID)
     Uuid(uuid::Uuid),
 
+    /// A fixed-precision decimal number.
+    /// See [`rust_decimal::Decimal`].
+    #[cfg(feature = "rust_decimal")]
+    Decimal(rust_decimal::Decimal),
+
     /// An arbitrary-precision decimal number.
     /// See [`bigdecimal::BigDecimal`].
     #[cfg(feature = "bigdecimal")]
@@ -226,6 +231,8 @@ impl Value {
             Self::String(_) => ty.is_string(),
             Self::Bytes(_) => ty.is_bytes(),
             Self::Uuid(_) => ty.is_uuid(),
+            #[cfg(feature = "rust_decimal")]
+            Value::Decimal(_) => *ty == Type::Decimal,
             #[cfg(feature = "bigdecimal")]
             Value::BigDecimal(_) => *ty == Type::BigDecimal,
             #[cfg(feature = "jiff")]
@@ -271,6 +278,8 @@ impl Value {
             Value::U64(_) => Type::U64,
             Value::Bytes(_) => Type::Bytes,
             Value::Uuid(_) => Type::Uuid,
+            #[cfg(feature = "rust_decimal")]
+            Value::Decimal(_) => Type::Decimal,
             #[cfg(feature = "bigdecimal")]
             Value::BigDecimal(_) => Type::BigDecimal,
             #[cfg(feature = "jiff")]
@@ -355,6 +364,10 @@ impl PartialOrd for Value {
 
             // UUIDs.
             (Value::Uuid(a), Value::Uuid(b)) => a.partial_cmp(b),
+
+            // Decimal: fixed-precision decimal numbers.
+            #[cfg(feature = "rust_decimal")]
+            (Value::Decimal(a), Value::Decimal(b)) => a.partial_cmp(b),
 
             // BigDecimal: arbitrary-precision decimal numbers.
             #[cfg(feature = "bigdecimal")]
@@ -476,6 +489,25 @@ impl TryFrom<Value> for uuid::Uuid {
         match value {
             Value::Uuid(value) => Ok(value),
             _ => Err(anyhow!("value is not of type UUID")),
+        }
+    }
+}
+
+#[cfg(feature = "rust_decimal")]
+impl From<rust_decimal::Decimal> for Value {
+    fn from(value: rust_decimal::Decimal) -> Self {
+        Self::Decimal(value)
+    }
+}
+
+#[cfg(feature = "rust_decimal")]
+impl TryFrom<Value> for rust_decimal::Decimal {
+    type Error = crate::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Decimal(value) => Ok(value),
+            _ => Err(anyhow!("value is not of type Decimal")),
         }
     }
 }

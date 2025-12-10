@@ -357,6 +357,17 @@ fn postgres_to_toasty(
             stmt::Type::ChronoNaiveDate => get_from_row::<chrono::NaiveDate>(row, index),
             _ => panic!("TIME requires the jiff or chrono feature to be enabled"),
         }
+    } else if column.type_() == &Type::NUMERIC {
+        #[cfg(feature = "rust_decimal")]
+        {
+            row.get::<usize, Option<rust_decimal::Decimal>>(index)
+                .map(stmt::Value::Decimal)
+                .unwrap_or(stmt::Value::Null)
+        }
+        #[cfg(not(feature = "rust_decimal"))]
+        {
+            panic!("NUMERIC requires rust_decimal feature to be enabled")
+        }
     } else {
         todo!(
             "implement PostgreSQL to toasty conversion for `{:#?}`",
@@ -380,6 +391,8 @@ fn postgres_ty_for_value(value: &stmt::Value) -> Type {
         stmt::Value::String(_) => Type::TEXT,
         stmt::Value::Uuid(_) => Type::UUID,
         stmt::Value::Null => Type::TEXT, // Default for NULL values
+        #[cfg(feature = "rust_decimal")]
+        stmt::Value::Decimal(_) => Type::NUMERIC,
         #[cfg(feature = "jiff")]
         stmt::Value::JiffTimestamp(_) => Type::TIMESTAMPTZ,
         #[cfg(feature = "jiff")]

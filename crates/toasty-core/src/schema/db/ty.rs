@@ -127,6 +127,9 @@ impl Type {
                 stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
                 stmt::Type::Uuid => Ok(db.default_uuid_type.clone()),
+                // Decimal type
+                #[cfg(feature = "rust_decimal")]
+                stmt::Type::Decimal => Ok(db.default_decimal_type.clone()),
                 // BigDecimal type
                 #[cfg(feature = "bigdecimal")]
                 stmt::Type::BigDecimal => Ok(db.default_bigdecimal_type.clone()),

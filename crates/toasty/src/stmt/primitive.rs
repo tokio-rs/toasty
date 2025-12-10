@@ -1,3 +1,5 @@
+use std::{rc::Rc, sync::Arc};
+
 use crate::{stmt::Id, Model, Result};
 
 use std::borrow::Cow;
@@ -125,6 +127,63 @@ impl Primitive for uuid::Uuid {
         match value {
             stmt::Value::Uuid(v) => Ok(v),
             _ => anyhow::bail!("cannot convert value to uuid::Uuid {value:#?}"),
+        }
+    }
+}
+
+impl Primitive for bool {
+    fn ty() -> stmt::Type {
+        stmt::Type::Bool
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::Bool(v) => Ok(v),
+            _ => anyhow::bail!("cannot convert value to bool: {value:#?}"),
+        }
+    }
+}
+
+impl<T: Primitive> Primitive for Arc<T> {
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Primitive>::load(value).map(Arc::new)
+    }
+}
+
+impl<T: Primitive> Primitive for Rc<T> {
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Primitive>::load(value).map(Rc::new)
+    }
+}
+
+impl<T: Primitive> Primitive for Box<T> {
+    fn ty() -> stmt::Type {
+        T::ty()
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        <T as Primitive>::load(value).map(Box::new)
+    }
+}
+
+#[cfg(feature = "rust_decimal")]
+impl Primitive for rust_decimal::Decimal {
+    fn ty() -> stmt::Type {
+        stmt::Type::Decimal
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        match value {
+            stmt::Value::Decimal(v) => Ok(v),
+            _ => anyhow::bail!("cannot convert value to rust_decimal::Decimal {value:#?}"),
         }
     }
 }

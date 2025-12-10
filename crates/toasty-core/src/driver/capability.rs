@@ -17,6 +17,11 @@ pub struct Capability {
 
     /// DynamoDB does not support != predicates on the primary key.
     pub primary_key_ne_predicate: bool,
+
+    /// Whether BigDecimal driver support is implemented.
+    /// TODO: Remove this flag when PostgreSQL BigDecimal support is implemented.
+    /// Currently only MySQL has implemented BigDecimal driver support.
+    pub bigdecimal_implemented: bool,
 }
 
 #[derive(Debug)]
@@ -30,6 +35,9 @@ pub struct StorageTypes {
 
     /// The default storage type for a UUID.
     pub default_uuid_type: db::Type,
+
+    /// The default storage type for a Decimal (fixed-precision decimal).
+    pub default_decimal_type: db::Type,
 
     /// The default storage type for a BigDecimal (arbitrary-precision decimal).
     pub default_bigdecimal_type: db::Type,
@@ -61,6 +69,16 @@ pub struct StorageTypes {
     /// Whether the database has native support for DateTime types.
     pub native_datetime: bool,
 
+    /// Whether the database has native support for Decimal types.
+    pub native_decimal: bool,
+
+    /// Whether the database's decimal type supports arbitrary precision.
+    /// When false, the decimal type requires fixed precision and scale to be specified upfront.
+    /// - PostgreSQL: true (NUMERIC supports arbitrary precision)
+    /// - MySQL: false (DECIMAL requires fixed precision/scale)
+    /// - SQLite/DynamoDB: false (no native decimal support, stored as TEXT)
+    pub decimal_arbitrary_precision: bool,
+
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
     pub max_unsigned_integer: Option<u64>,
@@ -85,6 +103,7 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         primary_key_ne_predicate: true,
+        bigdecimal_implemented: false,
     };
 
     /// PostgreSQL capabilities
@@ -92,6 +111,7 @@ impl Capability {
         cte_with_update: true,
         storage_types: StorageTypes::POSTGRESQL,
         select_for_update: true,
+        bigdecimal_implemented: false,
         ..Self::SQLITE
     };
 
@@ -100,6 +120,7 @@ impl Capability {
         cte_with_update: false,
         storage_types: StorageTypes::MYSQL,
         select_for_update: true,
+        bigdecimal_implemented: true,
         ..Self::SQLITE
     };
 
@@ -110,6 +131,7 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         primary_key_ne_predicate: false,
+        bigdecimal_implemented: false,
     };
 }
 
@@ -133,6 +155,7 @@ impl StorageTypes {
         default_uuid_type: db::Type::Blob,
 
         // SQLite does not have a native decimal type. Store as TEXT.
+        default_decimal_type: db::Type::Text,
         default_bigdecimal_type: db::Type::Text,
 
         // SQLite does not have native date/time types. Store as TEXT in ISO 8601 format.
@@ -147,6 +170,10 @@ impl StorageTypes {
         native_date: false,
         native_time: false,
         native_datetime: false,
+
+        // SQLite does not have native decimal types
+        native_decimal: false,
+        decimal_arbitrary_precision: false,
 
         // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
         // are limited to i64::MAX to prevent overflow
@@ -163,6 +190,8 @@ impl StorageTypes {
 
         default_uuid_type: db::Type::Uuid,
 
+        // PostgreSQL has native NUMERIC type for fixed and arbitrary-precision decimals.
+        default_decimal_type: db::Type::Numeric(None),
         // TODO: PostgreSQL has native NUMERIC type for arbitrary-precision decimals,
         // but the encoding is complicated and has to be done separately in the future.
         default_bigdecimal_type: db::Type::Text,
@@ -179,6 +208,10 @@ impl StorageTypes {
         native_date: true,
         native_time: true,
         native_datetime: true,
+
+        // PostgreSQL has native NUMERIC type with arbitrary precision
+        native_decimal: true,
+        decimal_arbitrary_precision: true,
 
         // PostgreSQL BIGINT is signed 64-bit, so unsigned integers are limited
         // to i64::MAX. While NUMERIC could theoretically support larger values,
@@ -201,6 +234,7 @@ impl StorageTypes {
 
         // MySQL does not have an arbitrary-precision decimal type. The DECIMAL type
         // requires a fixed precision and scale to be specified upfront. Store as TEXT.
+        default_decimal_type: db::Type::Text,
         default_bigdecimal_type: db::Type::Text,
 
         // MySQL has native support for temporal types with microsecond precision (6 digits)
@@ -218,6 +252,10 @@ impl StorageTypes {
         native_time: true,
         native_datetime: true,
 
+        // MySQL has DECIMAL type but requires fixed precision/scale upfront
+        native_decimal: true,
+        decimal_arbitrary_precision: false,
+
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
     };
@@ -231,6 +269,7 @@ impl StorageTypes {
         default_uuid_type: db::Type::Blob,
 
         // DynamoDB does not have a native decimal type. Store as TEXT.
+        default_decimal_type: db::Type::Text,
         default_bigdecimal_type: db::Type::Text,
 
         // DynamoDB does not have native date/time types. Store as TEXT (strings).
@@ -245,6 +284,10 @@ impl StorageTypes {
         native_date: false,
         native_time: false,
         native_datetime: false,
+
+        // DynamoDB does not have native decimal types
+        native_decimal: false,
+        decimal_arbitrary_precision: false,
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,

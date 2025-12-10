@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
+rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal"]
 bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal"]
 jiff = ["dep:jiff", "toasty-core/jiff", "postgres-types/with-jiff-0_2"]
 chrono = ["dep:chrono", "toasty-core/chrono", "postgres-types/with-chrono-0_4"]
@@ -13,6 +14,7 @@ toasty-core.workspace = true
 toasty-sql.workspace = true
 
 anyhow.workspace = true
+rust_decimal = { workspace = true, optional = true, features = ["db-postgres"] }
 bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
