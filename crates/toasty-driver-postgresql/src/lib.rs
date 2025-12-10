@@ -318,48 +318,44 @@ fn postgres_to_toasty(
             })
             .unwrap_or(stmt::Value::Null)
     } else if column.type_() == &Type::TIMESTAMPTZ {
-        #[cfg(feature = "jiff")]
-        {
-            row.get::<usize, Option<jiff::Timestamp>>(index)
-                .map(stmt::Value::JiffTimestamp)
-                .unwrap_or(stmt::Value::Null)
-        }
-        #[cfg(not(feature = "jiff"))]
-        {
-            panic!("TIMESTAMPTZ requires jiff feature to be enabled")
+        match expected_ty {
+            #[cfg(feature = "jiff")]
+            stmt::Type::JiffTimestamp | stmt::Type::JiffZoned => {
+                get_from_row::<jiff::Timestamp>(row, index)
+            }
+            #[cfg(feature = "chrono")]
+            stmt::Type::ChronoDateTimeUtc => {
+                get_from_row::<chrono::DateTime<chrono::Utc>>(row, index)
+            }
+            #[cfg(feature = "chrono")]
+            stmt::Type::ChronoNaiveDateTime => get_from_row::<chrono::NaiveDateTime>(row, index),
+            _ => panic!("TIMESTAMPTZ requires the jiff or chrono feature to be enabled"),
         }
     } else if column.type_() == &Type::TIMESTAMP {
-        #[cfg(feature = "jiff")]
         {
-            row.get::<usize, Option<jiff::civil::DateTime>>(index)
-                .map(stmt::Value::JiffDateTime)
-                .unwrap_or(stmt::Value::Null)
-        }
-        #[cfg(not(feature = "jiff"))]
-        {
-            panic!("TIMESTAMP requires jiff feature to be enabled")
+            match expected_ty {
+                #[cfg(feature = "jiff")]
+                stmt::Type::JiffDate => get_from_row::<jiff::civil::DateTime>(row, index),
+                #[cfg(feature = "chrono")]
+                stmt::Type::ChronoNaiveDate => get_from_row::<chrono::NaiveDate>(row, index),
+                _ => panic!("TIMESTAMP requires the jiff or chrono feature to be enabled"),
+            }
         }
     } else if column.type_() == &Type::DATE {
-        #[cfg(feature = "jiff")]
-        {
-            row.get::<usize, Option<jiff::civil::Date>>(index)
-                .map(stmt::Value::JiffDate)
-                .unwrap_or(stmt::Value::Null)
-        }
-        #[cfg(not(feature = "jiff"))]
-        {
-            panic!("DATE requires jiff feature to be enabled")
+        match expected_ty {
+            #[cfg(feature = "jiff")]
+            stmt::Type::JiffDate => get_from_row::<jiff::civil::Date>(row, index),
+            #[cfg(feature = "chrono")]
+            stmt::Type::ChronoNaiveDate => get_from_row::<chrono::NaiveDate>(row, index),
+            _ => panic!("DATE requires the jiff or chrono feature to be enabled"),
         }
     } else if column.type_() == &Type::TIME {
-        #[cfg(feature = "jiff")]
-        {
-            row.get::<usize, Option<jiff::civil::Time>>(index)
-                .map(stmt::Value::JiffTime)
-                .unwrap_or(stmt::Value::Null)
-        }
-        #[cfg(not(feature = "jiff"))]
-        {
-            panic!("TIME requires jiff feature to be enabled")
+        match expected_ty {
+            #[cfg(feature = "jiff")]
+            stmt::Type::JiffTime => get_from_row::<jiff::civil::Time>(row, index),
+            #[cfg(feature = "chrono")]
+            stmt::Type::ChronoNaiveDate => get_from_row::<chrono::NaiveDate>(row, index),
+            _ => panic!("TIME requires the jiff or chrono feature to be enabled"),
         }
     } else {
         todo!(
@@ -392,6 +388,25 @@ fn postgres_ty_for_value(value: &stmt::Value) -> Type {
         stmt::Value::JiffTime(_) => Type::TIME,
         #[cfg(feature = "jiff")]
         stmt::Value::JiffDateTime(_) => Type::TIMESTAMP,
+        #[cfg(feature = "chrono")]
+        stmt::Value::ChronoDateTimeUtc(_) => Type::TIMESTAMPTZ,
+        #[cfg(feature = "chrono")]
+        stmt::Value::ChronoNaiveDateTime(_) => Type::TIMESTAMP,
+        #[cfg(feature = "chrono")]
+        stmt::Value::ChronoNaiveDate(_) => Type::DATE,
+        #[cfg(feature = "chrono")]
+        stmt::Value::ChronoNaiveTime(_) => Type::TIME,
         _ => todo!("postgres_ty_for_value: {value:#?}"),
     }
+}
+
+#[cfg(any(feature = "chrono", feature = "jiff"))]
+fn get_from_row<T>(row: &Row, index: usize) -> stmt::Value
+where
+    T: postgres_types::FromSqlOwned,
+    T: Into<stmt::Value>,
+{
+    row.get::<usize, Option<T>>(index)
+        .map(Into::into)
+        .unwrap_or(stmt::Value::Null)
 }

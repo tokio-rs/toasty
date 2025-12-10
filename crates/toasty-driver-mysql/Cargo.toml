@@ -6,7 +6,7 @@ edition = "2021"
 [features]
 bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal"]
 jiff = ["dep:jiff", "toasty-core/jiff"]
-chrono = ["dep:chrono", "toasty-core/chrono"]
+chrono = ["dep:chrono", "toasty-core/chrono", "mysql_async/chrono"]
 
 [dependencies]
 toasty-core.workspace = true

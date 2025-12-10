@@ -90,6 +90,18 @@ pub enum Value {
     /// See [`jiff::civil::DateTime`].
     #[cfg(feature = "jiff")]
     JiffDateTime(jiff::civil::DateTime),
+
+    #[cfg(feature = "chrono")]
+    ChronoDateTimeUtc(chrono::DateTime<chrono::Utc>),
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveDateTime(chrono::NaiveDateTime),
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveDate(chrono::NaiveDate),
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveTime(chrono::NaiveTime),
 }
 
 impl Value {
@@ -226,6 +238,14 @@ impl Value {
             Value::JiffTime(_) => *ty == Type::JiffTime,
             #[cfg(feature = "jiff")]
             Value::JiffDateTime(_) => *ty == Type::JiffDateTime,
+            #[cfg(feature = "chrono")]
+            Value::ChronoDateTimeUtc(_) => *ty == Type::ChronoDateTimeUtc,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveDateTime(_) => *ty == Type::ChronoNaiveDateTime,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveDate(_) => *ty == Type::ChronoNaiveDate,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveTime(_) => *ty == Type::ChronoNaiveTime,
             _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
     }
@@ -263,6 +283,14 @@ impl Value {
             Value::JiffTime(_) => Type::JiffTime,
             #[cfg(feature = "jiff")]
             Value::JiffDateTime(_) => Type::JiffDateTime,
+            #[cfg(feature = "chrono")]
+            Value::ChronoDateTimeUtc(_) => Type::ChronoDateTimeUtc,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveDateTime(_) => Type::ChronoNaiveDateTime,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveDate(_) => Type::ChronoNaiveDate,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveTime(_) => Type::ChronoNaiveTime,
         }
     }
 
@@ -343,6 +371,15 @@ impl PartialOrd for Value {
             (Value::JiffTime(a), Value::JiffTime(b)) => a.partial_cmp(b),
             #[cfg(feature = "jiff")]
             (Value::JiffDateTime(a), Value::JiffDateTime(b)) => a.partial_cmp(b),
+
+            #[cfg(feature = "chrono")]
+            (Value::ChronoDateTimeUtc(a), Value::ChronoDateTimeUtc(b)) => a.partial_cmp(b),
+            #[cfg(feature = "chrono")]
+            (Value::ChronoNaiveDateTime(a), Value::ChronoNaiveDateTime(b)) => a.partial_cmp(b),
+            #[cfg(feature = "chrono")]
+            (Value::ChronoNaiveDate(a), Value::ChronoNaiveDate(b)) => a.partial_cmp(b),
+            #[cfg(feature = "chrono")]
+            (Value::ChronoNaiveTime(a), Value::ChronoNaiveTime(b)) => a.partial_cmp(b),
 
             // Types without natural ordering or different types.
             _ => None,

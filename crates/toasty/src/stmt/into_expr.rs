@@ -38,11 +38,19 @@ impl_into_expr_for_copy! {
 
 #[cfg(feature = "jiff")]
 impl_into_expr_for_copy! {
-    Timestamp(jiff::Timestamp);
-    Zoned(jiff::Zoned);
-    Date(jiff::civil::Date);
-    Time(jiff::civil::Time);
-    DateTime(jiff::civil::DateTime);
+    JiffTimestamp(jiff::Timestamp);
+    JiffZoned(jiff::Zoned);
+    JiffDate(jiff::civil::Date);
+    JiffTime(jiff::civil::Time);
+    JiffDateTime(jiff::civil::DateTime);
+}
+
+#[cfg(feature = "chrono")]
+impl_into_expr_for_copy! {
+    ChronoDateTimeUtc(chrono::DateTime<chrono::Utc>);
+    ChronoNaiveDateTime(chrono::NaiveDateTime);
+    ChronoNaiveDate(chrono::NaiveDate);
+    ChronoNaiveTime(chrono::NaiveTime);
 }
 
 // Pointer-sized integers convert through their fixed-size equivalents

@@ -141,6 +141,14 @@ impl Type {
                 stmt::Type::JiffTime => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::JiffDateTime => Ok(db.default_datetime_type.clone()),
+                #[cfg(feature = "chrono")]
+                stmt::Type::ChronoDateTimeUtc => Ok(db.default_timestamp_type.clone()),
+                #[cfg(feature = "chrono")]
+                stmt::Type::ChronoNaiveDateTime => Ok(db.default_datetime_type.clone()),
+                #[cfg(feature = "chrono")]
+                stmt::Type::ChronoNaiveDate => Ok(db.default_date_type.clone()),
+                #[cfg(feature = "chrono")]
+                stmt::Type::ChronoNaiveTime => Ok(db.default_time_type.clone()),
                 // Gotta support some app-level types as well for now.
                 //
                 // TODO: not really correct, but we are getting rid of ID types

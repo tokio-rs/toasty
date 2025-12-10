@@ -208,6 +208,8 @@ fn value_from_param(value: &stmt::Value) -> rusqlite::types::ToSqlOutput<'_> {
     use rusqlite::types::{ToSqlOutput, Value, ValueRef};
     use stmt::Value::*;
 
+    dbg!(&value);
+
     match value {
         Bool(true) => ToSqlOutput::Owned(Value::Integer(1)),
         Bool(false) => ToSqlOutput::Owned(Value::Integer(0)),

@@ -74,6 +74,14 @@ impl ToValue for Value {
                     (value.subsec_nanosecond() / 1000) as u32, // Convert nanoseconds to microseconds
                 )
             }
+            #[cfg(feature = "chrono")]
+            CoreValue::ChronoDateTimeUtc(value) => value.naive_utc().to_value(),
+            #[cfg(feature = "chrono")]
+            CoreValue::ChronoNaiveDateTime(value) => value.to_value(),
+            #[cfg(feature = "chrono")]
+            CoreValue::ChronoNaiveDate(value) => value.to_value(),
+            #[cfg(feature = "chrono")]
+            CoreValue::ChronoNaiveTime(value) => value.to_value(),
             value => todo!("{:#?}", value),
         }
     }

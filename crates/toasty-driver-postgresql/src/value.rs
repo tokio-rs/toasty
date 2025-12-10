@@ -138,6 +138,14 @@ impl ToSql for Value {
             stmt::Value::JiffTime(value) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
             stmt::Value::JiffDateTime(value) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            stmt::Value::ChronoDateTimeUtc(value) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            stmt::Value::ChronoNaiveDateTime(value) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            stmt::Value::ChronoNaiveDate(value) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            stmt::Value::ChronoNaiveTime(value) => value.to_sql(ty, out),
             value => todo!("{value:#?}"),
         }
     }

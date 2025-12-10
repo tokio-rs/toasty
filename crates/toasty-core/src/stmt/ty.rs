@@ -154,6 +154,18 @@ pub enum Type {
     #[cfg(feature = "jiff")]
     JiffDateTime,
 
+    #[cfg(feature = "chrono")]
+    ChronoDateTimeUtc,
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveDateTime,
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveDate,
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveTime,
+
     /// The null type can be cast to any type.
     ///
     /// TODO: we should get rid of this.
@@ -238,6 +250,11 @@ impl Type {
 
         #[cfg(feature = "jiff")]
         if let Some(value) = self.cast_jiff(&value)? {
+            return Ok(value);
+        }
+
+        #[cfg(feature = "chrono")]
+        if let Some(value) = self.cast_chrono(&value)? {
             return Ok(value);
         }
 
