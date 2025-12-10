@@ -1219,10 +1219,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             }
                         }
 
-                        // todo!("expr={expr:#?}; args={:#?}", self.returning_args);
                         let eval = eval::Func::from_stmt(expr, arg_tys);
 
-                        self.insert_mir_with_deps(mir::Eval { inputs, eval })
+                        let node_id = self.insert_mir_with_deps(mir::Eval { inputs, eval });
+
+                        if !self.stmt().is_query() {
+                            self.planner.mir[node_id].deps.insert(exec_stmt_node_id);
+                        }
+
+                        node_id
                     }
                 }
                 stmt::Returning::Expr(returning) => {
@@ -1297,5 +1302,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // Type of the index key. Value for single index keys, record for
         // composite.
         stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index))
+    }
+
+    fn stmt(&self) -> &stmt::Statement {
+        self.stmt_info.stmt.as_deref().unwrap()
     }
 }
