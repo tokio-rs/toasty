@@ -363,6 +363,15 @@ impl LowerStatement<'_, '_> {
         debug_assert!(stmt.target.is_model());
 
         stmt.target = self.relation_pair_scope(pair.id, source).into();
+
+        // has_many fields represent collections and must return lists for type
+        // consistency, even when inserting a single record. The insert may arrive
+        // with `single = true` (semantically inserting one record into the set),
+        // but we set it to false to ensure the result is wrapped in a list.
+        if _field.ty.is_has_many() {
+            stmt.source.single = false;
+        }
+
         self.state.engine.simplify_stmt(&mut stmt);
         source.set_returning_field(_field.id, stmt.into());
     }

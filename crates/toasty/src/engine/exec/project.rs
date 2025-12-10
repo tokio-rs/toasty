@@ -35,7 +35,7 @@ impl Exec<'_> {
                             projected_rows.push(row);
                         }
                     }
-                    _ => todo!(),
+                    _ => todo!("value={value:#?}"),
                 }
             }
             Rows::Stream(mut value_stream) => {
