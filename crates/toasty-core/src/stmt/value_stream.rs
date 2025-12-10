@@ -313,7 +313,7 @@ impl Buffer {
     }
 
     fn next(&mut self) -> Option<Value> {
-        match self {
+        let ret = match self {
             Self::Empty => None,
             Self::One(_) => {
                 let Self::One(value) = mem::take(self) else {
@@ -322,7 +322,11 @@ impl Buffer {
                 Some(value)
             }
             Self::Many(values) => values.pop_front(),
-        }
+        };
+
+        println!("+ ValueStream::next() -> {ret:#?}");
+
+        ret
     }
 
     fn push(&mut self, value: Value) {

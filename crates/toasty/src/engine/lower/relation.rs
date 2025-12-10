@@ -39,9 +39,6 @@ trait RelationSource {
 
     /// Update a returning field expression
     fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr);
-
-    /// Try to downcast to InsertRelationSource for checking Expr::Default fields
-    fn as_insert_source(&self) -> Option<&InsertRelationSource<'_>>;
 }
 
 #[derive(Debug)]
@@ -605,10 +602,6 @@ impl RelationSource for &stmt::Delete {
     fn set_returning_field(&mut self, _field: FieldId, _expr: stmt::Expr) {
         unimplemented!("delete statements do not need to update field values");
     }
-
-    fn as_insert_source(&self) -> Option<&InsertRelationSource<'_>> {
-        None
-    }
 }
 
 impl RelationSource for UpdateRelationSource<'_> {
@@ -646,10 +639,6 @@ impl RelationSource for UpdateRelationSource<'_> {
         );
 
         record.fields[position] = expr;
-    }
-
-    fn as_insert_source(&self) -> Option<&InsertRelationSource<'_>> {
-        None
     }
 }
 
@@ -699,9 +688,5 @@ impl RelationSource for InsertRelationSource<'_> {
             }
             _ => todo!("InsertRelationSource={self:#?}"),
         }
-    }
-
-    fn as_insert_source(&self) -> Option<&InsertRelationSource<'_>> {
-        Some(self)
     }
 }

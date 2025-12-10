@@ -39,14 +39,8 @@ impl Exec<'_> {
         if !action.input.is_empty() {
             let mut input_values = Vec::new();
             for var_id in &action.input {
-                let values = self
-                    .vars
-                    .load(*var_id)
-                    .await?
-                    .into_values()
-                    .collect()
-                    .await?;
-                input_values.push(stmt::Value::List(values));
+                let values = self.vars.load(*var_id).await?.collect_as_value().await?;
+                input_values.push(values);
             }
             stmt.substitute(&input_values);
 
@@ -68,7 +62,7 @@ impl Exec<'_> {
                     assert!(!action.conditional_update_with_no_returning);
 
                     let rows = if action.output.ty.is_some() {
-                        Rows::Values(stmt::ValueStream::default())
+                        Rows::Stream(stmt::ValueStream::default())
                     } else {
                         Rows::Count(0)
                     };
@@ -100,7 +94,7 @@ impl Exec<'_> {
             .await?;
 
         if action.conditional_update_with_no_returning {
-            let Rows::Values(rows) = res.rows else {
+            let Rows::Stream(rows) = res.rows else {
                 return Err(anyhow::anyhow!(
                     "conditional_update_with_no_returning: expected values, got {res:#?}"
                 ));
@@ -123,6 +117,8 @@ impl Exec<'_> {
 
             res.rows = Rows::Count(record[0].to_u64_unwrap());
         }
+
+        println!(" + exec_statement; res={res:#?}");
 
         self.vars.store(
             action.output.output.var,

@@ -40,9 +40,9 @@ impl Exec<'_> {
             .vars
             .load(action.input)
             .await?
-            .into_values()
-            .collect()
-            .await?;
+            .collect_as_value()
+            .await?
+            .unwrap_list();
 
         let res = if keys.is_empty() {
             if action.returning {
@@ -66,7 +66,7 @@ impl Exec<'_> {
                 .exec(&self.engine.schema.db, op.into())
                 .await?;
 
-            debug_assert_eq!(res.rows.is_values(), action.returning);
+            debug_assert_eq!(!res.rows.is_count(), action.returning);
 
             res.rows
         };

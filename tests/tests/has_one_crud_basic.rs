@@ -57,6 +57,9 @@ async fn crud_has_one_bi_direction_optional(test: &mut DbTest) {
     let user_reload = profile.user().get(&db).await.unwrap().unwrap();
     assert_eq!(user.id, user_reload.id);
 
+    println!("");
+    println!(" ======== CREATE =========");
+    println!("");
     // Create a new user with a profile
     let mut user = User::create()
         .name("Tim Apple")
@@ -64,10 +67,16 @@ async fn crud_has_one_bi_direction_optional(test: &mut DbTest) {
         .exec(&db)
         .await
         .unwrap();
+    println!("");
+    println!(" ======== END CREATE =========");
+    println!("");
 
     let profile = user.profile().get(&db).await.unwrap().unwrap();
     assert_eq!(profile.bio, "an apple a day");
 
+    println!("");
+    println!(" ======== GET ");
+    println!("");
     // The new profile is associated with the user
     assert_eq!(user.id, profile.user().get(&db).await.unwrap().unwrap().id);
 

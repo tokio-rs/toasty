@@ -81,10 +81,11 @@ impl Driver for LoggingDriver {
 async fn duplicate_response_mut(response: &mut Response) -> Result<Response> {
     let rows = match &mut response.rows {
         Rows::Count(count) => Rows::Count(*count),
-        Rows::Values(stream) => {
+        Rows::Value(_) => todo!(),
+        Rows::Stream(stream) => {
             // Duplicate the value stream
             let duplicated_stream = stream.dup().await?;
-            Rows::Values(duplicated_stream)
+            Rows::Stream(duplicated_stream)
         }
     };
 

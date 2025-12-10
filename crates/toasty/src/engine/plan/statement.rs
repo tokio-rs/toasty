@@ -3,7 +3,7 @@ use toasty_core::stmt::{self, visit_mut, Condition};
 
 use crate::engine::{
     eval,
-    hir::{self, Arg},
+    hir::{self},
     index::{self, IndexPlan},
     mir,
     plan::HirPlanner,
@@ -187,7 +187,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) {
         if let stmt::Statement::Insert(insert) = &linked_stmt.stmt {
             if insert.source.body.is_values() {
-                self.extract_columns_from_insert_returning(selection, insert);
+                self.extract_columns_from_insert_returning(selection);
                 return;
             }
         }
@@ -195,11 +195,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         self.extract_columns_from_stmt_returning(selection)
     }
 
-    fn extract_columns_from_insert_returning(
-        &mut self,
-        selection: &mut Selection,
-        stmt: &stmt::Insert,
-    ) {
+    fn extract_columns_from_insert_returning(&mut self, selection: &mut Selection) {
         visit_mut::for_each_expr_mut(&mut selection.returning, |expr| match expr {
             stmt::Expr::Reference(expr_reference) => {
                 let position = *self.returning_arg_curr.get_or_insert_with(|| {
@@ -238,44 +234,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 *expr = stmt::Expr::arg_project(0, [index]);
             }
         });
-    }
-
-    /// If the ExprReference in the returning clause of an Insert references a
-    /// known value provided during insertion, then we do not need the database
-    /// to provide that value and can extract it during planning.
-    ///
-    /// TODO: Instead of checking all the values first, then extracting them
-    /// later, do it in one pass.
-    fn returning_expr_ref_needs_db(
-        &self,
-        expr_reference: &stmt::ExprReference,
-        stmt: &stmt::Statement,
-    ) -> bool {
-        let expr_column = expr_reference.as_expr_column_unwrap();
-
-        if expr_column.nesting > 0 {
-            return true;
-        }
-
-        let stmt::Statement::Insert(insert) = stmt else {
-            return true;
-        };
-
-        let Some(values) = insert.source.body.as_values() else {
-            return true;
-        };
-
-        for row in &values.rows {
-            let Some(entry) = row.entry(expr_column.column) else {
-                return true;
-            };
-
-            if !entry.is_const() {
-                return true;
-            }
-        }
-
-        false
     }
 
     fn extract_sub_statement_args_from_filter(&mut self, linked_stmt: &mut LinkedStatement) {
@@ -646,7 +604,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         &mut self,
         stmt: &stmt::Statement,
         expr_refs: &IndexSet<stmt::ExprReference>,
-    ) -> Option<(Vec<stmt::Value>, stmt::Type)> {
+    ) -> Option<(stmt::Value, stmt::Type)> {
         let stmt::Statement::Insert(insert) = stmt else {
             return None;
         };
@@ -698,7 +656,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let ty = self.planner.engine.infer_record_list_ty(stmt, expr_refs);
 
-        Some((result, ty))
+        Some((stmt::Value::List(result), ty))
     }
 
     fn plan_conditional_sql_query_as_cte(
@@ -935,14 +893,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         };
 
         let node_id = if index_plan.index.primary_key {
-            self.plan_primary_key_execution(
-                linked,
-                &mut index_plan,
-                pk_keys,
-                ref_source,
-                selection,
-                &ty,
-            )
+            self.plan_primary_key_execution(linked, &mut index_plan, pk_keys, selection, &ty)
         } else {
             self.plan_secondary_index_execution(linked, &mut index_plan, selection, &ty)
         };
@@ -955,7 +906,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         linked: LinkedStatement,
         index_plan: &mut index::IndexPlan,
         pk_keys: Option<eval::Func>,
-        ref_source: Option<stmt::ExprArg>,
         selection: &Selection,
         ty: &stmt::Type,
     ) -> mir::NodeId {
@@ -1239,16 +1189,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     // Value variant contains a constant expression that can be evaluated
                     if let Ok(value) = expr.eval_const() {
                         let ty = value.infer_ty();
-                        let stmt::Value::List(rows) = value else {
-                            todo!(
-                                "unexpected returning type; value={value:#?}; stmt={:#?}",
-                                self.stmt_info.stmt
-                            )
-                        };
 
                         self.planner
                             .mir
-                            .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
+                            .insert_with_deps(mir::Const { value, ty }, [exec_stmt_node_id])
                     } else {
                         let mut arg_tys = vec![];
                         let mut inputs = IndexSet::new();
@@ -1329,10 +1273,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             "const type mismatch; expected={ty:#?}; actual={value:#?}",
         );
 
-        self.planner.mir.insert(mir::Const {
-            value: value.unwrap_list(),
-            ty,
-        })
+        self.planner.mir.insert(mir::Const { value, ty })
     }
 
     fn insert_mir_with_deps(&mut self, node: impl Into<mir::Node>) -> mir::NodeId {

@@ -107,7 +107,7 @@ async fn basic_crud(test: &mut DbTest) {
         }));
     }
 
-    assert_struct!(resp.rows, Rows::Values(
+    assert_struct!(resp.rows, Rows::Stream(
         0.buffered(): [
             =~ (user_id.clone(), "Alice", 30),
         ],

@@ -25,14 +25,8 @@ impl Exec<'_> {
         let mut input = Vec::with_capacity(action.inputs.len());
 
         for var_id in &action.inputs {
-            let data = self
-                .vars
-                .load(*var_id)
-                .await?
-                .into_values()
-                .collect()
-                .await?;
-            input.push(stmt::Value::List(data));
+            let data = self.vars.load(*var_id).await?.collect_as_value().await?;
+            input.push(data);
         }
 
         // Evaluate the function with the collected inputs

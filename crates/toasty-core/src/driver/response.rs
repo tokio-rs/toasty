@@ -1,4 +1,4 @@
-use crate::{stmt::ValueStream, Result};
+use crate::{stmt, Result};
 
 #[derive(Debug)]
 pub struct Response {
@@ -10,8 +10,11 @@ pub enum Rows {
     /// Number of rows impacted by the operation
     Count(u64),
 
+    /// A single value
+    Value(stmt::Value),
+
     /// Operation result, as a stream of rows
-    Values(ValueStream),
+    Stream(stmt::ValueStream),
 }
 
 impl Response {
@@ -21,7 +24,7 @@ impl Response {
         }
     }
 
-    pub fn value_stream(values: impl Into<ValueStream>) -> Self {
+    pub fn value_stream(values: impl Into<stmt::ValueStream>) -> Self {
         Self {
             rows: Rows::value_stream(values),
         }
@@ -29,35 +32,33 @@ impl Response {
 
     pub fn empty_value_stream() -> Self {
         Self {
-            rows: Rows::Values(ValueStream::default()),
+            rows: Rows::Stream(stmt::ValueStream::default()),
         }
     }
 }
 
 impl Rows {
-    pub fn value_stream(values: impl Into<ValueStream>) -> Self {
-        Self::Values(values.into())
+    pub fn value_stream(values: impl Into<stmt::ValueStream>) -> Self {
+        Self::Stream(values.into())
     }
 
     pub fn is_count(&self) -> bool {
         matches!(self, Self::Count(_))
     }
 
-    pub fn is_values(&self) -> bool {
-        matches!(self, Self::Values(_))
-    }
-
     pub async fn dup(&mut self) -> Result<Self> {
         match self {
             Rows::Count(count) => Ok(Rows::Count(*count)),
-            Rows::Values(values) => Ok(Rows::Values(values.dup().await?)),
+            Rows::Value(value) => Ok(Rows::Value(value.clone())),
+            Rows::Stream(values) => Ok(Rows::Stream(values.dup().await?)),
         }
     }
 
     pub fn try_clone(&self) -> Option<Self> {
         match self {
             Rows::Count(count) => Some(Rows::Count(*count)),
-            Rows::Values(values) => values.try_clone().map(Rows::Values),
+            Rows::Value(value) => Some(Rows::Value(value.clone())),
+            Rows::Stream(values) => values.try_clone().map(Rows::Stream),
         }
     }
 
@@ -69,11 +70,19 @@ impl Rows {
         }
     }
 
-    #[track_caller]
-    pub fn into_values(self) -> ValueStream {
+    pub async fn collect_as_value(self) -> Result<stmt::Value> {
         match self {
-            Self::Values(values) => values,
-            _ => todo!("rows={self:#?}"),
+            Rows::Count(_) => panic!("expected value; actual={self:#?}"),
+            Rows::Value(value) => Ok(value),
+            Rows::Stream(stream) => Ok(stmt::Value::List(stream.collect().await?)),
+        }
+    }
+
+    pub fn into_value_stream(self) -> stmt::ValueStream {
+        match self {
+            Rows::Value(stmt::Value::List(items)) => stmt::ValueStream::from_vec(items),
+            Rows::Stream(stream) => stream,
+            _ => panic!("expected ValueStream; actual={self:#?}"),
         }
     }
 }

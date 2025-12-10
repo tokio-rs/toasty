@@ -113,14 +113,8 @@ impl Exec<'_> {
 
         for var_id in &action.inputs {
             // TODO: make loading input concurrent
-            let data = self
-                .vars
-                .load(*var_id)
-                .await?
-                .into_values()
-                .collect()
-                .await?;
-            input.push(data);
+            let data = self.vars.load(*var_id).await?.collect_as_value().await?;
+            input.push(data.unwrap_list());
         }
 
         // Load the root rows

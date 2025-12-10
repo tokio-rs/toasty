@@ -71,7 +71,9 @@ impl Engine {
         Ok(if let Some(returning) = plan.returning {
             match exec.vars.load(returning).await? {
                 Rows::Count(_) => ValueStream::default(),
-                Rows::Values(value_stream) => value_stream,
+                Rows::Value(stmt::Value::List(items)) => ValueStream::from_vec(items),
+                Rows::Value(_) => panic!("should have been a list"),
+                Rows::Stream(value_stream) => value_stream,
             }
         } else {
             ValueStream::default()
@@ -101,14 +103,8 @@ impl Exec<'_> {
         let mut ret = Vec::new();
 
         for var_id in input {
-            let values = self
-                .vars
-                .load(*var_id)
-                .await?
-                .into_values()
-                .collect()
-                .await?;
-            ret.push(stmt::Value::List(values));
+            let value = self.vars.load(*var_id).await?.collect_as_value().await?;
+            ret.push(value);
         }
 
         Ok(ret)

@@ -230,6 +230,26 @@ impl NestedMergePlanner<'_> {
                     if let stmt::Returning::Value(returning_expr) = child_returning {
                         debug_assert!(returning_expr.is_const(), "this block is assuming, at this point, `Returning::Value` is always constant.");
 
+                        match child_stmt {
+                            stmt::Statement::Query(query) => {
+                                if query.single {
+                                    let stmt::Expr::Value(v) = returning_expr else {
+                                        todo!()
+                                    };
+                                    assert!(!v.is_list());
+                                }
+                            }
+                            stmt::Statement::Insert(insert) => {
+                                if insert.source.single {
+                                    let stmt::Expr::Value(v) = returning_expr else {
+                                        todo!()
+                                    };
+                                    assert!(!v.is_list());
+                                }
+                            }
+                            _ => {}
+                        }
+
                         // For consistency, make sure the child statement's execution happens before this one.
                         self.deps
                             .insert(child_stmt_state.exec_statement.get().unwrap());

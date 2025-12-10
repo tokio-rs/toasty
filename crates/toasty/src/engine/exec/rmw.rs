@@ -54,7 +54,7 @@ impl Exec<'_> {
             )
             .await?;
 
-        let Rows::Values(rows) = res.rows else {
+        let Rows::Stream(rows) = res.rows else {
             anyhow::bail!("expected rows");
         };
 

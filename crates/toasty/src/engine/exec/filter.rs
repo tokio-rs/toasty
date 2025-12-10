@@ -22,7 +22,7 @@ pub(crate) struct Filter {
 impl Exec<'_> {
     pub(super) async fn action_filter(&mut self, action: &Filter) -> Result<()> {
         // Load the input variable
-        let mut input_stream = self.vars.load(action.input).await?.into_values();
+        let mut input_stream = self.vars.load(action.input).await?.into_value_stream();
 
         let mut filtered_rows = vec![];
 

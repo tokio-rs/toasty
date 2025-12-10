@@ -9,7 +9,7 @@ use crate::engine::{exec, mir};
 #[derive(Debug)]
 pub(crate) struct Const {
     /// The constant rows.
-    pub(crate) value: Vec<stmt::Value>,
+    pub(crate) value: stmt::Value,
 
     /// The type of this constant.
     pub(crate) ty: stmt::Type,
@@ -25,7 +25,7 @@ impl Const {
                 var,
                 num_uses: node.num_uses.get(),
             },
-            rows: self.value.clone(),
+            value: self.value.clone(),
         }
     }
 }

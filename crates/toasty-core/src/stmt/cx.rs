@@ -4,9 +4,8 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        expr_reference, Delete, Expr, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget,
-        Query, Returning, Select, Source, SourceTable, Statement, TableFactor, TableRef, Type,
-        Update, UpdateTarget,
+        Delete, Expr, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query, Returning,
+        Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, Update, UpdateTarget,
     },
     Schema,
 };
