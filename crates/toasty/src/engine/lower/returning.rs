@@ -1,12 +1,15 @@
+use indexmap::{IndexMap, IndexSet};
 use toasty_core::{schema::db::ColumnId, stmt};
 
 use crate::engine::lower::{LowerStatement, LoweringContext};
 
+#[derive(Debug)]
 struct ConstantizeReturning<'a> {
     cx: stmt::ExprContext<'a>,
     source: ConstantizeSource<'a>,
 }
 
+#[derive(Debug)]
 enum ConstantizeSource<'a> {
     InsertValues {
         values: &'a stmt::Expr,
@@ -23,9 +26,13 @@ impl LowerStatement<'_, '_> {
         returning: &mut stmt::Returning,
         source: &stmt::Query,
     ) {
+        use indexmap::map::Entry;
+
         let stmt::ExprSet::Values(values) = &source.body else {
             return;
         };
+
+        assert!(!values.is_empty(), "TODO: handle this case");
 
         let LoweringContext::Insert(columns) = &self.cx else {
             panic!("not currently lowering an insert statement")
@@ -35,33 +42,95 @@ impl LowerStatement<'_, '_> {
             return;
         };
 
-        let mut constantized = vec![];
+        // First, go through the returning expression and extract the list of
+        // columns that is used in the returning clause.
+        //
+        // TODO: this information probably could be stored on the stmt_info
+        // level. I think it is used in the HIR -> MIR conversion.
+        let mut columns_are_all_equal = IndexMap::new();
+        let mut all_const = true;
 
-        for row in &values.rows {
-            let input = ConstantizeReturning {
-                cx: self.expr_cx,
-                source: ConstantizeSource::InsertValues {
-                    values: row,
-                    columns,
-                },
-            };
+        stmt::visit::for_each_expr(project, |expr| {
+            if let stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) = expr {
+                assert!(expr_column.nesting == 0, "TODO");
 
-            let Ok(row) = project.eval(input) else {
-                return;
-            };
+                // If there already is an entry for this column, then there is no more work to do.
+                let e = match columns_are_all_equal.entry(*expr_column) {
+                    Entry::Occupied(_) => return,
+                    Entry::Vacant(e) => e,
+                };
 
-            constantized.push(row);
-        }
+                // Find the index in the row
+                let index = columns
+                    .iter()
+                    .position(|column| column.index == expr_column.column)
+                    .unwrap();
 
-        *returning = stmt::Returning::Value(if source.single {
-            constantized
-                .into_iter()
-                .next()
-                .unwrap_or(stmt::Value::Null)
-                .into()
-        } else {
-            stmt::Value::List(constantized).into()
+                let first = &values.rows[0].as_record_unwrap().fields[index];
+                all_const &= first.is_const();
+
+                let mut all_equal = true;
+
+                for row in &values.rows[1..] {
+                    let field = &row.as_record_unwrap().fields[index];
+
+                    if all_equal {
+                        all_equal &= first == field;
+                    }
+
+                    if all_const {
+                        all_const &= field.is_const();
+                    }
+
+                    if !all_equal && !all_const {
+                        break;
+                    }
+                }
+
+                e.insert(if all_equal { Some(first) } else { None });
+            }
         });
+
+        if all_const {
+            // Now, for each column, iterate the rows to see if either a) the column is specified as a constant for each row and b) if the value is equivalent for each row.
+
+            let mut constantized = vec![];
+
+            for row in &values.rows {
+                let input = ConstantizeReturning {
+                    cx: self.expr_cx,
+                    source: ConstantizeSource::InsertValues {
+                        values: row,
+                        columns,
+                    },
+                };
+
+                let Ok(row) = project.eval(input) else {
+                    println!("FAILED TO EVAL ROW; project={project:#?}; input={row:#?}; columns={columns:#?}");
+                    return;
+                };
+
+                constantized.push(row);
+            }
+
+            *returning = stmt::Returning::Value(if source.single {
+                constantized
+                    .into_iter()
+                    .next()
+                    .unwrap_or(stmt::Value::Null)
+                    .into()
+            } else {
+                stmt::Value::List(constantized).into()
+            });
+        } else {
+            stmt::visit_mut::for_each_expr_mut(project, |expr| {
+                if let stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) = expr {
+                    if let Some(all_eq) = &columns_are_all_equal[&*expr_column] {
+                        todo!("all_eq={all_eq:#?}");
+                    }
+                }
+            });
+        }
     }
 
     pub(super) fn constantize_update_returning(

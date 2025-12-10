@@ -324,8 +324,6 @@ impl Buffer {
             Self::Many(values) => values.pop_front(),
         };
 
-        println!("+ ValueStream::next() -> {ret:#?}");
-
         ret
     }
 

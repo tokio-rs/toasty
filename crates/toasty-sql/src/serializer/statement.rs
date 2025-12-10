@@ -135,7 +135,7 @@ impl ToSql for &stmt::Insert {
             .map(|returning| ("RETURNING ", returning));
 
         if returning.is_some() && f.serializer.is_mysql() {
-            panic!("MySQL does not support the RETURNING clause with INSERT statements");
+            panic!("MySQL does not support the RETURNING clause with INSERT statements; returning={returning:#?}");
         }
 
         // Set flag to indicate we're in INSERT context (VALUES shouldn't use ROW())
