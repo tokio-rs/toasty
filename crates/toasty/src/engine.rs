@@ -78,7 +78,7 @@ impl Engine {
 
         // Translate the optimized statement into a series of driver operations.
         let plan = self.plan_hir_statement(hir)?;
-        // dbg!(&plan);
+        dbg!(&plan);
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).

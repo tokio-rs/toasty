@@ -84,6 +84,14 @@ impl Statement {
         }
     }
 
+    #[track_caller]
+    pub fn filter_unwrap(&self) -> &Filter {
+        match self.filter() {
+            Some(filter) => filter,
+            _ => panic!("expected statement to have a filter; statement={self:#?}"),
+        }
+    }
+
     pub fn filter_or_default(&self) -> &Filter {
         self.filter().unwrap_or(&Filter::ALL)
     }

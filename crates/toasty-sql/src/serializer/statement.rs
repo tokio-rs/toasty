@@ -358,7 +358,7 @@ impl ToSql for &stmt::TableRef {
                 let depth = f.depth - nesting;
                 fmt!(cx, f, "cte_" depth "_" index);
             }
-            stmt::TableRef::Arg(..) => panic!("unexpected TableRef argument"),
+            stmt::TableRef::Arg(..) => panic!("unexpected TableRef argument; table_ref={self:#?}"),
         }
     }
 }

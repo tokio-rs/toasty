@@ -118,8 +118,6 @@ impl Exec<'_> {
             res.rows = Rows::Count(record[0].to_u64_unwrap());
         }
 
-        println!(" + exec_statement; res={res:#?}");
-
         self.vars.store(
             action.output.output.var,
             action.output.output.num_uses,

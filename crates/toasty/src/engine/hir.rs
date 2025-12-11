@@ -185,8 +185,8 @@ pub(super) enum Arg {
 
     /// A reference to a parent statement's columns.
     Ref {
-        /// The original ExprReference for the argument
-        expr_ref: ExprReference,
+        /// The expression reference relative to the target statement.
+        target_expr_ref: ExprReference,
 
         /// The parent statement that provides the data for this reference.
         stmt_id: StmtId,
@@ -196,15 +196,11 @@ pub(super) enum Arg {
         /// A value of 1 means the immediate parent, 2 means the grandparent, etc.
         nesting: usize,
 
-        /// Index of this column in the parent's batch-load query results.
-        ///
-        /// The parent statement includes columns in its batch-load that are referenced
-        /// by child statements. This is the index of this specific column in that set.
-        batch_load_index: usize,
-        /*
         /// Index in the operation's inputs list. Set during planning.
         input: Cell<Option<usize>>,
-        */
+
+        /// Index of the TableRef that will provide the data for this ref.
+        batch_load_table_ref_index: Cell<Option<usize>>,
     },
 }
 

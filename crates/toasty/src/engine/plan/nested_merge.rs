@@ -298,7 +298,7 @@ impl NestedMergePlanner<'_> {
                 let hir::Arg::Ref {
                     nesting,
                     stmt_id: target_id,
-                    batch_load_index,
+                    target_expr_ref,
                     ..
                 } = &stmt_state.args[expr_arg.position]
                 else {
@@ -311,18 +311,13 @@ impl NestedMergePlanner<'_> {
                 // want to find a better way to track the info for more direct
                 // access.
                 let target_stmt = &self.hir[target_id];
-                // The ExprReference based on the target's "self"
-                let target_expr_reference =
-                    &target_stmt.back_refs[&stmt_id].exprs[*batch_load_index];
 
                 let target_exec_statement_index = target_stmt
                     .load_data_columns
                     .get()
                     .unwrap()
-                    .get_index_of(target_expr_reference)
+                    .get_index_of(target_expr_ref)
                     .unwrap();
-
-                let _ = self.hir[target_id].load_data_columns.get().unwrap();
 
                 *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
             }

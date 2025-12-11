@@ -896,9 +896,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         // returned from the target statement's ExecStatement operation. This
         // ExecStatement operation batch loads all records needed to execute
         // the full root statement.
-        //
-        // TODO: not sure if this should be computed here.
-        let (batch_load_index, _) = target
+        target
             .back_refs
             .entry(source_id)
             .or_default()
@@ -911,16 +909,13 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         // See if an arg already exists
         for (i, arg) in source.args.iter().enumerate() {
             let hir::Arg::Ref {
-                stmt_id: s,
-                nesting: n,
-                batch_load_index: b,
-                ..
+                target_expr_ref, ..
             } = arg
             else {
                 continue;
             };
 
-            if *s == target_id && *n == nesting && *b == batch_load_index {
+            if *target_expr_ref == expr_reference {
                 return i;
             }
         }
@@ -928,10 +923,11 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let arg = source.args.len();
 
         source.args.push(hir::Arg::Ref {
-            expr_ref: expr_reference,
+            target_expr_ref: expr_reference,
             stmt_id: target_id,
             nesting,
-            batch_load_index,
+            input: Cell::new(None),
+            batch_load_table_ref_index: Cell::new(None),
         });
 
         arg
