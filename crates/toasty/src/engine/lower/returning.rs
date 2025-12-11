@@ -47,7 +47,7 @@ impl LowerStatement<'_, '_> {
         //
         // TODO: this information probably could be stored on the stmt_info
         // level. I think it is used in the HIR -> MIR conversion.
-        let mut columns_are_all_equal = IndexMap::new();
+        let mut columns_are_stable_and_equal = IndexMap::new();
         let mut all_const = true;
 
         stmt::visit::for_each_expr(project, |expr| {
@@ -55,7 +55,7 @@ impl LowerStatement<'_, '_> {
                 assert!(expr_column.nesting == 0, "TODO");
 
                 // If there already is an entry for this column, then there is no more work to do.
-                let e = match columns_are_all_equal.entry(*expr_column) {
+                let e = match columns_are_stable_and_equal.entry(*expr_column) {
                     Entry::Occupied(_) => return,
                     Entry::Vacant(e) => e,
                 };
@@ -69,25 +69,29 @@ impl LowerStatement<'_, '_> {
                 let first = &values.rows[0].as_record_unwrap().fields[index];
                 all_const &= first.is_const();
 
-                let mut all_equal = true;
+                let mut all_stable_and_equal = first.is_stable();
 
                 for row in &values.rows[1..] {
                     let field = &row.as_record_unwrap().fields[index];
 
-                    if all_equal {
-                        all_equal &= first == field;
+                    if all_stable_and_equal {
+                        all_stable_and_equal &= first == field;
                     }
 
                     if all_const {
                         all_const &= field.is_const();
                     }
 
-                    if !all_equal && !all_const {
+                    if !all_stable_and_equal && !all_const {
                         break;
                     }
                 }
 
-                e.insert(if all_equal { Some(first) } else { None });
+                e.insert(if all_stable_and_equal {
+                    Some(first)
+                } else {
+                    None
+                });
             }
         });
 
@@ -125,8 +129,8 @@ impl LowerStatement<'_, '_> {
         } else {
             stmt::visit_mut::for_each_expr_mut(project, |expr| {
                 if let stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) = expr {
-                    if let Some(all_eq) = &columns_are_all_equal[&*expr_column] {
-                        todo!("all_eq={all_eq:#?}");
+                    if let Some(new_expr) = columns_are_stable_and_equal[&*expr_column] {
+                        *expr = new_expr.clone();
                     }
                 }
             });

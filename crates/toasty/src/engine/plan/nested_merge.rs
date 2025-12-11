@@ -114,7 +114,7 @@ impl NestedMergePlanner<'_> {
 
         let level = self.plan_nested_level(stmt_id, depth);
         let stmt_state = &self.hir[stmt_id];
-        let selection = stmt_state.exec_statement_selection.get().unwrap();
+        let selection = stmt_state.load_data_columns.get().unwrap();
 
         let ret = match stmt_state.stmt.as_deref().unwrap() {
             stmt::Statement::Query(query) => {
@@ -199,7 +199,7 @@ impl NestedMergePlanner<'_> {
 
         let mut fields = vec![];
 
-        for expr_reference in stmt_state.exec_statement_selection.get().unwrap() {
+        for expr_reference in stmt_state.load_data_columns.get().unwrap() {
             fields.push(cx.infer_expr_reference_ty(expr_reference));
         }
 
@@ -214,7 +214,7 @@ impl NestedMergePlanner<'_> {
         nested: &mut Vec<NestedChild>,
     ) -> eval::Func {
         let stmt_state = &self.hir[stmt_id];
-        let selection = stmt_state.exec_statement_selection.get().unwrap();
+        let selection = stmt_state.load_data_columns.get().unwrap();
         let mut projection = expr.clone();
 
         visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
@@ -316,13 +316,13 @@ impl NestedMergePlanner<'_> {
                     &target_stmt.back_refs[&stmt_id].exprs[*batch_load_index];
 
                 let target_exec_statement_index = target_stmt
-                    .exec_statement_selection
+                    .load_data_columns
                     .get()
                     .unwrap()
                     .get_index_of(target_expr_reference)
                     .unwrap();
 
-                let _ = self.hir[target_id].exec_statement_selection.get().unwrap();
+                let _ = self.hir[target_id].load_data_columns.get().unwrap();
 
                 *expr = stmt::Expr::arg_project(depth - *nesting, [target_exec_statement_index]);
             }

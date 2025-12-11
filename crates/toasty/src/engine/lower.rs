@@ -896,6 +896,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         // returned from the target statement's ExecStatement operation. This
         // ExecStatement operation batch loads all records needed to execute
         // the full root statement.
+        //
+        // TODO: not sure if this should be computed here.
         let (batch_load_index, _) = target
             .back_refs
             .entry(source_id)
@@ -926,10 +928,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let arg = source.args.len();
 
         source.args.push(hir::Arg::Ref {
+            expr_ref: expr_reference,
             stmt_id: target_id,
             nesting,
             batch_load_index,
-            input: Cell::new(None),
         });
 
         arg

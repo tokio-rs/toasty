@@ -6,7 +6,7 @@ use std::{
 
 use index_vec::IndexVec;
 use indexmap::IndexSet;
-use toasty_core::stmt;
+use toasty_core::stmt::{self, ExprReference};
 
 use crate::engine::mir;
 
@@ -79,7 +79,7 @@ pub(super) struct StatementInfo {
     ///
     /// Populated during planning to track which columns are fetched from the
     /// database. Used to resolve column references in child statements.
-    pub(super) exec_statement_selection: OnceCell<IndexSet<stmt::ExprReference>>,
+    pub(super) load_data_columns: OnceCell<IndexSet<stmt::ExprReference>>,
 
     /// MIR node representing this statement's final output.
     ///
@@ -109,7 +109,7 @@ impl StatementInfo {
             args: vec![],
             back_refs: HashMap::new(),
             exec_statement: Cell::new(None),
-            exec_statement_selection: OnceCell::new(),
+            load_data_columns: OnceCell::new(),
             output: Cell::new(None),
             independent: true,
         }
@@ -129,6 +129,10 @@ impl StatementInfo {
         self.deps
             .iter()
             .map(|stmt_id| hir[stmt_id].output.get().unwrap())
+    }
+
+    pub(super) fn stmt(&self) -> &stmt::Statement {
+        self.stmt.as_deref().unwrap()
     }
 }
 
@@ -181,6 +185,9 @@ pub(super) enum Arg {
 
     /// A reference to a parent statement's columns.
     Ref {
+        /// The original ExprReference for the argument
+        expr_ref: ExprReference,
+
         /// The parent statement that provides the data for this reference.
         stmt_id: StmtId,
 
@@ -194,9 +201,10 @@ pub(super) enum Arg {
         /// The parent statement includes columns in its batch-load that are referenced
         /// by child statements. This is the index of this specific column in that set.
         batch_load_index: usize,
-
+        /*
         /// Index in the operation's inputs list. Set during planning.
         input: Cell<Option<usize>>,
+        */
     },
 }
 
