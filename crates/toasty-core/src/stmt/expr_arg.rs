@@ -15,6 +15,11 @@ use super::Expr;
 pub struct ExprArg {
     /// The zero-based position of the argument.
     pub position: usize,
+
+    /// Which "argument scope" this references. This is the number of scopes up
+    /// from the current scope. Scopes are created by functional expressions
+    /// like Expr::Map.
+    pub nesting: usize,
 }
 
 impl Expr {
@@ -25,13 +30,19 @@ impl Expr {
 
 impl ExprArg {
     pub fn new(position: usize) -> ExprArg {
-        ExprArg { position }
+        ExprArg {
+            position,
+            nesting: 0,
+        }
     }
 }
 
 impl From<usize> for ExprArg {
     fn from(value: usize) -> Self {
-        Self { position: value }
+        Self {
+            position: value,
+            nesting: 0,
+        }
     }
 }
 

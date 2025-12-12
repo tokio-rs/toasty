@@ -4,8 +4,9 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query, Returning,
-        Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, Update, UpdateTarget,
+        Delete, Expr, ExprArg, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query,
+        Returning, Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, Update,
+        UpdateTarget,
     },
     Schema,
 };
@@ -114,6 +115,12 @@ pub trait Resolve {
 
 pub trait IntoExprTarget<'a, T = Schema> {
     fn into_expr_target(self, schema: &'a T) -> ExprTarget<'a>;
+}
+
+#[derive(Debug)]
+struct ArgTyStack<'a> {
+    tys: &'a [Type],
+    parent: Option<&'a ArgTyStack<'a>>,
 }
 
 impl<'a, T> ExprContext<'a, T> {
@@ -310,6 +317,8 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     }
 
     fn infer_returning_ty(&self, returning: &Returning, args: &[Type], single: bool) -> Type {
+        let arg_ty_stack = ArgTyStack::new(args);
+
         match returning {
             Returning::Model { .. } => {
                 let ty = Type::Model(
@@ -326,7 +335,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             }
             Returning::Changed => todo!(),
             Returning::Expr(expr) => {
-                let ty = self.infer_expr_ty2(expr, args, false);
+                let ty = self.infer_expr_ty2(&arg_ty_stack, expr, false);
 
                 if single {
                     ty
@@ -334,17 +343,18 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     Type::list(ty)
                 }
             }
-            Returning::Value(expr) => self.infer_expr_ty2(expr, args, true),
+            Returning::Value(expr) => self.infer_expr_ty2(&arg_ty_stack, expr, true),
         }
     }
 
     pub fn infer_expr_ty(&self, expr: &Expr, args: &[Type]) -> Type {
-        self.infer_expr_ty2(expr, args, false)
+        let arg_ty_stack = ArgTyStack::new(args);
+        self.infer_expr_ty2(&arg_ty_stack, expr, false)
     }
 
-    fn infer_expr_ty2(&self, expr: &Expr, args: &[Type], returning_expr: bool) -> Type {
+    fn infer_expr_ty2(&self, args: &ArgTyStack<'_>, expr: &Expr, returning_expr: bool) -> Type {
         match expr {
-            Expr::Arg(e) => args[e.position].clone(),
+            Expr::Arg(e) => args.resolve_arg_ty(e).clone(),
             Expr::And(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
@@ -358,11 +368,26 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::IsNull(_) => Type::Bool,
             Expr::List(e) => {
                 debug_assert!(!e.items.is_empty());
-                Type::list(self.infer_expr_ty2(&e.items[0], args, returning_expr))
+                Type::list(self.infer_expr_ty2(args, &e.items[0], returning_expr))
             }
             Expr::Map(e) => {
-                let base = self.infer_expr_ty2(&e.base, args, returning_expr);
-                let ty = self.infer_expr_ty2(&e.map, &[base], returning_expr);
+                // Compute the map base type
+                let base = self.infer_expr_ty2(args, &e.base, returning_expr);
+
+                // The base type should be a list (as it is being mapped)
+                let Type::List(item) = base else {
+                    todo!("error handling; base={base:#?}")
+                };
+
+                let scope_tys = &[*item];
+
+                // Create a new type scope
+                let args = args.scope(scope_tys);
+
+                // Infer the type of each map call
+                let ty = self.infer_expr_ty2(&args, &e.map, returning_expr);
+
+                // The mapped type is a list
                 Type::list(ty)
             }
             Expr::Or(_) => Type::Bool,
@@ -375,7 +400,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                             // returning expression is *not* a projection. Referencing a
                             // column implies a *list* of
                             assert!(e.projection.as_slice().len() == 1);
-                            return args[expr_arg.position].clone();
+                            return args.resolve_arg_ty(expr_arg).clone();
                         }
                         Expr::Reference(expr_reference) => {
                             // When `returning_expr` is `true`, the expression is being
@@ -389,7 +414,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     }
                 }
 
-                let mut base = self.infer_expr_ty2(&e.base, args, returning_expr);
+                let mut base = self.infer_expr_ty2(args, &e.base, returning_expr);
 
                 for step in e.projection.iter() {
                     base = match base {
@@ -408,7 +433,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::Record(e) => Type::Record(
                 e.fields
                     .iter()
-                    .map(|field| self.infer_expr_ty2(field, args, returning_expr))
+                    .map(|field| self.infer_expr_ty2(args, field, returning_expr))
                     .collect(),
             ),
             Expr::Value(value) => value.infer_ty(),
@@ -722,6 +747,31 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a Statement {
             Statement::Insert(stmt) => stmt.into_expr_target(schema),
             Statement::Query(stmt) => stmt.into_expr_target(schema),
             Statement::Update(stmt) => stmt.into_expr_target(schema),
+        }
+    }
+}
+
+impl<'a> ArgTyStack<'a> {
+    fn new(tys: &'a [Type]) -> ArgTyStack<'a> {
+        ArgTyStack { tys, parent: None }
+    }
+
+    fn resolve_arg_ty(&self, expr_arg: &ExprArg) -> &'a Type {
+        let mut nesting = expr_arg.nesting;
+        let mut args = self;
+
+        while nesting > 0 {
+            args = args.parent.unwrap();
+            nesting -= 1;
+        }
+
+        &args.tys[expr_arg.position]
+    }
+
+    fn scope<'child>(&'child self, tys: &'child [Type]) -> ArgTyStack<'child> {
+        ArgTyStack {
+            tys,
+            parent: Some(self),
         }
     }
 }

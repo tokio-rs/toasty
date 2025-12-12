@@ -926,7 +926,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             target_expr_ref: expr_reference,
             stmt_id: target_id,
             nesting,
-            input: Cell::new(None),
+            data_load_input: Cell::new(None),
+            returning_input: Cell::new(None),
             batch_load_table_ref_index: Cell::new(None),
         });
 

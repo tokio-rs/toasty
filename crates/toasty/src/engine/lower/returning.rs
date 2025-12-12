@@ -110,7 +110,6 @@ impl LowerStatement<'_, '_> {
                 };
 
                 let Ok(row) = project.eval(input) else {
-                    println!("FAILED TO EVAL ROW; project={project:#?}; input={row:#?}; columns={columns:#?}");
                     return;
                 };
 

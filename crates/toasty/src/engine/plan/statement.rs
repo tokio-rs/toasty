@@ -118,7 +118,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // Track sub-statements referenced in the returning clause as inputs, so their
         // results are available when building the return value.
-        self.extract_inputs_from_returning(&mut stmt);
+        self.extract_inputs_from_returning();
 
         // Visit the main statement's returning clause to extract needed columns
         self.extract_columns_from_returning(&mut stmt);
@@ -133,6 +133,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // rewritten to batch load all records for a NestedMerge operation.
         if !self.load_data.batch_load_args.is_empty() {
             self.rewrite_stmt_for_batch_load(&mut stmt);
+        } else if let stmt::Statement::Insert(insert) = &mut stmt {
+            self.rewrite_stmt_insert_for_batch_load(insert);
         }
 
         let exec_stmt_node_id = self.plan_data_loading(stmt);
@@ -162,12 +164,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     // ===== Setup helpers =====
 
-    fn extract_inputs_from_returning(&mut self, stmt: &mut stmt::Statement) {
+    fn extract_inputs_from_returning(&mut self) {
         visit_mut::for_each_expr_mut(&mut self.returning.clause, |expr| {
             if let stmt::Expr::Arg(expr_arg) = expr {
                 match &self.stmt_info.args[expr_arg.position] {
                     hir::Arg::Ref {
-                        stmt_id: target_id, ..
+                        stmt_id: target_id,
+                        returning_input,
+                        ..
                     } => {
                         // Find the node providing the data for the ref
                         let node_id = self.planner.hir[target_id].back_refs[&self.stmt_id]
@@ -177,8 +181,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
                         let (index, _) = self.returning.inputs.insert_full(node_id);
                         assert_eq!(index, 0, "TODO");
-                        // input.set(Some(index));
-                        todo!("index={index:#?}");
+                        returning_input.set(Some(index));
                     }
                     hir::Arg::Sub {
                         stmt_id: target_id,
@@ -226,6 +229,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     fn extract_columns_and_args_from_insert_returning(&mut self) {
+        let is_returning_projection =
+            matches!(self.returning.clause, Some(stmt::Returning::Expr(..)));
+
         visit_mut::for_each_expr_mut(&mut self.returning.clause, |expr| match expr {
             stmt::Expr::Reference(expr_reference) => {
                 let position = *self.returning.arg_stmt.get_or_insert_with(|| {
@@ -246,7 +252,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 self.returning
                     .args
                     .push(ReturningArg::Input(expr_arg.position));
-                *expr = stmt::Expr::arg(position);
+
+                *expr = stmt::ExprArg {
+                    position,
+                    // If the returning clause is a projection, then arguments
+                    // must reference the scope *above* the projection.
+                    nesting: if is_returning_projection { 1 } else { 0 },
+                }
+                .into();
             }
             _ => {}
         });
@@ -263,58 +276,65 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     /// Extract arguments needed to perform data loading
     fn extract_data_load_args(&mut self, stmt: &mut stmt::Statement) {
-        let Some(filter) = stmt.filter() else {
-            return;
-        };
-        stmt::visit::for_each_expr(filter, |expr| {
-            if let stmt::Expr::Arg(expr_arg) = expr {
-                match &self.stmt_info.args[expr_arg.position] {
-                    hir::Arg::Sub {
-                        stmt_id: target_id,
-                        returning,
-                        input,
-                        ..
-                    } => {
-                        debug_assert!(!returning, "the argument was found in a filter");
-                        // Sub-statement arguments in the filter should only happen with !sql
-                        debug_assert!(!self.planner.engine.capability().sql);
+        if let Some(filter) = stmt.filter() {
+            stmt::visit::for_each_expr(filter, |expr| {
+                self.extract_data_load_args_from_expr(expr);
+            });
+        }
 
-                        let node_id = self.planner.hir[target_id].output.get().expect("bug");
-                        let (index, _) = self.load_data.inputs.insert_full(node_id);
-                        input.set(Some(index));
+        if let Some(insert_source) = stmt.insert_source() {
+            stmt::visit::for_each_expr(insert_source, |expr| {
+                self.extract_data_load_args_from_expr(expr);
+            });
+        }
+    }
+
+    fn extract_data_load_args_from_expr(&mut self, expr: &stmt::Expr) {
+        if let stmt::Expr::Arg(expr_arg) = expr {
+            match &self.stmt_info.args[expr_arg.position] {
+                hir::Arg::Sub {
+                    stmt_id: target_id,
+                    returning,
+                    input,
+                    ..
+                } => {
+                    debug_assert!(!returning, "the argument was found in a filter");
+                    // Sub-statement arguments in the filter should only happen with !sql
+                    debug_assert!(!self.planner.engine.capability().sql);
+
+                    let node_id = self.planner.hir[target_id].output.get().expect("bug");
+                    let (index, _) = self.load_data.inputs.insert_full(node_id);
+                    input.set(Some(index));
+                }
+                hir::Arg::Ref {
+                    stmt_id: target_id,
+                    data_load_input,
+                    batch_load_table_ref_index,
+                    ..
+                } => {
+                    // refs can be duplicated in the same statement
+                    if data_load_input.get().is_some() {
+                        return;
                     }
-                    hir::Arg::Ref {
-                        stmt_id: target_id,
-                        input,
-                        batch_load_table_ref_index,
-                        ..
-                    } => {
-                        // refs can be duplicated in the same statement
-                        if input.get().is_some() {
-                            return;
-                        }
 
-                        let target_stmt_info = &self.planner.hir[target_id];
-                        let back_ref = &target_stmt_info.back_refs[&self.stmt_id];
+                    let target_stmt_info = &self.planner.hir[target_id];
+                    let back_ref = &target_stmt_info.back_refs[&self.stmt_id];
 
-                        // TODO: should we just use the data_load node ID?
-                        let node_id = back_ref.node_id.get().unwrap();
+                    // TODO: should we just use the data_load node ID?
+                    let node_id = back_ref.node_id.get().unwrap();
 
-                        let (index, _) = self.load_data.inputs.insert_full(node_id);
-                        input.set(Some(index));
+                    let (index, _) = self.load_data.inputs.insert_full(node_id);
+                    data_load_input.set(Some(index));
 
-                        // If the target statement is a query, then we are in a batch-load scenario.
-                        if target_stmt_info.stmt().is_query() {
-                            let (batch_load_index, _) =
-                                self.load_data.batch_load_args.insert_full(index);
-                            batch_load_table_ref_index.set(Some(batch_load_index));
-                        } else {
-                            todo!()
-                        }
+                    // If the target statement is a query, then we are in a batch-load scenario.
+                    if target_stmt_info.stmt().is_query() {
+                        let (batch_load_index, _) =
+                            self.load_data.batch_load_args.insert_full(index);
+                        batch_load_table_ref_index.set(Some(batch_load_index));
                     }
                 }
             }
-        });
+        }
     }
 
     fn collect_back_ref_columns(&mut self) {
@@ -326,13 +346,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     fn rewrite_stmt_for_batch_load(&mut self, stmt: &mut stmt::Statement) {
-        if let stmt::Statement::Insert(stmt) = stmt {
-            if self.planner.engine.capability().sql {
-                self.rewrite_stmt_insert_for_batch_load_sql(stmt);
-            } else {
-                todo!()
-            }
-        } else if self.planner.engine.capability().sql {
+        if self.planner.engine.capability().sql {
             self.rewrite_stmt_query_for_batch_load_sql(stmt);
         } else {
             self.rewrite_stmt_query_for_batch_load_nosql(stmt);
@@ -439,22 +453,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
     }
 
-    fn rewrite_stmt_insert_for_batch_load_sql(&mut self, stmt: &mut stmt::Insert) {
-        /*
-        let hir::Arg::Ref { stmt_id, .. } = &self.stmt_info.args[ref_source.position] else {
-            todo!()
-        };
-
-        let target_stmt = &self.planner.hir[stmt_id];
-        let target_stmt = target_stmt.stmt.as_deref().unwrap();
-
-        assert!(target_stmt.is_insert(), "TODO");
-
-        // For now, an insert statement referencing a parent is only supported when the
-        // targeted insert statement is also an insert with a single row being inserted.
-        let values = target_stmt.insert_source_unwrap().body.as_values_unwrap();
-        assert_eq!(1, values.rows.len(), "TODO");
-
+    fn rewrite_stmt_insert_for_batch_load(&mut self, stmt: &mut stmt::Insert) {
         let stmt::ExprSet::Values(values) = &mut stmt.source.body else {
             todo!()
         };
@@ -462,21 +461,32 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         for row in &mut values.rows {
             visit_mut::for_each_expr_mut(row, |expr| {
                 if let stmt::Expr::Arg(expr_arg) = expr {
-                    let hir::Arg::Ref {
-                        batch_load_index: index,
-                        input,
-                        ..
-                    } = &self.stmt_info.args[expr_arg.position]
-                    else {
-                        todo!()
-                    };
+                    match &self.stmt_info.args[expr_arg.position] {
+                        hir::Arg::Ref {
+                            stmt_id: target_id,
+                            target_expr_ref,
+                            data_load_input,
+                            ..
+                        } => {
+                            debug_assert!(
+                                !self.load_data.inputs.is_empty(),
+                                "{:#?}",
+                                self.load_data
+                            );
 
-                    *expr = stmt::Expr::arg_project(*expr_arg, [input.get().unwrap(), *index])
+                            let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
+                            let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
+
+                            *expr = stmt::Expr::arg_project(
+                                *expr_arg,
+                                [data_load_input.get().unwrap(), column],
+                            )
+                        }
+                        arg => todo!("arg={arg:#?}"),
+                    }
                 }
-            })
+            });
         }
-        */
-        todo!()
     }
 
     // ===== Plan data loading phase =====
@@ -1160,6 +1170,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         if let Some(returning) = self.returning.clause.take() {
             match returning {
                 stmt::Returning::Value(expr) => {
+                    assert!(
+                        self.returning.inputs.is_empty(),
+                        "TODO: returning={expr:#?}; inputs={:#?}",
+                        self.returning.inputs
+                    );
                     // Value variant contains a constant expression that can be evaluated
                     if let Ok(value) = expr.eval_const() {
                         let ty = value.infer_ty();
@@ -1204,29 +1219,30 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         node_id
                     }
                 }
-                stmt::Returning::Expr(returning) => {
-                    // todo!(
-                    //     "returning={returning:#?}; returning_args={:#?}; stmt_info.args={:#?}",
-                    //     self.returning.args,
-                    //     self.stmt_info.args
-                    // );
-                    let arg_ty = match self.planner.mir[exec_stmt_node_id].ty() {
-                        stmt::Type::List(ty) => vec![(**ty).clone()],
-                        stmt::Type::Unit => vec![],
-                        _ => todo!(),
-                    };
+                stmt::Returning::Expr(projection) => {
+                    let mut inputs = IndexSet::new();
 
-                    let projection = eval::Func::from_stmt(returning, arg_ty);
-                    let ty = stmt::Type::list(projection.ret.clone());
+                    for arg in &self.returning.args {
+                        inputs.insert(match arg {
+                            ReturningArg::Stmt => exec_stmt_node_id,
+                            ReturningArg::Input(index) => self.returning.inputs[*index],
+                        });
+                    }
 
-                    let node = mir::Project {
-                        input: exec_stmt_node_id,
-                        projection,
-                        ty,
-                    };
+                    let arg_tys: Vec<_> = inputs
+                        .iter()
+                        .map(|node| self.planner.mir[node].ty().clone())
+                        .collect();
 
-                    // Plan the final projection to handle the returning clause.
-                    self.insert_mir_with_deps(node)
+                    let arg_stmt = self.returning.arg_stmt.unwrap();
+                    let returning = stmt::Expr::map(stmt::Expr::arg(arg_stmt), projection);
+
+                    let projection = eval::Func::from_stmt(returning, arg_tys);
+
+                    self.insert_mir_with_deps(mir::Eval {
+                        inputs,
+                        eval: projection,
+                    })
                 }
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
             }

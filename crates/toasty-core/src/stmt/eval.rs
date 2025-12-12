@@ -73,6 +73,7 @@ impl Expr {
                 Ok(true.into())
             }
             Expr::Arg(expr_arg) => {
+                assert!(expr_arg.nesting == 0, "TODO; expr_arg={expr_arg:#?}");
                 let Some(expr) = input.resolve_arg(expr_arg, &Projection::identity()) else {
                     anyhow::bail!("failed to resolve argument")
                 };

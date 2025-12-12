@@ -196,8 +196,11 @@ pub(super) enum Arg {
         /// A value of 1 means the immediate parent, 2 means the grandparent, etc.
         nesting: usize,
 
-        /// Index in the operation's inputs list. Set during planning.
-        input: Cell<Option<usize>>,
+        /// The MIR node input when the ref is used during the data loading phase
+        data_load_input: Cell<Option<usize>>,
+
+        /// The MIR node input when the ref is used during the returing phase
+        returning_input: Cell<Option<usize>>,
 
         /// Index of the TableRef that will provide the data for this ref.
         batch_load_table_ref_index: Cell<Option<usize>>,
