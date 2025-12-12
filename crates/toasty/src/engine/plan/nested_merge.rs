@@ -150,7 +150,7 @@ impl NestedMergePlanner<'_> {
 
         let (source, _) = self
             .inputs
-            .insert_full(stmt_state.exec_statement.get().unwrap());
+            .insert_full(stmt_state.load_data_statement.get().unwrap());
 
         let mut nested = vec![];
 
@@ -252,7 +252,7 @@ impl NestedMergePlanner<'_> {
 
                         // For consistency, make sure the child statement's execution happens before this one.
                         self.deps
-                            .insert(child_stmt_state.exec_statement.get().unwrap());
+                            .insert(child_stmt_state.load_data_statement.get().unwrap());
                         *expr = returning_expr.clone();
                     } else {
                         let nested_child = self.plan_nested_child(*stmt_id, depth + 1);

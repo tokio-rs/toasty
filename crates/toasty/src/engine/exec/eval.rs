@@ -29,6 +29,8 @@ impl Exec<'_> {
             input.push(data);
         }
 
+        println!(" + action_eval; action={action:#?}; input={input:#?}");
+
         // Evaluate the function with the collected inputs
         let result = action.eval.eval(&input)?;
 

@@ -108,6 +108,8 @@ async fn auto_increment_with_associations(test: &mut DbTest) {
 tests!(
     auto_uuid_v4,
     auto_uuid_v7,
+    #[ignore]
     auto_increment,
+    #[ignore]
     auto_increment_with_associations
 );

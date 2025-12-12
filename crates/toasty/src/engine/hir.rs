@@ -73,7 +73,7 @@ pub(super) struct StatementInfo {
     ///
     /// Set during planning when the statement is converted to an operation.
     /// Used to wire up dependencies between operations.
-    pub(super) exec_statement: Cell<Option<mir::NodeId>>,
+    pub(super) load_data_statement: Cell<Option<mir::NodeId>>,
 
     /// Columns selected by the `exec_statement` operation.
     ///
@@ -108,7 +108,7 @@ impl StatementInfo {
             deps,
             args: vec![],
             back_refs: HashMap::new(),
-            exec_statement: Cell::new(None),
+            load_data_statement: Cell::new(None),
             load_data_columns: OnceCell::new(),
             output: Cell::new(None),
             independent: true,
@@ -202,8 +202,11 @@ pub(super) enum Arg {
         /// The MIR node input when the ref is used during the returing phase
         returning_input: Cell<Option<usize>>,
 
-        /// Index of the TableRef that will provide the data for this ref.
-        batch_load_table_ref_index: Cell<Option<usize>>,
+        /// Depending on the statement type, this is used in different ways. For
+        /// Query types, it is the index of the TableRef that will provide the
+        /// data for this ref. For Insert statements, it is the offset at which
+        /// the data should be fetched.
+        batch_load_index: Cell<Option<usize>>,
     },
 }
 

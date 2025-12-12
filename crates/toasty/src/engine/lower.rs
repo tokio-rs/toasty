@@ -928,7 +928,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             nesting,
             data_load_input: Cell::new(None),
             returning_input: Cell::new(None),
-            batch_load_table_ref_index: Cell::new(None),
+            batch_load_index: Cell::new(None),
         });
 
         arg
