@@ -1281,20 +1281,29 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     }
                 }
                 stmt::Returning::Expr(projection) => {
-                    let position = self
-                        .returning
-                        .inputs
-                        .get_index_of(&data_load_node_id)
-                        .unwrap();
+                    if let Some(position) = self.returning.inputs.get_index_of(&data_load_node_id) {
+                        let returning = stmt::Expr::map(stmt::Expr::arg(position), projection);
 
-                    let returning = stmt::Expr::map(stmt::Expr::arg(position), projection);
+                        let projection = eval::Func::from_stmt(returning, returning_arg_tys);
 
-                    let projection = eval::Func::from_stmt(returning, returning_arg_tys);
+                        self.insert_mir_with_deps(mir::Eval {
+                            inputs: self.returning.inputs.clone(),
+                            eval: projection,
+                        })
+                    } else {
+                        // TODO: figure out how to handle repeating a number of times vs. projecting results
+                        let projection = eval::Func::from_stmt(projection, vec![]);
+                        let ty = stmt::Type::list(projection.ret.clone());
 
-                    self.insert_mir_with_deps(mir::Eval {
-                        inputs: self.returning.inputs.clone(),
-                        eval: projection,
-                    })
+                        let node = mir::Project {
+                            input: data_load_node_id,
+                            projection,
+                            ty,
+                        };
+
+                        // Plan the final projection to handle the returning clause.
+                        self.insert_mir_with_deps(node)
+                    }
                 }
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
             }
