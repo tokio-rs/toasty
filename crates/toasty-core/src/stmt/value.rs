@@ -236,6 +236,7 @@ impl Value {
             Value::Null => Type::Null,
             Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
             Value::String(_) => Type::String,
+            Value::List(items) if items.is_empty() => Type::list(Type::Null),
             Value::List(items) => Type::list(items[0].infer_ty()),
             Value::Enum(_) => todo!(),
             Value::U8(_) => Type::U8,

@@ -59,7 +59,7 @@ impl<I: Input, T: Resolve> Input for TypedInput<'_, I, T> {
                 };
             }
 
-            assert!(actual_ty == *ty, "resolved input did not match requested argument type; expected={ty:#?}; actual={actual_ty:#?}");
+            assert!(actual_ty.is_equivalent(ty), "resolved input did not match requested argument type; expected={ty:#?}; actual={actual_ty:#?}")
         }
 
         Some(expr)
