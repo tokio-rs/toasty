@@ -1,6 +1,7 @@
 #![allow(clippy::needless_range_loop)]
 
 mod capability;
+mod test;
 mod value;
 pub(crate) use value::Value;
 
@@ -11,7 +12,7 @@ use mysql_async::{
 };
 use std::sync::Arc;
 use toasty_core::{
-    driver::{operation::Transaction, Capability, Operation, Response, TestDriver},
+    driver::{operation::Transaction, Capability, Operation, Response},
     schema::db::{Schema, Table},
     stmt::{self, ValueRecord},
     Driver, Result,
@@ -213,10 +214,6 @@ impl Driver for MySQL {
 
         Ok(())
     }
-}
-
-impl TestDriver for MySQL {
-    const CAPABILITY: Capability = capability::CAPABILITY;
 }
 
 fn mysql_to_toasty(

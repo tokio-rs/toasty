@@ -1,4 +1,5 @@
 mod capability;
+mod test;
 mod value;
 pub(crate) use value::Value;
 
@@ -9,7 +10,7 @@ use postgres::{
 };
 use std::sync::Arc;
 use toasty_core::{
-    driver::{Capability, Operation, Response, TestDriver},
+    driver::{Capability, Operation, Response},
     schema::db::{Schema, Table},
     stmt::{self, ValueRecord},
     Driver, Result,
@@ -236,10 +237,6 @@ impl Driver for PostgreSQL {
 
         Ok(())
     }
-}
-
-impl TestDriver for PostgreSQL {
-    const CAPABILITY: Capability = capability::CAPABILITY;
 }
 
 /// Converts a PostgreSQL value within a row to a [`toasty_core::stmt::Value`].

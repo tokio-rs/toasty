@@ -9,7 +9,7 @@ pub use operation::Operation;
 
 use crate::{async_trait, schema::db::Schema};
 
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, future::Future, sync::Arc};
 
 #[async_trait]
 pub trait Driver: Debug + Send + Sync + 'static {
@@ -32,4 +32,13 @@ pub trait Driver: Debug + Send + Sync + 'static {
 /// the engine.
 pub trait TestDriver: Debug + Send + Sync + 'static {
     const CAPABILITY: Capability;
+
+    /// Get raw column value from the database for verification purposes.
+    /// This method is used by tests to verify that values are stored correctly in the database.
+    fn get_raw_column_value(
+        &self,
+        table: &str,
+        column: &str,
+        filter: std::collections::HashMap<String, crate::stmt::Value>,
+    ) -> impl Future<Output = crate::Result<crate::stmt::Value>>;
 }

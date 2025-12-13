@@ -1,4 +1,5 @@
 mod capability;
+mod test;
 
 use rusqlite::Connection;
 use std::{
@@ -8,7 +9,7 @@ use std::{
 use toasty_core::{
     driver::{
         operation::{Operation, Transaction},
-        Capability, Driver, Response, TestDriver,
+        Capability, Driver, Response,
     },
     schema::db::{Schema, Table},
     stmt, Result,
@@ -163,10 +164,6 @@ impl Driver for Sqlite {
 
         Ok(())
     }
-}
-
-impl TestDriver for Sqlite {
-    const CAPABILITY: Capability = capability::CAPABILITY;
 }
 
 impl Sqlite {

@@ -1,8 +1,9 @@
 mod capability;
 mod op;
+mod test;
 
 use toasty_core::{
-    driver::{operation::Operation, Capability, Driver, Response, TestDriver},
+    driver::{operation::Operation, Capability, Driver, Response},
     schema::{
         app,
         db::{Column, ColumnId, Schema, Table},
@@ -107,10 +108,6 @@ impl Driver for DynamoDb {
 
         Ok(())
     }
-}
-
-impl TestDriver for DynamoDb {
-    const CAPABILITY: Capability = capability::CAPABILITY;
 }
 
 impl DynamoDb {
