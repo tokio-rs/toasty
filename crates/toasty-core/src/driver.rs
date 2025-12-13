@@ -27,3 +27,9 @@ pub trait Driver: Debug + Send + Sync + 'static {
         unimplemented!()
     }
 }
+
+/// Utilities used by integration tests to access the database more directly than through
+/// the engine.
+pub trait TestDriver: Debug + Send + Sync + 'static {
+    const CAPABILITY: Capability;
+}
