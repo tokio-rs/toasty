@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use toasty::driver::Capability;
 use toasty_core::stmt;
+use toasty_driver_postgresql::PostgreSQL;
 use tokio::sync::OnceCell;
 
 use crate::{isolation::TestIsolation, Setup};
@@ -10,6 +11,8 @@ pub struct SetupPostgreSQL {
     isolation: TestIsolation,
     // Per-test-instance client to avoid runtime issues with static sharing
     client: OnceCell<Arc<tokio_postgres::Client>>,
+    // Driver instance for TestDriver methods
+    driver: OnceCell<Arc<PostgreSQL>>,
 }
 
 impl SetupPostgreSQL {
@@ -17,6 +20,7 @@ impl SetupPostgreSQL {
         Self {
             isolation: TestIsolation::new(),
             client: OnceCell::new(),
+            driver: OnceCell::new(),
         }
     }
 
@@ -41,6 +45,18 @@ impl SetupPostgreSQL {
                 });
 
                 Arc::new(client)
+            })
+            .await
+    }
+
+    /// Get or create the per-test-instance PostgreSQL driver
+    async fn get_driver(&self) -> &Arc<PostgreSQL> {
+        self.driver
+            .get_or_init(|| async {
+                let client = self.get_client().await;
+                // Clone the Arc to get a Client (not Arc<Client>)
+                let client_inner = (**client).clone();
+                Arc::new(PostgreSQL::new(client_inner))
             })
             .await
     }
@@ -82,55 +98,11 @@ impl Setup for SetupPostgreSQL {
         column: &str,
         filter: HashMap<String, stmt::Value>,
     ) -> toasty::Result<stmt::Value> {
+        use toasty_core::driver::TestDriver;
+
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
-
-        // Build WHERE clause from filter
-        let mut where_conditions = Vec::new();
-        let mut param_index = 1;
-
-        // Convert stmt::Values to PostgreSQL parameters
-        let mut pg_params = Vec::new();
-        for (col_name, value) in filter {
-            where_conditions.push(format!("{col_name} = ${param_index}"));
-
-            // Convert each value individually to avoid trait bound issues
-            match value {
-                stmt::Value::String(s) => pg_params.push(s),
-                stmt::Value::I64(i) => pg_params.push(i.to_string()),
-                stmt::Value::U64(u) => pg_params.push((u as i64).to_string()),
-                stmt::Value::Id(id) => {
-                    // Convert Id to string representation
-                    pg_params.push(id.to_string());
-                }
-                _ => todo!("Unsupported filter value type: {value:?}"),
-            }
-            param_index += 1;
-        }
-
-        let where_clause = if where_conditions.is_empty() {
-            String::new()
-        } else {
-            format!(" WHERE {}", where_conditions.join(" AND "))
-        };
-
-        let query = format!("SELECT {column} FROM {full_table_name}{where_clause}");
-
-        // Get the per-test-instance PostgreSQL client
-        let client = self.get_client().await;
-
-        // For simplicity, use string parameters for now
-        let string_params: Vec<&str> = pg_params.iter().map(|s| s.as_str()).collect();
-        let params_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = string_params
-            .iter()
-            .map(|s| s as &(dyn tokio_postgres::types::ToSql + Sync))
-            .collect();
-        let row = client
-            .query_one(&query, &params_refs)
-            .await
-            .unwrap_or_else(|e| panic!("Query failed: {e}"));
-
-        // Convert PostgreSQL result directly to stmt::Value
-        self.pg_row_to_stmt_value(&row, 0)
+        let driver = self.get_driver().await;
+        driver.get_raw_column_value(&full_table_name, column, filter).await
     }
 }
 
@@ -163,24 +135,5 @@ impl SetupPostgreSQL {
         }
 
         Ok(())
-    }
-
-    fn pg_row_to_stmt_value(
-        &self,
-        row: &tokio_postgres::Row,
-        col: usize,
-    ) -> toasty::Result<stmt::Value> {
-        use tokio_postgres::types::Type;
-
-        let column = &row.columns()[col];
-        match *column.type_() {
-            Type::INT2 => Ok(stmt::Value::I16(row.get(col))),
-            Type::INT4 => Ok(stmt::Value::I32(row.get(col))),
-            Type::INT8 => Ok(stmt::Value::I64(row.get(col))),
-            Type::TEXT | Type::VARCHAR => Ok(stmt::Value::String(row.get(col))),
-            Type::BYTEA => Ok(stmt::Value::Bytes(row.get(col))),
-            Type::BOOL => Ok(stmt::Value::Bool(row.get(col))),
-            _ => todo!("Unsupported PostgreSQL type: {:?}", column.type_()),
-        }
     }
 }

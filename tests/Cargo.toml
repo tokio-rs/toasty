@@ -7,10 +7,10 @@ publish = false
 [features]
 default = ["sqlite"]
 sql = ["sqlite", "mysql", "postgresql"]
-sqlite = ["toasty/sqlite"]
-mysql = ["toasty/mysql"]
-dynamodb = ["toasty/dynamodb"]
-postgresql = ["toasty/postgresql"]
+sqlite = ["toasty/sqlite", "dep:toasty-driver-sqlite"]
+mysql = ["toasty/mysql", "dep:toasty-driver-mysql"]
+dynamodb = ["toasty/dynamodb", "dep:toasty-driver-dynamodb"]
+postgresql = ["toasty/postgresql", "dep:toasty-driver-postgresql"]
 
 [dependencies]
 assert-struct.workspace = true
@@ -22,6 +22,12 @@ toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff"] }
 toasty-core = { workspace = true, features = ["assert-struct"] }
 toasty-macros.workspace = true
 tokio.workspace = true
+
+# Database drivers for TestDriver implementations
+toasty-driver-sqlite = { workspace = true, optional = true }
+toasty-driver-mysql = { workspace = true, optional = true }
+toasty-driver-postgresql = { workspace = true, optional = true }
+toasty-driver-dynamodb = { workspace = true, optional = true }
 
 # Database clients for cleanup
 tokio-postgres.workspace = true

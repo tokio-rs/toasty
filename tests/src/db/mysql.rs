@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use toasty::driver::Capability;
+use toasty_driver_mysql::MySQL;
 
 use crate::{isolation::TestIsolation, Setup};
 
@@ -7,6 +9,8 @@ pub struct SetupMySQL {
     isolation: TestIsolation,
     // Per-test-instance pool to avoid runtime issues with static sharing
     pool: tokio::sync::OnceCell<mysql_async::Pool>,
+    // Driver instance for TestDriver methods
+    driver: tokio::sync::OnceCell<Arc<MySQL>>,
 }
 
 impl SetupMySQL {
@@ -14,6 +18,7 @@ impl SetupMySQL {
         Self {
             isolation: TestIsolation::new(),
             pool: tokio::sync::OnceCell::new(),
+            driver: tokio::sync::OnceCell::new(),
         }
     }
 
@@ -25,6 +30,16 @@ impl SetupMySQL {
                     .unwrap_or_else(|_| "mysql://localhost:3306/toasty_test".to_string());
 
                 mysql_async::Pool::new(url.as_str())
+            })
+            .await
+    }
+
+    /// Get or create the per-test-instance MySQL driver
+    async fn get_driver(&self) -> &Arc<MySQL> {
+        self.driver
+            .get_or_init(|| async {
+                let pool = self.get_pool().await.clone();
+                Arc::new(MySQL::new(pool))
             })
             .await
     }
@@ -66,77 +81,11 @@ impl Setup for SetupMySQL {
         column: &str,
         filter: HashMap<String, toasty_core::stmt::Value>,
     ) -> toasty::Result<toasty_core::stmt::Value> {
-        use mysql_async::prelude::Queryable;
+        use toasty_core::driver::TestDriver;
 
         let full_table_name = format!("{}{}", self.isolation.table_prefix(), table);
-
-        // Build WHERE clause from filter
-        let mut where_conditions = Vec::new();
-        let mut mysql_params = Vec::new();
-
-        for (col_name, value) in filter {
-            where_conditions.push(format!("{col_name} = ?"));
-
-            // Convert stmt::Value to MySQL parameter
-            match value {
-                toasty_core::stmt::Value::String(s) => {
-                    mysql_params.push(mysql_async::Value::Bytes(s.into_bytes()))
-                }
-                toasty_core::stmt::Value::I64(i) => mysql_params.push(mysql_async::Value::Int(i)),
-                toasty_core::stmt::Value::U64(u) => mysql_params.push(mysql_async::Value::UInt(u)),
-                toasty_core::stmt::Value::I32(i) => {
-                    mysql_params.push(mysql_async::Value::Int(i as i64))
-                }
-                toasty_core::stmt::Value::I16(i) => {
-                    mysql_params.push(mysql_async::Value::Int(i as i64))
-                }
-                toasty_core::stmt::Value::I8(i) => {
-                    mysql_params.push(mysql_async::Value::Int(i as i64))
-                }
-                toasty_core::stmt::Value::U32(u) => {
-                    mysql_params.push(mysql_async::Value::UInt(u as u64))
-                }
-                toasty_core::stmt::Value::U16(u) => {
-                    mysql_params.push(mysql_async::Value::UInt(u as u64))
-                }
-                toasty_core::stmt::Value::U8(u) => {
-                    mysql_params.push(mysql_async::Value::UInt(u as u64))
-                }
-                toasty_core::stmt::Value::Bool(b) => {
-                    mysql_params.push(mysql_async::Value::Int(if b { 1 } else { 0 }))
-                }
-                toasty_core::stmt::Value::Id(id) => {
-                    mysql_params.push(mysql_async::Value::Bytes(id.to_string().into_bytes()))
-                }
-                _ => todo!("Unsupported filter value type for MySQL: {value:?}"),
-            }
-        }
-
-        let where_clause = if where_conditions.is_empty() {
-            String::new()
-        } else {
-            format!(" WHERE {}", where_conditions.join(" AND "))
-        };
-
-        let query = format!("SELECT {column} FROM {full_table_name}{where_clause}");
-
-        // Get connection from per-test-instance pool
-        let pool = self.get_pool().await;
-        let mut conn = pool
-            .get_conn()
-            .await
-            .unwrap_or_else(|e| panic!("MySQL connection failed: {e}"));
-
-        let mut result = conn
-            .exec_iter(&query, mysql_params)
-            .await
-            .unwrap_or_else(|e| panic!("MySQL query failed: {e}"));
-
-        if let Ok(Some(row)) = result.next().await {
-            self.mysql_row_to_stmt_value(&row, 0)
-        } else {
-            panic!("No rows found")
-        }
+        let driver = self.get_driver().await;
+        driver.get_raw_column_value(&full_table_name, column, filter).await
     }
 }
 
@@ -170,33 +119,5 @@ impl SetupMySQL {
         }
 
         Ok(())
-    }
-
-    fn mysql_row_to_stmt_value(
-        &self,
-        row: &mysql_async::Row,
-        col: usize,
-    ) -> toasty::Result<toasty_core::stmt::Value> {
-        use mysql_async::Value;
-
-        let value = row
-            .as_ref(col)
-            .ok_or_else(|| toasty::Error::msg(format!("MySQL column {col} not found")))?;
-
-        match value {
-            Value::NULL => Ok(toasty_core::stmt::Value::Null),
-            Value::Bytes(bytes) => {
-                let text = String::from_utf8(bytes.clone()).map_err(|e| {
-                    toasty::Error::msg(format!("MySQL bytes to string conversion failed: {e}"))
-                })?;
-                Ok(toasty_core::stmt::Value::String(text))
-            }
-            Value::Int(i) => Ok(toasty_core::stmt::Value::I64(*i)),
-            Value::UInt(u) => Ok(toasty_core::stmt::Value::U64(*u)),
-            _ => todo!(
-                "MySQL value type conversion not yet implemented: {:?}",
-                value
-            ),
-        }
     }
 }
