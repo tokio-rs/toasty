@@ -212,11 +212,7 @@ impl ToValue for Value {
 }
 
 /// Helper function to extract a value from a MySQL row or return Null if the value is NULL
-fn extract_or_null<T>(
-    row: &mut Row,
-    i: usize,
-    constructor: fn(T) -> stmt::Value,
-) -> stmt::Value
+fn extract_or_null<T>(row: &mut Row, i: usize, constructor: fn(T) -> stmt::Value) -> stmt::Value
 where
     T: mysql_async::prelude::FromValue,
 {
