@@ -18,7 +18,8 @@ async-trait.workspace = true
 rust_decimal.workspace = true
 bigdecimal.workspace = true
 jiff.workspace = true
-toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff"] }
+chrono.workspace = true
+toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "chrono"] }
 toasty-core = { workspace = true, features = ["assert-struct"] }
 toasty-macros.workspace = true
 tokio.workspace = true

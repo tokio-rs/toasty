@@ -9,28 +9,30 @@ impl Type {
     pub fn cast_jiff(&self, value: &Value) -> Result<Option<Value>> {
         Ok(Some(match (value, self) {
             // String -> jiff
-            (Value::String(value), Type::Timestamp) => Value::Timestamp(value.parse()?),
-            (Value::String(value), Type::Zoned) => Value::Zoned(value.parse()?),
-            (Value::String(value), Type::Date) => Value::Date(value.parse()?),
-            (Value::String(value), Type::Time) => Value::Time(value.parse()?),
-            (Value::String(value), Type::DateTime) => Value::DateTime(value.parse()?),
+            (Value::String(value), Type::JiffTimestamp) => Value::JiffTimestamp(value.parse()?),
+            (Value::String(value), Type::JiffZoned) => Value::JiffZoned(value.parse()?),
+            (Value::String(value), Type::JiffDate) => Value::JiffDate(value.parse()?),
+            (Value::String(value), Type::JiffTime) => Value::JiffTime(value.parse()?),
+            (Value::String(value), Type::JiffDateTime) => Value::JiffDateTime(value.parse()?),
 
             // jiff -> String
-            (Value::Timestamp(value), Type::String) => Value::String(value.to_string()),
-            (Value::Zoned(value), Type::String) => Value::String(value.to_string()),
-            (Value::Date(value), Type::String) => Value::String(value.to_string()),
-            (Value::Time(value), Type::String) => Value::String(value.to_string()),
-            (Value::DateTime(value), Type::String) => Value::String(value.to_string()),
+            (Value::JiffTimestamp(value), Type::String) => Value::String(value.to_string()),
+            (Value::JiffZoned(value), Type::String) => Value::String(value.to_string()),
+            (Value::JiffDate(value), Type::String) => Value::String(value.to_string()),
+            (Value::JiffTime(value), Type::String) => Value::String(value.to_string()),
+            (Value::JiffDateTime(value), Type::String) => Value::String(value.to_string()),
 
             // UTC <-> Zoned
-            (Value::Timestamp(value), Type::Zoned) => Value::Zoned(value.to_zoned(TimeZone::UTC)),
-            (Value::Zoned(value), Type::Timestamp) => Value::Timestamp(value.into()),
+            (Value::JiffTimestamp(value), Type::JiffZoned) => {
+                Value::JiffZoned(value.to_zoned(TimeZone::UTC))
+            }
+            (Value::JiffZoned(value), Type::JiffTimestamp) => Value::JiffTimestamp(value.into()),
 
             // UTC <-> Civil
-            (Value::Timestamp(value), Type::DateTime) => {
-                Value::DateTime(value.to_zoned(TimeZone::UTC).into())
+            (Value::JiffTimestamp(value), Type::JiffDateTime) => {
+                Value::JiffDateTime(value.to_zoned(TimeZone::UTC).into())
             }
-            (Value::DateTime(value), Type::Timestamp) => Value::Timestamp(
+            (Value::JiffDateTime(value), Type::JiffTimestamp) => Value::JiffTimestamp(
                 value
                     .to_zoned(TimeZone::UTC)
                     .expect("value was too close to minimum or maximum DateTime")
@@ -38,8 +40,8 @@ impl Type {
             ),
 
             // Zoned <-> Civil
-            (Value::Zoned(value), Type::DateTime) => Value::DateTime(value.into()),
-            (Value::DateTime(value), Type::Zoned) => Value::Zoned(
+            (Value::JiffZoned(value), Type::JiffDateTime) => Value::JiffDateTime(value.into()),
+            (Value::JiffDateTime(value), Type::JiffZoned) => Value::JiffZoned(
                 value
                     .to_zoned(TimeZone::UTC)
                     .expect("value was too close to minimum or maximum DateTime"),
@@ -80,43 +82,43 @@ mod tests {
     #[test]
     fn test_string_to_timestamp() {
         let value = Value::String("2021-01-01T00:00:00Z".to_string());
-        let result = Type::Timestamp.cast_jiff(&value).unwrap();
-        assert!(matches!(result.unwrap(), Value::Timestamp(_)));
+        let result = Type::JiffTimestamp.cast_jiff(&value).unwrap();
+        assert!(matches!(result.unwrap(), Value::JiffTimestamp(_)));
     }
 
     #[test]
     fn test_string_to_zoned() {
         let value = Value::String("2021-01-01T00:00:00Z[UTC]".to_string());
-        let result = Type::Zoned.cast_jiff(&value).unwrap();
-        assert!(matches!(result.unwrap(), Value::Zoned(_)));
+        let result = Type::JiffZoned.cast_jiff(&value).unwrap();
+        assert!(matches!(result.unwrap(), Value::JiffZoned(_)));
     }
 
     #[test]
     fn test_string_to_date() {
         let value = Value::String("2021-01-01".to_string());
-        let result = Type::Date.cast_jiff(&value).unwrap();
-        assert!(matches!(result.unwrap(), Value::Date(_)));
+        let result = Type::JiffDate.cast_jiff(&value).unwrap();
+        assert!(matches!(result.unwrap(), Value::JiffDate(_)));
     }
 
     #[test]
     fn test_string_to_time() {
         let value = Value::String("12:30:45".to_string());
-        let result = Type::Time.cast_jiff(&value).unwrap();
-        assert!(matches!(result.unwrap(), Value::Time(_)));
+        let result = Type::JiffTime.cast_jiff(&value).unwrap();
+        assert!(matches!(result.unwrap(), Value::JiffTime(_)));
     }
 
     #[test]
     fn test_string_to_datetime() {
         let value = Value::String("2021-01-01T12:30:45".to_string());
-        let result = Type::DateTime.cast_jiff(&value).unwrap();
-        assert!(matches!(result.unwrap(), Value::DateTime(_)));
+        let result = Type::JiffDateTime.cast_jiff(&value).unwrap();
+        assert!(matches!(result.unwrap(), Value::JiffDateTime(_)));
     }
 
     // ===== jiff -> String conversions =====
 
     #[test]
     fn test_timestamp_to_string() {
-        let value = Value::Timestamp(timestamp());
+        let value = Value::JiffTimestamp(timestamp());
         let result = Type::String.cast_jiff(&value).unwrap();
         match result.unwrap() {
             Value::String(s) => assert!(!s.is_empty()),
@@ -126,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_zoned_to_string() {
-        let value = Value::Zoned(zoned());
+        let value = Value::JiffZoned(zoned());
         let result = Type::String.cast_jiff(&value).unwrap();
         match result.unwrap() {
             Value::String(s) => assert!(!s.is_empty()),
@@ -136,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_date_to_string() {
-        let value = Value::Date(date());
+        let value = Value::JiffDate(date());
         let result = Type::String.cast_jiff(&value).unwrap();
         match result.unwrap() {
             Value::String(s) => assert_eq!(s, "2021-01-01"),
@@ -146,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_time_to_string() {
-        let value = Value::Time(time());
+        let value = Value::JiffTime(time());
         let result = Type::String.cast_jiff(&value).unwrap();
         match result.unwrap() {
             Value::String(s) => assert_eq!(s, "12:30:45"),
@@ -156,7 +158,7 @@ mod tests {
 
     #[test]
     fn test_datetime_to_string() {
-        let value = Value::DateTime(datetime());
+        let value = Value::JiffDateTime(datetime());
         let result = Type::String.cast_jiff(&value).unwrap();
         match result.unwrap() {
             Value::String(s) => assert!(!s.is_empty()),
@@ -168,10 +170,10 @@ mod tests {
 
     #[test]
     fn test_timestamp_to_zoned() {
-        let value = Value::Timestamp(timestamp());
-        let result = Type::Zoned.cast_jiff(&value).unwrap();
+        let value = Value::JiffTimestamp(timestamp());
+        let result = Type::JiffZoned.cast_jiff(&value).unwrap();
         match result.unwrap() {
-            Value::Zoned(z) => {
+            Value::JiffZoned(z) => {
                 let expected = timestamp().to_zoned(TimeZone::UTC);
                 assert_eq!(z.timestamp(), expected.timestamp());
             }
@@ -181,10 +183,10 @@ mod tests {
 
     #[test]
     fn test_zoned_to_timestamp() {
-        let value = Value::Zoned(zoned());
-        let result = Type::Timestamp.cast_jiff(&value).unwrap();
+        let value = Value::JiffZoned(zoned());
+        let result = Type::JiffTimestamp.cast_jiff(&value).unwrap();
         match result.unwrap() {
-            Value::Timestamp(ts) => {
+            Value::JiffTimestamp(ts) => {
                 let expected: jiff::Timestamp = zoned().into();
                 assert_eq!(ts, expected);
             }
@@ -196,10 +198,10 @@ mod tests {
 
     #[test]
     fn test_timestamp_to_datetime() {
-        let value = Value::Timestamp(timestamp());
-        let result = Type::DateTime.cast_jiff(&value).unwrap();
+        let value = Value::JiffTimestamp(timestamp());
+        let result = Type::JiffDateTime.cast_jiff(&value).unwrap();
         match result.unwrap() {
-            Value::DateTime(dt) => {
+            Value::JiffDateTime(dt) => {
                 let expected: jiff::civil::DateTime = timestamp().to_zoned(TimeZone::UTC).into();
                 assert_eq!(dt, expected);
             }
@@ -209,19 +211,19 @@ mod tests {
 
     #[test]
     fn test_datetime_to_timestamp() {
-        let value = Value::DateTime(datetime());
-        let result = Type::Timestamp.cast_jiff(&value).unwrap();
-        assert!(matches!(result.unwrap(), Value::Timestamp(_)));
+        let value = Value::JiffDateTime(datetime());
+        let result = Type::JiffTimestamp.cast_jiff(&value).unwrap();
+        assert!(matches!(result.unwrap(), Value::JiffTimestamp(_)));
     }
 
     // ===== Zoned <-> Civil conversions =====
 
     #[test]
     fn test_zoned_to_datetime() {
-        let value = Value::Zoned(zoned());
-        let result = Type::DateTime.cast_jiff(&value).unwrap();
+        let value = Value::JiffZoned(zoned());
+        let result = Type::JiffDateTime.cast_jiff(&value).unwrap();
         match result.unwrap() {
-            Value::DateTime(dt) => {
+            Value::JiffDateTime(dt) => {
                 let expected: jiff::civil::DateTime = zoned().into();
                 assert_eq!(dt, expected);
             }
@@ -231,9 +233,9 @@ mod tests {
 
     #[test]
     fn test_datetime_to_zoned() {
-        let value = Value::DateTime(datetime());
-        let result = Type::Zoned.cast_jiff(&value).unwrap();
-        assert!(matches!(result.unwrap(), Value::Zoned(_)));
+        let value = Value::JiffDateTime(datetime());
+        let result = Type::JiffZoned.cast_jiff(&value).unwrap();
+        assert!(matches!(result.unwrap(), Value::JiffZoned(_)));
     }
 
     // ===== Invalid conversions (should return None) =====
@@ -241,29 +243,29 @@ mod tests {
     #[test]
     fn test_invalid_conversion_returns_none() {
         // Try converting a Timestamp to Date (not supported)
-        let value = Value::Timestamp(timestamp());
-        let result = Type::Date.cast_jiff(&value).unwrap();
+        let value = Value::JiffTimestamp(timestamp());
+        let result = Type::JiffDate.cast_jiff(&value).unwrap();
         assert!(result.is_none());
     }
 
     #[test]
     fn test_invalid_conversion_date_to_time() {
-        let value = Value::Date(date());
-        let result = Type::Time.cast_jiff(&value).unwrap();
+        let value = Value::JiffDate(date());
+        let result = Type::JiffTime.cast_jiff(&value).unwrap();
         assert!(result.is_none());
     }
 
     #[test]
     fn test_invalid_conversion_time_to_date() {
-        let value = Value::Time(time());
-        let result = Type::Date.cast_jiff(&value).unwrap();
+        let value = Value::JiffTime(time());
+        let result = Type::JiffDate.cast_jiff(&value).unwrap();
         assert!(result.is_none());
     }
 
     #[test]
     fn test_invalid_conversion_date_to_timestamp() {
-        let value = Value::Date(date());
-        let result = Type::Timestamp.cast_jiff(&value).unwrap();
+        let value = Value::JiffDate(date());
+        let result = Type::JiffTimestamp.cast_jiff(&value).unwrap();
         assert!(result.is_none());
     }
 
@@ -271,12 +273,12 @@ mod tests {
 
     #[test]
     fn test_roundtrip_timestamp_string() {
-        let original = Value::Timestamp(timestamp());
+        let original = Value::JiffTimestamp(timestamp());
         let as_string = Type::String.cast_jiff(&original).unwrap().unwrap();
-        let back_to_timestamp = Type::Timestamp.cast_jiff(&as_string).unwrap().unwrap();
+        let back_to_timestamp = Type::JiffTimestamp.cast_jiff(&as_string).unwrap().unwrap();
 
         match (original, back_to_timestamp) {
-            (Value::Timestamp(orig), Value::Timestamp(roundtrip)) => {
+            (Value::JiffTimestamp(orig), Value::JiffTimestamp(roundtrip)) => {
                 assert_eq!(orig.as_second(), roundtrip.as_second());
             }
             _ => panic!("Round-trip failed"),
@@ -285,39 +287,42 @@ mod tests {
 
     #[test]
     fn test_roundtrip_date_string() {
-        let original = Value::Date(date());
+        let original = Value::JiffDate(date());
         let as_string = Type::String.cast_jiff(&original).unwrap().unwrap();
-        let back_to_date = Type::Date.cast_jiff(&as_string).unwrap().unwrap();
+        let back_to_date = Type::JiffDate.cast_jiff(&as_string).unwrap().unwrap();
 
         assert_eq!(original, back_to_date);
     }
 
     #[test]
     fn test_roundtrip_time_string() {
-        let original = Value::Time(time());
+        let original = Value::JiffTime(time());
         let as_string = Type::String.cast_jiff(&original).unwrap().unwrap();
-        let back_to_time = Type::Time.cast_jiff(&as_string).unwrap().unwrap();
+        let back_to_time = Type::JiffTime.cast_jiff(&as_string).unwrap().unwrap();
 
         assert_eq!(original, back_to_time);
     }
 
     #[test]
     fn test_roundtrip_timestamp_zoned() {
-        let original = Value::Timestamp(timestamp());
-        let as_zoned = Type::Zoned.cast_jiff(&original).unwrap().unwrap();
-        let back_to_timestamp = Type::Timestamp.cast_jiff(&as_zoned).unwrap().unwrap();
+        let original = Value::JiffTimestamp(timestamp());
+        let as_zoned = Type::JiffZoned.cast_jiff(&original).unwrap().unwrap();
+        let back_to_timestamp = Type::JiffTimestamp.cast_jiff(&as_zoned).unwrap().unwrap();
 
         assert_eq!(original, back_to_timestamp);
     }
 
     #[test]
     fn test_roundtrip_timestamp_datetime() {
-        let original = Value::Timestamp(timestamp());
-        let as_datetime = Type::DateTime.cast_jiff(&original).unwrap().unwrap();
-        let back_to_timestamp = Type::Timestamp.cast_jiff(&as_datetime).unwrap().unwrap();
+        let original = Value::JiffTimestamp(timestamp());
+        let as_datetime = Type::JiffDateTime.cast_jiff(&original).unwrap().unwrap();
+        let back_to_timestamp = Type::JiffTimestamp
+            .cast_jiff(&as_datetime)
+            .unwrap()
+            .unwrap();
 
         match (original, back_to_timestamp) {
-            (Value::Timestamp(orig), Value::Timestamp(roundtrip)) => {
+            (Value::JiffTimestamp(orig), Value::JiffTimestamp(roundtrip)) => {
                 assert_eq!(orig.as_second(), roundtrip.as_second());
             }
             _ => panic!("Round-trip failed"),
@@ -329,21 +334,21 @@ mod tests {
     #[test]
     fn test_invalid_string_to_timestamp_fails() {
         let value = Value::String("not-a-timestamp".to_string());
-        let result = Type::Timestamp.cast_jiff(&value);
+        let result = Type::JiffTimestamp.cast_jiff(&value);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_string_to_date_fails() {
         let value = Value::String("invalid-date".to_string());
-        let result = Type::Date.cast_jiff(&value);
+        let result = Type::JiffDate.cast_jiff(&value);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_string_to_time_fails() {
         let value = Value::String("25:99:99".to_string());
-        let result = Type::Time.cast_jiff(&value);
+        let result = Type::JiffTime.cast_jiff(&value);
         assert!(result.is_err());
     }
 }

@@ -133,13 +133,21 @@ impl ToSql for Value {
             #[cfg(feature = "rust_decimal")]
             stmt::Value::Decimal(value) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            stmt::Value::Timestamp(value) => value.to_sql(ty, out),
+            stmt::Value::JiffTimestamp(value) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            stmt::Value::Date(value) => value.to_sql(ty, out),
+            stmt::Value::JiffDate(value) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            stmt::Value::Time(value) => value.to_sql(ty, out),
+            stmt::Value::JiffTime(value) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            stmt::Value::DateTime(value) => value.to_sql(ty, out),
+            stmt::Value::JiffDateTime(value) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            stmt::Value::ChronoDateTimeUtc(value) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            stmt::Value::ChronoNaiveDateTime(value) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            stmt::Value::ChronoNaiveDate(value) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            stmt::Value::ChronoNaiveTime(value) => value.to_sql(ty, out),
             value => todo!("{value:#?}"),
         }
     }

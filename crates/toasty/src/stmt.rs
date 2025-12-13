@@ -34,6 +34,9 @@ pub use primitive::Primitive;
 #[cfg(feature = "jiff")]
 mod primitive_jiff;
 
+#[cfg(feature = "chrono")]
+mod primitive_chrono;
+
 mod select;
 pub use select::Select;
 

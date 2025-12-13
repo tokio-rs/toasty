@@ -74,27 +74,39 @@ pub enum Value {
     /// An instant in time represented as the number of nanoseconds since the Unix epoch.
     /// See [`jiff::Timestamp`].
     #[cfg(feature = "jiff")]
-    Timestamp(jiff::Timestamp),
+    JiffTimestamp(jiff::Timestamp),
 
     /// A time zone aware instant in time.
     /// See [`jiff::Zoned`]
     #[cfg(feature = "jiff")]
-    Zoned(jiff::Zoned),
+    JiffZoned(jiff::Zoned),
 
     /// A representation of a civil date in the Gregorian calendar.
     /// See [`jiff::civil::Date`].
     #[cfg(feature = "jiff")]
-    Date(jiff::civil::Date),
+    JiffDate(jiff::civil::Date),
 
     /// A representation of civil “wall clock” time.
     /// See [`jiff::civil::Time`].
     #[cfg(feature = "jiff")]
-    Time(jiff::civil::Time),
+    JiffTime(jiff::civil::Time),
 
     /// A representation of a civil datetime in the Gregorian calendar.
     /// See [`jiff::civil::DateTime`].
     #[cfg(feature = "jiff")]
-    DateTime(jiff::civil::DateTime),
+    JiffDateTime(jiff::civil::DateTime),
+
+    #[cfg(feature = "chrono")]
+    ChronoDateTimeUtc(chrono::DateTime<chrono::Utc>),
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveDateTime(chrono::NaiveDateTime),
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveDate(chrono::NaiveDate),
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveTime(chrono::NaiveTime),
 }
 
 impl Value {
@@ -224,15 +236,23 @@ impl Value {
             #[cfg(feature = "bigdecimal")]
             Value::BigDecimal(_) => *ty == Type::BigDecimal,
             #[cfg(feature = "jiff")]
-            Value::Timestamp(_) => *ty == Type::Timestamp,
+            Value::JiffTimestamp(_) => *ty == Type::JiffTimestamp,
             #[cfg(feature = "jiff")]
-            Value::Zoned(_) => *ty == Type::Zoned,
+            Value::JiffZoned(_) => *ty == Type::JiffZoned,
             #[cfg(feature = "jiff")]
-            Value::Date(_) => *ty == Type::Date,
+            Value::JiffDate(_) => *ty == Type::JiffDate,
             #[cfg(feature = "jiff")]
-            Value::Time(_) => *ty == Type::Time,
+            Value::JiffTime(_) => *ty == Type::JiffTime,
             #[cfg(feature = "jiff")]
-            Value::DateTime(_) => *ty == Type::DateTime,
+            Value::JiffDateTime(_) => *ty == Type::JiffDateTime,
+            #[cfg(feature = "chrono")]
+            Value::ChronoDateTimeUtc(_) => *ty == Type::ChronoDateTimeUtc,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveDateTime(_) => *ty == Type::ChronoNaiveDateTime,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveDate(_) => *ty == Type::ChronoNaiveDate,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveTime(_) => *ty == Type::ChronoNaiveTime,
             _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
     }
@@ -263,15 +283,23 @@ impl Value {
             #[cfg(feature = "bigdecimal")]
             Value::BigDecimal(_) => Type::BigDecimal,
             #[cfg(feature = "jiff")]
-            Value::Timestamp(_) => Type::Timestamp,
+            Value::JiffTimestamp(_) => Type::JiffTimestamp,
             #[cfg(feature = "jiff")]
-            Value::Zoned(_) => Type::Zoned,
+            Value::JiffZoned(_) => Type::JiffZoned,
             #[cfg(feature = "jiff")]
-            Value::Date(_) => Type::Date,
+            Value::JiffDate(_) => Type::JiffDate,
             #[cfg(feature = "jiff")]
-            Value::Time(_) => Type::Time,
+            Value::JiffTime(_) => Type::JiffTime,
             #[cfg(feature = "jiff")]
-            Value::DateTime(_) => Type::DateTime,
+            Value::JiffDateTime(_) => Type::JiffDateTime,
+            #[cfg(feature = "chrono")]
+            Value::ChronoDateTimeUtc(_) => Type::ChronoDateTimeUtc,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveDateTime(_) => Type::ChronoNaiveDateTime,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveDate(_) => Type::ChronoNaiveDate,
+            #[cfg(feature = "chrono")]
+            Value::ChronoNaiveTime(_) => Type::ChronoNaiveTime,
         }
     }
 
@@ -347,15 +375,24 @@ impl PartialOrd for Value {
 
             // Date/time types.
             #[cfg(feature = "jiff")]
-            (Value::Timestamp(a), Value::Timestamp(b)) => a.partial_cmp(b),
+            (Value::JiffTimestamp(a), Value::JiffTimestamp(b)) => a.partial_cmp(b),
             #[cfg(feature = "jiff")]
-            (Value::Zoned(a), Value::Zoned(b)) => a.partial_cmp(b),
+            (Value::JiffZoned(a), Value::JiffZoned(b)) => a.partial_cmp(b),
             #[cfg(feature = "jiff")]
-            (Value::Date(a), Value::Date(b)) => a.partial_cmp(b),
+            (Value::JiffDate(a), Value::JiffDate(b)) => a.partial_cmp(b),
             #[cfg(feature = "jiff")]
-            (Value::Time(a), Value::Time(b)) => a.partial_cmp(b),
+            (Value::JiffTime(a), Value::JiffTime(b)) => a.partial_cmp(b),
             #[cfg(feature = "jiff")]
-            (Value::DateTime(a), Value::DateTime(b)) => a.partial_cmp(b),
+            (Value::JiffDateTime(a), Value::JiffDateTime(b)) => a.partial_cmp(b),
+
+            #[cfg(feature = "chrono")]
+            (Value::ChronoDateTimeUtc(a), Value::ChronoDateTimeUtc(b)) => a.partial_cmp(b),
+            #[cfg(feature = "chrono")]
+            (Value::ChronoNaiveDateTime(a), Value::ChronoNaiveDateTime(b)) => a.partial_cmp(b),
+            #[cfg(feature = "chrono")]
+            (Value::ChronoNaiveDate(a), Value::ChronoNaiveDate(b)) => a.partial_cmp(b),
+            #[cfg(feature = "chrono")]
+            (Value::ChronoNaiveTime(a), Value::ChronoNaiveTime(b)) => a.partial_cmp(b),
 
             // Types without natural ordering or different types.
             _ => None,

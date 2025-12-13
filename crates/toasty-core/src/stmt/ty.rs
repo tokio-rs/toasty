@@ -137,27 +137,39 @@ pub enum Type {
     /// An instant in time represented as the number of nanoseconds since the Unix epoch.
     /// See [`jiff::Timestamp`].
     #[cfg(feature = "jiff")]
-    Timestamp,
+    JiffTimestamp,
 
     /// A time zone aware instant in time.
     /// See [`jiff::Zoned`]
     #[cfg(feature = "jiff")]
-    Zoned,
+    JiffZoned,
 
     /// A representation of a civil date in the Gregorian calendar.
     /// See [`jiff::civil::Date`].
     #[cfg(feature = "jiff")]
-    Date,
+    JiffDate,
 
     /// A representation of civil “wall clock” time.
     /// See [`jiff::civil::Time`].
     #[cfg(feature = "jiff")]
-    Time,
+    JiffTime,
 
     /// A representation of a civil datetime in the Gregorian calendar.
     /// See [`jiff::civil::DateTime`].
     #[cfg(feature = "jiff")]
-    DateTime,
+    JiffDateTime,
+
+    #[cfg(feature = "chrono")]
+    ChronoDateTimeUtc,
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveDateTime,
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveDate,
+
+    #[cfg(feature = "chrono")]
+    ChronoNaiveTime,
 
     /// The null type can be cast to any type.
     ///
@@ -254,6 +266,11 @@ impl Type {
 
         #[cfg(feature = "jiff")]
         if let Some(value) = self.cast_jiff(&value)? {
+            return Ok(value);
+        }
+
+        #[cfg(feature = "chrono")]
+        if let Some(value) = self.cast_chrono(&value)? {
             return Ok(value);
         }
 
