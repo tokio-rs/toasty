@@ -25,6 +25,7 @@ impl<M: Model> Cursor<M> {
     pub async fn next(&mut self) -> Option<Result<M, Error>> {
         Some(match self.values.next().await? {
             Ok(stmt::Value::Record(row)) => {
+                println!("row={row:#?}");
                 self.validate_row(&row);
                 M::load(row)
             }

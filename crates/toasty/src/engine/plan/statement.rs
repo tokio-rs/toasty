@@ -180,53 +180,62 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         hir::Arg::Ref {
                             stmt_id: target_id,
                             returning_input,
+                            batch_load_index,
+                            target_expr_ref,
                             ..
                         } => {
                             assert!(returning_input.get().is_none());
 
+                            let target_stmt_info = &self.planner.hir[target_id];
+                            let back_ref = &target_stmt_info.back_refs[&self.stmt_id];
+
                             // Find the node providing the data for the ref
-                            let node_id = self.planner.hir[target_id].back_refs[&self.stmt_id]
-                                .node_id
-                                .get()
-                                .unwrap();
+                            let node_id = back_ref.node_id.get().unwrap();
+
+                            // Find the column
+                            let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
 
                             let (index, _) = self.returning.inputs.insert_full(node_id);
-                            assert_eq!(index, 0, "TODO");
                             returning_input.set(Some(index));
 
-                            *expr = stmt::ExprArg {
-                                position: index,
-                                nesting: if is_insert_returning_projection { 1 } else { 0 },
-                            }
-                            .into();
+                            *expr = if is_insert_returning_projection {
+                                let row = batch_load_index.get().unwrap();
+                                stmt::Expr::project(
+                                    stmt::ExprArg {
+                                        position: index,
+                                        nesting: 1,
+                                    },
+                                    [row, column],
+                                )
+                                .into()
+                            } else {
+                                stmt::ExprArg {
+                                    position: index,
+                                    nesting: 0,
+                                }
+                                .into()
+                            };
                         }
                         hir::Arg::Sub {
                             stmt_id: target_id,
                             input,
                             returning: true,
                         } => {
+                            /*
                             // If there are back-refs, the exec statement is preloading
                             // data for a NestedMerge. Sub-statements will be loaded
                             // during the NestedMerge.
                             if !self.stmt_info.back_refs.is_empty() {
                                 return;
                             }
+                            */
 
                             assert!(input.get().is_none());
 
                             let target_stmt_info = &self.planner.hir[target_id];
+                            let target_node_id = target_stmt_info.output.get().expect("bug");
 
-                            let node_id = if target_stmt_info.independent {
-                                target_stmt_info.output.get().expect("bug")
-                            } else {
-                                todo!(
-                                    "what is going on? arg={:#?}; stmt={:#?}",
-                                    self.stmt_info.args[expr_arg.position],
-                                    target_stmt_info,
-                                );
-                            };
-
-                            let (index, _) = self.returning.inputs.insert_full(node_id);
+                            let (index, _) = self.returning.inputs.insert_full(target_node_id);
                             input.set(Some(index));
 
                             *expr = stmt::Expr::arg(index);
@@ -553,6 +562,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                                 self.load_data
                             );
 
+                            // TODO: this work seems to be duplicated in the returning as well.
                             let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
                             let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
 
