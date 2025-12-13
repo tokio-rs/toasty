@@ -1,7 +1,7 @@
 use super::{
-    ddb_expression, ddb_key, ddb_to_val, ddb_val, operation, stmt, Delete, DynamoDb, ExprAttrs,
-    Put, Result, ReturnValuesOnConditionCheckFailure, Schema, SdkError, TransactWriteItem, Update,
-    UpdateItemError,
+    ddb_expression, ddb_key, operation, stmt, Delete, DynamoDb, ExprAttrs, Put, Result,
+    ReturnValuesOnConditionCheckFailure, Schema, SdkError, TransactWriteItem, Update,
+    UpdateItemError, Value,
 };
 use std::{collections::HashMap, fmt::Write};
 use toasty_core::{driver::Response, stmt::ExprContext};
@@ -234,7 +234,7 @@ impl DynamoDb {
                                 };
 
                                 // TODO: this probably could be made cheaper if needed
-                                if ddb_to_val(&column.ty, &prev) != *value {
+                                if Value::from_ddb(&column.ty, &prev).into_inner() != *value {
                                     updated_unique_attrs.insert(column.id, prev);
                                 }
                             } else {
@@ -324,7 +324,10 @@ impl DynamoDb {
                             };
 
                             if !value.is_null() {
-                                index_insert_items.insert(column.name.clone(), ddb_val(value));
+                                index_insert_items.insert(
+                                    column.name.clone(),
+                                    Value::from(value.clone()).to_ddb(),
+                                );
                             }
                         }
 
@@ -339,7 +342,10 @@ impl DynamoDb {
                                 stmt::Value::Record(record) => &record[index],
                                 value => value,
                             };
-                            index_insert_items.insert(column.name.clone(), ddb_val(key_field));
+                            index_insert_items.insert(
+                                column.name.clone(),
+                                Value::from(key_field.clone()).to_ddb(),
+                            );
                         }
 
                         // Ensure value is unique
