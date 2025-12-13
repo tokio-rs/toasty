@@ -1,5 +1,5 @@
 use super::{
-    ddb_val, stmt, DynamoDb, Put, PutRequest, Result, Schema, TransactWriteItem, WriteRequest,
+    stmt, DynamoDb, Put, PutRequest, Result, Schema, TransactWriteItem, Value, WriteRequest,
 };
 use std::collections::HashMap;
 use toasty_core::driver::Response;
@@ -45,7 +45,7 @@ impl DynamoDb {
                 let value = entry.as_value();
 
                 if !value.is_null() {
-                    items.insert(column.name.clone(), ddb_val(value));
+                    items.insert(column.name.clone(), Value::from(value.clone()).to_ddb());
                 }
             }
             insert_items.push(items);

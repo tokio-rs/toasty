@@ -1,11 +1,7 @@
 mod value;
 pub(crate) use value::Value;
 
-use postgres::{
-    tls::MakeTlsConnect,
-    types::ToSql,
-    Socket,
-};
+use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
 use std::sync::Arc;
 use toasty_core::{
     driver::{Capability, Operation, Response},
@@ -191,12 +187,7 @@ impl Driver for PostgreSQL {
 
         let args = params
             .iter()
-            .map(|param| {
-                (
-                    param as &(dyn ToSql + Sync),
-                    param.ty(),
-                )
-            })
+            .map(|param| (param as &(dyn ToSql + Sync), param.postgres_ty()))
             .collect::<Vec<_>>();
 
         let rows = self.client.query_typed(&sql_as_str, &args).await?;

@@ -85,7 +85,9 @@ impl Value {
         } else if column.type_() == &Type::BYTEA {
             row.get::<usize, Option<Vec<u8>>>(index)
                 .map(|v| match expected_ty {
-                    stmt::Type::Uuid => stmt::Value::Uuid(v.try_into().expect("invalid uuid bytes")),
+                    stmt::Type::Uuid => {
+                        stmt::Value::Uuid(v.try_into().expect("invalid uuid bytes"))
+                    }
                     stmt::Type::Bytes => stmt::Value::Bytes(v),
                     _ => todo!(
                         "unsupported conversion from {:#?} to {expected_ty:?}",
@@ -159,7 +161,7 @@ impl Value {
     }
 
     /// Returns the PostgreSQL type for this value.
-    pub fn ty(&self) -> Type {
+    pub fn postgres_ty(&self) -> Type {
         match &self.0 {
             stmt::Value::Bool(_) => Type::BOOL,
             stmt::Value::I8(_) => Type::INT2,
