@@ -58,7 +58,7 @@ heck = "0.5.0"
 indexmap = "2.6.0"
 index_vec = "0.1.4"
 jiff = "0.2.16"
-chrono ={ version = "0.4", features = ["std"] }
+chrono = { version = "0.4", features = ["std"], default-feature = false }
 mysql_async = { version = "0.35.1", default-features = false, features = [
     "minimal",
     "native-tls-tls",
