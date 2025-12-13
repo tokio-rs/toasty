@@ -1,10 +1,8 @@
-use aws_sdk_dynamodb::types::{AttributeValue, ScalarAttributeType};
+use aws_sdk_dynamodb::types::AttributeValue;
 use toasty_core::{
     schema::app,
     stmt::{self, Value as CoreValue},
 };
-
-use crate::TypeExt;
 
 #[derive(Debug)]
 pub struct Value(CoreValue);
