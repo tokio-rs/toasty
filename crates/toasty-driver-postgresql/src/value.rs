@@ -160,34 +160,9 @@ impl Value {
         Value(core_value)
     }
 
-    /// Returns the PostgreSQL type for this value.
-    pub fn postgres_ty(&self) -> Type {
-        match &self.0 {
-            stmt::Value::Bool(_) => Type::BOOL,
-            stmt::Value::I8(_) => Type::INT2,
-            stmt::Value::I16(_) => Type::INT2,
-            stmt::Value::I32(_) => Type::INT4,
-            stmt::Value::I64(_) => Type::INT8,
-            stmt::Value::U8(_) => Type::INT2,
-            stmt::Value::U16(_) => Type::INT4,
-            stmt::Value::U32(_) => Type::INT8,
-            stmt::Value::U64(_) => Type::INT8,
-            stmt::Value::Id(_) => Type::TEXT,
-            stmt::Value::String(_) => Type::TEXT,
-            stmt::Value::Uuid(_) => Type::UUID,
-            stmt::Value::Null => Type::TEXT, // Default for NULL values
-            #[cfg(feature = "rust_decimal")]
-            stmt::Value::Decimal(_) => Type::NUMERIC,
-            #[cfg(feature = "jiff")]
-            stmt::Value::Timestamp(_) => Type::TIMESTAMPTZ,
-            #[cfg(feature = "jiff")]
-            stmt::Value::Date(_) => Type::DATE,
-            #[cfg(feature = "jiff")]
-            stmt::Value::Time(_) => Type::TIME,
-            #[cfg(feature = "jiff")]
-            stmt::Value::DateTime(_) => Type::TIMESTAMP,
-            _ => todo!("ty: {:#?}", self.0),
-        }
+    /// Returns the inferred Toasty type for this value.
+    pub fn infer_ty(&self) -> stmt::Type {
+        self.0.infer_ty()
     }
 }
 

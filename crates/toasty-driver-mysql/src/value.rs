@@ -20,6 +20,24 @@ impl Value {
     pub fn from_sql(i: usize, row: &mut Row, column: &Column, ty: &stmt::Type) -> Self {
         use mysql_async::consts::ColumnType::*;
 
+        /// Helper function to extract a value from a MySQL row or return Null if the value is NULL
+        fn extract_or_null<T>(
+            row: &mut Row,
+            i: usize,
+            constructor: fn(T) -> stmt::Value,
+        ) -> stmt::Value
+        where
+            T: mysql_async::prelude::FromValue,
+        {
+            match row.take_opt(i).expect("value missing") {
+                Ok(v) => constructor(v),
+                Err(e) => {
+                    assert!(matches!(e.0, mysql_async::Value::NULL));
+                    stmt::Value::Null
+                }
+            }
+        }
+
         let core_value = match column.column_type() {
             MYSQL_TYPE_NULL => stmt::Value::Null,
 
@@ -207,20 +225,6 @@ impl ToValue for Value {
                 )
             }
             value => todo!("{:#?}", value),
-        }
-    }
-}
-
-/// Helper function to extract a value from a MySQL row or return Null if the value is NULL
-fn extract_or_null<T>(row: &mut Row, i: usize, constructor: fn(T) -> stmt::Value) -> stmt::Value
-where
-    T: mysql_async::prelude::FromValue,
-{
-    match row.take_opt(i).expect("value missing") {
-        Ok(v) => constructor(v),
-        Err(e) => {
-            assert!(matches!(e.0, mysql_async::Value::NULL));
-            stmt::Value::Null
         }
     }
 }

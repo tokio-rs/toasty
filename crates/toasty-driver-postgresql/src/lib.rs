@@ -1,5 +1,9 @@
+mod r#type;
 mod value;
+
 pub(crate) use value::Value;
+
+use r#type::TypeExt;
 
 use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
 use std::sync::Arc;
@@ -187,7 +191,12 @@ impl Driver for PostgreSQL {
 
         let args = params
             .iter()
-            .map(|param| (param as &(dyn ToSql + Sync), param.postgres_ty()))
+            .map(|param| {
+                (
+                    param as &(dyn ToSql + Sync),
+                    param.infer_ty().to_postgres_type(),
+                )
+            })
             .collect::<Vec<_>>();
 
         let rows = self.client.query_typed(&sql_as_str, &args).await?;
