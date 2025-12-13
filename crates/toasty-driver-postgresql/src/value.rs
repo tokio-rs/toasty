@@ -166,128 +166,53 @@ impl ToSql for Value {
     where
         Self: Sized,
     {
-        match &self.0 {
-            stmt::Value::Bool(value) => value.to_sql(ty, out),
-            stmt::Value::I8(value) => match *ty {
-                Type::INT2 => {
-                    let value = *value as i16;
-                    value.to_sql(ty, out)
+        match (&self.0, ty) {
+            (stmt::Value::Bool(value), _) => value.to_sql(ty, out),
+            (stmt::Value::I8(value), &Type::INT2) => (*value as i16).to_sql(ty, out),
+            (stmt::Value::I8(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+            (stmt::Value::I8(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+            (stmt::Value::I16(value), &Type::INT2) => value.to_sql(ty, out),
+            (stmt::Value::I16(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+            (stmt::Value::I16(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+            (stmt::Value::I32(value), &Type::INT4) => value.to_sql(ty, out),
+            (stmt::Value::I32(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+            (stmt::Value::I64(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+            (stmt::Value::I64(value), &Type::INT8) => value.to_sql(ty, out),
+            (stmt::Value::U8(value), &Type::INT2) => (*value as i16).to_sql(ty, out),
+            (stmt::Value::U8(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+            (stmt::Value::U8(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+            (stmt::Value::U16(value), &Type::INT4) => (*value as i32).to_sql(ty, out),
+            (stmt::Value::U16(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+            (stmt::Value::U32(value), &Type::INT8) => (*value as i64).to_sql(ty, out),
+            (stmt::Value::U64(value), &Type::INT8) => {
+                if *value > i64::MAX as u64 {
+                    return Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!(
+                            "u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT",
+                            value,
+                            i64::MAX
+                        ),
+                    )));
                 }
-                Type::INT4 => {
-                    let value = *value as i32;
-                    value.to_sql(ty, out)
-                }
-                Type::INT8 => {
-                    let value = *value as i64;
-                    value.to_sql(ty, out)
-                }
-                _ => todo!(),
-            },
-            stmt::Value::I16(value) => match *ty {
-                Type::INT2 => value.to_sql(ty, out),
-                Type::INT4 => {
-                    let value = *value as i32;
-                    value.to_sql(ty, out)
-                }
-                Type::INT8 => {
-                    let value = *value as i64;
-                    value.to_sql(ty, out)
-                }
-                _ => todo!(),
-            },
-            stmt::Value::I32(value) => match *ty {
-                Type::INT4 => value.to_sql(ty, out),
-                Type::INT8 => {
-                    let value = *value as i64;
-                    value.to_sql(ty, out)
-                }
-                _ => todo!(),
-            },
-            // TODO: we need to do better type management
-            stmt::Value::I64(value) => match *ty {
-                Type::INT4 => {
-                    let value = *value as i32;
-                    value.to_sql(ty, out)
-                }
-                Type::INT8 => value.to_sql(ty, out),
-                _ => todo!("ty={ty:#?}"),
-            },
-            stmt::Value::U8(value) => match *ty {
-                Type::INT2 => {
-                    // u8 is now stored in i16 (SMALLINT)
-                    let value = *value as i16;
-                    value.to_sql(ty, out)
-                }
-                Type::INT4 => {
-                    let value = *value as i32;
-                    value.to_sql(ty, out)
-                }
-                Type::INT8 => {
-                    let value = *value as i64;
-                    value.to_sql(ty, out)
-                }
-                _ => todo!(),
-            },
-            stmt::Value::U16(value) => match *ty {
-                Type::INT4 => {
-                    // u16 is now stored in i32 (INTEGER)
-                    let value = *value as i32;
-                    value.to_sql(ty, out)
-                }
-                Type::INT8 => {
-                    let value = *value as i64;
-                    value.to_sql(ty, out)
-                }
-                _ => todo!("Unsupported PostgreSQL type for u16: {:?}", ty),
-            },
-            stmt::Value::U32(value) => match *ty {
-                Type::INT8 => {
-                    // u32 stored in BIGINT
-                    let value = *value as i64;
-                    value.to_sql(ty, out)
-                }
-                _ => todo!("Unsupported PostgreSQL type for u32: {:?}", ty),
-            },
-            stmt::Value::U64(value) => match *ty {
-                Type::INT8 => {
-                    // PostgreSQL BIGINT is signed, so validate u64 fits in i64 range
-                    if *value > i64::MAX as u64 {
-                        return Err(Box::new(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            format!("u64 value {} exceeds i64::MAX ({}), cannot store in PostgreSQL BIGINT",
-                                value, i64::MAX)
-                        )));
-                    }
-                    let value = *value as i64;
-                    value.to_sql(ty, out)
-                }
-                _ => todo!("Unsupported PostgreSQL type for u64: {:?}", ty),
-            },
-            stmt::Value::Id(value) => value.to_string().to_sql(ty, out),
-            stmt::Value::Null => Ok(IsNull::Yes),
-            stmt::Value::String(value) => value.to_sql(ty, out),
-            stmt::Value::Bytes(value) => match *ty {
-                Type::BYTEA => value.to_sql(ty, out),
-                _ => todo!("Unsupported PostgreSQL type for bytes: {:?}", ty),
-            },
-            stmt::Value::Uuid(value) => match *ty {
-                Type::UUID => value.to_sql(ty, out),
-                Type::BYTEA => value.as_bytes().to_sql(ty, out),
-                Type::TEXT => value.to_string().to_sql(ty, out),
-                Type::VARCHAR => value.to_string().to_sql(ty, out),
-                _ => todo!("Unsupported PostgreSQL type for UUID: {:?}", ty),
-            },
+                (*value as i64).to_sql(ty, out)
+            }
+            (stmt::Value::Id(value), _) => value.to_string().to_sql(ty, out),
+            (stmt::Value::Null, _) => Ok(IsNull::Yes),
+            (stmt::Value::String(value), _) => value.to_sql(ty, out),
+            (stmt::Value::Bytes(value), &Type::BYTEA) => value.to_sql(ty, out),
+            (stmt::Value::Uuid(value), &Type::UUID) => value.to_sql(ty, out),
             #[cfg(feature = "rust_decimal")]
-            stmt::Value::Decimal(value) => value.to_sql(ty, out),
+            (stmt::Value::Decimal(value), _) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            stmt::Value::Timestamp(value) => value.to_sql(ty, out),
+            (stmt::Value::Timestamp(value), _) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            stmt::Value::Date(value) => value.to_sql(ty, out),
+            (stmt::Value::Date(value), _) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            stmt::Value::Time(value) => value.to_sql(ty, out),
+            (stmt::Value::Time(value), _) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            stmt::Value::DateTime(value) => value.to_sql(ty, out),
-            value => todo!("{value:#?}"),
+            (stmt::Value::DateTime(value), _) => value.to_sql(ty, out),
+            (value, _) => todo!("unsupported Value for PostgreSQL type: {value:#?}, type: {ty:#?}"),
         }
     }
 
