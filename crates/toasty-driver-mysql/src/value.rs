@@ -18,7 +18,7 @@ impl Value {
 
     /// Converts a MySQL value within a row to a Toasty value.
     pub fn from_sql(i: usize, row: &mut Row, column: &Column, ty: &stmt::Type) -> Self {
-        use mysql_async::consts::ColumnType::*;
+        use mysql_async::consts::ColumnType as CT;
 
         /// Helper function to extract a value from a MySQL row or return Null if the value is NULL
         fn extract_or_null<T>(
@@ -39,19 +39,23 @@ impl Value {
         }
 
         let core_value = match column.column_type() {
-            MYSQL_TYPE_NULL => stmt::Value::Null,
+            CT::MYSQL_TYPE_NULL => stmt::Value::Null,
 
-            MYSQL_TYPE_VARCHAR | MYSQL_TYPE_VAR_STRING | MYSQL_TYPE_STRING | MYSQL_TYPE_BLOB => {
-                match ty {
-                    stmt::Type::String => extract_or_null(row, i, stmt::Value::String),
-                    stmt::Type::Uuid => extract_or_null(row, i, stmt::Value::Uuid),
-                    stmt::Type::Bytes => extract_or_null(row, i, stmt::Value::Bytes),
-                    _ => todo!("ty={ty:#?}"),
-                }
-            }
+            CT::MYSQL_TYPE_VARCHAR
+            | CT::MYSQL_TYPE_VAR_STRING
+            | CT::MYSQL_TYPE_STRING
+            | CT::MYSQL_TYPE_BLOB => match ty {
+                stmt::Type::String => extract_or_null(row, i, stmt::Value::String),
+                stmt::Type::Uuid => extract_or_null(row, i, stmt::Value::Uuid),
+                stmt::Type::Bytes => extract_or_null(row, i, stmt::Value::Bytes),
+                _ => todo!("ty={ty:#?}"),
+            },
 
-            MYSQL_TYPE_TINY | MYSQL_TYPE_SHORT | MYSQL_TYPE_INT24 | MYSQL_TYPE_LONG
-            | MYSQL_TYPE_LONGLONG => match ty {
+            CT::MYSQL_TYPE_TINY
+            | CT::MYSQL_TYPE_SHORT
+            | CT::MYSQL_TYPE_INT24
+            | CT::MYSQL_TYPE_LONG
+            | CT::MYSQL_TYPE_LONGLONG => match ty {
                 stmt::Type::Bool => extract_or_null(row, i, stmt::Value::Bool),
                 stmt::Type::I8 => extract_or_null(row, i, stmt::Value::I8),
                 stmt::Type::I16 => extract_or_null(row, i, stmt::Value::I16),
@@ -65,7 +69,7 @@ impl Value {
             },
 
             #[cfg(feature = "jiff")]
-            MYSQL_TYPE_TIMESTAMP | MYSQL_TYPE_DATETIME => {
+            CT::MYSQL_TYPE_TIMESTAMP | CT::MYSQL_TYPE_DATETIME => {
                 match row.take_opt(i).expect("value missing") {
                     Ok(mysql_async::Value::Date(
                         year,
@@ -99,7 +103,7 @@ impl Value {
             }
 
             #[cfg(feature = "jiff")]
-            MYSQL_TYPE_DATE => match row.take_opt(i).expect("value missing") {
+            CT::MYSQL_TYPE_DATE => match row.take_opt(i).expect("value missing") {
                 Ok(mysql_async::Value::Date(year, month, day, _, _, _, _)) => stmt::Value::Date(
                     jiff::civil::Date::constant(year as i16, month as i8, day as i8),
                 ),
@@ -108,7 +112,7 @@ impl Value {
             },
 
             #[cfg(feature = "jiff")]
-            MYSQL_TYPE_TIME => {
+            CT::MYSQL_TYPE_TIME => {
                 match row.take_opt(i).expect("value missing") {
                     Ok(mysql_async::Value::Time(
                         _is_negative,
@@ -130,7 +134,7 @@ impl Value {
                 }
             }
 
-            MYSQL_TYPE_NEWDECIMAL | MYSQL_TYPE_DECIMAL => match ty {
+            CT::MYSQL_TYPE_NEWDECIMAL | CT::MYSQL_TYPE_DECIMAL => match ty {
                 #[cfg(feature = "rust_decimal")]
                 stmt::Type::Decimal => extract_or_null(row, i, |s: String| {
                     stmt::Value::Decimal(s.parse().expect("failed to parse Decimal from MySQL"))

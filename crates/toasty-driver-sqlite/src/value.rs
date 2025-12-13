@@ -55,24 +55,24 @@ impl Value {
 
 impl ToSql for Value {
     fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        use stmt::Value::*;
+        use stmt::Value;
 
         match &self.0 {
-            Bool(true) => Ok(ToSqlOutput::Owned(SqlValue::Integer(1))),
-            Bool(false) => Ok(ToSqlOutput::Owned(SqlValue::Integer(0))),
-            Id(v) => Ok(ToSqlOutput::Owned(v.to_string().into())),
-            I8(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
-            I16(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
-            I32(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
-            I64(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v))),
-            U8(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
-            U16(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
-            U32(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
-            U64(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
-            String(v) => Ok(ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes()))),
-            Bytes(v) => Ok(ToSqlOutput::Borrowed(ValueRef::Blob(&v[..]))),
-            Null => Ok(ToSqlOutput::Owned(SqlValue::Null)),
-            Enum(value_enum) => {
+            Value::Bool(true) => Ok(ToSqlOutput::Owned(SqlValue::Integer(1))),
+            Value::Bool(false) => Ok(ToSqlOutput::Owned(SqlValue::Integer(0))),
+            Value::Id(v) => Ok(ToSqlOutput::Owned(v.to_string().into())),
+            Value::I8(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
+            Value::I16(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
+            Value::I32(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
+            Value::I64(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v))),
+            Value::U8(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
+            Value::U16(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
+            Value::U32(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
+            Value::U64(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
+            Value::String(v) => Ok(ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes()))),
+            Value::Bytes(v) => Ok(ToSqlOutput::Borrowed(ValueRef::Blob(&v[..]))),
+            Value::Null => Ok(ToSqlOutput::Owned(SqlValue::Null)),
+            Value::Enum(value_enum) => {
                 let v = match &value_enum.fields[..] {
                     [] => V::Null,
                     [stmt::Value::Bool(v)] => V::Bool(*v),

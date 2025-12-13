@@ -111,15 +111,13 @@ impl Driver for DynamoDb {
 
 impl DynamoDb {
     async fn exec2(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        use Operation::*;
-
         match op {
-            GetByKey(op) => self.exec_get_by_key(schema, op).await,
-            QueryPk(op) => self.exec_query_pk(schema, op).await,
-            DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
-            UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
-            FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
-            QuerySql(op) => match op.stmt {
+            Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
+            Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
+            Operation::DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
+            Operation::UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
+            Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
+            Operation::QuerySql(op) => match op.stmt {
                 stmt::Statement::Insert(op) => self.exec_insert(schema, op).await,
                 _ => todo!("op={:#?}", op),
             },
