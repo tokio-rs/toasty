@@ -1,6 +1,11 @@
-use crate::{db::Pool, engine::Engine, Db, Model, Result};
+use crate::{
+    db::{Connect, Pool},
+    engine::Engine,
+    Db, Model, Result,
+};
 
 use toasty_core::{
+    driver::Driver,
     schema::{self, app},
     stmt::{Value, ValueStream},
 };
@@ -37,10 +42,12 @@ impl Builder {
     }
 
     pub async fn connect(&mut self, url: &str) -> Result<Db> {
-        self.build(Pool::connect(url).await?).await
+        self.build(Connect::new(url)?).await
     }
 
-    pub async fn build(&mut self, pool: Pool) -> Result<Db> {
+    pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
+        let pool = Pool::new(driver).await?;
+
         let schema = self
             .core
             .build(self.build_app_schema()?, pool.capability())?;
