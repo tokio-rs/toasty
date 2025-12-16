@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tempfile::NamedTempFile;
-use toasty::db;
+use toasty::{db, driver::Capability};
 
 use crate::Setup;
 

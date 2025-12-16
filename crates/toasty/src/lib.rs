@@ -48,3 +48,7 @@ pub mod codegen_support {
         stmt::{Type, Value, ValueRecord, ValueStream},
     };
 }
+
+pub mod driver {
+    pub use toasty_core::driver::Capability;
+}
