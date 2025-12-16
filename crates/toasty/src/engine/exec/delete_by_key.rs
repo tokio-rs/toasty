@@ -1,7 +1,7 @@
 use toasty_core::{
     driver::{operation, Rows},
     schema::db::TableId,
-    stmt, Connection,
+    stmt,
 };
 
 use crate::engine::exec::{Action, Output, VarId};

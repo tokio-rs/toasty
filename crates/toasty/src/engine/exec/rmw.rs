@@ -8,7 +8,6 @@ use toasty_core::{
         Rows,
     },
     stmt::{self, ValueStream},
-    Connection,
 };
 
 #[derive(Debug)]

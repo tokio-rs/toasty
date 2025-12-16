@@ -3,10 +3,11 @@ pub(crate) use value::Value;
 
 use rusqlite::Connection as RusqliteConnection;
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 use toasty_core::{
+    async_trait,
     driver::{
         operation::{Operation, Transaction},
         Capability, Driver, Response,
@@ -18,17 +19,20 @@ use toasty_sql as sql;
 use url::Url;
 
 #[derive(Debug)]
-pub enum Sqlite<'a> {
-    Url(&'a str),
+pub enum Sqlite {
+    Url(String),
     InMemory,
-    File(&'a Path),
+    File(PathBuf),
 }
 
-impl<'a> Driver for Sqlite<'a> {
+#[async_trait]
+impl Driver for Sqlite {
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::Connection>> {
-        match self {
-            Self::Url(url) => Connection::connect(url)?.into(),
-        }
+        Ok(match self {
+            Self::Url(url) => Box::new(Connection::connect(url)?),
+            Self::InMemory => Box::new(Connection::in_memory()),
+            Self::File(path) => Box::new(Connection::open(path)?),
+        })
     }
 }
 

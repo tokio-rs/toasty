@@ -1,7 +1,7 @@
 use crate::Result;
 
-use toasty_core::driver::Driver;
 pub use toasty_core::driver::{operation::Operation, Capability, Connection, Response};
+use toasty_core::{async_trait, driver::Driver};
 
 use url::Url;
 
@@ -18,61 +18,33 @@ impl Connect {
     }
 }
 
+#[async_trait]
 impl Driver for Connect {
     async fn connect(&self) -> Result<Box<dyn Connection>> {
         match self.url.scheme() {
+            #[cfg(feature = "dynamodb")]
             "dynamodb" => toasty_driver_dynamodb::DynamoDb::connect(url.as_str()),
             #[cfg(not(feature = "dynamodb"))]
             "dynamodb" => anyhow::bail!("`dynamodb` feature not enabled"),
 
+            #[cfg(feature = "mysql")]
             "mysql" => connect_mysql(&self.url).await,
+            #[cfg(feature = "postgresql")]
             "postgresql" => connect_postgresql(&self.url).await,
-            "sqlite" => connect_sqlite(&self.url),
+
+            #[cfg(feature = "sqlite")]
+            "sqlite" => {
+                toasty_driver_sqlite::Sqlite::Url(self.url.to_string())
+                    .connect()
+                    .await
+            }
+            #[cfg(not(feature = "sqlite"))]
+            "sqlite" => anyhow::bail!("`sqlite` feature not enabled"),
+
             scheme => Err(anyhow::anyhow!(
-                "unsupported database; schema={scheme}; url={url}"
+                "unsupported database; schema={scheme}; url={}",
+                self.url
             )),
         }
     }
-}
-
-#[cfg(feature = "dynamodb")]
-async fn connect_dynamodb(url: &Url) -> Result<Box<dyn Connection>> {
-    let driver = toasty_driver_dynamodb::DynamoDb::connect(url.as_str()).await?;
-    Ok(Connection(Flavor::DynamoDb(driver)))
-}
-
-#[cfg(not(feature = "dynamodb"))]
-async fn connect_dynamodb(_url: &Url) -> Result<Box<dyn Connection>> {
-    Err(anyhow::anyhow!("`dynamodb` feature not enabled"))
-}
-
-#[cfg(feature = "mysql")]
-async fn connect_mysql(url: &Url) -> Result<Box<dyn Connection>> {
-    let driver = toasty_driver_mysql::MySQL::connect(url.as_str()).await?;
-    Ok(Connection(Flavor::MySQL(driver)))
-}
-
-#[cfg(not(feature = "mysql"))]
-async fn connect_mysql(_url: &Url) -> Result<Box<dyn Connection>> {
-    Err(anyhow::anyhow!("`mysql` feature not enabled"))
-}
-
-#[cfg(feature = "postgresql")]
-async fn connect_postgresql(url: &Url) -> Result<Box<dyn Connection>> {
-    toasty_driver_postgresql::PostgreSQL::connect(url.as_str())
-}
-
-#[cfg(not(feature = "postgresql"))]
-async fn connect_postgresql(_url: &Url) -> Result<Box<dyn Connection>> {
-    Err(anyhow::anyhow!("`postgresql` feature not enabled"))
-}
-
-#[cfg(feature = "sqlite")]
-fn connect_sqlite(url: &Url) -> Result<Box<dyn Connection>> {
-    toasty_driver_sqlite::Connection::connect(url.as_str())
-}
-
-#[cfg(not(feature = "sqlite"))]
-fn connect_sqlite(_url: &Url) -> Result<Box<dyn Connection>> {
-    Err(anyhow::anyhow!("`sqlite` feature not enabled"))
 }

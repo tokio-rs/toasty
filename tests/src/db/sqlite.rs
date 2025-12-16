@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tempfile::NamedTempFile;
-use toasty::{db, driver::Capability};
+use toasty::{
+    db,
+    driver::{Capability, Driver},
+};
 
 use crate::Setup;
 
@@ -113,8 +116,7 @@ impl Default for SetupSqlite {
 impl Setup for SetupSqlite {
     async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Connection>> {
         let url = format!("sqlite:{}", self.temp_db_path);
-        let conn = toasty::db::Connection::connect(&url).await?;
-        Ok(Box::new(conn))
+        Ok(toasty::db::Connect::new(&url)?.connect().await?)
     }
 
     fn configure_builder(&self, _builder: &mut db::Builder) {
