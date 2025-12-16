@@ -9,20 +9,39 @@ use mysql_async::{
 };
 use std::sync::Arc;
 use toasty_core::{
-    driver::{operation::Transaction, Capability, Operation, Response},
+    async_trait,
+    driver::{operation::Transaction, Capability, Driver, Operation, Response},
     schema::db::{Schema, Table},
     stmt::{self, ValueRecord},
-    Connection, Result,
+    Result,
 };
 use toasty_sql as sql;
 use url::Url;
 
 #[derive(Debug)]
 pub struct MySQL {
-    pool: Pool,
+    url: String,
 }
 
 impl MySQL {
+    pub fn new(url: String) -> Self {
+        Self { url }
+    }
+}
+
+#[async_trait]
+impl Driver for MySQL {
+    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
+        Ok(Box::new(Connection::connect(&self.url).await?))
+    }
+}
+
+#[derive(Debug)]
+pub struct Connection {
+    pool: Pool,
+}
+
+impl Connection {
     pub fn new(pool: Pool) -> Self {
         Self { pool }
     }
@@ -112,14 +131,14 @@ impl MySQL {
         Ok(())
     }
 }
-impl From<Pool> for MySQL {
+impl From<Pool> for Connection {
     fn from(pool: Pool) -> Self {
         Self { pool }
     }
 }
 
-#[toasty_core::async_trait]
-impl Connection for MySQL {
+#[async_trait]
+impl toasty_core::driver::Connection for Connection {
     fn capability(&self) -> &'static Capability {
         &Capability::MYSQL
     }

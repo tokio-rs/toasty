@@ -28,7 +28,14 @@ impl Driver for Connect {
             "dynamodb" => anyhow::bail!("`dynamodb` feature not enabled"),
 
             #[cfg(feature = "mysql")]
-            "mysql" => connect_mysql(&self.url).await,
+            "mysql" => {
+                toasty_driver_mysql::MySQL::new(self.url.to_string())
+                    .connect()
+                    .await
+            }
+            #[cfg(not(feature = "mysql"))]
+            "mysql" => anyhow::bail!("`mysql` feature not enabled"),
+
             #[cfg(feature = "postgresql")]
             "postgresql" => {
                 toasty_driver_postgresql::PostgreSQL::new(self.url.to_string())
