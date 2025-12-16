@@ -8,7 +8,7 @@ use crate::{
 use toasty_core::{
     driver::operation,
     schema::db::{ColumnId, TableId},
-    stmt,
+    stmt, Driver,
 };
 
 #[derive(Debug)]
@@ -43,8 +43,7 @@ impl Exec<'_> {
         }
 
         let res = self
-            .engine
-            .driver
+            .connection
             .exec(
                 &self.engine.schema.db,
                 operation::QueryPk {

@@ -158,12 +158,8 @@ impl From<Client> for PostgreSQL {
 
 #[toasty_core::async_trait]
 impl Driver for PostgreSQL {
-    fn capability(&self) -> &Capability {
+    fn capability(&self) -> &'static Capability {
         &Capability::POSTGRESQL
-    }
-
-    async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
-        Ok(())
     }
 
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {

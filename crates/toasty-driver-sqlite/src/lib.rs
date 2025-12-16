@@ -58,12 +58,8 @@ impl Sqlite {
 
 #[toasty_core::async_trait]
 impl Driver for Sqlite {
-    fn capability(&self) -> &Capability {
+    fn capability(&self) -> &'static Capability {
         &Capability::SQLITE
-    }
-
-    async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
-        Ok(())
     }
 
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {

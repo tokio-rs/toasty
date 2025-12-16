@@ -1,5 +1,9 @@
 mod builder;
+mod connection;
+mod pool;
+
 pub use builder::Builder;
+pub(crate) use pool::*;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -7,7 +11,7 @@ use tokio::{
 
 use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
 
-use toasty_core::{stmt::ValueStream, Schema};
+use toasty_core::{stmt::ValueStream, Driver, Schema};
 
 #[derive(Debug)]
 pub struct Db {
@@ -98,7 +102,12 @@ impl Db {
 
     /// TODO: remove
     pub async fn reset_db(&self) -> Result<()> {
-        self.engine.driver.reset_db(&self.engine.schema.db).await
+        self.engine
+            .pool
+            .get()
+            .await?
+            .reset_db(&self.engine.schema.db)
+            .await
     }
 
     pub fn schema(&self) -> &Schema {

@@ -88,12 +88,8 @@ impl DynamoDb {
 
 #[toasty_core::async_trait]
 impl Driver for DynamoDb {
-    fn capability(&self) -> &Capability {
+    fn capability(&self) -> &'static Capability {
         &Capability::DYNAMODB
-    }
-
-    async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
-        Ok(())
     }
 
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {

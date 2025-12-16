@@ -14,12 +14,12 @@ use simplify::Simplify;
 mod ty;
 mod verify;
 
-use crate::Result;
+use crate::{db::Pool, Result};
 use std::sync::Arc;
 use toasty_core::{
     driver::Capability,
     stmt::{self, Statement, ValueStream},
-    Driver, Schema,
+    Schema,
 };
 
 /// The query execution engine.
@@ -39,19 +39,19 @@ pub(crate) struct Engine {
     /// The schema being managed by this database instance.
     pub(crate) schema: Arc<Schema>,
 
-    /// Handle to the underlying database driver.
-    pub(crate) driver: Arc<dyn Driver>,
+    /// Handle to the connection pool.
+    pub(crate) pool: Arc<Pool>,
 }
 
 impl Engine {
     /// Creates a new [`Engine`] with the given schema and driver.
-    pub(crate) fn new(schema: Arc<Schema>, driver: Arc<dyn Driver>) -> Engine {
-        Engine { schema, driver }
+    pub(crate) fn new(schema: Arc<Schema>, pool: Arc<Pool>) -> Engine {
+        Engine { schema, pool }
     }
 
     /// Returns the driver's capabilities.
     pub(crate) fn capability(&self) -> &Capability {
-        self.driver.capability()
+        self.pool.capability()
     }
 
     /// Executes a statement and returns the result as a value stream.

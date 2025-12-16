@@ -1,10 +1,7 @@
 use crate::Result;
 
 pub use toasty_core::{
-    driver::{
-        operation::{self, Operation},
-        Capability, Driver, Response, Rows,
-    },
+    driver::{operation::Operation, Capability, Driver, Response},
     schema::db::Schema,
 };
 
@@ -110,14 +107,8 @@ macro_rules! match_db {
 
 #[toasty_core::async_trait]
 impl Driver for Connection {
-    fn capability(&self) -> &Capability {
+    fn capability(&self) -> &'static Capability {
         match_db!(self, ref driver => driver.capability())
-    }
-
-    async fn register_schema(&mut self, schema: &Schema) -> Result<()> {
-        #[allow(unused_variables)]
-        let schema = schema;
-        match_db!(self, ref mut driver => driver.register_schema(schema).await)
     }
 
     async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {

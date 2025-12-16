@@ -14,10 +14,7 @@ use std::{fmt::Debug, sync::Arc};
 #[async_trait]
 pub trait Driver: Debug + Send + Sync + 'static {
     /// Describes the driver's capability, which informs the query planner.
-    fn capability(&self) -> &Capability;
-
-    /// Register the schema with the driver.
-    async fn register_schema(&mut self, schema: &Schema) -> crate::Result<()>;
+    fn capability(&self) -> &'static Capability;
 
     /// Execute a database operation
     async fn exec(&self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response>;

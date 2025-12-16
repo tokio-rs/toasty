@@ -1,6 +1,6 @@
 use toasty_core::{
     driver::{operation, Rows},
-    stmt,
+    stmt, Driver,
 };
 
 use crate::{
@@ -95,8 +95,7 @@ impl Exec<'_> {
         };
 
         let mut res = self
-            .engine
-            .driver
+            .connection
             .exec(&self.engine.schema.db, op.into())
             .await?;
 

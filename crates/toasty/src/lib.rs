@@ -7,9 +7,6 @@ pub use cursor::Cursor;
 pub mod db;
 pub use db::Db;
 
-// TODO: move to `db` module
-pub mod driver;
-
 mod engine;
 
 mod model;

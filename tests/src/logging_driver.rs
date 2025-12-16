@@ -43,10 +43,6 @@ impl Driver for LoggingDriver {
         self.inner.capability()
     }
 
-    async fn register_schema(&mut self, schema: &Schema) -> Result<()> {
-        self.inner.register_schema(schema).await
-    }
-
     async fn exec(&self, schema: &Arc<Schema>, operation: Operation) -> Result<Response> {
         // Clone the operation for logging
         let operation_clone = operation.clone();

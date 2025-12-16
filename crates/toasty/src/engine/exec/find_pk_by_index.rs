@@ -1,7 +1,7 @@
 use toasty_core::{
     driver::{operation, Rows},
     schema::db::{IndexId, TableId},
-    stmt,
+    stmt, Driver,
 };
 
 use crate::{
@@ -53,8 +53,7 @@ impl Exec<'_> {
         }
 
         let res = self
-            .engine
-            .driver
+            .connection
             .exec(
                 &self.engine.schema.db,
                 operation::FindPkByIndex {

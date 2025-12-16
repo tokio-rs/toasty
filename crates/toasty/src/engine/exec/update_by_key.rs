@@ -1,12 +1,12 @@
 use crate::{
-    driver::Rows,
     engine::exec::{Action, Exec, Output, VarId},
     Result,
 };
 use toasty_core::{
-    driver::operation,
+    driver::{operation, Rows},
     schema::db::TableId,
     stmt::{self, ValueStream},
+    Driver,
 };
 
 #[derive(Debug, Clone)]
@@ -61,8 +61,7 @@ impl Exec<'_> {
             };
 
             let res = self
-                .engine
-                .driver
+                .connection
                 .exec(&self.engine.schema.db, op.into())
                 .await?;
 
