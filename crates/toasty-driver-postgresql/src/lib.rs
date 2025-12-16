@@ -149,7 +149,12 @@ impl Connection {
     }
 
     /// Drops a table.
-    pub async fn drop_table(&mut self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
+    pub async fn drop_table(
+        &mut self,
+        schema: &Schema,
+        table: &Table,
+        if_exists: bool,
+    ) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
         let mut params = Vec::new();
 

@@ -7,8 +7,8 @@ mod query_pk;
 mod update_by_key;
 
 use super::{
-    ddb_expression, ddb_key, ddb_key_schema, item_to_record, AttributeDefinition, Connection, Delete,
-    ExprAttrs, GlobalSecondaryIndex, KeysAndAttributes, Projection, ProjectionType,
+    ddb_expression, ddb_key, ddb_key_schema, item_to_record, AttributeDefinition, Connection,
+    Delete, ExprAttrs, GlobalSecondaryIndex, KeysAndAttributes, Projection, ProjectionType,
     ProvisionedThroughput, Put, PutRequest, ReturnValuesOnConditionCheckFailure, SdkError,
     TransactWriteItem, TypeExt, Update, UpdateItemError, Value, WriteRequest,
 };

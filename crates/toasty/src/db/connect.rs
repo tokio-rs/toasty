@@ -6,62 +6,57 @@ use toasty_core::{async_trait, driver::Driver};
 use url::Url;
 
 /// A connection to a database, wrapping the specific driver implementation.
-#[derive(Debug)]
 pub struct Connect {
-    url: Url,
+    driver: Box<dyn Driver>,
+}
+
+impl std::fmt::Debug for Connect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Connect")
+            .field("driver", &self.driver)
+            .finish()
+    }
 }
 
 impl Connect {
     pub fn new(url: &str) -> Result<Self> {
         let url = Url::parse(url)?;
-        Ok(Self { url })
+
+        let driver: Box<dyn Driver> = match url.scheme() {
+            #[cfg(feature = "dynamodb")]
+            "dynamodb" => Box::new(toasty_driver_dynamodb::DynamoDb::new(url.to_string())),
+            #[cfg(not(feature = "dynamodb"))]
+            "dynamodb" => anyhow::bail!("`dynamodb` feature not enabled"),
+
+            #[cfg(feature = "mysql")]
+            "mysql" => Box::new(toasty_driver_mysql::MySQL::new(url.to_string())),
+            #[cfg(not(feature = "mysql"))]
+            "mysql" => anyhow::bail!("`mysql` feature not enabled"),
+
+            #[cfg(feature = "postgresql")]
+            "postgresql" => Box::new(toasty_driver_postgresql::PostgreSQL::new(url.to_string())),
+            #[cfg(not(feature = "postgresql"))]
+            "postgresql" => anyhow::bail!("`postgresql` feature not enabled"),
+
+            #[cfg(feature = "sqlite")]
+            "sqlite" => Box::new(toasty_driver_sqlite::Sqlite::Url(url.to_string())),
+            #[cfg(not(feature = "sqlite"))]
+            "sqlite" => anyhow::bail!("`sqlite` feature not enabled"),
+
+            scheme => {
+                return Err(anyhow::anyhow!(
+                    "unsupported database; schema={scheme}; url={url}"
+                ))
+            }
+        };
+
+        Ok(Self { driver })
     }
 }
 
 #[async_trait]
 impl Driver for Connect {
     async fn connect(&self) -> Result<Box<dyn Connection>> {
-        match self.url.scheme() {
-            #[cfg(feature = "dynamodb")]
-            "dynamodb" => {
-                toasty_driver_dynamodb::DynamoDb::new(self.url.to_string())
-                    .connect()
-                    .await
-            }
-            #[cfg(not(feature = "dynamodb"))]
-            "dynamodb" => anyhow::bail!("`dynamodb` feature not enabled"),
-
-            #[cfg(feature = "mysql")]
-            "mysql" => {
-                toasty_driver_mysql::MySQL::new(self.url.to_string())
-                    .connect()
-                    .await
-            }
-            #[cfg(not(feature = "mysql"))]
-            "mysql" => anyhow::bail!("`mysql` feature not enabled"),
-
-            #[cfg(feature = "postgresql")]
-            "postgresql" => {
-                toasty_driver_postgresql::PostgreSQL::new(self.url.to_string())
-                    .connect()
-                    .await
-            }
-            #[cfg(not(feature = "postgresql"))]
-            "postgresql" => anyhow::bail!("`postgresql` feature not enabled"),
-
-            #[cfg(feature = "sqlite")]
-            "sqlite" => {
-                toasty_driver_sqlite::Sqlite::Url(self.url.to_string())
-                    .connect()
-                    .await
-            }
-            #[cfg(not(feature = "sqlite"))]
-            "sqlite" => anyhow::bail!("`sqlite` feature not enabled"),
-
-            scheme => Err(anyhow::anyhow!(
-                "unsupported database; schema={scheme}; url={}",
-                self.url
-            )),
-        }
+        self.driver.connect().await
     }
 }

@@ -78,7 +78,6 @@ impl toasty_core::driver::Connection for Connection {
     }
 
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret),
             // Operation::Insert(op) => op.stmt.into(),

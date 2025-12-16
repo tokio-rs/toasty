@@ -109,7 +109,12 @@ impl Connection {
     }
 
     /// Drops a table.
-    pub async fn drop_table(&mut self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
+    pub async fn drop_table(
+        &mut self,
+        schema: &Schema,
+        table: &Table,
+        if_exists: bool,
+    ) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
         let mut params = Vec::new();
 
@@ -141,7 +146,6 @@ impl toasty_core::driver::Connection for Connection {
     }
 
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-
         let (sql, ret): (sql::Statement, _) = match op {
             // Operation::Insert(stmt) => stmt.into(),
             Operation::QuerySql(op) => (op.stmt.into(), op.ret),
@@ -171,7 +175,8 @@ impl toasty_core::driver::Connection for Connection {
             .collect::<Vec<_>>();
 
         if ret.is_none() {
-            let count = self.conn
+            let count = self
+                .conn
                 .exec_iter(&sql_as_str, mysql_async::Params::Positional(args))
                 .await?
                 .affected_rows();
