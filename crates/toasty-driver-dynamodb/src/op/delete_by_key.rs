@@ -1,11 +1,11 @@
 use super::{
-    ddb_expression, ddb_key, operation, Delete, DynamoDb, ExprAttrs, Result, Schema, SdkError,
+    ddb_expression, ddb_key, operation, Connection, Delete, ExprAttrs, Result, Schema, SdkError,
     TransactWriteItem,
 };
 use std::collections::HashMap;
 use toasty_core::{driver::Response, stmt::ExprContext};
 
-impl DynamoDb {
+impl Connection {
     pub(crate) async fn exec_delete_by_key(
         &self,
         schema: &Schema,

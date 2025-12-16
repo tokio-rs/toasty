@@ -1,10 +1,10 @@
 use super::{
-    ddb_key, item_to_record, operation, stmt, DynamoDb, KeysAndAttributes, Result, Schema,
+    ddb_key, item_to_record, operation, stmt, Connection, KeysAndAttributes, Result, Schema,
 };
 use std::{collections::HashMap, sync::Arc};
 use toasty_core::driver::Response;
 
-impl DynamoDb {
+impl Connection {
     pub(crate) async fn exec_get_by_key(
         &self,
         schema: &Arc<Schema>,

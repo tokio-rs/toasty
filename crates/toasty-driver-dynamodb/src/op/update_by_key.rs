@@ -1,12 +1,12 @@
 use super::{
-    ddb_expression, ddb_key, operation, stmt, Delete, DynamoDb, ExprAttrs, Put, Result,
+    ddb_expression, ddb_key, operation, stmt, Connection, Delete, ExprAttrs, Put, Result,
     ReturnValuesOnConditionCheckFailure, Schema, SdkError, TransactWriteItem, Update,
     UpdateItemError, Value,
 };
 use std::{collections::HashMap, fmt::Write};
 use toasty_core::{driver::Response, stmt::ExprContext};
 
-impl DynamoDb {
+impl Connection {
     pub(crate) async fn exec_update_by_key(
         &self,
         schema: &Schema,

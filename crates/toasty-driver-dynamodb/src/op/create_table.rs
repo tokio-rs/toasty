@@ -1,9 +1,9 @@
 use super::{
-    ddb_key_schema, AttributeDefinition, DynamoDb, GlobalSecondaryIndex, Projection,
+    ddb_key_schema, AttributeDefinition, Connection, GlobalSecondaryIndex, Projection,
     ProjectionType, ProvisionedThroughput, Result, Schema, Table, TypeExt,
 };
 
-impl DynamoDb {
+impl Connection {
     pub(crate) async fn create_table(
         &self,
         schema: &Schema,

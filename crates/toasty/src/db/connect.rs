@@ -23,7 +23,11 @@ impl Driver for Connect {
     async fn connect(&self) -> Result<Box<dyn Connection>> {
         match self.url.scheme() {
             #[cfg(feature = "dynamodb")]
-            "dynamodb" => toasty_driver_dynamodb::DynamoDb::connect(url.as_str()),
+            "dynamodb" => {
+                toasty_driver_dynamodb::DynamoDb::new(self.url.to_string())
+                    .connect()
+                    .await
+            }
             #[cfg(not(feature = "dynamodb"))]
             "dynamodb" => anyhow::bail!("`dynamodb` feature not enabled"),
 
