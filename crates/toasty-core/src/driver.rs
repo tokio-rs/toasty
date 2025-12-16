@@ -22,10 +22,10 @@ pub trait Connection: Debug + Send + Sync + 'static {
     fn capability(&self) -> &'static Capability;
 
     /// Execute a database operation
-    async fn exec(&self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response>;
+    async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response>;
 
     /// TODO: this will probably go away
-    async fn reset_db(&self, _schema: &Schema) -> crate::Result<()> {
+    async fn reset_db(&mut self, _schema: &Schema) -> crate::Result<()> {
         unimplemented!()
     }
 }

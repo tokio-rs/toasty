@@ -4,7 +4,7 @@ use toasty_core::{driver::Response, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_find_pk_by_index(
-        &self,
+        &mut self,
         schema: &Arc<Schema>,
         op: operation::FindPkByIndex,
     ) -> Result<Response> {

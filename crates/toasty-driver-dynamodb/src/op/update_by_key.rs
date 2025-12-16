@@ -8,7 +8,7 @@ use toasty_core::{driver::Response, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_update_by_key(
-        &self,
+        &mut self,
         schema: &Schema,
         op: operation::UpdateByKey,
     ) -> Result<Response> {

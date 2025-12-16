@@ -112,7 +112,7 @@ impl Connection {
     }
 
     /// Creates a table.
-    pub async fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
+    pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
 
         let mut params = Vec::new();
@@ -149,7 +149,7 @@ impl Connection {
     }
 
     /// Drops a table.
-    pub async fn drop_table(&self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
+    pub async fn drop_table(&mut self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
         let mut params = Vec::new();
 
@@ -181,7 +181,7 @@ impl toasty_core::driver::Connection for Connection {
         &Capability::POSTGRESQL
     }
 
-    async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::Insert(op) => (op.stmt.into(), None),
             Operation::QuerySql(query) => (query.stmt.into(), query.ret),
@@ -243,7 +243,7 @@ impl toasty_core::driver::Connection for Connection {
         }
     }
 
-    async fn reset_db(&self, schema: &Schema) -> Result<()> {
+    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.drop_table(schema, table, true).await?;
             self.create_table(schema, table).await?;

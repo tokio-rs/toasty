@@ -111,11 +111,11 @@ impl toasty_core::driver::Connection for Connection {
         &Capability::DYNAMODB
     }
 
-    async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         self.exec2(schema, op).await
     }
 
-    async fn reset_db(&self, schema: &Schema) -> Result<()> {
+    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.create_table(schema, table, true).await?;
         }
@@ -125,7 +125,7 @@ impl toasty_core::driver::Connection for Connection {
 }
 
 impl Connection {
-    async fn exec2(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec2(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,

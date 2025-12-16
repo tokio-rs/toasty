@@ -4,7 +4,7 @@ use toasty_core::{driver::Response, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_query_pk(
-        &self,
+        &mut self,
         schema: &Arc<Schema>,
         op: operation::QueryPk,
     ) -> Result<Response> {

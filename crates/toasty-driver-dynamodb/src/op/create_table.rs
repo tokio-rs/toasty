@@ -5,7 +5,7 @@ use super::{
 
 impl Connection {
     pub(crate) async fn create_table(
-        &self,
+        &mut self,
         schema: &Schema,
         table: &Table,
         reset: bool,

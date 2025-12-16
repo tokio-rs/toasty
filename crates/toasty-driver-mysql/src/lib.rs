@@ -5,7 +5,7 @@ pub(crate) use value::Value;
 
 use mysql_async::{
     prelude::{Queryable, ToValue},
-    Pool,
+    Conn, Pool,
 };
 use std::sync::Arc;
 use toasty_core::{
@@ -38,12 +38,12 @@ impl Driver for MySQL {
 
 #[derive(Debug)]
 pub struct Connection {
-    pool: Pool,
+    conn: Conn,
 }
 
 impl Connection {
-    pub fn new(pool: Pool) -> Self {
-        Self { pool }
+    pub fn new(conn: Conn) -> Self {
+        Self { conn }
     }
 
     pub async fn connect(url: &str) -> Result<Self> {
@@ -69,11 +69,11 @@ impl Connection {
         let opts = mysql_async::Opts::from_url(url.as_ref())?;
         let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
 
-        let pool = Pool::new(opts);
-        Ok(Self { pool })
+        let conn = Conn::new(opts).await?;
+        Ok(Self { conn })
     }
 
-    pub async fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
+    pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
 
         let mut params = Vec::new();
@@ -88,8 +88,7 @@ impl Connection {
             "creating a table shouldn't involve any parameters"
         );
 
-        let mut conn = self.pool.get_conn().await?;
-        conn.exec_drop(&sql, ()).await?;
+        self.conn.exec_drop(&sql, ()).await?;
 
         for index in &table.indices {
             if index.primary_key {
@@ -103,14 +102,14 @@ impl Connection {
                 "creating an index shouldn't involve any parameters"
             );
 
-            conn.exec_drop(&sql, ()).await?;
+            self.conn.exec_drop(&sql, ()).await?;
         }
 
         Ok(())
     }
 
     /// Drops a table.
-    pub async fn drop_table(&self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
+    pub async fn drop_table(&mut self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
         let mut params = Vec::new();
 
@@ -125,15 +124,13 @@ impl Connection {
             "dropping a table shouldn't involve any parameters"
         );
 
-        let mut conn = self.pool.get_conn().await?;
-
-        conn.exec_drop(&sql, ()).await?;
+        self.conn.exec_drop(&sql, ()).await?;
         Ok(())
     }
 }
-impl From<Pool> for Connection {
-    fn from(pool: Pool) -> Self {
-        Self { pool }
+impl From<Conn> for Connection {
+    fn from(conn: Conn) -> Self {
+        Self { conn }
     }
 }
 
@@ -143,22 +140,21 @@ impl toasty_core::driver::Connection for Connection {
         &Capability::MYSQL
     }
 
-    async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        let mut conn = self.pool.get_conn().await?;
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
 
         let (sql, ret): (sql::Statement, _) = match op {
             // Operation::Insert(stmt) => stmt.into(),
             Operation::QuerySql(op) => (op.stmt.into(), op.ret),
             Operation::Transaction(Transaction::Start) => {
-                conn.query_drop("START TRANSACTION").await?;
+                self.conn.query_drop("START TRANSACTION").await?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
-                conn.query_drop("COMMIT").await?;
+                self.conn.query_drop("COMMIT").await?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {
-                conn.query_drop("ROLLBACK").await?;
+                self.conn.query_drop("ROLLBACK").await?;
                 return Ok(Response::count(0));
             }
             op => todo!("op={:#?}", op),
@@ -175,7 +171,7 @@ impl toasty_core::driver::Connection for Connection {
             .collect::<Vec<_>>();
 
         if ret.is_none() {
-            let count = conn
+            let count = self.conn
                 .exec_iter(&sql_as_str, mysql_async::Params::Positional(args))
                 .await?
                 .affected_rows();
@@ -183,7 +179,7 @@ impl toasty_core::driver::Connection for Connection {
             return Ok(Response::count(count));
         }
 
-        let rows: Vec<mysql_async::Row> = conn.exec(&sql_as_str, &args).await?;
+        let rows: Vec<mysql_async::Row> = self.conn.exec(&sql_as_str, &args).await?;
 
         if let Some(returning) = ret {
             let results = rows.into_iter().map(move |mut row| {
@@ -218,7 +214,7 @@ impl toasty_core::driver::Connection for Connection {
         }
     }
 
-    async fn reset_db(&self, schema: &Schema) -> Result<()> {
+    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.drop_table(schema, table, true).await?;
             self.create_table(schema, table).await?;

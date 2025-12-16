@@ -6,7 +6,7 @@ use toasty_core::driver::Response;
 
 impl Connection {
     pub(crate) async fn exec_insert(
-        &self,
+        &mut self,
         schema: &Schema,
         insert: stmt::Insert,
     ) -> Result<Response> {
