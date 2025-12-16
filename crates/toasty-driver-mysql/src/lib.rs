@@ -5,7 +5,7 @@ pub(crate) use value::Value;
 
 use mysql_async::{
     prelude::{Queryable, ToValue},
-    Conn, Pool,
+    Conn,
 };
 use std::sync::Arc;
 use toasty_core::{
