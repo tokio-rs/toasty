@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 use toasty_core::{
-    async_trait,
     driver::{Capability, Connection, Operation, Response, Rows},
     schema::db::Schema,
     Result,
@@ -37,7 +36,6 @@ impl LoggingDriver {
     }
 }
 
-#[async_trait]
 impl Connection for LoggingDriver {
     fn capability(&self) -> &'static Capability {
         self.inner.capability()

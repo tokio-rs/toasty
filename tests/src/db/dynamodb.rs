@@ -43,7 +43,6 @@ impl Default for SetupDynamoDb {
     }
 }
 
-#[async_trait::async_trait]
 impl Setup for SetupDynamoDb {
     async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
         let url =

@@ -7,25 +7,29 @@ pub use response::{Response, Rows};
 pub mod operation;
 pub use operation::Operation;
 
-use crate::{async_trait, schema::db::Schema};
+use crate::schema::db::Schema;
 
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, future::Future, sync::Arc};
 
-#[async_trait]
 pub trait Driver: Debug + Send + Sync + 'static {
-    async fn connect(&self) -> crate::Result<Box<dyn Connection>>;
+    type Connection: Connection;
+    fn connect(&self) -> crate::Result<Self::Connection>;
 }
 
-#[async_trait]
 pub trait Connection: Debug + Send + Sync + 'static {
     /// Describes the driver's capability, which informs the query planner.
     fn capability(&self) -> &'static Capability;
 
     /// Execute a database operation
-    async fn exec(&self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response>;
+    fn exec(
+        &self,
+        schema: &Arc<Schema>,
+        plan: Operation,
+    ) -> impl Future<Output = crate::Result<Response>>;
 
     /// TODO: this will probably go away
-    async fn reset_db(&self, _schema: &Schema) -> crate::Result<()> {
-        unimplemented!()
+    fn reset_db(&self, _schema: &Schema) -> impl Future<Output = crate::Result<()>> {
+        unimplemented!();
+        async { Ok(()) }
     }
 }

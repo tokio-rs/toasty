@@ -86,7 +86,6 @@ impl DynamoDb {
     }
 }
 
-#[toasty_core::async_trait]
 impl Connection for DynamoDb {
     fn capability(&self) -> &'static Capability {
         &Capability::DYNAMODB

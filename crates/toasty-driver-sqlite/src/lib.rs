@@ -71,7 +71,6 @@ impl Connection {
     }
 }
 
-#[toasty_core::async_trait]
 impl toasty_core::driver::Connection for Connection {
     fn capability(&self) -> &'static Capability {
         &Capability::SQLITE

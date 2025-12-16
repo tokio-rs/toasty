@@ -52,7 +52,6 @@ impl Default for SetupPostgreSQL {
     }
 }
 
-#[async_trait::async_trait]
 impl Setup for SetupPostgreSQL {
     async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
         let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
