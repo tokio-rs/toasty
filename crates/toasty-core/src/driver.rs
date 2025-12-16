@@ -17,7 +17,7 @@ pub trait Driver: Debug + Send + Sync + 'static {
 }
 
 #[async_trait]
-pub trait Connection: Debug + Send + Sync + 'static {
+pub trait Connection: Debug + Send + 'static {
     /// Describes the driver's capability, which informs the query planner.
     fn capability(&self) -> &'static Capability;
 

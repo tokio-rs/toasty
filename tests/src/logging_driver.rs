@@ -63,7 +63,7 @@ impl Connection for LoggingConnection {
         self.inner.capability()
     }
 
-    async fn exec(&self, schema: &Arc<Schema>, operation: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, operation: Operation) -> Result<Response> {
         // Clone the operation for logging
         let operation_clone = operation.clone();
 
@@ -87,7 +87,7 @@ impl Connection for LoggingConnection {
         Ok(response)
     }
 
-    async fn reset_db(&self, schema: &Schema) -> Result<()> {
+    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
         self.inner.reset_db(schema).await
     }
 }
