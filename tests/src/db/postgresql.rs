@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use toasty::driver::Capability;
+use toasty::{
+    db::Connect,
+    driver::{Capability, Driver},
+};
 use toasty_core::stmt;
 use tokio::sync::OnceCell;
 
@@ -54,11 +57,10 @@ impl Default for SetupPostgreSQL {
 
 #[async_trait::async_trait]
 impl Setup for SetupPostgreSQL {
-    async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
+    fn driver(&self) -> Box<dyn Driver> {
         let url = std::env::var("TOASTY_TEST_POSTGRES_URL")
             .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
-        let conn = toasty::driver::Connection::connect(&url).await?;
-        Ok(Box::new(conn))
+        Box::new(Connect::new(&url).unwrap())
     }
 
     fn configure_builder(&self, builder: &mut toasty::db::Builder) {

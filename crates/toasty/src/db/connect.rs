@@ -30,7 +30,13 @@ impl Driver for Connect {
             #[cfg(feature = "mysql")]
             "mysql" => connect_mysql(&self.url).await,
             #[cfg(feature = "postgresql")]
-            "postgresql" => connect_postgresql(&self.url).await,
+            "postgresql" => {
+                toasty_driver_postgresql::PostgreSQL::new(self.url.to_string())
+                    .connect()
+                    .await
+            }
+            #[cfg(not(feature = "postgresql"))]
+            "postgresql" => anyhow::bail!("`postgresql` feature not enabled"),
 
             #[cfg(feature = "sqlite")]
             "sqlite" => {

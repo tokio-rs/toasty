@@ -8,11 +8,12 @@ use r#type::TypeExt;
 use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
 use std::sync::Arc;
 use toasty_core::{
-    driver::{Capability, Operation, Response},
+    async_trait,
+    driver::{Capability, Driver, Operation, Response},
     schema::db::{Schema, Table},
     stmt,
     stmt::ValueRecord,
-    Connection, Result,
+    Result,
 };
 use toasty_sql as sql;
 use tokio_postgres::{Client, Config};
@@ -20,14 +21,32 @@ use url::Url;
 
 #[derive(Debug)]
 pub struct PostgreSQL {
+    url: String,
+}
+
+impl PostgreSQL {
+    pub fn new(url: String) -> Self {
+        Self { url }
+    }
+}
+
+#[async_trait]
+impl Driver for PostgreSQL {
+    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
+        Ok(Box::new(Connection::connect(&self.url).await?))
+    }
+}
+
+#[derive(Debug)]
+pub struct Connection {
     /// The PostgreSQL client.
     client: Client,
 }
 
-impl PostgreSQL {
-    /// Initialize a Toasty PostgreSQL driver using an initialized connection.
-    pub fn new(connection: Client) -> Self {
-        Self { client: connection }
+impl Connection {
+    /// Initialize a Toasty PostgreSQL connection using an initialized client.
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 
     /// Connects to a PostgreSQL database using a connection string.
@@ -150,14 +169,14 @@ impl PostgreSQL {
     }
 }
 
-impl From<Client> for PostgreSQL {
+impl From<Client> for Connection {
     fn from(client: Client) -> Self {
         Self { client }
     }
 }
 
-#[toasty_core::async_trait]
-impl Connection for PostgreSQL {
+#[async_trait]
+impl toasty_core::driver::Connection for Connection {
     fn capability(&self) -> &'static Capability {
         &Capability::POSTGRESQL
     }
