@@ -8,7 +8,7 @@ use crate::{
 use toasty_core::{
     driver::operation,
     schema::db::{ColumnId, TableId},
-    stmt, Driver,
+    stmt, Connection,
 };
 
 #[derive(Debug)]

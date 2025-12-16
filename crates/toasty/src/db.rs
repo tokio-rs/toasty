@@ -1,9 +1,10 @@
 mod builder;
-mod connection;
+mod connect;
 mod pool;
 
 pub use builder::Builder;
-pub(crate) use pool::*;
+pub use connect::*;
+pub use pool::*;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -11,7 +12,7 @@ use tokio::{
 
 use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
 
-use toasty_core::{stmt::ValueStream, Driver, Schema};
+use toasty_core::{stmt::ValueStream, Schema};
 
 #[derive(Debug)]
 pub struct Db {

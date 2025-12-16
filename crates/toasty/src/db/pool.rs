@@ -1,8 +1,8 @@
 use std::ops::{Deref, DerefMut};
 
-use toasty_core::{driver::Capability, Driver};
+use toasty_core::driver::{Capability, Driver};
 
-use crate::db::connection::Connection;
+use crate::db::Connection;
 
 #[derive(Debug)]
 pub struct Pool {
@@ -46,15 +46,15 @@ impl Pool {
 
 #[derive(Debug)]
 struct Manager {
-    url: String,
+    driver: Box<dyn Driver>,
 }
 
 impl deadpool::managed::Manager for Manager {
-    type Type = Connection;
+    type Type = Box<dyn Connection>;
     type Error = crate::Error;
 
     async fn create(&self) -> Result<Self::Type, Self::Error> {
-        Connection::connect(&self.url).await
+        Ok(self.driver.connect().await?)
     }
 
     async fn recycle(
@@ -71,7 +71,7 @@ pub struct ManagedConnection {
 }
 
 impl Deref for ManagedConnection {
-    type Target = Connection;
+    type Target = Box<dyn Connection>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner

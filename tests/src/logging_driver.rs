@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use toasty_core::{
     async_trait,
-    driver::{Capability, Driver, Operation, Response, Rows},
+    driver::{Capability, Connection, Operation, Response, Rows},
     schema::db::Schema,
     Result,
 };
@@ -16,7 +16,7 @@ pub struct DriverOp {
 #[derive(Debug)]
 pub struct LoggingDriver {
     /// The underlying driver that actually executes operations
-    inner: Box<dyn Driver>,
+    inner: Box<dyn Connection>,
 
     /// Log of all operations executed through this driver
     /// Using Arc<Mutex> for thread-safe access from tests
@@ -24,7 +24,7 @@ pub struct LoggingDriver {
 }
 
 impl LoggingDriver {
-    pub fn new(inner: Box<dyn Driver>) -> Self {
+    pub fn new(inner: Box<dyn Connection>) -> Self {
         Self {
             inner,
             ops_log: Arc::new(Mutex::new(Vec::new())),
@@ -38,8 +38,8 @@ impl LoggingDriver {
 }
 
 #[async_trait]
-impl Driver for LoggingDriver {
-    fn capability(&self) -> &Capability {
+impl Connection for LoggingDriver {
+    fn capability(&self) -> &'static Capability {
         self.inner.capability()
     }
 

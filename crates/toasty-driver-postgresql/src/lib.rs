@@ -12,7 +12,7 @@ use toasty_core::{
     schema::db::{Schema, Table},
     stmt,
     stmt::ValueRecord,
-    Driver, Result,
+    Connection, Result,
 };
 use toasty_sql as sql;
 use tokio_postgres::{Client, Config};
@@ -157,7 +157,7 @@ impl From<Client> for PostgreSQL {
 }
 
 #[toasty_core::async_trait]
-impl Driver for PostgreSQL {
+impl Connection for PostgreSQL {
     fn capability(&self) -> &'static Capability {
         &Capability::POSTGRESQL
     }

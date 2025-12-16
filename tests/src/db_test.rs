@@ -80,7 +80,7 @@ impl DbTest {
     }
 
     /// Connect to get a raw driver (for error testing)
-    pub async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
+    pub async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Connection>> {
         let setup = self.setup.as_ref().expect("Setup already consumed");
         setup.connect().await
     }

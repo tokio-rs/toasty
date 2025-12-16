@@ -12,7 +12,7 @@ use toasty_core::{
     driver::{operation::Transaction, Capability, Operation, Response},
     schema::db::{Schema, Table},
     stmt::{self, ValueRecord},
-    Driver, Result,
+    Connection, Result,
 };
 use toasty_sql as sql;
 use url::Url;
@@ -119,7 +119,7 @@ impl From<Pool> for MySQL {
 }
 
 #[toasty_core::async_trait]
-impl Driver for MySQL {
+impl Connection for MySQL {
     fn capability(&self) -> &'static Capability {
         &Capability::MYSQL
     }

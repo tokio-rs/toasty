@@ -6,7 +6,7 @@ use toasty_core::{
     driver::{operation, Rows},
     schema::db::TableId,
     stmt::{self, ValueStream},
-    Driver,
+    Connection,
 };
 
 #[derive(Debug, Clone)]

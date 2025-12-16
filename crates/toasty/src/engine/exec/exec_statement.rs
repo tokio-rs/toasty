@@ -1,6 +1,6 @@
 use toasty_core::{
     driver::{operation, Rows},
-    stmt, Driver,
+    stmt, Connection,
 };
 
 use crate::{

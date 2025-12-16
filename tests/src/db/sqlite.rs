@@ -111,9 +111,9 @@ impl Default for SetupSqlite {
 
 #[async_trait::async_trait]
 impl Setup for SetupSqlite {
-    async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
+    async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Connection>> {
         let url = format!("sqlite:{}", self.temp_db_path);
-        let conn = toasty::driver::Connection::connect(&url).await?;
+        let conn = toasty::db::Connection::connect(&url).await?;
         Ok(Box::new(conn))
     }
 

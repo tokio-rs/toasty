@@ -4,7 +4,7 @@ use toasty::driver::Capability;
 #[async_trait::async_trait]
 pub trait Setup: Send + Sync + 'static {
     /// Create a connection to the database
-    async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>>;
+    async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Connection>>;
 
     /// Configure the builder with database-specific settings (like table prefixes)
     fn configure_builder(&self, _builder: &mut toasty::db::Builder) {

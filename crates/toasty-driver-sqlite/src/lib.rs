@@ -1,7 +1,7 @@
 mod value;
 pub(crate) use value::Value;
 
-use rusqlite::Connection;
+use rusqlite::Connection as RusqliteConnection;
 use std::{
     path::Path,
     sync::{Arc, Mutex},
@@ -18,11 +18,26 @@ use toasty_sql as sql;
 use url::Url;
 
 #[derive(Debug)]
-pub struct Sqlite {
-    connection: Mutex<Connection>,
+pub enum Sqlite<'a> {
+    Url(&'a str),
+    InMemory,
+    File(&'a Path),
 }
 
-impl Sqlite {
+impl<'a> Driver for Sqlite<'a> {
+    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::Connection>> {
+        match self {
+            Self::Url(url) => Connection::connect(url)?.into(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Connection {
+    connection: Mutex<RusqliteConnection>,
+}
+
+impl Connection {
     pub fn connect(url: &str) -> Result<Self> {
         let url = Url::parse(url)?;
 
@@ -40,7 +55,7 @@ impl Sqlite {
     }
 
     pub fn in_memory() -> Self {
-        let connection = Connection::open_in_memory().unwrap();
+        let connection = RusqliteConnection::open_in_memory().unwrap();
 
         Self {
             connection: Mutex::new(connection),
@@ -48,7 +63,7 @@ impl Sqlite {
     }
 
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let connection = Connection::open(path)?;
+        let connection = RusqliteConnection::open(path)?;
         let sqlite = Self {
             connection: Mutex::new(connection),
         };
@@ -57,7 +72,7 @@ impl Sqlite {
 }
 
 #[toasty_core::async_trait]
-impl Driver for Sqlite {
+impl toasty_core::driver::Connection for Connection {
     fn capability(&self) -> &'static Capability {
         &Capability::SQLITE
     }
@@ -160,7 +175,7 @@ impl Driver for Sqlite {
     }
 }
 
-impl Sqlite {
+impl Connection {
     fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::sqlite(schema);
 

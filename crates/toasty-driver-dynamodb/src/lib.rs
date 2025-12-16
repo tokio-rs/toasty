@@ -6,7 +6,7 @@ pub(crate) use r#type::TypeExt;
 pub(crate) use value::Value;
 
 use toasty_core::{
-    driver::{operation::Operation, Capability, Driver, Response},
+    driver::{operation::Operation, Capability, Connection, Response},
     schema::db::{Column, ColumnId, Schema, Table},
     stmt::{self, ExprContext},
 };
@@ -87,7 +87,7 @@ impl DynamoDb {
 }
 
 #[toasty_core::async_trait]
-impl Driver for DynamoDb {
+impl Connection for DynamoDb {
     fn capability(&self) -> &'static Capability {
         &Capability::DYNAMODB
     }

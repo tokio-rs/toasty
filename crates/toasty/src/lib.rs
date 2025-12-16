@@ -50,5 +50,5 @@ pub mod codegen_support {
 }
 
 pub mod driver {
-    pub use toasty_core::driver::Capability;
+    pub use toasty_core::driver::*;
 }

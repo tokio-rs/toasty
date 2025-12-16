@@ -6,7 +6,7 @@ use toasty_core::{
     driver::{operation, Rows},
     schema::db::{ColumnId, TableId},
     stmt::ValueStream,
-    Driver,
+    Connection,
 };
 
 /// Get a model by key

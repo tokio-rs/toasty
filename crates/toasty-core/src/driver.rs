@@ -13,6 +13,11 @@ use std::{fmt::Debug, sync::Arc};
 
 #[async_trait]
 pub trait Driver: Debug + Send + Sync + 'static {
+    async fn connect(&self) -> crate::Result<Box<dyn Connection>>;
+}
+
+#[async_trait]
+pub trait Connection: Debug + Send + Sync + 'static {
     /// Describes the driver's capability, which informs the query planner.
     fn capability(&self) -> &'static Capability;
 
