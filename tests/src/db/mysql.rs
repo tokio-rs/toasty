@@ -36,6 +36,7 @@ impl Default for SetupMySQL {
     }
 }
 
+#[async_trait::async_trait]
 impl Setup for SetupMySQL {
     async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
         let url = std::env::var("TOASTY_TEST_MYSQL_URL")

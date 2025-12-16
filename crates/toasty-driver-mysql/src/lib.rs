@@ -118,6 +118,7 @@ impl From<Pool> for MySQL {
     }
 }
 
+#[toasty_core::async_trait]
 impl Connection for MySQL {
     fn capability(&self) -> &'static Capability {
         &Capability::MYSQL

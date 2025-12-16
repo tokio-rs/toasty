@@ -156,6 +156,7 @@ impl From<Client> for PostgreSQL {
     }
 }
 
+#[toasty_core::async_trait]
 impl Connection for PostgreSQL {
     fn capability(&self) -> &'static Capability {
         &Capability::POSTGRESQL
