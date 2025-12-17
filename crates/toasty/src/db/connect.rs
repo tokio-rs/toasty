@@ -34,12 +34,12 @@ impl Connect {
             "mysql" => anyhow::bail!("`mysql` feature not enabled"),
 
             #[cfg(feature = "postgresql")]
-            "postgresql" => Box::new(toasty_driver_postgresql::PostgreSQL::new(url.to_string())),
+            "postgresql" => Box::new(toasty_driver_postgresql::PostgreSQL::new(url)?),
             #[cfg(not(feature = "postgresql"))]
             "postgresql" => anyhow::bail!("`postgresql` feature not enabled"),
 
             #[cfg(feature = "sqlite")]
-            "sqlite" => Box::new(toasty_driver_sqlite::Sqlite::Url(url.to_string())),
+            "sqlite" => Box::new(toasty_driver_sqlite::Sqlite::new(url)),
             #[cfg(not(feature = "sqlite"))]
             "sqlite" => anyhow::bail!("`sqlite` feature not enabled"),
 

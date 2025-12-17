@@ -2,10 +2,7 @@ mod value;
 pub(crate) use value::Value;
 
 use rusqlite::Connection as RusqliteConnection;
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 use toasty_core::{
     async_trait,
     driver::{
@@ -19,20 +16,35 @@ use toasty_sql as sql;
 use url::Url;
 
 #[derive(Debug)]
-pub enum Sqlite {
-    Url(String),
-    InMemory,
-    File(PathBuf),
+pub struct Sqlite {
+    url: String,
+}
+
+impl Sqlite {
+    /// Create a new SQLite driver with an arbitrary connection URL
+    pub fn new(url: impl Into<String>) -> Self {
+        Self { url: url.into() }
+    }
+
+    /// Create an in-memory SQLite database
+    pub fn in_memory() -> Self {
+        Self {
+            url: "sqlite::memory:".to_string(),
+        }
+    }
+
+    /// Open a SQLite database at the specified file path
+    pub fn open<P: AsRef<Path>>(path: P) -> Self {
+        Self {
+            url: format!("sqlite:{}", path.as_ref().display()),
+        }
+    }
 }
 
 #[async_trait]
 impl Driver for Sqlite {
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::Connection>> {
-        Ok(match self {
-            Self::Url(url) => Box::new(Connection::connect(url)?),
-            Self::InMemory => Box::new(Connection::in_memory()),
-            Self::File(path) => Box::new(Connection::open(path)?),
-        })
+        Ok(Box::new(Connection::connect(&self.url)?))
     }
 }
 

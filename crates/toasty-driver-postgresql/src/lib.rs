@@ -21,39 +21,14 @@ use url::Url;
 
 #[derive(Debug)]
 pub struct PostgreSQL {
-    url: String,
+    config: Config,
 }
 
 impl PostgreSQL {
-    pub fn new(url: String) -> Self {
-        Self { url }
-    }
-}
-
-#[async_trait]
-impl Driver for PostgreSQL {
-    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
-        Ok(Box::new(Connection::connect(&self.url).await?))
-    }
-}
-
-#[derive(Debug)]
-pub struct Connection {
-    /// The PostgreSQL client.
-    client: Client,
-}
-
-impl Connection {
-    /// Initialize a Toasty PostgreSQL connection using an initialized client.
-    pub fn new(client: Client) -> Self {
-        Self { client }
-    }
-
-    /// Connects to a PostgreSQL database using a connection string.
-    ///
-    /// See [`postgres::Client::connect`] for more information.
-    pub async fn connect(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
+    /// Create a new PostgreSQL driver from a connection URL
+    pub fn new(url: impl Into<String>) -> Result<Self> {
+        let url_str = url.into();
+        let url = Url::parse(&url_str)?;
 
         if url.scheme() != "postgresql" {
             return Err(anyhow::anyhow!(
@@ -89,13 +64,40 @@ impl Connection {
             config.password(password);
         }
 
-        Self::connect_with_config(config, tokio_postgres::NoTls).await
+        Ok(Self { config })
+    }
+
+    /// Create a new PostgreSQL driver with a tokio-postgres Config
+    pub fn from_config(config: Config) -> Self {
+        Self { config }
+    }
+}
+
+#[async_trait]
+impl Driver for PostgreSQL {
+    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
+        Ok(Box::new(
+            Connection::connect(self.config.clone(), tokio_postgres::NoTls).await?,
+        ))
+    }
+}
+
+#[derive(Debug)]
+pub struct Connection {
+    /// The PostgreSQL client.
+    client: Client,
+}
+
+impl Connection {
+    /// Initialize a Toasty PostgreSQL connection using an initialized client.
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 
     /// Connects to a PostgreSQL database using a [`postgres::Config`].
     ///
     /// See [`postgres::Client::configure`] for more information.
-    pub async fn connect_with_config<T>(config: Config, tls: T) -> Result<Self>
+    pub async fn connect<T>(config: Config, tls: T) -> Result<Self>
     where
         T: MakeTlsConnect<Socket> + 'static,
         T::Stream: Send,
