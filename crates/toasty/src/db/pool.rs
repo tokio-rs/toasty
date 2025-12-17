@@ -1,9 +1,12 @@
+//! Connection pooling for database connections.
+
 use std::ops::{Deref, DerefMut};
 
 use toasty_core::driver::{Capability, Driver};
 
 use crate::db::{Connect, Connection};
 
+/// A connection pool that manages database connections.
 #[derive(Debug)]
 pub struct Pool {
     inner: deadpool::managed::Pool<Manager>,
@@ -13,6 +16,7 @@ pub struct Pool {
 }
 
 impl Pool {
+    /// Creates a new connection pool from the given driver.
     pub async fn new(driver: impl Driver) -> crate::Result<Self> {
         let inner = deadpool::managed::Pool::builder(Manager {
             driver: Box::new(driver),
@@ -29,13 +33,15 @@ impl Pool {
         })
     }
 
+    /// Creates a new connection pool from a connection URL.
     pub async fn connect(url: &str) -> crate::Result<Self> {
         Self::new(Connect::new(url)?).await
     }
 
-    pub async fn get(&self) -> crate::Result<ManagedConnection> {
+    /// Retrieves a connection from the pool.
+    pub async fn get(&self) -> crate::Result<PoolConnection> {
         Ok(match self.inner.get().await {
-            Ok(connection) => ManagedConnection { inner: connection },
+            Ok(connection) => PoolConnection { inner: connection },
             Err(err) => {
                 return Err(anyhow::anyhow!(
                     "failed to retrieve connection from pool: {err}"
@@ -44,6 +50,7 @@ impl Pool {
         })
     }
 
+    /// Returns the database driver's capabilities.
     pub fn capability(&self) -> &Capability {
         self.capability
     }
@@ -71,11 +78,14 @@ impl deadpool::managed::Manager for Manager {
     }
 }
 
-pub struct ManagedConnection {
+/// A connection retrieved from a pool.
+///
+/// When dropped, the connection is returned to the pool for reuse.
+pub struct PoolConnection {
     inner: deadpool::managed::Object<Manager>,
 }
 
-impl Deref for ManagedConnection {
+impl Deref for PoolConnection {
     type Target = Box<dyn Connection>;
 
     fn deref(&self) -> &Self::Target {
@@ -83,7 +93,7 @@ impl Deref for ManagedConnection {
     }
 }
 
-impl DerefMut for ManagedConnection {
+impl DerefMut for PoolConnection {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }

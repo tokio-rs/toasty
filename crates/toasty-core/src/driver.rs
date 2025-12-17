@@ -13,6 +13,10 @@ use std::{fmt::Debug, sync::Arc};
 
 #[async_trait]
 pub trait Driver: Debug + Send + Sync + 'static {
+    /// Creates a new connection to the database.
+    ///
+    /// This method is called by the [`Pool`] whenever a [`Connection`] is requested while none is
+    /// available and there is room to create a new [`Connection`].
     async fn connect(&self) -> crate::Result<Box<dyn Connection>>;
 }
 

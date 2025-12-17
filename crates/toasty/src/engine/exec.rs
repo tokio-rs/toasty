@@ -43,7 +43,7 @@ pub(crate) use update_by_key::UpdateByKey;
 mod var;
 pub(crate) use var::{VarDecls, VarId, VarStore};
 
-use crate::{db::ManagedConnection, engine::Engine, Result};
+use crate::{db::PoolConnection, engine::Engine, Result};
 use toasty_core::{
     driver::Rows,
     stmt::{self, ValueStream},
@@ -51,7 +51,7 @@ use toasty_core::{
 
 struct Exec<'a> {
     engine: &'a Engine,
-    connection: ManagedConnection,
+    connection: PoolConnection,
     vars: VarStore,
 }
 
