@@ -3,9 +3,14 @@ use toasty_core::stmt::{self, Expr, Value};
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_in_list(&self, expr: &mut stmt::ExprInList) -> Option<Expr> {
-        // First, if the list is empty, then simplify to false
+        // `x in ()` → `false`
         if expr.list.is_list_empty() {
             return Some(Expr::Value(Value::Bool(false)));
+        }
+
+        // Null propagation, `null in (x, y, z)` → `null`
+        if expr.expr.is_value_null() {
+            return Some(Expr::null());
         }
 
         self.rewrite_expr_in_list_when_model(expr);
@@ -226,5 +231,53 @@ mod tests {
         let result = simplify.simplify_expr_in_list(&mut expr);
 
         assert!(result.is_none());
+    }
+
+    // Null propagation tests
+
+    #[test]
+    fn null_in_list_becomes_null() {
+        let schema = test_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `null in (1, 2, 3)` → `null`
+        let mut expr = in_list(
+            Expr::null(),
+            value_list(vec![
+                Value::from(1i64),
+                Value::from(2i64),
+                Value::from(3i64),
+            ]),
+        );
+        let result = simplify.simplify_expr_in_list(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn null_in_single_item_becomes_null() {
+        let schema = test_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `null in (42)` → `null`
+        let mut expr = in_list(Expr::null(), value_list(vec![Value::from(42i64)]));
+        let result = simplify.simplify_expr_in_list(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn null_in_expr_list_becomes_null() {
+        let schema = test_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `null in list([arg(0), arg(1)])` → `null`
+        let mut expr = in_list(Expr::null(), expr_list(vec![Expr::arg(0), Expr::arg(1)]));
+        let result = simplify.simplify_expr_in_list(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
     }
 }
