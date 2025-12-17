@@ -8,9 +8,19 @@ impl Simplify<'_> {
             return Some(inner.expr.take());
         }
 
-        // Constant folding, `not(true)` → `false`, `not(false)` → `true`
-        if let Expr::Value(stmt::Value::Bool(b)) = expr_not.expr.as_ref() {
-            return Some(Expr::Value(stmt::Value::Bool(!b)));
+        // Constant folding,
+        //
+        //   - `not(true)` → `false`
+        //   - `not(false)` → `true`
+        //   - `not(null)` → `null`
+        match expr_not.expr.as_ref() {
+            Expr::Value(stmt::Value::Bool(b)) => {
+                return Some(Expr::Value(stmt::Value::Bool(!b)));
+            }
+            Expr::Value(stmt::Value::Null) => {
+                return Some(Expr::null());
+            }
+            _ => {}
         }
 
         // Negation of comparisons, `not(x = y)` → `x != y`, etc.
@@ -39,6 +49,13 @@ impl Simplify<'_> {
                 .map(Expr::not)
                 .collect::<Vec<_>>();
             return Some(Expr::and_from_vec(negated));
+        }
+
+        // `not(x in ())` → `true` (x NOT IN empty list is always true)
+        if let Expr::InList(expr_in_list) = expr_not.expr.as_ref() {
+            if expr_in_list.list.is_list_empty() {
+                return Some(true.into());
+            }
         }
 
         None
@@ -112,6 +129,19 @@ mod tests {
         let result = simplify.simplify_expr_not(&mut expr);
 
         assert!(matches!(result, Some(Expr::Value(Value::Bool(true)))));
+    }
+
+    #[test]
+    fn not_null_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `not(null)` → `null`
+        let mut expr = not_expr(Expr::null());
+
+        let result = simplify.simplify_expr_not(&mut expr);
+
+        assert!(matches!(result, Some(Expr::Value(Value::Null))));
     }
 
     // Negation of comparison tests
@@ -347,5 +377,39 @@ mod tests {
         for operand in &and_expr.operands {
             assert!(matches!(operand, Expr::Not(_)));
         }
+    }
+
+    // NOT IN tests
+
+    #[test]
+    fn not_in_empty_list_becomes_true() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `not(x in ())` → `true`
+        let in_list_expr = Expr::in_list(Expr::arg(0), Expr::list::<Expr>(vec![]));
+        let mut expr = not_expr(in_list_expr);
+
+        let result = simplify.simplify_expr_not(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_true());
+    }
+
+    #[test]
+    fn not_in_non_empty_list_not_simplified() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `not(x in (1, 2))` → not simplified directly by expr_not
+        let in_list_expr = Expr::in_list(
+            Expr::arg(0),
+            Expr::list(vec![Value::from(1i64), Value::from(2i64)]),
+        );
+        let mut expr = not_expr(in_list_expr);
+
+        let result = simplify.simplify_expr_not(&mut expr);
+
+        assert!(result.is_none());
     }
 }
