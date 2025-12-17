@@ -4,9 +4,9 @@ use index_match::{IndexColumnMatch, IndexMatch};
 mod index_plan;
 pub(crate) use index_plan::IndexPlan;
 
-use crate::{driver::Capability, engine::Engine};
+use crate::engine::Engine;
 use std::collections::HashMap;
-use toasty_core::{schema::db::Table, stmt};
+use toasty_core::{driver::Capability, schema::db::Table, stmt};
 
 impl Engine {
     pub(crate) fn plan_index_path<'a>(&'a self, stmt: &stmt::Statement) -> IndexPlan<'a> {

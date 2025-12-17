@@ -13,7 +13,7 @@ pub mod helpers;
 mod isolation;
 
 mod logging_driver;
-pub use logging_driver::{DriverOp, LoggingDriver};
+pub use logging_driver::{DriverOp, LoggingConnection, LoggingDriver};
 
 pub mod prelude;
 

@@ -1,10 +1,12 @@
-use super::{ddb_expression, item_to_record, operation, stmt, DynamoDb, ExprAttrs, Result, Schema};
+use super::{
+    ddb_expression, item_to_record, operation, stmt, Connection, ExprAttrs, Result, Schema,
+};
 use std::sync::Arc;
 use toasty_core::{driver::Response, stmt::ExprContext};
 
-impl DynamoDb {
+impl Connection {
     pub(crate) async fn exec_query_pk(
-        &self,
+        &mut self,
         schema: &Arc<Schema>,
         op: operation::QueryPk,
     ) -> Result<Response> {

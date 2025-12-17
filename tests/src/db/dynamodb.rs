@@ -1,5 +1,8 @@
 use std::collections::HashMap;
-use toasty::driver::Capability;
+use toasty::{
+    db::Connect,
+    driver::{Capability, Driver},
+};
 use tokio::sync::OnceCell;
 
 use crate::{isolation::TestIsolation, Setup};
@@ -45,11 +48,10 @@ impl Default for SetupDynamoDb {
 
 #[async_trait::async_trait]
 impl Setup for SetupDynamoDb {
-    async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
+    fn driver(&self) -> Box<dyn Driver> {
         let url =
             std::env::var("TOASTY_TEST_DYNAMODB_URL").unwrap_or_else(|_| "dynamodb://".to_string());
-        let conn = toasty::driver::Connection::connect(&url).await?;
-        Ok(Box::new(conn))
+        Box::new(Connect::new(&url).unwrap())
     }
 
     fn configure_builder(&self, builder: &mut toasty::db::Builder) {

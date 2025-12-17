@@ -7,9 +7,6 @@ pub use cursor::Cursor;
 pub mod db;
 pub use db::Db;
 
-// TODO: move to `db` module
-pub mod driver;
-
 mod engine;
 
 mod model;
@@ -50,4 +47,8 @@ pub mod codegen_support {
         },
         stmt::{Type, Value, ValueRecord, ValueStream},
     };
+}
+
+pub mod driver {
+    pub use toasty_core::driver::*;
 }

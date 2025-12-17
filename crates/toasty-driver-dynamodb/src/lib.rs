@@ -6,6 +6,7 @@ pub(crate) use r#type::TypeExt;
 pub(crate) use value::Value;
 
 use toasty_core::{
+    async_trait,
     driver::{operation::Operation, Capability, Driver, Response},
     schema::db::{Column, ColumnId, Schema, Table},
     stmt::{self, ExprContext},
@@ -27,11 +28,29 @@ use url::Url;
 
 #[derive(Debug)]
 pub struct DynamoDb {
+    url: String,
+}
+
+impl DynamoDb {
+    pub fn new(url: String) -> Self {
+        Self { url }
+    }
+}
+
+#[async_trait]
+impl Driver for DynamoDb {
+    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
+        Ok(Box::new(Connection::connect(&self.url).await?))
+    }
+}
+
+#[derive(Debug)]
+pub struct Connection {
     /// Handle to the AWS SDK client
     client: Client,
 }
 
-impl DynamoDb {
+impl Connection {
     pub fn new(client: Client) -> Self {
         Self { client }
     }
@@ -86,21 +105,17 @@ impl DynamoDb {
     }
 }
 
-#[toasty_core::async_trait]
-impl Driver for DynamoDb {
-    fn capability(&self) -> &Capability {
+#[async_trait]
+impl toasty_core::driver::Connection for Connection {
+    fn capability(&self) -> &'static Capability {
         &Capability::DYNAMODB
     }
 
-    async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
-        Ok(())
-    }
-
-    async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         self.exec2(schema, op).await
     }
 
-    async fn reset_db(&self, schema: &Schema) -> Result<()> {
+    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.create_table(schema, table, true).await?;
         }
@@ -109,8 +124,8 @@ impl Driver for DynamoDb {
     }
 }
 
-impl DynamoDb {
-    async fn exec2(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+impl Connection {
+    async fn exec2(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,

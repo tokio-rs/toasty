@@ -1,12 +1,12 @@
 use super::{
-    stmt, DynamoDb, Put, PutRequest, Result, Schema, TransactWriteItem, Value, WriteRequest,
+    stmt, Connection, Put, PutRequest, Result, Schema, TransactWriteItem, Value, WriteRequest,
 };
 use std::collections::HashMap;
 use toasty_core::driver::Response;
 
-impl DynamoDb {
+impl Connection {
     pub(crate) async fn exec_insert(
-        &self,
+        &mut self,
         schema: &Schema,
         insert: stmt::Insert,
     ) -> Result<Response> {

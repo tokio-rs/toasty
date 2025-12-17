@@ -1,5 +1,10 @@
 mod builder;
+mod connect;
+mod pool;
+
 pub use builder::Builder;
+pub use connect::*;
+pub use pool::*;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -98,7 +103,12 @@ impl Db {
 
     /// TODO: remove
     pub async fn reset_db(&self) -> Result<()> {
-        self.engine.driver.reset_db(&self.engine.schema.db).await
+        self.engine
+            .pool
+            .get()
+            .await?
+            .reset_db(&self.engine.schema.db)
+            .await
     }
 
     pub fn schema(&self) -> &Schema {

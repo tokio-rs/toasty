@@ -2,7 +2,7 @@
 mod macros;
 
 pub mod driver;
-pub use driver::Driver;
+pub use driver::Connection;
 
 #[macro_use]
 mod error;

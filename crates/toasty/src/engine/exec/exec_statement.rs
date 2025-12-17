@@ -95,8 +95,7 @@ impl Exec<'_> {
         };
 
         let mut res = self
-            .engine
-            .driver
+            .connection
             .exec(&self.engine.schema.db, op.into())
             .await?;
 

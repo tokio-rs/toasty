@@ -8,11 +8,12 @@ use r#type::TypeExt;
 use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
 use std::sync::Arc;
 use toasty_core::{
-    driver::{Capability, Operation, Response},
+    async_trait,
+    driver::{Capability, Driver, Operation, Response},
     schema::db::{Schema, Table},
     stmt,
     stmt::ValueRecord,
-    Driver, Result,
+    Result,
 };
 use toasty_sql as sql;
 use tokio_postgres::{Client, Config};
@@ -20,21 +21,14 @@ use url::Url;
 
 #[derive(Debug)]
 pub struct PostgreSQL {
-    /// The PostgreSQL client.
-    client: Client,
+    config: Config,
 }
 
 impl PostgreSQL {
-    /// Initialize a Toasty PostgreSQL driver using an initialized connection.
-    pub fn new(connection: Client) -> Self {
-        Self { client: connection }
-    }
-
-    /// Connects to a PostgreSQL database using a connection string.
-    ///
-    /// See [`postgres::Client::connect`] for more information.
-    pub async fn connect(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
+    /// Create a new PostgreSQL driver from a connection URL
+    pub fn new(url: impl Into<String>) -> Result<Self> {
+        let url_str = url.into();
+        let url = Url::parse(&url_str)?;
 
         if url.scheme() != "postgresql" {
             return Err(anyhow::anyhow!(
@@ -70,13 +64,40 @@ impl PostgreSQL {
             config.password(password);
         }
 
-        Self::connect_with_config(config, tokio_postgres::NoTls).await
+        Ok(Self { config })
+    }
+
+    /// Create a new PostgreSQL driver with a tokio-postgres Config
+    pub fn from_config(config: Config) -> Self {
+        Self { config }
+    }
+}
+
+#[async_trait]
+impl Driver for PostgreSQL {
+    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
+        Ok(Box::new(
+            Connection::connect(self.config.clone(), tokio_postgres::NoTls).await?,
+        ))
+    }
+}
+
+#[derive(Debug)]
+pub struct Connection {
+    /// The PostgreSQL client.
+    client: Client,
+}
+
+impl Connection {
+    /// Initialize a Toasty PostgreSQL connection using an initialized client.
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 
     /// Connects to a PostgreSQL database using a [`postgres::Config`].
     ///
     /// See [`postgres::Client::configure`] for more information.
-    pub async fn connect_with_config<T>(config: Config, tls: T) -> Result<Self>
+    pub async fn connect<T>(config: Config, tls: T) -> Result<Self>
     where
         T: MakeTlsConnect<Socket> + 'static,
         T::Stream: Send,
@@ -93,7 +114,7 @@ impl PostgreSQL {
     }
 
     /// Creates a table.
-    pub async fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
+    pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
 
         let mut params = Vec::new();
@@ -130,7 +151,12 @@ impl PostgreSQL {
     }
 
     /// Drops a table.
-    pub async fn drop_table(&self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
+    pub async fn drop_table(
+        &mut self,
+        schema: &Schema,
+        table: &Table,
+        if_exists: bool,
+    ) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
         let mut params = Vec::new();
 
@@ -150,23 +176,19 @@ impl PostgreSQL {
     }
 }
 
-impl From<Client> for PostgreSQL {
+impl From<Client> for Connection {
     fn from(client: Client) -> Self {
         Self { client }
     }
 }
 
-#[toasty_core::async_trait]
-impl Driver for PostgreSQL {
-    fn capability(&self) -> &Capability {
+#[async_trait]
+impl toasty_core::driver::Connection for Connection {
+    fn capability(&self) -> &'static Capability {
         &Capability::POSTGRESQL
     }
 
-    async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
-        Ok(())
-    }
-
-    async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::Insert(op) => (op.stmt.into(), None),
             Operation::QuerySql(query) => (query.stmt.into(), query.ret),
@@ -228,7 +250,7 @@ impl Driver for PostgreSQL {
         }
     }
 
-    async fn reset_db(&self, schema: &Schema) -> Result<()> {
+    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.drop_table(schema, table, true).await?;
             self.create_table(schema, table).await?;

@@ -1,12 +1,13 @@
 mod value;
 pub(crate) use value::Value;
 
-use rusqlite::Connection;
+use rusqlite::Connection as RusqliteConnection;
 use std::{
-    path::Path,
-    sync::{Arc, Mutex},
+    path::{Path, PathBuf},
+    sync::Arc,
 };
 use toasty_core::{
+    async_trait,
     driver::{
         operation::{Operation, Transaction},
         Capability, Driver, Response,
@@ -18,70 +19,96 @@ use toasty_sql as sql;
 use url::Url;
 
 #[derive(Debug)]
-pub struct Sqlite {
-    connection: Mutex<Connection>,
+pub enum Sqlite {
+    File(PathBuf),
+    InMemory,
 }
 
 impl Sqlite {
-    pub fn connect(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
+    /// Create a new SQLite driver with an arbitrary connection URL
+    pub fn new(url: impl Into<String>) -> Result<Self> {
+        let url_str = url.into();
+        let url = Url::parse(&url_str)?;
 
         if url.scheme() != "sqlite" {
             return Err(anyhow::anyhow!(
-                "connection URL does not have a `sqlite` scheme; url={url}"
+                "connection URL does not have a `sqlite` scheme; url={}",
+                url_str
             ));
         }
 
         if url.path() == ":memory:" {
-            Ok(Self::in_memory())
+            Ok(Self::InMemory)
         } else {
-            Self::open(url.path())
+            Ok(Self::File(PathBuf::from(url.path())))
         }
     }
 
+    /// Create an in-memory SQLite database
     pub fn in_memory() -> Self {
-        let connection = Connection::open_in_memory().unwrap();
+        Self::InMemory
+    }
 
-        Self {
-            connection: Mutex::new(connection),
-        }
+    /// Open a SQLite database at the specified file path
+    pub fn open<P: AsRef<Path>>(path: P) -> Self {
+        Self::File(path.as_ref().to_path_buf())
+    }
+}
+
+#[async_trait]
+impl Driver for Sqlite {
+    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::Connection>> {
+        let connection = match self {
+            Sqlite::File(path) => Connection::open(path)?,
+            Sqlite::InMemory => Connection::in_memory(),
+        };
+        Ok(Box::new(connection))
+    }
+
+    fn max_connections(&self) -> Option<usize> {
+        matches!(self, Self::InMemory).then_some(1)
+    }
+}
+
+#[derive(Debug)]
+pub struct Connection {
+    connection: RusqliteConnection,
+}
+
+impl Connection {
+    pub fn in_memory() -> Self {
+        let connection = RusqliteConnection::open_in_memory().unwrap();
+
+        Self { connection }
     }
 
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let connection = Connection::open(path)?;
-        let sqlite = Self {
-            connection: Mutex::new(connection),
-        };
+        let connection = RusqliteConnection::open(path)?;
+        let sqlite = Self { connection };
         Ok(sqlite)
     }
 }
 
 #[toasty_core::async_trait]
-impl Driver for Sqlite {
-    fn capability(&self) -> &Capability {
+impl toasty_core::driver::Connection for Connection {
+    fn capability(&self) -> &'static Capability {
         &Capability::SQLITE
     }
 
-    async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
-        Ok(())
-    }
-
-    async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        let connection = self.connection.lock().unwrap();
-
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret),
             // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(Transaction::Start) => {
-                connection.execute("BEGIN", [])?;
+                self.connection.execute("BEGIN", [])?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
-                connection.execute("COMMIT", [])?;
+                self.connection.execute("COMMIT", [])?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {
-                connection.execute("ROLLBACK", [])?;
+                self.connection.execute("ROLLBACK", [])?;
                 return Ok(Response::count(0));
             }
             _ => todo!("op={:#?}", op),
@@ -90,7 +117,7 @@ impl Driver for Sqlite {
         let mut params = vec![];
         let sql_str = sql::Serializer::sqlite(schema).serialize(&sql, &mut params);
 
-        let mut stmt = connection.prepare(&sql_str).unwrap();
+        let mut stmt = self.connection.prepare(&sql_str).unwrap();
 
         let width = match &sql {
             sql::Statement::Query(stmt) => match &stmt.body {
@@ -155,7 +182,7 @@ impl Driver for Sqlite {
         Ok(Response::value_stream(stmt::ValueStream::from_vec(ret)))
     }
 
-    async fn reset_db(&self, schema: &Schema) -> Result<()> {
+    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.create_table(schema, table)?;
         }
@@ -164,11 +191,9 @@ impl Driver for Sqlite {
     }
 }
 
-impl Sqlite {
-    fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
+impl Connection {
+    fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::sqlite(schema);
-
-        let connection = self.connection.lock().unwrap();
 
         let mut params = vec![];
         let stmt = serializer.serialize(
@@ -177,7 +202,7 @@ impl Sqlite {
         );
         assert!(params.is_empty());
 
-        connection.execute(&stmt, [])?;
+        self.connection.execute(&stmt, [])?;
 
         // Create any indices
         for index in &table.indices {
@@ -189,7 +214,7 @@ impl Sqlite {
             let stmt = serializer.serialize(&sql::Statement::create_index(index), &mut params);
             assert!(params.is_empty());
 
-            connection.execute(&stmt, [])?;
+            self.connection.execute(&stmt, [])?;
         }
         Ok(())
     }
