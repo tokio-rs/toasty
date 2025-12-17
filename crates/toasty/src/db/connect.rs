@@ -26,22 +26,22 @@ impl Connect {
             #[cfg(feature = "dynamodb")]
             "dynamodb" => Box::new(toasty_driver_dynamodb::DynamoDb::new(url.to_string())),
             #[cfg(not(feature = "dynamodb"))]
-            "dynamodb" => anyhow::bail!("`dynamodb` feature not enabled"),
+            "dynamodb" => Err(anyhow::anyhow!("`dynamodb` feature not enabled"))?, // Note the ?
 
             #[cfg(feature = "mysql")]
             "mysql" => Box::new(toasty_driver_mysql::MySQL::new(url.to_string())),
             #[cfg(not(feature = "mysql"))]
-            "mysql" => anyhow::bail!("`mysql` feature not enabled"),
+            "mysql" => Err(anyhow::anyhow!("`mysql` feature not enabled"))?,
 
             #[cfg(feature = "postgresql")]
             "postgresql" => Box::new(toasty_driver_postgresql::PostgreSQL::new(url)?),
             #[cfg(not(feature = "postgresql"))]
-            "postgresql" => anyhow::bail!("`postgresql` feature not enabled"),
+            "postgresql" => Err(anyhow::anyhow!("`postgresql` feature not enabled"))?,
 
             #[cfg(feature = "sqlite")]
             "sqlite" => Box::new(toasty_driver_sqlite::Sqlite::new(url)?),
             #[cfg(not(feature = "sqlite"))]
-            "sqlite" => anyhow::bail!("`sqlite` feature not enabled"),
+            "sqlite" => Err(anyhow::anyhow!("`sqlite` feature not enabled"))?,
 
             scheme => {
                 return Err(anyhow::anyhow!(
