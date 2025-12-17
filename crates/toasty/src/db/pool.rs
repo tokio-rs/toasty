@@ -17,6 +17,7 @@ impl Pool {
         let inner = deadpool::managed::Pool::builder(Manager {
             driver: Box::new(driver),
         })
+        .runtime(deadpool::Runtime::Tokio1)
         .build()?;
         let connection = match inner.get().await {
             Ok(connection) => connection,

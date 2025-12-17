@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [features]
-default = ["sqlite", "postgresql"]
+default = ["sqlite"]
 sql = ["sqlite", "mysql", "postgresql"]
 sqlite = ["toasty/sqlite"]
 mysql = ["toasty/mysql"]
