@@ -1,11 +1,13 @@
 mod op;
+mod r#type;
+mod value;
+
+pub(crate) use r#type::TypeExt;
+pub(crate) use value::Value;
 
 use toasty_core::{
     driver::{operation::Operation, Capability, Driver, Response},
-    schema::{
-        app,
-        db::{Column, ColumnId, Schema, Table},
-    },
+    schema::db::{Column, ColumnId, Schema, Table},
     stmt::{self, ExprContext},
 };
 
@@ -16,8 +18,7 @@ use aws_sdk_dynamodb::{
     types::{
         AttributeDefinition, AttributeValue, Delete, GlobalSecondaryIndex, KeySchemaElement,
         KeyType, KeysAndAttributes, Projection, ProjectionType, ProvisionedThroughput, Put,
-        PutRequest, ReturnValuesOnConditionCheckFailure, ScalarAttributeType, TransactWriteItem,
-        Update, WriteRequest,
+        PutRequest, ReturnValuesOnConditionCheckFailure, TransactWriteItem, Update, WriteRequest,
     },
     Client,
 };
@@ -110,33 +111,18 @@ impl Driver for DynamoDb {
 
 impl DynamoDb {
     async fn exec2(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        use Operation::*;
-
         match op {
-            GetByKey(op) => self.exec_get_by_key(schema, op).await,
-            QueryPk(op) => self.exec_query_pk(schema, op).await,
-            DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
-            UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
-            FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
-            QuerySql(op) => match op.stmt {
+            Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
+            Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
+            Operation::DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
+            Operation::UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
+            Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
+            Operation::QuerySql(op) => match op.stmt {
                 stmt::Statement::Insert(op) => self.exec_insert(schema, op).await,
                 _ => todo!("op={:#?}", op),
             },
             _ => todo!("op={op:#?}"),
         }
-    }
-}
-
-fn ddb_ty(ty: &stmt::Type) -> ScalarAttributeType {
-    use stmt::Type::*;
-    use ScalarAttributeType::*;
-
-    match ty {
-        Bool => N,
-        String | Enum(..) => S,
-        I8 | I16 | I32 | I64 => N,
-        Id(_) => S,
-        _ => todo!("ddb_ty; ty={:#?}", ty),
     }
 }
 
@@ -149,122 +135,10 @@ fn ddb_key(table: &Table, key: &stmt::Value) -> HashMap<String, AttributeValue> 
             value => value,
         };
 
-        ret.insert(column.name.clone(), ddb_val(value));
+        ret.insert(column.name.clone(), Value::from(value.clone()).to_ddb());
     }
 
     ret
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-enum V {
-    Bool(bool),
-    Null,
-    String(String),
-    I8(i8),
-    I16(i16),
-    I32(i32),
-    I64(i64),
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(u64),
-    Id(usize, String),
-}
-
-fn ddb_val(val: &stmt::Value) -> AttributeValue {
-    match val {
-        stmt::Value::Bool(val) => AttributeValue::Bool(*val),
-        stmt::Value::String(val) => AttributeValue::S(val.to_string()),
-        stmt::Value::I8(val) => AttributeValue::N(val.to_string()),
-        stmt::Value::I16(val) => AttributeValue::N(val.to_string()),
-        stmt::Value::I32(val) => AttributeValue::N(val.to_string()),
-        stmt::Value::I64(val) => AttributeValue::N(val.to_string()),
-        stmt::Value::U8(val) => AttributeValue::N(val.to_string()),
-        stmt::Value::U16(val) => AttributeValue::N(val.to_string()),
-        stmt::Value::U32(val) => AttributeValue::N(val.to_string()),
-        stmt::Value::U64(val) => AttributeValue::N(val.to_string()),
-        stmt::Value::Bytes(val) => AttributeValue::B(val.clone().into()),
-        stmt::Value::Uuid(val) => AttributeValue::S(val.to_string()),
-        stmt::Value::Id(val) => AttributeValue::S(val.to_string()),
-        stmt::Value::Enum(val) => {
-            let v = match &val.fields[..] {
-                [] => V::Null,
-                [stmt::Value::Bool(v)] => V::Bool(*v),
-                [stmt::Value::String(v)] => V::String(v.to_string()),
-                [stmt::Value::I8(v)] => V::I8(*v),
-                [stmt::Value::I16(v)] => V::I16(*v),
-                [stmt::Value::I32(v)] => V::I32(*v),
-                [stmt::Value::I64(v)] => V::I64(*v),
-                [stmt::Value::U8(v)] => V::U8(*v),
-                [stmt::Value::U16(v)] => V::U16(*v),
-                [stmt::Value::U32(v)] => V::U32(*v),
-                [stmt::Value::U64(v)] => V::U64(*v),
-                [stmt::Value::Id(id)] => V::Id(id.model_id().0, id.to_string()),
-                _ => todo!("val={:#?}", val.fields),
-            };
-            AttributeValue::S(format!(
-                "{}#{}",
-                val.variant,
-                serde_json::to_string(&v).unwrap()
-            ))
-        }
-        _ => todo!("{:#?}", val),
-    }
-}
-
-fn ddb_to_val(ty: &stmt::Type, val: &AttributeValue) -> stmt::Value {
-    use stmt::Type;
-    use AttributeValue::*;
-
-    match (ty, val) {
-        (Type::Bool, Bool(val)) => stmt::Value::from(*val),
-        (Type::String, S(val)) => stmt::Value::from(val.clone()),
-        (Type::I8, N(val)) => stmt::Value::from(val.parse::<i8>().unwrap()),
-        (Type::I16, N(val)) => stmt::Value::from(val.parse::<i16>().unwrap()),
-        (Type::I32, N(val)) => stmt::Value::from(val.parse::<i32>().unwrap()),
-        (Type::I64, N(val)) => stmt::Value::from(val.parse::<i64>().unwrap()),
-        (Type::U8, N(val)) => stmt::Value::from(val.parse::<u8>().unwrap()),
-        (Type::U16, N(val)) => stmt::Value::from(val.parse::<u16>().unwrap()),
-        (Type::U32, N(val)) => stmt::Value::from(val.parse::<u32>().unwrap()),
-        (Type::U64, N(val)) => stmt::Value::from(val.parse::<u64>().unwrap()),
-        (Type::Bytes, B(val)) => stmt::Value::Bytes(val.clone().into_inner()),
-        (Type::Uuid, S(val)) => stmt::Value::from(val.parse::<uuid::Uuid>().unwrap()),
-        (Type::Id(model), S(val)) => stmt::Value::from(stmt::Id::from_string(*model, val.clone())),
-        (Type::Enum(..), S(val)) => {
-            let (variant, rest) = val.split_once("#").unwrap();
-            let variant: usize = variant.parse().unwrap();
-            let v: V = serde_json::from_str(rest).unwrap();
-            let value = match v {
-                V::Bool(v) => stmt::Value::Bool(v),
-                V::Null => stmt::Value::Null,
-                V::String(v) => stmt::Value::String(v),
-                V::Id(model, v) => stmt::Value::Id(stmt::Id::from_string(app::ModelId(model), v)),
-                V::I8(v) => stmt::Value::I8(v),
-                V::I16(v) => stmt::Value::I16(v),
-                V::I32(v) => stmt::Value::I32(v),
-                V::I64(v) => stmt::Value::I64(v),
-                V::U8(v) => stmt::Value::U8(v),
-                V::U16(v) => stmt::Value::U16(v),
-                V::U32(v) => stmt::Value::U32(v),
-                V::U64(v) => stmt::Value::U64(v),
-            };
-
-            if value.is_null() {
-                stmt::ValueEnum {
-                    variant,
-                    fields: stmt::ValueRecord::from_vec(vec![]),
-                }
-                .into()
-            } else {
-                stmt::ValueEnum {
-                    variant,
-                    fields: stmt::ValueRecord::from_vec(vec![value]),
-                }
-                .into()
-            }
-        }
-        _ => todo!("ty={:#?}; value={:#?}", ty, val),
-    }
 }
 
 fn ddb_key_schema(partition: &Column, range: Option<&Column>) -> Vec<KeySchemaElement> {
@@ -299,7 +173,7 @@ fn item_to_record<'a, 'stmt>(
         columns
             .map(|column| {
                 if let Some(value) = item.get(&column.name) {
-                    ddb_to_val(&column.ty, value)
+                    Value::from_ddb(&column.ty, value).into_inner()
                 } else {
                     stmt::Value::Null
                 }
@@ -376,7 +250,7 @@ impl ExprAttrs {
     }
 
     fn value(&mut self, val: &stmt::Value) -> String {
-        self.ddb_value(ddb_val(val))
+        self.ddb_value(Value::from(val.clone()).to_ddb())
     }
 
     fn ddb_value(&mut self, val: AttributeValue) -> String {

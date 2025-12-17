@@ -1,3 +1,6 @@
+mod value;
+pub(crate) use value::Value;
+
 use rusqlite::Connection;
 use std::{
     path::Path,
@@ -113,18 +116,16 @@ impl Driver for Sqlite {
             _ => None,
         };
 
+        let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
+
         if width.is_none() {
-            let count = stmt.execute(rusqlite::params_from_iter(
-                params.iter().map(value_from_param),
-            ))?;
+            let count = stmt.execute(rusqlite::params_from_iter(params.iter()))?;
 
             return Ok(Response::count(count as _));
         }
 
         let mut rows = stmt
-            .query(rusqlite::params_from_iter(
-                params.iter().map(value_from_param),
-            ))
+            .query(rusqlite::params_from_iter(params.iter()))
             .unwrap();
 
         let mut ret = vec![];
@@ -139,7 +140,7 @@ impl Driver for Sqlite {
                     let width = width.unwrap();
 
                     for index in 0..width {
-                        items.push(sqlite_to_toasty(row, index, &ret_tys[index]));
+                        items.push(Value::from_sql(row, index, &ret_tys[index]).into_inner());
                     }
 
                     ret.push(stmt::ValueRecord::from_vec(items).into());
@@ -191,88 +192,5 @@ impl Sqlite {
             connection.execute(&stmt, [])?;
         }
         Ok(())
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-enum V {
-    Bool(bool),
-    Null,
-    String(String),
-    I8(i8),
-    I64(i64),
-    Id(usize, String),
-}
-
-fn value_from_param(value: &stmt::Value) -> rusqlite::types::ToSqlOutput<'_> {
-    use rusqlite::types::{ToSqlOutput, Value, ValueRef};
-    use stmt::Value::*;
-
-    match value {
-        Bool(true) => ToSqlOutput::Owned(Value::Integer(1)),
-        Bool(false) => ToSqlOutput::Owned(Value::Integer(0)),
-        Id(v) => ToSqlOutput::Owned(v.to_string().into()),
-        I8(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        I16(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        I32(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        I64(v) => ToSqlOutput::Owned(Value::Integer(*v)),
-        U8(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        U16(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        U32(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        U64(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        String(v) => ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes())),
-        Bytes(v) => ToSqlOutput::Borrowed(ValueRef::Blob(&v[..])),
-        Null => ToSqlOutput::Owned(Value::Null),
-        Enum(value_enum) => {
-            let v = match &value_enum.fields[..] {
-                [] => V::Null,
-                [stmt::Value::Bool(v)] => V::Bool(*v),
-                [stmt::Value::String(v)] => V::String(v.to_string()),
-                [stmt::Value::I64(v)] => V::I64(*v),
-                [stmt::Value::Id(id)] => V::Id(id.model_id().0, id.to_string()),
-                _ => todo!("val={:#?}", value_enum.fields),
-            };
-
-            ToSqlOutput::Owned(
-                format!(
-                    "{}#{}",
-                    value_enum.variant,
-                    serde_json::to_string(&v).unwrap()
-                )
-                .into(),
-            )
-        }
-        _ => todo!("value = {:#?}", value),
-    }
-}
-
-fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt::Value {
-    use rusqlite::types::Value as SqlValue;
-
-    let value: Option<SqlValue> = row.get(index).unwrap();
-
-    match value {
-        Some(SqlValue::Null) => stmt::Value::Null,
-        Some(SqlValue::Integer(value)) => match ty {
-            stmt::Type::I8 => stmt::Value::I8(value as i8),
-            stmt::Type::I16 => stmt::Value::I16(value as i16),
-            stmt::Type::I32 => stmt::Value::I32(value as i32),
-            stmt::Type::I64 => stmt::Value::I64(value),
-            stmt::Type::U8 => stmt::Value::U8(value as u8),
-            stmt::Type::U16 => stmt::Value::U16(value as u16),
-            stmt::Type::U32 => stmt::Value::U32(value as u32),
-            stmt::Type::U64 => stmt::Value::U64(value as u64),
-            _ => todo!("ty={ty:#?}"),
-        },
-        Some(SqlValue::Text(value)) => match ty {
-            stmt::Type::Uuid => stmt::Value::Uuid(value.parse().expect("text is a valid uuid")),
-            _ => stmt::Value::String(value),
-        },
-        Some(SqlValue::Blob(value)) => match ty {
-            stmt::Type::Bytes => stmt::Value::Bytes(value),
-            _ => todo!("value={value:#?}"),
-        },
-        None => stmt::Value::Null,
-        _ => todo!("value={value:#?}"),
     }
 }
