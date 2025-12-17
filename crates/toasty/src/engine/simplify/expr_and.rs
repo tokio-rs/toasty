@@ -1,6 +1,6 @@
 use super::Simplify;
 use std::mem;
-use toasty_core::stmt;
+use toasty_core::stmt::{self, BinaryOp, Expr};
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_and(&mut self, expr: &mut stmt::ExprAnd) -> Option<stmt::Expr> {
@@ -20,6 +20,12 @@ impl Simplify<'_> {
 
         // `and(..., true, ...) → and(..., ...)`
         expr.operands.retain(|expr| !expr.is_true());
+
+        // Null propagation, `null and null` → `null`
+        // After removing true values, if all operands are null, return null.
+        if !expr.operands.is_empty() && expr.operands.iter().all(|e| e.is_value_null()) {
+            return Some(Expr::null());
+        }
 
         // Idempotent law, `a and a` → `a`
         // Note: O(n) lookups are acceptable here since operand lists are typically small.
@@ -58,6 +64,9 @@ impl Simplify<'_> {
         if self.try_complement_and(expr) {
             return Some(false.into());
         }
+
+        // Range to equality: `a >= c and a <= c` → `a = c`
+        self.try_range_to_equality(expr);
 
         if expr.operands.is_empty() {
             Some(true.into())
@@ -98,6 +107,64 @@ impl Simplify<'_> {
         }
 
         false
+    }
+
+    /// Finds pairs of range comparisons that collapse to equality.
+    ///
+    /// `a >= c and a <= c` → `a = c`
+    ///
+    /// When a pair is found, all other bounds on the same (lhs, rhs) are also
+    /// removed since equality implies them.
+    ///
+    /// NOTE: This assumes comparisons are already canonicalized with literals
+    /// on the right-hand side (e.g., `a >= 5` not `5 <= a`).
+    fn try_range_to_equality(&mut self, expr: &mut stmt::ExprAnd) {
+        for i in 0..expr.operands.len() {
+            let Expr::BinaryOp(op_i) = &expr.operands[i] else {
+                continue;
+            };
+
+            if !matches!(op_i.op, BinaryOp::Ge | BinaryOp::Le) {
+                continue;
+            }
+
+            for j in (i + 1)..expr.operands.len() {
+                let Expr::BinaryOp(op_j) = &expr.operands[j] else {
+                    continue;
+                };
+
+                if !matches!(
+                    (op_i.op, op_j.op),
+                    (BinaryOp::Ge, BinaryOp::Le) | (BinaryOp::Le, BinaryOp::Ge)
+                ) {
+                    continue;
+                }
+
+                if op_i.lhs == op_j.lhs && op_i.rhs == op_j.rhs {
+                    let lhs = op_i.lhs.clone();
+                    let rhs = op_i.rhs.clone();
+
+                    // Replace the first operand with equality
+                    expr.operands[i] = Expr::eq(lhs.as_ref().clone(), rhs.as_ref().clone());
+
+                    // Mark all other `Ge`/`Le` bounds on the same (lhs, rhs)
+                    // for removal
+                    for k in (i + 1)..expr.operands.len() {
+                        if let Expr::BinaryOp(op_k) = &expr.operands[k] {
+                            if matches!(op_k.op, BinaryOp::Ge | BinaryOp::Le)
+                                && op_k.lhs == lhs
+                                && op_k.rhs == rhs
+                            {
+                                expr.operands[k] = true.into();
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        expr.operands.retain(|e| !e.is_true());
     }
 }
 
@@ -488,5 +555,251 @@ mod tests {
 
         assert!(result.is_some());
         assert!(result.unwrap().is_false());
+    }
+
+    #[test]
+    fn range_to_equality_ge_le() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a >= 5 and a <= 5` → `a = 5`
+        let mut expr = ExprAnd {
+            operands: vec![
+                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
+                Expr::binary_op(Expr::arg(0), BinaryOp::Le, 5i64),
+            ],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        let Some(Expr::BinaryOp(bin_op)) = result else {
+            panic!("expected binary op");
+        };
+        assert!(bin_op.op.is_eq());
+    }
+
+    #[test]
+    fn range_to_equality_le_ge() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a <= 5 and a >= 5` → `a = 5` (opposite order)
+        let mut expr = ExprAnd {
+            operands: vec![
+                Expr::binary_op(Expr::arg(0), BinaryOp::Le, 5i64),
+                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
+            ],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        let Some(Expr::BinaryOp(bin_op)) = result else {
+            panic!("expected binary op");
+        };
+        assert!(bin_op.op.is_eq());
+    }
+
+    #[test]
+    fn range_to_equality_different_bounds_not_simplified() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a >= 5 and a <= 10` is not simplified (different bounds)
+        let mut expr = ExprAnd {
+            operands: vec![
+                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
+                Expr::binary_op(Expr::arg(0), BinaryOp::Le, 10i64),
+            ],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+    }
+
+    #[test]
+    fn range_to_equality_different_exprs_not_simplified() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a >= 5 and b <= 5` is not simplified (different expressions)
+        let mut expr = ExprAnd {
+            operands: vec![
+                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
+                Expr::binary_op(Expr::arg(1), BinaryOp::Le, 5i64),
+            ],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+    }
+
+    #[test]
+    fn range_to_equality_with_other_operands() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `x and a >= 5 and a <= 5` → `x and a = 5`
+        let mut expr = ExprAnd {
+            operands: vec![
+                Expr::arg(0),
+                Expr::binary_op(Expr::arg(1), BinaryOp::Ge, 5i64),
+                Expr::binary_op(Expr::arg(1), BinaryOp::Le, 5i64),
+            ],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_none()); // Still has multiple operands
+        assert_eq!(expr.operands.len(), 2);
+
+        // One should be arg(0), the other should be the equality
+        let has_equality = expr
+            .operands
+            .iter()
+            .any(|e| matches!(e, Expr::BinaryOp(op) if op.op.is_eq()));
+        assert!(has_equality);
+    }
+
+    #[test]
+    fn range_to_equality_uneven_repetitions() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a >= 5 and a >= 5 and a <= 5` → `a = 5`
+        let mut expr = ExprAnd {
+            operands: vec![
+                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
+                Expr::binary_op(Expr::arg(0), BinaryOp::Ge, 5i64),
+                Expr::binary_op(Expr::arg(0), BinaryOp::Le, 5i64),
+            ],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        // All bounds collapse to a single equality
+        let Some(Expr::BinaryOp(bin_op)) = result else {
+            panic!("expected binary op");
+        };
+        assert!(bin_op.op.is_eq());
+    }
+
+    // Null propagation tests
+
+    #[test]
+    fn null_and_null_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null and null` → `null`
+        let mut expr = ExprAnd {
+            operands: vec![Expr::null(), Expr::null()],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn null_and_true_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null and true` → `null` (true is removed, leaving only null)
+        let mut expr = ExprAnd {
+            operands: vec![Expr::null(), true.into()],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn true_and_null_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `true and null` → `null` (true is removed, leaving only null)
+        let mut expr = ExprAnd {
+            operands: vec![true.into(), Expr::null()],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn null_and_false_becomes_false() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null and false` → `false` (false short-circuits)
+        let mut expr = ExprAnd {
+            operands: vec![Expr::null(), false.into()],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_false());
+    }
+
+    #[test]
+    fn false_and_null_becomes_false() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `false and null` → `false` (false short-circuits)
+        let mut expr = ExprAnd {
+            operands: vec![false.into(), Expr::null()],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_false());
+    }
+
+    #[test]
+    fn null_and_symbolic_not_simplified() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null and a` → no change (symbolic operand present)
+        let mut expr = ExprAnd {
+            operands: vec![Expr::null(), Expr::arg(0)],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+    }
+
+    #[test]
+    fn multiple_nulls_become_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null and null and null` → `null`
+        let mut expr = ExprAnd {
+            operands: vec![Expr::null(), Expr::null(), Expr::null()],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn multiple_nulls_and_true_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null and true and null and true` → `null`
+        let mut expr = ExprAnd {
+            operands: vec![Expr::null(), true.into(), Expr::null(), true.into()],
+        };
+        let result = simplify.simplify_expr_and(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
     }
 }
