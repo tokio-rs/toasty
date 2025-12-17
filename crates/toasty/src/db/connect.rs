@@ -39,7 +39,7 @@ impl Connect {
             "postgresql" => anyhow::bail!("`postgresql` feature not enabled"),
 
             #[cfg(feature = "sqlite")]
-            "sqlite" => Box::new(toasty_driver_sqlite::Sqlite::new(url)),
+            "sqlite" => Box::new(toasty_driver_sqlite::Sqlite::new(url)?),
             #[cfg(not(feature = "sqlite"))]
             "sqlite" => anyhow::bail!("`sqlite` feature not enabled"),
 

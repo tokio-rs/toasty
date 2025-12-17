@@ -2,7 +2,10 @@ mod value;
 pub(crate) use value::Value;
 
 use rusqlite::Connection as RusqliteConnection;
-use std::{path::Path, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use toasty_core::{
     async_trait,
     driver::{
@@ -16,35 +19,54 @@ use toasty_sql as sql;
 use url::Url;
 
 #[derive(Debug)]
-pub struct Sqlite {
-    url: String,
+pub enum Sqlite {
+    File(PathBuf),
+    InMemory,
 }
 
 impl Sqlite {
     /// Create a new SQLite driver with an arbitrary connection URL
-    pub fn new(url: impl Into<String>) -> Self {
-        Self { url: url.into() }
+    pub fn new(url: impl Into<String>) -> Result<Self> {
+        let url_str = url.into();
+        let url = Url::parse(&url_str)?;
+
+        if url.scheme() != "sqlite" {
+            return Err(anyhow::anyhow!(
+                "connection URL does not have a `sqlite` scheme; url={}",
+                url_str
+            ));
+        }
+
+        if url.path() == ":memory:" {
+            Ok(Self::InMemory)
+        } else {
+            Ok(Self::File(PathBuf::from(url.path())))
+        }
     }
 
     /// Create an in-memory SQLite database
     pub fn in_memory() -> Self {
-        Self {
-            url: "sqlite::memory:".to_string(),
-        }
+        Self::InMemory
     }
 
     /// Open a SQLite database at the specified file path
     pub fn open<P: AsRef<Path>>(path: P) -> Self {
-        Self {
-            url: format!("sqlite:{}", path.as_ref().display()),
-        }
+        Self::File(path.as_ref().to_path_buf())
     }
 }
 
 #[async_trait]
 impl Driver for Sqlite {
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::Connection>> {
-        Ok(Box::new(Connection::connect(&self.url)?))
+        let connection = match self {
+            Sqlite::File(path) => Connection::open(path)?,
+            Sqlite::InMemory => Connection::in_memory(),
+        };
+        Ok(Box::new(connection))
+    }
+
+    fn max_connections(&self) -> Option<usize> {
+        matches!(self, Self::InMemory).then_some(1)
     }
 }
 
@@ -54,22 +76,6 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn connect(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
-
-        if url.scheme() != "sqlite" {
-            return Err(anyhow::anyhow!(
-                "connection URL does not have a `sqlite` scheme; url={url}"
-            ));
-        }
-
-        if url.path() == ":memory:" {
-            Ok(Self::in_memory())
-        } else {
-            Self::open(url.path())
-        }
-    }
-
     pub fn in_memory() -> Self {
         let connection = RusqliteConnection::open_in_memory().unwrap();
 
