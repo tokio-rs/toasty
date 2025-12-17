@@ -18,6 +18,12 @@ pub trait Driver: Debug + Send + Sync + 'static {
     /// This method is called by the [`Pool`] whenever a [`Connection`] is requested while none is
     /// available and there is room to create a new [`Connection`].
     async fn connect(&self) -> crate::Result<Box<dyn Connection>>;
+
+    /// Returns the maximum number of simultaneous database connections supported. For example,
+    /// this is `Some(1)` for the in-memory SQLite driver which cannot be pooled.
+    fn max_connections(&self) -> Option<usize> {
+        None
+    }
 }
 
 #[async_trait]

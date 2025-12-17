@@ -2,9 +2,39 @@
 
 use std::ops::{Deref, DerefMut};
 
+pub use deadpool::managed::Timeouts;
 use toasty_core::driver::{Capability, Driver};
 
 use crate::db::{Connect, Connection};
+
+/// Get the default maximum size of a pool, which is `cpu_core_count * 2`
+/// including logical cores (Hyper-Threading).
+fn get_default_pool_max_size() -> usize {
+    deadpool::managed::PoolConfig::default().max_size
+}
+
+/// Configuration for connection pool behavior.
+#[derive(Debug, Clone)]
+pub struct PoolConfig {
+    pub max_size: usize,
+    pub timeouts: Timeouts,
+}
+
+impl PoolConfig {
+    /// Creates a new pool configuration with default settings.
+    pub fn new() -> Self {
+        Self {
+            max_size: get_default_pool_max_size(),
+            timeouts: Default::default(),
+        }
+    }
+}
+
+impl Default for PoolConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// A connection pool that manages database connections.
 #[derive(Debug)]
@@ -18,11 +48,18 @@ pub struct Pool {
 impl Pool {
     /// Creates a new connection pool from the given driver.
     pub async fn new(driver: impl Driver) -> crate::Result<Self> {
-        let inner = deadpool::managed::Pool::builder(Manager {
+        let max_connections = driver.max_connections();
+        let mut builder = deadpool::managed::Pool::builder(Manager {
             driver: Box::new(driver),
         })
-        .runtime(deadpool::Runtime::Tokio1)
-        .build()?;
+        .runtime(deadpool::Runtime::Tokio1);
+
+        if let Some(max_connections) = max_connections {
+            builder = builder.max_size(max_connections);
+        }
+
+        let inner = builder.build()?;
+
         let connection = match inner.get().await {
             Ok(connection) => connection,
             Err(err) => return Err(anyhow::anyhow!("failed to establish connection: {err}")),
