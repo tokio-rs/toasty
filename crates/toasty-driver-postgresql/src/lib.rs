@@ -191,7 +191,13 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::Insert(op) => (op.stmt.into(), None),
-            Operation::QuerySql(query) => (query.stmt.into(), query.ret),
+            Operation::QuerySql(query) => {
+                assert!(
+                    query.last_insert_id_hack.is_none(),
+                    "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
+                );
+                (query.stmt.into(), query.ret)
+            }
             op => todo!("op={:#?}", op),
         };
 

@@ -12,7 +12,12 @@ impl<M: Model> CreateMany<M> {
     }
 
     pub fn item(mut self, item: impl stmt::IntoInsert<Model = M>) -> Self {
-        self.stmts.push(item.into_insert());
+        let stmt = item.into_insert();
+        assert!(
+            stmt.untyped.source.single,
+            "BUG: insert statement should have `single` flag set"
+        );
+        self.stmts.push(stmt);
         self
     }
 
@@ -29,6 +34,8 @@ impl<M: Model> CreateMany<M> {
         for stmt in stmts {
             merged.merge(stmt);
         }
+
+        merged.untyped.source.single = false;
 
         let records = db.exec(merged.into()).await?;
         let cursor = Cursor::new(db.engine.schema.clone(), records);

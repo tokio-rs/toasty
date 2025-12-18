@@ -15,11 +15,11 @@ impl<M: Model> Insert<M> {
     /// This insertion statement is not guaranteed to be valid.
     ///
     /// TODO: rename `new`?
-    pub fn blank() -> Self {
+    pub fn blank_single() -> Self {
         Self {
             untyped: stmt::Insert {
                 target: stmt::InsertTarget::Model(M::id()),
-                source: stmt::Query::new(vec![stmt::ExprRecord::from_vec(
+                source: stmt::Query::new_single(vec![stmt::ExprRecord::from_vec(
                     M::schema()
                         .fields
                         .iter()

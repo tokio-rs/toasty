@@ -6,7 +6,7 @@ use toasty_core::{driver::Rows, stmt};
 
 #[derive(Debug)]
 pub(crate) struct SetVar {
-    pub rows: Vec<stmt::Value>,
+    pub value: stmt::Value,
     pub output: Output,
 }
 
@@ -16,7 +16,7 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            Rows::value_stream(action.rows.clone()),
+            Rows::Value(action.value.clone()),
         );
 
         Ok(())

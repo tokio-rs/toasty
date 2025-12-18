@@ -5,7 +5,7 @@ pub(crate) use value::Value;
 
 use mysql_async::{
     prelude::{Queryable, ToValue},
-    Conn,
+    Conn, Pool,
 };
 use std::sync::Arc;
 use toasty_core::{
@@ -20,34 +20,13 @@ use url::Url;
 
 #[derive(Debug)]
 pub struct MySQL {
-    url: String,
+    pool: Pool,
 }
 
 impl MySQL {
-    pub fn new(url: String) -> Self {
-        Self { url }
-    }
-}
-
-#[async_trait]
-impl Driver for MySQL {
-    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
-        Ok(Box::new(Connection::connect(&self.url).await?))
-    }
-}
-
-#[derive(Debug)]
-pub struct Connection {
-    conn: Conn,
-}
-
-impl Connection {
-    pub fn new(conn: Conn) -> Self {
-        Self { conn }
-    }
-
-    pub async fn connect(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
+    pub fn new(url: impl Into<String>) -> Result<Self> {
+        let url_str = url.into();
+        let url = Url::parse(&url_str)?;
 
         if url.scheme() != "mysql" {
             return Err(anyhow::anyhow!(
@@ -69,8 +48,33 @@ impl Connection {
         let opts = mysql_async::Opts::from_url(url.as_ref())?;
         let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
 
-        let conn = Conn::new(opts).await?;
-        Ok(Self { conn })
+        let pool = Pool::new(opts);
+        Ok(Self { pool })
+    }
+}
+
+impl From<Pool> for MySQL {
+    fn from(pool: Pool) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait]
+impl Driver for MySQL {
+    async fn connect(&self) -> Result<Box<dyn toasty_core::driver::Connection>> {
+        let conn = self.pool.get_conn().await?;
+        Ok(Box::new(Connection::new(conn)))
+    }
+}
+
+#[derive(Debug)]
+pub struct Connection {
+    conn: Conn,
+}
+
+impl Connection {
+    pub fn new(conn: Conn) -> Self {
+        Self { conn }
     }
 
     pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
@@ -133,6 +137,7 @@ impl Connection {
         Ok(())
     }
 }
+
 impl From<Conn> for Connection {
     fn from(conn: Conn) -> Self {
         Self { conn }
@@ -146,9 +151,8 @@ impl toasty_core::driver::Connection for Connection {
     }
 
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        let (sql, ret): (sql::Statement, _) = match op {
-            // Operation::Insert(stmt) => stmt.into(),
-            Operation::QuerySql(op) => (op.stmt.into(), op.ret),
+        let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
+            Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
             Operation::Transaction(Transaction::Start) => {
                 self.conn.query_drop("START TRANSACTION").await?;
                 return Ok(Response::count(0));
@@ -180,6 +184,33 @@ impl toasty_core::driver::Connection for Connection {
                 .exec_iter(&sql_as_str, mysql_async::Params::Positional(args))
                 .await?
                 .affected_rows();
+
+            // Handle the last_insert_id_hack for MySQL INSERT with RETURNING
+            if let Some(num_rows) = last_insert_id_hack {
+                // Assert the previous statement was an INSERT
+                assert!(
+                    matches!(sql, sql::Statement::Insert(_)),
+                    "last_insert_id_hack should only be used with INSERT statements"
+                );
+
+                // Execute SELECT LAST_INSERT_ID() on the same connection
+                let first_id: u64 = self
+                    .conn
+                    .query_first("SELECT LAST_INSERT_ID()")
+                    .await?
+                    .ok_or_else(|| anyhow::anyhow!("LAST_INSERT_ID() returned no rows"))?;
+
+                // Generate rows with sequential IDs
+                let results = (0..num_rows).map(move |offset| {
+                    let id = first_id + offset;
+                    // Return a record with a single field containing the ID
+                    Ok(ValueRecord::from_vec(vec![stmt::Value::U64(id)]))
+                });
+
+                return Ok(Response::value_stream(stmt::ValueStream::from_iter(
+                    results,
+                )));
+            }
 
             return Ok(Response::count(count));
         }

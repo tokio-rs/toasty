@@ -47,12 +47,13 @@ impl Exec<'_> {
                 operation::QuerySql {
                     stmt: action.read.clone().into(),
                     ret: ty,
+                    last_insert_id_hack: None,
                 }
                 .into(),
             )
             .await?;
 
-        let Rows::Values(rows) = res.rows else {
+        let Rows::Stream(rows) = res.rows else {
             anyhow::bail!("expected rows");
         };
 
@@ -79,6 +80,7 @@ impl Exec<'_> {
                 operation::QuerySql {
                     stmt: action.write.clone(),
                     ret: None,
+                    last_insert_id_hack: None,
                 }
                 .into(),
             )

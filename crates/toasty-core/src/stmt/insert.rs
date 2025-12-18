@@ -71,6 +71,29 @@ impl Statement {
             v => panic!("expected `Insert`, found {v:#?}"),
         }
     }
+
+    /// Attempts to return a reference to the insert statement's source query.
+    ///
+    /// Returns `None` if the statement is not an [`Statement::Insert`].
+    pub fn insert_source(&self) -> Option<&Query> {
+        match self {
+            Statement::Insert(insert) => Some(&insert.source),
+            _ => None,
+        }
+    }
+
+    /// Returns a reference to the insert statement's source query.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the statement is not a [`Statement::Insert`].
+    #[track_caller]
+    pub fn insert_source_unwrap(&self) -> &Query {
+        match self {
+            Statement::Insert(insert) => &insert.source,
+            v => panic!("expected `Insert`, found {v:#?}"),
+        }
+    }
 }
 
 impl From<Insert> for Statement {

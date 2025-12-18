@@ -51,6 +51,17 @@ impl Query {
         }
     }
 
+    pub fn new_single(body: impl Into<ExprSet>) -> Self {
+        Self {
+            with: None,
+            body: body.into(),
+            single: true,
+            order_by: None,
+            limit: None,
+            locks: vec![],
+        }
+    }
+
     pub fn new_select(source: impl Into<Source>, filter: impl Into<Filter>) -> Self {
         Self::builder(Select::new(source, filter)).build()
     }

@@ -9,12 +9,45 @@ struct ColumnsWithConstraints<'a>(&'a stmt::CreateTable);
 
 impl ToSql for ColumnsWithConstraints<'_> {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        // SQLite needs the PK specified with the auto increment
+        let trailing_pk = if f.serializer.is_sqlite() {
+            // Sqlite only supports auto incrementing columns if they are the only primary key.
+            match self.0.columns.iter().filter(|c| c.auto_increment).count() {
+                0 => true,
+                1 => {
+                    // In this case, the primary key **must** be the auto incrementing column
+                    let Some(pk) = self.0.primary_key.as_deref().and_then(|pk| pk.as_record())
+                    else {
+                        todo!("Toasty should catch this earlier")
+                    };
+
+                    let [stmt::Expr::Reference(pk)] = &pk.fields[..] else {
+                        todo!("Toasty should catch this earlier")
+                    };
+
+                    let pk = pk.as_expr_column_unwrap();
+
+                    assert_eq!(0, pk.nesting);
+                    assert!(
+                        self.0.columns[pk.column].auto_increment,
+                        "Toasty should catch this earlier"
+                    );
+
+                    false
+                }
+                _ => panic!("Toasty should catch this case earlier"),
+            }
+        } else {
+            true
+        };
+
         let columns = Comma(&self.0.columns);
 
-        if let Some(pk) = &self.0.primary_key {
-            fmt!(cx, f, columns ", PRIMARY KEY " pk);
-        } else {
-            fmt!(cx, f, columns);
+        match &self.0.primary_key {
+            Some(pk) if trailing_pk => {
+                fmt!(cx, f, columns ", PRIMARY KEY " pk);
+            }
+            _ => fmt!(cx, f, columns),
         }
     }
 }
@@ -100,6 +133,10 @@ impl ToSql for &stmt::Insert {
             .returning
             .as_ref()
             .map(|returning| ("RETURNING ", returning));
+
+        if returning.is_some() && f.serializer.is_mysql() {
+            panic!("MySQL does not support the RETURNING clause with INSERT statements; returning={returning:#?}");
+        }
 
         // Set flag to indicate we're in INSERT context (VALUES shouldn't use ROW())
         let prev_in_insert = f.in_insert;
@@ -218,10 +255,16 @@ impl ToSql for &stmt::Returning {
 
 impl ToSql for &stmt::Select {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        fmt!(
-            cx, f,
-            "SELECT " self.returning " FROM " self.source self.filter
-        );
+        let source_table = self.source.as_source_table();
+
+        if source_table.from.is_empty() {
+            fmt!(cx, f, "SELECT " self.returning)
+        } else {
+            fmt!(
+                cx, f,
+                "SELECT " self.returning " FROM " self.source self.filter
+            );
+        }
     }
 }
 
@@ -278,29 +321,36 @@ impl ToSql for &stmt::Statement {
 
 impl ToSql for &stmt::SourceTable {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        // Serialize the main table relation
-        match &self.from_item.relation {
-            stmt::TableFactor::Table(table_id) => {
-                let table_ref = &self.tables[table_id.0];
-                let alias = TableAlias {
-                    depth: f.depth,
-                    table: *table_id,
-                };
-
-                fmt!(cx, f, table_ref " AS " alias);
+        // Iterate over each TableWithJoins in the from clause
+        for (i, table_with_joins) in self.from.iter().enumerate() {
+            if i > 0 {
+                fmt!(cx, f, ", ");
             }
-        }
 
-        // Serialize the joins
-        for join in &self.from_item.joins {
-            match &join.constraint {
-                stmt::JoinOp::Left(expr) => {
-                    let join_table_ref = &self.tables[join.table.0];
+            // Serialize the main table relation
+            match &table_with_joins.relation {
+                stmt::TableFactor::Table(table_id) => {
+                    let table_ref = &self.tables[table_id.0];
                     let alias = TableAlias {
                         depth: f.depth,
-                        table: join.table,
+                        table: *table_id,
                     };
-                    fmt!(cx, f, " LEFT JOIN " join_table_ref " AS " alias " ON " expr);
+
+                    fmt!(cx, f, table_ref " AS " alias);
+                }
+            }
+
+            // Serialize the joins
+            for join in &table_with_joins.joins {
+                match &join.constraint {
+                    stmt::JoinOp::Left(expr) => {
+                        let join_table_ref = &self.tables[join.table.0];
+                        let alias = TableAlias {
+                            depth: f.depth,
+                            table: join.table,
+                        };
+                        fmt!(cx, f, " LEFT JOIN " join_table_ref " AS " alias " ON " expr);
+                    }
                 }
             }
         }
@@ -321,7 +371,7 @@ impl ToSql for &stmt::TableRef {
                 let depth = f.depth - nesting;
                 fmt!(cx, f, "cte_" depth "_" index);
             }
-            stmt::TableRef::Arg(..) => panic!("unexpected TableRef argument"),
+            stmt::TableRef::Arg(..) => panic!("unexpected TableRef argument; table_ref={self:#?}"),
         }
     }
 }
@@ -361,6 +411,10 @@ impl ToSql for &stmt::Update {
             .returning
             .as_ref()
             .map(|returning| (" RETURNING ", returning));
+
+        if returning.is_some() && f.serializer.is_mysql() {
+            panic!("MySQL does not support the RETURNING clause with UPDATE statements; returning={returning:#?}");
+        }
 
         assert!(
             self.condition.is_none(),

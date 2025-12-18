@@ -29,7 +29,7 @@ impl Connect {
             "dynamodb" => Err(anyhow::anyhow!("`dynamodb` feature not enabled"))?, // Note the ?
 
             #[cfg(feature = "mysql")]
-            "mysql" => Box::new(toasty_driver_mysql::MySQL::new(url.to_string())),
+            "mysql" => Box::new(toasty_driver_mysql::MySQL::new(url.to_string())?),
             #[cfg(not(feature = "mysql"))]
             "mysql" => Err(anyhow::anyhow!("`mysql` feature not enabled"))?,
 

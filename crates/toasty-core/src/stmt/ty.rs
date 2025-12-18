@@ -244,6 +244,40 @@ impl Type {
         matches!(self, Self::Uuid)
     }
 
+    pub fn is_sparse_record(&self) -> bool {
+        matches!(self, Self::SparseRecord(..))
+    }
+
+    /// Returns `true` if this type is a numeric integer type.
+    ///
+    /// Numeric types include all signed and unsigned integer types:
+    /// `I8`, `I16`, `I32`, `I64`, `U8`, `U16`, `U32`, `U64`.
+    ///
+    /// This does not include decimal types or floating-point types.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::Type;
+    /// assert!(Type::I32.is_numeric());
+    /// assert!(Type::U64.is_numeric());
+    /// assert!(!Type::String.is_numeric());
+    /// assert!(!Type::Bool.is_numeric());
+    /// ```
+    pub fn is_numeric(&self) -> bool {
+        matches!(
+            self,
+            Self::I8
+                | Self::I16
+                | Self::I32
+                | Self::I64
+                | Self::U8
+                | Self::U16
+                | Self::U32
+                | Self::U64
+        )
+    }
+
     pub fn cast(&self, value: Value) -> Result<Value> {
         use stmt::Value;
 
@@ -289,8 +323,102 @@ impl Type {
             (Value::Record(record), Self::SparseRecord(fields)) => {
                 Value::sparse_record(fields.clone(), record)
             }
+            // Integer conversions - use TryFrom which provides error messages
+            (value, Self::I8) => Value::I8(i8::try_from(value)?),
+            (value, Self::I16) => Value::I16(i16::try_from(value)?),
+            (value, Self::I32) => Value::I32(i32::try_from(value)?),
+            (value, Self::I64) => Value::I64(i64::try_from(value)?),
+            (value, Self::U8) => Value::U8(u8::try_from(value)?),
+            (value, Self::U16) => Value::U16(u16::try_from(value)?),
+            (value, Self::U32) => Value::U32(u32::try_from(value)?),
+            (value, Self::U64) => Value::U64(u64::try_from(value)?),
             (value, _) => todo!("value={value:#?}; ty={self:#?}"),
         })
+    }
+
+    /// Checks if two types are equivalent.
+    ///
+    /// This is similar to equality, **except** [`Type::Null`] matches any type. `Null` represents
+    /// "we don't know what type this is", which makes it equivalent to anything.
+    ///
+    /// This method is commutative: `a.is_equivalent(b)` equals `b.is_equivalent(a)`.
+    ///
+    /// # Examples
+    ///
+    /// Basic equivalence:
+    /// - `String` is equivalent to `String` ✓
+    /// - `String` is equivalent to `Null` ✓
+    /// - `String` is **not** equivalent to `Bytes` ✗
+    ///
+    /// Recursive equivalence for container types:
+    /// - `List<String>` is equivalent to `List<String>` ✓
+    /// - `List<String>` is equivalent to `List<Null>` ✓
+    /// - `List<String>` is **not** equivalent to `List<Bytes>` ✗
+    pub fn is_equivalent(&self, other: &Type) -> bool {
+        // Null matches anything (commutative)
+        if matches!(self, Type::Null) || matches!(other, Type::Null) {
+            return true;
+        }
+
+        // For non-Null types, check structural equivalence
+        match (self, other) {
+            // Simple types must match exactly
+            (Type::Bool, Type::Bool) => true,
+            (Type::String, Type::String) => true,
+            (Type::I8, Type::I8) => true,
+            (Type::I16, Type::I16) => true,
+            (Type::I32, Type::I32) => true,
+            (Type::I64, Type::I64) => true,
+            (Type::U8, Type::U8) => true,
+            (Type::U16, Type::U16) => true,
+            (Type::U32, Type::U32) => true,
+            (Type::U64, Type::U64) => true,
+            (Type::Uuid, Type::Uuid) => true,
+            (Type::Bytes, Type::Bytes) => true,
+            (Type::Unit, Type::Unit) => true,
+            (Type::Unknown, Type::Unknown) => true,
+
+            // Decimal types
+            #[cfg(feature = "rust_decimal")]
+            (Type::Decimal, Type::Decimal) => true,
+            #[cfg(feature = "bigdecimal")]
+            (Type::BigDecimal, Type::BigDecimal) => true,
+
+            // Temporal types
+            #[cfg(feature = "jiff")]
+            (Type::Timestamp, Type::Timestamp) => true,
+            #[cfg(feature = "jiff")]
+            (Type::Zoned, Type::Zoned) => true,
+            #[cfg(feature = "jiff")]
+            (Type::Date, Type::Date) => true,
+            #[cfg(feature = "jiff")]
+            (Type::Time, Type::Time) => true,
+            #[cfg(feature = "jiff")]
+            (Type::DateTime, Type::DateTime) => true,
+
+            // Model-related types must match model IDs
+            (Type::Id(a), Type::Id(b)) => a == b,
+            (Type::Key(a), Type::Key(b)) => a == b,
+            (Type::Model(a), Type::Model(b)) => a == b,
+            (Type::ForeignKey(a), Type::ForeignKey(b)) => a == b,
+
+            // List types are equivalent if their item types are equivalent
+            (Type::List(a), Type::List(b)) => a.is_equivalent(b),
+
+            // Record types are equivalent if they have the same length and all fields are equivalent
+            (Type::Record(a), Type::Record(b)) => {
+                a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| a.is_equivalent(b))
+            }
+
+            // Enum types must be structurally equivalent
+            (Type::Enum(a), Type::Enum(b)) => a == b,
+
+            // Sparse records must have the same field set
+            (Type::SparseRecord(a), Type::SparseRecord(b)) => a == b,
+
+            // Different type variants are not equivalent
+            _ => false,
+        }
     }
 }
 

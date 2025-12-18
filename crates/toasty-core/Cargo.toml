@@ -8,7 +8,7 @@ publish = false
 anyhow.workspace = true
 assert-struct = { workspace = true, optional = true }
 async-trait.workspace = true
-bit-set = "0.8.0"
+bit-set.workspace = true
 indexmap.workspace = true
 jiff = { workspace = true, optional = true }
 rust_decimal = { workspace = true, optional = true }

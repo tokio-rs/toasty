@@ -1,3 +1,4 @@
+use bit_set::BitSet;
 use toasty_core::{schema::app, stmt};
 
 use crate::engine::lower::LowerStatement;
@@ -34,7 +35,11 @@ impl LowerStatement<'_, '_> {
         *target = stmt::InsertTarget::Model(scope.source.model_id_unwrap());
     }
 
-    pub(super) fn preprocess_insert_values(&mut self, source: &mut stmt::Query) {
+    pub(super) fn preprocess_insert_values(
+        &mut self,
+        source: &mut stmt::Query,
+        returning: &mut Option<stmt::Returning>,
+    ) {
         let stmt::ExprSet::Values(values) = &mut source.body else {
             todo!()
         };
@@ -43,15 +48,31 @@ impl LowerStatement<'_, '_> {
             return;
         };
 
+        let mut set_fields: BitSet<usize> = BitSet::default();
+
+        // First, apply any defaults while also tracking all the fields that are set.
         for row in &mut values.rows {
-            self.apply_app_level_insertion_defaults(model, row);
-            self.plan_stmt_insert_relations(row);
+            self.apply_app_level_insertion_defaults(model, row, &mut set_fields);
+        }
+
+        // If there are any has_n associations included in the insertion, the
+        // statement returning has to be transformed to accomodate the nested
+        // structure.
+        self.convert_returning_for_insert_with_has_n(model, &set_fields, values, returning);
+
+        for (index, row) in values.rows.iter_mut().enumerate() {
+            self.plan_stmt_insert_relations(row, returning, index);
             self.verify_field_constraints(model, row);
         }
     }
 
     // Checks all fields of a record and handles nulls
-    fn apply_app_level_insertion_defaults(&mut self, model: &app::Model, expr: &mut stmt::Expr) {
+    fn apply_app_level_insertion_defaults(
+        &mut self,
+        model: &app::Model,
+        expr: &mut stmt::Expr,
+        set_fields: &mut BitSet<usize>,
+    ) {
         // First, we pad the record to account for all fields
         if let stmt::Expr::Record(expr_record) = expr {
             // TODO: get rid of this
@@ -86,15 +107,98 @@ impl LowerStatement<'_, '_> {
                 // If the field is defined to be auto-populated, then populate
                 // it here.
                 if let Some(auto) = &field.auto {
+                    let ty = match &field.ty {
+                        app::FieldTy::Primitive(primitive) => &primitive.ty,
+                        _ => panic!("#[auto] not allowed on non-primitive fields"),
+                    };
                     match auto {
                         app::Auto::Id => {
                             let id = uuid::Uuid::new_v4().to_string();
                             field_expr.insert(stmt::Id::from_string(model.id, id).into());
                         }
+                        app::Auto::Uuid(version) => {
+                            let id = match version {
+                                app::UuidVersion::V4 => uuid::Uuid::new_v4(),
+                                app::UuidVersion::V7 => uuid::Uuid::now_v7(),
+                            };
+                            match ty {
+                                stmt::Type::String => field_expr.insert(stmt::Value::String(id.to_string()).into()),
+                                stmt::Type::Uuid => field_expr.insert(stmt::Value::Uuid(id).into()),
+                                _ => panic!("auto-generated UUID cannot be inserted into column of type {ty:?}"),
+                            };
+                        }
+                        app::Auto::Increment => {
+                            // Leave value as `Expr::Default` and let the database handle it.
+                        }
                     }
                 }
             }
+
+            if !field_expr.is_value_null() {
+                set_fields.insert(field.id.index);
+            }
         }
+    }
+
+    fn convert_returning_for_insert_with_has_n(
+        &mut self,
+        model: &app::Model,
+        set_fields: &BitSet<usize>,
+        values: &stmt::Values,
+        returning: &mut Option<stmt::Returning>,
+    ) {
+        // If there is no returning statement, there is nothing to convert
+        let Some(stmt::Returning::Expr(projection)) = returning else {
+            return;
+        };
+
+        // Only perform the conversion if there are any has_n fields included in the
+        if !model
+            .fields
+            .iter()
+            .any(|f| f.ty.is_has_n() && set_fields.contains(f.id.index))
+        {
+            return;
+        }
+
+        #[derive(Debug)]
+        struct Input(usize);
+
+        impl stmt::Input for Input {
+            fn resolve_arg(
+                &mut self,
+                expr_arg: &stmt::ExprArg,
+                projection: &stmt::Projection,
+            ) -> Option<stmt::Expr> {
+                todo!("self={self:#?}; expr_arg={expr_arg:#?}; projection={projection:#?}");
+            }
+
+            fn resolve_ref(
+                &mut self,
+                expr_reference: &stmt::ExprReference,
+                projection: &stmt::Projection,
+            ) -> Option<stmt::Expr> {
+                let expr_column = expr_reference.as_expr_column()?;
+
+                assert!(
+                    expr_column.nesting == 0 && expr_column.table == 0,
+                    "expr_reference={expr_reference:#?}"
+                );
+                assert!(projection.is_identity(), "TODO");
+
+                Some(stmt::Expr::project(*expr_reference, self.0))
+            }
+        }
+
+        let mut converted = vec![];
+
+        for i in 0..values.rows.len() {
+            let mut converted_row = projection.clone();
+            converted_row.substitute(Input(i));
+            converted.push(converted_row);
+        }
+
+        *returning = Some(stmt::Returning::Value(stmt::Expr::list_from_vec(converted)));
     }
 
     fn verify_field_constraints(&mut self, model: &app::Model, expr: &mut stmt::Expr) {
@@ -103,11 +207,11 @@ impl LowerStatement<'_, '_> {
                 continue;
             }
 
-            let field_expr = expr.entry(field.id.index);
+            let field_expr = expr.entry(field.id.index).unwrap();
 
             if !field.nullable && field_expr.is_value_null() {
                 // Relations are handled differently
-                if !field.ty.is_relation() {
+                if !field.ty.is_relation() && field.auto.is_none() {
                     panic!(
                         "Insert missing non-nullable field; model={}; field={:#?}; expr={:#?}",
                         model.name.upper_camel_case(),
@@ -137,17 +241,35 @@ impl ApplyInsertScope<'_> {
             stmt::Expr::BinaryOp(e) if e.op.is_eq() => match (&*e.lhs, &*e.rhs) {
                 (
                     stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }),
-                    stmt::Expr::Value(rhs),
+                    rhs @ stmt::Expr::Value(..),
                 ) => {
-                    self.apply_eq_const(expr_ref, rhs);
+                    self.apply_eq_constraint(expr_ref, rhs);
                 }
                 (
-                    stmt::Expr::Value(lhs),
+                    lhs @ stmt::Expr::Value(..),
                     stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }),
                 ) => {
-                    self.apply_eq_const(expr_ref, lhs);
+                    self.apply_eq_constraint(expr_ref, lhs);
                 }
-                _ => todo!(),
+                (
+                    lhs_expr @ stmt::Expr::Reference(
+                        lhs @ stmt::ExprReference::Field {
+                            nesting: nesting_lhs,
+                            ..
+                        },
+                    ),
+                    rhs_expr @ stmt::Expr::Reference(
+                        rhs @ stmt::ExprReference::Field {
+                            nesting: nesting_rhs,
+                            ..
+                        },
+                    ),
+                ) => match (nesting_lhs, nesting_rhs) {
+                    (0, _) if *nesting_rhs > 0 => self.apply_eq_constraint(lhs, rhs_expr),
+                    (_, 0) if *nesting_lhs > 0 => self.apply_eq_constraint(rhs, lhs_expr),
+                    _ => panic!("exactly one field must reference parent"),
+                },
+                _ => todo!("EXPR = {:#?}", stmt),
             },
             // Constants are ignored
             stmt::Expr::Value(_) => {}
@@ -155,7 +277,7 @@ impl ApplyInsertScope<'_> {
         }
     }
 
-    fn apply_eq_const(&mut self, expr_ref: &stmt::ExprReference, val: &stmt::Value) {
+    fn apply_eq_constraint(&mut self, expr_ref: &stmt::ExprReference, val: &stmt::Expr) {
         let stmt::ExprReference::Field { nesting, index } = expr_ref else {
             todo!("handle non-field reference");
         };
@@ -166,12 +288,16 @@ impl ApplyInsertScope<'_> {
 
         if !existing.is_value_null() && !existing.is_default() {
             if let stmt::EntryMut::Value(existing) = existing {
-                assert_eq!(existing, val);
+                if let stmt::Expr::Value(val) = val {
+                    assert_eq!(existing, val);
+                } else {
+                    todo!()
+                }
             } else {
                 todo!()
             }
         } else {
-            existing.insert(val.clone().into());
+            existing.insert(val.clone());
         }
     }
 }

@@ -41,6 +41,7 @@ toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-sqlite = { workspace = true, optional = true }
 serde_core = { version = "1.0.221", optional = true }
 
+bit-set.workspace = true
 by_address.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true

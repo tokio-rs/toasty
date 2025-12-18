@@ -30,9 +30,9 @@ impl Exec<'_> {
             .vars
             .load(action.input)
             .await?
-            .into_values()
-            .collect()
-            .await?;
+            .collect_as_value()
+            .await?
+            .unwrap_list();
 
         let res = if keys.is_empty() {
             Rows::value_stream(ValueStream::default())

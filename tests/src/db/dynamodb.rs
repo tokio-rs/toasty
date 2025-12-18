@@ -183,9 +183,14 @@ impl SetupDynamoDb {
         match attr {
             AttributeValue::S(s) => Ok(toasty_core::stmt::Value::String(s.clone())),
             AttributeValue::N(n) => {
-                // DynamoDB stores all numbers as strings, so we return as String
-                // and let the TryFrom implementation handle the parsing
-                Ok(toasty_core::stmt::Value::String(n.clone()))
+                // Try to parse as i64 first, fall back to u64 if it's too large/unsigned
+                if let Ok(val) = n.parse::<i64>() {
+                    Ok(toasty_core::stmt::Value::I64(val))
+                } else if let Ok(val) = n.parse::<u64>() {
+                    Ok(toasty_core::stmt::Value::U64(val))
+                } else {
+                    Err(anyhow::anyhow!("Failed to parse DynamoDB number: {}", n))
+                }
             }
             AttributeValue::B(b) => Ok(toasty_core::stmt::Value::Bytes(b.clone().into_inner())),
             AttributeValue::Bool(b) => Ok(toasty_core::stmt::Value::Bool(*b)),

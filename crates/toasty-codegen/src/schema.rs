@@ -1,3 +1,6 @@
+mod auto;
+pub(crate) use auto::{Auto, UuidVersion};
+
 mod belongs_to;
 pub(crate) use belongs_to::BelongsTo;
 

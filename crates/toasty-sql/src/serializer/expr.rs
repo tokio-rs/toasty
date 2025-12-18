@@ -35,6 +35,9 @@ impl ToSql for &stmt::Expr {
                 (None, Some(expr)) => fmt!(cx, f, "COUNT(*) FILTER (WHERE " expr ")"),
                 _ => todo!("func={func:#?}"),
             },
+            Func(stmt::ExprFunc::LastInsertId(_)) => {
+                fmt!(cx, f, "LAST_INSERT_ID()")
+            }
             InList(expr) => {
                 fmt!(cx, f, expr.expr " IN " expr.list);
             }

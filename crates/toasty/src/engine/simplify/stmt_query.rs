@@ -39,17 +39,25 @@ impl Simplify<'_> {
     }
 
     fn source_table_is_empty(&self, source_table: &stmt::SourceTable) -> bool {
-        // Get the primary relation
-        let stmt::TableFactor::Table(primary_table_id) = &source_table.from_item.relation;
+        if source_table.from.is_empty() {
+            todo!(
+                "this case is not handled yet at this level; \
+                   Do we want to handle this or transform the statement \
+                   to something different first?"
+            );
+        }
+
+        // Get the primary relation from the first table
+        let stmt::TableFactor::Table(primary_table_id) = &source_table.from[0].relation;
 
         // Check if primary source is empty VALUES
         if self.table_ref_is_empty_values(&source_table.tables[primary_table_id.0]) {
             // Primary source is empty - result will be empty unless there are
             // LEFT JOINs that could still produce results
             return !source_table
-                .from_item
-                .joins
+                .from
                 .iter()
+                .flat_map(|twj| &twj.joins)
                 .any(|join| matches!(join.constraint, stmt::JoinOp::Left(_)));
         }
 
