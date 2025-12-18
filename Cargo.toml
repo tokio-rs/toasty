@@ -13,6 +13,10 @@ members = [
     "crates/toasty-driver-postgresql",
     "crates/toasty-driver-sqlite",
 
+    # Driver integration test suite
+    "crates/toasty-driver-integration-suite",
+    "crates/toasty-driver-integration-suite-macros",
+
     # General utilities.
     "crates/std-util",
 
@@ -42,6 +46,10 @@ toasty-driver-dynamodb = { path = "crates/toasty-driver-dynamodb" }
 toasty-driver-mysql = { path = "crates/toasty-driver-mysql" }
 toasty-driver-postgresql = { path = "crates/toasty-driver-postgresql" }
 toasty-driver-sqlite = { path = "crates/toasty-driver-sqlite" }
+
+# Driver integration test suite dependencies
+toasty-driver-integration-suite = { path = "crates/toasty-driver-integration-suite" }
+toasty-driver-integration-suite-macros = { path = "crates/toasty-driver-integration-suite-macros" }
 
 # Other crates
 anyhow = "1.0.92"
