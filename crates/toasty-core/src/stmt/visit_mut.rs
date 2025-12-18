@@ -5,10 +5,10 @@ use super::{
     ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
     ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
-    Filter, FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
-    OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
-    SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
-    UpdateTarget, Value, ValueRecord, Values, With,
+    Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
+    OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel,
+    SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins,
+    Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait VisitMut {
@@ -89,6 +89,10 @@ pub trait VisitMut {
 
     fn visit_expr_func_count_mut(&mut self, i: &mut FuncCount) {
         visit_expr_func_count_mut(self, i);
+    }
+
+    fn visit_expr_func_last_insert_id_mut(&mut self, i: &mut FuncLastInsertId) {
+        visit_expr_func_last_insert_id_mut(self, i);
     }
 
     fn visit_expr_in_list_mut(&mut self, i: &mut ExprInList) {
@@ -703,6 +707,7 @@ where
 {
     match node {
         ExprFunc::Count(func) => v.visit_expr_func_count_mut(func),
+        ExprFunc::LastInsertId(func) => v.visit_expr_func_last_insert_id_mut(func),
     }
 }
 
@@ -717,6 +722,13 @@ where
     if let Some(expr) = &mut node.filter {
         v.visit_expr_mut(expr);
     }
+}
+
+pub fn visit_expr_func_last_insert_id_mut<V>(_v: &mut V, _node: &mut FuncLastInsertId)
+where
+    V: VisitMut + ?Sized,
+{
+    // FuncLastInsertId has no fields to visit
 }
 
 pub fn visit_expr_in_list_mut<V>(v: &mut V, node: &mut ExprInList)
@@ -818,6 +830,7 @@ where
         ExprSet::SetOp(expr) => v.visit_expr_set_op_mut(expr),
         ExprSet::Update(expr) => v.visit_stmt_update_mut(expr),
         ExprSet::Values(expr) => v.visit_values_mut(expr),
+        ExprSet::Insert(expr) => v.visit_stmt_insert_mut(expr),
     }
 }
 
@@ -961,7 +974,7 @@ where
         }
         Returning::Changed => {}
         Returning::Expr(expr) => v.visit_expr_mut(expr),
-        Returning::Value(value) => v.visit_value_mut(value),
+        Returning::Value(expr) => v.visit_expr_mut(expr),
     }
 }
 
@@ -991,7 +1004,9 @@ where
     for table_ref in &mut node.tables {
         v.visit_table_ref_mut(table_ref);
     }
-    v.visit_table_with_joins_mut(&mut node.from_item);
+    for table_with_joins in &mut node.from {
+        v.visit_table_with_joins_mut(table_with_joins);
+    }
 }
 
 pub fn visit_source_table_id_mut<V>(v: &mut V, node: &mut SourceTableId)

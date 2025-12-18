@@ -11,7 +11,6 @@ pub(crate) struct VarDecls {
 impl VarDecls {
     #[track_caller]
     pub(crate) fn register_var(&mut self, ty: stmt::Type) -> VarId {
-        debug_assert!(ty.is_list() || ty.is_unit(), "{ty:#?}");
         // Register a new slot
         let ret = self.vars.len();
         self.vars.push(ty);
@@ -67,12 +66,16 @@ impl VarStore {
                 assert!(self.tys[var.0].is_unit());
                 rows
             }
-            Rows::Values(value_stream) => {
+            Rows::Value(value) => {
+                assert!(value.is_a(&self.tys[var.0]));
+                Rows::Value(value)
+            }
+            Rows::Stream(value_stream) => {
                 let stmt::Type::List(item_tys) = &self.tys[var.0] else {
                     todo!("ty={:#?}", self.tys[var.0])
                 };
 
-                Rows::Values(value_stream.typed((**item_tys).clone()))
+                Rows::Stream(value_stream.typed((**item_tys).clone()))
             }
         };
 

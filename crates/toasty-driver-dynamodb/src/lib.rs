@@ -132,10 +132,16 @@ impl Connection {
             Operation::DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
             Operation::UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
-            Operation::QuerySql(op) => match op.stmt {
-                stmt::Statement::Insert(op) => self.exec_insert(schema, op).await,
-                _ => todo!("op={:#?}", op),
-            },
+            Operation::QuerySql(op) => {
+                assert!(
+                    op.last_insert_id_hack.is_none(),
+                    "last_insert_id_hack is MySQL-specific and should not be set for DynamoDB"
+                );
+                match op.stmt {
+                    stmt::Statement::Insert(op) => self.exec_insert(schema, op).await,
+                    _ => todo!("op={:#?}", op),
+                }
+            }
             _ => todo!("op={op:#?}"),
         }
     }

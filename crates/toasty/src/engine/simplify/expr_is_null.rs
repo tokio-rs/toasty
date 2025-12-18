@@ -52,7 +52,7 @@ mod tests {
         let result = simplify.simplify_expr_is_null(&mut expr);
 
         assert!(result.is_none());
-        assert!(matches!(*expr.expr, Expr::Arg(ExprArg { position: 0 })));
+        assert!(matches!(*expr.expr, Expr::Arg(ExprArg { position: 0, .. })));
     }
 
     #[test]
@@ -91,7 +91,7 @@ mod tests {
         let result = simplify.simplify_expr_is_null(&mut expr);
 
         assert!(result.is_none());
-        assert!(matches!(*expr.expr, Expr::Arg(ExprArg { position: 0 })));
+        assert!(matches!(*expr.expr, Expr::Arg(ExprArg { position: 0, .. })));
     }
 
     #[test]
@@ -110,7 +110,10 @@ mod tests {
 
         if let Expr::Not(not) = &expr {
             if let Expr::IsNull(is_null) = not.expr.as_ref() {
-                assert!(matches!(*is_null.expr, Expr::Arg(ExprArg { position: 0 })));
+                assert!(matches!(
+                    *is_null.expr,
+                    Expr::Arg(ExprArg { position: 0, .. })
+                ));
             } else {
                 panic!("expected `IsNull` inside `Not` expression");
             }

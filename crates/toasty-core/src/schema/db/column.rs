@@ -22,6 +22,11 @@ pub struct Column {
 
     /// True if the column is part of the table's primary key
     pub primary_key: bool,
+
+    /// True if the column is an integer that should be auto-incremented
+    /// with each insertion of a new row. This should be false if a `storage_ty`
+    /// of type `Serial` is used.
+    pub auto_increment: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]

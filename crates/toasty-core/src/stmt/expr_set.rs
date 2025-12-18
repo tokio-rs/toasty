@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::{Expr, ExprSetOp, Select, SourceModel, Update, Values};
+use super::{Expr, ExprSetOp, Insert, Select, SourceModel, Update, Values};
 use crate::schema::db::TableId;
 
 /// A set of rows produced by a query, set operation, or explicit values.
@@ -27,11 +27,54 @@ pub enum ExprSet {
 
     /// Explicitly listed values (as expressions).
     Values(Values),
+
+    /// An insert statement (used for UNION-style batch inserts)
+    Insert(Box<Insert>),
 }
 
 impl ExprSet {
     pub fn values(values: impl Into<Values>) -> ExprSet {
         ExprSet::Values(values.into())
+    }
+
+    /// Returns `true` if this is an [`ExprSet::Values`] variant.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::{ExprSet, Values};
+    /// let values = ExprSet::values(Values::default());
+    /// assert!(values.is_values());
+    ///
+    /// let select = ExprSet::from(toasty_core::schema::db::TableId(0));
+    /// assert!(!select.is_values());
+    /// ```
+    pub fn is_values(&self) -> bool {
+        matches!(self, ExprSet::Values(_))
+    }
+
+    /// Returns a reference to the inner [`Values`] if this is an [`ExprSet::Values`].
+    ///
+    /// Returns `None` for all other [`ExprSet`] variants.
+    #[track_caller]
+    pub fn as_values(&self) -> Option<&Values> {
+        match self {
+            Self::Values(values) => Some(values),
+            _ => None,
+        }
+    }
+
+    /// Returns a reference to the inner [`Values`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not an [`ExprSet::Values`].
+    #[track_caller]
+    pub fn as_values_unwrap(&self) -> &Values {
+        match self {
+            Self::Values(values) => values,
+            v => panic!("expected `Values`, found {v:#?}"),
+        }
     }
 
     #[track_caller]
@@ -59,6 +102,7 @@ impl ExprSet {
                 .all(|operand| operand.is_const()),
             ExprSet::Update(..) => false,
             ExprSet::Values(values) => values.is_const(),
+            ExprSet::Insert(..) => false,
         }
     }
 }
@@ -70,6 +114,7 @@ impl fmt::Debug for ExprSet {
             Self::SetOp(e) => e.fmt(f),
             Self::Update(e) => e.fmt(f),
             Self::Values(e) => e.fmt(f),
+            Self::Insert(e) => e.fmt(f),
         }
     }
 }
@@ -89,6 +134,12 @@ impl From<Select> for ExprSet {
 impl From<Update> for ExprSet {
     fn from(value: Update) -> Self {
         Self::Update(Box::new(value))
+    }
+}
+
+impl From<Insert> for ExprSet {
+    fn from(value: Insert) -> Self {
+        Self::Insert(Box::new(value))
     }
 }
 

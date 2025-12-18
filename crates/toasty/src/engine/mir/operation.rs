@@ -2,6 +2,8 @@ use std::cell::Cell;
 
 use indexmap::{indexset, IndexSet};
 
+use crate::engine::mir::Eval;
+
 use super::{
     Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, NestedMerge, Node, Project,
     QueryPk, ReadModifyWrite, UpdateByKey,
@@ -17,6 +19,8 @@ pub(crate) enum Operation {
     Const(Const),
 
     DeleteByKey(DeleteByKey),
+
+    Eval(Eval),
 
     /// Execute a database query
     ExecStatement(Box<ExecStatement>),
@@ -50,6 +54,7 @@ impl From<Operation> for Node {
         let deps = match &value {
             Operation::Const(_m) => IndexSet::new(),
             Operation::DeleteByKey(m) => indexset![m.input],
+            Operation::Eval(m) => m.inputs.clone(),
             Operation::ExecStatement(m) => m.inputs.clone(),
             Operation::Filter(m) => indexset![m.input],
             Operation::FindPkByIndex(m) => m.inputs.clone(),

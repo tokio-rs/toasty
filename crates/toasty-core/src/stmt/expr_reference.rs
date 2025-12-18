@@ -18,10 +18,13 @@ use crate::{
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub enum ExprReference {
-    /// Reference a model at a specific nesting level.
+    /// A reference to a column in a database-level statement.
     ///
-    /// This is roughly referencing the full record instead of a specific field.
-    Model { nesting: usize },
+    /// ExprReference::Column represents resolved column references after lowering from the
+    /// application schema to the database schema. It uses a scope-based approach
+    /// similar to ExprReference::Field, referencing a specific column within a target
+    /// at a given nesting level.
+    Column(ExprColumn),
 
     /// Reference a specific field in a query's relation.
     ///
@@ -34,13 +37,10 @@ pub enum ExprReference {
         index: usize,
     },
 
-    /// A reference to a column in a database-level statement.
+    /// Reference a model at a specific nesting level.
     ///
-    /// ExprReference::Column represents resolved column references after lowering from the
-    /// application schema to the database schema. It uses a scope-based approach
-    /// similar to ExprReference::Field, referencing a specific column within a target
-    /// at a given nesting level.
-    Column(ExprColumn),
+    /// This is roughly referencing the full record instead of a specific field.
+    Model { nesting: usize },
 }
 
 /// A reference to a database column.
@@ -153,14 +153,6 @@ impl Expr {
 }
 
 impl ExprReference {
-    pub fn nesting(&self) -> usize {
-        match self {
-            ExprReference::Model { nesting } => *nesting,
-            ExprReference::Field { nesting, .. } => *nesting,
-            ExprReference::Column(expr_column) => expr_column.nesting,
-        }
-    }
-
     pub fn field(field: impl Into<FieldId>) -> Self {
         ExprReference::Field {
             nesting: 0,
@@ -186,6 +178,21 @@ impl ExprReference {
 
     pub fn is_column(&self) -> bool {
         matches!(self, ExprReference::Column(..))
+    }
+
+    pub fn as_expr_column(&self) -> Option<&ExprColumn> {
+        match self {
+            ExprReference::Column(expr_column) => Some(expr_column),
+            _ => None,
+        }
+    }
+
+    #[track_caller]
+    pub fn as_expr_column_unwrap(&self) -> &ExprColumn {
+        match self {
+            ExprReference::Column(expr_column) => expr_column,
+            _ => panic!("expected ExprColumn; actual={self:#?}"),
+        }
     }
 }
 

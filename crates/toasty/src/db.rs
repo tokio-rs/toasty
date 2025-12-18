@@ -93,7 +93,10 @@ impl Db {
     ///
     /// Used by generated code
     #[doc(hidden)]
-    pub async fn exec_insert_one<M: Model>(&self, stmt: stmt::Insert<M>) -> Result<M> {
+    pub async fn exec_insert_one<M: Model>(&self, mut stmt: stmt::Insert<M>) -> Result<M> {
+        // TODO: HAX
+        stmt.untyped.source.single = false;
+
         // Execute the statement and return the result
         let records = self.exec(stmt.into()).await?;
         let mut cursor = Cursor::new(self.engine.schema.clone(), records);

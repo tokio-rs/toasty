@@ -8,41 +8,43 @@ use toasty_core::{
 
 impl Simplify<'_> {
     pub(super) fn simplify_expr_eq_operand(&mut self, operand: &mut stmt::Expr) {
-        match operand {
-            stmt::Expr::Reference(expr_reference) if expr_reference.is_model() => {
-                let model = self
-                    .cx
-                    .resolve_expr_reference(expr_reference)
-                    .expect_model();
+        if let stmt::Expr::Reference(expr_reference) = operand {
+            match &*expr_reference {
+                stmt::ExprReference::Model { nesting } => {
+                    let model = self
+                        .cx
+                        .resolve_expr_reference(expr_reference)
+                        .expect_model();
 
-                let [pk_field] = &model.primary_key.fields[..] else {
-                    todo!("handle composite keys");
-                };
+                    let [pk_field] = &model.primary_key.fields[..] else {
+                        todo!("handle composite keys");
+                    };
 
-                *operand = stmt::Expr::ref_field(expr_reference.nesting(), pk_field);
-            }
-            stmt::Expr::Reference(expr_reference) if expr_reference.is_field() => {
-                let field = self
-                    .cx
-                    .resolve_expr_reference(expr_reference)
-                    .expect_field();
+                    *operand = stmt::Expr::ref_field(*nesting, pk_field);
+                }
+                stmt::ExprReference::Field { .. } => {
+                    let field = self
+                        .cx
+                        .resolve_expr_reference(expr_reference)
+                        .expect_field();
 
-                match &field.ty {
-                    FieldTy::Primitive(_) => {}
-                    FieldTy::HasMany(_) | FieldTy::HasOne(_) => todo!(),
-                    FieldTy::BelongsTo(rel) => {
-                        let [fk_field] = &rel.foreign_key.fields[..] else {
-                            todo!("handle composite keys");
-                        };
+                    match &field.ty {
+                        FieldTy::Primitive(_) => {}
+                        FieldTy::HasMany(_) | FieldTy::HasOne(_) => todo!(),
+                        FieldTy::BelongsTo(rel) => {
+                            let [fk_field] = &rel.foreign_key.fields[..] else {
+                                todo!("handle composite keys");
+                            };
 
-                        let stmt::ExprReference::Field { index, .. } = expr_reference else {
-                            panic!()
-                        };
-                        *index = fk_field.source.index;
+                            let stmt::ExprReference::Field { index, .. } = expr_reference else {
+                                panic!()
+                            };
+                            *index = fk_field.source.index;
+                        }
                     }
                 }
+                _ => {}
             }
-            _ => {}
         }
     }
 

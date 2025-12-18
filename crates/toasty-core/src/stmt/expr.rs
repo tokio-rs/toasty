@@ -187,6 +187,55 @@ impl Expr {
         }
     }
 
+    /// Returns `true` if the expression is stable
+    ///
+    /// An expression is stable if it yields the same value each time it is evaluated
+    pub fn is_stable(&self) -> bool {
+        match self {
+            // Always stable - constant values
+            Self::Value(_) | Self::Type(_) => true,
+
+            // Never stable - generates new values each evaluation
+            Self::Default => false,
+
+            // Stable if all children are stable
+            Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_stable()),
+            Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_stable()),
+            Self::Cast(expr_cast) => expr_cast.expr.is_stable(),
+            Self::BinaryOp(expr_binary) => {
+                expr_binary.lhs.is_stable() && expr_binary.rhs.is_stable()
+            }
+            Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_stable()),
+            Self::Any(expr_any) => expr_any.expr.is_stable(),
+            Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_stable()),
+            Self::IsNull(expr_is_null) => expr_is_null.expr.is_stable(),
+            Self::Not(expr_not) => expr_not.expr.is_stable(),
+            Self::InList(expr_in_list) => {
+                expr_in_list.expr.is_stable() && expr_in_list.list.is_stable()
+            }
+            Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_stable()),
+            Self::ConcatStr(expr_concat_str) => {
+                expr_concat_str.exprs.iter().all(|expr| expr.is_stable())
+            }
+            Self::Project(expr_project) => expr_project.base.is_stable(),
+            Self::Enum(expr_enum) => expr_enum.fields.iter().all(|expr| expr.is_stable()),
+            Self::Pattern(expr_pattern) => match expr_pattern {
+                super::ExprPattern::BeginsWith(e) => e.expr.is_stable() && e.pattern.is_stable(),
+                super::ExprPattern::Like(e) => e.expr.is_stable() && e.pattern.is_stable(),
+            },
+            Self::Map(expr_map) => expr_map.base.is_stable() && expr_map.map.is_stable(),
+            Self::Key(_) => true,
+            Self::DecodeEnum(expr, ..) => expr.is_stable(),
+
+            // References and statements - stable (they reference existing data)
+            Self::Reference(_) | Self::Arg(_) => true,
+
+            // Subqueries and functions - could be unstable
+            // For now, conservatively mark as unstable
+            Self::Stmt(_) | Self::Func(_) | Self::InSubquery(_) | Self::Exists(_) => false,
+        }
+    }
+
     /// Returns `true` if the expression is a constant expression.
     ///
     /// A constant expression is one that does not reference any external data.
@@ -245,19 +294,23 @@ impl Expr {
     }
 
     #[track_caller]
-    pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
+    pub fn entry(&self, path: impl EntryPath) -> Option<Entry<'_>> {
         let mut ret = Entry::Expr(self);
 
         for step in path.step_iter() {
             ret = match ret {
                 Entry::Expr(Self::Record(expr)) => Entry::Expr(&expr[step]),
+                Entry::Expr(Self::List(expr)) => Entry::Expr(&expr.items[step]),
                 Entry::Value(Value::Record(record))
                 | Entry::Expr(Self::Value(Value::Record(record))) => Entry::Value(&record[step]),
-                _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
+                Entry::Value(Value::List(items)) | Entry::Expr(Self::Value(Value::List(items))) => {
+                    Entry::Value(&items[step])
+                }
+                _ => return None,
             }
         }
 
-        ret
+        Some(ret)
     }
 
     #[track_caller]

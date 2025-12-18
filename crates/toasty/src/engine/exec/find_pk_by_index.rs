@@ -46,7 +46,7 @@ impl Exec<'_> {
         }
 
         if filter.is_false() {
-            let rows = Rows::Values(stmt::ValueStream::default());
+            let rows = Rows::Stream(stmt::ValueStream::default());
             self.vars
                 .store(action.output.var, action.output.num_uses, rows);
             return Ok(());

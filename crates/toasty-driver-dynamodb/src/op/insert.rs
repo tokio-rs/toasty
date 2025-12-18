@@ -41,7 +41,7 @@ impl Connection {
 
             for (i, column_id) in insert_table.columns.iter().enumerate() {
                 let column = schema.column(*column_id);
-                let entry = row.entry(i);
+                let entry = row.entry(i).unwrap();
                 let value = entry.as_value();
 
                 if !value.is_null() {

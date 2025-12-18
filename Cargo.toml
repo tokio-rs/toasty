@@ -51,6 +51,7 @@ async-stream = "0.3.6"
 async-trait = "0.1.83"
 aws-config = "1"
 aws-sdk-dynamodb = { version = "1.3.0", features = ["test-util"] }
+bit-set = "0.8.0"
 by_address = "1.2.1"
 cfg-if = "1.0.0"
 clap = { version = "4.5.20", features = ["derive"] }
@@ -82,4 +83,4 @@ tokio-postgres = "0.7.13"
 tokio-stream = { version = "0.1.16", default-features = false }
 trybuild = { version = "1.0.89", features = ["diff"] }
 url = "2.5.4"
-uuid = { version = "1.11.0", features = ["v4", "fast-rng"] }
+uuid = { version = "1.11.0", features = ["v4", "v7", "fast-rng"] }

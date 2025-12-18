@@ -6,7 +6,7 @@ use std::{
 
 use index_vec::IndexVec;
 use indexmap::IndexSet;
-use toasty_core::stmt;
+use toasty_core::stmt::{self, ExprReference};
 
 use crate::engine::mir;
 
@@ -73,13 +73,13 @@ pub(super) struct StatementInfo {
     ///
     /// Set during planning when the statement is converted to an operation.
     /// Used to wire up dependencies between operations.
-    pub(super) exec_statement: Cell<Option<mir::NodeId>>,
+    pub(super) load_data_statement: Cell<Option<mir::NodeId>>,
 
     /// Columns selected by the `exec_statement` operation.
     ///
     /// Populated during planning to track which columns are fetched from the
     /// database. Used to resolve column references in child statements.
-    pub(super) exec_statement_selection: OnceCell<IndexSet<stmt::ExprReference>>,
+    pub(super) load_data_columns: OnceCell<IndexSet<stmt::ExprReference>>,
 
     /// MIR node representing this statement's final output.
     ///
@@ -87,6 +87,10 @@ pub(super) struct StatementInfo {
     /// (e.g., filtering, projection, or nested merge). Dependent statements
     /// reference this node to establish execution order.
     pub(super) output: Cell<Option<mir::NodeId>>,
+
+    /// When true, the statement is independent. An independent statement does
+    /// not depend on any anestors itself nor do any of its sub-dependencies.
+    pub(super) independent: bool,
 }
 
 index_vec::define_index_type! {
@@ -104,9 +108,10 @@ impl StatementInfo {
             deps,
             args: vec![],
             back_refs: HashMap::new(),
-            exec_statement: Cell::new(None),
-            exec_statement_selection: OnceCell::new(),
+            load_data_statement: Cell::new(None),
+            load_data_columns: OnceCell::new(),
             output: Cell::new(None),
+            independent: true,
         }
     }
 
@@ -124,6 +129,10 @@ impl StatementInfo {
         self.deps
             .iter()
             .map(|stmt_id| hir[stmt_id].output.get().unwrap())
+    }
+
+    pub(super) fn stmt(&self) -> &stmt::Statement {
+        self.stmt.as_deref().unwrap()
     }
 }
 
@@ -176,6 +185,9 @@ pub(super) enum Arg {
 
     /// A reference to a parent statement's columns.
     Ref {
+        /// The expression reference relative to the target statement.
+        target_expr_ref: ExprReference,
+
         /// The parent statement that provides the data for this reference.
         stmt_id: StmtId,
 
@@ -184,14 +196,17 @@ pub(super) enum Arg {
         /// A value of 1 means the immediate parent, 2 means the grandparent, etc.
         nesting: usize,
 
-        /// Index of this column in the parent's batch-load query results.
-        ///
-        /// The parent statement includes columns in its batch-load that are referenced
-        /// by child statements. This is the index of this specific column in that set.
-        batch_load_index: usize,
+        /// The MIR node input when the ref is used during the data loading phase
+        data_load_input: Cell<Option<usize>>,
 
-        /// Index in the operation's inputs list. Set during planning.
-        input: Cell<Option<usize>>,
+        /// The MIR node input when the ref is used during the returing phase
+        returning_input: Cell<Option<usize>>,
+
+        /// Depending on the statement type, this is used in different ways. For
+        /// Query types, it is the index of the TableRef that will provide the
+        /// data for this ref. For Insert statements, it is the offset at which
+        /// the data should be fetched.
+        batch_load_index: Cell<Option<usize>>,
     },
 }
 

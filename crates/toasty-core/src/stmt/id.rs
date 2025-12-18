@@ -82,8 +82,19 @@ impl Id {
 
     pub fn cast(self, ty: &Type) -> Result<Value> {
         match (self.repr, ty) {
+            (repr, Type::Id(model_id)) if *model_id == self.model => Ok(Id {
+                model: self.model,
+                repr,
+            }
+            .into()),
             (Repr::String(id), Type::String) => Ok(id.into()),
-            (repr, _) => todo!("id={repr:#?}; ty={ty:#?}"),
+            (repr, _) => todo!(
+                "id={:#?}; ty={ty:#?}",
+                Id {
+                    model: self.model,
+                    repr
+                }
+            ),
         }
     }
 }

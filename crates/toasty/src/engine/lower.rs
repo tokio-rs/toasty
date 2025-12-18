@@ -312,6 +312,18 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                             let source_id = self.scope_stmt_id();
                             let target_id = self.resolve_stmt_id(expr_column.nesting);
 
+                            // The statement is not independent. Walk up the
+                            // scope stack until the referened target statement
+                            // and flag any intermediate statements as also not
+                            // indepdnendent.
+                            for scope in self.state.scopes.iter().rev() {
+                                if scope.stmt_id == target_id {
+                                    break;
+                                }
+
+                                self.state.hir[scope.stmt_id].independent = false;
+                            }
+
                             let position = self.new_ref(source_id, target_id, *expr_reference);
 
                             // Using ExprArg as a placeholder. It will be rewritten
@@ -338,6 +350,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
 
                 let position = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
+
+                if self.state.hir[target_id].independent {
+                    self.curr_stmt_info().deps.insert(target_id);
+                }
+
                 *expr = stmt::Expr::arg(position);
             }
             _ => {
@@ -424,8 +441,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // *except* the target field (since it is borrowed).
         let mut lower = self.lower_insert(&stmt.target);
 
-        // Preprocess the insertion source (values usually);
-        lower.preprocess_insert_values(&mut stmt.source);
+        if let Some(returning) = &mut stmt.returning {
+            lower.visit_returning_mut(returning);
+        }
+
+        // Preprocess the insertion source (values usually)
+        lower.preprocess_insert_values(&mut stmt.source, &mut stmt.returning);
 
         // Lower the insertion source
         lower.visit_stmt_query_mut(&mut stmt.source);
@@ -476,34 +497,49 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
         let mut lower = self.scope_expr(&stmt.target);
 
-        // Plan relations
-        lower.plan_stmt_update_relations(&mut stmt.assignments, &stmt.filter);
+        let mut returning_changed = false;
 
         // Before lowering children, convert the "Changed" returning statement
         // to an expression referencing changed fields.
         if let Some(returning) = &mut stmt.returning {
             if returning.is_changed() {
+                returning_changed = true;
+
                 if let Some(model) = lower.model() {
                     let mut fields = vec![];
 
-                    for i in stmt.assignments.keys() {
+                    // TODO: Really gotta either fix SparseRecord or get rid of it... It does not maintain key order.
+                    let field_set: stmt::PathFieldSet = stmt.assignments.keys().collect();
+
+                    for i in field_set.iter() {
                         let field = &model.fields[i];
 
-                        assert!(field.ty.is_primitive(), "field={field:#?}");
-
-                        fields.push(stmt::Expr::ref_self_field(app::FieldId {
-                            model: model.id,
-                            index: i,
-                        }));
+                        if field.ty.is_primitive() {
+                            fields.push(stmt::Expr::ref_self_field(app::FieldId {
+                                model: model.id,
+                                index: i,
+                            }));
+                        } else {
+                            // This will be populated later during relation planning
+                            fields.push(stmt::Expr::null());
+                        }
                     }
 
                     *returning = stmt::Returning::Expr(stmt::Expr::cast(
                         stmt::ExprRecord::from_vec(fields),
-                        stmt::Type::SparseRecord(stmt.assignments.keys().collect()),
+                        stmt::Type::SparseRecord(field_set),
                     ));
                 }
             }
         }
+
+        // Plan relations
+        lower.plan_stmt_update_relations(
+            &mut stmt.assignments,
+            &stmt.filter,
+            &mut stmt.returning,
+            returning_changed,
+        );
 
         lower.visit_assignments_mut(&mut stmt.assignments);
         lower.visit_filter_mut(&mut stmt.filter);
@@ -749,7 +785,16 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 assert!(assignment.op.is_set(), "TODO");
                 assignment.expr.clone()
             }
-            LoweringContext::InsertRow(row) => row.entry(index).to_expr(),
+            LoweringContext::InsertRow(row) => {
+                // If nesting > 0, this references a parent scope, not the current row
+                if nesting > 0 {
+                    // Use Statement context to properly handle cross-statement references
+                    let mapping = self.mapping_at_unwrap(nesting);
+                    mapping.table_to_model.lower_expr_reference(nesting, index)
+                } else {
+                    row.entry(index).unwrap().to_expr()
+                }
+            }
             _ => todo!("cx={:#?}", self.cx),
         }
     }
@@ -848,7 +893,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         // returned from the target statement's ExecStatement operation. This
         // ExecStatement operation batch loads all records needed to execute
         // the full root statement.
-        let (batch_load_index, _) = target
+        target
             .back_refs
             .entry(source_id)
             .or_default()
@@ -857,22 +902,40 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
         // Create an argument for inputing the expr reference's value into the statement.
         let source = &mut self.state.hir[source_id];
+
+        // See if an arg already exists
+        for (i, arg) in source.args.iter().enumerate() {
+            let hir::Arg::Ref {
+                target_expr_ref, ..
+            } = arg
+            else {
+                continue;
+            };
+
+            if *target_expr_ref == expr_reference {
+                return i;
+            }
+        }
+
         let arg = source.args.len();
 
         source.args.push(hir::Arg::Ref {
+            target_expr_ref: expr_reference,
             stmt_id: target_id,
             nesting,
-            batch_load_index,
-            input: Cell::new(None),
+            data_load_input: Cell::new(None),
+            returning_input: Cell::new(None),
+            batch_load_index: Cell::new(None),
         });
 
         arg
     }
 
     fn new_statement_info(&mut self) -> hir::StmtId {
-        self.state
-            .hir
-            .new_statement_info(self.state.dependencies.clone())
+        let mut deps = self.state.dependencies.clone();
+        deps.extend(&self.curr_stmt_info().deps);
+
+        self.state.hir.new_statement_info(deps)
     }
 
     /// Create a new sub-statement. Returns the argument position

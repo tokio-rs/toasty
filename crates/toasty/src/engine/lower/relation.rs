@@ -34,19 +34,29 @@ trait RelationSource {
     /// Return a query representing the source selection
     fn selection(&self) -> stmt::Query;
 
-    /// Update a field expression
-    fn set(&mut self, field: FieldId, expr: stmt::Expr);
+    /// Update a source field expression
+    fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr);
+
+    /// Update a returning field expression
+    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr);
 }
 
+#[derive(Debug)]
 struct InsertRelationSource<'a> {
     model: &'a app::Model,
     row: &'a mut stmt::Expr,
+    /// The index in stmt::Returning that represents the row
+    index: usize,
+    returning: &'a mut Option<stmt::Returning>,
 }
 
+#[derive(Debug)]
 struct UpdateRelationSource<'a> {
     model: &'a app::Model,
     filter: &'a stmt::Filter,
     assignments: &'a mut stmt::Assignments,
+    returning: &'a mut Option<stmt::Returning>,
+    returning_changed: bool,
 }
 
 impl LowerStatement<'_, '_> {
@@ -66,7 +76,12 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    pub(super) fn plan_stmt_insert_relations(&mut self, row: &mut stmt::Expr) {
+    pub(super) fn plan_stmt_insert_relations(
+        &mut self,
+        row: &mut stmt::Expr,
+        returning: &mut Option<stmt::Returning>,
+        index: usize,
+    ) {
         let model = self.expr_cx.target().as_model_unwrap();
 
         for (i, field) in model.fields.iter().enumerate() {
@@ -93,7 +108,12 @@ impl LowerStatement<'_, '_> {
                         expr,
                         exclusive: field.ty.is_belongs_to(),
                     },
-                    &mut InsertRelationSource { model, row },
+                    &mut InsertRelationSource {
+                        model,
+                        row,
+                        returning,
+                        index,
+                    },
                 );
             }
         }
@@ -103,6 +123,8 @@ impl LowerStatement<'_, '_> {
         &mut self,
         assignments: &mut stmt::Assignments,
         filter: &stmt::Filter,
+        returning: &mut Option<stmt::Returning>,
+        returning_changed: bool,
     ) {
         let model = self.expr_cx.target().as_model_unwrap();
 
@@ -147,6 +169,8 @@ impl LowerStatement<'_, '_> {
                     model,
                     filter,
                     assignments: &mut *assignments,
+                    returning,
+                    returning_changed,
                 },
             );
         }
@@ -318,7 +342,7 @@ impl LowerStatement<'_, '_> {
         field: &Field,
         pair: &Field,
         stmt: stmt::Statement,
-        source: &dyn RelationSource,
+        source: &mut dyn RelationSource,
     ) {
         match stmt {
             stmt::Statement::Insert(stmt) => {
@@ -333,16 +357,23 @@ impl LowerStatement<'_, '_> {
         _field: &Field,
         pair: &Field,
         mut stmt: stmt::Insert,
-        source: &dyn RelationSource,
+        source: &mut dyn RelationSource,
     ) {
-        // Returning does nothing in this context.
-        stmt.returning = None;
-
         debug_assert_eq!(stmt.target.as_model_unwrap(), pair.id.model);
         debug_assert!(stmt.target.is_model());
 
         stmt.target = self.relation_pair_scope(pair.id, source).into();
-        self.new_dependency(stmt);
+
+        // has_many fields represent collections and must return lists for type
+        // consistency, even when inserting a single record. The insert may arrive
+        // with `single = true` (semantically inserting one record into the set),
+        // but we set it to false to ensure the result is wrapped in a list.
+        if _field.ty.is_has_many() {
+            stmt.source.single = false;
+        }
+
+        self.state.engine.simplify_stmt(&mut stmt);
+        source.set_returning_field(_field.id, stmt.into());
     }
 
     fn plan_mut_belongs_to(
@@ -351,6 +382,7 @@ impl LowerStatement<'_, '_> {
         op: Mutation,
         source: &mut dyn RelationSource,
     ) {
+        // BelongsTo doesn't create child inserts, so `then` is unused
         match op {
             Mutation::Associate { expr, .. } => {
                 self.plan_mut_belongs_to_associate(field, expr, source)
@@ -389,7 +421,7 @@ impl LowerStatement<'_, '_> {
 
         if !delete {
             for fk_field in &belongs_to.foreign_key.fields {
-                source.set(fk_field.source, stmt::Expr::null());
+                source.set_source_field(fk_field.source, stmt::Expr::null());
             }
         }
     }
@@ -489,15 +521,21 @@ impl LowerStatement<'_, '_> {
                 let stmt_info = &self.state.hir[stmt_id];
 
                 let returning = stmt_info.stmt.as_ref().unwrap().returning().expect("bug");
-                let stmt::Returning::Value(value) = returning.clone() else {
-                    todo!()
-                };
-                let stmt::Value::List(rows) = value else {
-                    todo!()
-                };
-                assert_eq!(1, rows.len());
 
-                self.set_relation_field(field, rows.into_iter().next().unwrap().into(), source);
+                let expr = match returning.clone() {
+                    stmt::Returning::Value(stmt::Expr::Value(stmt::Value::List(rows))) => {
+                        assert_eq!(1, rows.len());
+                        rows.into_iter().next().unwrap().into()
+                    }
+                    stmt::Returning::Value(stmt::Expr::List(rows)) => {
+                        assert_eq!(1, rows.items.len());
+                        rows.items.into_iter().next().unwrap()
+                    }
+                    stmt::Returning::Value(row) => row,
+                    returning => todo!("returning={returning:#?}"),
+                };
+
+                self.set_relation_field(field, expr, source);
             }
             stmt::Statement::Query(query) => {
                 // Try to extract the FK from the select without performing the query
@@ -553,11 +591,11 @@ impl LowerStatement<'_, '_> {
             let fk_values = expr.into_record_items().unwrap();
 
             for (fk_field, fk_value) in fk_fields.iter().zip(fk_values) {
-                source.set(fk_field.source, fk_value);
+                source.set_source_field(fk_field.source, fk_value);
             }
         } else {
             let [fk_field] = &fk_fields[..] else { todo!() };
-            source.set(fk_field.source, expr);
+            source.set_source_field(fk_field.source, expr);
         }
     }
 }
@@ -567,7 +605,11 @@ impl RelationSource for &stmt::Delete {
         stmt::Delete::selection(self)
     }
 
-    fn set(&mut self, _field: FieldId, _expr: stmt::Expr) {
+    fn set_source_field(&mut self, _field: FieldId, _expr: stmt::Expr) {
+        unimplemented!("delete statements do not need to update field values");
+    }
+
+    fn set_returning_field(&mut self, _field: FieldId, _expr: stmt::Expr) {
         unimplemented!("delete statements do not need to update field values");
     }
 }
@@ -577,8 +619,36 @@ impl RelationSource for UpdateRelationSource<'_> {
         stmt::Query::new_select(self.model, self.filter.clone())
     }
 
-    fn set(&mut self, field: FieldId, expr: stmt::Expr) {
+    fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
         self.assignments.set(field, expr);
+    }
+
+    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
+        debug_assert!(self.returning_changed, "TODO");
+
+        let Some(stmt::Returning::Expr(stmt::Expr::Cast(expr_cast))) = self.returning else {
+            todo!("UpdateRelationSource={self:#?}")
+        };
+
+        let stmt::Type::SparseRecord(path_field_set) = &mut expr_cast.ty else {
+            todo!("expr={expr:#?}")
+        };
+
+        let position = path_field_set
+            .iter()
+            .position(|field_id| field_id == field.index)
+            .unwrap();
+
+        let stmt::Expr::Record(record) = &mut *expr_cast.expr else {
+            todo!()
+        };
+
+        assert!(
+            record.fields[position].is_value_null(),
+            "TODO: probably need to merge instead of overwrite; field={field:#?}; expr={expr:#?}; self={self:#?}"
+        );
+
+        record.fields[position] = expr;
     }
 }
 
@@ -587,14 +657,46 @@ impl RelationSource for InsertRelationSource<'_> {
         let mut args = vec![];
 
         for pk_field in self.model.primary_key_fields() {
-            args.push(self.row.entry(pk_field.id.index).to_value());
+            let entry = self.row.entry(pk_field.id.index).unwrap();
+
+            if entry.is_value() {
+                args.push(entry.to_expr());
+            } else if entry.is_expr_default() {
+                args.push(stmt::Expr::ref_parent_field(pk_field.id))
+            } else {
+                todo!("{entry:#?}");
+            }
         }
 
-        self.model.find_by_id(&args)
+        self.model.find_by_id(&args[..])
     }
 
-    fn set(&mut self, field: FieldId, expr: stmt::Expr) {
+    fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
         assert_eq!(self.model.id, field.model);
         self.row.as_record_mut()[field.index] = expr;
+    }
+
+    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
+        match self.returning {
+            Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => {
+                assert!(
+                    record.fields[field.index].is_value_null(),
+                    "TODO: probably need to merge instead of overwrite; actual={:#?}",
+                    record.fields[field.index]
+                );
+                record.fields[field.index] = expr;
+            }
+            Some(stmt::Returning::Value(stmt::Expr::List(rows))) => {
+                let record = &mut rows.items[self.index].as_record_mut();
+
+                assert!(
+                    record.fields[field.index].is_value_null(),
+                    "TODO: probably need to merge instead of overwrite; actual={:#?}",
+                    record.fields[field.index]
+                );
+                record.fields[field.index] = expr;
+            }
+            _ => todo!("InsertRelationSource={self:#?}"),
+        }
     }
 }

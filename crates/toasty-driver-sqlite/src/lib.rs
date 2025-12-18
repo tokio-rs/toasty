@@ -97,7 +97,13 @@ impl toasty_core::driver::Connection for Connection {
 
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {
-            Operation::QuerySql(op) => (op.stmt.into(), op.ret),
+            Operation::QuerySql(op) => {
+                assert!(
+                    op.last_insert_id_hack.is_none(),
+                    "last_insert_id_hack is MySQL-specific and should not be set for SQLite"
+                );
+                (op.stmt.into(), op.ret)
+            }
             // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(Transaction::Start) => {
                 self.connection.execute("BEGIN", [])?;
@@ -122,23 +128,23 @@ impl toasty_core::driver::Connection for Connection {
         let width = match &sql {
             sql::Statement::Query(stmt) => match &stmt.body {
                 stmt::ExprSet::Select(stmt) => {
-                    Some(stmt.returning.as_expr_unwrap().as_record().len())
+                    Some(stmt.returning.as_expr_unwrap().as_record_unwrap().len())
                 }
                 _ => todo!(),
             },
             sql::Statement::Insert(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| returning.as_expr_unwrap().as_record().len()),
+                .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
             sql::Statement::Delete(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| returning.as_expr_unwrap().as_record().len()),
+                .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
             sql::Statement::Update(stmt) => {
                 assert!(stmt.condition.is_none(), "stmt={stmt:#?}");
                 stmt.returning
                     .as_ref()
-                    .map(|returning| returning.as_expr_unwrap().as_record().len())
+                    .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len())
             }
             _ => None,
         };
