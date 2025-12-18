@@ -21,6 +21,12 @@ impl Simplify<'_> {
         // `or(..., false, ...) → or(..., ...)`
         expr.operands.retain(|expr| !expr.is_false());
 
+        // Null propagation, `null or null` → `null`
+        // After removing false values, if all operands are null, return null.
+        if !expr.operands.is_empty() && expr.operands.iter().all(|e| e.is_value_null()) {
+            return Some(stmt::Expr::null());
+        }
+
         // Idempotent law, `a or a` → `a`
         // Note: O(n) lookups are acceptable here since operand lists are typically small.
         let mut seen = Vec::new();
@@ -63,6 +69,11 @@ impl Simplify<'_> {
         // Complement law, `a or not(a)` → `true` (only if `a` is non-nullable)
         if self.try_complement_or(expr) {
             return Some(true.into());
+        }
+
+        // OR-to-IN conversion, `a = 1 or a = 2 or a = 3` → `a in (1, 2, 3)`
+        if let Some(in_list) = self.try_or_to_in_list(expr) {
+            return Some(in_list);
         }
 
         if expr.operands.is_empty() {
@@ -170,6 +181,86 @@ impl Simplify<'_> {
         }
 
         false
+    }
+
+    /// Converts disjunctive equality chains to IN lists.
+    ///
+    /// `a = 1 or a = 2 or b = 3` → `a in (1, 2) or b = 3`
+    /// `a = 1 or a = 2 or b = 3 or b = 4` → `a in (1, 2) or b in (3, 4)`
+    ///
+    /// Groups equality comparisons by their LHS and converts groups with 2+
+    /// values into IN lists. Non-equality operands are preserved.
+    fn try_or_to_in_list(&self, expr: &mut stmt::ExprOr) -> Option<stmt::Expr> {
+        use std::collections::HashMap;
+
+        // Group equalities by their LHS expression
+        // Key: index into `lhs_exprs`, Value: list of RHS constant values
+        //
+        // TODO: this could be simplified to use `Expr` as the `HashMap` key
+        // directly if `Expr` ever implements `Hash`.
+        let mut lhs_exprs: Vec<stmt::Expr> = Vec::new();
+        let mut groups: HashMap<usize, Vec<stmt::Value>> = HashMap::new();
+        let mut other_operands: Vec<stmt::Expr> = Vec::new();
+
+        for operand in mem::take(&mut expr.operands) {
+            if let stmt::Expr::BinaryOp(bin_op) = &operand {
+                if bin_op.op.is_eq() {
+                    if let stmt::Expr::Value(value) = bin_op.rhs.as_ref() {
+                        // Find or create index for this LHS
+                        let lhs_idx = lhs_exprs
+                            .iter()
+                            .position(|e| e == bin_op.lhs.as_ref())
+                            .unwrap_or_else(|| {
+                                lhs_exprs.push(bin_op.lhs.as_ref().clone());
+                                lhs_exprs.len() - 1
+                            });
+
+                        groups.entry(lhs_idx).or_default().push(value.clone());
+                        continue;
+                    }
+                }
+            }
+
+            // Non-equality or non-constant RHS - keep as is
+            other_operands.push(operand);
+        }
+
+        // Check if any conversion will happen (any group with 2+ values)
+        let has_conversion = groups.values().any(|v| v.len() >= 2);
+        if !has_conversion {
+            // Restore original operands and return None
+            for (idx, values) in groups {
+                let lhs = &lhs_exprs[idx];
+                for value in values {
+                    other_operands.push(stmt::Expr::eq(lhs.clone(), stmt::Expr::Value(value)));
+                }
+            }
+            expr.operands = other_operands;
+            return None;
+        }
+
+        // Build result operands
+        let mut result_operands = other_operands;
+
+        for (idx, values) in groups {
+            let lhs = lhs_exprs[idx].clone();
+            if values.len() >= 2 {
+                // Convert to IN list
+                result_operands.push(stmt::Expr::in_list(lhs, stmt::Expr::list(values)));
+            } else {
+                // Keep as equality
+                for value in values {
+                    result_operands.push(stmt::Expr::eq(lhs.clone(), stmt::Expr::Value(value)));
+                }
+            }
+        }
+
+        if result_operands.len() == 1 {
+            Some(result_operands.remove(0))
+        } else {
+            expr.operands = result_operands;
+            None
+        }
     }
 }
 
@@ -649,5 +740,299 @@ mod tests {
 
         assert!(result.is_some());
         assert!(result.unwrap().is_true());
+    }
+
+    // Null propagation tests
+
+    #[test]
+    fn null_or_null_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or null` → `null`
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), Expr::null()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn null_or_false_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or false` → `null` (false is removed, leaving only null)
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), false.into()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn false_or_null_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `false or null` → `null` (false is removed, leaving only null)
+        let mut expr = ExprOr {
+            operands: vec![false.into(), Expr::null()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn null_or_true_becomes_true() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or true` → `true`
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), true.into()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_true());
+    }
+
+    #[test]
+    fn null_or_symbolic_not_simplified() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or a` → no change (symbolic operand present)
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), Expr::arg(0)],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+    }
+
+    #[test]
+    fn multiple_nulls_become_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or null or null` → `null`
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), Expr::null(), Expr::null()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    #[test]
+    fn multiple_nulls_and_false_becomes_null() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `null or false or null or false` → `null`
+        let mut expr = ExprOr {
+            operands: vec![Expr::null(), false.into(), Expr::null(), false.into()],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(result.unwrap().is_value_null());
+    }
+
+    // OR-to-IN conversion tests
+
+    #[test]
+    fn or_to_in_basic() {
+        use toasty_core::stmt::Value;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a = 1 or a = 2 or a = 3` → `a in (1, 2, 3)`
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(1i64))),
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(2i64))),
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(3i64))),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        let Some(Expr::InList(in_list)) = result else {
+            panic!("expected InList");
+        };
+        assert_eq!(*in_list.expr, Expr::arg(0));
+    }
+
+    #[test]
+    fn or_to_in_two_values() {
+        use toasty_core::stmt::Value;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a = 1 or a = 2` → `a in (1, 2)`
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(1i64))),
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(2i64))),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        assert!(result.is_some());
+        assert!(matches!(result, Some(Expr::InList(_))));
+    }
+
+    #[test]
+    fn or_to_in_single_value_not_converted() {
+        use toasty_core::stmt::Value;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a = 1` (single equality, not converted)
+        let mut expr = ExprOr {
+            operands: vec![Expr::eq(Expr::arg(0), Expr::Value(Value::from(1i64)))],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        // Single operand gets unwrapped, but not to IN
+        assert!(result.is_some());
+        assert!(matches!(result, Some(Expr::BinaryOp(_))));
+    }
+
+    #[test]
+    fn or_to_in_different_lhs_not_converted() {
+        use toasty_core::stmt::Value;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a = 1 or b = 2` (different LHS, not converted to single IN)
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(1i64))),
+                Expr::eq(Expr::arg(1), Expr::Value(Value::from(2i64))),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        // Not converted, stays as OR
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+    }
+
+    #[test]
+    fn or_to_in_mixed_keeps_other_operands() {
+        use toasty_core::stmt::Value;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a = 1 or a = 2 or b = 3` → `a in (1, 2) or b = 3`
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(1i64))),
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(2i64))),
+                Expr::eq(Expr::arg(1), Expr::Value(Value::from(3i64))),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        // Stays as OR but with transformed operands
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+
+        // Should have one InList and one BinaryOp
+        let has_in_list = expr.operands.iter().any(|e| matches!(e, Expr::InList(_)));
+        let has_binary_op = expr.operands.iter().any(|e| matches!(e, Expr::BinaryOp(_)));
+        assert!(has_in_list);
+        assert!(has_binary_op);
+    }
+
+    #[test]
+    fn or_to_in_multiple_groups() {
+        use toasty_core::stmt::Value;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a = 1 or a = 2 or b = 3 or b = 4` → `a in (1, 2) or b in (3, 4)`
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(1i64))),
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(2i64))),
+                Expr::eq(Expr::arg(1), Expr::Value(Value::from(3i64))),
+                Expr::eq(Expr::arg(1), Expr::Value(Value::from(4i64))),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        // Stays as OR with two InList operands
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+
+        // Both should be InList
+        assert!(expr.operands.iter().all(|e| matches!(e, Expr::InList(_))));
+    }
+
+    #[test]
+    fn or_to_in_with_non_equality_preserved() {
+        use toasty_core::stmt::Value;
+
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a = 1 or a = 2 or c` → `a in (1, 2) or c`
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(1i64))),
+                Expr::eq(Expr::arg(0), Expr::Value(Value::from(2i64))),
+                Expr::arg(2), // non-equality operand
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        // Stays as OR
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+
+        // One InList, one arg
+        let has_in_list = expr.operands.iter().any(|e| matches!(e, Expr::InList(_)));
+        let has_arg = expr.operands.iter().any(|e| matches!(e, Expr::Arg(_)));
+        assert!(has_in_list);
+        assert!(has_arg);
+    }
+
+    #[test]
+    fn or_to_in_non_const_rhs_not_converted() {
+        let schema = test_schema();
+        let mut simplify = Simplify::new(&schema);
+
+        // `a = b or a = c` (non-constant RHS, not converted)
+        let mut expr = ExprOr {
+            operands: vec![
+                Expr::eq(Expr::arg(0), Expr::arg(1)),
+                Expr::eq(Expr::arg(0), Expr::arg(2)),
+            ],
+        };
+        let result = simplify.simplify_expr_or(&mut expr);
+
+        // Not converted, stays as OR
+        assert!(result.is_none());
+        assert_eq!(expr.operands.len(), 2);
+        assert!(expr.operands.iter().all(|e| matches!(e, Expr::BinaryOp(_))));
     }
 }

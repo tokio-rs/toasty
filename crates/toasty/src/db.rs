@@ -1,5 +1,10 @@
 mod builder;
+mod connect;
+mod pool;
+
 pub use builder::Builder;
+pub use connect::*;
+pub use pool::*;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -88,7 +93,10 @@ impl Db {
     ///
     /// Used by generated code
     #[doc(hidden)]
-    pub async fn exec_insert_one<M: Model>(&self, stmt: stmt::Insert<M>) -> Result<M> {
+    pub async fn exec_insert_one<M: Model>(&self, mut stmt: stmt::Insert<M>) -> Result<M> {
+        // TODO: HAX
+        stmt.untyped.source.single = false;
+
         // Execute the statement and return the result
         let records = self.exec(stmt.into()).await?;
         let mut cursor = Cursor::new(self.engine.schema.clone(), records);
@@ -98,7 +106,12 @@ impl Db {
 
     /// TODO: remove
     pub async fn reset_db(&self) -> Result<()> {
-        self.engine.driver.reset_db(&self.engine.schema.db).await
+        self.engine
+            .pool
+            .get()
+            .await?
+            .reset_db(&self.engine.schema.db)
+            .await
     }
 
     pub fn schema(&self) -> &Schema {

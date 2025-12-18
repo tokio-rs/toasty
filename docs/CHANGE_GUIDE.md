@@ -154,7 +154,6 @@ This guide explains how to make common changes to the Toasty codebase based on p
 1. **Create driver crate** if new database
 2. **Implement Driver trait** from toasty-core (3 methods):
    - `capability()` - Return driver capabilities
-   - `register_schema()` - Handle schema registration
    - `exec()` - Execute operations
 3. **Handle operations** based on driver type:
    - **SQL operations**: `QuerySql`, `Insert`, `Update`, `Delete`

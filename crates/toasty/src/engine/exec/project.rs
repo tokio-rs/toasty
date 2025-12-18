@@ -5,7 +5,7 @@ use crate::{
     },
     Result,
 };
-use toasty_core::driver::Rows;
+use toasty_core::{driver::Rows, stmt};
 
 #[derive(Debug)]
 pub(crate) struct Project {
@@ -26,7 +26,19 @@ impl Exec<'_> {
         let mut projected_rows = vec![];
 
         match self.vars.load(action.input).await? {
-            Rows::Values(mut value_stream) => {
+            Rows::Value(value) => {
+                match value {
+                    stmt::Value::List(items) => {
+                        for value in items {
+                            // Apply the projection
+                            let row = action.projection.eval(&[value])?;
+                            projected_rows.push(row);
+                        }
+                    }
+                    _ => todo!("value={value:#?}"),
+                }
+            }
+            Rows::Stream(mut value_stream) => {
                 while let Some(res) = value_stream.next().await {
                     let value = res?;
 

@@ -1,20 +1,35 @@
+use std::mem;
+
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit_mut, Condition};
 
 use crate::engine::{
-    eval, hir,
+    eval,
+    hir::{self},
     index::{self, IndexPlan},
     mir,
     plan::HirPlanner,
 };
 
-struct Selection {
+#[derive(Debug)]
+struct LoadData {
+    /// MIR node inputs needed to load data associated with the statement
+    inputs: IndexSet<mir::NodeId>,
+
+    /// Columns to load
     columns: IndexSet<stmt::ExprReference>,
-    returning: Option<stmt::Returning>,
+
+    /// When the statement data is batch loaded (single database query to load
+    /// data for multiple statements), arguments are passed in in batches as
+    /// well. For SQL, this is done using derived tables. This maps "input" to
+    /// the derived table index.
+    batch_load_args: IndexSet<usize>,
 }
 
-struct LinkedStatement {
-    stmt: stmt::Statement,
+type Returning = Option<stmt::Returning>;
+
+struct ReturningInfo {
+    clause: Option<stmt::Returning>,
     inputs: IndexSet<mir::NodeId>,
 }
 
@@ -22,6 +37,9 @@ struct PlanStatement<'a, 'b> {
     planner: &'a mut HirPlanner<'b>,
     stmt_id: hir::StmtId,
     stmt_info: &'b hir::StatementInfo,
+
+    /// Planning information related ot how to load data to satisfy the statement.
+    load_data: LoadData,
 
     /// True if the statement's dependencies have been tracked
     did_take_deps: bool,
@@ -32,7 +50,7 @@ impl HirPlanner<'_> {
         let stmt_info = &self.hir[stmt_id];
 
         // Check if the statement has already been planned
-        if stmt_info.exec_statement.get().is_some() {
+        if stmt_info.load_data_statement.get().is_some() {
             return;
         }
 
@@ -42,202 +60,313 @@ impl HirPlanner<'_> {
             self.plan_statement(dep_stmt_id);
         }
 
+        let stmt = stmt_info.stmt.as_deref().unwrap().clone();
+
         // Delegate to PlanStatement
         let mut planner = PlanStatement {
             planner: self,
             stmt_id,
             stmt_info,
+            load_data: LoadData {
+                inputs: IndexSet::new(),
+                columns: IndexSet::new(),
+                batch_load_args: IndexSet::new(),
+            },
             did_take_deps: false,
         };
-        planner.plan();
+        planner.plan(stmt);
     }
 }
 
 impl<'a, 'b> PlanStatement<'a, 'b> {
     // ===== Entry point =====
 
-    fn plan(&mut self) {
-        let mut stmt = self.stmt_info.stmt.as_deref().unwrap().clone();
+    fn plan(&mut self, mut stmt: stmt::Statement) {
+        let mut returning = stmt.take_returning();
 
         // Tracks if the original query is a single query.
-        let single = stmt.as_query().map(|query| query.single).unwrap_or(false);
         if let Some(query) = stmt.as_query_mut() {
             query.single = false;
         }
 
-        let returning = stmt.take_returning();
-
-        // Columns to select
-        let columns = IndexSet::new();
-
-        let mut linked_stmt = LinkedStatement {
-            stmt,
-            inputs: IndexSet::new(),
-        };
-
-        let mut selection = Selection { columns, returning };
-
         // Visit the main statement's returning clause to extract needed columns
-        self.extract_columns_from_returning(&mut selection, &mut linked_stmt);
+        self.extract_columns_from_returning(&returning);
 
-        // Track sub-statement arguments from filter
-        self.extract_sub_statement_args_from_filter(&mut linked_stmt);
+        // Process any args (sub statements or refs to parent statements) in the query's filter.
+        self.extract_data_load_args(&mut stmt);
 
         // For each back ref, include the needed columns
-        self.collect_back_ref_columns(&mut selection);
+        self.collect_back_ref_columns();
 
-        // If there are any ref args, then the statement needs to be rewritten
-        // to batch load all records for a NestedMerge operation .
-        let ref_source = self.process_ref_args(&mut linked_stmt);
+        // If there are any ref args, then the statement might need to be
+        // rewritten to batch load all records for a NestedMerge operation.
+        if !self.load_data.batch_load_args.is_empty() {
+            self.rewrite_stmt_for_batch_load(&mut stmt);
+        } else if let stmt::Statement::Insert(insert) = &mut stmt {
+            self.rewrite_stmt_insert_for_batch_load(insert);
+        }
 
-        let exec_stmt_node_id = self.plan_execution(linked_stmt, &mut selection, ref_source);
+        let load_data_node_id = self.plan_data_loading(stmt, &mut returning);
 
         // Track the exec statement operation node.
-        self.stmt_info.exec_statement.set(Some(exec_stmt_node_id));
+        self.stmt_info
+            .load_data_statement
+            .set(Some(load_data_node_id));
 
         // Now, for each back ref, we need to project the expression to what the
         // next statement expects.
-        self.process_back_ref_projections(exec_stmt_node_id, &selection);
+        self.process_back_ref_projections(load_data_node_id);
 
         // Track the selection for later use.
+        // TODO: Do we actually need to track this on the statement?
         self.stmt_info
-            .exec_statement_selection
-            .set(selection.columns)
+            .load_data_columns
+            .set(mem::take(&mut self.load_data.columns))
             .unwrap();
 
         // Plan each child
         self.plan_child_statements();
 
+        // Track sub-statements referenced in the returning clause as inputs, so their
+        // results are available when building the return value.
+        let returning_info = ReturningInfo {
+            inputs: self.extract_inputs_from_returning(&mut returning, load_data_node_id),
+            clause: returning,
+        };
+
         // Plans a NestedMerge if one is needed
-        let output_node_id =
-            self.plan_output_node(exec_stmt_node_id, selection.returning, single, ref_source);
+        let output_node_id = self.plan_output_node(load_data_node_id, returning_info);
 
         self.stmt_info.output.set(Some(output_node_id));
     }
 
     // ===== Setup helpers =====
 
-    fn extract_columns_from_returning(
+    fn extract_inputs_from_returning(
         &mut self,
-        selection: &mut Selection,
-        linked_stmt: &mut LinkedStatement,
-    ) {
-        visit_mut::for_each_expr_mut(&mut selection.returning, |expr| {
+        returning: &mut Returning,
+        load_data_node_id: mir::NodeId,
+    ) -> IndexSet<mir::NodeId> {
+        let mut inputs = IndexSet::new();
+
+        let is_returning_projection = matches!(returning, Some(stmt::Returning::Expr(..)));
+        debug_assert!(
+            is_returning_projection || matches!(returning, None | Some(stmt::Returning::Value(..)))
+        );
+
+        visit_mut::for_each_expr_mut(returning, |expr| {
             match expr {
-                stmt::Expr::Reference(expr_reference) => {
-                    let (index, _) = selection.columns.insert_full(*expr_reference);
-                    *expr = stmt::Expr::arg_project(0, [index]);
-                }
-                stmt::Expr::Arg(expr_arg) => match &self.stmt_info.args[expr_arg.position] {
-                    hir::Arg::Ref { .. } => {
-                        todo!("refs in returning is not yet supported");
-                    }
-                    hir::Arg::Sub {
-                        stmt_id,
-                        input,
-                        returning: true,
-                    } => {
-                        // If there are back-refs, the exec statement is preloading
-                        // data for a NestedMerge. Sub-statements will be loaded
-                        // during the NestedMerge.
-                        if !self.stmt_info.back_refs.is_empty() {
-                            return;
+                stmt::Expr::Arg(expr_arg) => {
+                    match &self.stmt_info.args[expr_arg.position] {
+                        hir::Arg::Ref {
+                            stmt_id: target_id,
+                            returning_input,
+                            batch_load_index,
+                            target_expr_ref,
+                            ..
+                        } => {
+                            assert!(returning_input.get().is_none());
+
+                            let target_stmt_info = &self.planner.hir[target_id];
+                            let back_ref = &target_stmt_info.back_refs[&self.stmt_id];
+
+                            // Find the node providing the data for the ref
+                            let node_id = back_ref.node_id.get().unwrap();
+
+                            // Find the column
+                            let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
+
+                            let (index, _) = inputs.insert_full(node_id);
+                            returning_input.set(Some(index));
+
+                            *expr = if self.stmt().is_insert() && is_returning_projection {
+                                let row = batch_load_index.get().unwrap();
+                                stmt::Expr::project(
+                                    stmt::ExprArg {
+                                        position: index,
+                                        nesting: 1,
+                                    },
+                                    [row, column],
+                                )
+                            } else {
+                                stmt::ExprArg {
+                                    position: index,
+                                    nesting: 0,
+                                }
+                                .into()
+                            };
                         }
+                        hir::Arg::Sub {
+                            stmt_id: target_id,
+                            input,
+                            returning: true,
+                        } => {
+                            assert!(input.get().is_none());
 
-                        let node_id = self.planner.hir[stmt_id].exec_statement.get().expect("bug");
+                            let target_stmt_info = &self.planner.hir[target_id];
+                            let target_node_id = target_stmt_info.output.get().expect("bug");
 
-                        let (index, _) = linked_stmt.inputs.insert_full(node_id);
-                        input.set(Some(index));
+                            let (index, _) = inputs.insert_full(target_node_id);
+                            input.set(Some(index));
+
+                            *expr = stmt::Expr::arg(index);
+                        }
+                        _ => todo!(),
                     }
-                    _ => todo!(),
-                },
+                }
+                stmt::Expr::Project(expr_project) if !is_returning_projection => {
+                    // When returning an expression (not projection),
+                    // ExprReference projections need to be handled explicitly.
+                    if let stmt::Expr::Reference(expr_reference) = &*expr_project.base {
+                        let [row] = expr_project.projection.as_slice() else {
+                            todo!("expr_projec{expr_project:#?}")
+                        };
+
+                        let column = self.load_data_expr_reference_position(expr_reference);
+                        let (position, _) = inputs.insert_full(load_data_node_id);
+                        *expr = stmt::Expr::arg_project(position, [*row, column]);
+                    }
+                }
+                stmt::Expr::Reference(expr_reference) => {
+                    if is_returning_projection {
+                        let column = self.load_data_expr_reference_position(expr_reference);
+                        let (position, _) = inputs.insert_full(load_data_node_id);
+                        *expr = stmt::Expr::arg_project(position, [column]);
+                    }
+                }
                 _ => {}
             }
         });
+
+        inputs
     }
 
-    fn extract_sub_statement_args_from_filter(&mut self, linked_stmt: &mut LinkedStatement) {
-        visit_mut::for_each_expr_mut(&mut linked_stmt.stmt.filter_mut(), |expr| {
-            if let stmt::Expr::Arg(expr_arg) = expr {
-                if let hir::Arg::Sub {
-                    stmt_id: arg_stmt_id,
-                    returning: false,
-                    input,
-                } = &self.stmt_info.args[expr_arg.position]
-                {
-                    debug_assert!(!self.planner.engine.capability().sql);
-                    debug_assert!(input.get().is_none());
-                    let node_id = self.planner.hir[arg_stmt_id].output.get().expect("bug");
+    fn load_data_expr_reference_position(&self, expr_reference: &stmt::ExprReference) -> usize {
+        assert!(
+            expr_reference.is_column(),
+            "TODO: expr_reference = {expr_reference:#?}"
+        );
 
-                    let (index, _) = linked_stmt.inputs.insert_full(node_id);
-                    input.set(Some(index));
-                }
-            }
-        });
+        let Some(column) = self
+            .stmt_info
+            .load_data_columns
+            .get()
+            .unwrap()
+            .get_index_of(expr_reference)
+        else {
+            panic!(
+                "expr_reference={expr_reference:#?}; data_load.columns={:#?}",
+                self.load_data.columns
+            )
+        };
+        column
     }
 
-    fn collect_back_ref_columns(&mut self, selection: &mut Selection) {
-        for back_ref in self.stmt_info.back_refs.values() {
-            for expr in &back_ref.exprs {
-                selection.columns.insert(*expr);
+    fn extract_columns_from_returning(&mut self, returning: &Returning) {
+        stmt::visit::for_each_expr(returning, |expr| {
+            if let stmt::Expr::Reference(expr_reference) = expr {
+                assert!(
+                    expr_reference.is_column(),
+                    "TODO: expr_reference = {expr_reference:#?}"
+                );
+                self.load_data.columns.insert(*expr_reference);
             }
+        })
+        // stmt::Expr::arg_project(position, [index])
+    }
+
+    /// Extract arguments needed to perform data loading
+    fn extract_data_load_args(&mut self, stmt: &mut stmt::Statement) {
+        if let Some(filter) = stmt.filter() {
+            stmt::visit::for_each_expr(filter, |expr| {
+                self.extract_data_load_args_from_expr(expr, None);
+            });
         }
-    }
 
-    fn process_ref_args(&mut self, linked_stmt: &mut LinkedStatement) -> Option<stmt::ExprArg> {
-        let mut ref_source = None;
-
-        for arg in &self.stmt_info.args {
-            let hir::Arg::Ref {
-                stmt_id: target_id,
-                input,
-                ..
-            } = arg
-            else {
-                continue;
+        if let Some(insert_source) = stmt.insert_source() {
+            let stmt::ExprSet::Values(values) = &insert_source.body else {
+                todo!()
             };
 
-            assert!(ref_source.is_none(), "TODO: handle more complex ref cases");
-            assert!(
-                !linked_stmt.stmt.filter_or_default().is_false(),
-                "TODO: handle const false filters"
-            );
-
-            // Find the back-ref for this arg
-            let node_id = self.planner.hir[target_id].back_refs[&self.stmt_id]
-                .node_id
-                .get()
-                .unwrap();
-
-            let (index, _) = linked_stmt.inputs.insert_full(node_id);
-            ref_source = Some(stmt::ExprArg::new(index));
-            input.set(Some(0));
+            for (i, row) in values.rows.iter().enumerate() {
+                stmt::visit::for_each_expr(row, |expr| {
+                    self.extract_data_load_args_from_expr(expr, Some(i));
+                });
+            }
         }
-
-        if let Some(ref_source) = ref_source {
-            self.rewrite_stmt_for_ref_source(&mut linked_stmt.stmt, ref_source);
-        }
-
-        ref_source
     }
 
-    fn rewrite_stmt_for_ref_source(
-        &mut self,
-        stmt: &mut stmt::Statement,
-        ref_source: stmt::ExprArg,
-    ) {
+    fn extract_data_load_args_from_expr(&mut self, expr: &stmt::Expr, insert_row: Option<usize>) {
+        if let stmt::Expr::Arg(expr_arg) = expr {
+            match &self.stmt_info.args[expr_arg.position] {
+                hir::Arg::Sub {
+                    stmt_id: target_id,
+                    returning,
+                    input,
+                    ..
+                } => {
+                    debug_assert!(!returning, "the argument was found in a filter");
+                    // Sub-statement arguments in the filter should only happen with !sql
+                    debug_assert!(!self.planner.engine.capability().sql);
+
+                    let node_id = self.planner.hir[target_id].output.get().expect("bug");
+                    let (index, _) = self.load_data.inputs.insert_full(node_id);
+                    input.set(Some(index));
+                }
+                hir::Arg::Ref {
+                    stmt_id: target_id,
+                    data_load_input,
+                    batch_load_index,
+                    ..
+                } => {
+                    // refs can be duplicated in the same statement
+                    if data_load_input.get().is_some() {
+                        return;
+                    }
+
+                    let target_stmt_info = &self.planner.hir[target_id];
+                    let back_ref = &target_stmt_info.back_refs[&self.stmt_id];
+
+                    // TODO: should we just use the data_load node ID?
+                    let node_id = back_ref.node_id.get().unwrap();
+
+                    let (index, _) = self.load_data.inputs.insert_full(node_id);
+                    data_load_input.set(Some(index));
+
+                    // If the target statement is a query, then we are in a batch-load scenario.
+                    if let Some(row) = insert_row {
+                        debug_assert!(target_stmt_info.stmt().is_insert());
+                        debug_assert!(batch_load_index.get().is_none());
+                        batch_load_index.set(Some(row));
+                    } else if target_stmt_info.stmt().is_query() {
+                        let (batch_load_table_ref_index, _) =
+                            self.load_data.batch_load_args.insert_full(index);
+                        batch_load_index.set(Some(batch_load_table_ref_index));
+                    } else {
+                        todo!()
+                    }
+                }
+            }
+        }
+    }
+
+    fn collect_back_ref_columns(&mut self) {
+        for back_ref in self.stmt_info.back_refs.values() {
+            for expr in &back_ref.exprs {
+                self.load_data.columns.insert(*expr);
+            }
+        }
+    }
+
+    fn rewrite_stmt_for_batch_load(&mut self, stmt: &mut stmt::Statement) {
         if self.planner.engine.capability().sql {
-            self.rewrite_stmt_for_ref_source_sql(stmt, ref_source);
+            self.rewrite_stmt_query_for_batch_load_sql(stmt);
         } else {
-            self.rewrite_stmt_for_ref_source_nosql(stmt, ref_source);
+            self.rewrite_stmt_query_for_batch_load_nosql(stmt);
         }
     }
 
-    fn rewrite_stmt_for_ref_source_sql(
-        &mut self,
-        stmt: &mut stmt::Statement,
-        ref_source: stmt::ExprArg,
-    ) {
+    fn rewrite_stmt_query_for_batch_load_sql(&mut self, stmt: &mut stmt::Statement) {
         // If targeting SQL, leverage the SQL query engine to handle most of the rewrite details.
         let mut filter = stmt
             .filter_mut()
@@ -254,39 +383,54 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }
                 stmt::Expr::Arg(expr_arg) => {
                     let hir::Arg::Ref {
-                        input,
-                        batch_load_index: index,
+                        stmt_id: target_id,
+                        target_expr_ref,
+                        batch_load_index: batch_load_table_ref_index,
                         ..
                     } = &self.stmt_info.args[expr_arg.position]
                     else {
                         todo!()
                     };
 
+                    let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
+                    let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
+
                     // Rewrite reference the new `FROM`.
                     *expr = stmt::Expr::column(stmt::ExprColumn {
                         nesting: 0,
-                        table: input.get().unwrap(),
-                        column: *index,
+                        table: batch_load_table_ref_index.get().unwrap(),
+                        column,
                     });
                 }
                 _ => {}
             }
         });
 
+        let tables: Vec<stmt::TableRef> = self
+            .load_data
+            .batch_load_args
+            .iter()
+            .map(|position| stmt::TableRef::Arg(stmt::ExprArg::new(*position)))
+            .collect();
+
+        assert!(tables.len() <= 1, "TODO: handle more complicated cases");
+
         let sub_query = stmt::Select {
             returning: stmt::Returning::Expr(stmt::Expr::record([1])),
-            source: stmt::Source::from(ref_source),
+            source: stmt::Source::Table(stmt::SourceTable {
+                tables,
+                from: vec![stmt::TableWithJoins {
+                    relation: stmt::TableFactor::Table(stmt::SourceTableId(0)),
+                    joins: vec![],
+                }],
+            }),
             filter,
         };
 
         stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
     }
 
-    fn rewrite_stmt_for_ref_source_nosql(
-        &mut self,
-        stmt: &mut stmt::Statement,
-        ref_source: stmt::ExprArg,
-    ) {
+    fn rewrite_stmt_query_for_batch_load_nosql(&mut self, stmt: &mut stmt::Statement) {
         let mut filter = stmt.filter_expr_mut();
         visit_mut::for_each_expr_mut(&mut filter, |expr| match expr {
             stmt::Expr::Reference(stmt::ExprReference::Column(expr_column)) => {
@@ -294,48 +438,101 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             }
             stmt::Expr::Arg(expr_arg) => {
                 let hir::Arg::Ref {
-                    batch_load_index: index,
+                    stmt_id: target_id,
+                    target_expr_ref,
                     ..
                 } = &self.stmt_info.args[expr_arg.position]
                 else {
                     todo!()
                 };
 
-                *expr = stmt::Expr::arg(*index);
+                let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
+                let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
+
+                *expr = stmt::Expr::arg(column);
             }
             _ => {}
         });
 
+        assert!(
+            self.load_data.batch_load_args.len() == 1,
+            "TODO: handle more complicated cases"
+        );
+        let input = self.load_data.batch_load_args[0];
+
         if let Some(filter) = filter {
             let expr = filter.take();
-            *filter = stmt::Expr::any(stmt::Expr::map(ref_source, expr));
+            *filter = stmt::Expr::any(stmt::Expr::map(stmt::Expr::arg(input), expr));
         }
     }
 
-    // ===== Execution dispatch =====
+    fn rewrite_stmt_insert_for_batch_load(&mut self, stmt: &mut stmt::Insert) {
+        let stmt::ExprSet::Values(values) = &mut stmt.source.body else {
+            todo!()
+        };
 
-    fn plan_execution(
+        for row in &mut values.rows {
+            visit_mut::for_each_expr_mut(row, |expr| {
+                if let stmt::Expr::Arg(expr_arg) = expr {
+                    match &self.stmt_info.args[expr_arg.position] {
+                        hir::Arg::Ref {
+                            stmt_id: target_id,
+                            target_expr_ref,
+                            data_load_input,
+                            batch_load_index,
+                            ..
+                        } => {
+                            debug_assert!(
+                                !self.load_data.inputs.is_empty(),
+                                "{:#?}",
+                                self.load_data
+                            );
+
+                            // TODO: this work seems to be duplicated in the returning as well.
+                            let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
+                            let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
+
+                            // `0` is hardcoded here because there only ever is a single insert row passed in (as of now).
+                            *expr = stmt::Expr::arg_project(
+                                data_load_input.get().unwrap(),
+                                [batch_load_index.get().unwrap(), column],
+                            )
+                        }
+                        arg => todo!("arg={arg:#?}"),
+                    }
+                }
+            });
+        }
+    }
+
+    // ===== Plan data loading phase =====
+
+    fn plan_data_loading(
         &mut self,
-        linked: LinkedStatement,
-        selection: &mut Selection,
-        ref_source: Option<stmt::ExprArg>,
+        stmt: stmt::Statement,
+        returning: &mut Returning,
     ) -> mir::NodeId {
-        if let Some(node_id) = self.plan_const_or_empty_statement(&linked, selection) {
+        if let Some(node_id) = self.plan_const_or_empty_statement(&stmt, returning) {
+            debug_assert!(
+                stmt.is_query() || stmt.assignments().map(|a| a.is_empty()).unwrap_or(false),
+                "planned a mutable statement as const; stmt={:#?}",
+                stmt
+            );
             node_id
-        } else if self.planner.engine.capability().sql || linked.stmt.is_insert() {
-            self.plan_sql_execution(linked, selection)
+        } else if self.planner.engine.capability().sql || stmt.is_insert() {
+            self.plan_data_loading_sql(stmt)
         } else {
-            self.plan_nosql_execution(linked, selection, ref_source)
+            self.plan_data_loading_nosql(stmt)
         }
     }
 
     fn plan_const_or_empty_statement(
         &mut self,
-        linked: &LinkedStatement,
-        selection: &Selection,
+        stmt: &stmt::Statement,
+        returning: &mut Returning,
     ) -> Option<mir::NodeId> {
-        if linked.stmt.is_const() {
-            let stmt::Value::List(rows) = linked.stmt.eval_const().unwrap() else {
+        if stmt.is_const() {
+            let stmt::Value::List(rows) = stmt.eval_const().unwrap() else {
                 todo!()
             };
 
@@ -344,18 +541,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     rows,
                     self.planner
                         .engine
-                        .infer_record_list_ty(&linked.stmt, &selection.columns),
+                        .infer_record_list_ty(stmt, &self.load_data.columns),
                 ),
             );
         }
 
-        if linked
-            .stmt
-            .assignments()
-            .map(|a| a.is_empty())
-            .unwrap_or(false)
-        {
-            if selection.returning.is_some() {
+        if stmt.assignments().map(|a| a.is_empty()).unwrap_or(false) {
+            if returning.is_some() {
                 return Some(self.insert_const(
                     vec![stmt::Value::empty_sparse_record()],
                     stmt::Type::list(stmt::Type::empty_sparse_record()),
@@ -373,17 +565,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     // ===== SQL execution =====
 
-    fn plan_sql_execution(
-        &mut self,
-        linked: LinkedStatement,
-        selection: &mut Selection,
-    ) -> mir::NodeId {
-        let LinkedStatement { mut stmt, inputs } = linked;
+    fn plan_data_loading_sql(&mut self, mut stmt: stmt::Statement) -> mir::NodeId {
+        let const_returning = self.extract_insert_returning_as_const(&stmt);
 
-        if !selection.columns.is_empty() {
+        if !self.load_data.columns.is_empty() {
             stmt.set_returning(
                 stmt::Expr::record(
-                    selection
+                    self.load_data
                         .columns
                         .iter()
                         .map(|expr_reference| stmt::Expr::from(*expr_reference)),
@@ -392,7 +580,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             );
         }
 
-        let input_args: Vec<_> = inputs
+        let input_args: Vec<_> = self
+            .load_data
+            .inputs
             .iter()
             .map(|input| self.planner.mir.ty(*input).clone())
             .collect();
@@ -402,19 +592,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let node = if stmt.condition().is_some() {
             if let stmt::Statement::Update(stmt) = stmt {
                 assert!(stmt.returning.is_none(), "TODO: stmt={stmt:#?}");
-                assert!(
-                    selection.returning.is_none(),
-                    "TODO: returning={:#?}",
-                    selection.returning
-                );
 
                 if self.planner.engine.capability().cte_with_update {
                     mir::Operation::ExecStatement(Box::new(
-                        self.plan_conditional_sql_query_as_cte(inputs, stmt, ty),
+                        self.plan_conditional_sql_query_as_cte(stmt, ty),
                     ))
                 } else {
                     mir::Operation::ReadModifyWrite(Box::new(
-                        self.plan_conditional_sql_query_as_rmw(inputs, stmt, ty),
+                        self.plan_conditional_sql_query_as_rmw(stmt, ty),
                     ))
                 }
             } else {
@@ -431,7 +616,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
             mir::Operation::ExecStatement(Box::new(mir::ExecStatement {
-                inputs,
+                inputs: mem::take(&mut self.load_data.inputs),
                 stmt,
                 ty,
                 conditional_update_with_no_returning: false,
@@ -441,12 +626,82 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // With SQL capability, we can just punt the details of execution to
         // the database's query planner.
         debug_assert!(!self.did_take_deps);
-        self.insert_mir_with_deps(node)
+        let mut exec_statement_node = self.insert_mir_with_deps(node);
+
+        if let Some((const_value, const_ty)) = const_returning {
+            exec_statement_node = self.planner.mir.insert_with_deps(
+                mir::Const {
+                    value: const_value,
+                    ty: const_ty,
+                },
+                [exec_statement_node],
+            );
+        }
+
+        exec_statement_node
+    }
+
+    fn extract_insert_returning_as_const(
+        &mut self,
+        stmt: &stmt::Statement,
+    ) -> Option<(stmt::Value, stmt::Type)> {
+        let stmt::Statement::Insert(insert) = stmt else {
+            return None;
+        };
+
+        if self.load_data.columns.is_empty() {
+            return None;
+        }
+
+        let target = insert.target.as_table_unwrap();
+        let values = insert.source.body.as_values()?;
+
+        let mut indices = vec![];
+
+        for expr_ref in &self.load_data.columns {
+            let expr_col = expr_ref.as_expr_column_unwrap();
+            debug_assert!(expr_col.nesting == 0, "expr_column={expr_col:#?}");
+
+            let Some(index) = target
+                .columns
+                .iter()
+                .enumerate()
+                .find(|(_, column_id)| column_id.index == expr_col.column)
+                .map(|(index, _)| index)
+            else {
+                todo!("insert returning referencing parent statement");
+                // return None;
+            };
+
+            indices.push(index);
+        }
+
+        // Now extract the values for each row
+        let mut result = Vec::with_capacity(values.rows.len());
+
+        for row in &values.rows {
+            // Build a record with only the requested fields
+            let mut fields = Vec::with_capacity(indices.len());
+
+            for &index in &indices {
+                // Try to evaluate the expression to a constant value
+                let value = row.entry(index)?.eval_const().ok()?;
+                fields.push(value);
+            }
+
+            result.push(stmt::Value::record_from_vec(fields));
+        }
+
+        let ty = self
+            .planner
+            .engine
+            .infer_record_list_ty(stmt, &self.load_data.columns);
+
+        Some((stmt::Value::List(result), ty))
     }
 
     fn plan_conditional_sql_query_as_cte(
-        &self,
-        inputs: IndexSet<mir::NodeId>,
+        &mut self,
         stmt: stmt::Update,
         ty: stmt::Type,
     ) -> mir::ExecStatement {
@@ -584,7 +839,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         .into();
 
         mir::ExecStatement {
-            inputs,
+            inputs: mem::take(&mut self.load_data.inputs),
             stmt,
             ty,
             conditional_update_with_no_returning: true,
@@ -593,7 +848,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_conditional_sql_query_as_rmw(
         &mut self,
-        inputs: IndexSet<mir::NodeId>,
         stmt: stmt::Update,
         ty: stmt::Type,
     ) -> mir::ReadModifyWrite {
@@ -641,7 +895,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         };
 
         mir::ReadModifyWrite {
-            inputs,
+            inputs: mem::take(&mut self.load_data.inputs),
             read,
             write: write.into(),
             ty,
@@ -650,40 +904,31 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     // ===== NoSQL execution =====
 
-    fn plan_nosql_execution(
-        &mut self,
-        linked: LinkedStatement,
-        selection: &mut Selection,
-        ref_source: Option<stmt::ExprArg>,
-    ) -> mir::NodeId {
+    fn plan_data_loading_nosql(&mut self, stmt: stmt::Statement) -> mir::NodeId {
+        if stmt.is_insert() {
+            debug_assert!(self.load_data.columns.is_empty());
+        }
+
         // Without SQL capability, we have to plan the execution of the
         // statement based on available indices.
-        let mut index_plan = self.planner.engine.plan_index_path(&linked.stmt);
-        let pk_keys = self.try_build_pk_keys(&linked, &index_plan, ref_source);
+        let mut index_plan = self.planner.engine.plan_index_path(&stmt);
+        let pk_keys = self.try_build_pk_keys(&stmt, &index_plan);
 
-        let post_filter =
-            self.prepare_post_filter(&linked, &mut index_plan, pk_keys.is_some(), selection);
+        let post_filter = self.prepare_post_filter(&stmt, &mut index_plan, pk_keys.is_some());
 
         // Type of the final record.
-        let ty = if selection.columns.is_empty() {
+        let ty = if self.load_data.columns.is_empty() {
             stmt::Type::Unit
         } else {
             self.planner
                 .engine
-                .infer_record_list_ty(&linked.stmt, &selection.columns)
+                .infer_record_list_ty(&stmt, &self.load_data.columns)
         };
 
         let node_id = if index_plan.index.primary_key {
-            self.plan_primary_key_execution(
-                linked,
-                &mut index_plan,
-                pk_keys,
-                ref_source,
-                selection,
-                &ty,
-            )
+            self.plan_primary_key_execution(stmt, &mut index_plan, pk_keys, &ty)
         } else {
-            self.plan_secondary_index_execution(linked, &mut index_plan, selection, &ty)
+            self.plan_secondary_index_execution(stmt, &mut index_plan, &ty)
         };
 
         self.apply_post_filter(node_id, post_filter, ty)
@@ -691,27 +936,20 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_primary_key_execution(
         &mut self,
-        linked: LinkedStatement,
+        stmt: stmt::Statement,
         index_plan: &mut index::IndexPlan,
         pk_keys: Option<eval::Func>,
-        ref_source: Option<stmt::ExprArg>,
-        selection: &Selection,
         ty: &stmt::Type,
     ) -> mir::NodeId {
         if let Some(keys) = pk_keys {
-            let get_by_key_input = self.build_get_by_key_input(
-                keys,
-                &linked,
-                ref_source,
-                self.index_key_ty(index_plan),
-            );
+            let get_by_key_input = self.build_get_by_key_input(keys, self.index_key_ty(index_plan));
 
-            self.build_key_operation(&linked.stmt, index_plan, get_by_key_input, selection, ty)
+            self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
         } else {
-            let input = if linked.inputs.is_empty() {
+            let input = if self.load_data.inputs.is_empty() {
                 None
-            } else if linked.inputs.len() == 1 {
-                Some(linked.inputs[0])
+            } else if self.load_data.inputs.len() == 1 {
+                Some(self.load_data.inputs[0])
             } else {
                 todo!()
             };
@@ -719,7 +957,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             self.insert_mir_with_deps(mir::QueryPk {
                 input,
                 table: index_plan.table_id(),
-                columns: selection.columns.clone(),
+                columns: self.load_data.columns.clone(),
                 pk_filter: index_plan.index_filter.take(),
                 row_filter: index_plan.result_filter.take(),
                 ty: ty.clone(),
@@ -729,21 +967,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_secondary_index_execution(
         &mut self,
-        linked: LinkedStatement,
+        stmt: stmt::Statement,
         index_plan: &mut index::IndexPlan,
-        selection: &Selection,
         ty: &stmt::Type,
     ) -> mir::NodeId {
+        let inputs = mem::take(&mut self.load_data.inputs);
         assert!(index_plan.post_filter.is_none(), "TODO");
-        assert!(
-            linked.inputs.len() <= 1,
-            "TODO: inputs={:#?}",
-            linked.inputs
-        );
+        assert!(inputs.len() <= 1, "TODO: inputs={:#?}", inputs);
 
         let index_key_ty = self.index_key_ty(index_plan);
-
-        let LinkedStatement { stmt, inputs } = linked;
 
         let get_by_key_input = self.insert_mir_with_deps(mir::FindPkByIndex {
             inputs,
@@ -753,14 +985,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             ty: index_key_ty,
         });
 
-        self.build_key_operation(&stmt, index_plan, get_by_key_input, selection, ty)
+        self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
     }
 
     fn try_build_pk_keys(
         &mut self,
-        linked: &LinkedStatement,
+        stmt: &stmt::Statement,
         index_plan: &index::IndexPlan,
-        ref_source: Option<stmt::ExprArg>,
     ) -> Option<eval::Func> {
         // If the query can be reduced to fetching rows using a set of
         // primary-key keys, then `pk_keys` will be set to `Some(<keys>)`.
@@ -768,21 +999,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return None;
         }
 
-        let pk_keys_project_args = if ref_source.is_some() {
-            assert_eq!(linked.inputs.len(), 1, "TODO");
-            let ty = self.planner.mir[linked.inputs[0]].ty();
-            vec![ty.unwrap_list_ref().clone()]
-        } else {
-            linked
-                .inputs
-                .iter()
-                .map(|node_id| self.planner.mir[node_id].ty().clone())
-                .collect()
-        };
+        let pk_keys_project_args = self
+            .load_data
+            .inputs
+            .iter()
+            .map(|node_id| self.planner.mir[node_id].ty().clone())
+            .collect();
 
         // If using the primary key to find rows, try to convert the
         // filter expression to a set of primary-key keys.
-        let cx = self.planner.engine.expr_cx_for(&linked.stmt);
+        let cx = self.planner.engine.expr_cx_for(stmt);
         self.planner.engine.try_build_key_filter(
             cx,
             index_plan.index,
@@ -793,17 +1019,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn prepare_post_filter(
         &mut self,
-        linked: &LinkedStatement,
+        stmt: &stmt::Statement,
         index_plan: &mut index::IndexPlan,
         has_pk_keys: bool,
-        selection: &mut Selection,
     ) -> Option<stmt::Expr> {
         let mut post_filter = index_plan.post_filter.clone();
 
         // If fetching rows using GetByKey, some databases do not support
         // applying additional filters to the rows before returning results.
         // In this case, the result_filter needs to be applied in-memory.
-        if linked.stmt.is_query() && (has_pk_keys || !index_plan.index.primary_key) {
+        if stmt.is_query() && (has_pk_keys || !index_plan.index.primary_key) {
             if let Some(result_filter) = index_plan.result_filter.take() {
                 post_filter = Some(match post_filter {
                     Some(post_filter) => stmt::Expr::and(result_filter, post_filter),
@@ -813,16 +1038,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
 
         debug_assert!(
-            post_filter.is_none() || linked.stmt.is_query(),
+            post_filter.is_none() || stmt.is_query(),
             "stmt={:#?}; post_filter={post_filter:#?}",
-            linked.stmt
+            stmt
         );
 
         // Make sure we are including columns needed to apply the post filter
         if let Some(post_filter) = &mut post_filter {
             visit_mut::for_each_expr_mut(post_filter, |expr| match expr {
                 stmt::Expr::Reference(expr_reference) => {
-                    let (index, _) = selection.columns.insert_full(*expr_reference);
+                    let (index, _) = self.load_data.columns.insert_full(*expr_reference);
                     *expr = stmt::Expr::arg_project(0, [index]);
                 }
                 stmt::Expr::Arg(_) => todo!("expr={expr:#?}"),
@@ -855,21 +1080,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn build_get_by_key_input(
         &mut self,
         keys: eval::Func,
-        linked: &LinkedStatement,
-        ref_source: Option<stmt::ExprArg>,
         index_key_ty: stmt::Type,
     ) -> mir::NodeId {
         if keys.is_const() {
             self.insert_const(keys.eval_const(), index_key_ty)
         } else if keys.is_identity() {
-            debug_assert_eq!(1, linked.inputs.len(), "TODO");
-            linked.inputs[0]
+            debug_assert_eq!(1, self.load_data.inputs.len(), "TODO");
+            self.load_data.inputs[0]
         } else {
-            debug_assert!(ref_source.is_some(), "TODO");
             let ty = stmt::Type::list(keys.ret.clone());
             // Gotta project
             self.planner.mir.insert(mir::Project {
-                input: linked.inputs[0],
+                input: self.load_data.inputs[0],
                 projection: keys,
                 ty,
             })
@@ -881,7 +1103,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         stmt: &stmt::Statement,
         index_plan: &mut index::IndexPlan,
         get_by_key_input: mir::NodeId,
-        selection: &Selection,
         ty: &stmt::Type,
     ) -> mir::NodeId {
         match stmt {
@@ -890,23 +1111,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 self.insert_mir_with_deps(mir::GetByKey {
                     input: get_by_key_input,
                     table: index_plan.table_id(),
-                    columns: selection.columns.clone(),
+                    columns: self.load_data.columns.clone(),
                     ty: ty.clone(),
                 })
             }
-            stmt::Statement::Delete(_) => {
-                debug_assert!(
-                    ty.is_unit(),
-                    "stmt={stmt:#?}; returning={:#?}; ty={ty:#?}",
-                    selection.returning
-                );
-                self.insert_mir_with_deps(mir::DeleteByKey {
-                    input: get_by_key_input,
-                    table: index_plan.table_id(),
-                    filter: index_plan.result_filter.take(),
-                    ty: stmt::Type::Unit,
-                })
-            }
+            stmt::Statement::Delete(_) => self.insert_mir_with_deps(mir::DeleteByKey {
+                input: get_by_key_input,
+                table: index_plan.table_id(),
+                filter: index_plan.result_filter.take(),
+                ty: stmt::Type::Unit,
+            }),
             stmt::Statement::Update(update_stmt) => self.insert_mir_with_deps(mir::UpdateByKey {
                 input: get_by_key_input,
                 table: index_plan.table_id(),
@@ -921,21 +1135,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     // ===== Finalization helpers =====
 
-    fn process_back_ref_projections(
-        &mut self,
-        exec_stmt_node_id: mir::NodeId,
-        selection: &Selection,
-    ) {
+    fn process_back_ref_projections(&mut self, exec_stmt_node_id: mir::NodeId) {
         for back_ref in self.stmt_info.back_refs.values() {
             let projection = stmt::Expr::record(back_ref.exprs.iter().map(|expr_reference| {
-                let index = selection.columns.get_index_of(expr_reference).unwrap();
+                let index = self.load_data.columns.get_index_of(expr_reference).unwrap();
                 stmt::Expr::arg_project(0, [index])
             }));
 
-            let arg_ty = self.planner.mir[exec_stmt_node_id]
-                .ty()
-                .unwrap_list_ref()
-                .clone();
+            let arg_ty = match self.planner.mir[exec_stmt_node_id].ty() {
+                // Lists are flattened
+                stmt::Type::List(ty) => (**ty).clone(),
+                ty => ty.clone(),
+            };
+
             let projection = eval::Func::from_stmt(projection, vec![arg_ty]);
             let ty = stmt::Type::list(projection.ret.clone());
 
@@ -960,67 +1172,80 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_output_node(
         &mut self,
-        exec_stmt_node_id: mir::NodeId,
-        returning: Option<stmt::Returning>,
-        single: bool,
-        ref_source: Option<stmt::ExprArg>,
+        data_load_node_id: mir::NodeId,
+        returning: ReturningInfo,
     ) -> mir::NodeId {
         // First check for nested merge
         if let Some(node_id) = self.planner.plan_nested_merge(self.stmt_id) {
             return node_id;
         }
 
+        let returning_arg_tys = returning
+            .inputs
+            .iter()
+            .map(|input| self.planner.mir[input].ty().clone())
+            .collect();
+
         // Then handle returning clause
-        if let Some(returning) = returning {
-            debug_assert!(
-                !single || ref_source.is_some(),
-                "TODO: single queries not supported here"
-            );
+        if let Some(clause) = returning.clause {
+            match clause {
+                stmt::Returning::Value(expr) => {
+                    // Value variant contains a constant expression that can be evaluated
+                    if let Ok(value) = expr.eval_const() {
+                        let ty = value.infer_ty();
 
-            match returning {
-                stmt::Returning::Value(returning) => {
-                    let ty = returning.infer_ty();
+                        self.planner
+                            .mir
+                            .insert_with_deps(mir::Const { value, ty }, [data_load_node_id])
+                    } else {
+                        let eval = eval::Func::from_stmt(expr, returning_arg_tys);
 
-                    let stmt::Value::List(rows) = returning else {
-                        todo!(
-                            "unexpected returning type; returning={returning:#?}; stmt={:#?}",
-                            self.stmt_info.stmt
-                        )
-                    };
+                        let node_id = self.insert_mir_with_deps(mir::Eval {
+                            inputs: returning.inputs,
+                            eval,
+                        });
 
-                    self.planner
-                        .mir
-                        .insert_with_deps(mir::Const { value: rows, ty }, [exec_stmt_node_id])
+                        if !self.stmt().is_query() {
+                            self.planner.mir[node_id].deps.insert(data_load_node_id);
+                        }
+
+                        node_id
+                    }
                 }
-                stmt::Returning::Expr(returning) => {
-                    let arg_ty = match self.planner.mir[exec_stmt_node_id].ty() {
-                        stmt::Type::List(ty) => vec![(**ty).clone()],
-                        stmt::Type::Unit => vec![],
-                        _ => todo!(),
-                    };
+                stmt::Returning::Expr(projection) => {
+                    if let Some(position) = returning.inputs.get_index_of(&data_load_node_id) {
+                        self.insert_mir_with_deps(mir::Eval {
+                            inputs: returning.inputs,
+                            eval: eval::Func::from_stmt(
+                                stmt::Expr::map(stmt::Expr::arg(position), projection),
+                                returning_arg_tys,
+                            ),
+                        })
+                    } else {
+                        // TODO: figure out how to handle repeating a number of times vs. projecting results
+                        let projection = eval::Func::from_stmt(projection, vec![]);
+                        let ty = stmt::Type::list(projection.ret.clone());
 
-                    let projection = eval::Func::from_stmt(returning, arg_ty);
-                    let ty = stmt::Type::list(projection.ret.clone());
+                        let node = mir::Project {
+                            input: data_load_node_id,
+                            projection,
+                            ty,
+                        };
 
-                    let node = mir::Project {
-                        input: exec_stmt_node_id,
-                        projection,
-                        ty,
-                    };
-
-                    // Plan the final projection to handle the returning clause.
-                    self.insert_mir_with_deps(node)
+                        // Plan the final projection to handle the returning clause.
+                        self.insert_mir_with_deps(node)
+                    }
                 }
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
             }
         } else {
             if let Some(dependencies) = self.take_dependencies() {
-                self.planner.mir[exec_stmt_node_id]
+                self.planner.mir[data_load_node_id]
                     .deps
                     .extend(dependencies);
             }
 
-            exec_stmt_node_id
+            data_load_node_id
         }
     }
 
@@ -1040,10 +1265,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             "const type mismatch; expected={ty:#?}; actual={value:#?}",
         );
 
-        self.planner.mir.insert(mir::Const {
-            value: value.unwrap_list(),
-            ty,
-        })
+        self.planner.mir.insert(mir::Const { value, ty })
     }
 
     fn insert_mir_with_deps(&mut self, node: impl Into<mir::Node>) -> mir::NodeId {
@@ -1067,5 +1289,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // Type of the index key. Value for single index keys, record for
         // composite.
         stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index))
+    }
+
+    fn stmt(&self) -> &stmt::Statement {
+        self.stmt_info.stmt.as_deref().unwrap()
     }
 }

@@ -41,11 +41,8 @@ impl DbTest {
         // Let the setup configure the builder
         setup.configure_builder(&mut builder);
 
-        // Get the driver from the setup
-        let driver = setup.connect().await?;
-
         // Always wrap with logging
-        let logging_driver = LoggingDriver::new(driver);
+        let logging_driver = LoggingDriver::new(setup.driver());
         let ops_log = logging_driver.ops_log_handle();
         self.exec_log = ExecLog::new(ops_log);
 
@@ -77,12 +74,6 @@ impl DbTest {
     pub fn configure_builder(&self, builder: &mut toasty::db::Builder) {
         let setup = self.setup.as_ref().expect("Setup already consumed");
         setup.configure_builder(builder);
-    }
-
-    /// Connect to get a raw driver (for error testing)
-    pub async fn connect(&self) -> toasty::Result<Box<dyn toasty_core::driver::Driver>> {
-        let setup = self.setup.as_ref().expect("Setup already consumed");
-        setup.connect().await
     }
 
     /// Get raw column value from database (for storage verification)

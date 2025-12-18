@@ -1,3 +1,5 @@
+use crate::stmt::ExprArg;
+
 use super::{Expr, Projection};
 
 /// Projects a field or element from a base expression.
@@ -29,6 +31,10 @@ impl Expr {
             projection: projection.into(),
         }
         .into()
+    }
+
+    pub fn arg_project(expr_arg: impl Into<ExprArg>, projection: impl Into<Projection>) -> Self {
+        Self::project(Self::arg(expr_arg), projection)
     }
 
     pub fn is_project(&self) -> bool {

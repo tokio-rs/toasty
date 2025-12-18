@@ -16,7 +16,7 @@ impl<T: Model> HasOne<T> {
             Value::Record(record) => Self {
                 value: Some(Box::new(T::load(record)?)),
             },
-            _ => todo!(),
+            _ => todo!("value={input:#?}"),
         })
     }
 
@@ -27,6 +27,10 @@ impl<T: Model> HasOne<T> {
 
     pub fn is_unloaded(&self) -> bool {
         self.value.is_none()
+    }
+
+    pub fn unload(&mut self) {
+        self.value = None;
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::engine::exec::{
-    DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, NestedMerge, Project, QueryPk,
-    ReadModifyWrite, SetVar, UpdateByKey,
+    DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, NestedMerge, Project,
+    QueryPk, ReadModifyWrite, SetVar, UpdateByKey,
 };
 
 use std::fmt;
@@ -8,6 +8,9 @@ use std::fmt;
 pub(crate) enum Action {
     /// Delete a record by the primary key
     DeleteByKey(DeleteByKey),
+
+    /// Evaluate a function in memory
+    Eval(Eval),
 
     /// Execute a statement
     ExecStatement(Box<ExecStatement>),
@@ -48,6 +51,7 @@ impl fmt::Debug for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::DeleteByKey(a) => a.fmt(f),
+            Self::Eval(a) => a.fmt(f),
             Self::ExecStatement(a) => a.fmt(f),
             Self::Filter(a) => a.fmt(f),
             Self::FindPkByIndex(a) => a.fmt(f),

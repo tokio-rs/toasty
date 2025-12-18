@@ -1,5 +1,4 @@
 use super::Expr;
-use crate::stmt;
 
 /// A positional argument placeholder.
 ///
@@ -16,30 +15,34 @@ use crate::stmt;
 pub struct ExprArg {
     /// The zero-based position of the argument.
     pub position: usize,
+
+    /// Which "argument scope" this references. This is the number of scopes up
+    /// from the current scope. Scopes are created by functional expressions
+    /// like Expr::Map.
+    pub nesting: usize,
 }
 
 impl Expr {
     pub fn arg(expr_arg: impl Into<ExprArg>) -> Self {
         Self::Arg(expr_arg.into())
     }
-
-    pub fn arg_project(
-        expr_arg: impl Into<ExprArg>,
-        projection: impl Into<stmt::Projection>,
-    ) -> Self {
-        Self::project(Self::arg(expr_arg), projection)
-    }
 }
 
 impl ExprArg {
     pub fn new(position: usize) -> ExprArg {
-        ExprArg { position }
+        ExprArg {
+            position,
+            nesting: 0,
+        }
     }
 }
 
 impl From<usize> for ExprArg {
     fn from(value: usize) -> Self {
-        Self { position: value }
+        Self {
+            position: value,
+            nesting: 0,
+        }
     }
 }
 

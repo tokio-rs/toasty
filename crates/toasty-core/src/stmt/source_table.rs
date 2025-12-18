@@ -8,12 +8,15 @@ pub struct SourceTable {
     pub tables: Vec<TableRef>,
 
     /// The main table with joins
-    pub from_item: TableWithJoins,
+    pub from: Vec<TableWithJoins>,
 }
 
 impl SourceTable {
-    pub fn new(tables: Vec<TableRef>, from_item: TableWithJoins) -> Self {
-        Self { tables, from_item }
+    pub fn new(tables: Vec<TableRef>, from: TableWithJoins) -> Self {
+        Self {
+            tables,
+            from: vec![from],
+        }
     }
 }
 
@@ -21,10 +24,10 @@ impl From<ExprArg> for SourceTable {
     fn from(value: ExprArg) -> Self {
         SourceTable {
             tables: vec![TableRef::Arg(value)],
-            from_item: TableWithJoins {
+            from: vec![TableWithJoins {
                 relation: TableFactor::Table(SourceTableId(0)),
                 joins: vec![],
-            },
+            }],
         }
     }
 }

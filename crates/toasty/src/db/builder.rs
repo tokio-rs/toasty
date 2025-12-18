@@ -1,6 +1,11 @@
-use crate::{driver::Driver, engine::Engine, Db, Model, Result};
+use crate::{
+    db::{Connect, Pool},
+    engine::Engine,
+    Db, Model, Result,
+};
 
 use toasty_core::{
+    driver::Driver,
     schema::{self, app},
     stmt::{Value, ValueStream},
 };
@@ -37,18 +42,17 @@ impl Builder {
     }
 
     pub async fn connect(&mut self, url: &str) -> Result<Db> {
-        use crate::driver::Connection;
-        self.build(Connection::connect(url).await?).await
+        self.build(Connect::new(url)?).await
     }
 
-    pub async fn build(&mut self, mut driver: impl Driver) -> Result<Db> {
+    pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
+        let pool = Pool::new(driver).await?;
+
         let schema = self
             .core
-            .build(self.build_app_schema()?, driver.capability())?;
+            .build(self.build_app_schema()?, pool.capability())?;
 
-        driver.register_schema(&schema.db).await.unwrap();
-
-        let engine = Engine::new(Arc::new(schema), Arc::new(driver));
+        let engine = Engine::new(Arc::new(schema), Arc::new(pool));
         let engine2 = engine.clone();
 
         let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<(

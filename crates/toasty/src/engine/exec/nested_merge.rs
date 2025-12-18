@@ -75,6 +75,12 @@ pub(crate) struct NestedChild {
 /// How to filter nested records for a parent record
 #[derive(Debug, Clone)]
 pub(crate) enum MergeQualification {
+    /// Parent selects all records provided from sub statements.
+    ///
+    /// This is typically used when the parent query returns only one row, so all
+    /// nested records end up associated with that single parent record.
+    All,
+
     /// General predicate evaluation (uses nested loop)
     /// Args: [ancestor_stack..., nested_record] -> bool
     ///
@@ -100,35 +106,52 @@ struct RowAndNested<'a> {
     nested: &'a [stmt::Value],
 }
 
+#[derive(Debug)]
+enum Input {
+    Count(u64),
+    Value(Vec<stmt::Value>),
+}
+
 impl Exec<'_> {
     pub(super) async fn action_nested_merge(&mut self, action: &NestedMerge) -> Result<()> {
         // Load all input data upfront
-        let mut input = Vec::with_capacity(action.inputs.len());
+        let mut inputs = Vec::with_capacity(action.inputs.len());
 
         for var_id in &action.inputs {
-            // TODO: make loading input concurrent
-            let data = self
-                .vars
-                .load(*var_id)
-                .await?
-                .into_values()
-                .collect()
-                .await?;
-            input.push(data);
+            inputs.push(match self.vars.load(*var_id).await? {
+                Rows::Count(count) => Input::Count(count),
+                Rows::Value(value) => Input::Value(value.unwrap_list()),
+                Rows::Stream(value_stream) => Input::Value(value_stream.collect().await?),
+            });
         }
 
         // Load the root rows
-        let root_rows = &input[action.root.source];
         let mut merged_rows = vec![];
 
-        // Iterate over each record to perform the nested merge
-        for row in root_rows {
-            let stack = RowStack {
-                parent: None,
-                row,
-                position: 0,
-            };
-            merged_rows.push(self.merge_nested_row(&stack, &action.root, &input)?);
+        match &inputs[action.root.source] {
+            Input::Count(count) => {
+                let row_stack = RowStack {
+                    parent: None,
+                    // Bit of a hack
+                    row: &stmt::Value::Null,
+                    position: 0,
+                };
+
+                for _ in 0..*count {
+                    merged_rows.push(self.merge_nested_row(&row_stack, &action.root, &inputs)?);
+                }
+            }
+            Input::Value(root_rows) => {
+                // Iterate over each record to perform the nested merge
+                for row in root_rows {
+                    let stack = RowStack {
+                        parent: None,
+                        row,
+                        position: 0,
+                    };
+                    merged_rows.push(self.merge_nested_row(&stack, &action.root, &inputs)?);
+                }
+            }
         }
 
         // Store the output
@@ -172,14 +195,16 @@ impl Exec<'_> {
         &self,
         row_stack: &RowStack<'_>,
         level: &NestedLevel,
-        input: &[Vec<stmt::Value>],
+        inputs: &[Input],
     ) -> Result<stmt::Value> {
         // Collected all nested rows for this row.
         let mut nested = vec![];
 
         for nested_child in &level.nested {
             // Find the batch-loaded input
-            let nested_input = &input[nested_child.level.source];
+            let Input::Value(nested_input) = &inputs[nested_child.level.source] else {
+                todo!("input={:#?}", inputs[nested_child.level.source])
+            };
             let mut nested_rows_projected = vec![];
 
             for nested_row in nested_input {
@@ -198,7 +223,7 @@ impl Exec<'_> {
                 nested_rows_projected.push(self.merge_nested_row(
                     &nested_stack,
                     &nested_child.level,
-                    input,
+                    inputs,
                 )?);
             }
 
@@ -230,6 +255,7 @@ impl Exec<'_> {
         row: &RowStack<'_>,
     ) -> Result<bool> {
         match qual {
+            MergeQualification::All => Ok(true),
             MergeQualification::Predicate(func) => func.eval_bool(row),
         }
     }

@@ -1,9 +1,13 @@
-use rusqlite::Connection;
+mod value;
+pub(crate) use value::Value;
+
+use rusqlite::Connection as RusqliteConnection;
 use std::{
-    path::Path,
-    sync::{Arc, Mutex},
+    path::{Path, PathBuf},
+    sync::Arc,
 };
 use toasty_core::{
+    async_trait,
     driver::{
         operation::{Operation, Transaction},
         Capability, Driver, Response,
@@ -15,70 +19,102 @@ use toasty_sql as sql;
 use url::Url;
 
 #[derive(Debug)]
-pub struct Sqlite {
-    connection: Mutex<Connection>,
+pub enum Sqlite {
+    File(PathBuf),
+    InMemory,
 }
 
 impl Sqlite {
-    pub fn connect(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
+    /// Create a new SQLite driver with an arbitrary connection URL
+    pub fn new(url: impl Into<String>) -> Result<Self> {
+        let url_str = url.into();
+        let url = Url::parse(&url_str)?;
 
         if url.scheme() != "sqlite" {
             return Err(anyhow::anyhow!(
-                "connection URL does not have a `sqlite` scheme; url={url}"
+                "connection URL does not have a `sqlite` scheme; url={}",
+                url_str
             ));
         }
 
         if url.path() == ":memory:" {
-            Ok(Self::in_memory())
+            Ok(Self::InMemory)
         } else {
-            Self::open(url.path())
+            Ok(Self::File(PathBuf::from(url.path())))
         }
     }
 
+    /// Create an in-memory SQLite database
     pub fn in_memory() -> Self {
-        let connection = Connection::open_in_memory().unwrap();
+        Self::InMemory
+    }
 
-        Self {
-            connection: Mutex::new(connection),
-        }
+    /// Open a SQLite database at the specified file path
+    pub fn open<P: AsRef<Path>>(path: P) -> Self {
+        Self::File(path.as_ref().to_path_buf())
+    }
+}
+
+#[async_trait]
+impl Driver for Sqlite {
+    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::Connection>> {
+        let connection = match self {
+            Sqlite::File(path) => Connection::open(path)?,
+            Sqlite::InMemory => Connection::in_memory(),
+        };
+        Ok(Box::new(connection))
+    }
+
+    fn max_connections(&self) -> Option<usize> {
+        matches!(self, Self::InMemory).then_some(1)
+    }
+}
+
+#[derive(Debug)]
+pub struct Connection {
+    connection: RusqliteConnection,
+}
+
+impl Connection {
+    pub fn in_memory() -> Self {
+        let connection = RusqliteConnection::open_in_memory().unwrap();
+
+        Self { connection }
     }
 
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let connection = Connection::open(path)?;
-        let sqlite = Self {
-            connection: Mutex::new(connection),
-        };
+        let connection = RusqliteConnection::open(path)?;
+        let sqlite = Self { connection };
         Ok(sqlite)
     }
 }
 
 #[toasty_core::async_trait]
-impl Driver for Sqlite {
-    fn capability(&self) -> &Capability {
+impl toasty_core::driver::Connection for Connection {
+    fn capability(&self) -> &'static Capability {
         &Capability::SQLITE
     }
 
-    async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
-        Ok(())
-    }
-
-    async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        let connection = self.connection.lock().unwrap();
-
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {
-            Operation::QuerySql(op) => (op.stmt.into(), op.ret),
+            Operation::QuerySql(op) => {
+                assert!(
+                    op.last_insert_id_hack.is_none(),
+                    "last_insert_id_hack is MySQL-specific and should not be set for SQLite"
+                );
+                (op.stmt.into(), op.ret)
+            }
             // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(Transaction::Start) => {
-                connection.execute("BEGIN", [])?;
+                self.connection.execute("BEGIN", [])?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
-                connection.execute("COMMIT", [])?;
+                self.connection.execute("COMMIT", [])?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {
-                connection.execute("ROLLBACK", [])?;
+                self.connection.execute("ROLLBACK", [])?;
                 return Ok(Response::count(0));
             }
             _ => todo!("op={:#?}", op),
@@ -87,44 +123,42 @@ impl Driver for Sqlite {
         let mut params = vec![];
         let sql_str = sql::Serializer::sqlite(schema).serialize(&sql, &mut params);
 
-        let mut stmt = connection.prepare(&sql_str).unwrap();
+        let mut stmt = self.connection.prepare(&sql_str).unwrap();
 
         let width = match &sql {
             sql::Statement::Query(stmt) => match &stmt.body {
                 stmt::ExprSet::Select(stmt) => {
-                    Some(stmt.returning.as_expr_unwrap().as_record().len())
+                    Some(stmt.returning.as_expr_unwrap().as_record_unwrap().len())
                 }
                 _ => todo!(),
             },
             sql::Statement::Insert(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| returning.as_expr_unwrap().as_record().len()),
+                .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
             sql::Statement::Delete(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| returning.as_expr_unwrap().as_record().len()),
+                .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
             sql::Statement::Update(stmt) => {
                 assert!(stmt.condition.is_none(), "stmt={stmt:#?}");
                 stmt.returning
                     .as_ref()
-                    .map(|returning| returning.as_expr_unwrap().as_record().len())
+                    .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len())
             }
             _ => None,
         };
 
+        let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
+
         if width.is_none() {
-            let count = stmt.execute(rusqlite::params_from_iter(
-                params.iter().map(value_from_param),
-            ))?;
+            let count = stmt.execute(rusqlite::params_from_iter(params.iter()))?;
 
             return Ok(Response::count(count as _));
         }
 
         let mut rows = stmt
-            .query(rusqlite::params_from_iter(
-                params.iter().map(value_from_param),
-            ))
+            .query(rusqlite::params_from_iter(params.iter()))
             .unwrap();
 
         let mut ret = vec![];
@@ -139,7 +173,7 @@ impl Driver for Sqlite {
                     let width = width.unwrap();
 
                     for index in 0..width {
-                        items.push(sqlite_to_toasty(row, index, &ret_tys[index]));
+                        items.push(Value::from_sql(row, index, &ret_tys[index]).into_inner());
                     }
 
                     ret.push(stmt::ValueRecord::from_vec(items).into());
@@ -154,7 +188,7 @@ impl Driver for Sqlite {
         Ok(Response::value_stream(stmt::ValueStream::from_vec(ret)))
     }
 
-    async fn reset_db(&self, schema: &Schema) -> Result<()> {
+    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.create_table(schema, table)?;
         }
@@ -163,11 +197,9 @@ impl Driver for Sqlite {
     }
 }
 
-impl Sqlite {
-    fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
+impl Connection {
+    fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::sqlite(schema);
-
-        let connection = self.connection.lock().unwrap();
 
         let mut params = vec![];
         let stmt = serializer.serialize(
@@ -176,7 +208,7 @@ impl Sqlite {
         );
         assert!(params.is_empty());
 
-        connection.execute(&stmt, [])?;
+        self.connection.execute(&stmt, [])?;
 
         // Create any indices
         for index in &table.indices {
@@ -188,92 +220,8 @@ impl Sqlite {
             let stmt = serializer.serialize(&sql::Statement::create_index(index), &mut params);
             assert!(params.is_empty());
 
-            connection.execute(&stmt, [])?;
+            self.connection.execute(&stmt, [])?;
         }
         Ok(())
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-enum V {
-    Bool(bool),
-    Null,
-    String(String),
-    I8(i8),
-    I64(i64),
-    Id(usize, String),
-}
-
-fn value_from_param(value: &stmt::Value) -> rusqlite::types::ToSqlOutput<'_> {
-    use rusqlite::types::{ToSqlOutput, Value, ValueRef};
-    use stmt::Value::*;
-
-    match value {
-        Bool(true) => ToSqlOutput::Owned(Value::Integer(1)),
-        Bool(false) => ToSqlOutput::Owned(Value::Integer(0)),
-        Id(v) => ToSqlOutput::Owned(v.to_string().into()),
-        I8(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        I16(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        I32(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        I64(v) => ToSqlOutput::Owned(Value::Integer(*v)),
-        U8(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        U16(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        U32(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        U64(v) => ToSqlOutput::Owned(Value::Integer(*v as i64)),
-        String(v) => ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes())),
-        Bytes(v) => ToSqlOutput::Borrowed(ValueRef::Blob(&v[..])),
-        Null => ToSqlOutput::Owned(Value::Null),
-        Enum(value_enum) => {
-            let v = match &value_enum.fields[..] {
-                [] => V::Null,
-                [stmt::Value::Bool(v)] => V::Bool(*v),
-                [stmt::Value::String(v)] => V::String(v.to_string()),
-                [stmt::Value::I64(v)] => V::I64(*v),
-                [stmt::Value::Id(id)] => V::Id(id.model_id().0, id.to_string()),
-                _ => todo!("val={:#?}", value_enum.fields),
-            };
-
-            ToSqlOutput::Owned(
-                format!(
-                    "{}#{}",
-                    value_enum.variant,
-                    serde_json::to_string(&v).unwrap()
-                )
-                .into(),
-            )
-        }
-        _ => todo!("value = {:#?}", value),
-    }
-}
-
-fn sqlite_to_toasty(row: &rusqlite::Row, index: usize, ty: &stmt::Type) -> stmt::Value {
-    use rusqlite::types::Value as SqlValue;
-
-    let value: Option<SqlValue> = row.get(index).unwrap();
-
-    match value {
-        Some(SqlValue::Null) => stmt::Value::Null,
-        Some(SqlValue::Integer(value)) => match ty {
-            stmt::Type::Bool => stmt::Value::Bool(value != 0),
-            stmt::Type::I8 => stmt::Value::I8(value as i8),
-            stmt::Type::I16 => stmt::Value::I16(value as i16),
-            stmt::Type::I32 => stmt::Value::I32(value as i32),
-            stmt::Type::I64 => stmt::Value::I64(value),
-            stmt::Type::U8 => stmt::Value::U8(value as u8),
-            stmt::Type::U16 => stmt::Value::U16(value as u16),
-            stmt::Type::U32 => stmt::Value::U32(value as u32),
-            stmt::Type::U64 => stmt::Value::U64(value as u64),
-            _ => todo!("ty={ty:#?}"),
-        },
-        Some(SqlValue::Text(value)) => match ty {
-            stmt::Type::Uuid => stmt::Value::Uuid(value.parse().expect("text is a valid uuid")),
-            _ => stmt::Value::String(value),
-        },
-        Some(SqlValue::Blob(value)) => match ty {
-            stmt::Type::Bytes => stmt::Value::Bytes(value),
-            _ => todo!("value={value:#?}"),
-        },
-        None => stmt::Value::Null,
-        _ => todo!("value={value:#?}"),
     }
 }

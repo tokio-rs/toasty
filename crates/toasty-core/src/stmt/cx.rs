@@ -4,8 +4,9 @@ use crate::{
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query, Returning,
-        Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, Update, UpdateTarget,
+        Delete, Expr, ExprArg, ExprColumn, ExprReference, ExprSet, Insert, InsertTarget, Query,
+        Returning, Select, Source, SourceTable, Statement, TableFactor, TableRef, Type, Update,
+        UpdateTarget,
     },
     Schema,
 };
@@ -116,6 +117,12 @@ pub trait IntoExprTarget<'a, T = Schema> {
     fn into_expr_target(self, schema: &'a T) -> ExprTarget<'a>;
 }
 
+#[derive(Debug)]
+struct ArgTyStack<'a> {
+    tys: &'a [Type],
+    parent: Option<&'a ArgTyStack<'a>>,
+}
+
 impl<'a, T> ExprContext<'a, T> {
     pub fn schema(&self) -> &'a T {
         self.schema
@@ -199,9 +206,9 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     /// match index columns, and key extraction to identify column IDs.
     pub fn resolve_expr_reference(&self, expr_reference: &ExprReference) -> ResolvedRef<'a> {
         let nesting = match expr_reference {
-            ExprReference::Model { nesting } => *nesting,
-            ExprReference::Field { nesting, .. } => *nesting,
             ExprReference::Column(expr_column) => expr_column.nesting,
+            ExprReference::Field { nesting, .. } => *nesting,
+            ExprReference::Model { nesting } => *nesting,
         };
 
         let target = self.target_at(nesting);
@@ -287,13 +294,18 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Statement::Insert(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| cx.infer_returning_ty(returning, args, false))
+                .map(|returning| cx.infer_returning_ty(returning, args, stmt.source.single))
                 .unwrap_or(Type::Unit),
             Statement::Query(stmt) => match &stmt.body {
                 ExprSet::Select(body) => cx.infer_returning_ty(&body.returning, args, stmt.single),
                 ExprSet::SetOp(_body) => todo!(),
                 ExprSet::Update(_body) => todo!(),
                 ExprSet::Values(_body) => todo!(),
+                ExprSet::Insert(body) => body
+                    .returning
+                    .as_ref()
+                    .map(|returning| cx.infer_returning_ty(returning, args, stmt.single))
+                    .unwrap_or(Type::Unit),
             },
             Statement::Update(stmt) => stmt
                 .returning
@@ -304,6 +316,8 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     }
 
     fn infer_returning_ty(&self, returning: &Returning, args: &[Type], single: bool) -> Type {
+        let arg_ty_stack = ArgTyStack::new(args);
+
         match returning {
             Returning::Model { .. } => {
                 let ty = Type::Model(
@@ -320,7 +334,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             }
             Returning::Changed => todo!(),
             Returning::Expr(expr) => {
-                let ty = self.infer_expr_ty(expr, args);
+                let ty = self.infer_expr_ty2(&arg_ty_stack, expr, false);
 
                 if single {
                     ty
@@ -328,31 +342,88 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     Type::list(ty)
                 }
             }
-            Returning::Value(value) => value.infer_ty(),
+            Returning::Value(expr) => self.infer_expr_ty2(&arg_ty_stack, expr, true),
         }
     }
 
     pub fn infer_expr_ty(&self, expr: &Expr, args: &[Type]) -> Type {
+        let arg_ty_stack = ArgTyStack::new(args);
+        self.infer_expr_ty2(&arg_ty_stack, expr, false)
+    }
+
+    fn infer_expr_ty2(&self, args: &ArgTyStack<'_>, expr: &Expr, returning_expr: bool) -> Type {
         match expr {
-            Expr::Arg(e) => args[e.position].clone(),
+            Expr::Arg(e) => args.resolve_arg_ty(e).clone(),
             Expr::And(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
-            Expr::Reference(expr_ref) => self.infer_expr_reference_ty(expr_ref),
+            Expr::Reference(expr_ref) => {
+                assert!(
+                    !returning_expr,
+                    "should have been handled in Expr::Project. Invalid expr?"
+                );
+                self.infer_expr_reference_ty(expr_ref)
+            }
             Expr::IsNull(_) => Type::Bool,
+            Expr::List(e) => {
+                debug_assert!(!e.items.is_empty());
+                Type::list(self.infer_expr_ty2(args, &e.items[0], returning_expr))
+            }
             Expr::Map(e) => {
-                let base = self.infer_expr_ty(&e.base, args);
-                let ty = self.infer_expr_ty(&e.map, &[base]);
+                // Compute the map base type
+                let base = self.infer_expr_ty2(args, &e.base, returning_expr);
+
+                // The base type should be a list (as it is being mapped)
+                let Type::List(item) = base else {
+                    todo!("error handling; base={base:#?}")
+                };
+
+                let scope_tys = &[*item];
+
+                // Create a new type scope
+                let args = args.scope(scope_tys);
+
+                // Infer the type of each map call
+                let ty = self.infer_expr_ty2(&args, &e.map, returning_expr);
+
+                // The mapped type is a list
                 Type::list(ty)
             }
             Expr::Or(_) => Type::Bool,
             Expr::Project(e) => {
-                let mut base = self.infer_expr_ty(&e.base, args);
+                if returning_expr {
+                    match &*e.base {
+                        Expr::Arg(expr_arg) => {
+                            // When `returning_expr` is `true`, the expression is being
+                            // evaluated from a RETURNING EXPR clause. In this case, the
+                            // returning expression is *not* a projection. Referencing a
+                            // column implies a *list* of
+                            assert!(e.projection.as_slice().len() == 1);
+                            return args.resolve_arg_ty(expr_arg).clone();
+                        }
+                        Expr::Reference(expr_reference) => {
+                            // When `returning_expr` is `true`, the expression is being
+                            // evaluated from a RETURNING EXPR clause. In this case, the
+                            // returning expression is *not* a projection. Referencing a
+                            // column implies a *list* of
+                            assert!(e.projection.as_slice().len() == 1);
+                            return self.infer_expr_reference_ty(expr_reference);
+                        }
+                        _ => {}
+                    }
+                }
+
+                let mut base = self.infer_expr_ty2(args, &e.base, returning_expr);
 
                 for step in e.projection.iter() {
-                    base = match &mut base {
-                        Type::Record(fields) => std::mem::replace(&mut fields[*step], Type::Null),
-                        expr => todo!("expr={expr:#?}"),
+                    base = match base {
+                        Type::Record(mut fields) => {
+                            std::mem::replace(&mut fields[*step], Type::Null)
+                        }
+                        Type::List(items) => *items,
+                        expr => todo!(
+                            "returning_expr={returning_expr:#?}; expr={expr:#?}; project={e:#?}"
+                        ),
                     }
                 }
 
@@ -361,7 +432,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::Record(e) => Type::Record(
                 e.fields
                     .iter()
-                    .map(|field| self.infer_expr_ty(field, args))
+                    .map(|field| self.infer_expr_ty2(args, field, returning_expr))
                     .collect(),
             ),
             Expr::Value(value) => value.infer_ty(),
@@ -536,8 +607,8 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for ExprTarget<'a> {
     fn into_expr_target(self, schema: &'a T) -> ExprTarget<'a> {
         match self {
             ExprTarget::Source(source_table) => {
-                if source_table.from_item.joins.is_empty() {
-                    match &source_table.from_item.relation {
+                if source_table.from.len() == 1 && source_table.from[0].joins.is_empty() {
+                    match &source_table.from[0].relation {
                         TableFactor::Table(source_table_id) => {
                             debug_assert_eq!(0, source_table_id.0);
                             debug_assert_eq!(1, source_table.tables.len());
@@ -585,6 +656,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a ExprSet {
             ExprSet::SetOp(_) => todo!(),
             ExprSet::Update(update) => update.into_expr_target(schema),
             ExprSet::Values(_) => ExprTarget::Free,
+            ExprSet::Insert(insert) => insert.into_expr_target(schema),
         }
     }
 }
@@ -674,6 +746,31 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a Statement {
             Statement::Insert(stmt) => stmt.into_expr_target(schema),
             Statement::Query(stmt) => stmt.into_expr_target(schema),
             Statement::Update(stmt) => stmt.into_expr_target(schema),
+        }
+    }
+}
+
+impl<'a> ArgTyStack<'a> {
+    fn new(tys: &'a [Type]) -> ArgTyStack<'a> {
+        ArgTyStack { tys, parent: None }
+    }
+
+    fn resolve_arg_ty(&self, expr_arg: &ExprArg) -> &'a Type {
+        let mut nesting = expr_arg.nesting;
+        let mut args = self;
+
+        while nesting > 0 {
+            args = args.parent.unwrap();
+            nesting -= 1;
+        }
+
+        &args.tys[expr_arg.position]
+    }
+
+    fn scope<'child>(&'child self, tys: &'child [Type]) -> ArgTyStack<'child> {
+        ArgTyStack {
+            tys,
+            parent: Some(self),
         }
     }
 }

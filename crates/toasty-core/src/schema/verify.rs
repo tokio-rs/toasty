@@ -34,6 +34,7 @@ impl Verify<'_> {
         self.verify_indices_have_columns();
         self.verify_index_names_are_unique().unwrap();
         self.verify_table_indices_and_nullable();
+        self.verify_auto_increment_columns();
     }
 
     // TODO: move these methods to separate modules?
@@ -143,6 +144,40 @@ impl Verify<'_> {
     fn verify_each_table_has_one_primary_key(&self) {
         for table in &self.schema.db.tables {
             assert_eq!(1, table.indices.iter().filter(|i| i.primary_key).count());
+        }
+    }
+
+    fn verify_auto_increment_columns(&self) {
+        for table in &self.schema.db.tables {
+            for column in &table.columns {
+                if column.auto_increment {
+                    // Verify the column has a numeric type
+                    assert!(
+                        column.ty.is_numeric(),
+                        "auto_increment column `{}` in table `{}` must have a numeric type, found {:?}",
+                        column.name,
+                        table.name,
+                        column.ty
+                    );
+
+                    // Verify it's the only column in the primary key
+                    assert_eq!(
+                        table.primary_key.columns.len(),
+                        1,
+                        "auto_increment column `{}` in table `{}` must be the only column in the primary key",
+                        column.name,
+                        table.name
+                    );
+
+                    // Verify the auto_increment column is actually in the primary key
+                    let pk_column = &table.columns[table.primary_key.columns[0].index];
+                    assert_eq!(
+                        pk_column.id, column.id,
+                        "auto_increment column `{}` in table `{}` must be part of the primary key",
+                        column.name, table.name
+                    );
+                }
+            }
         }
     }
 }

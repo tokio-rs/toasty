@@ -54,14 +54,12 @@ impl<I: Input, T: Resolve> Input for TypedInput<'_, I, T> {
             for step in projection {
                 ty = match ty {
                     Type::Record(tys) => &tys[step],
+                    Type::List(item) => item,
                     _ => todo!("ty={ty:#?}"),
                 };
             }
 
-            assert_eq!(
-                actual_ty, *ty,
-                "resolved input did not match requested argument type"
-            );
+            assert!(actual_ty.is_equivalent(ty), "resolved input did not match requested argument type; expected={ty:#?}; actual={actual_ty:#?}")
         }
 
         Some(expr)

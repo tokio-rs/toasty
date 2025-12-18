@@ -1,18 +1,19 @@
+mod r#type;
 mod value;
+
 pub(crate) use value::Value;
 
-use postgres::{
-    tls::MakeTlsConnect,
-    types::{ToSql, Type},
-    Column, Row, Socket,
-};
+use r#type::TypeExt;
+
+use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
 use std::sync::Arc;
 use toasty_core::{
-    driver::{Capability, Operation, Response},
+    async_trait,
+    driver::{Capability, Driver, Operation, Response},
     schema::db::{Schema, Table},
     stmt,
     stmt::ValueRecord,
-    Driver, Result,
+    Result,
 };
 use toasty_sql as sql;
 use tokio_postgres::{Client, Config};
@@ -20,21 +21,14 @@ use url::Url;
 
 #[derive(Debug)]
 pub struct PostgreSQL {
-    /// The PostgreSQL client.
-    client: Client,
+    config: Config,
 }
 
 impl PostgreSQL {
-    /// Initialize a Toasty PostgreSQL driver using an initialized connection.
-    pub fn new(connection: Client) -> Self {
-        Self { client: connection }
-    }
-
-    /// Connects to a PostgreSQL database using a connection string.
-    ///
-    /// See [`postgres::Client::connect`] for more information.
-    pub async fn connect(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
+    /// Create a new PostgreSQL driver from a connection URL
+    pub fn new(url: impl Into<String>) -> Result<Self> {
+        let url_str = url.into();
+        let url = Url::parse(&url_str)?;
 
         if url.scheme() != "postgresql" {
             return Err(anyhow::anyhow!(
@@ -70,13 +64,40 @@ impl PostgreSQL {
             config.password(password);
         }
 
-        Self::connect_with_config(config, tokio_postgres::NoTls).await
+        Ok(Self { config })
+    }
+
+    /// Create a new PostgreSQL driver with a tokio-postgres Config
+    pub fn from_config(config: Config) -> Self {
+        Self { config }
+    }
+}
+
+#[async_trait]
+impl Driver for PostgreSQL {
+    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
+        Ok(Box::new(
+            Connection::connect(self.config.clone(), tokio_postgres::NoTls).await?,
+        ))
+    }
+}
+
+#[derive(Debug)]
+pub struct Connection {
+    /// The PostgreSQL client.
+    client: Client,
+}
+
+impl Connection {
+    /// Initialize a Toasty PostgreSQL connection using an initialized client.
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 
     /// Connects to a PostgreSQL database using a [`postgres::Config`].
     ///
     /// See [`postgres::Client::configure`] for more information.
-    pub async fn connect_with_config<T>(config: Config, tls: T) -> Result<Self>
+    pub async fn connect<T>(config: Config, tls: T) -> Result<Self>
     where
         T: MakeTlsConnect<Socket> + 'static,
         T::Stream: Send,
@@ -93,7 +114,7 @@ impl PostgreSQL {
     }
 
     /// Creates a table.
-    pub async fn create_table(&self, schema: &Schema, table: &Table) -> Result<()> {
+    pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
 
         let mut params = Vec::new();
@@ -130,7 +151,12 @@ impl PostgreSQL {
     }
 
     /// Drops a table.
-    pub async fn drop_table(&self, schema: &Schema, table: &Table, if_exists: bool) -> Result<()> {
+    pub async fn drop_table(
+        &mut self,
+        schema: &Schema,
+        table: &Table,
+        if_exists: bool,
+    ) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
         let mut params = Vec::new();
 
@@ -150,26 +176,28 @@ impl PostgreSQL {
     }
 }
 
-impl From<Client> for PostgreSQL {
+impl From<Client> for Connection {
     fn from(client: Client) -> Self {
         Self { client }
     }
 }
 
-#[toasty_core::async_trait]
-impl Driver for PostgreSQL {
-    fn capability(&self) -> &Capability {
+#[async_trait]
+impl toasty_core::driver::Connection for Connection {
+    fn capability(&self) -> &'static Capability {
         &Capability::POSTGRESQL
     }
 
-    async fn register_schema(&mut self, _schema: &Schema) -> Result<()> {
-        Ok(())
-    }
-
-    async fn exec(&self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::Insert(op) => (op.stmt.into(), None),
-            Operation::QuerySql(query) => (query.stmt.into(), query.ret),
+            Operation::QuerySql(query) => {
+                assert!(
+                    query.last_insert_id_hack.is_none(),
+                    "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
+                );
+                (query.stmt.into(), query.ret)
+            }
             op => todo!("op={:#?}", op),
         };
 
@@ -194,7 +222,7 @@ impl Driver for PostgreSQL {
             .map(|param| {
                 (
                     param as &(dyn ToSql + Sync),
-                    postgres_ty_for_value(&param.0),
+                    param.infer_ty().to_postgres_type(),
                 )
             })
             .collect::<Vec<_>>();
@@ -216,7 +244,7 @@ impl Driver for PostgreSQL {
             let results = rows.into_iter().map(move |row| {
                 let mut results = Vec::new();
                 for (i, column) in row.columns().iter().enumerate() {
-                    results.push(postgres_to_toasty(i, &row, column, &ret_tys[i]));
+                    results.push(Value::from_sql(i, &row, column, &ret_tys[i]).into_inner());
                 }
 
                 Ok(ValueRecord::from_vec(results))
@@ -228,7 +256,7 @@ impl Driver for PostgreSQL {
         }
     }
 
-    async fn reset_db(&self, schema: &Schema) -> Result<()> {
+    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.drop_table(schema, table, true).await?;
             self.create_table(schema, table).await?;
@@ -236,188 +264,4 @@ impl Driver for PostgreSQL {
 
         Ok(())
     }
-}
-
-/// Converts a PostgreSQL value within a row to a [`toasty_core::stmt::Value`].
-fn postgres_to_toasty(
-    index: usize,
-    row: &Row,
-    column: &Column,
-    expected_ty: &stmt::Type,
-) -> stmt::Value {
-    // NOTE: unfortunately, the inner representation of the PostgreSQL type enum is not
-    // accessible, so we must manually match each type like so.
-    if column.type_() == &Type::TEXT || column.type_() == &Type::VARCHAR {
-        row.get::<usize, Option<String>>(index)
-            .map(|v| match expected_ty {
-                stmt::Type::String => stmt::Value::String(v),
-                stmt::Type::Uuid => stmt::Value::Uuid(
-                    v.parse()
-                        .unwrap_or_else(|_| panic!("uuid could not be parsed from text")),
-                ),
-                _ => stmt::Value::String(v), // Default to string
-            })
-            .unwrap_or(stmt::Value::Null)
-    } else if column.type_() == &Type::BOOL {
-        row.get::<usize, Option<bool>>(index)
-            .map(stmt::Value::Bool)
-            .unwrap_or(stmt::Value::Null)
-    } else if column.type_() == &Type::INT2 {
-        row.get::<usize, Option<i16>>(index)
-            .map(|v| match expected_ty {
-                stmt::Type::I8 => stmt::Value::I8(v as i8),
-                stmt::Type::I16 => stmt::Value::I16(v),
-                stmt::Type::U8 => stmt::Value::U8(
-                    u8::try_from(v).unwrap_or_else(|_| panic!("u8 value out of range: {v}")),
-                ),
-                stmt::Type::U16 => stmt::Value::U16(v as u16),
-                _ => panic!("unexpected type for INT2: {expected_ty:#?}"),
-            })
-            .unwrap_or(stmt::Value::Null)
-    } else if column.type_() == &Type::INT4 {
-        row.get::<usize, Option<i32>>(index)
-            .map(|v| match expected_ty {
-                stmt::Type::I32 => stmt::Value::I32(v),
-                stmt::Type::U16 => stmt::Value::U16(
-                    u16::try_from(v).unwrap_or_else(|_| panic!("u16 value out of range: {v}")),
-                ),
-                stmt::Type::U32 => stmt::Value::U32(v as u32),
-                _ => stmt::Value::I32(v), // Default fallback
-            })
-            .unwrap_or(stmt::Value::Null)
-    } else if column.type_() == &Type::INT8 {
-        row.get::<usize, Option<i64>>(index)
-            .map(|v| match expected_ty {
-                stmt::Type::I64 => stmt::Value::I64(v),
-                stmt::Type::U32 => stmt::Value::U32(
-                    u32::try_from(v).unwrap_or_else(|_| panic!("u32 value out of range: {v}")),
-                ),
-                stmt::Type::U64 => stmt::Value::U64(
-                    u64::try_from(v).unwrap_or_else(|_| panic!("u64 value out of range: {v}")),
-                ),
-                _ => stmt::Value::I64(v), // Default fallback
-            })
-            .unwrap_or(stmt::Value::Null)
-    } else if column.type_() == &Type::UUID {
-        row.get::<usize, Option<uuid::Uuid>>(index)
-            .map(|v| match expected_ty {
-                stmt::Type::Uuid => stmt::Value::Uuid(v),
-                stmt::Type::String => stmt::Value::String(v.to_string()),
-                _ => stmt::Value::Uuid(v),
-            })
-            .unwrap_or(stmt::Value::Null)
-    } else if column.type_() == &Type::BYTEA {
-        row.get::<usize, Option<Vec<u8>>>(index)
-            .map(|v| match expected_ty {
-                stmt::Type::Uuid => stmt::Value::Uuid(v.try_into().expect("invalid uuid bytes")),
-                stmt::Type::Bytes => stmt::Value::Bytes(v),
-                _ => todo!(
-                    "unsupported conversion from {:#?} to {expected_ty:?}",
-                    column.type_()
-                ),
-            })
-            .unwrap_or(stmt::Value::Null)
-    } else if column.type_() == &Type::TIMESTAMPTZ {
-        match expected_ty {
-            #[cfg(feature = "jiff")]
-            stmt::Type::JiffTimestamp | stmt::Type::JiffZoned => {
-                get_from_row::<jiff::Timestamp>(row, index)
-            }
-            #[cfg(feature = "chrono")]
-            stmt::Type::ChronoDateTimeUtc => {
-                get_from_row::<chrono::DateTime<chrono::Utc>>(row, index)
-            }
-            #[cfg(feature = "chrono")]
-            stmt::Type::ChronoNaiveDateTime => get_from_row::<chrono::NaiveDateTime>(row, index),
-            _ => panic!("TIMESTAMPTZ requires the jiff or chrono feature to be enabled"),
-        }
-    } else if column.type_() == &Type::TIMESTAMP {
-        match expected_ty {
-            #[cfg(feature = "jiff")]
-            stmt::Type::JiffDateTime => get_from_row::<jiff::civil::DateTime>(row, index),
-            #[cfg(feature = "chrono")]
-            stmt::Type::ChronoNaiveDateTime => get_from_row::<chrono::NaiveDateTime>(row, index),
-            _ => panic!("TIMESTAMP requires the jiff or chrono feature to be enabled"),
-        }
-    } else if column.type_() == &Type::DATE {
-        match expected_ty {
-            #[cfg(feature = "jiff")]
-            stmt::Type::JiffDate => get_from_row::<jiff::civil::Date>(row, index),
-            #[cfg(feature = "chrono")]
-            stmt::Type::ChronoNaiveDate => get_from_row::<chrono::NaiveDate>(row, index),
-            _ => panic!("DATE requires the jiff or chrono feature to be enabled"),
-        }
-    } else if column.type_() == &Type::TIME {
-        match expected_ty {
-            #[cfg(feature = "jiff")]
-            stmt::Type::JiffTime => get_from_row::<jiff::civil::Time>(row, index),
-            #[cfg(feature = "chrono")]
-            stmt::Type::ChronoNaiveTime => get_from_row::<chrono::NaiveTime>(row, index),
-            _ => panic!("TIME requires the jiff or chrono feature to be enabled"),
-        }
-    } else if column.type_() == &Type::NUMERIC {
-        #[cfg(feature = "rust_decimal")]
-        {
-            row.get::<usize, Option<rust_decimal::Decimal>>(index)
-                .map(stmt::Value::Decimal)
-                .unwrap_or(stmt::Value::Null)
-        }
-        #[cfg(not(feature = "rust_decimal"))]
-        {
-            panic!("NUMERIC requires rust_decimal feature to be enabled")
-        }
-    } else {
-        todo!(
-            "implement PostgreSQL to toasty conversion for `{:#?}`",
-            column.type_()
-        );
-    }
-}
-
-fn postgres_ty_for_value(value: &stmt::Value) -> Type {
-    match value {
-        stmt::Value::Bool(_) => Type::BOOL,
-        stmt::Value::I8(_) => Type::INT2,
-        stmt::Value::I16(_) => Type::INT2,
-        stmt::Value::I32(_) => Type::INT4,
-        stmt::Value::I64(_) => Type::INT8,
-        stmt::Value::U8(_) => Type::INT2,
-        stmt::Value::U16(_) => Type::INT4,
-        stmt::Value::U32(_) => Type::INT8,
-        stmt::Value::U64(_) => Type::INT8,
-        stmt::Value::Id(_) => Type::TEXT,
-        stmt::Value::String(_) => Type::TEXT,
-        stmt::Value::Uuid(_) => Type::UUID,
-        stmt::Value::Null => Type::TEXT, // Default for NULL values
-        #[cfg(feature = "rust_decimal")]
-        stmt::Value::Decimal(_) => Type::NUMERIC,
-        #[cfg(feature = "jiff")]
-        stmt::Value::JiffTimestamp(_) => Type::TIMESTAMPTZ,
-        #[cfg(feature = "jiff")]
-        stmt::Value::JiffDate(_) => Type::DATE,
-        #[cfg(feature = "jiff")]
-        stmt::Value::JiffTime(_) => Type::TIME,
-        #[cfg(feature = "jiff")]
-        stmt::Value::JiffDateTime(_) => Type::TIMESTAMP,
-        #[cfg(feature = "chrono")]
-        stmt::Value::ChronoDateTimeUtc(_) => Type::TIMESTAMPTZ,
-        #[cfg(feature = "chrono")]
-        stmt::Value::ChronoNaiveDateTime(_) => Type::TIMESTAMP,
-        #[cfg(feature = "chrono")]
-        stmt::Value::ChronoNaiveDate(_) => Type::DATE,
-        #[cfg(feature = "chrono")]
-        stmt::Value::ChronoNaiveTime(_) => Type::TIME,
-        _ => todo!("postgres_ty_for_value: {value:#?}"),
-    }
-}
-
-#[cfg(any(feature = "chrono", feature = "jiff"))]
-fn get_from_row<T>(row: &Row, index: usize) -> stmt::Value
-where
-    T: postgres_types::FromSqlOwned,
-    T: Into<stmt::Value>,
-{
-    row.get::<usize, Option<T>>(index)
-        .map(Into::into)
-        .unwrap_or(stmt::Value::Null)
 }

@@ -5,10 +5,10 @@ use super::{
     ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
     ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
-    Filter, FuncCount, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy,
-    OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
-    SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
-    UpdateTarget, Value, ValueRecord, Values, With,
+    Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
+    OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel,
+    SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins,
+    Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait Visit {
@@ -89,6 +89,10 @@ pub trait Visit {
 
     fn visit_expr_func_count(&mut self, i: &FuncCount) {
         visit_expr_func_count(self, i);
+    }
+
+    fn visit_expr_func_last_insert_id(&mut self, i: &FuncLastInsertId) {
+        visit_expr_func_last_insert_id(self, i);
     }
 
     fn visit_expr_in_list(&mut self, i: &ExprInList) {
@@ -703,6 +707,7 @@ where
 {
     match node {
         ExprFunc::Count(func) => v.visit_expr_func_count(func),
+        ExprFunc::LastInsertId(func) => v.visit_expr_func_last_insert_id(func),
     }
 }
 
@@ -717,6 +722,13 @@ where
     if let Some(expr) = &node.filter {
         v.visit_expr(expr);
     }
+}
+
+pub fn visit_expr_func_last_insert_id<V>(_v: &mut V, _node: &FuncLastInsertId)
+where
+    V: Visit + ?Sized,
+{
+    // FuncLastInsertId has no fields to visit
 }
 
 pub fn visit_expr_in_list<V>(v: &mut V, node: &ExprInList)
@@ -818,6 +830,7 @@ where
         ExprSet::SetOp(expr) => v.visit_expr_set_op(expr),
         ExprSet::Update(expr) => v.visit_stmt_update(expr),
         ExprSet::Values(expr) => v.visit_values(expr),
+        ExprSet::Insert(expr) => v.visit_stmt_insert(expr),
     }
 }
 
@@ -961,7 +974,7 @@ where
         }
         Returning::Changed => {}
         Returning::Expr(expr) => v.visit_expr(expr),
-        Returning::Value(value) => v.visit_value(value),
+        Returning::Value(expr) => v.visit_expr(expr),
     }
 }
 
@@ -991,7 +1004,9 @@ where
     for table_ref in &node.tables {
         v.visit_table_ref(table_ref);
     }
-    v.visit_table_with_joins(&node.from_item);
+    for table_with_joins in &node.from {
+        v.visit_table_with_joins(table_with_joins);
+    }
 }
 
 pub fn visit_source_table_id<V>(v: &mut V, node: &SourceTableId)

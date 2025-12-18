@@ -43,3 +43,9 @@ impl From<Insert> for ExprStmt {
         }
     }
 }
+
+impl From<Insert> for Expr {
+    fn from(value: Insert) -> Self {
+        Self::Stmt(value.into())
+    }
+}

@@ -1,10 +1,9 @@
 use crate::{
-    driver::Rows,
     engine::exec::{Action, Exec, Output, VarId},
     Result,
 };
 use toasty_core::{
-    driver::operation,
+    driver::{operation, Rows},
     schema::db::{ColumnId, TableId},
     stmt::ValueStream,
 };
@@ -31,9 +30,9 @@ impl Exec<'_> {
             .vars
             .load(action.input)
             .await?
-            .into_values()
-            .collect()
-            .await?;
+            .collect_as_value()
+            .await?
+            .unwrap_list();
 
         let res = if keys.is_empty() {
             Rows::value_stream(ValueStream::default())
@@ -45,8 +44,7 @@ impl Exec<'_> {
             };
 
             let res = self
-                .engine
-                .driver
+                .connection
                 .exec(&self.engine.schema.db, op.into())
                 .await?;
             res.rows

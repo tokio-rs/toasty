@@ -211,19 +211,19 @@ impl Iterator for Iter<'_> {
 
 impl Project for Expr {
     fn project(self, projection: &Projection) -> Option<Expr> {
-        Some(self.entry(projection).to_expr())
+        Some(self.entry(projection)?.to_expr())
     }
 }
 
 impl Project for &Expr {
     fn project(self, projection: &Projection) -> Option<Expr> {
-        Some(self.entry(projection).to_expr())
+        Some(self.entry(projection)?.to_expr())
     }
 }
 
 impl Project for &&Expr {
     fn project(self, projection: &Projection) -> Option<Expr> {
-        Some(self.entry(projection).to_expr())
+        Some(self.entry(projection)?.to_expr())
     }
 }
 

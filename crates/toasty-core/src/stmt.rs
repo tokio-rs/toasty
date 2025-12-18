@@ -123,6 +123,9 @@ pub use filter::Filter;
 mod func_count;
 pub use func_count::FuncCount;
 
+mod func_last_insert_id;
+pub use func_last_insert_id::FuncLastInsertId;
+
 mod id;
 pub use id::Id;
 

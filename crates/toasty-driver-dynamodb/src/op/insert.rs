@@ -1,12 +1,12 @@
 use super::{
-    ddb_val, stmt, DynamoDb, Put, PutRequest, Result, Schema, TransactWriteItem, WriteRequest,
+    stmt, Connection, Put, PutRequest, Result, Schema, TransactWriteItem, Value, WriteRequest,
 };
 use std::collections::HashMap;
 use toasty_core::driver::Response;
 
-impl DynamoDb {
+impl Connection {
     pub(crate) async fn exec_insert(
-        &self,
+        &mut self,
         schema: &Schema,
         insert: stmt::Insert,
     ) -> Result<Response> {
@@ -41,11 +41,11 @@ impl DynamoDb {
 
             for (i, column_id) in insert_table.columns.iter().enumerate() {
                 let column = schema.column(*column_id);
-                let entry = row.entry(i);
+                let entry = row.entry(i).unwrap();
                 let value = entry.as_value();
 
                 if !value.is_null() {
-                    items.insert(column.name.clone(), ddb_val(value));
+                    items.insert(column.name.clone(), Value::from(value.clone()).to_ddb());
                 }
             }
             insert_items.push(items);

@@ -28,7 +28,7 @@ impl<M: Model> Cursor<M> {
                 self.validate_row(&row);
                 M::load(row)
             }
-            Ok(_) => todo!(),
+            Ok(value) => todo!("value={value:#?}"),
             Err(e) => Err(e),
         })
     }

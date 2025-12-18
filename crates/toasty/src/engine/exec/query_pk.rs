@@ -43,8 +43,7 @@ impl Exec<'_> {
         }
 
         let res = self
-            .engine
-            .driver
+            .connection
             .exec(
                 &self.engine.schema.db,
                 operation::QueryPk {

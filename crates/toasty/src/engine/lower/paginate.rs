@@ -44,7 +44,6 @@ impl LowerStatement<'_, '_> {
             }
             _ => todo!(),
         }
-        dbg!(&body.filter);
     }
 
     fn rewrite_offset_after_field_as_filter(

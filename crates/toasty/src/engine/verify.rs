@@ -37,6 +37,7 @@ impl stmt::Visit for Verify<'_> {
     fn visit_stmt_query(&mut self, i: &stmt::Query) {
         stmt::visit::visit_stmt_query(self, i);
 
+        self.verify_single_query(i);
         self.verify_offset_key_matches_order_by(i);
     }
 
@@ -90,6 +91,16 @@ impl Verify<'_> {
                 assert!(order_by.exprs.len() == 1, "order_by = {order_by:#?}");
             }
             _ => todo!("unsupported offset expression; stmt={i:#?}"),
+        }
+    }
+
+    fn verify_single_query(&self, i: &stmt::Query) {
+        if !i.single {
+            return;
+        }
+
+        if let stmt::ExprSet::Values(values) = &i.body {
+            assert_eq!(1, values.rows.len(), "stmt={i:#?}");
         }
     }
 }

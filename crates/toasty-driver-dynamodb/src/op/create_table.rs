@@ -1,11 +1,11 @@
 use super::{
-    ddb_key_schema, ddb_ty, AttributeDefinition, DynamoDb, GlobalSecondaryIndex, Projection,
-    ProjectionType, ProvisionedThroughput, Result, Schema, Table,
+    ddb_key_schema, AttributeDefinition, Connection, GlobalSecondaryIndex, Projection,
+    ProjectionType, ProvisionedThroughput, Result, Schema, Table, TypeExt,
 };
 
-impl DynamoDb {
+impl Connection {
     pub(crate) async fn create_table(
-        &self,
+        &mut self,
         schema: &Schema,
         table: &Table,
         reset: bool,
@@ -86,7 +86,7 @@ impl DynamoDb {
             .iter()
             .map(|column_id| {
                 let column = table.column(*column_id);
-                let ty = ddb_ty(&column.ty);
+                let ty = column.ty.to_ddb_type();
 
                 AttributeDefinition::builder()
                     .attribute_name(&column.name)
@@ -120,7 +120,7 @@ impl DynamoDb {
                 .attribute_definitions(
                     AttributeDefinition::builder()
                         .attribute_name(&pk.name)
-                        .attribute_type(ddb_ty(&pk.ty))
+                        .attribute_type(pk.ty.to_ddb_type())
                         .build()
                         .unwrap(),
                 )
