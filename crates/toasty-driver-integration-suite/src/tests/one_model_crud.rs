@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 #[driver_test]
-pub(crate) async fn crud_no_fields(t: &mut Test) {
+pub async fn crud_no_fields(t: &mut Test) {
     const MORE: i32 = 10;
 
     #[derive(Debug, toasty::Model)]
@@ -80,7 +80,7 @@ pub(crate) async fn crud_no_fields(t: &mut Test) {
 }
 
 #[driver_test]
-pub(crate) async fn crud_one_string(test: &mut Test) {
+pub async fn crud_one_string(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -169,7 +169,7 @@ pub(crate) async fn crud_one_string(test: &mut Test) {
 }
 
 #[driver_test]
-pub(crate) async fn required_field_create_without_setting(test: &mut Test) {
+pub async fn required_field_create_without_setting(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -187,7 +187,7 @@ pub(crate) async fn required_field_create_without_setting(test: &mut Test) {
 }
 
 #[driver_test]
-pub(crate) async fn unique_index_required_field_update(test: &mut Test) {
+pub async fn unique_index_required_field_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -288,7 +288,7 @@ pub(crate) async fn unique_index_required_field_update(test: &mut Test) {
 }
 
 #[driver_test]
-pub(crate) async fn unique_index_nullable_field_update(test: &mut Test) {
+pub async fn unique_index_nullable_field_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -378,7 +378,7 @@ pub(crate) async fn unique_index_nullable_field_update(test: &mut Test) {
 }
 
 #[driver_test]
-pub(crate) async fn unique_index_no_update(test: &mut Test) {
+pub async fn unique_index_no_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -417,7 +417,7 @@ pub(crate) async fn unique_index_no_update(test: &mut Test) {
 }
 
 #[driver_test]
-pub(crate) async fn batch_get_by_id(test: &mut Test) {
+pub async fn batch_get_by_id(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -446,7 +446,7 @@ pub(crate) async fn batch_get_by_id(test: &mut Test) {
 }
 
 #[driver_test]
-pub(crate) async fn empty_batch_get_by_id(test: &mut Test) {
+pub async fn empty_batch_get_by_id(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -471,7 +471,7 @@ pub(crate) async fn empty_batch_get_by_id(test: &mut Test) {
 }
 
 #[driver_test]
-pub(crate) async fn update_multiple_fields(test: &mut Test) {
+pub async fn update_multiple_fields(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]

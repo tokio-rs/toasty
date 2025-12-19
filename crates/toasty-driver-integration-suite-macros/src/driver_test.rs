@@ -17,14 +17,7 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let variant_fns: Vec<_> = driver_test
         .kinds
         .iter()
-        .map(|kind| {
-            let variant_fn = generate_variant(&driver_test.input, kind.name(), kind.target_type());
-            let registration = generate_registration(mod_name, kind.name());
-            quote! {
-                #variant_fn
-                #registration
-            }
-        })
+        .map(|kind| generate_variant(&driver_test.input, kind.name(), kind.target_type()))
         .collect();
 
     quote! {
@@ -49,27 +42,6 @@ fn generate_variant(input: &ItemFn, variant_name: &str, target_type: Type) -> It
     rewriter.visit_item_fn_mut(&mut variant);
 
     variant
-}
-
-/// Generate test registration code for a variant
-fn generate_registration(mod_name: &syn::Ident, variant_name: &str) -> proc_macro2::TokenStream {
-    let variant_ident = syn::Ident::new(variant_name, mod_name.span());
-    let registration_name = syn::Ident::new(
-        &format!("__{}__{}_REGISTRATION", mod_name, variant_name).to_uppercase(),
-        mod_name.span(),
-    );
-
-    // Build the full test path string at compile time
-    // We'll store the full path and strip the prefix at runtime in the registry lookup
-
-    quote::quote! {
-        #[::linkme::distributed_slice(crate::registry::TESTS)]
-        static #registration_name: crate::registry::RegisteredTest =
-            crate::registry::RegisteredTest {
-                name: concat!(module_path!(), "::", stringify!(#variant_ident)),
-                func: |test| ::std::boxed::Box::pin(#variant_ident(test)),
-            };
-    }
 }
 
 /// Visitor that rewrites `ID` type references to a configurable target type

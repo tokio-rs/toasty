@@ -12,19 +12,14 @@ use isolate::Isolate;
 mod logging_driver;
 use logging_driver::LoggingDriver;
 
-pub mod registry;
-
 mod setup;
 pub use setup::Setup;
 
-mod suite;
-pub use suite::IntegrationSuite;
-
 mod test;
-use test::Test;
+pub use test::Test;
 
 /// Test implementations
-pub(crate) mod tests;
+pub mod tests;
 
 // Generate the test registry macro
 // Pass the relative path from CARGO_MANIFEST_DIR

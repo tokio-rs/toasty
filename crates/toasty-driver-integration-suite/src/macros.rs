@@ -27,12 +27,12 @@ macro_rules! generate_driver_tests_impl {
                         $(
                             #[test]
                             fn $variant() {
-                                let suite = $crate::IntegrationSuite::new($driver);
-                                suite.run_test(concat!(
-                                    stringify!($module), "::",
-                                    stringify!($test), "::",
-                                    stringify!($variant)
-                                ));
+                                let mut test = $crate::Test::new(
+                                    ::std::sync::Arc::new($driver)
+                                );
+                                test.run(async move |t| {
+                                    $crate::tests::$module::$test::$variant(t).await;
+                                });
                             }
                         )*
                     }

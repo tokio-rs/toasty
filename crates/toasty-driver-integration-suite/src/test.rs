@@ -8,7 +8,7 @@ use crate::{ExecLog, Isolate, LoggingDriver, Setup};
 /// Wraps the Tokio runtime and ensures cleanup happens.
 ///
 /// This also passes necessary
-pub(crate) struct Test {
+pub struct Test {
     /// Handle to the DB suite setup
     setup: Arc<dyn Setup>,
 
@@ -25,7 +25,7 @@ pub(crate) struct Test {
 }
 
 impl Test {
-    pub(crate) fn new(setup: Arc<dyn Setup>) -> Self {
+    pub fn new(setup: Arc<dyn Setup>) -> Self {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -62,12 +62,12 @@ impl Test {
     }
 
     /// Setup a database with models, always with logging enabled
-    pub(crate) async fn setup_db(&mut self, builder: toasty::db::Builder) -> Db {
+    pub async fn setup_db(&mut self, builder: toasty::db::Builder) -> Db {
         self.try_setup_db(builder).await.unwrap()
     }
 
     /// Run an async test function using the internal runtime
-    pub(crate) fn run(&mut self, f: impl AsyncFn(&mut Test)) {
+    pub fn run(&mut self, f: impl AsyncFn(&mut Test)) {
         // Temporarily take the runtime to avoid borrow checker issues
         let runtime = self.runtime.take().expect("runtime already consumed");
         runtime.block_on(f(self));
