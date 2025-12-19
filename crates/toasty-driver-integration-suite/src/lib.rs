@@ -26,6 +26,10 @@ use test::Test;
 /// Test implementations
 pub(crate) mod tests;
 
+// Generate the test registry macro
+// Pass the relative path from CARGO_MANIFEST_DIR
+toasty_driver_integration_suite_macros::generate_test_registry!("src/tests");
+
 mod prelude {
     pub(crate) use crate::Test;
 

@@ -2,25 +2,36 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, visit_mut::VisitMut, ItemFn, Type, TypePath};
 
+use crate::parse::DriverTest;
+
 pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
 
-    let mod_name = &input.sig.ident;
-    let vis = &input.vis;
+    // Parse the driver test
+    let driver_test = DriverTest::from_item_fn(input);
 
-    // Generate id_u64 variant
-    let id_u64_fn = generate_variant(&input, "id_u64", syn::parse_quote!(u64));
+    let mod_name = &driver_test.name;
+    let vis = &driver_test.input.vis;
 
-    // Generate registration for id_u64 variant
-    let id_u64_registration = generate_registration(&mod_name, "id_u64");
+    // Generate variants
+    let variant_fns: Vec<_> = driver_test
+        .kinds
+        .iter()
+        .map(|kind| {
+            let variant_fn = generate_variant(&driver_test.input, kind.name(), kind.target_type());
+            let registration = generate_registration(mod_name, kind.name());
+            quote! {
+                #variant_fn
+                #registration
+            }
+        })
+        .collect();
 
     quote! {
         #vis mod #mod_name {
             use super::*;
 
-            #id_u64_fn
-
-            #id_u64_registration
+            #(#variant_fns)*
         }
     }
     .into()

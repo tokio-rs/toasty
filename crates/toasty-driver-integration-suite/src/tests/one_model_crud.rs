@@ -175,6 +175,9 @@ pub(crate) async fn required_field_create_without_setting(test: &mut Test) {
         #[key]
         #[auto]
         id: ID,
+
+        #[allow(dead_code)]
+        name: String,
     }
 
     let db = test.setup_db(models!(User)).await;
