@@ -1,5 +1,5 @@
 mod auto;
-pub(crate) use auto::{Auto, UuidVersion};
+pub(crate) use auto::{AutoStrategy, UuidVersion};
 
 mod belongs_to;
 pub(crate) use belongs_to::BelongsTo;

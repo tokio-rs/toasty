@@ -1,7 +1,7 @@
 mod primitive;
 pub use primitive::FieldPrimitive;
 
-use super::{Auto, BelongsTo, Constraint, HasMany, HasOne, Model, ModelId, Schema};
+use super::{AutoStrategy, BelongsTo, Constraint, HasMany, HasOne, Model, ModelId, Schema};
 use crate::{driver, stmt, Result};
 use std::fmt;
 
@@ -23,7 +23,7 @@ pub struct Field {
     pub primary_key: bool,
 
     /// Specified if and how Toasty should automatically populate this field for new values
-    pub auto: Option<Auto>,
+    pub auto: Option<AutoStrategy>,
 
     /// Any additional field constraints
     pub constraints: Vec<Constraint>,
@@ -82,7 +82,7 @@ impl Field {
     }
 
     /// Gets the [`Auto`].
-    pub fn auto(&self) -> Option<&Auto> {
+    pub fn auto(&self) -> Option<&AutoStrategy> {
         self.auto.as_ref()
     }
 

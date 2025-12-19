@@ -26,6 +26,7 @@ impl Verify<'_> {
         for model in self.schema.app.models() {
             for field in &model.fields {
                 self.verify_relations_are_indexed(field);
+                self.verify_auto_field_type(field);
             }
         }
 
@@ -177,6 +178,48 @@ impl Verify<'_> {
                         column.name, table.name
                     );
                 }
+            }
+        }
+    }
+
+    fn verify_auto_field_type(&self, field: &super::app::Field) {
+        use super::app::AutoStrategy;
+
+        let Some(auto) = &field.auto else {
+            return;
+        };
+
+        // Only verify primitive fields
+        let Some(primitive) = field.ty.as_primitive() else {
+            return;
+        };
+
+        let field_ty = &primitive.ty;
+
+        match auto {
+            AutoStrategy::Increment => {
+                assert!(
+                    field_ty.is_numeric(),
+                    "field `{}` has Auto::Increment but type is not numeric: {:?}",
+                    field.name.app_name,
+                    field_ty
+                );
+            }
+            AutoStrategy::Uuid(_) => {
+                assert!(
+                    field_ty.is_uuid(),
+                    "field `{}` has Auto::Uuid but type is not Uuid: {:?}",
+                    field.name.app_name,
+                    field_ty
+                );
+            }
+            AutoStrategy::Id => {
+                assert!(
+                    field_ty.is_id(),
+                    "field `{}` has Auto::Id but type is not Id: {:?}",
+                    field.name.app_name,
+                    field_ty
+                );
             }
         }
     }

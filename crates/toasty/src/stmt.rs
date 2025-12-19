@@ -29,7 +29,7 @@ mod path;
 pub use path::Path;
 
 mod primitive;
-pub use primitive::Primitive;
+pub use primitive::{Auto, Primitive};
 
 #[cfg(feature = "jiff")]
 mod primitive_jiff;
