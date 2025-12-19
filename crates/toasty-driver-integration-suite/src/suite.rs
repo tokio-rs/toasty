@@ -20,4 +20,9 @@ impl IntegrationSuite {
             crate::tests::one_model_crud::crud_no_fields::id_u64(t).await;
         });
     }
+
+    /// Run a single test
+    pub fn run_test(&self, name: &str) {
+        todo!()
+    }
 }
