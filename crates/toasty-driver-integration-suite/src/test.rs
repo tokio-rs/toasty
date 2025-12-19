@@ -1,50 +1,62 @@
 use std::sync::{Arc, Mutex};
 
-use toasty::{driver::Driver, Db};
+use toasty::Db;
 use tokio::runtime::Runtime;
 
-use crate::{exec_log::ExecLog, logging_driver::LoggingDriver};
+use crate::{ExecLog, Isolate, LoggingDriver, Setup};
 
 /// Wraps the Tokio runtime and ensures cleanup happens.
 ///
 /// This also passes necessary
 pub(crate) struct Test {
-    driver: Arc<dyn Driver>,
+    /// Handle to the DB suite setup
+    setup: Arc<dyn Setup>,
+
+    /// Handles isolating tables between tests
+    isolate: Isolate,
+
+    /// Tokio runtime used by the test
     runtime: Option<Runtime>,
+
     exec_log: ExecLog,
+
+    /// List of all tables created during the test. These will need to be removed later.
+    tables: Vec<String>,
 }
 
 impl Test {
-    pub(crate) fn new(driver: Arc<dyn Driver>) -> Self {
+    pub(crate) fn new(setup: Arc<dyn Setup>) -> Self {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("failed to create Tokio runtime");
 
         Test {
-            driver,
+            setup,
+            isolate: Isolate::new(),
             runtime: Some(runtime),
             exec_log: ExecLog::new(Arc::new(Mutex::new(Vec::new()))),
+            tables: vec![],
         }
     }
 
     /// Try to setup a database with models, returns Result for error handling
     pub async fn try_setup_db(&mut self, mut builder: toasty::db::Builder) -> toasty::Result<Db> {
-        /*
-        let setup = self.setup.as_ref().expect("Setup already consumed");
-
-        // Let the setup configure the builder
-        setup.configure_builder(&mut builder);
-        */
+        // Set the table prefix
+        builder.table_name_prefix(&self.isolate.table_prefix());
 
         // Always wrap with logging
-        let logging_driver = LoggingDriver::new(self.driver.clone());
+        let logging_driver = LoggingDriver::new(self.setup.driver());
         let ops_log = logging_driver.ops_log_handle();
         self.exec_log = ExecLog::new(ops_log);
 
         // Build the database with the logging driver
         let db = builder.build(logging_driver).await?;
         db.reset_db().await?;
+
+        for table in &db.schema().db.tables {
+            self.tables.push(table.name.clone());
+        }
 
         Ok(db)
     }
@@ -55,16 +67,16 @@ impl Test {
     }
 
     /// Run an async test function using the internal runtime
-    pub(crate) fn run<F>(&mut self, f: F)
-    where
-        F: for<'a> FnOnce(
-            &'a mut Self,
-        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>>,
-    {
+    pub(crate) fn run(&mut self, f: impl AsyncFn(&mut Test)) {
         // Temporarily take the runtime to avoid borrow checker issues
         let runtime = self.runtime.take().expect("runtime already consumed");
-        let fut = f(self);
-        runtime.block_on(fut);
+        runtime.block_on(f(self));
+
+        // now, wut
+        for table in &self.tables {
+            runtime.block_on(self.setup.delete_table(table));
+        }
+
         self.runtime = Some(runtime);
     }
 }

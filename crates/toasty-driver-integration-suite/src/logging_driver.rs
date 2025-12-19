@@ -9,7 +9,7 @@ use toasty_core::{
 
 #[derive(Debug)]
 pub struct LoggingDriver {
-    inner: Arc<dyn Driver>,
+    inner: Box<dyn Driver>,
 
     /// Log of all operations executed through this driver
     /// Using Arc<Mutex> for thread-safe access from tests
@@ -17,7 +17,7 @@ pub struct LoggingDriver {
 }
 
 impl LoggingDriver {
-    pub fn new(driver: Arc<dyn Driver>) -> Self {
+    pub fn new(driver: Box<dyn Driver>) -> Self {
         Self {
             inner: driver,
             ops_log: Arc::new(Mutex::new(Vec::new())),

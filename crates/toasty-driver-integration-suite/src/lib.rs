@@ -7,8 +7,14 @@ use cx::Context;
 mod exec_log;
 use exec_log::ExecLog;
 
+mod isolate;
+use isolate::Isolate;
+
 mod logging_driver;
 use logging_driver::LoggingDriver;
+
+mod setup;
+pub use setup::Setup;
 
 mod suite;
 pub use suite::IntegrationSuite;
