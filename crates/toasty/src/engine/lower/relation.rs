@@ -532,7 +532,11 @@ impl LowerStatement<'_, '_> {
                         rows.items.into_iter().next().unwrap()
                     }
                     stmt::Returning::Value(row) => row,
-                    returning => todo!("returning={returning:#?}"),
+                    stmt::Returning::Expr(expr) => {
+                        // The result dependency is needed to get the foreign key.
+                        todo!();
+                    }
+                    returning => todo!("returning={returning:#?}; dep={stmt_info:#?}"),
                 };
 
                 self.set_relation_field(field, expr, source);
