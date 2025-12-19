@@ -21,8 +21,14 @@ impl IntegrationSuite {
         });
     }
 
-    /// Run a single test
+    /// Run a single test by its path (e.g., "one_model_crud::crud_no_fields::id_u64")
     pub fn run_test(&self, name: &str) {
-        todo!()
+        let test_fn =
+            crate::registry::find_test(name).unwrap_or_else(|| panic!("Test '{}' not found", name));
+
+        let mut test = Test::new(self.setup.clone());
+        test.run(async |t| {
+            (test_fn.func)(t).await;
+        });
     }
 }

@@ -12,8 +12,19 @@ impl toasty_driver_integration_suite::Setup for SqliteSetup {
 }
 
 #[test]
-fn hello_world() {
+fn run_single_test() {
     let setup = SqliteSetup;
     let suite = toasty_driver_integration_suite::IntegrationSuite::new(setup);
-    suite.run();
+
+    // Run a specific test by its path
+    suite.run_test("one_model_crud::crud_no_fields::id_u64");
+}
+
+#[test]
+fn run_another_single_test() {
+    let setup = SqliteSetup;
+    let suite = toasty_driver_integration_suite::IntegrationSuite::new(setup);
+
+    // Run a different test
+    suite.run_test("one_model_crud::crud_one_string::id_u64");
 }

@@ -2,7 +2,6 @@
 mod macros;
 
 mod cx;
-use cx::Context;
 
 mod exec_log;
 use exec_log::ExecLog;
@@ -12,6 +11,8 @@ use isolate::Isolate;
 
 mod logging_driver;
 use logging_driver::LoggingDriver;
+
+pub mod registry;
 
 mod setup;
 pub use setup::Setup;
@@ -26,7 +27,7 @@ use test::Test;
 pub(crate) mod tests;
 
 mod prelude {
-    pub(crate) use crate::{Context, Test};
+    pub(crate) use crate::Test;
 
     pub(crate) use std_util::{
         assert_err, assert_none, assert_ok, assert_unique, num::NumUtil, slice::SliceUtil,
