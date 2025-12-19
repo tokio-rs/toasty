@@ -70,7 +70,8 @@ impl Test {
     pub fn run(&mut self, f: impl AsyncFn(&mut Test)) {
         // Temporarily take the runtime to avoid borrow checker issues
         let runtime = self.runtime.take().expect("runtime already consumed");
-        runtime.block_on(f(self));
+        let f: std::pin::Pin<Box<dyn std::future::Future<Output = ()>>> = Box::pin(f(self));
+        runtime.block_on(f);
 
         // now, wut
         for table in &self.tables {
