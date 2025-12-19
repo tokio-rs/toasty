@@ -3,14 +3,27 @@ use std::{rc::Rc, sync::Arc};
 use crate::{stmt::Id, Model, Result};
 
 use std::borrow::Cow;
-use toasty_core::stmt;
+use toasty_core::{
+    schema::app::{AutoStrategy, UuidVersion},
+    stmt,
+};
 
 pub trait Primitive: Sized {
+    /// Whether or not the type is nullable
     const NULLABLE: bool = false;
 
     fn ty() -> stmt::Type;
 
     fn load(value: stmt::Value) -> Result<Self>;
+}
+
+#[diagnostic::on_unimplemented(
+    message = "Toasty cannot automatically set values for type `{Self}`",
+    label = "Toasty cannot automatically set values for this field",
+    note = "Is the field annotated with #[auto]?"
+)]
+pub trait Auto: Primitive {
+    const STRATEGY: AutoStrategy;
 }
 
 /// Macro to generate Primitive implementations for numeric types that use `try_into()`
@@ -25,6 +38,10 @@ macro_rules! impl_primitive_numeric {
                 fn load(value: stmt::Value) -> Result<Self> {
                     value.try_into()
                 }
+            }
+
+            impl Auto for $ty {
+                const STRATEGY: AutoStrategy = AutoStrategy::Increment;
             }
         )*
     };
@@ -53,6 +70,10 @@ impl Primitive for isize {
     }
 }
 
+impl Auto for isize {
+    const STRATEGY: AutoStrategy = AutoStrategy::Increment;
+}
+
 impl Primitive for usize {
     fn ty() -> stmt::Type {
         stmt::Type::U64
@@ -61,6 +82,10 @@ impl Primitive for usize {
     fn load(value: stmt::Value) -> Result<Self> {
         value.try_into()
     }
+}
+
+impl Auto for usize {
+    const STRATEGY: AutoStrategy = AutoStrategy::Increment;
 }
 
 impl Primitive for String {
@@ -87,6 +112,10 @@ impl<T: Model> Primitive for Id<T> {
             _ => panic!("cannot convert value to Id; value={value:#?}"),
         }
     }
+}
+
+impl<T: Model> Auto for Id<T> {
+    const STRATEGY: AutoStrategy = AutoStrategy::Id;
 }
 
 impl<T: Primitive> Primitive for Option<T> {
@@ -129,6 +158,10 @@ impl Primitive for uuid::Uuid {
             _ => anyhow::bail!("cannot convert value to uuid::Uuid {value:#?}"),
         }
     }
+}
+
+impl Auto for uuid::Uuid {
+    const STRATEGY: AutoStrategy = AutoStrategy::Uuid(UuidVersion::V7);
 }
 
 impl Primitive for bool {

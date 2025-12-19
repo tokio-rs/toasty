@@ -1,6 +1,6 @@
 /// How toasty should populate the field
 #[derive(Debug, Clone)]
-pub enum Auto {
+pub enum AutoStrategy {
     Id,
     Uuid(UuidVersion),
     Increment,
@@ -12,7 +12,7 @@ pub enum UuidVersion {
     V7,
 }
 
-impl Auto {
+impl AutoStrategy {
     /// Returns `true` if the auto is [`Increment`].
     ///
     /// [`Increment`]: Auto::Increment

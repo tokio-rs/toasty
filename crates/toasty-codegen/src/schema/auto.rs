@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub enum Auto {
+pub enum AutoStrategy {
     Unspecified,
     Uuid(UuidVersion),
     Increment,
@@ -11,7 +11,7 @@ pub enum UuidVersion {
     V7,
 }
 
-impl Auto {
+impl AutoStrategy {
     pub(super) fn from_ast(attr: &syn::Attribute) -> syn::Result<Self> {
         match attr.meta {
             syn::Meta::Path(_) => Ok(Self::Unspecified),
@@ -28,7 +28,7 @@ mod kw {
     syn::custom_keyword!(increment);
 }
 
-impl syn::parse::Parse for Auto {
+impl syn::parse::Parse for AutoStrategy {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(kw::uuid) {
