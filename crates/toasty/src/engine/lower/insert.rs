@@ -112,11 +112,11 @@ impl LowerStatement<'_, '_> {
                         _ => panic!("#[auto] not allowed on non-primitive fields"),
                     };
                     match auto {
-                        app::Auto::Id => {
+                        app::AutoStrategy::Id => {
                             let id = uuid::Uuid::new_v4().to_string();
                             field_expr.insert(stmt::Id::from_string(model.id, id).into());
                         }
-                        app::Auto::Uuid(version) => {
+                        app::AutoStrategy::Uuid(version) => {
                             let id = match version {
                                 app::UuidVersion::V4 => uuid::Uuid::new_v4(),
                                 app::UuidVersion::V7 => uuid::Uuid::now_v7(),
@@ -127,7 +127,7 @@ impl LowerStatement<'_, '_> {
                                 _ => panic!("auto-generated UUID cannot be inserted into column of type {ty:?}"),
                             };
                         }
-                        app::Auto::Increment => {
+                        app::AutoStrategy::Increment => {
                             // Leave value as `Expr::Default` and let the database handle it.
                         }
                     }

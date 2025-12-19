@@ -1,4 +1,4 @@
-use crate::schema::Auto;
+use crate::schema::AutoStrategy;
 
 use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
 
@@ -31,7 +31,7 @@ pub(crate) struct FieldAttr {
     pub(crate) unique: bool,
 
     /// Specifies if and how Toasty should automatically set values of newly created rows
-    pub(crate) auto: Option<Auto>,
+    pub(crate) auto: Option<AutoStrategy>,
 
     /// True if the field is indexed
     pub(crate) index: bool,
@@ -84,7 +84,7 @@ impl Field {
                 if attrs.auto.is_some() {
                     errs.push(syn::Error::new_spanned(attr, "duplicate #[auto] attribute"));
                 } else {
-                    attrs.auto = Some(Auto::from_ast(attr)?);
+                    attrs.auto = Some(AutoStrategy::from_ast(attr)?);
                 }
             } else if attr.path().is_ident("unique") {
                 if attrs.unique {
