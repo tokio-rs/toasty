@@ -491,6 +491,8 @@ impl LowerStatement<'_, '_> {
 
         match stmt {
             stmt::Statement::Insert(mut insert) => {
+                debug_assert!(insert.source.single);
+
                 if let stmt::ExprSet::Values(values) = &insert.source.body {
                     assert_eq!(1, values.rows.len());
                 }
@@ -516,9 +518,8 @@ impl LowerStatement<'_, '_> {
                     .into(),
                 );
 
-                let stmt_id = self.new_dependency(insert);
-
-                let stmt_info = &self.state.hir[stmt_id];
+                let target_id = self.new_dependency(insert);
+                let stmt_info = &self.state.hir[target_id];
 
                 let returning = stmt_info.stmt.as_ref().unwrap().returning().expect("bug");
 
@@ -533,8 +534,14 @@ impl LowerStatement<'_, '_> {
                     }
                     stmt::Returning::Value(row) => row,
                     stmt::Returning::Expr(expr) => {
+                        assert_eq!(
+                            belongs_to.foreign_key.fields.len(),
+                            1,
+                            "TODO: handle composite keys"
+                        );
                         // The result dependency is needed to get the foreign key.
-                        todo!();
+                        let arg = self.new_dependency_arg(self.scope_stmt_id(), target_id);
+                        stmt::Expr::project(arg, [0])
                     }
                     returning => todo!("returning={returning:#?}; dep={stmt_info:#?}"),
                 };

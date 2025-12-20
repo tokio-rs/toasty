@@ -290,12 +290,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         panic!()
                     };
 
-                    let position =
+                    let arg =
                         self.new_sub_statement(source_id, target_id, Box::new((*e.query).into()));
 
                     *expr = stmt::ExprInList {
                         expr: e.expr,
-                        list: Box::new(stmt::Expr::arg(position)),
+                        list: Box::new(arg),
                     }
                     .into();
                 }
@@ -349,13 +349,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                 self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
 
-                let position = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
+                *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
 
                 if self.state.hir[target_id].independent {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
-
-                *expr = stmt::Expr::arg(position);
             }
             _ => {
                 // Recurse down the statement tree
@@ -959,18 +957,23 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         source_id: hir::StmtId,
         target_id: hir::StmtId,
         stmt: Box<stmt::Statement>,
-    ) -> usize {
+    ) -> stmt::Expr {
+        self.state.hir[target_id].stmt = Some(stmt);
+        self.new_dependency_arg(source_id, target_id)
+    }
+
+    /// Create a new argument on a dependent statement
+    fn new_dependency_arg(&mut self, source_id: hir::StmtId, target_id: hir::StmtId) -> stmt::Expr {
         let source = &mut self.state.hir[source_id];
         let arg = source.args.len();
         source.args.push(hir::Arg::Sub {
             stmt_id: target_id,
             returning: self.cx.is_returning(),
             input: Cell::new(None),
+            batch_load_index: Cell::new(None),
         });
 
-        self.state.hir[target_id].stmt = Some(stmt);
-
-        arg
+        stmt::Expr::arg(arg)
     }
 
     fn schema(&self) -> &'b Schema {
