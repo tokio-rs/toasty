@@ -94,7 +94,7 @@ impl Connection {
     pub fn new(client: Client) -> Self {
         Self {
             client,
-            statement_cache: StatementCache::new(),
+            statement_cache: StatementCache::new(100),
         }
     }
 
@@ -184,7 +184,7 @@ impl From<Client> for Connection {
     fn from(client: Client) -> Self {
         Self {
             client,
-            statement_cache: StatementCache::new(),
+            statement_cache: StatementCache::new(100),
         }
     }
 }

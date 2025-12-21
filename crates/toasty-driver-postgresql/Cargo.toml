@@ -16,6 +16,7 @@ anyhow.workspace = true
 rust_decimal = { workspace = true, optional = true, features = ["db-postgres"] }
 bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
+lru.workspace = true
 postgres.workspace = true
 postgres-types.workspace = true
 tokio.workspace = true

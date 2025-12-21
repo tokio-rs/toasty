@@ -1,29 +1,32 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::borrow::Cow;
 
+use lru::LruCache;
 use postgres::{Error, Statement};
 use postgres_types::Type;
 use tokio_postgres::Client;
 
 #[derive(Debug, Clone)]
 pub struct StatementCache {
-    map: HashMap<Key<'static>, Statement>,
+    inner: LruCache<Key<'static>, Statement>,
 }
 
 impl StatementCache {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(capacity: usize) -> Self {
         Self {
-            map: HashMap::new(),
+            inner: LruCache::new(capacity.try_into().unwrap()),
         }
     }
 
-    pub fn get(&self, query: &str, types: &[Type]) -> Option<Statement> {
-        self.map.get(&Key::new(query, types)).map(ToOwned::to_owned)
+    pub fn get(&mut self, query: &str, types: &[Type]) -> Option<Statement> {
+        self.inner
+            .get(&Key::new(query, types).into_owned())
+            .map(ToOwned::to_owned)
     }
 
     pub fn insert(&mut self, query: &str, types: &[Type], statement: Statement) {
-        self.map
-            .insert(Key::new(query, types).into_owned(), statement);
+        self.inner
+            .put(Key::new(query, types).into_owned(), statement);
     }
 
     pub async fn prepare_typed(
