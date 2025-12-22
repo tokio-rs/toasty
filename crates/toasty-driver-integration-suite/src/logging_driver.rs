@@ -1,3 +1,5 @@
+#![allow(dead_code)] // TODO: remove when fully migrated to integration suite
+
 use std::sync::{Arc, Mutex};
 use toasty::driver::Driver;
 use toasty_core::{

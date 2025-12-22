@@ -1156,39 +1156,3 @@ impl LoweringContext<'_> {
         matches!(self, LoweringContext::Returning)
     }
 }
-
-fn uncast_expr_id(expr: &mut stmt::Expr) {
-    match expr {
-        stmt::Expr::Value(value) => {
-            uncast_value_id(value);
-        }
-        stmt::Expr::Cast(expr_cast) if expr_cast.ty.is_id() => {
-            *expr = expr_cast.expr.take();
-        }
-        stmt::Expr::Project(_) => {
-            let base = expr.take();
-            *expr = stmt::Expr::cast(base, stmt::Type::String);
-        }
-        stmt::Expr::List(expr_list) => {
-            for expr in &mut expr_list.items {
-                uncast_expr_id(expr);
-            }
-        }
-        _ => todo!("{expr:#?}"),
-    }
-}
-
-fn uncast_value_id(value: &mut stmt::Value) {
-    match value {
-        stmt::Value::Id(_) => {
-            let uncast = value.take().into_id().into_primitive();
-            *value = uncast;
-        }
-        stmt::Value::List(items) => {
-            for item in items {
-                uncast_value_id(item);
-            }
-        }
-        _ => todo!("{value:#?}"),
-    }
-}

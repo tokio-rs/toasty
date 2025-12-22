@@ -22,6 +22,9 @@ pub struct Test {
 
     /// List of all tables created during the test. These will need to be removed later.
     tables: Vec<String>,
+
+    /// Cached driver capability
+    capability: &'static toasty::driver::Capability,
 }
 
 impl Test {
@@ -31,12 +34,20 @@ impl Test {
             .build()
             .expect("failed to create Tokio runtime");
 
+        // Get capability early
+        let driver = setup.driver();
+        let capability = runtime.block_on(async {
+            let conn = driver.connect().await.expect("failed to connect");
+            conn.capability()
+        });
+
         Test {
             setup,
             isolate: Isolate::new(),
             runtime: Some(runtime),
             exec_log: ExecLog::new(Arc::new(Mutex::new(Vec::new()))),
             tables: vec![],
+            capability,
         }
     }
 
@@ -64,6 +75,11 @@ impl Test {
     /// Setup a database with models, always with logging enabled
     pub async fn setup_db(&mut self, builder: toasty::db::Builder) -> Db {
         self.try_setup_db(builder).await.unwrap()
+    }
+
+    /// Get the driver capability
+    pub fn capability(&self) -> &'static toasty::driver::Capability {
+        self.capability
     }
 
     /// Run an async test function using the internal runtime

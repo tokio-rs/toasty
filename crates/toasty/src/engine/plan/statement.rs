@@ -215,7 +215,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             *expr = stmt::Expr::arg(index);
                         }
                         hir::Arg::Sub {
-                            stmt_id: target_id,
                             input,
                             returning: false,
                             ..
@@ -510,7 +509,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                                 [batch_load_index.get().unwrap(), column],
                             )
                         }
-                        arg @ hir::Arg::Sub {
+                        hir::Arg::Sub {
                             input,
                             batch_load_index,
                             ..

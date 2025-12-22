@@ -56,9 +56,4 @@ impl DriverTest {
 
         DriverTest { input, name, kinds }
     }
-
-    /// Get list of variant names
-    pub fn variant_names(&self) -> Vec<&str> {
-        self.kinds.iter().map(|k| k.name()).collect()
-    }
 }

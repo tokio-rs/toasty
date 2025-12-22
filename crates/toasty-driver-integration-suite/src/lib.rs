@@ -1,8 +1,6 @@
 #[macro_use]
 mod macros;
 
-mod cx;
-
 mod exec_log;
 use exec_log::ExecLog;
 

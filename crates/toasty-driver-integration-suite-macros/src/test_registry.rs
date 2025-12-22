@@ -3,7 +3,7 @@ use quote::quote;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use syn::{parse_macro_input, visit::Visit, File, ItemFn, LitStr};
+use syn::{parse_macro_input, visit::Visit, ItemFn, LitStr};
 
 use crate::parse::DriverTest;
 

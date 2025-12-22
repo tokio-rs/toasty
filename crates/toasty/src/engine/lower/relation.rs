@@ -533,7 +533,7 @@ impl LowerStatement<'_, '_> {
                         rows.items.into_iter().next().unwrap()
                     }
                     stmt::Returning::Value(row) => row,
-                    stmt::Returning::Expr(expr) => {
+                    stmt::Returning::Expr(_) => {
                         assert_eq!(
                             belongs_to.foreign_key.fields.len(),
                             1,
