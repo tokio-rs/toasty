@@ -295,7 +295,7 @@ impl StorageTypes {
         // DynamoDB does not support varchar types
         varchar: None,
 
-        default_uuid_type: db::Type::Blob,
+        default_uuid_type: db::Type::Text,
 
         // DynamoDB does not have a native decimal type. Store as TEXT.
         default_decimal_type: db::Type::Text,
