@@ -18,6 +18,8 @@ pub struct DriverTest {
 pub enum Kind {
     /// u64 ID type variant
     IdU64,
+    /// UUID ID type variant
+    IdUuid,
 }
 
 impl Kind {
@@ -25,6 +27,7 @@ impl Kind {
     pub fn name(&self) -> &'static str {
         match self {
             Kind::IdU64 => "id_u64",
+            Kind::IdUuid => "id_uuid",
         }
     }
 
@@ -32,6 +35,7 @@ impl Kind {
     pub fn target_type(&self) -> syn::Type {
         match self {
             Kind::IdU64 => syn::parse_quote!(u64),
+            Kind::IdUuid => syn::parse_quote!(uuid::Uuid),
         }
     }
 
@@ -46,9 +50,9 @@ impl DriverTest {
     pub fn from_item_fn(input: ItemFn) -> Self {
         let name = input.sig.ident.clone();
 
-        // Currently hardcoded to generate only id_u64 variant
+        // Generate both id_u64 and id_uuid variants
         // TODO: Make this configurable via attribute parameters
-        let kinds = vec![Kind::IdU64];
+        let kinds = vec![Kind::IdU64, Kind::IdUuid];
 
         DriverTest { input, name, kinds }
     }

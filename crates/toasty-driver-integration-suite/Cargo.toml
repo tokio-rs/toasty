@@ -13,3 +13,4 @@ toasty-macros.workspace = true
 toasty-driver-integration-suite-macros.workspace = true
 tokio.workspace = true
 std-util.workspace = true
+uuid.workspace = true
