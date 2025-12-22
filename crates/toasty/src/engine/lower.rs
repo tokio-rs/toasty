@@ -614,12 +614,12 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     )),
                 ))
             }
-            (stmt::Expr::Cast(expr_cast), other) if expr_cast.ty.is_id() => {
-                uncast_expr_id(lhs);
-                uncast_expr_id(other);
+            (stmt::Expr::Cast(expr_cast), other) => {
+                let target_ty = self.capability().native_type_for(&expr_cast.ty);
+                self.cast_expr(lhs, &target_ty);
+                self.cast_expr(other, &target_ty);
                 None
             }
-            (stmt::Expr::Cast(_), stmt::Expr::Cast(_)) => todo!(),
             _ => None,
         }
     }
@@ -638,24 +638,24 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 assert!(maybe_res.is_none(), "TODO");
                 None
             }
-            (stmt::Expr::Cast(expr_cast), list) if expr_cast.ty.is_id() => {
-                uncast_expr_id(expr);
+            (stmt::Expr::Cast(expr_cast), list) => {
+                let target_ty = self.capability().native_type_for(&expr_cast.ty);
+                self.cast_expr(expr, &target_ty);
 
                 match list {
                     stmt::Expr::List(expr_list) => {
-                        for expr in &mut expr_list.items {
-                            uncast_expr_id(expr);
+                        for item in &mut expr_list.items {
+                            self.cast_expr(item, &target_ty);
                         }
                     }
                     stmt::Expr::Value(stmt::Value::List(items)) => {
                         for item in items {
-                            uncast_value_id(item);
+                            *item = target_ty.cast(item.take()).expect("failed to cast value");
                         }
                     }
                     stmt::Expr::Arg(_) => {
                         let arg = list.take();
-
-                        let cast = stmt::Expr::cast(stmt::Expr::arg(0), stmt::Type::String);
+                        let cast = stmt::Expr::cast(stmt::Expr::arg(0), target_ty);
                         *list = stmt::Expr::map(arg, cast);
                     }
                     _ => todo!("expr={expr:#?}; list={list:#?}"),
@@ -1116,6 +1116,33 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             scope_id: self.scope_id,
             cx: LoweringContext::Returning,
             collect_dependencies: self.collect_dependencies,
+        }
+    }
+
+    fn cast_expr(&mut self, expr: &mut stmt::Expr, target_ty: &stmt::Type) {
+        assert!(!target_ty.is_list(), "TODO");
+        match expr {
+            stmt::Expr::Cast(expr_cast) => {
+                // TODO: verify that this is actually a correct cast.
+                // Remove the cast - the inner expression is already the right type
+                *expr = expr_cast.expr.take();
+            }
+            stmt::Expr::Value(value) => {
+                // Cast the value to target_ty using existing cast method
+                let casted = target_ty.cast(value.take()).expect("failed to cast value");
+                *value = casted;
+            }
+            stmt::Expr::Project(_) => {
+                todo!()
+                // let base = expr.take();
+                // *expr = stmt::Expr::cast(base, target_ty.clone());
+            }
+            stmt::Expr::Arg(_) => {
+                // Create a cast expression for the arg
+                let base = expr.take();
+                *expr = stmt::Expr::cast(base, target_ty.clone());
+            }
+            _ => todo!("cast_expr: cannot cast {expr:#?} to {target_ty:?}"),
         }
     }
 }
