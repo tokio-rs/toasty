@@ -70,11 +70,11 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
 }
 
 fn extract_tests_from_file(path: &Path) -> Vec<DriverTest> {
-    let content =
-        fs::read_to_string(path).expect(&format!("Failed to read file: {}", path.display()));
+    let content = fs::read_to_string(path)
+        .unwrap_or_else(|_| panic!("Failed to read file: {}", path.display()));
 
-    let file =
-        syn::parse_file(&content).expect(&format!("Failed to parse file: {}", path.display()));
+    let file = syn::parse_file(&content)
+        .unwrap_or_else(|_| panic!("Failed to parse file: {}", path.display()));
 
     let mut visitor = TestVisitor { tests: Vec::new() };
 

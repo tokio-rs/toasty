@@ -16,7 +16,7 @@ pub async fn crud_no_fields(t: &mut Test) {
     let created = Foo::create().exec(&db).await.unwrap();
 
     // Find Foo
-    let read = Foo::filter_by_id(&created.id)
+    let read = Foo::filter_by_id(created.id)
         .all(&db)
         .await
         .unwrap()
@@ -65,7 +65,7 @@ pub async fn crud_no_fields(t: &mut Test) {
             val.delete(&db).await.unwrap();
         } else {
             // Delete by ID
-            Foo::filter_by_id(&id).delete(&db).await.unwrap();
+            Foo::filter_by_id(id).delete(&db).await.unwrap();
         }
 
         // Assert deleted
@@ -97,7 +97,7 @@ pub async fn crud_one_string(test: &mut Test) {
     assert_eq!(created.val, "hello world");
 
     // Find Foo
-    let read = Foo::filter_by_id(&created.id)
+    let read = Foo::filter_by_id(created.id)
         .all(&db)
         .await
         .unwrap()
@@ -146,7 +146,7 @@ pub async fn crud_one_string(test: &mut Test) {
     assert_eq!(reload.val, created.val);
 
     // Update by ID
-    Foo::filter_by_id(&created.id)
+    Foo::filter_by_id(created.id)
         .update()
         .val("updated again!")
         .exec(&db)
@@ -162,7 +162,7 @@ pub async fn crud_one_string(test: &mut Test) {
     assert_err!(Foo::get_by_id(&db, &created.id).await);
 
     // Delete by ID
-    Foo::filter_by_id(&ids[0]).delete(&db).await.unwrap();
+    Foo::filter_by_id(ids[0]).delete(&db).await.unwrap();
 
     // It is gone
     assert_err!(Foo::get_by_id(&db, &ids[0]).await);
@@ -244,7 +244,7 @@ pub async fn unique_index_required_field_update(test: &mut Test) {
         .unwrap();
 
     // Reload the user by ID
-    let user_reloaded = User::filter_by_id(&user2.id).get(&db).await.unwrap();
+    let user_reloaded = User::filter_by_id(user2.id).get(&db).await.unwrap();
     assert_eq!(user2.id, user_reloaded.id);
     assert_eq!(user_reloaded.email, "user2@example.com");
 
@@ -260,7 +260,7 @@ pub async fn unique_index_required_field_update(test: &mut Test) {
     assert_ne!(user3.id, user2.id);
 
     // Updating the email address by ID
-    User::filter_by_id(&user2.id)
+    User::filter_by_id(user2.id)
         .update()
         .email("user3@example.com")
         .exec(&db)
@@ -400,7 +400,7 @@ pub async fn unique_index_no_update(test: &mut Test) {
         .await
         .unwrap();
 
-    let u = User::filter_by_id(&user.id).get(&db).await.unwrap();
+    let u = User::filter_by_id(user.id).get(&db).await.unwrap();
     assert_eq!(user.name, u.name);
 
     // Update the name by value
@@ -507,7 +507,7 @@ pub async fn update_multiple_fields(test: &mut Test) {
     assert_eq!("jane@example.com", user.email);
 
     // Update by query
-    User::filter_by_id(&user.id)
+    User::filter_by_id(user.id)
         .update()
         .name("John2 Doe")
         .email("john2@example.com")
