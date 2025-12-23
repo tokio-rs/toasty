@@ -1,9 +1,10 @@
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use syn::{parse_macro_input, visit::Visit, ItemFn, LitStr};
+use syn::{parse_macro_input, visit::Visit, Ident, ItemFn, LitStr};
 
 use crate::parse::DriverTest;
 
@@ -107,36 +108,48 @@ impl<'ast> Visit<'ast> for TestVisitor {
 }
 
 fn generate_macro(structure: TestStructure) -> TokenStream {
-    let mut module_tokens = Vec::new();
+    // Generate the module structure with all tests inlined
+    let modules: Vec<TokenStream2> = structure
+        .modules
+        .iter()
+        .map(|(module_name, tests)| {
+            let module_ident = Ident::new(module_name, proc_macro2::Span::call_site());
 
-    for (module_name, tests) in structure.modules {
-        let module_ident = syn::Ident::new(&module_name, proc_macro2::Span::call_site());
+            let test_modules: Vec<TokenStream2> = tests
+                .iter()
+                .map(|test| {
+                    let test_ident = &test.name;
 
-        let mut test_tokens = Vec::new();
-        for driver_test in tests {
-            let test_ident = &driver_test.name;
-            let variant_idents: Vec<_> = driver_test.kinds.iter().map(|k| k.ident()).collect();
+                    quote! {
+                        mod #test_ident {
+                            use super::*;
 
-            test_tokens.push(quote! {
-                #test_ident { #(#variant_idents)* }
-            });
-        }
+                            $crate::generate_driver_test_variants!(
+                                $crate,
+                                #module_ident::#test_ident,
+                                $driver_expr
+                                    $(, $($t)* )?
+                            );
+                        }
+                    }
+                })
+                .collect();
 
-        module_tokens.push(quote! {
-            #module_ident {
-                #(#test_tokens)*
+            quote! {
+                mod #module_ident {
+                    use super::*;
+
+                    #(#test_modules)*
+                }
             }
-        });
-    }
+        })
+        .collect();
 
     let expanded = quote! {
         #[macro_export]
         macro_rules! generate_driver_tests {
-            ($driver:expr) => {
-                $crate::generate_driver_tests_impl! {
-                    $driver,
-                    #(#module_tokens)*
-                }
+            ($driver_expr:expr $(, $($t:tt)* )?) => {
+                #(#modules)*
             };
         }
     };

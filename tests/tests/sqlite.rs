@@ -2,6 +2,12 @@
 
 struct SqliteSetup;
 
+impl SqliteSetup {
+    fn new() -> Self {
+        SqliteSetup
+    }
+}
+
 #[async_trait::async_trait]
 impl toasty_driver_integration_suite::Setup for SqliteSetup {
     fn driver(&self) -> Box<dyn toasty::driver::Driver> {
@@ -14,4 +20,4 @@ impl toasty_driver_integration_suite::Setup for SqliteSetup {
 }
 
 // Generate all driver tests
-toasty_driver_integration_suite::generate_driver_tests!(SqliteSetup);
+toasty_driver_integration_suite::generate_driver_tests!(SqliteSetup::new());

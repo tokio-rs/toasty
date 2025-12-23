@@ -38,11 +38,6 @@ impl Kind {
             Kind::IdUuid => syn::parse_quote!(uuid::Uuid),
         }
     }
-
-    /// Get the variant name as an ident
-    pub fn ident(&self) -> syn::Ident {
-        syn::Ident::new(self.name(), proc_macro2::Span::call_site())
-    }
 }
 
 impl DriverTest {
@@ -55,5 +50,46 @@ impl DriverTest {
         let kinds = vec![Kind::IdU64, Kind::IdUuid];
 
         DriverTest { input, name, kinds }
+    }
+}
+
+/// Helper to parse `requires: { ... }` from attribute
+struct RequiresParser {
+    requires: Vec<syn::Ident>,
+}
+
+impl syn::parse::Parse for RequiresParser {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        use syn::{braced, Token};
+
+        let mut requires = Vec::new();
+
+        // Look for `requires:` keyword
+        while !input.is_empty() {
+            if input.peek(syn::Ident) {
+                let ident: syn::Ident = input.parse()?;
+                if ident == "requires" {
+                    input.parse::<Token![:]>()?;
+                    let content;
+                    braced!(content in input);
+
+                    // Parse comma-separated identifiers
+                    while !content.is_empty() {
+                        let req: syn::Ident = content.parse()?;
+                        requires.push(req);
+
+                        if content.peek(Token![,]) {
+                            content.parse::<Token![,]>()?;
+                        }
+                    }
+                    break;
+                }
+            }
+
+            // Skip to next token
+            input.parse::<proc_macro2::TokenTree>()?;
+        }
+
+        Ok(RequiresParser { requires })
     }
 }

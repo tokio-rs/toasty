@@ -41,29 +41,6 @@ fn generate_variant(input: &ItemFn, variant_name: &str, target_type: Type) -> It
     let mut rewriter = IdRewriter::new(target_type);
     rewriter.visit_item_fn_mut(&mut variant);
 
-    // For id_u64 variant, inject auto_increment capability check at the start
-    if variant_name == "id_u64" {
-        // Get the parameter name from the function signature (should be first parameter)
-        let param_name = if let Some(syn::FnArg::Typed(pat_type)) = variant.sig.inputs.first() {
-            if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-                &pat_ident.ident
-            } else {
-                panic!("Expected identifier pattern for first parameter");
-            }
-        } else {
-            panic!("Expected at least one parameter");
-        };
-
-        let original_block = &variant.block;
-        variant.block = syn::parse_quote! {{
-            // Skip test if auto_increment not supported (for id_u64 variant)
-            if !#param_name.capability().has_auto_increment {
-                return;
-            }
-            #original_block
-        }};
-    }
-
     variant
 }
 

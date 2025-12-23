@@ -19,8 +19,12 @@ pub use test::Test;
 /// Test implementations
 pub mod tests;
 
-// Generate the test registry macro
-// Pass the relative path from CARGO_MANIFEST_DIR
+// Re-export the macros
+#[doc(hidden)]
+pub use toasty_driver_integration_suite_macros::generate_driver_test_variants;
+
+// Generate the test registry macro by scanning the test directory once at compile time
+// This creates a macro_rules! generate_driver_tests that can be called multiple times
 toasty_driver_integration_suite_macros::generate_test_registry!("src/tests");
 
 mod prelude {

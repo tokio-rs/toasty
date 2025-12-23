@@ -47,5 +47,5 @@ impl toasty_driver_integration_suite::Setup for DynamoDbSetup {
     }
 }
 
-// Generate all driver tests
-toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new());
+// Generate all driver tests (DynamoDB doesn't support auto_increment)
+toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new(), auto_increment: false);
