@@ -1,3 +1,5 @@
+#![cfg(feature = "mysql")]
+
 use mysql_async::prelude::Queryable;
 use tokio::sync::OnceCell;
 

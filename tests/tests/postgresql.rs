@@ -1,3 +1,5 @@
+#![cfg(feature = "postgresql")]
+
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tokio_postgres::NoTls;

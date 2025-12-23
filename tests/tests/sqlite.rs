@@ -1,3 +1,5 @@
+#![cfg(feature = "sqlite")]
+
 struct SqliteSetup;
 
 #[async_trait::async_trait]

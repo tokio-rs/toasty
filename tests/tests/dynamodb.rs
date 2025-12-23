@@ -1,3 +1,5 @@
+#![cfg(feature = "dynamodb")]
+
 use aws_config::BehaviorVersion;
 use aws_sdk_dynamodb::{config::Credentials, Client};
 use tokio::sync::OnceCell;
