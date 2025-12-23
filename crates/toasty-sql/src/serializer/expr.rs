@@ -96,6 +96,9 @@ impl ToSql for &stmt::Expr {
                 let stmt = &*expr.stmt;
                 fmt!(cx, f, "(" stmt ")");
             }
+            UnaryOp(expr) => {
+                fmt!(cx, f, expr.op "(" expr.expr ")");
+            }
             Value(expr) => expr.to_sql(cx, f),
             Default => match f.serializer.flavor {
                 Flavor::Postgresql | Flavor::Mysql => fmt!(cx, f, "DEFAULT"),
@@ -116,7 +119,20 @@ impl ToSql for &stmt::BinaryOp {
             stmt::BinaryOp::Lt => "<",
             stmt::BinaryOp::Le => "<=",
             stmt::BinaryOp::Ne => "<>",
+            stmt::BinaryOp::Add => "+",
+            stmt::BinaryOp::Sub => "-",
+            stmt::BinaryOp::Mul => "*",
+            stmt::BinaryOp::Div => "/",
+            stmt::BinaryOp::Mod => "%",
             _ => todo!(),
+        })
+    }
+}
+
+impl ToSql for &stmt::UnaryOp {
+    fn to_sql<P: Params>(self, _cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        f.dst.push_str(match self {
+            stmt::UnaryOp::Neg => "-",
         })
     }
 }

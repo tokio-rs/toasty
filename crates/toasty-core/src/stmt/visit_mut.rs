@@ -5,10 +5,10 @@ use super::{
     ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
     ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
-    Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
-    OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel,
-    SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins,
-    Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    ExprUnaryOp, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
+    Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source,
+    SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
+    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 pub trait VisitMut {
@@ -153,6 +153,10 @@ pub trait VisitMut {
 
     fn visit_expr_ty_mut(&mut self, i: &mut ExprTy) {
         visit_expr_ty_mut(self, i);
+    }
+
+    fn visit_expr_unary_op_mut(&mut self, i: &mut ExprUnaryOp) {
+        visit_expr_unary_op_mut(self, i);
     }
 
     fn visit_expr_pattern_mut(&mut self, i: &mut ExprPattern) {
@@ -417,6 +421,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_ty_mut(&mut **self, i);
     }
 
+    fn visit_expr_unary_op_mut(&mut self, i: &mut ExprUnaryOp) {
+        VisitMut::visit_expr_unary_op_mut(&mut **self, i);
+    }
+
     fn visit_expr_pattern_mut(&mut self, i: &mut ExprPattern) {
         VisitMut::visit_expr_pattern_mut(&mut **self, i);
     }
@@ -609,6 +617,7 @@ where
         Expr::List(expr) => v.visit_expr_list_mut(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt_mut(expr),
         Expr::Type(expr) => v.visit_expr_ty_mut(expr),
+        Expr::UnaryOp(expr) => v.visit_expr_unary_op_mut(expr),
         Expr::Value(expr) => v.visit_value_mut(expr),
         // HAX
         Expr::ConcatStr(expr) => {
@@ -855,6 +864,13 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_type_mut(&mut node.ty);
+}
+
+pub fn visit_expr_unary_op_mut<V>(v: &mut V, node: &mut ExprUnaryOp)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.expr);
 }
 
 pub fn visit_expr_pattern_mut<V>(v: &mut V, node: &mut ExprPattern)
