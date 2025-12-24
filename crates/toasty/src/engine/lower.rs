@@ -290,12 +290,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         panic!()
                     };
 
-                    let position =
+                    let arg =
                         self.new_sub_statement(source_id, target_id, Box::new((*e.query).into()));
 
                     *expr = stmt::ExprInList {
                         expr: e.expr,
-                        list: Box::new(stmt::Expr::arg(position)),
+                        list: Box::new(arg),
                     }
                     .into();
                 }
@@ -349,13 +349,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                 self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
 
-                let position = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
+                *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
 
                 if self.state.hir[target_id].independent {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
-
-                *expr = stmt::Expr::arg(position);
             }
             _ => {
                 // Recurse down the statement tree
@@ -616,12 +614,12 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     )),
                 ))
             }
-            (stmt::Expr::Cast(expr_cast), other) if expr_cast.ty.is_id() => {
-                uncast_expr_id(lhs);
-                uncast_expr_id(other);
+            (stmt::Expr::Cast(expr_cast), other) => {
+                let target_ty = self.capability().native_type_for(&expr_cast.ty);
+                self.cast_expr(lhs, &target_ty);
+                self.cast_expr(other, &target_ty);
                 None
             }
-            (stmt::Expr::Cast(_), stmt::Expr::Cast(_)) => todo!(),
             _ => None,
         }
     }
@@ -640,24 +638,24 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 assert!(maybe_res.is_none(), "TODO");
                 None
             }
-            (stmt::Expr::Cast(expr_cast), list) if expr_cast.ty.is_id() => {
-                uncast_expr_id(expr);
+            (stmt::Expr::Cast(expr_cast), list) => {
+                let target_ty = self.capability().native_type_for(&expr_cast.ty);
+                self.cast_expr(expr, &target_ty);
 
                 match list {
                     stmt::Expr::List(expr_list) => {
-                        for expr in &mut expr_list.items {
-                            uncast_expr_id(expr);
+                        for item in &mut expr_list.items {
+                            self.cast_expr(item, &target_ty);
                         }
                     }
                     stmt::Expr::Value(stmt::Value::List(items)) => {
                         for item in items {
-                            uncast_value_id(item);
+                            *item = target_ty.cast(item.take()).expect("failed to cast value");
                         }
                     }
                     stmt::Expr::Arg(_) => {
                         let arg = list.take();
-
-                        let cast = stmt::Expr::cast(stmt::Expr::arg(0), stmt::Type::String);
+                        let cast = stmt::Expr::cast(stmt::Expr::arg(0), target_ty);
                         *list = stmt::Expr::map(arg, cast);
                     }
                     _ => todo!("expr={expr:#?}; list={list:#?}"),
@@ -679,6 +677,21 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             (stmt::Expr::Record(lhs), stmt::Expr::Value(stmt::Value::List(_))) => {
                 for lhs in lhs {
                     assert!(lhs.is_column());
+                }
+
+                None
+            }
+            (stmt::Expr::Reference(expr_reference), list) => {
+                assert!(expr_reference.is_column());
+
+                match list {
+                    stmt::Expr::Value(stmt::Value::List(_)) => {}
+                    stmt::Expr::List(list) => {
+                        for item in &list.items {
+                            assert!(item.is_value());
+                        }
+                    }
+                    _ => panic!("invalid; should have been caught earlier"),
                 }
 
                 None
@@ -944,18 +957,23 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         source_id: hir::StmtId,
         target_id: hir::StmtId,
         stmt: Box<stmt::Statement>,
-    ) -> usize {
+    ) -> stmt::Expr {
+        self.state.hir[target_id].stmt = Some(stmt);
+        self.new_dependency_arg(source_id, target_id)
+    }
+
+    /// Create a new argument on a dependent statement
+    fn new_dependency_arg(&mut self, source_id: hir::StmtId, target_id: hir::StmtId) -> stmt::Expr {
         let source = &mut self.state.hir[source_id];
         let arg = source.args.len();
         source.args.push(hir::Arg::Sub {
             stmt_id: target_id,
             returning: self.cx.is_returning(),
             input: Cell::new(None),
+            batch_load_index: Cell::new(None),
         });
 
-        self.state.hir[target_id].stmt = Some(stmt);
-
-        arg
+        stmt::Expr::arg(arg)
     }
 
     fn schema(&self) -> &'b Schema {
@@ -1100,6 +1118,33 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             collect_dependencies: self.collect_dependencies,
         }
     }
+
+    fn cast_expr(&mut self, expr: &mut stmt::Expr, target_ty: &stmt::Type) {
+        assert!(!target_ty.is_list(), "TODO");
+        match expr {
+            stmt::Expr::Cast(expr_cast) => {
+                // TODO: verify that this is actually a correct cast.
+                // Remove the cast - the inner expression is already the right type
+                *expr = expr_cast.expr.take();
+            }
+            stmt::Expr::Value(value) => {
+                // Cast the value to target_ty using existing cast method
+                let casted = target_ty.cast(value.take()).expect("failed to cast value");
+                *value = casted;
+            }
+            stmt::Expr::Project(_) => {
+                todo!()
+                // let base = expr.take();
+                // *expr = stmt::Expr::cast(base, target_ty.clone());
+            }
+            stmt::Expr::Arg(_) => {
+                // Create a cast expression for the arg
+                let base = expr.take();
+                *expr = stmt::Expr::cast(base, target_ty.clone());
+            }
+            _ => todo!("cast_expr: cannot cast {expr:#?} to {target_ty:?}"),
+        }
+    }
 }
 
 impl LoweringContext<'_> {
@@ -1109,41 +1154,5 @@ impl LoweringContext<'_> {
 
     fn is_returning(&self) -> bool {
         matches!(self, LoweringContext::Returning)
-    }
-}
-
-fn uncast_expr_id(expr: &mut stmt::Expr) {
-    match expr {
-        stmt::Expr::Value(value) => {
-            uncast_value_id(value);
-        }
-        stmt::Expr::Cast(expr_cast) if expr_cast.ty.is_id() => {
-            *expr = expr_cast.expr.take();
-        }
-        stmt::Expr::Project(_) => {
-            let base = expr.take();
-            *expr = stmt::Expr::cast(base, stmt::Type::String);
-        }
-        stmt::Expr::List(expr_list) => {
-            for expr in &mut expr_list.items {
-                uncast_expr_id(expr);
-            }
-        }
-        _ => todo!("{expr:#?}"),
-    }
-}
-
-fn uncast_value_id(value: &mut stmt::Value) {
-    match value {
-        stmt::Value::Id(_) => {
-            let uncast = value.take().into_id().into_primitive();
-            *value = uncast;
-        }
-        stmt::Value::List(items) => {
-            for item in items {
-                uncast_value_id(item);
-            }
-        }
-        _ => todo!("{value:#?}"),
     }
 }

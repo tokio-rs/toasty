@@ -1,4 +1,4 @@
-use crate::schema::db;
+use crate::{schema::db, stmt};
 
 #[derive(Debug)]
 pub struct Capability {
@@ -99,6 +99,22 @@ impl Capability {
         match &self.storage_types.default_string_type {
             db::Type::VarChar(len) => Some(*len),
             _ => None, // Handle other types gracefully
+        }
+    }
+
+    /// Returns the native database type for an application-level type.
+    ///
+    /// If the database supports the type natively, returns the same type.
+    /// Otherwise, returns the bridge/storage type that the application type
+    /// maps to in this database.
+    ///
+    /// This uses the existing `db::Type::bridge_type()` method to determine
+    /// the appropriate bridge type based on the database's storage capabilities.
+    pub fn native_type_for(&self, ty: &stmt::Type) -> stmt::Type {
+        match ty {
+            stmt::Type::Uuid => self.storage_types.default_uuid_type.bridge_type(ty),
+            stmt::Type::Id(_) => self.storage_types.default_string_type.bridge_type(ty),
+            _ => ty.clone(),
         }
     }
 
@@ -279,7 +295,7 @@ impl StorageTypes {
         // DynamoDB does not support varchar types
         varchar: None,
 
-        default_uuid_type: db::Type::Blob,
+        default_uuid_type: db::Type::Text,
 
         // DynamoDB does not have a native decimal type. Store as TEXT.
         default_decimal_type: db::Type::Text,

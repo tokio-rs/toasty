@@ -24,6 +24,15 @@ toasty-core = { workspace = true, features = ["assert-struct"] }
 toasty-macros.workspace = true
 tokio.workspace = true
 
+# Integration test suite
+toasty-driver-integration-suite.workspace = true
+
+# Database drivers
+toasty-driver-sqlite.workspace = true
+toasty-driver-mysql.workspace = true
+toasty-driver-postgresql.workspace = true
+toasty-driver-dynamodb.workspace = true
+
 # Database clients for cleanup
 tokio-postgres.workspace = true
 mysql_async.workspace = true
@@ -36,6 +45,7 @@ std-util.workspace = true
 tempfile.workspace = true
 trybuild.workspace = true
 env_logger = "0.11.8"
+url.workspace = true
 
 # Third-party types
 uuid.workspace = true

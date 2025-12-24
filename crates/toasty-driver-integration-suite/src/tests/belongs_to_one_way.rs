@@ -1,15 +1,15 @@
-use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
+use crate::prelude::*;
 
-async fn crud_user_optional_profile_one_direction(test: &mut DbTest) {
+#[driver_test]
+pub async fn crud_user_optional_profile_one_direction(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        profile_id: Option<Id<Profile>>,
+        profile_id: Option<ID>,
 
         #[belongs_to(key = profile_id, references = id)]
         profile: toasty::BelongsTo<Option<Profile>>,
@@ -19,7 +19,7 @@ async fn crud_user_optional_profile_one_direction(test: &mut DbTest) {
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
     }
 
     let db = test.setup_db(models!(User, Profile)).await;
@@ -33,5 +33,3 @@ async fn crud_user_optional_profile_one_direction(test: &mut DbTest) {
 
     assert!(user.profile_id.is_some());
 }
-
-tests!(crud_user_optional_profile_one_direction,);
