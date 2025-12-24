@@ -13,6 +13,10 @@ members = [
     "crates/toasty-driver-postgresql",
     "crates/toasty-driver-sqlite",
 
+    # Driver integration test suite
+    "crates/toasty-driver-integration-suite",
+    "crates/toasty-driver-integration-suite-macros",
+
     # General utilities.
     "crates/std-util",
 
@@ -43,6 +47,10 @@ toasty-driver-mysql = { path = "crates/toasty-driver-mysql" }
 toasty-driver-postgresql = { path = "crates/toasty-driver-postgresql" }
 toasty-driver-sqlite = { path = "crates/toasty-driver-sqlite" }
 
+# Driver integration test suite dependencies
+toasty-driver-integration-suite = { path = "crates/toasty-driver-integration-suite" }
+toasty-driver-integration-suite-macros = { path = "crates/toasty-driver-integration-suite-macros" }
+
 # Other crates
 anyhow = "1.0.92"
 assert-struct = "0.2.0"
@@ -61,6 +69,7 @@ indexmap = "2.6.0"
 index_vec = "0.1.4"
 jiff = "0.2.16"
 chrono = { version = "0.4", features = ["std"], default-feature = false }
+lru = "0.16.2"
 mysql_async = { version = "0.35.1", default-features = false, features = [
     "minimal",
     "native-tls-tls",

@@ -11,6 +11,7 @@ mod expr_list;
 mod expr_map;
 mod expr_not;
 mod expr_or;
+mod expr_project;
 mod expr_record;
 mod stmt_query;
 mod value;
@@ -79,6 +80,7 @@ impl VisitMut for Simplify<'_> {
             Expr::Or(expr) => self.simplify_expr_or(expr),
             Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
+            Expr::Project(expr) => self.simplify_expr_project(expr),
             _ => None,
         };
 

@@ -1,0 +1,16 @@
+[package]
+name = "toasty-driver-integration-suite"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+assert-struct.workspace = true
+async-trait.workspace = true
+toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff"] }
+toasty-core.workspace = true
+toasty-macros.workspace = true
+toasty-driver-integration-suite-macros.workspace = true
+tokio.workspace = true
+std-util.workspace = true
+uuid.workspace = true

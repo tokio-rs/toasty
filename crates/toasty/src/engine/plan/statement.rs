@@ -84,9 +84,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn plan(&mut self, mut stmt: stmt::Statement) {
         let mut returning = stmt.take_returning();
 
-        // Tracks if the original query is a single query.
-        if let Some(query) = stmt.as_query_mut() {
-            query.single = false;
+        // No queries are single at this point.
+        match &mut stmt {
+            stmt::Statement::Query(stmt) => stmt.single = false,
+            stmt::Statement::Insert(stmt) => stmt.source.single = false,
+            _ => {}
         }
 
         // Visit the main statement's returning clause to extract needed columns
@@ -200,6 +202,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             stmt_id: target_id,
                             input,
                             returning: true,
+                            ..
                         } => {
                             assert!(input.get().is_none());
 
@@ -211,7 +214,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
                             *expr = stmt::Expr::arg(index);
                         }
-                        _ => todo!(),
+                        hir::Arg::Sub {
+                            input,
+                            returning: false,
+                            ..
+                        } => {
+                            *expr = stmt::Expr::arg(input.get().unwrap());
+                        }
                     }
                 }
                 stmt::Expr::Project(expr_project) if !is_returning_projection => {
@@ -277,6 +286,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     /// Extract arguments needed to perform data loading
     fn extract_data_load_args(&mut self, stmt: &mut stmt::Statement) {
+        println!("stmt={stmt:#?}");
         if let Some(filter) = stmt.filter() {
             stmt::visit::for_each_expr(filter, |expr| {
                 self.extract_data_load_args_from_expr(expr, None);
@@ -303,14 +313,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     stmt_id: target_id,
                     returning,
                     input,
+                    batch_load_index,
                     ..
                 } => {
                     debug_assert!(!returning, "the argument was found in a filter");
                     // Sub-statement arguments in the filter should only happen with !sql
-                    debug_assert!(!self.planner.engine.capability().sql);
+                    debug_assert!(insert_row.is_some() || !self.planner.engine.capability().sql);
 
                     let node_id = self.planner.hir[target_id].output.get().expect("bug");
                     let (index, _) = self.load_data.inputs.insert_full(node_id);
+                    batch_load_index.set(insert_row);
                     input.set(Some(index));
                 }
                 hir::Arg::Ref {
@@ -492,13 +504,26 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
                             let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
 
-                            // `0` is hardcoded here because there only ever is a single insert row passed in (as of now).
                             *expr = stmt::Expr::arg_project(
                                 data_load_input.get().unwrap(),
                                 [batch_load_index.get().unwrap(), column],
                             )
                         }
-                        arg => todo!("arg={arg:#?}"),
+                        hir::Arg::Sub {
+                            input,
+                            batch_load_index,
+                            ..
+                        } => {
+                            debug_assert!(
+                                !self.load_data.inputs.is_empty(),
+                                "{:#?} | is this needed?",
+                                self.load_data
+                            );
+                            *expr = stmt::Expr::arg_project(
+                                input.get().unwrap(),
+                                [batch_load_index.get().unwrap()],
+                            )
+                        }
                     }
                 }
             });

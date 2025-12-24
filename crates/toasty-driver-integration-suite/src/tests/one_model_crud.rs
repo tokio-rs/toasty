@@ -1,23 +1,22 @@
-use std_util::{assert_err, assert_none, assert_ok, assert_unique, num::NumUtil, slice::SliceUtil};
-use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
+use crate::prelude::*;
 
-const MORE: i32 = 10;
+#[driver_test]
+pub async fn crud_no_fields(t: &mut Test) {
+    const MORE: i32 = 10;
 
-async fn crud_no_fields(test: &mut DbTest) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
     }
 
-    let db = test.setup_db(models!(Foo)).await;
+    let db = t.setup_db(models!(Foo)).await;
 
     let created = Foo::create().exec(&db).await.unwrap();
 
     // Find Foo
-    let read = Foo::filter_by_id(&created.id)
+    let read = Foo::filter_by_id(created.id)
         .all(&db)
         .await
         .unwrap()
@@ -66,7 +65,7 @@ async fn crud_no_fields(test: &mut DbTest) {
             val.delete(&db).await.unwrap();
         } else {
             // Delete by ID
-            Foo::filter_by_id(&id).delete(&db).await.unwrap();
+            Foo::filter_by_id(id).delete(&db).await.unwrap();
         }
 
         // Assert deleted
@@ -80,12 +79,13 @@ async fn crud_no_fields(test: &mut DbTest) {
     }
 }
 
-async fn crud_one_string(test: &mut DbTest) {
+#[driver_test]
+pub async fn crud_one_string(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         val: String,
     }
@@ -97,7 +97,7 @@ async fn crud_one_string(test: &mut DbTest) {
     assert_eq!(created.val, "hello world");
 
     // Find Foo
-    let read = Foo::filter_by_id(&created.id)
+    let read = Foo::filter_by_id(created.id)
         .all(&db)
         .await
         .unwrap()
@@ -146,7 +146,7 @@ async fn crud_one_string(test: &mut DbTest) {
     assert_eq!(reload.val, created.val);
 
     // Update by ID
-    Foo::filter_by_id(&created.id)
+    Foo::filter_by_id(created.id)
         .update()
         .val("updated again!")
         .exec(&db)
@@ -162,18 +162,22 @@ async fn crud_one_string(test: &mut DbTest) {
     assert_err!(Foo::get_by_id(&db, &created.id).await);
 
     // Delete by ID
-    Foo::filter_by_id(&ids[0]).delete(&db).await.unwrap();
+    Foo::filter_by_id(ids[0]).delete(&db).await.unwrap();
 
     // It is gone
     assert_err!(Foo::get_by_id(&db, &ids[0]).await);
 }
 
-async fn required_field_create_without_setting(test: &mut DbTest) {
+#[driver_test]
+pub async fn required_field_create_without_setting(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
+
+        #[allow(dead_code)]
+        name: String,
     }
 
     let db = test.setup_db(models!(User)).await;
@@ -182,12 +186,13 @@ async fn required_field_create_without_setting(test: &mut DbTest) {
     assert_err!(User::create().exec(&db).await);
 }
 
-async fn unique_index_required_field_update(test: &mut DbTest) {
+#[driver_test]
+pub async fn unique_index_required_field_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
         email: String,
@@ -239,7 +244,7 @@ async fn unique_index_required_field_update(test: &mut DbTest) {
         .unwrap();
 
     // Reload the user by ID
-    let user_reloaded = User::filter_by_id(&user2.id).get(&db).await.unwrap();
+    let user_reloaded = User::filter_by_id(user2.id).get(&db).await.unwrap();
     assert_eq!(user2.id, user_reloaded.id);
     assert_eq!(user_reloaded.email, "user2@example.com");
 
@@ -255,7 +260,7 @@ async fn unique_index_required_field_update(test: &mut DbTest) {
     assert_ne!(user3.id, user2.id);
 
     // Updating the email address by ID
-    User::filter_by_id(&user2.id)
+    User::filter_by_id(user2.id)
         .update()
         .email("user3@example.com")
         .exec(&db)
@@ -282,12 +287,13 @@ async fn unique_index_required_field_update(test: &mut DbTest) {
     assert_ok!(User::create().email("user2@example.com").exec(&db).await);
 }
 
-async fn unique_index_nullable_field_update(test: &mut DbTest) {
+#[driver_test]
+pub async fn unique_index_nullable_field_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
         email: Option<String>,
@@ -371,12 +377,13 @@ async fn unique_index_nullable_field_update(test: &mut DbTest) {
     assert_eq!(u4_reload.id, u4.id);
 }
 
-async fn unique_index_no_update(test: &mut DbTest) {
+#[driver_test]
+pub async fn unique_index_no_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
         email: String,
@@ -393,7 +400,7 @@ async fn unique_index_no_update(test: &mut DbTest) {
         .await
         .unwrap();
 
-    let u = User::filter_by_id(&user.id).get(&db).await.unwrap();
+    let u = User::filter_by_id(user.id).get(&db).await.unwrap();
     assert_eq!(user.name, u.name);
 
     // Update the name by value
@@ -409,12 +416,13 @@ async fn unique_index_no_update(test: &mut DbTest) {
     assert_eq!(user.name, u.name);
 }
 
-async fn batch_get_by_id(test: &mut DbTest) {
+#[driver_test]
+pub async fn batch_get_by_id(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
     }
 
     let db = test.setup_db(models!(Foo)).await;
@@ -437,12 +445,13 @@ async fn batch_get_by_id(test: &mut DbTest) {
     }
 }
 
-async fn empty_batch_get_by_id(test: &mut DbTest) {
+#[driver_test]
+pub async fn empty_batch_get_by_id(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
     }
 
     let db = test.setup_db(models!(Foo)).await;
@@ -453,7 +462,7 @@ async fn empty_batch_get_by_id(test: &mut DbTest) {
         ids.push(item.id);
     }
 
-    let items: Vec<_> = Foo::filter_by_id_batch(&[] as &[toasty::stmt::Id<Foo>])
+    let items: Vec<_> = Foo::filter_by_id_batch(&[] as &[ID])
         .collect(&db)
         .await
         .unwrap();
@@ -461,12 +470,13 @@ async fn empty_batch_get_by_id(test: &mut DbTest) {
     assert_eq!(0, items.len());
 }
 
-async fn update_multiple_fields(test: &mut DbTest) {
+#[driver_test]
+pub async fn update_multiple_fields(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
         email: String,
@@ -497,7 +507,7 @@ async fn update_multiple_fields(test: &mut DbTest) {
     assert_eq!("jane@example.com", user.email);
 
     // Update by query
-    User::filter_by_id(&user.id)
+    User::filter_by_id(user.id)
         .update()
         .name("John2 Doe")
         .email("john2@example.com")
@@ -509,17 +519,3 @@ async fn update_multiple_fields(test: &mut DbTest) {
     assert_eq!("John2 Doe", user.name);
     assert_eq!("john2@example.com", user.email);
 }
-
-tests!(
-    crud_no_fields,
-    crud_one_string,
-    unique_index_required_field_update,
-    unique_index_nullable_field_update,
-    batch_get_by_id,
-    empty_batch_get_by_id,
-    unique_index_no_update,
-    // TODO: this should be an error, but right now it panics
-    #[should_panic]
-    required_field_create_without_setting,
-    update_multiple_fields,
-);

@@ -1,9 +1,8 @@
+mod statement_cache;
 mod r#type;
 mod value;
 
 pub(crate) use value::Value;
-
-use r#type::TypeExt;
 
 use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
 use std::sync::Arc;
@@ -18,6 +17,8 @@ use toasty_core::{
 use toasty_sql as sql;
 use tokio_postgres::{Client, Config};
 use url::Url;
+
+use crate::{r#type::TypeExt, statement_cache::StatementCache};
 
 #[derive(Debug)]
 pub struct PostgreSQL {
@@ -84,14 +85,17 @@ impl Driver for PostgreSQL {
 
 #[derive(Debug)]
 pub struct Connection {
-    /// The PostgreSQL client.
     client: Client,
+    statement_cache: StatementCache,
 }
 
 impl Connection {
     /// Initialize a Toasty PostgreSQL connection using an initialized client.
     pub fn new(client: Client) -> Self {
-        Self { client }
+        Self {
+            client,
+            statement_cache: StatementCache::new(100),
+        }
     }
 
     /// Connects to a PostgreSQL database using a [`postgres::Config`].
@@ -178,7 +182,10 @@ impl Connection {
 
 impl From<Client> for Connection {
     fn from(client: Client) -> Self {
-        Self { client }
+        Self {
+            client,
+            statement_cache: StatementCache::new(100),
+        }
     }
 }
 
@@ -207,27 +214,26 @@ impl toasty_core::driver::Connection for Connection {
         let sql_as_str = sql::Serializer::postgresql(schema).serialize(&sql, &mut params);
 
         let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
+        let param_types = params
+            .iter()
+            .map(|param| param.infer_ty().to_postgres_type())
+            .collect::<Vec<_>>();
+        let params = params
+            .iter()
+            .map(|param| param as &(dyn ToSql + Sync))
+            .collect::<Vec<_>>();
+
+        let statement = self
+            .statement_cache
+            .prepare_typed(&mut self.client, &sql_as_str, &param_types)
+            .await?;
 
         if width.is_none() {
-            let args = params
-                .iter()
-                .map(|param| param as &(dyn ToSql + Sync))
-                .collect::<Vec<_>>();
-            let count = self.client.execute(&sql_as_str, &args).await?;
+            let count = self.client.execute(&statement, &params).await?;
             return Ok(Response::count(count));
         }
 
-        let args = params
-            .iter()
-            .map(|param| {
-                (
-                    param as &(dyn ToSql + Sync),
-                    param.infer_ty().to_postgres_type(),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        let rows = self.client.query_typed(&sql_as_str, &args).await?;
+        let rows = self.client.query(&statement, &params).await?;
 
         if width.is_none() {
             let [row] = &rows[..] else { todo!() };

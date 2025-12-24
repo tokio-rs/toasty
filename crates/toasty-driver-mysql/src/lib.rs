@@ -178,10 +178,12 @@ impl toasty_core::driver::Connection for Connection {
             .map(|param| param.to_value())
             .collect::<Vec<_>>();
 
+        let statement = self.conn.prep(&sql_as_str).await?;
+
         if ret.is_none() {
             let count = self
                 .conn
-                .exec_iter(&sql_as_str, mysql_async::Params::Positional(args))
+                .exec_iter(&statement, mysql_async::Params::Positional(args))
                 .await?
                 .affected_rows();
 
@@ -215,7 +217,7 @@ impl toasty_core::driver::Connection for Connection {
             return Ok(Response::count(count));
         }
 
-        let rows: Vec<mysql_async::Row> = self.conn.exec(&sql_as_str, &args).await?;
+        let rows: Vec<mysql_async::Row> = self.conn.exec(&statement, &args).await?;
 
         if let Some(returning) = ret {
             let results = rows.into_iter().map(move |mut row| {

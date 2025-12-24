@@ -1,11 +1,12 @@
-use tests::{models, tests, DbTest};
+use crate::prelude::*;
 
-async fn different_field_name(test: &mut DbTest) {
+#[driver_test]
+pub async fn different_field_name(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: toasty::stmt::Id<Self>,
+        id: ID,
 
         #[has_many(pair = owner)]
         todos: toasty::HasMany<Todo>,
@@ -15,13 +16,13 @@ async fn different_field_name(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: toasty::stmt::Id<Self>,
+        id: ID,
 
         #[belongs_to(key = owner_id, references = id)]
         owner: toasty::BelongsTo<User>,
 
         #[index]
-        owner_id: toasty::stmt::Id<User>,
+        owner_id: ID,
 
         title: String,
     }
@@ -47,5 +48,3 @@ async fn different_field_name(test: &mut DbTest) {
 
     assert_eq!(user.id, user_reloaded.id)
 }
-
-tests!(different_field_name,);

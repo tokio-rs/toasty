@@ -181,6 +181,12 @@ pub(super) enum Arg {
 
         /// Index in the operation's inputs list. Set during planning.
         input: Cell<Option<usize>>,
+
+        /// Depending on the statement type, this is used in different ways. For
+        /// Query types, it is the index of the TableRef that will provide the
+        /// data for this ref. For Insert statements, it is the offset at which
+        /// the data should be fetched.
+        batch_load_index: Cell<Option<usize>>,
     },
 
     /// A reference to a parent statement's columns.

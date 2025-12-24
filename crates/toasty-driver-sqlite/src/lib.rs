@@ -123,7 +123,7 @@ impl toasty_core::driver::Connection for Connection {
         let mut params = vec![];
         let sql_str = sql::Serializer::sqlite(schema).serialize(&sql, &mut params);
 
-        let mut stmt = self.connection.prepare(&sql_str).unwrap();
+        let mut stmt = self.connection.prepare_cached(&sql_str).unwrap();
 
         let width = match &sql {
             sql::Statement::Query(stmt) => match &stmt.body {

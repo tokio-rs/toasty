@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::{Auto, Column, FieldTy, Name, UuidVersion};
+use crate::schema::{AutoStrategy, Column, FieldTy, Name, UuidVersion};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -144,12 +144,22 @@ impl Expand<'_> {
             }
 
             let primary_key = self.model.primary_key.fields.contains(&index);
-            let auto = match field.attrs.auto {
+            let auto = match &field.attrs.auto {
                 None => quote! { None },
-                Some(Auto::Unspecified) => quote! { Some(Auto::Id) },
-                Some(Auto::Uuid(UuidVersion::V4)) => quote! { Some(Auto::Uuid(UuidVersion::V4)) },
-                Some(Auto::Uuid(UuidVersion::V7)) => quote! { Some(Auto::Uuid(UuidVersion::V7)) },
-                Some(Auto::Increment) => quote! { Some(Auto::Increment) },
+                Some(auto) => {
+                    let FieldTy::Primitive(ty) = &field.ty else { todo!("better error handling") };
+
+                    match auto {
+                        AutoStrategy::Unspecified => {
+                            assert!(primary_key, "TODO: better error handling");
+
+                            quote! { Some(<#ty as #toasty::stmt::Auto>::STRATEGY) }
+                         }
+                        AutoStrategy::Uuid(UuidVersion::V4) => quote! { Some(AutoStrategy::Uuid(UuidVersion::V4)) },
+                        AutoStrategy::Uuid(UuidVersion::V7) => quote! { Some(AutoStrategy::Uuid(UuidVersion::V4)) },
+                        AutoStrategy::Increment => quote! { Some(AutoStrategy::Increment) },
+                    }
+                }
             };
 
             quote! {
