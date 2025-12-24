@@ -97,45 +97,51 @@ impl Value {
                 ),
             }
         } else if column.type_() == &Type::TIMESTAMPTZ {
-            #[cfg(feature = "jiff")]
-            {
-                stmt::Value::Timestamp(get_or_return_null!(jiff::Timestamp))
-            }
-            #[cfg(not(feature = "jiff"))]
-            {
-                panic!("TIMESTAMPTZ requires jiff feature to be enabled")
+            match expected_ty {
+                #[cfg(feature = "jiff")]
+                stmt::Type::JiffTimestamp | stmt::Type::JiffZoned => {
+                    get_from_row::<jiff::Timestamp>(row, index)
+                }
+                #[cfg(feature = "chrono")]
+                stmt::Type::ChronoDateTimeUtc => {
+                    get_from_row::<chrono::DateTime<chrono::Utc>>(row, index)
+                }
+                #[cfg(feature = "chrono")]
+                stmt::Type::ChronoNaiveDateTime => {
+                    get_from_row::<chrono::NaiveDateTime>(row, index)
+                }
+                _ => panic!("TIMESTAMPTZ requires the jiff or chrono feature to be enabled"),
             }
         } else if column.type_() == &Type::TIMESTAMP {
-            #[cfg(feature = "jiff")]
-            {
-                stmt::Value::DateTime(get_or_return_null!(jiff::civil::DateTime))
-            }
-            #[cfg(not(feature = "jiff"))]
-            {
-                panic!("TIMESTAMP requires jiff feature to be enabled")
+            match expected_ty {
+                #[cfg(feature = "jiff")]
+                stmt::Type::JiffDateTime => get_from_row::<jiff::civil::DateTime>(row, index),
+                #[cfg(feature = "chrono")]
+                stmt::Type::ChronoNaiveDateTime => {
+                    get_from_row::<chrono::NaiveDateTime>(row, index)
+                }
+                _ => panic!("TIMESTAMP requires the jiff or chrono feature to be enabled"),
             }
         } else if column.type_() == &Type::DATE {
-            #[cfg(feature = "jiff")]
-            {
-                stmt::Value::Date(get_or_return_null!(jiff::civil::Date))
-            }
-            #[cfg(not(feature = "jiff"))]
-            {
-                panic!("DATE requires jiff feature to be enabled")
+            match expected_ty {
+                #[cfg(feature = "jiff")]
+                stmt::Type::JiffDate => get_from_row::<jiff::civil::Date>(row, index),
+                #[cfg(feature = "chrono")]
+                stmt::Type::ChronoNaiveDate => get_from_row::<chrono::NaiveDate>(row, index),
+                _ => panic!("DATE requires the jiff or chrono feature to be enabled"),
             }
         } else if column.type_() == &Type::TIME {
-            #[cfg(feature = "jiff")]
-            {
-                stmt::Value::Time(get_or_return_null!(jiff::civil::Time))
-            }
-            #[cfg(not(feature = "jiff"))]
-            {
-                panic!("TIME requires jiff feature to be enabled")
+            match expected_ty {
+                #[cfg(feature = "jiff")]
+                stmt::Type::JiffTime => get_from_row::<jiff::civil::Time>(row, index),
+                #[cfg(feature = "chrono")]
+                stmt::Type::ChronoNaiveTime => get_from_row::<chrono::NaiveTime>(row, index),
+                _ => panic!("TIME requires the jiff or chrono feature to be enabled"),
             }
         } else if column.type_() == &Type::NUMERIC {
             #[cfg(feature = "rust_decimal")]
             {
-                stmt::Value::Decimal(get_or_return_null!(rust_decimal::Decimal))
+                get_from_row::<rust_decimal::Decimal>(row, index)
             }
             #[cfg(not(feature = "rust_decimal"))]
             {
@@ -155,6 +161,17 @@ impl Value {
     pub fn infer_ty(&self) -> stmt::Type {
         self.0.infer_ty()
     }
+}
+
+#[cfg(any(feature = "chrono", feature = "jiff", feature = "rust_decimal"))]
+fn get_from_row<T>(row: &Row, index: usize) -> stmt::Value
+where
+    T: postgres_types::FromSqlOwned,
+    T: Into<stmt::Value>,
+{
+    row.get::<usize, Option<T>>(index)
+        .map(Into::into)
+        .unwrap_or(stmt::Value::Null)
 }
 
 impl ToSql for Value {
@@ -205,14 +222,22 @@ impl ToSql for Value {
             #[cfg(feature = "rust_decimal")]
             (stmt::Value::Decimal(value), _) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            (stmt::Value::Timestamp(value), _) => value.to_sql(ty, out),
+            (stmt::Value::JiffTimestamp(value), _) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            (stmt::Value::Date(value), _) => value.to_sql(ty, out),
+            (stmt::Value::JiffDate(value), _) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            (stmt::Value::Time(value), _) => value.to_sql(ty, out),
+            (stmt::Value::JiffTime(value), _) => value.to_sql(ty, out),
             #[cfg(feature = "jiff")]
-            (stmt::Value::DateTime(value), _) => value.to_sql(ty, out),
-            (value, _) => todo!("unsupported Value for PostgreSQL type: {value:#?}, type: {ty:#?}"),
+            (stmt::Value::JiffDateTime(value), _) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            (stmt::Value::ChronoDateTimeUtc(value), _) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            (stmt::Value::ChronoNaiveDateTime(value), _) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            (stmt::Value::ChronoNaiveDate(value), _) => value.to_sql(ty, out),
+            #[cfg(feature = "chrono")]
+            (stmt::Value::ChronoNaiveTime(value), _) => value.to_sql(ty, out),
+            value => todo!("{value:#?}"),
         }
     }
 
