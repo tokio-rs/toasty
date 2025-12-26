@@ -2,13 +2,23 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, visit_mut::VisitMut, ItemFn, Type, TypePath};
 
-use crate::parse::{DriverTest, Kind};
+use crate::parse::{DriverTest, DriverTestAttr, Kind};
 
-pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
+    let attr = parse_macro_input!(attr as DriverTestAttr);
 
     // Parse the driver test using shared logic
-    let driver_test = DriverTest::from_item_fn(input);
+    let driver_test = DriverTest::from_item_fn(input, attr);
+
+    // If no kinds, just return the original function (no expansion)
+    if driver_test.kinds.is_empty() {
+        let input = &driver_test.input;
+        return quote! {
+            #input
+        }
+        .into();
+    }
 
     let mod_name = &driver_test.name;
     let vis = &driver_test.input.vis;
@@ -37,29 +47,35 @@ fn generate_variant(input: &ItemFn, kind: &Kind) -> ItemFn {
     // Update function name using Kind's method
     variant.sig.ident = syn::Ident::new(kind.name(), input.sig.ident.span());
 
-    // Rewrite ID types to target type using Kind's method
-    let mut rewriter = IdRewriter::new(kind.target_type());
+    // Rewrite ID types to target type using Kind's configuration
+    let mut rewriter = IdRewriter::new(kind.ident(), kind.target_type());
     rewriter.visit_item_fn_mut(&mut variant);
 
     variant
 }
 
-/// Visitor that rewrites `ID` type references to a configurable target type
+/// Visitor that rewrites type references to a configurable target type
 struct IdRewriter {
+    /// The identifier to replace (e.g., "ID")
+    ident: String,
+    /// The target type to replace with
     target_type: Type,
 }
 
 impl IdRewriter {
-    fn new(target_type: Type) -> Self {
-        Self { target_type }
+    fn new(ident: &str, target_type: Type) -> Self {
+        Self {
+            ident: ident.to_string(),
+            target_type,
+        }
     }
 }
 
 impl VisitMut for IdRewriter {
     fn visit_type_mut(&mut self, ty: &mut Type) {
         if let Type::Path(TypePath { qself: None, path }) = ty {
-            // Check if this is a simple `ID` identifier
-            if path.segments.len() == 1 && path.segments[0].ident == "ID" {
+            // Check if this matches the identifier we're looking for
+            if path.segments.len() == 1 && path.segments[0].ident == self.ident {
                 // Replace with target type
                 *ty = self.target_type.clone();
                 return;

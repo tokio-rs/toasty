@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use syn::{parse_macro_input, visit::Visit, Ident, ItemFn, LitStr};
 
-use crate::parse::DriverTest;
+use crate::parse::{DriverTest, DriverTestAttr};
 
 pub fn expand(input: TokenStream) -> TokenStream {
     // Parse the relative path to the tests directory (relative to CARGO_MANIFEST_DIR)
@@ -90,15 +90,25 @@ struct TestVisitor {
 
 impl<'ast> Visit<'ast> for TestVisitor {
     fn visit_item_fn(&mut self, node: &'ast ItemFn) {
-        // Check if this function has the #[driver_test] attribute
-        let has_driver_test = node
+        // Check if this function has the #[driver_test] attribute and extract it
+        let driver_test_attr = node
             .attrs
             .iter()
-            .any(|attr| attr.path().is_ident("driver_test"));
+            .find(|attr| attr.path().is_ident("driver_test"));
 
-        if has_driver_test {
+        if let Some(attr) = driver_test_attr {
+            // Parse the attribute arguments
+            let parsed_attr = if attr.meta.require_path_only().is_ok() {
+                // Empty attribute: #[driver_test]
+                DriverTestAttr { id_ident: None }
+            } else {
+                // Parse attribute arguments: #[driver_test(id(ID))]
+                attr.parse_args::<DriverTestAttr>()
+                    .unwrap_or_else(|e| panic!("Failed to parse #[driver_test] attribute: {}", e))
+            };
+
             // Use the shared parsing logic
-            let driver_test = DriverTest::from_item_fn(node.clone());
+            let driver_test = DriverTest::from_item_fn(node.clone(), parsed_attr);
             self.tests.push(driver_test);
         }
 
@@ -120,16 +130,33 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
                 .map(|test| {
                     let test_ident = &test.name;
 
-                    quote! {
-                        mod #test_ident {
-                            use super::*;
+                    // If test has no kinds, it's not ID-parameterized, so generate a single test
+                    // Otherwise, generate a module with variants
+                    if test.kinds.is_empty() {
+                        quote! {
+                            #[test]
+                            fn #test_ident() {
+                                let mut test = $crate::Test::new(
+                                    ::std::sync::Arc::new($driver_expr)
+                                );
 
-                            $crate::generate_driver_test_variants!(
-                                $crate,
-                                #module_ident::#test_ident,
-                                $driver_expr
-                                    $(, $($t)* )?
-                            );
+                                test.run(async move |t| {
+                                    $crate::tests::#module_ident::#test_ident(t).await;
+                                });
+                            }
+                        }
+                    } else {
+                        quote! {
+                            mod #test_ident {
+                                use super::*;
+
+                                $crate::generate_driver_test_variants!(
+                                    $crate,
+                                    #module_ident::#test_ident,
+                                    $driver_expr
+                                        $(, $($t)* )?
+                                );
+                            }
                         }
                     }
                 })

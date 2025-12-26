@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use std::collections::HashMap;
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn crud_person_self_referential(t: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Person {

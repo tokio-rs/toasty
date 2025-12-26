@@ -3,7 +3,7 @@ use crate::prelude::*;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn ty_decimal(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -36,7 +36,7 @@ pub async fn ty_decimal(test: &mut Test) {
     }
 }
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn ty_decimal_as_text(test: &mut Test) {
     use rust_decimal::Decimal;
     use std::str::FromStr;
@@ -67,7 +67,7 @@ pub async fn ty_decimal_as_text(test: &mut Test) {
     }
 }
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -96,7 +96,7 @@ pub async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut Test) {
     }
 }
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn ty_decimal_as_numeric_fixed_precision(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
