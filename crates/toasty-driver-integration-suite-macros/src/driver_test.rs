@@ -2,22 +2,22 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, visit_mut::VisitMut, ItemFn, Type, TypePath};
 
-use crate::parse::DriverTest;
+use crate::parse::{DriverTest, Kind};
 
 pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
 
-    // Parse the driver test
+    // Parse the driver test using shared logic
     let driver_test = DriverTest::from_item_fn(input);
 
     let mod_name = &driver_test.name;
     let vis = &driver_test.input.vis;
 
-    // Generate variants
+    // Generate variants using shared Kind logic
     let variant_fns: Vec<_> = driver_test
         .kinds
         .iter()
-        .map(|kind| generate_variant(&driver_test.input, kind.name(), kind.target_type()))
+        .map(|kind| generate_variant(&driver_test.input, kind))
         .collect();
 
     quote! {
@@ -31,14 +31,14 @@ pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Generate a test variant with ID rewritten to the target type
-fn generate_variant(input: &ItemFn, variant_name: &str, target_type: Type) -> ItemFn {
+fn generate_variant(input: &ItemFn, kind: &Kind) -> ItemFn {
     let mut variant = input.clone();
 
-    // Update function name
-    variant.sig.ident = syn::Ident::new(variant_name, input.sig.ident.span());
+    // Update function name using Kind's method
+    variant.sig.ident = syn::Ident::new(kind.name(), input.sig.ident.span());
 
-    // Rewrite ID types to target type
-    let mut rewriter = IdRewriter::new(target_type);
+    // Rewrite ID types to target type using Kind's method
+    let mut rewriter = IdRewriter::new(kind.target_type());
     rewriter.visit_item_fn_mut(&mut variant);
 
     variant
