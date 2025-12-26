@@ -79,6 +79,9 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
         }
     }
 
+    // Always include auto_increment as it's implicitly required by ID expansion
+    all_requires.insert("auto_increment".to_string());
+
     // Convert HashSet to sorted Vec of Idents
     let mut requires_vec: Vec<_> = all_requires.into_iter().collect();
     requires_vec.sort();
@@ -227,11 +230,16 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
         quote! {}
     };
 
+    // Generate runtime capability validation test
+    let capability_runtime_test = generate_capability_runtime_test(&structure);
+
     let expanded = quote! {
         #[macro_export]
         macro_rules! generate_driver_tests {
             ($driver_expr:expr $(, $($t:tt)* )?) => {
                 #capability_validation
+
+                #capability_runtime_test
 
                 #(#modules)*
             };
@@ -239,4 +247,88 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
     };
 
     expanded.into()
+}
+
+/// Generate a runtime test that validates driver capabilities match the specified requirements
+fn generate_capability_runtime_test(structure: &TestStructure) -> TokenStream2 {
+    if structure.requires.is_empty() {
+        return quote! {};
+    }
+
+    let requires_list = &structure.requires;
+
+    quote! {
+        #[test]
+        fn validate_driver_capabilities() {
+            let mut test = $crate::Test::new(
+                ::std::sync::Arc::new($driver_expr)
+            );
+
+            test.run(async move |t| {
+                let capability = t.capability();
+
+                // Parse capability flags from macro arguments
+                let mut expected_capabilities = ::std::collections::HashMap::new();
+
+                // Default all capabilities to true
+                #(
+                    expected_capabilities.insert(stringify!(#requires_list).to_string(), true);
+                )*
+
+                // Override with user-specified values
+                $(
+                    __parse_capability_flags(&mut expected_capabilities, stringify!($($t)*));
+                )?
+
+                // Validate each capability matches expected value
+                #(
+                    let expected = expected_capabilities.get(stringify!(#requires_list)).copied().unwrap_or(true);
+                    assert_eq!(
+                        capability.#requires_list,
+                        expected,
+                        "Capability mismatch for {}: expected {}, got {}",
+                        stringify!(#requires_list),
+                        expected,
+                        capability.#requires_list
+                    );
+                )*
+            });
+        }
+
+        #[allow(dead_code)]
+        fn __parse_capability_flags(map: &mut ::std::collections::HashMap<String, bool>, input: &str) {
+            // Parse "cap1: false, cap2: true" format
+            for part in input.split(',') {
+                let part = part.trim();
+                if let Some((key, value)) = part.split_once(':') {
+                    let key = key.trim();
+                    let value = value.trim();
+
+                    let bool_value = match value {
+                        "true" => true,
+                        "false" => false,
+                        _ => continue,
+                    };
+
+                    // Map short names to full capability field names
+                    match key {
+                        "bigdecimal" => {
+                            assert!(map.contains_key("bigdecimal_implemented"), "not a valid capability: {key:#?}");
+                            map.insert("bigdecimal_implemented".to_string(), bool_value);
+                        }
+                        "decimal" => {
+                            assert!(map.contains_key("decimal_arbitrary_precision"), "not a valid capability: {key:#?}");
+                            assert!(map.contains_key("native_decimal"), "not a valid capability: {key:#?}");
+                            map.insert("decimal_arbitrary_precision".to_string(), bool_value);
+                            map.insert("native_decimal".to_string(), bool_value);
+                        }
+                        other => {
+                            assert!(map.contains_key(other), "not a valid capability: {other:#?}");
+                            map.insert(other.to_string(), bool_value);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

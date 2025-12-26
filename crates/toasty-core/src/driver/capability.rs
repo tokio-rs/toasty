@@ -22,7 +22,7 @@ pub struct Capability {
     pub primary_key_ne_predicate: bool,
 
     /// Whether the database has an auto increment modifier for integer columns.
-    pub has_auto_increment: bool,
+    pub auto_increment: bool,
 
     /// Whether the database has native support for Timestamp types.
     pub native_timestamp: bool,
@@ -126,7 +126,7 @@ impl Capability {
         select_for_update: false,
         returning_from_mutation: true,
         primary_key_ne_predicate: true,
-        has_auto_increment: true,
+        auto_increment: true,
         bigdecimal_implemented: false,
 
         // SQLite does not have native date/time types
@@ -145,7 +145,7 @@ impl Capability {
         cte_with_update: true,
         storage_types: StorageTypes::POSTGRESQL,
         select_for_update: true,
-        has_auto_increment: true,
+        auto_increment: true,
         bigdecimal_implemented: false,
 
         // PostgreSQL has native date/time types
@@ -167,7 +167,7 @@ impl Capability {
         storage_types: StorageTypes::MYSQL,
         select_for_update: true,
         returning_from_mutation: false,
-        has_auto_increment: true,
+        auto_increment: true,
         bigdecimal_implemented: true,
 
         // MySQL has native date/time types
@@ -190,7 +190,7 @@ impl Capability {
         select_for_update: false,
         returning_from_mutation: false,
         primary_key_ne_predicate: false,
-        has_auto_increment: false,
+        auto_increment: false,
         bigdecimal_implemented: false,
 
         // DynamoDB does not have native date/time types
