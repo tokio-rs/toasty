@@ -100,9 +100,12 @@ impl<'ast> Visit<'ast> for TestVisitor {
             // Parse the attribute arguments
             let parsed_attr = if attr.meta.require_path_only().is_ok() {
                 // Empty attribute: #[driver_test]
-                DriverTestAttr { id_ident: None }
+                DriverTestAttr {
+                    id_ident: None,
+                    requires: Vec::new(),
+                }
             } else {
-                // Parse attribute arguments: #[driver_test(id(ID))]
+                // Parse attribute arguments: #[driver_test(id(ID), requires(...))]
                 attr.parse_args::<DriverTestAttr>()
                     .unwrap_or_else(|e| panic!("Failed to parse #[driver_test] attribute: {}", e))
             };
@@ -146,6 +149,13 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
                             }
                         }
                     } else {
+                        // Generate requires list as comma-separated identifiers
+                        let requires_list: Vec<_> = test
+                            .requires
+                            .iter()
+                            .map(|r| Ident::new(r, proc_macro2::Span::call_site()))
+                            .collect();
+
                         quote! {
                             mod #test_ident {
                                 use super::*;
@@ -153,7 +163,8 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
                                 $crate::generate_driver_test_variants!(
                                     $crate,
                                     #module_ident::#test_ident,
-                                    $driver_expr
+                                    $driver_expr,
+                                    requires: [#(#requires_list),*]
                                         $(, $($t)* )?
                                 );
                             }

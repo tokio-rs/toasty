@@ -65,7 +65,7 @@ pub async fn ty_bigdecimal_as_text(test: &mut Test) {
     }
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(bigdecimal))]
 pub async fn ty_bigdecimal_as_numeric_arbitrary_precision(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -94,7 +94,7 @@ pub async fn ty_bigdecimal_as_numeric_arbitrary_precision(test: &mut Test) {
     }
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(bigdecimal))]
 pub async fn ty_bigdecimal_as_numeric_fixed_precision(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]

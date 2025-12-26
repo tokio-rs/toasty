@@ -20,4 +20,4 @@ impl toasty_driver_integration_suite::Setup for SqliteSetup {
 }
 
 // Generate all driver tests
-toasty_driver_integration_suite::generate_driver_tests!(SqliteSetup::new());
+toasty_driver_integration_suite::generate_driver_tests!(SqliteSetup::new(), decimal: false, bigdecimal: false);
