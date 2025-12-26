@@ -165,7 +165,7 @@ async fn ty_timestamp_precision_2(test: &mut DbTest) {
     use jiff::Timestamp;
 
     // Skip if database doesn't have native timestamp support
-    if !test.capability().storage_types.native_timestamp {
+    if !test.capability().native_timestamp {
         return;
     }
 
@@ -208,7 +208,7 @@ async fn ty_time_precision_2(test: &mut DbTest) {
     use jiff::civil::Time;
 
     // Skip if database doesn't have native time support
-    if !test.capability().storage_types.native_time {
+    if !test.capability().native_time {
         return;
     }
 
@@ -245,7 +245,7 @@ async fn ty_datetime_precision_2(test: &mut DbTest) {
     use jiff::civil::DateTime;
 
     // Skip if database doesn't have native datetime support
-    if !test.capability().storage_types.native_datetime {
+    if !test.capability().native_datetime {
         return;
     }
 

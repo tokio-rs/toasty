@@ -103,8 +103,18 @@ fn generate_test_variants(input: &Input) -> Vec<TokenStream2> {
 
     let mut variants = Vec::new();
 
-    // Generate both id_u64 and id_uuid variants
-    variants.push(generate_variant(input, "id_u64"));
+    // Generate id_u64 variant only if auto_increment is supported (u64 IDs require auto-increment)
+    let auto_increment_supported = input
+        .capabilities
+        .get("auto_increment")
+        .copied()
+        .unwrap_or(true);
+
+    if auto_increment_supported {
+        variants.push(generate_variant(input, "id_u64"));
+    }
+
+    // Always generate id_uuid variant (UUIDs don't require auto-increment)
     variants.push(generate_variant(input, "id_uuid"));
 
     variants
