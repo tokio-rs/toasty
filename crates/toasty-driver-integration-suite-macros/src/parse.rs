@@ -1,4 +1,4 @@
-use syn::ItemFn;
+use syn::{parse::Parse, punctuated::Punctuated, token::Comma, Ident, ItemFn};
 
 /// Parsed representation of a `#[driver_test]` function
 #[derive(Debug, Clone)]
@@ -11,11 +11,23 @@ pub struct DriverTest {
 
     /// List of test kinds to generate
     pub kinds: Vec<Kind>,
+
+    /// Required capabilities for this test
+    pub requires: Vec<String>,
 }
 
 /// Kinds of test variants to generate
 #[derive(Debug, Clone)]
-pub enum Kind {
+pub struct Kind {
+    /// The identifier to replace (e.g., "ID")
+    pub ident: String,
+    /// The target type variant
+    pub variant: KindVariant,
+}
+
+/// Type variants for ID replacement
+#[derive(Debug, Clone)]
+pub enum KindVariant {
     /// u64 ID type variant
     IdU64,
     /// UUID ID type variant
@@ -25,30 +37,149 @@ pub enum Kind {
 impl Kind {
     /// Get the variant function name (e.g., "id_u64")
     pub fn name(&self) -> &'static str {
+        self.variant.name()
+    }
+
+    /// Get the target type for ID replacement
+    pub fn target_type(&self) -> syn::Type {
+        self.variant.target_type()
+    }
+
+    /// Get the identifier to replace
+    pub fn ident(&self) -> &str {
+        &self.ident
+    }
+}
+
+impl KindVariant {
+    /// Get the variant function name (e.g., "id_u64")
+    pub fn name(&self) -> &'static str {
         match self {
-            Kind::IdU64 => "id_u64",
-            Kind::IdUuid => "id_uuid",
+            KindVariant::IdU64 => "id_u64",
+            KindVariant::IdUuid => "id_uuid",
         }
     }
 
     /// Get the target type for ID replacement
     pub fn target_type(&self) -> syn::Type {
         match self {
-            Kind::IdU64 => syn::parse_quote!(u64),
-            Kind::IdUuid => syn::parse_quote!(uuid::Uuid),
+            KindVariant::IdU64 => syn::parse_quote!(u64),
+            KindVariant::IdUuid => syn::parse_quote!(uuid::Uuid),
+        }
+    }
+}
+
+/// Attribute arguments for `#[driver_test(...)]`
+#[derive(Debug)]
+pub struct DriverTestAttr {
+    pub id_ident: Option<String>,
+    pub requires: Vec<String>,
+}
+
+impl Parse for DriverTestAttr {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut id_ident = None;
+        let mut requires = Vec::new();
+
+        // Parse comma-separated list of attributes
+        let attrs = Punctuated::<DriverTestAttrItem, Comma>::parse_terminated(input)?;
+
+        for attr in attrs {
+            match attr {
+                DriverTestAttrItem::Id(ident) => {
+                    id_ident = Some(ident);
+                }
+                DriverTestAttrItem::Requires(caps) => {
+                    requires.extend(caps);
+                }
+            }
+        }
+
+        Ok(DriverTestAttr { id_ident, requires })
+    }
+}
+
+/// Individual attribute item
+#[derive(Debug)]
+enum DriverTestAttrItem {
+    /// id(IDENT) - specifies test should be expanded for multiple ID types
+    Id(String),
+    /// requires(cap1, cap2, ...) - specifies capabilities required for this test
+    Requires(Vec<String>),
+}
+
+impl Parse for DriverTestAttrItem {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let name: Ident = input.parse()?;
+
+        match name.to_string().as_str() {
+            "id" => {
+                // Parse id(IDENT)
+                let content;
+                syn::parenthesized!(content in input);
+                let ident: Ident = content.parse()?;
+                Ok(DriverTestAttrItem::Id(ident.to_string()))
+            }
+            "requires" => {
+                // Parse requires(cap1, cap2, ...)
+                let content;
+                syn::parenthesized!(content in input);
+                let caps = Punctuated::<Ident, Comma>::parse_terminated(&content)?;
+                Ok(DriverTestAttrItem::Requires(
+                    caps.into_iter().map(|i| i.to_string()).collect(),
+                ))
+            }
+            _ => Err(syn::Error::new_spanned(
+                name,
+                "unknown attribute, expected `id` or `requires`",
+            )),
         }
     }
 }
 
 impl DriverTest {
     /// Parse a function with the `#[driver_test]` attribute
-    pub fn from_item_fn(input: ItemFn) -> Self {
+    pub fn from_item_fn(input: ItemFn, attr: DriverTestAttr) -> Self {
         let name = input.sig.ident.clone();
+        let requires = attr.requires;
 
-        // Generate both id_u64 and id_uuid variants
-        // TODO: Make this configurable via attribute parameters
-        let kinds = vec![Kind::IdU64, Kind::IdUuid];
+        // Generate variants based on attribute
+        // If test has requires, always expand (even if no id specified)
+        let kinds = if let Some(ident) = attr.id_ident {
+            // Generate both u64 and uuid variants with the specified identifier
+            vec![
+                Kind {
+                    ident: ident.clone(),
+                    variant: KindVariant::IdU64,
+                },
+                Kind {
+                    ident,
+                    variant: KindVariant::IdUuid,
+                },
+            ]
+        } else if !requires.is_empty() {
+            // Has requires but no id() - still expand to handle capability filtering
+            // Use a dummy identifier that won't match anything
+            vec![
+                Kind {
+                    ident: String::new(),
+                    variant: KindVariant::IdU64,
+                },
+                Kind {
+                    ident: String::new(),
+                    variant: KindVariant::IdUuid,
+                },
+            ]
+        } else {
+            // No id() and no requires - no expansion needed
+            vec![]
+        };
 
-        DriverTest { input, name, kinds }
+        DriverTest {
+            input,
+            name,
+            kinds,
+            requires,
+        }
     }
 }

@@ -1,16 +1,16 @@
-use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
+use crate::prelude::*;
 
-async fn ty_bigdecimal(test: &mut DbTest) {
-    use bigdecimal::BigDecimal;
-    use std::str::FromStr;
+use bigdecimal::BigDecimal;
+use std::str::FromStr;
 
+#[driver_test(id(ID))]
+pub async fn ty_bigdecimal(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         val: BigDecimal,
     }
 
@@ -36,16 +36,15 @@ async fn ty_bigdecimal(test: &mut DbTest) {
     }
 }
 
-async fn ty_bigdecimal_as_text(test: &mut DbTest) {
-    use bigdecimal::BigDecimal;
-    use std::str::FromStr;
-
+#[driver_test(id(ID))]
+pub async fn ty_bigdecimal_as_text(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
+
         #[column(type = text)]
         val: BigDecimal,
     }
@@ -66,24 +65,14 @@ async fn ty_bigdecimal_as_text(test: &mut DbTest) {
     }
 }
 
-async fn ty_bigdecimal_as_numeric_arbitrary_precision(test: &mut DbTest) {
-    use bigdecimal::BigDecimal;
-    use std::str::FromStr;
-
-    // Only test on databases that support arbitrary precision decimals
-    // and have BigDecimal driver support implemented
-    if !test.capability().storage_types.decimal_arbitrary_precision
-        || !test.capability().bigdecimal_implemented
-    {
-        return;
-    }
-
+#[driver_test(id(ID), requires(bigdecimal_implemented, decimal_arbitrary_precision))]
+pub async fn ty_bigdecimal_as_numeric_arbitrary_precision(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = numeric)]
         val: BigDecimal,
     }
@@ -105,23 +94,14 @@ async fn ty_bigdecimal_as_numeric_arbitrary_precision(test: &mut DbTest) {
     }
 }
 
-async fn ty_bigdecimal_as_numeric_fixed_precision(test: &mut DbTest) {
-    use bigdecimal::BigDecimal;
-    use std::str::FromStr;
-
-    // Only test on databases that support native decimal types
-    // Skip PostgreSQL as BigDecimal support is not yet implemented
-    if !test.capability().storage_types.native_decimal || !test.capability().bigdecimal_implemented
-    {
-        return;
-    }
-
+#[driver_test(id(ID), requires(native_decimal, bigdecimal_implemented))]
+pub async fn ty_bigdecimal_as_numeric_fixed_precision(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = numeric(38, 20))]
         val: BigDecimal,
     }
@@ -142,10 +122,3 @@ async fn ty_bigdecimal_as_numeric_fixed_precision(test: &mut DbTest) {
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
 }
-
-tests!(
-    ty_bigdecimal,
-    ty_bigdecimal_as_text,
-    ty_bigdecimal_as_numeric_arbitrary_precision,
-    ty_bigdecimal_as_numeric_fixed_precision
-);

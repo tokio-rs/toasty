@@ -57,4 +57,4 @@ impl toasty_driver_integration_suite::Setup for PostgreSqlSetup {
 }
 
 // Generate all driver tests
-toasty_driver_integration_suite::generate_driver_tests!(PostgreSqlSetup::new());
+toasty_driver_integration_suite::generate_driver_tests!(PostgreSqlSetup::new(), bigdecimal_implemented: false);

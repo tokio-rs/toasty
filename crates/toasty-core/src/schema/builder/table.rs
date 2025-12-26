@@ -209,7 +209,7 @@ impl BuildTableFromModels<'_> {
             storage_ty,
             nullable: field.nullable,
             primary_key: false,
-            auto_increment: auto_increment && self.db.has_auto_increment,
+            auto_increment: auto_increment && self.db.auto_increment,
         };
 
         self.mapping.model_mut(field.id.model).fields[field.id.index]

@@ -7,6 +7,8 @@ publish = false
 [dependencies]
 assert-struct.workspace = true
 async-trait.workspace = true
+bigdecimal.workspace = true
+rust_decimal.workspace = true
 toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff"] }
 toasty-core.workspace = true
 toasty-macros.workspace = true
