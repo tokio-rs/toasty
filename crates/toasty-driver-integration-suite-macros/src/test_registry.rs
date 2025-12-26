@@ -34,12 +34,17 @@ pub fn expand(input: TokenStream) -> TokenStream {
 struct TestStructure {
     /// Map of module name -> tests in that module
     modules: BTreeMap<String, Vec<DriverTest>>,
+    /// All unique capabilities required across all tests
+    requires: Vec<Ident>,
 }
 
 fn scan_test_directory(dir: &Path) -> TestStructure {
     let mut structure = TestStructure {
         modules: BTreeMap::new(),
+        requires: Vec::new(),
     };
+
+    let mut all_requires = std::collections::HashSet::new();
 
     // Read all .rs files in the directory
     for entry in fs::read_dir(dir).expect("Failed to read tests directory") {
@@ -61,11 +66,26 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
             // Parse the file and extract test functions
             let tests = extract_tests_from_file(&path);
 
+            // Collect all unique requires from these tests
+            for test in &tests {
+                for req in &test.requires {
+                    all_requires.insert(req.clone());
+                }
+            }
+
             if !tests.is_empty() {
                 structure.modules.insert(module_name, tests);
             }
         }
     }
+
+    // Convert HashSet to sorted Vec of Idents
+    let mut requires_vec: Vec<_> = all_requires.into_iter().collect();
+    requires_vec.sort();
+    structure.requires = requires_vec
+        .into_iter()
+        .map(|s| Ident::new(&s, proc_macro2::Span::call_site()))
+        .collect();
 
     structure
 }
