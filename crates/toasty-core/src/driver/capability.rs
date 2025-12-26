@@ -24,10 +24,32 @@ pub struct Capability {
     /// Whether the database has an auto increment modifier for integer columns.
     pub has_auto_increment: bool,
 
+    /// Whether the database has native support for Timestamp types.
+    pub native_timestamp: bool,
+
+    /// Whether the database has native support for Date types.
+    pub native_date: bool,
+
+    /// Whether the database has native support for Time types.
+    pub native_time: bool,
+
+    /// Whether the database has native support for DateTime types.
+    pub native_datetime: bool,
+
+    /// Whether the database has native support for Decimal types.
+    pub native_decimal: bool,
+
     /// Whether BigDecimal driver support is implemented.
     /// TODO: Remove this flag when PostgreSQL BigDecimal support is implemented.
     /// Currently only MySQL has implemented BigDecimal driver support.
     pub bigdecimal_implemented: bool,
+
+    /// Whether the database's decimal type supports arbitrary precision.
+    /// When false, the decimal type requires fixed precision and scale to be specified upfront.
+    /// - PostgreSQL: true (NUMERIC supports arbitrary precision)
+    /// - MySQL: false (DECIMAL requires fixed precision/scale)
+    /// - SQLite/DynamoDB: false (no native decimal support, stored as TEXT)
+    pub decimal_arbitrary_precision: bool,
 }
 
 #[derive(Debug)]
@@ -62,28 +84,6 @@ pub struct StorageTypes {
 
     /// The default storage type for a DateTime (civil datetime).
     pub default_datetime_type: db::Type,
-
-    /// Whether the database has native support for Timestamp types.
-    pub native_timestamp: bool,
-
-    /// Whether the database has native support for Date types.
-    pub native_date: bool,
-
-    /// Whether the database has native support for Time types.
-    pub native_time: bool,
-
-    /// Whether the database has native support for DateTime types.
-    pub native_datetime: bool,
-
-    /// Whether the database has native support for Decimal types.
-    pub native_decimal: bool,
-
-    /// Whether the database's decimal type supports arbitrary precision.
-    /// When false, the decimal type requires fixed precision and scale to be specified upfront.
-    /// - PostgreSQL: true (NUMERIC supports arbitrary precision)
-    /// - MySQL: false (DECIMAL requires fixed precision/scale)
-    /// - SQLite/DynamoDB: false (no native decimal support, stored as TEXT)
-    pub decimal_arbitrary_precision: bool,
 
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
@@ -128,6 +128,16 @@ impl Capability {
         primary_key_ne_predicate: true,
         has_auto_increment: true,
         bigdecimal_implemented: false,
+
+        // SQLite does not have native date/time types
+        native_timestamp: false,
+        native_date: false,
+        native_time: false,
+        native_datetime: false,
+
+        // SQLite does not have native decimal types
+        native_decimal: false,
+        decimal_arbitrary_precision: false,
     };
 
     /// PostgreSQL capabilities
@@ -137,6 +147,17 @@ impl Capability {
         select_for_update: true,
         has_auto_increment: true,
         bigdecimal_implemented: false,
+
+        // PostgreSQL has native date/time types
+        native_timestamp: true,
+        native_date: true,
+        native_time: true,
+        native_datetime: true,
+
+        // PostgreSQL has native NUMERIC type with arbitrary precision
+        native_decimal: true,
+        decimal_arbitrary_precision: true,
+
         ..Self::SQLITE
     };
 
@@ -148,6 +169,16 @@ impl Capability {
         returning_from_mutation: false,
         has_auto_increment: true,
         bigdecimal_implemented: true,
+
+        // MySQL has native date/time types
+        native_timestamp: true,
+        native_date: true,
+        native_time: true,
+        native_datetime: true,
+
+        // MySQL has DECIMAL type but requires fixed precision/scale upfront
+        native_decimal: true,
+        decimal_arbitrary_precision: false,
         ..Self::SQLITE
     };
 
@@ -161,6 +192,16 @@ impl Capability {
         primary_key_ne_predicate: false,
         has_auto_increment: false,
         bigdecimal_implemented: false,
+
+        // DynamoDB does not have native date/time types
+        native_timestamp: false,
+        native_date: false,
+        native_time: false,
+        native_datetime: false,
+
+        // DynamoDB does not have native decimal types
+        native_decimal: false,
+        decimal_arbitrary_precision: false,
     };
 }
 
@@ -194,16 +235,6 @@ impl StorageTypes {
         default_time_type: db::Type::Text,
         default_datetime_type: db::Type::Text,
 
-        // SQLite does not have native date/time types
-        native_timestamp: false,
-        native_date: false,
-        native_time: false,
-        native_datetime: false,
-
-        // SQLite does not have native decimal types
-        native_decimal: false,
-        decimal_arbitrary_precision: false,
-
         // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
         // are limited to i64::MAX to prevent overflow
         max_unsigned_integer: Some(i64::MAX as u64),
@@ -231,16 +262,6 @@ impl StorageTypes {
         default_date_type: db::Type::Date,
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),
-
-        // PostgreSQL has native date/time types
-        native_timestamp: true,
-        native_date: true,
-        native_time: true,
-        native_datetime: true,
-
-        // PostgreSQL has native NUMERIC type with arbitrary precision
-        native_decimal: true,
-        decimal_arbitrary_precision: true,
 
         // PostgreSQL BIGINT is signed 64-bit, so unsigned integers are limited
         // to i64::MAX. While NUMERIC could theoretically support larger values,
@@ -275,16 +296,6 @@ impl StorageTypes {
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),
 
-        // MySQL has native date/time types
-        native_timestamp: true,
-        native_date: true,
-        native_time: true,
-        native_datetime: true,
-
-        // MySQL has DECIMAL type but requires fixed precision/scale upfront
-        native_decimal: true,
-        decimal_arbitrary_precision: false,
-
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
     };
@@ -307,16 +318,6 @@ impl StorageTypes {
         default_date_type: db::Type::Text,
         default_time_type: db::Type::Text,
         default_datetime_type: db::Type::Text,
-
-        // DynamoDB does not have native date/time types
-        native_timestamp: false,
-        native_date: false,
-        native_time: false,
-        native_datetime: false,
-
-        // DynamoDB does not have native decimal types
-        native_decimal: false,
-        decimal_arbitrary_precision: false,
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,

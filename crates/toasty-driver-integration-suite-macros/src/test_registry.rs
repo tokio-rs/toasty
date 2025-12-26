@@ -203,10 +203,36 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
         })
         .collect();
 
+    // Generate capability validation function
+    let capability_checks: Vec<_> = structure
+        .requires
+        .iter()
+        .map(|cap| {
+            quote! {
+                let _ = cap.#cap;
+            }
+        })
+        .collect();
+
+    let capability_validation = if !structure.requires.is_empty() {
+        quote! {
+            // Validate driver capabilities at compile time
+            const _: () = {
+                async fn __validate_capabilities(cap: &toasty_core::driver::Capability) {
+                    #(#capability_checks)*
+                }
+            };
+        }
+    } else {
+        quote! {}
+    };
+
     let expanded = quote! {
         #[macro_export]
         macro_rules! generate_driver_tests {
             ($driver_expr:expr $(, $($t:tt)* )?) => {
+                #capability_validation
+
                 #(#modules)*
             };
         }
