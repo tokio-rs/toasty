@@ -25,6 +25,8 @@ pub(super) struct Filter {
 
     /// Filter method batch identifier
     filter_method_batch_ident: syn::Ident,
+
+    update_method_ident: syn::Ident,
 }
 
 struct BuildModelFilters<'a> {
@@ -341,6 +343,27 @@ impl Expand<'_> {
         })
     }
 
+    pub(super) fn expand_model_update_method(&self, filter: &Filter) -> TokenStream {
+        let vis = &self.model.vis;
+        let query_struct_ident = &self.model.query_struct_ident;
+        let update_query_struct_ident = &self.model.update_query_struct_ident;
+        let update_method_ident = &filter.update_method_ident;
+        let filter_method_ident = &filter.filter_method_ident;
+        let args = self.expand_filter_args(filter);
+        let arg_idents = self.expand_filter_arg_idents(filter);
+
+        let body = quote! {
+            #query_struct_ident::default()
+                .#filter_method_ident( #( #arg_idents ),* ).update()
+        };
+
+        quote! {
+            #vis fn #update_method_ident(#( #args ),* ) -> #update_query_struct_ident {
+                #body
+            }
+        }
+    }
+
     pub(super) fn primary_key_filter(&self) -> &Filter {
         let fields = self
             .model
@@ -401,6 +424,7 @@ impl<'a> BuildModelFilters<'a> {
                             "filter",
                             Some("batch"),
                         ),
+                        update_method_ident: self.method_ident(&fields, "update", None),
                     },
                 );
             }
@@ -424,6 +448,7 @@ impl<'a> BuildModelFilters<'a> {
                                 "filter",
                                 Some("batch"),
                             ),
+                            update_method_ident: self.method_ident(&fields, "update", None),
                         },
                     );
                 }

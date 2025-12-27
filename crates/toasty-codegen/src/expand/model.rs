@@ -19,6 +19,7 @@ impl Expand<'_> {
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
         let relation_methods = self.expand_model_relation_methods();
+        let update_method = self.expand_model_update_method(self.primary_key_filter());
         let into_select_body_ref = self.expand_model_into_select_body(true);
         let into_select_body_value = self.expand_model_into_select_body(false);
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
@@ -29,6 +30,7 @@ impl Expand<'_> {
                 #model_fields
                 #filter_methods
                 #relation_methods
+                #update_method
 
                 #vis fn create() -> #create_struct_ident {
                     #create_struct_ident::default()
