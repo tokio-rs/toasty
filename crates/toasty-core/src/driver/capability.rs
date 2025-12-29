@@ -279,8 +279,8 @@ impl StorageTypes {
         varchar: Some(65_535),
 
         // MySQL does not have an inbuilt UUID type. The binary blob type is more
-        // difficult to read than Text but likely has better performance characteristics.
-        default_uuid_type: db::Type::Binary(16),
+        // difficult to read than Text but likely has better performance characteristics. However, limitations in the engine make it easier to use VarChar for now.
+        default_uuid_type: db::Type::VarChar(36),
 
         // MySQL does not have an arbitrary-precision decimal type. The DECIMAL type
         // requires a fixed precision and scale to be specified upfront. Store as TEXT.
