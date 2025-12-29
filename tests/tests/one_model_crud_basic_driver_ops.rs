@@ -114,8 +114,7 @@ async fn basic_crud(test: &mut DbTest) {
     ));
 
     // ========== UPDATE ==========
-    User::filter_by_id(&user_id)
-        .update()
+    User::update_by_id(&user_id)
         .age(31)
         .exec(&db)
         .await
