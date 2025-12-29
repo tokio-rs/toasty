@@ -278,8 +278,10 @@ impl StorageTypes {
         // which is shared among all columns) and the character set used.
         varchar: Some(65_535),
 
-        // MySQL does not have an inbuilt UUID type. The binary blob type is more
-        // difficult to read than Text but likely has better performance characteristics. However, limitations in the engine make it easier to use VarChar for now.
+        // MySQL does not have an inbuilt UUID type. The binary blob type is
+        // more difficult to read than Text but likely has better performance
+        // characteristics. However, limitations in the engine make it easier to
+        // use VarChar for now.
         default_uuid_type: db::Type::VarChar(36),
 
         // MySQL does not have an arbitrary-precision decimal type. The DECIMAL type
