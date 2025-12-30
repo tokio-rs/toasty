@@ -35,22 +35,22 @@ pub async fn crud_person_self_referential(t: &mut Test) {
         .await
         .unwrap();
 
-    assert_eq!(p2.parent_id, Some(p1.id.clone()));
+    assert_eq!(p2.parent_id, Some(p1.id));
 
     // Associate P3 with P1 by ID.
     let p3 = Person::create()
         .name("person 3")
-        .parent_id(&p1.id)
+        .parent_id(p1.id)
         .exec(&db)
         .await
         .unwrap();
 
-    assert_eq!(p3.parent_id, Some(p1.id.clone()));
+    assert_eq!(p3.parent_id, Some(p1.id));
 
     let assert = |children: &[Person]| {
         assert_eq!(children.len(), 2);
 
-        let children: HashMap<_, _> = children.iter().map(|p| (p.id.clone(), p)).collect();
+        let children: HashMap<_, _> = children.iter().map(|p| (p.id, p)).collect();
         assert_eq!(children.len(), 2);
 
         for (id, child) in &children {
@@ -69,7 +69,7 @@ pub async fn crud_person_self_referential(t: &mut Test) {
     assert(&children);
 
     // Try preloading this time
-    let p1 = Person::filter_by_id(&p1.id)
+    let p1 = Person::filter_by_id(p1.id)
         .include(Person::FIELDS.children())
         .get(&db)
         .await

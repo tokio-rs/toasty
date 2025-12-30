@@ -150,11 +150,6 @@ impl Value {
 
         Value(core_value)
     }
-
-    /// Returns the inferred Toasty type for this value.
-    pub fn infer_ty(&self) -> stmt::Type {
-        self.0.infer_ty()
-    }
 }
 
 impl ToSql for Value {
