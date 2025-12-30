@@ -121,7 +121,7 @@ impl Connection {
     pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
 
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
         let sql = serializer.serialize(
             &sql::Statement::create_table(table, &Capability::POSTGRESQL),
             &mut params,
@@ -162,7 +162,7 @@ impl Connection {
         if_exists: bool,
     ) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
         let sql = if if_exists {
             serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
@@ -210,15 +210,16 @@ impl toasty_core::driver::Connection for Connection {
 
         let width = sql.returning_len();
 
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
         let sql_as_str = sql::Serializer::postgresql(schema).serialize(&sql, &mut params);
 
-        let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
         let param_types = params
             .iter()
-            .map(|param| param.infer_ty().to_postgres_type())
+            .map(|typed_value| typed_value.infer_ty().to_postgres_type())
             .collect::<Vec<_>>();
-        let params = params
+
+        let values: Vec<_> = params.into_iter().map(|tv| Value::from(tv.value)).collect();
+        let params = values
             .iter()
             .map(|param| param as &(dyn ToSql + Sync))
             .collect::<Vec<_>>();

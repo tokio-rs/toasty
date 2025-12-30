@@ -120,7 +120,7 @@ impl toasty_core::driver::Connection for Connection {
             _ => todo!("op={:#?}", op),
         };
 
-        let mut params = vec![];
+        let mut params: Vec<toasty_sql::TypedValue> = vec![];
         let sql_str = sql::Serializer::sqlite(schema).serialize(&sql, &mut params);
 
         let mut stmt = self.connection.prepare_cached(&sql_str).unwrap();
@@ -149,7 +149,10 @@ impl toasty_core::driver::Connection for Connection {
             _ => None,
         };
 
-        let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
+        let params = params
+            .into_iter()
+            .map(|tv| Value::from(tv.value))
+            .collect::<Vec<_>>();
 
         if width.is_none() {
             let count = stmt.execute(rusqlite::params_from_iter(params.iter()))?;
@@ -201,7 +204,7 @@ impl Connection {
     fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::sqlite(schema);
 
-        let mut params = vec![];
+        let mut params: Vec<toasty_sql::TypedValue> = vec![];
         let stmt = serializer.serialize(
             &sql::Statement::create_table(table, &Capability::SQLITE),
             &mut params,
