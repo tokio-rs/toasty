@@ -138,15 +138,22 @@ impl ToSql for &stmt::Insert {
             panic!("MySQL does not support the RETURNING clause with INSERT statements; returning={returning:#?}");
         }
 
-        // Set flag to indicate we're in INSERT context (VALUES shouldn't use ROW())
-        let prev_in_insert = f.in_insert;
-        f.in_insert = true;
+        // Set insert context to provide column type information for VALUES
+        let insert_ctx = match &self.target {
+            stmt::InsertTarget::Table(table) => Some(crate::serializer::InsertContext {
+                table_id: table.table,
+                columns: table.columns.clone(),
+            }),
+            _ => None,
+        };
+        let prev_insert_context = f.insert_context.take();
+        f.insert_context = insert_ctx;
 
         fmt!(
             &cx, f, "INSERT INTO " self.target " " self.source returning
         );
 
-        f.in_insert = prev_in_insert;
+        f.insert_context = prev_insert_context;
     }
 }
 
@@ -459,7 +466,7 @@ impl ToSql for &stmt::Values {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         // MySQL requires ROW() keyword for table value constructors when used
         // in subqueries, but NOT in INSERT statements
-        if f.serializer.is_mysql() && !f.in_insert {
+        if f.serializer.is_mysql() && f.insert_context.is_none() {
             let rows = Comma(self.rows.iter().map(|row| ("ROW(", row, ")")));
             fmt!(cx, f, "VALUES " rows)
         } else {

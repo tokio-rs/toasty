@@ -286,7 +286,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     /// Extract arguments needed to perform data loading
     fn extract_data_load_args(&mut self, stmt: &mut stmt::Statement) {
-        println!("stmt={stmt:#?}");
         if let Some(filter) = stmt.filter() {
             stmt::visit::for_each_expr(filter, |expr| {
                 self.extract_data_load_args_from_expr(expr, None);

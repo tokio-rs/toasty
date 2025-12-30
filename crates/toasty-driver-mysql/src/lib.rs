@@ -80,7 +80,7 @@ impl Connection {
     pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
 
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
         let sql = serializer.serialize(
             &sql::Statement::create_table(table, &Capability::MYSQL),
@@ -120,7 +120,7 @@ impl Connection {
         if_exists: bool,
     ) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
         let sql = if if_exists {
             serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
@@ -168,11 +168,14 @@ impl toasty_core::driver::Connection for Connection {
             op => todo!("op={:#?}", op),
         };
 
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
         let sql_as_str = sql::Serializer::mysql(schema).serialize(&sql, &mut params);
 
-        let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
+        let params = params
+            .into_iter()
+            .map(|tv| Value::from(tv.value))
+            .collect::<Vec<_>>();
         let args = params
             .iter()
             .map(|param| param.to_value())

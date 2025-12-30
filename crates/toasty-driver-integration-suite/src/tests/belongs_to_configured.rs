@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn different_field_name(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {

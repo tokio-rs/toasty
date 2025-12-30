@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn crud_no_fields(t: &mut Test) {
     const MORE: i32 = 10;
 
@@ -79,7 +79,7 @@ pub async fn crud_no_fields(t: &mut Test) {
     }
 }
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn crud_one_string(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
@@ -168,7 +168,7 @@ pub async fn crud_one_string(test: &mut Test) {
     assert_err!(Foo::get_by_id(&db, &ids[0]).await);
 }
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn required_field_create_without_setting(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -186,7 +186,7 @@ pub async fn required_field_create_without_setting(test: &mut Test) {
     assert_err!(User::create().exec(&db).await);
 }
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn unique_index_required_field_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -287,7 +287,7 @@ pub async fn unique_index_required_field_update(test: &mut Test) {
     assert_ok!(User::create().email("user2@example.com").exec(&db).await);
 }
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn unique_index_nullable_field_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -377,7 +377,7 @@ pub async fn unique_index_nullable_field_update(test: &mut Test) {
     assert_eq!(u4_reload.id, u4.id);
 }
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn unique_index_no_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -416,7 +416,7 @@ pub async fn unique_index_no_update(test: &mut Test) {
     assert_eq!(user.name, u.name);
 }
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn batch_get_by_id(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
@@ -445,7 +445,7 @@ pub async fn batch_get_by_id(test: &mut Test) {
     }
 }
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn empty_batch_get_by_id(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
@@ -470,7 +470,7 @@ pub async fn empty_batch_get_by_id(test: &mut Test) {
     assert_eq!(0, items.len());
 }
 
-#[driver_test]
+#[driver_test(id(ID))]
 pub async fn update_multiple_fields(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {

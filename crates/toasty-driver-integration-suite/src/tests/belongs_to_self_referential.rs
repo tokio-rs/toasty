@@ -1,19 +1,18 @@
+use crate::prelude::*;
 use std::collections::HashMap;
-use std_util::assert_none;
-use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
 
-async fn crud_person_self_referential(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn crud_person_self_referential(t: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Person {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
         #[index]
-        parent_id: Option<Id<Person>>,
+        parent_id: Option<ID>,
 
         #[belongs_to(key = parent_id, references = id)]
         parent: toasty::BelongsTo<Option<Person>>,
@@ -22,7 +21,7 @@ async fn crud_person_self_referential(test: &mut DbTest) {
         children: toasty::HasMany<Person>,
     }
 
-    let db = test.setup_db(models!(Person)).await;
+    let db = t.setup_db(models!(Person)).await;
 
     let p1 = Person::create().name("person 1").exec(&db).await.unwrap();
 
@@ -36,22 +35,22 @@ async fn crud_person_self_referential(test: &mut DbTest) {
         .await
         .unwrap();
 
-    assert_eq!(p2.parent_id, Some(p1.id.clone()));
+    assert_eq!(p2.parent_id, Some(p1.id));
 
     // Associate P3 with P1 by ID.
     let p3 = Person::create()
         .name("person 3")
-        .parent_id(&p1.id)
+        .parent_id(p1.id)
         .exec(&db)
         .await
         .unwrap();
 
-    assert_eq!(p3.parent_id, Some(p1.id.clone()));
+    assert_eq!(p3.parent_id, Some(p1.id));
 
     let assert = |children: &[Person]| {
         assert_eq!(children.len(), 2);
 
-        let children: HashMap<_, _> = children.iter().map(|p| (p.id.clone(), p)).collect();
+        let children: HashMap<_, _> = children.iter().map(|p| (p.id, p)).collect();
         assert_eq!(children.len(), 2);
 
         for (id, child) in &children {
@@ -70,7 +69,7 @@ async fn crud_person_self_referential(test: &mut DbTest) {
     assert(&children);
 
     // Try preloading this time
-    let p1 = Person::filter_by_id(&p1.id)
+    let p1 = Person::filter_by_id(p1.id)
         .include(Person::FIELDS.children())
         .get(&db)
         .await
@@ -78,5 +77,3 @@ async fn crud_person_self_referential(test: &mut DbTest) {
 
     assert(p1.children.get());
 }
-
-tests!(crud_person_self_referential,);

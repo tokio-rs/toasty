@@ -1,16 +1,16 @@
-use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
+use crate::prelude::*;
 
-async fn ty_decimal(test: &mut DbTest) {
-    use rust_decimal::Decimal;
-    use std::str::FromStr;
+use rust_decimal::Decimal;
+use std::str::FromStr;
 
+#[driver_test(id(ID))]
+pub async fn ty_decimal(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         val: Decimal,
     }
 
@@ -36,7 +36,8 @@ async fn ty_decimal(test: &mut DbTest) {
     }
 }
 
-async fn ty_decimal_as_text(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn ty_decimal_as_text(test: &mut Test) {
     use rust_decimal::Decimal;
     use std::str::FromStr;
 
@@ -45,7 +46,7 @@ async fn ty_decimal_as_text(test: &mut DbTest) {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = text)]
         val: Decimal,
     }
@@ -66,21 +67,14 @@ async fn ty_decimal_as_text(test: &mut DbTest) {
     }
 }
 
-async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut DbTest) {
-    use rust_decimal::Decimal;
-    use std::str::FromStr;
-
-    // Only test on databases that support arbitrary precision decimals
-    if !test.capability().storage_types.decimal_arbitrary_precision {
-        return;
-    }
-
+#[driver_test(id(ID), requires(decimal_arbitrary_precision))]
+pub async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = numeric)]
         val: Decimal,
     }
@@ -102,21 +96,14 @@ async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut DbTest) {
     }
 }
 
-async fn ty_decimal_as_numeric_fixed_precision(test: &mut DbTest) {
-    use rust_decimal::Decimal;
-    use std::str::FromStr;
-
-    // Only test on databases that support native decimal types
-    if !test.capability().storage_types.native_decimal {
-        return;
-    }
-
+#[driver_test(id(ID), requires(native_decimal))]
+pub async fn ty_decimal_as_numeric_fixed_precision(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = numeric(28, 10))]
         val: Decimal,
     }
@@ -137,10 +124,3 @@ async fn ty_decimal_as_numeric_fixed_precision(test: &mut DbTest) {
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
 }
-
-tests!(
-    ty_decimal,
-    ty_decimal_as_text,
-    ty_decimal_as_numeric_arbitrary_precision,
-    ty_decimal_as_numeric_fixed_precision
-);

@@ -7,6 +7,38 @@ use crate::{
     stmt,
 };
 
+/// Wrapper for serializing a field within an INSERT VALUES record with type hints
+struct TypeHintedField<'a> {
+    field_index: usize,
+    expr: &'a stmt::Expr,
+}
+
+impl<'a> ToSql for TypeHintedField<'a> {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        // Get type hint from insert context if available
+        let type_hint = f.insert_context.as_ref().and_then(|insert_ctx| {
+            if self.field_index < insert_ctx.columns.len()
+                && !matches!(self.expr, stmt::Expr::Default)
+            {
+                let col_id = insert_ctx.columns[self.field_index];
+                let table = &cx.schema().tables[insert_ctx.table_id.0];
+                Some(table.columns[col_id.index].ty.clone())
+            } else {
+                None
+            }
+        });
+
+        // If this is a Value expr with a type hint, serialize with the hint
+        if let (stmt::Expr::Value(value), Some(type_hint)) = (self.expr, type_hint) {
+            let placeholder = f.params.push(value, Some(&type_hint));
+            fmt!(cx, f, placeholder);
+        } else {
+            // Other expr types (including Default) serialize normally
+            self.expr.to_sql(cx, f);
+        }
+    }
+}
+
 impl ToSql for &stmt::Expr {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         use stmt::Expr::*;
@@ -65,8 +97,18 @@ impl ToSql for &stmt::Expr {
                 fmt!(cx, f, expr.expr " LIKE " pattern);
             }
             Record(expr) => {
-                let exprs = Comma(&expr.fields);
-                fmt!(cx, f, "(" exprs ")");
+                // Use TypeHintedField wrapper to provide type hints from INSERT context
+                let fields =
+                    Comma(
+                        expr.fields
+                            .iter()
+                            .enumerate()
+                            .map(|(i, field)| TypeHintedField {
+                                field_index: i,
+                                expr: field,
+                            }),
+                    );
+                fmt!(cx, f, "(" fields ")");
             }
             Reference(expr_reference @ stmt::ExprReference::Column(expr_column)) => {
                 if f.alias {
