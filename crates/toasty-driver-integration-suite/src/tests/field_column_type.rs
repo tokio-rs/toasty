@@ -1,19 +1,15 @@
-use tests::{assert_err, models, tests, DbTest};
-use toasty::stmt::Id;
+use crate::prelude::*;
 
-async fn specify_constrained_string_field(test: &mut DbTest) {
+#[driver_test(id(ID), requires(native_varchar))]
+pub async fn specify_constrained_string_field(test: &mut Test) {
     #[derive(toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[column(type = varchar(5))]
         name: String,
-    }
-
-    if test.capability().storage_types.varchar.is_none() {
-        return;
     }
 
     let db = test.setup_db(models!(User)).await;
@@ -26,13 +22,14 @@ async fn specify_constrained_string_field(test: &mut DbTest) {
     assert!(res.is_err());
 }
 
-async fn specify_invalid_varchar_size(test: &mut DbTest) {
+#[driver_test(id(ID), requires(native_varchar))]
+pub async fn specify_invalid_varchar_size(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[column(type = varchar(1_000_000_000_000))]
         name: String,
@@ -54,20 +51,17 @@ async fn specify_invalid_varchar_size(test: &mut DbTest) {
     );
 }
 
-async fn specify_varchar_ty_when_not_supported(test: &mut DbTest) {
+#[driver_test(id(ID), requires(native_varchar))]
+pub async fn specify_varchar_ty_when_not_supported(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[column(type = varchar(5))]
         name: String,
-    }
-
-    if test.capability().storage_types.varchar.is_some() {
-        return;
     }
 
     // Try to setup a database with varchar when not supported
@@ -75,13 +69,14 @@ async fn specify_varchar_ty_when_not_supported(test: &mut DbTest) {
     assert_eq!(err.to_string(), "varchar storage type not supported");
 }
 
-async fn specify_uuid_as_text(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn specify_uuid_as_text(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[column(type = text)]
         val: uuid::Uuid,
@@ -105,13 +100,14 @@ async fn specify_uuid_as_text(test: &mut DbTest) {
     }
 }
 
-async fn specify_uuid_as_bytes(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn specify_uuid_as_bytes(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[column(type = blob)]
         val: uuid::Uuid,
@@ -126,11 +122,3 @@ async fn specify_uuid_as_bytes(test: &mut DbTest) {
         assert_eq!(read.val, val);
     }
 }
-
-tests!(
-    specify_constrained_string_field,
-    specify_invalid_varchar_size,
-    specify_varchar_ty_when_not_supported,
-    specify_uuid_as_text,
-    specify_uuid_as_bytes,
-);
