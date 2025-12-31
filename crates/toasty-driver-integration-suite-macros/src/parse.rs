@@ -13,7 +13,16 @@ pub struct DriverTest {
     pub kinds: Vec<Kind>,
 
     /// Required capabilities for this test
-    pub requires: Vec<String>,
+    pub requires: Vec<Capability>,
+}
+
+/// A capability requirement, optionally negated
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Capability {
+    /// The capability name
+    pub name: String,
+    /// Whether this capability should NOT be present
+    pub negated: bool,
 }
 
 /// Kinds of test variants to generate
@@ -73,7 +82,7 @@ impl KindVariant {
 #[derive(Debug)]
 pub struct DriverTestAttr {
     pub id_ident: Option<String>,
-    pub requires: Vec<String>,
+    pub requires: Vec<Capability>,
 }
 
 impl Parse for DriverTestAttr {
@@ -105,7 +114,7 @@ enum DriverTestAttrItem {
     /// id(IDENT) - specifies test should be expanded for multiple ID types
     Id(String),
     /// requires(cap1, cap2, ...) - specifies capabilities required for this test
-    Requires(Vec<String>),
+    Requires(Vec<Capability>),
 }
 
 impl Parse for DriverTestAttrItem {
@@ -121,18 +130,65 @@ impl Parse for DriverTestAttrItem {
                 Ok(DriverTestAttrItem::Id(ident.to_string()))
             }
             "requires" => {
-                // Parse requires(cap1, cap2, ...)
+                // Parse requires(cap1, cap2, not(cap3), ...)
                 let content;
                 syn::parenthesized!(content in input);
-                let caps = Punctuated::<Ident, Comma>::parse_terminated(&content)?;
+                let caps = Punctuated::<CapabilityItem, Comma>::parse_terminated(&content)?;
                 Ok(DriverTestAttrItem::Requires(
-                    caps.into_iter().map(|i| i.to_string()).collect(),
+                    caps.into_iter().map(|item| item.into()).collect(),
                 ))
             }
             _ => Err(syn::Error::new_spanned(
                 name,
                 "unknown attribute, expected `id` or `requires`",
             )),
+        }
+    }
+}
+
+/// A single capability item in the requires() list
+enum CapabilityItem {
+    /// A plain capability name
+    Plain(Ident),
+    /// A negated capability: not(name)
+    Negated(Ident),
+}
+
+impl Parse for CapabilityItem {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let lookahead = input.lookahead1();
+
+        if lookahead.peek(Ident) {
+            let ident: Ident = input.parse()?;
+
+            // Check if this is "not"
+            if ident == "not" {
+                // Parse not(capability)
+                let content;
+                syn::parenthesized!(content in input);
+                let cap_ident: Ident = content.parse()?;
+                Ok(CapabilityItem::Negated(cap_ident))
+            } else {
+                // Plain capability
+                Ok(CapabilityItem::Plain(ident))
+            }
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
+
+impl From<CapabilityItem> for Capability {
+    fn from(item: CapabilityItem) -> Self {
+        match item {
+            CapabilityItem::Plain(ident) => Capability {
+                name: ident.to_string(),
+                negated: false,
+            },
+            CapabilityItem::Negated(ident) => Capability {
+                name: ident.to_string(),
+                negated: true,
+            },
         }
     }
 }

@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, visit_mut::VisitMut, ItemFn, Type, TypePath};
 
-use crate::parse::{DriverTest, DriverTestAttr, Kind};
+use crate::parse::{Capability, DriverTest, DriverTestAttr, Kind};
 
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
@@ -41,7 +41,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Generate a test variant with ID rewritten to the target type
-fn generate_variant(input: &ItemFn, kind: &Kind, requires: &[String]) -> ItemFn {
+fn generate_variant(input: &ItemFn, kind: &Kind, requires: &[Capability]) -> ItemFn {
     let mut variant = input.clone();
 
     // Update function name using Kind's method
@@ -60,7 +60,7 @@ fn generate_variant(input: &ItemFn, kind: &Kind, requires: &[String]) -> ItemFn 
 }
 
 /// Add runtime capability checks to the beginning of a test function
-fn add_capability_checks(func: &mut ItemFn, requires: &[String]) {
+fn add_capability_checks(func: &mut ItemFn, requires: &[Capability]) {
     use syn::{parse_quote, Ident, Stmt};
 
     // Get the test parameter name (first parameter of the function)
@@ -85,13 +85,25 @@ fn add_capability_checks(func: &mut ItemFn, requires: &[String]) {
     let capability_checks: Vec<Stmt> = requires
         .iter()
         .map(|cap| {
-            let cap_ident = Ident::new(cap, proc_macro2::Span::call_site());
-            parse_quote! {
-                assert!(
-                    #test_param.capability().#cap_ident,
-                    "Driver does not support required capability: {}",
-                    stringify!(#cap_ident)
-                );
+            let cap_ident = Ident::new(&cap.name, proc_macro2::Span::call_site());
+            if cap.negated {
+                // For negated capabilities, check that the capability is NOT present
+                parse_quote! {
+                    assert!(
+                        !#test_param.capability().#cap_ident,
+                        "Driver should not support capability: {}",
+                        stringify!(#cap_ident)
+                    );
+                }
+            } else {
+                // For regular capabilities, check that it IS present
+                parse_quote! {
+                    assert!(
+                        #test_param.capability().#cap_ident,
+                        "Driver does not support required capability: {}",
+                        stringify!(#cap_ident)
+                    );
+                }
             }
         })
         .collect();

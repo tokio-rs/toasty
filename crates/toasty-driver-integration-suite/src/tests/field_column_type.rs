@@ -120,10 +120,14 @@ pub async fn specify_uuid_as_text(test: &mut Test) {
 
         let (op, _) = test.log().pop();
 
-        assert_struct!(op, Operation::QuerySql(_ {
-            stmt: Statement::Query(_),
-            ..
-        }))
+        if test.capability().sql {
+            assert_struct!(op, Operation::QuerySql(_ {
+                stmt: Statement::Query(_),
+                ..
+            }))
+        } else {
+            assert_struct!(op, Operation::GetByKey(_))
+        }
     }
 }
 
