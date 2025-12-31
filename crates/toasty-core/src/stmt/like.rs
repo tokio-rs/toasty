@@ -11,47 +11,55 @@ use super::{Expr, ExprSet, Value};
 use assert_struct::Like;
 
 /// Helper function to extract Values from an Expr (handles both polymorphic representations)
-fn extract_values_from_expr(expr: &Expr) -> Option<Vec<&Value>> {
+fn extract_exprs_from_record(expr: &Expr) -> Option<Vec<Expr>> {
     match expr {
-        Expr::Value(Value::Record(record)) => Some(record.fields.iter().collect()),
-        Expr::Record(record) => {
-            let mut values = Vec::new();
-            for field in &record.fields {
-                match field {
-                    Expr::Value(v) => values.push(v),
-                    _ => return None,
-                }
-            }
-            Some(values)
+        Expr::Value(Value::Record(record)) => {
+            Some(record.fields.iter().cloned().map(Into::into).collect())
         }
+        Expr::Record(record) => Some(record.fields.clone()),
         _ => None,
+    }
+}
+
+impl Like<Value> for Expr {
+    fn like(&self, other: &Value) -> bool {
+        match (self, other) {
+            (Expr::Value(value), rhs) => value == rhs,
+            (Expr::Record(lhs), Value::Record(rhs)) => {
+                lhs.len() == rhs.len()
+                    && lhs
+                        .fields
+                        .iter()
+                        .zip(rhs.fields.iter())
+                        .all(|(lhs, rhs)| lhs.like(rhs))
+            }
+            _ => false,
+        }
     }
 }
 
 /// Like implementation for expressions against Vec<Value> patterns
 impl Like<Vec<Value>> for Expr {
     fn like(&self, pattern: &Vec<Value>) -> bool {
-        if let Some(values) = extract_values_from_expr(self) {
-            values.len() == pattern.len()
-                && values
-                    .iter()
-                    .zip(pattern)
-                    .all(|(value, expected)| value == &expected)
-        } else {
-            false
-        }
+        self.like(&&pattern[..])
     }
 }
 
 /// Like implementation for expressions against arrays of Values
 impl<const N: usize> Like<[Value; N]> for Expr {
     fn like(&self, pattern: &[Value; N]) -> bool {
-        if let Some(values) = extract_values_from_expr(self) {
-            values.len() == N
+        self.like(&&pattern[..])
+    }
+}
+
+impl Like<&[Value]> for Expr {
+    fn like(&self, other: &&[Value]) -> bool {
+        if let Some(values) = extract_exprs_from_record(self) {
+            values.len() == other.len()
                 && values
                     .iter()
-                    .zip(pattern)
-                    .all(|(value, expected)| value == &expected)
+                    .zip(*other)
+                    .all(|(value, expected)| value.like(expected))
         } else {
             false
         }
@@ -65,10 +73,22 @@ impl Like<&str> for Value {
     }
 }
 
+impl Like<&str> for Expr {
+    fn like(&self, pattern: &&str) -> bool {
+        matches!(self, Expr::Value(Value::String(s)) if s == pattern)
+    }
+}
+
 /// Convenience implementation for matching Value against i32
 impl Like<i32> for Value {
     fn like(&self, pattern: &i32) -> bool {
         matches!(self, Value::I32(v) if v == pattern)
+    }
+}
+
+impl Like<i32> for Expr {
+    fn like(&self, pattern: &i32) -> bool {
+        matches!(self, Expr::Value(Value::I32(v)) if v == pattern)
     }
 }
 
@@ -85,6 +105,13 @@ impl Like<&String> for Value {
     }
 }
 
+/// Like implementation for Expr and String (delegates to PartialEq)
+impl Like<String> for Expr {
+    fn like(&self, pattern: &String) -> bool {
+        self == pattern
+    }
+}
+
 /// Macro to generate Like implementations for tuple patterns using Alice's pattern
 ///
 /// Based on: https://users.rust-lang.org/t/macro-to-impl-trait-for-tuple/79165/2
@@ -94,12 +121,12 @@ macro_rules! impl_like_tuple {
         #[allow(non_snake_case)]
         impl<$($t),+> Like<($($t,)+)> for Expr
         where
-            $(Value: Like<$t>),+
+            $(Expr: Like<$t>),+
         {
             fn like(&self, pattern: &($($t,)+)) -> bool {
-                if let Some(values) = extract_values_from_expr(self) {
-                    values.len() == impl_like_tuple!(@count $($t)+) && $(
-                        values[$idx].like(&pattern.$idx)
+                if let Some(exprs) = extract_exprs_from_record(self) {
+                    exprs.len() == impl_like_tuple!(@count $($t)+) && $(
+                        exprs[$idx].like(&pattern.$idx)
                     )&&+
                 } else {
                     false
@@ -184,16 +211,16 @@ where
     }
 }
 
-/// Like implementation for Expr and String (delegates to PartialEq)
-impl Like<String> for Expr {
-    fn like(&self, pattern: &String) -> bool {
-        self == pattern
-    }
-}
-
-/// Like implementation for Expr and &str (delegates to PartialEq)
-impl Like<&str> for Expr {
-    fn like(&self, pattern: &&str) -> bool {
-        self == *pattern
+impl<const N: usize> Like<[&str; N]> for Expr {
+    fn like(&self, other: &[&str; N]) -> bool {
+        match self {
+            Expr::Value(Value::Record(v)) if v.len() == other.len() => {
+                v.iter().zip(other.iter()).all(|(lhs, rhs)| lhs.like(rhs))
+            }
+            Expr::Record(v) if v.len() == other.len() => {
+                v.iter().zip(other.iter()).all(|(lhs, rhs)| lhs.like(rhs))
+            }
+            _ => false,
+        }
     }
 }

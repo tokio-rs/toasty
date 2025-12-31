@@ -82,6 +82,11 @@ impl Test {
         self.capability
     }
 
+    /// Get the execution log for assertions
+    pub fn log(&mut self) -> &mut ExecLog {
+        &mut self.exec_log
+    }
+
     /// Run an async test function using the internal runtime
     pub fn run(&mut self, f: impl AsyncFn(&mut Test)) {
         // Temporarily take the runtime to avoid borrow checker issues
