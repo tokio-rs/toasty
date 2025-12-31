@@ -1,5 +1,3 @@
-#![allow(dead_code)] // TODO: remove when integration suite migration done
-
 use crate::logging_driver::DriverOp;
 use std::sync::{Arc, Mutex};
 use toasty_core::driver::{Operation, Response};
