@@ -14,8 +14,8 @@ struct Input {
     test_path: syn::Path,
     /// The driver setup expression
     driver_expr: Expr,
-    /// Capabilities required by this test
-    requires: Vec<String>,
+    /// Capabilities required by this test (capability_name, is_negated)
+    requires: Vec<(String, bool)>,
     /// Capabilities supported by the driver
     capabilities: std::collections::HashMap<String, bool>,
 }
@@ -45,13 +45,27 @@ impl Parse for Input {
 
             match &key.to_string()[..] {
                 "requires" => {
-                    // Parse requires: [cap1, cap2, ...]
+                    // Parse requires: [cap1, cap2, !cap3, ...]
+                    // where !cap means the capability should NOT be supported
                     let content;
                     syn::bracketed!(content in input);
-                    let caps = syn::punctuated::Punctuated::<Ident, Token![,]>::parse_terminated(
-                        &content,
-                    )?;
-                    requires.extend(caps.into_iter().map(|i| i.to_string()));
+
+                    // Parse as string literals that may start with !
+                    let caps =
+                        syn::punctuated::Punctuated::<syn::LitStr, Token![,]>::parse_terminated(
+                            &content,
+                        )?;
+
+                    for cap_lit in caps {
+                        let cap_str = cap_lit.value();
+                        if let Some(name) = cap_str.strip_prefix('!') {
+                            // Negated capability
+                            requires.push((name.to_string(), true));
+                        } else {
+                            // Normal capability
+                            requires.push((cap_str, false));
+                        }
+                    }
                 }
                 _ => {
                     // Parse capability flags: name: true/false
@@ -90,15 +104,24 @@ pub fn expand(input: TokenStream) -> TokenStream {
 
 /// Generate test variants (id_u64, id_uuid) based on requirements
 fn generate_test_variants(input: &Input) -> Vec<TokenStream2> {
-    // Check if test requires capabilities that the driver doesn't have
-    for req in &input.requires {
-        if let Some(&supported) = input.capabilities.get(req) {
+    // Check if test requirements match the driver's capabilities
+    for (cap_name, is_negated) in &input.requires {
+        let supported = input.capabilities.get(cap_name).copied().unwrap_or(true);
+
+        if *is_negated {
+            // Negated requirement: test requires this capability to NOT be supported
+            if supported {
+                // Driver supports this capability, but test requires it NOT to be supported
+                // Skip this test
+                return vec![];
+            }
+        } else {
+            // Normal requirement: test requires this capability to be supported
             if !supported {
                 // Driver doesn't support required capability - skip this test
                 return vec![];
             }
         }
-        // If capability not specified, assume it's supported (default: true)
     }
 
     let mut variants = Vec::new();

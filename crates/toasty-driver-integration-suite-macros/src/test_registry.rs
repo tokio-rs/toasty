@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use syn::{parse_macro_input, visit::Visit, Ident, ItemFn, LitStr};
 
-use crate::parse::{DriverTest, DriverTestAttr};
+use crate::parse::{Capability, DriverTest, DriverTestAttr};
 
 pub fn expand(input: TokenStream) -> TokenStream {
     // Parse the relative path to the tests directory (relative to CARGO_MANIFEST_DIR)
@@ -80,14 +80,17 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
     }
 
     // Always include auto_increment as it's implicitly required by ID expansion
-    all_requires.insert("auto_increment".to_string());
+    all_requires.insert(Capability {
+        name: "auto_increment".to_string(),
+        negated: false,
+    });
 
     // Convert HashSet to sorted Vec of Idents
     let mut requires_vec: Vec<_> = all_requires.into_iter().collect();
     requires_vec.sort();
     structure.requires = requires_vec
         .into_iter()
-        .map(|s| Ident::new(&s, proc_macro2::Span::call_site()))
+        .map(|cap| Ident::new(&cap.name, proc_macro2::Span::call_site()))
         .collect();
 
     structure
@@ -172,11 +175,18 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
                             }
                         }
                     } else {
-                        // Generate requires list as comma-separated identifiers
+                        // Generate requires list as capability specifications
+                        // Format: "capability_name" or "!capability_name" for negated
                         let requires_list: Vec<_> = test
                             .requires
                             .iter()
-                            .map(|r| Ident::new(r, proc_macro2::Span::call_site()))
+                            .map(|cap| {
+                                if cap.negated {
+                                    format!("!{}", cap.name)
+                                } else {
+                                    cap.name.clone()
+                                }
+                            })
                             .collect();
 
                         quote! {
