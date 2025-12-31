@@ -24,6 +24,8 @@ pub struct Capability {
     /// Whether the database has an auto increment modifier for integer columns.
     pub auto_increment: bool,
 
+    pub native_varchar: bool,
+
     /// Whether the database has native support for Timestamp types.
     pub native_timestamp: bool,
 
@@ -91,6 +93,30 @@ pub struct StorageTypes {
 }
 
 impl Capability {
+    /// Validates the consistency of the capability configuration.
+    ///
+    /// This performs sanity checks to ensure the capability fields are
+    /// internally consistent. For example, if `native_varchar` is true,
+    /// then `storage_types.varchar` must be Some, and vice versa.
+    ///
+    /// Returns an error if any inconsistencies are found.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        // Validate varchar consistency
+        if self.native_varchar && self.storage_types.varchar.is_none() {
+            anyhow::bail!(
+                "Capability validation failed: native_varchar is true but storage_types.varchar is None"
+            );
+        }
+
+        if !self.native_varchar && self.storage_types.varchar.is_some() {
+            anyhow::bail!(
+                "Capability validation failed: native_varchar is false but storage_types.varchar is Some"
+            );
+        }
+
+        Ok(())
+    }
+
     /// Returns the default string length limit for this database.
     ///
     /// This is useful for tests and applications that need to respect
@@ -128,6 +154,8 @@ impl Capability {
         primary_key_ne_predicate: true,
         auto_increment: true,
         bigdecimal_implemented: false,
+
+        native_varchar: true,
 
         // SQLite does not have native date/time types
         native_timestamp: false,
@@ -192,6 +220,7 @@ impl Capability {
         primary_key_ne_predicate: false,
         auto_increment: false,
         bigdecimal_implemented: false,
+        native_varchar: false,
 
         // DynamoDB does not have native date/time types
         native_timestamp: false,
@@ -324,4 +353,71 @@ impl StorageTypes {
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_sqlite_capability() {
+        // SQLite has native_varchar=true and varchar=Some, should pass
+        assert!(Capability::SQLITE.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_postgresql_capability() {
+        // PostgreSQL has native_varchar=true and varchar=Some, should pass
+        assert!(Capability::POSTGRESQL.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_mysql_capability() {
+        // MySQL has native_varchar=true and varchar=Some, should pass
+        assert!(Capability::MYSQL.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_dynamodb_capability() {
+        // DynamoDB has native_varchar=false and varchar=None, should pass
+        assert!(Capability::DYNAMODB.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_fails_when_native_varchar_true_but_no_varchar() {
+        let invalid = Capability {
+            native_varchar: true,
+            storage_types: StorageTypes {
+                varchar: None, // Invalid: native_varchar is true but varchar is None
+                ..StorageTypes::SQLITE
+            },
+            ..Capability::SQLITE
+        };
+
+        let result = invalid.validate();
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("native_varchar is true but storage_types.varchar is None"));
+    }
+
+    #[test]
+    fn test_validate_fails_when_native_varchar_false_but_has_varchar() {
+        let invalid = Capability {
+            native_varchar: false,
+            storage_types: StorageTypes {
+                varchar: Some(1000), // Invalid: native_varchar is false but varchar is Some
+                ..StorageTypes::DYNAMODB
+            },
+            ..Capability::DYNAMODB
+        };
+
+        let result = invalid.validate();
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("native_varchar is false but storage_types.varchar is Some"));
+    }
 }
