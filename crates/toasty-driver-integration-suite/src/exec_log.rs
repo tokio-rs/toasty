@@ -1,5 +1,8 @@
 use crate::logging_driver::DriverOp;
-use std::sync::{Arc, Mutex};
+use std::{
+    fmt,
+    sync::{Arc, Mutex},
+};
 use toasty_core::driver::{Operation, Response};
 
 /// A wrapper around the operations log that provides a clean API for tests
@@ -38,5 +41,12 @@ impl ExecLog {
             let driver_op = ops.remove(0);
             (driver_op.operation, driver_op.response)
         }
+    }
+}
+
+impl fmt::Debug for ExecLog {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ops = self.ops.lock().unwrap();
+        f.debug_struct("ExecLog").field("ops", &*ops).finish()
     }
 }

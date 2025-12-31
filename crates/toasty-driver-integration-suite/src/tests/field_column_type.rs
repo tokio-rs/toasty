@@ -1,5 +1,10 @@
 use crate::prelude::*;
 
+use toasty_core::{
+    driver::Operation,
+    stmt::{ExprSet, InsertTarget, Statement},
+};
+
 #[driver_test(id(ID), requires(native_varchar))]
 pub async fn specify_constrained_string_field(test: &mut Test) {
     #[derive(toasty::Model)]
@@ -51,7 +56,7 @@ pub async fn specify_invalid_varchar_size(test: &mut Test) {
     );
 }
 
-#[driver_test(id(ID), requires(native_varchar))]
+#[driver_test(id(ID), requires(not(native_varchar)))]
 pub async fn specify_varchar_ty_when_not_supported(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -86,17 +91,39 @@ pub async fn specify_uuid_as_text(test: &mut Test) {
 
     for _ in 0..16 {
         let val = uuid::Uuid::new_v4();
+        let val_str = val.to_string();
         let created = Foo::create().val(val).exec(&db).await.unwrap();
+
+        // Verify that the INSERT operation stored the UUID as a text string
+        let (op, _resp) = test.log().pop();
+
+        // Verify the operation uses the correct table and columns,
+        // and the UUID value is sent as a string
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Insert(_ {
+                target: InsertTarget::Table(_ {
+                    table: == table_id(&db, "foos"),
+                    columns: == columns(&db, "foos", &["id", "val"]),
+                    ..
+                }),
+                source.body: ExprSet::Values(_ {
+                    rows: [=~ (Any, val_str)],
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
+
         let read = Foo::get_by_id(&db, &created.id).await.unwrap();
         assert_eq!(read.val, val);
 
-        let mut filter = std::collections::HashMap::new();
-        filter.insert("id".to_string(), toasty_core::stmt::Value::from(created.id));
-        let raw_value = test
-            .get_raw_column_value::<String>("foos", "val", filter)
-            .await
-            .unwrap();
-        assert_eq!(raw_value, val.to_string());
+        let (op, _) = test.log().pop();
+
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Query(_),
+            ..
+        }))
     }
 }
 
