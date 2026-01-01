@@ -205,6 +205,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             ..
                         } => {
                             assert!(input.get().is_none());
+                            assert!(
+                                !(self.stmt().is_insert() && is_returning_projection),
+                                "TODO"
+                            );
 
                             let target_stmt_info = &self.planner.hir[target_id];
                             let target_node_id = target_stmt_info.output.get().expect("bug");
@@ -217,9 +221,24 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         hir::Arg::Sub {
                             input,
                             returning: false,
+                            batch_load_index,
                             ..
                         } => {
-                            *expr = stmt::Expr::arg(input.get().unwrap());
+                            let position = input.get().unwrap();
+
+                            *expr = if self.stmt().is_insert() && is_returning_projection {
+                                let row = batch_load_index.get().unwrap();
+                                stmt::Expr::project(
+                                    stmt::ExprArg {
+                                        position,
+                                        nesting: 1,
+                                    },
+                                    [row],
+                                )
+                                .into()
+                            } else {
+                                stmt::Expr::arg(position)
+                            };
                         }
                     }
                 }
@@ -281,7 +300,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 self.load_data.columns.insert(*expr_reference);
             }
         })
-        // stmt::Expr::arg_project(position, [index])
     }
 
     /// Extract arguments needed to perform data loading
@@ -319,7 +337,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     // Sub-statement arguments in the filter should only happen with !sql
                     debug_assert!(insert_row.is_some() || !self.planner.engine.capability().sql);
 
-                    let node_id = self.planner.hir[target_id].output.get().expect("bug");
+                    let target = &self.planner.hir[target_id];
+                    let node_id = target.output.get().expect("bug");
                     let (index, _) = self.load_data.inputs.insert_full(node_id);
                     batch_load_index.set(insert_row);
                     input.set(Some(index));
@@ -509,8 +528,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             )
                         }
                         hir::Arg::Sub {
+                            stmt_id: target_id,
                             input,
-                            batch_load_index,
                             ..
                         } => {
                             debug_assert!(
@@ -518,10 +537,24 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                                 "{:#?} | is this needed?",
                                 self.load_data
                             );
-                            *expr = stmt::Expr::arg_project(
-                                input.get().unwrap(),
-                                [batch_load_index.get().unwrap()],
-                            )
+                            let target = &self.planner.hir[target_id];
+
+                            // If the sub statement should be treated as a single query
+                            let single = target
+                                .stmt()
+                                .as_insert()
+                                .map(|insert| insert.source.single)
+                                .unwrap_or(false);
+
+                            *expr = if single {
+                                stmt::Expr::arg_project(input.get().unwrap(), [0])
+                            } else {
+                                // stmt::Expr::arg_project(
+                                //     input.get().unwrap(),
+                                //     [batch_load_index.get().unwrap()],
+                                // );
+                                stmt::Expr::arg(input.get().unwrap())
+                            };
                         }
                     }
                 }

@@ -6,4 +6,5 @@ pub mod decimal;
 pub mod field_auto;
 pub mod field_column_name;
 pub mod field_column_type;
+pub mod has_many_batch_create;
 pub mod one_model_crud;
