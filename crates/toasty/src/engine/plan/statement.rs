@@ -549,10 +549,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             *expr = if single {
                                 stmt::Expr::arg_project(input.get().unwrap(), [0])
                             } else {
-                                // stmt::Expr::arg_project(
-                                //     input.get().unwrap(),
-                                //     [batch_load_index.get().unwrap()],
-                                // );
                                 stmt::Expr::arg(input.get().unwrap())
                             };
                         }
