@@ -167,36 +167,35 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             target_expr_ref,
                             ..
                         } => {
-                            assert!(returning_input.get().is_none());
-
                             let target_stmt_info = &self.planner.hir[target_id];
                             let back_ref = &target_stmt_info.back_refs[&self.stmt_id];
-
-                            // Find the node providing the data for the ref
-                            let node_id = back_ref.node_id.get().unwrap();
 
                             // Find the column
                             let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
 
-                            let (index, _) = inputs.insert_full(node_id);
-                            returning_input.set(Some(index));
+                            if returning_input.get().is_none() {
+                                // Find the node providing the data for the ref
+                                let node_id = back_ref.node_id.get().unwrap();
 
-                            *expr = if self.stmt().is_insert() && is_returning_projection {
-                                let row = batch_load_index.get().unwrap();
-                                stmt::Expr::project(
-                                    stmt::ExprArg {
-                                        position: index,
-                                        nesting: 1,
-                                    },
-                                    [row, column],
-                                )
+                                let (index, _) = inputs.insert_full(node_id);
+                                returning_input.set(Some(index));
+                            }
+
+                            let index = returning_input.get().unwrap();
+                            let row = batch_load_index.get().unwrap();
+                            let nesting = if self.stmt().is_insert() && is_returning_projection {
+                                1
                             } else {
+                                0
+                            };
+
+                            *expr = stmt::Expr::project(
                                 stmt::ExprArg {
                                     position: index,
-                                    nesting: 0,
-                                }
-                                .into()
-                            };
+                                    nesting,
+                                },
+                                [row, column],
+                            );
                         }
                         hir::Arg::Sub {
                             stmt_id: target_id,
@@ -222,11 +221,22 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             input,
                             returning: false,
                             batch_load_index,
+                            stmt_id: target_id,
                             ..
                         } => {
                             let position = input.get().unwrap();
 
                             *expr = if self.stmt().is_insert() && is_returning_projection {
+                                debug_assert!(
+                                    match self.planner.hir[target_id].stmt() {
+                                        stmt::Statement::Query(stmt) => !stmt.single,
+                                        stmt::Statement::Insert(stmt) => !stmt.source.single,
+                                        stmt => todo!("stmt={stmt:#?}"),
+                                    },
+                                    "target-stmt={:#?}",
+                                    self.planner.hir[target_id].stmt()
+                                );
+
                                 let row = batch_load_index.get().unwrap();
                                 stmt::Expr::project(
                                     stmt::ExprArg {
@@ -537,20 +547,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                                 "{:#?} | is this needed?",
                                 self.load_data
                             );
-                            let target = &self.planner.hir[target_id];
-
-                            // If the sub statement should be treated as a single query
-                            let single = target
-                                .stmt()
-                                .as_insert()
-                                .map(|insert| insert.source.single)
-                                .unwrap_or(false);
-
-                            *expr = if single {
-                                stmt::Expr::arg_project(input.get().unwrap(), [0])
-                            } else {
-                                stmt::Expr::arg(input.get().unwrap())
-                            };
+                            *expr = stmt::Expr::arg(input.get().unwrap());
                         }
                     }
                 }

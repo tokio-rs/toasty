@@ -452,6 +452,15 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
             lower.constantize_insert_returning(returning, &stmt.source);
+
+            if stmt.source.single {
+                if let stmt::Returning::Value(expr) = &returning {
+                    // Not strictly true, but there is nothing that needs to
+                    // return a list at this point for a "single" query. If this
+                    // is ever needed, remove the assertion.
+                    debug_assert!(!expr.is_list());
+                }
+            }
         }
 
         self.visit_insert_target_mut(&mut stmt.target);
@@ -894,7 +903,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         // We only track references that point to statements being executed by
         // separate operations. References within the same operation are handled
         // by the target database.
-        debug_assert!(nesting != 0);
+        debug_assert!(nesting != 0, "expr_reference={expr_reference:#?}");
 
         // Set the nesting to zero as the stored ExprReference will be used from
         // the context of the *target* statement.
