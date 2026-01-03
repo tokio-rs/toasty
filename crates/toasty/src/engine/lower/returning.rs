@@ -279,7 +279,7 @@ impl LowerStatement<'_, '_> {
 
                 let field = &self.1.rows[*row].as_record_unwrap()[index];
 
-                if field.is_const() || field.is_arg() {
+                if field.is_eval() {
                     Some(field.clone())
                 } else {
                     None
