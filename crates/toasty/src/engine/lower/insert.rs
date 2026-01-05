@@ -58,7 +58,7 @@ impl LowerStatement<'_, '_> {
         // If there are any has_n associations included in the insertion, the
         // statement returning has to be transformed to accomodate the nested
         // structure.
-        self.convert_returning_for_insert_with_has_n(values, returning, source.single);
+        self.convert_returning_for_insert(values, returning, source.single);
 
         for (index, row) in values.rows.iter_mut().enumerate() {
             self.plan_stmt_insert_relations(row, returning, index);
@@ -140,7 +140,7 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    fn convert_returning_for_insert_with_has_n(
+    fn convert_returning_for_insert(
         &mut self,
         values: &stmt::Values,
         returning: &mut Option<stmt::Returning>,
