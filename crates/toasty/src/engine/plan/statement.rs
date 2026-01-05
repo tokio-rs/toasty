@@ -28,6 +28,7 @@ struct LoadData {
 
 type Returning = Option<stmt::Returning>;
 
+#[derive(Debug)]
 struct ReturningInfo {
     clause: Option<stmt::Returning>,
     inputs: IndexSet<mir::NodeId>,
@@ -247,7 +248,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                                 )
                                 .into()
                             } else {
-                                stmt::Expr::arg(position)
+                                let target_stmt_info = &self.planner.hir[target_id];
+                                let target_node_id = target_stmt_info.output.get().expect("bug");
+
+                                let (index, _) = inputs.insert_full(target_node_id);
+
+                                stmt::Expr::arg(index)
                             };
                         }
                     }
