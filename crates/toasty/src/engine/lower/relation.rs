@@ -523,27 +523,18 @@ impl LowerStatement<'_, '_> {
 
                 let returning = stmt_info.stmt.as_ref().unwrap().returning().expect("bug");
 
-                let expr = match returning.clone() {
-                    stmt::Returning::Value(stmt::Expr::Value(stmt::Value::List(rows))) => {
-                        assert_eq!(1, rows.len());
-                        rows.into_iter().next().unwrap().into()
-                    }
-                    stmt::Returning::Value(stmt::Expr::List(rows)) => {
-                        assert_eq!(1, rows.items.len());
-                        rows.items.into_iter().next().unwrap()
-                    }
-                    stmt::Returning::Value(row) => row,
-                    stmt::Returning::Expr(_) => {
-                        assert_eq!(
-                            belongs_to.foreign_key.fields.len(),
-                            1,
-                            "TODO: handle composite keys"
-                        );
+                let expr = match returning {
+                    stmt::Returning::Value(expr) if expr.is_const() => expr.clone(),
+                    _ => {
+                        // Make sure the source statement returns a single record
+                        debug_assert!(match &**stmt_info.stmt.as_ref().unwrap() {
+                            stmt::Statement::Insert(i) => i.source.single,
+                            stmt::Statement::Query(stmt) => stmt.single,
+                            stmt => todo!("stmt={stmt:#?}"),
+                        });
                         // The result dependency is needed to get the foreign key.
-                        let arg = self.new_dependency_arg(self.scope_stmt_id(), target_id);
-                        stmt::Expr::project(arg, [0])
+                        self.new_dependency_arg(self.scope_stmt_id(), target_id)
                     }
-                    returning => todo!("returning={returning:#?}; dep={stmt_info:#?}"),
                 };
 
                 self.set_relation_field(field, expr, source);
@@ -605,8 +596,22 @@ impl LowerStatement<'_, '_> {
                 source.set_source_field(fk_field.source, fk_value);
             }
         } else {
-            let [fk_field] = &fk_fields[..] else { todo!() };
-            source.set_source_field(fk_field.source, expr);
+            match expr {
+                stmt::Expr::Arg(_) => {
+                    for (i, fk_field) in fk_fields.iter().enumerate() {
+                        source.set_source_field(
+                            fk_field.source,
+                            stmt::Expr::project(expr.clone(), [i]),
+                        );
+                    }
+                }
+                stmt::Expr::Value(_) => {
+                    let [fk_field] = &fk_fields[..] else { todo!() };
+
+                    source.set_source_field(fk_field.source, expr);
+                }
+                expr => todo!("expr={expr:#?}"),
+            }
         }
     }
 }

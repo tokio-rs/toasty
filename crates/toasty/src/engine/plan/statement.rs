@@ -28,6 +28,7 @@ struct LoadData {
 
 type Returning = Option<stmt::Returning>;
 
+#[derive(Debug)]
 struct ReturningInfo {
     clause: Option<stmt::Returning>,
     inputs: IndexSet<mir::NodeId>,
@@ -167,59 +168,50 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             target_expr_ref,
                             ..
                         } => {
-                            assert!(returning_input.get().is_none());
-
                             let target_stmt_info = &self.planner.hir[target_id];
                             let back_ref = &target_stmt_info.back_refs[&self.stmt_id];
-
-                            // Find the node providing the data for the ref
-                            let node_id = back_ref.node_id.get().unwrap();
 
                             // Find the column
                             let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
 
-                            let (index, _) = inputs.insert_full(node_id);
-                            returning_input.set(Some(index));
+                            if returning_input.get().is_none() {
+                                // Find the node providing the data for the ref
+                                let node_id = back_ref.node_id.get().unwrap();
 
-                            *expr = if self.stmt().is_insert() && is_returning_projection {
-                                let row = batch_load_index.get().unwrap();
-                                stmt::Expr::project(
-                                    stmt::ExprArg {
-                                        position: index,
-                                        nesting: 1,
-                                    },
-                                    [row, column],
-                                )
+                                let (index, _) = inputs.insert_full(node_id);
+                                returning_input.set(Some(index));
+                            }
+
+                            let index = returning_input.get().unwrap();
+                            let row = batch_load_index.get().unwrap();
+                            let nesting = if self.stmt().is_insert() && is_returning_projection {
+                                1
                             } else {
+                                0
+                            };
+
+                            *expr = stmt::Expr::project(
                                 stmt::ExprArg {
                                     position: index,
-                                    nesting: 0,
-                                }
-                                .into()
-                            };
+                                    nesting,
+                                },
+                                [row, column],
+                            );
                         }
                         hir::Arg::Sub {
-                            stmt_id: target_id,
-                            input,
-                            returning: true,
-                            ..
+                            stmt_id: target_id, ..
                         } => {
-                            assert!(input.get().is_none());
+                            assert!(
+                                !(self.stmt().is_insert() && is_returning_projection),
+                                "TODO"
+                            );
 
                             let target_stmt_info = &self.planner.hir[target_id];
                             let target_node_id = target_stmt_info.output.get().expect("bug");
 
                             let (index, _) = inputs.insert_full(target_node_id);
-                            input.set(Some(index));
 
                             *expr = stmt::Expr::arg(index);
-                        }
-                        hir::Arg::Sub {
-                            input,
-                            returning: false,
-                            ..
-                        } => {
-                            *expr = stmt::Expr::arg(input.get().unwrap());
                         }
                     }
                 }
@@ -281,7 +273,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 self.load_data.columns.insert(*expr_reference);
             }
         })
-        // stmt::Expr::arg_project(position, [index])
     }
 
     /// Extract arguments needed to perform data loading
@@ -319,7 +310,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     // Sub-statement arguments in the filter should only happen with !sql
                     debug_assert!(insert_row.is_some() || !self.planner.engine.capability().sql);
 
-                    let node_id = self.planner.hir[target_id].output.get().expect("bug");
+                    let target = &self.planner.hir[target_id];
+                    let node_id = target.output.get().expect("bug");
                     let (index, _) = self.load_data.inputs.insert_full(node_id);
                     batch_load_index.set(insert_row);
                     input.set(Some(index));
@@ -508,20 +500,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                                 [batch_load_index.get().unwrap(), column],
                             )
                         }
-                        hir::Arg::Sub {
-                            input,
-                            batch_load_index,
-                            ..
-                        } => {
+                        hir::Arg::Sub { input, .. } => {
                             debug_assert!(
                                 !self.load_data.inputs.is_empty(),
                                 "{:#?} | is this needed?",
                                 self.load_data
                             );
-                            *expr = stmt::Expr::arg_project(
-                                input.get().unwrap(),
-                                [batch_load_index.get().unwrap()],
-                            )
+                            *expr = stmt::Expr::arg(input.get().unwrap());
                         }
                     }
                 }

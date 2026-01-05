@@ -1,12 +1,12 @@
-use tests::{assert_eq_unordered, models, tests, DbTest};
-use toasty::stmt::Id;
+use crate::prelude::*;
 
-async fn user_batch_create_todos_one_level_basic_fk(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn user_batch_create_todos_one_level_basic_fk(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -18,10 +18,10 @@ async fn user_batch_create_todos_one_level_basic_fk(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -51,12 +51,13 @@ async fn user_batch_create_todos_one_level_basic_fk(test: &mut DbTest) {
     assert_eq!("Make pizza", todo.title);
 }
 
-async fn user_batch_create_todos_two_levels_basic_fk(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -68,16 +69,16 @@ async fn user_batch_create_todos_two_levels_basic_fk(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
 
         #[index]
-        category_id: Id<Category>,
+        category_id: ID,
 
         #[belongs_to(key = category_id, references = id)]
         category: toasty::BelongsTo<Category>,
@@ -89,7 +90,7 @@ async fn user_batch_create_todos_two_levels_basic_fk(test: &mut DbTest) {
     struct Category {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -164,12 +165,13 @@ async fn user_batch_create_todos_two_levels_basic_fk(test: &mut DbTest) {
     assert_eq!(1, todos.len());
 }
 
-async fn user_batch_create_todos_set_category_by_value(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -181,16 +183,16 @@ async fn user_batch_create_todos_set_category_by_value(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
 
         #[index]
-        category_id: Id<Category>,
+        category_id: ID,
 
         #[belongs_to(key = category_id, references = id)]
         category: toasty::BelongsTo<Category>,
@@ -202,7 +204,7 @@ async fn user_batch_create_todos_set_category_by_value(test: &mut DbTest) {
     struct Category {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -243,8 +245,6 @@ async fn user_batch_create_todos_set_category_by_value(test: &mut DbTest) {
     );
 }
 
-async fn user_batch_create_todos_set_category_by_query(_test: &mut DbTest) {}
-
 /// Regression test for batch creation with optional fields
 ///
 /// This test reproduces a panic that occurs when:
@@ -258,12 +258,13 @@ async fn user_batch_create_todos_set_category_by_query(_test: &mut DbTest) {}
 /// The issue is in the RETURNING clause constantization code path where
 /// batch inserts with auto-increment fields encounter an Expr::Stmt (nested insert)
 /// that is not yet handled.
-async fn user_batch_create_todos_with_optional_field(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -280,10 +281,10 @@ async fn user_batch_create_todos_with_optional_field(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -313,12 +314,13 @@ async fn user_batch_create_todos_with_optional_field(test: &mut DbTest) {
     assert_eq!(titles, vec!["Make pizza", "Sleep"]);
 }
 
-async fn user_batch_create_two_todos_simple(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn user_batch_create_two_todos_simple(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -334,10 +336,10 @@ async fn user_batch_create_two_todos_simple(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -368,13 +370,3 @@ async fn user_batch_create_two_todos_simple(test: &mut DbTest) {
     titles.sort();
     assert_eq!(titles, vec!["Make pizza", "Sleep"]);
 }
-
-tests!(
-    user_batch_create_todos_one_level_basic_fk,
-    user_batch_create_todos_two_levels_basic_fk,
-    user_batch_create_todos_set_category_by_value,
-    #[ignore]
-    user_batch_create_todos_set_category_by_query,
-    user_batch_create_two_todos_simple,
-    user_batch_create_todos_with_optional_field,
-);

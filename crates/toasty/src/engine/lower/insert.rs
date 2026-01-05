@@ -58,7 +58,7 @@ impl LowerStatement<'_, '_> {
         // If there are any has_n associations included in the insertion, the
         // statement returning has to be transformed to accomodate the nested
         // structure.
-        self.convert_returning_for_insert_with_has_n(model, &set_fields, values, returning);
+        self.convert_returning_for_insert(values, returning, source.single);
 
         for (index, row) in values.rows.iter_mut().enumerate() {
             self.plan_stmt_insert_relations(row, returning, index);
@@ -140,26 +140,16 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    fn convert_returning_for_insert_with_has_n(
+    fn convert_returning_for_insert(
         &mut self,
-        model: &app::Model,
-        set_fields: &BitSet<usize>,
         values: &stmt::Values,
         returning: &mut Option<stmt::Returning>,
+        single: bool,
     ) {
         // If there is no returning statement, there is nothing to convert
         let Some(stmt::Returning::Expr(projection)) = returning else {
             return;
         };
-
-        // Only perform the conversion if there are any has_n fields included in the
-        if !model
-            .fields
-            .iter()
-            .any(|f| f.ty.is_has_n() && set_fields.contains(f.id.index))
-        {
-            return;
-        }
 
         #[derive(Debug)]
         struct Input(usize);
@@ -198,7 +188,12 @@ impl LowerStatement<'_, '_> {
             converted.push(converted_row);
         }
 
-        *returning = Some(stmt::Returning::Value(stmt::Expr::list_from_vec(converted)));
+        *returning = Some(stmt::Returning::Value(if single {
+            assert!(converted.len() == 1);
+            converted.into_iter().next().unwrap()
+        } else {
+            stmt::Expr::list_from_vec(converted)
+        }));
     }
 
     fn verify_field_constraints(&mut self, model: &app::Model, expr: &mut stmt::Expr) {

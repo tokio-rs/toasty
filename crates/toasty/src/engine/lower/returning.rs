@@ -279,11 +279,11 @@ impl LowerStatement<'_, '_> {
 
                 let field = &self.1.rows[*row].as_record_unwrap()[index];
 
-                if !field.is_const() {
-                    return None;
+                if field.is_eval() {
+                    Some(field.clone())
+                } else {
+                    None
                 }
-
-                Some(field.clone())
             }
         }
 
