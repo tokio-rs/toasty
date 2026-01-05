@@ -326,8 +326,8 @@ impl Expr {
             Self::Key(_) => true,
             Self::Func(expr_func) => match expr_func {
                 super::ExprFunc::Count(func_count) => {
-                    func_count.arg.as_ref().map_or(true, |e| e.is_eval())
-                        && func_count.filter.as_ref().map_or(true, |e| e.is_eval())
+                    func_count.arg.as_ref().is_none_or(|e| e.is_eval())
+                        && func_count.filter.as_ref().is_none_or(|e| e.is_eval())
                 }
                 super::ExprFunc::LastInsertId(_) => true,
             },
