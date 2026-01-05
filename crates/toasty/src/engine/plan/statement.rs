@@ -199,12 +199,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             );
                         }
                         hir::Arg::Sub {
-                            stmt_id: target_id,
-                            input,
-                            returning: true,
-                            ..
+                            stmt_id: target_id, ..
                         } => {
-                            assert!(input.get().is_none());
                             assert!(
                                 !(self.stmt().is_insert() && is_returning_projection),
                                 "TODO"
@@ -214,47 +210,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             let target_node_id = target_stmt_info.output.get().expect("bug");
 
                             let (index, _) = inputs.insert_full(target_node_id);
-                            input.set(Some(index));
 
                             *expr = stmt::Expr::arg(index);
-                        }
-                        hir::Arg::Sub {
-                            input,
-                            returning: false,
-                            batch_load_index,
-                            stmt_id: target_id,
-                            ..
-                        } => {
-                            let position = input.get().unwrap();
-
-                            *expr = if self.stmt().is_insert() && is_returning_projection {
-                                debug_assert!(
-                                    match self.planner.hir[target_id].stmt() {
-                                        stmt::Statement::Query(stmt) => !stmt.single,
-                                        stmt::Statement::Insert(stmt) => !stmt.source.single,
-                                        stmt => todo!("stmt={stmt:#?}"),
-                                    },
-                                    "target-stmt={:#?}",
-                                    self.planner.hir[target_id].stmt()
-                                );
-
-                                let row = batch_load_index.get().unwrap();
-                                stmt::Expr::project(
-                                    stmt::ExprArg {
-                                        position,
-                                        nesting: 1,
-                                    },
-                                    [row],
-                                )
-                                .into()
-                            } else {
-                                let target_stmt_info = &self.planner.hir[target_id];
-                                let target_node_id = target_stmt_info.output.get().expect("bug");
-
-                                let (index, _) = inputs.insert_full(target_node_id);
-
-                                stmt::Expr::arg(index)
-                            };
                         }
                     }
                 }
@@ -543,11 +500,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                                 [batch_load_index.get().unwrap(), column],
                             )
                         }
-                        hir::Arg::Sub {
-                            stmt_id: target_id,
-                            input,
-                            ..
-                        } => {
+                        hir::Arg::Sub { input, .. } => {
                             debug_assert!(
                                 !self.load_data.inputs.is_empty(),
                                 "{:#?} | is this needed?",

@@ -5,7 +5,7 @@ use crate::{
     },
     Result,
 };
-use toasty_core::{driver::Rows, stmt};
+use toasty_core::driver::Rows;
 
 #[derive(Debug)]
 pub(crate) struct Eval {
