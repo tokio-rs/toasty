@@ -74,6 +74,7 @@ pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
 
 impl<'a> Serializer<'a> {
     pub fn serialize(&self, stmt: &Statement, params: &mut impl Params) -> String {
+        println!("SQL={stmt:#?}");
         let mut ret = String::new();
 
         let mut fmt = Formatter {

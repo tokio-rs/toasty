@@ -48,7 +48,7 @@ impl Engine {
 
 impl LoweringState<'_> {
     fn lower_stmt(&mut self, expr_cx: stmt::ExprContext, mut stmt: stmt::Statement) -> hir::StmtId {
-        self.engine.simplify_stmt(&mut stmt);
+        Simplify::with_context(expr_cx).visit_mut(&mut stmt);
 
         let stmt_id = self.hir.new_statement_info(self.dependencies.clone());
         let scope_id = self.scopes.push(Scope { stmt_id });
@@ -149,13 +149,11 @@ impl LowerStatement<'_, '_> {
     fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> hir::StmtId {
         // Need to reset the scope stack as the statement cannot reference the
         // current scope.
-        let scopes = mem::take(&mut self.state.scopes);
+        // let scopes = mem::take(&mut self.state.scopes);
 
-        let stmt_id = self
-            .state
-            .lower_stmt(stmt::ExprContext::new(self.schema()), stmt.into());
+        let stmt_id = self.state.lower_stmt(self.expr_cx, stmt.into());
 
-        self.state.scopes = scopes;
+        // self.state.scopes = scopes;
 
         if let Some(dependencies) = &mut self.collect_dependencies {
             dependencies.insert(stmt_id);
@@ -802,10 +800,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 mapping.table_to_model.lower_expr_reference(nesting, index)
             }
             LoweringContext::Assignment(assignments) => {
-                assert_eq!(nesting, 0, "TODO");
-                let assignment = &assignments[index];
-                assert!(assignment.op.is_set(), "TODO");
-                assignment.expr.clone()
+                if nesting == 0 {
+                    assert!(nesting == 0, "TODO");
+                    let assignment = &assignments[index];
+                    assert!(assignment.op.is_set(), "TODO");
+                    assignment.expr.clone()
+                } else {
+                    // TODO: we may need a smarter way to pull out assignments
+                    // from elsewhere in the statement tree.
+                    let mapping = self.mapping_at_unwrap(nesting);
+                    mapping.table_to_model.lower_expr_reference(nesting, index)
+                }
             }
             LoweringContext::InsertRow(row) => {
                 // If nesting > 0, this references a parent scope, not the current row
@@ -1034,6 +1039,11 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     /// Get the StmtId for the specified nesting level
     fn resolve_stmt_id(&self, nesting: usize) -> hir::StmtId {
+        debug_assert!(
+            self.scope_id >= nesting,
+            "invalid nesting; nesting={nesting:#?}; scopes={:#?}",
+            self.state.scopes
+        );
         self.state.scopes[self.scope_id - nesting].stmt_id
     }
 

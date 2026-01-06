@@ -21,7 +21,7 @@ impl Simplify<'_> {
     ///
     /// Returns `None` if the subquery pattern doesn't match (e.g., complex filters,
     /// composite keys, non-equality operators).
-    pub(crate) fn extract_key_value(
+    pub(crate) fn extract_key_expr(
         &mut self,
         key: &[FieldId],
         stmt: &stmt::Query,
@@ -43,7 +43,23 @@ impl Simplify<'_> {
                 };
 
                 match (&*expr_binary_op.lhs, &*expr_binary_op.rhs) {
-                    (stmt::Expr::Reference(_), stmt::Expr::Reference(_)) => todo!("stmt={stmt:#?}"),
+                    (
+                        stmt::Expr::Reference(
+                            inner @ stmt::ExprReference::Field { nesting: 0, .. },
+                        ),
+                        stmt::Expr::Reference(outer @ stmt::ExprReference::Field { nesting, .. }),
+                    )
+                    | (
+                        stmt::Expr::Reference(outer @ stmt::ExprReference::Field { nesting, .. }),
+                        stmt::Expr::Reference(
+                            inner @ stmt::ExprReference::Field { nesting: 0, .. },
+                        ),
+                    ) if *nesting > 0 => {
+                        self.extract_key_expr_nested_ref(&cx, *key_field, inner, outer)
+                    }
+                    (stmt::Expr::Reference(_), stmt::Expr::Reference(_)) => {
+                        todo!("stmt={stmt:#?}");
+                    }
                     (stmt::Expr::Reference(expr_ref), other)
                     | (other, stmt::Expr::Reference(expr_ref)) => {
                         let field_ref = cx.resolve_expr_reference(expr_ref).expect_field();
@@ -65,6 +81,32 @@ impl Simplify<'_> {
                 todo!("either support PKs or check each op for the key");
             }
             _ => None,
+        }
+    }
+
+    fn extract_key_expr_nested_ref(
+        &self,
+        cx: &stmt::ExprContext,
+        key_field_id: FieldId,
+        inner: &stmt::ExprReference,
+        outer: &stmt::ExprReference,
+    ) -> Option<stmt::Expr> {
+        let field_ref = cx.resolve_expr_reference(inner).expect_field();
+
+        if key_field_id == field_ref.id {
+            let mut ret = *outer;
+            let stmt::ExprReference::Field { nesting, .. } = &mut ret else {
+                panic!()
+            };
+            // This should have been ensured already by the caller
+            debug_assert!(*nesting > 0);
+
+            // The returned expression is rescoped to the parent.
+            *nesting -= 1;
+
+            Some(ret.into())
+        } else {
+            None
         }
     }
 }
@@ -115,7 +157,7 @@ mod tests {
             Expr::Value(Value::from(42i64)),
         );
         let query = Query::new_select(User::id(), filter);
-        let result = simplify.extract_key_value(&[field_id], &query);
+        let result = simplify.extract_key_expr(&[field_id], &query);
 
         assert!(result.is_some());
         assert!(matches!(result.unwrap(), Expr::Value(Value::I64(42))));
@@ -132,7 +174,7 @@ mod tests {
             Expr::ref_self_field(field_id),
         );
         let query = Query::new_select(User::id(), filter);
-        let result = simplify.extract_key_value(&[field_id], &query);
+        let result = simplify.extract_key_expr(&[field_id], &query);
 
         assert!(result.is_some());
         assert!(matches!(result.unwrap(), Expr::Value(Value::I64(99))));
@@ -145,7 +187,7 @@ mod tests {
 
         // `extract_key_value(values()) → None`
         let query = Query::values(Values::default());
-        let result = simplify.extract_key_value(&[field_id], &query);
+        let result = simplify.extract_key_expr(&[field_id], &query);
 
         assert!(result.is_none());
     }
@@ -166,7 +208,7 @@ mod tests {
             model: User::id(),
             index: 1,
         };
-        let result = simplify.extract_key_value(&[field_id, field_id2], &query);
+        let result = simplify.extract_key_expr(&[field_id, field_id2], &query);
 
         assert!(result.is_none());
     }

@@ -179,13 +179,19 @@ impl ops::Index<usize> for Assignments {
     type Output = Assignment;
 
     fn index(&self, index: usize) -> &Self::Output {
-        self.assignments.get(&index).unwrap()
+        match self.assignments.get(&index) {
+            Some(ret) => ret,
+            None => panic!("no assignment for field index {index}"),
+        }
     }
 }
 
 impl ops::IndexMut<usize> for Assignments {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        self.assignments.get_mut(&index).unwrap()
+        match self.assignments.get_mut(&index) {
+            Some(ret) => ret,
+            None => panic!("no assignment for field index {index}"),
+        }
     }
 }
 
