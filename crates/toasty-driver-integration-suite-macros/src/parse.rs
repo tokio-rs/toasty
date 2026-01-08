@@ -14,6 +14,9 @@ pub struct DriverTest {
 
     /// Required capabilities for this test
     pub requires: Vec<Capability>,
+
+    /// Non-driver_test attributes (e.g., #[should_panic], #[ignore])
+    pub attrs: Vec<syn::Attribute>,
 }
 
 /// A capability requirement, optionally negated
@@ -195,9 +198,23 @@ impl From<CapabilityItem> for Capability {
 
 impl DriverTest {
     /// Parse a function with the `#[driver_test]` attribute
-    pub fn from_item_fn(input: ItemFn, attr: DriverTestAttr) -> Self {
+    pub fn from_item_fn(mut input: ItemFn, attr: DriverTestAttr) -> Self {
         let name = input.sig.ident.clone();
         let requires = attr.requires;
+
+        // Collect non-driver_test attributes to preserve them
+        let attrs: Vec<_> = input
+            .attrs
+            .iter()
+            .filter(|attr| !attr.path().is_ident("driver_test"))
+            .cloned()
+            .collect();
+
+        // Remove the #[driver_test] attribute from the function, but keep all other attributes
+        // (e.g., #[should_panic], #[ignore], etc.)
+        input
+            .attrs
+            .retain(|attr| !attr.path().is_ident("driver_test"));
 
         // Generate variants based on attribute
         // If test has requires, always expand (even if no id specified)
@@ -236,6 +253,7 @@ impl DriverTest {
             name,
             kinds,
             requires,
+            attrs,
         }
     }
 }

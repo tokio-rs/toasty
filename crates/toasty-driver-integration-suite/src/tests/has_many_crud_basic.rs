@@ -786,6 +786,7 @@ pub async fn associate_new_user_with_todo_on_update_query_via_creation(test: &mu
 }
 
 #[driver_test(id(ID))]
+#[should_panic]
 pub async fn update_user_with_null_todo_is_err(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
