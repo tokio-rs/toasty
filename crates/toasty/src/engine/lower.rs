@@ -3,7 +3,7 @@ mod paginate;
 mod relation;
 mod returning;
 
-use std::{cell::Cell, collections::HashSet, mem};
+use std::{cell::Cell, collections::HashSet};
 
 use index_vec::IndexVec;
 use toasty_core::{

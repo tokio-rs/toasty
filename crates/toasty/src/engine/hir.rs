@@ -115,22 +115,6 @@ impl StatementInfo {
         }
     }
 
-    /// Returns an iterator over the node IDs that this statement depends on.
-    ///
-    /// Dependencies must execute before this statement, even if their results
-    /// are not directly consumed. For example, an UPDATE may depend on a prior
-    /// INSERT to maintain referential integrity.
-    ///
-    /// Each dependency is represented by its output node ID.
-    pub(super) fn dependent_operations<'a>(
-        &'a self,
-        hir: &'a HirStatement,
-    ) -> impl Iterator<Item = mir::NodeId> + 'a {
-        self.deps
-            .iter()
-            .map(|stmt_id| hir[stmt_id].output.get().unwrap())
-    }
-
     pub(super) fn stmt(&self) -> &stmt::Statement {
         self.stmt.as_deref().unwrap()
     }

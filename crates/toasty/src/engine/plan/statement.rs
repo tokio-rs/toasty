@@ -43,7 +43,7 @@ struct PlanStatement<'a, 'b> {
     load_data: LoadData,
 
     /// True if the statement's dependencies have been tracked
-    did_take_deps: bool,
+    remaining_deps: Vec<hir::StmtId>,
 }
 
 impl HirPlanner<'_> {
@@ -55,10 +55,13 @@ impl HirPlanner<'_> {
             return;
         }
 
-        // First, plan dependency statements. These are statments that must run
-        // before the current one but do not reference the current statement.
+        // First, plan independent dependency statements. These are statments
+        // that must run before the current one but do not reference the current
+        // statement.
         for &dep_stmt_id in &stmt_info.deps {
-            self.plan_statement(dep_stmt_id);
+            if self.hir[dep_stmt_id].independent {
+                self.plan_statement(dep_stmt_id);
+            }
         }
 
         let stmt = stmt_info.stmt.as_deref().unwrap().clone();
@@ -73,7 +76,7 @@ impl HirPlanner<'_> {
                 columns: IndexSet::new(),
                 batch_load_args: IndexSet::new(),
             },
-            did_take_deps: false,
+            remaining_deps: stmt_info.deps.iter().cloned().collect(),
         };
         planner.plan(stmt);
     }
@@ -106,7 +109,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         if !self.load_data.batch_load_args.is_empty() {
             self.rewrite_stmt_for_batch_load(&mut stmt);
         } else if let stmt::Statement::Insert(insert) = &mut stmt {
-            self.rewrite_stmt_insert_for_batch_load(insert);
+            self.rewrite_stmt_insert_arg_dependencies(insert);
+        } else if let stmt::Statement::Update(update) = &mut stmt {
+            self.rewrite_stmt_update_arg_dependencies(update);
         }
 
         let load_data_node_id = self.plan_data_loading(stmt, &mut returning);
@@ -283,14 +288,22 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             });
         }
 
-        if let Some(insert_source) = stmt.insert_source() {
-            let stmt::ExprSet::Values(values) = &insert_source.body else {
+        if let stmt::Statement::Insert(insert) = stmt {
+            let stmt::ExprSet::Values(values) = &insert.source.body else {
                 todo!()
             };
 
             for (i, row) in values.rows.iter().enumerate() {
                 stmt::visit::for_each_expr(row, |expr| {
                     self.extract_data_load_args_from_expr(expr, Some(i));
+                });
+            }
+        }
+
+        if let stmt::Statement::Update(update) = stmt {
+            for (_, assignment) in update.assignments.iter() {
+                stmt::visit::for_each_expr(&assignment.expr, |expr| {
+                    self.extract_data_load_args_from_expr(expr, None);
                 });
             }
         }
@@ -341,12 +354,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         debug_assert!(target_stmt_info.stmt().is_insert());
                         debug_assert!(batch_load_index.get().is_none());
                         batch_load_index.set(Some(row));
-                    } else if target_stmt_info.stmt().is_query() {
+                    } else {
                         let (batch_load_table_ref_index, _) =
                             self.load_data.batch_load_args.insert_full(index);
                         batch_load_index.set(Some(batch_load_table_ref_index));
-                    } else {
-                        todo!()
                     }
                 }
             }
@@ -469,49 +480,55 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
     }
 
-    fn rewrite_stmt_insert_for_batch_load(&mut self, stmt: &mut stmt::Insert) {
+    fn rewrite_stmt_insert_arg_dependencies(&mut self, stmt: &mut stmt::Insert) {
         let stmt::ExprSet::Values(values) = &mut stmt.source.body else {
             todo!()
         };
 
         for row in &mut values.rows {
-            visit_mut::for_each_expr_mut(row, |expr| {
-                if let stmt::Expr::Arg(expr_arg) = expr {
-                    match &self.stmt_info.args[expr_arg.position] {
-                        hir::Arg::Ref {
-                            stmt_id: target_id,
-                            target_expr_ref,
-                            data_load_input,
-                            batch_load_index,
-                            ..
-                        } => {
-                            debug_assert!(
-                                !self.load_data.inputs.is_empty(),
-                                "{:#?}",
-                                self.load_data
-                            );
+            self.rewrite_arg_dependencies(row);
+        }
+    }
 
-                            // TODO: this work seems to be duplicated in the returning as well.
-                            let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
-                            let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
+    fn rewrite_stmt_update_arg_dependencies(&mut self, stmt: &mut stmt::Update) {
+        for (_, assignment) in stmt.assignments.iter_mut() {
+            self.rewrite_arg_dependencies(&mut assignment.expr);
+        }
+    }
 
-                            *expr = stmt::Expr::arg_project(
-                                data_load_input.get().unwrap(),
-                                [batch_load_index.get().unwrap(), column],
-                            )
-                        }
-                        hir::Arg::Sub { input, .. } => {
-                            debug_assert!(
-                                !self.load_data.inputs.is_empty(),
-                                "{:#?} | is this needed?",
-                                self.load_data
-                            );
-                            *expr = stmt::Expr::arg(input.get().unwrap());
-                        }
+    fn rewrite_arg_dependencies(&mut self, expr: &mut stmt::Expr) {
+        visit_mut::for_each_expr_mut(expr, |expr| {
+            if let stmt::Expr::Arg(expr_arg) = expr {
+                match &self.stmt_info.args[expr_arg.position] {
+                    hir::Arg::Ref {
+                        stmt_id: target_id,
+                        target_expr_ref,
+                        data_load_input,
+                        batch_load_index,
+                        ..
+                    } => {
+                        debug_assert!(!self.load_data.inputs.is_empty(), "{:#?}", self.load_data);
+
+                        // TODO: this work seems to be duplicated in the returning as well.
+                        let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
+                        let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
+
+                        *expr = stmt::Expr::arg_project(
+                            data_load_input.get().unwrap(),
+                            [batch_load_index.get().unwrap(), column],
+                        )
+                    }
+                    hir::Arg::Sub { input, .. } => {
+                        debug_assert!(
+                            !self.load_data.inputs.is_empty(),
+                            "{:#?} | is this needed?",
+                            self.load_data
+                        );
+                        *expr = stmt::Expr::arg(input.get().unwrap());
                     }
                 }
-            });
-        }
+            }
+        });
     }
 
     // ===== Plan data loading phase =====
@@ -634,7 +651,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // With SQL capability, we can just punt the details of execution to
         // the database's query planner.
-        debug_assert!(!self.did_take_deps);
         let mut exec_statement_node = self.insert_mir_with_deps(node);
 
         if let Some((const_value, const_ty)) = const_returning {
@@ -1170,6 +1186,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     fn plan_child_statements(&mut self) {
+        // Plan dependent child statements
+        for &dep_stmt_id in &self.stmt_info.deps {
+            if !self.planner.hir[dep_stmt_id].independent {
+                self.planner.plan_statement(dep_stmt_id);
+            }
+        }
+
         for arg in &self.stmt_info.args {
             let hir::Arg::Sub { stmt_id, .. } = arg else {
                 continue;
@@ -1248,12 +1271,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),
             }
         } else {
-            if let Some(dependencies) = self.take_dependencies() {
-                self.planner.mir[data_load_node_id]
-                    .deps
-                    .extend(dependencies);
-            }
-
+            self.apply_dependencies_to_node(data_load_node_id);
             data_load_node_id
         }
     }
@@ -1278,20 +1296,22 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     fn insert_mir_with_deps(&mut self, node: impl Into<mir::Node>) -> mir::NodeId {
-        if let Some(dependencies) = self.take_dependencies() {
-            self.planner.mir.insert_with_deps(node, dependencies)
-        } else {
-            self.planner.mir.insert(node)
-        }
+        let node_id = self.planner.mir.insert(node);
+        self.apply_dependencies_to_node(node_id);
+        node_id
     }
 
-    fn take_dependencies(&mut self) -> Option<impl Iterator<Item = mir::NodeId> + 'a> {
-        if !self.did_take_deps {
-            self.did_take_deps = true;
-            Some(self.stmt_info.dependent_operations(self.planner.hir))
-        } else {
-            None
-        }
+    fn apply_dependencies_to_node(&mut self, node_id: mir::NodeId) {
+        let node = &mut self.planner.mir[node_id];
+
+        self.remaining_deps.retain(|stmt_id| {
+            if let Some(dep_id) = self.planner.hir[stmt_id].output.get() {
+                node.deps.insert(dep_id);
+                false
+            } else {
+                true
+            }
+        });
     }
 
     fn index_key_ty(&self, index_plan: &IndexPlan) -> stmt::Type {
