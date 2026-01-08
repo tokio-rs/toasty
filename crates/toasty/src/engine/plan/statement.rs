@@ -107,6 +107,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // If there are any ref args, then the statement might need to be
         // rewritten to batch load all records for a NestedMerge operation.
         if !self.load_data.batch_load_args.is_empty() {
+            debug_assert!(stmt.is_query());
             self.rewrite_stmt_for_batch_load(&mut stmt);
         } else if let stmt::Statement::Insert(insert) = &mut stmt {
             self.rewrite_stmt_insert_arg_dependencies(insert);
@@ -350,14 +351,24 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     data_load_input.set(Some(index));
 
                     // If the target statement is a query, then we are in a batch-load scenario.
-                    if let Some(row) = insert_row {
+                    if target_stmt_info.stmt().is_query() {
+                        debug_assert!(insert_row.is_none());
+
+                        let (batch_load_table_ref_index, _) =
+                            self.load_data.batch_load_args.insert_full(index);
+                        batch_load_index.set(Some(batch_load_table_ref_index));
+                    } else if let Some(row) = insert_row {
                         debug_assert!(target_stmt_info.stmt().is_insert());
                         debug_assert!(batch_load_index.get().is_none());
                         batch_load_index.set(Some(row));
                     } else {
-                        let (batch_load_table_ref_index, _) =
-                            self.load_data.batch_load_args.insert_full(index);
-                        batch_load_index.set(Some(batch_load_table_ref_index));
+                        debug_assert!(
+                            batch_load_index.get().is_some(),
+                            "stmt={:#?}; target={:#?}; batch_load_index={:#?}",
+                            self.stmt_info,
+                            target_stmt_info,
+                            batch_load_index.get()
+                        );
                     }
                 }
             }
@@ -516,7 +527,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         *expr = stmt::Expr::arg_project(
                             data_load_input.get().unwrap(),
                             [batch_load_index.get().unwrap(), column],
-                        )
+                        );
                     }
                     hir::Arg::Sub { input, .. } => {
                         debug_assert!(

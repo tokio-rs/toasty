@@ -36,7 +36,7 @@ impl Engine {
             dependencies: HashSet::new(),
         };
 
-        state.lower_stmt(stmt::ExprContext::new(schema), stmt);
+        state.lower_stmt(stmt::ExprContext::new(schema), None, stmt);
 
         if let Some(err) = state.errors.into_iter().next() {
             return Err(err);
@@ -47,11 +47,16 @@ impl Engine {
 }
 
 impl LoweringState<'_> {
-    fn lower_stmt(&mut self, expr_cx: stmt::ExprContext, mut stmt: stmt::Statement) -> hir::StmtId {
+    fn lower_stmt(
+        &mut self,
+        expr_cx: stmt::ExprContext,
+        row_index: Option<usize>,
+        mut stmt: stmt::Statement,
+    ) -> hir::StmtId {
         Simplify::with_context(expr_cx).visit_mut(&mut stmt);
 
         let stmt_id = self.hir.new_statement_info(self.dependencies.clone());
-        let scope_id = self.scopes.push(Scope { stmt_id });
+        let scope_id = self.scopes.push(Scope { stmt_id, row_index });
         let mut collect_dependencies = None;
 
         // Map the statement
@@ -125,7 +130,7 @@ enum LoweringContext<'a> {
     Assignment(&'a stmt::Assignments),
 
     /// Lowering an insertion statement
-    Insert(&'a [ColumnId]),
+    Insert(&'a [ColumnId], Option<usize>),
 
     /// Lowering a value row being inserted
     InsertRow(&'a stmt::Expr),
@@ -139,8 +144,12 @@ enum LoweringContext<'a> {
 
 #[derive(Debug)]
 struct Scope {
-    /// Identifier of the statement in the partitioner state.
+    /// Identifier of the statement in the lowering state
     stmt_id: hir::StmtId,
+
+    /// If the statement is called from an insert's values (i.e. the parent
+    /// statement is an insert), this tracks the row index
+    row_index: Option<usize>,
 }
 
 index_vec::define_index_type! {
@@ -149,7 +158,13 @@ index_vec::define_index_type! {
 
 impl LowerStatement<'_, '_> {
     fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> hir::StmtId {
-        let stmt_id = self.state.lower_stmt(self.expr_cx, stmt.into());
+        let row_index = if let LoweringContext::Insert(_, row_index) = self.cx {
+            row_index
+        } else {
+            None
+        };
+
+        let stmt_id = self.state.lower_stmt(self.expr_cx, row_index, stmt.into());
 
         if let Some(dependencies) = &mut self.collect_dependencies {
             dependencies.insert(stmt_id);
@@ -951,7 +966,12 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             nesting,
             data_load_input: Cell::new(None),
             returning_input: Cell::new(None),
-            batch_load_index: Cell::new(None),
+            batch_load_index: if let Some(row_index) = self.state.scopes[self.scope_id].row_index {
+                debug_assert_eq!(1, nesting, "TODO");
+                Cell::new(Some(row_index))
+            } else {
+                Cell::new(None)
+            },
         });
 
         arg
@@ -1049,7 +1069,12 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     /// Plan a sub-statement that is able to reference the parent statement
     fn scope_statement(&mut self, f: impl FnOnce(&mut LowerStatement<'_, '_>)) -> hir::StmtId {
         let stmt_id = self.new_statement_info();
-        let scope_id = self.state.scopes.push(Scope { stmt_id });
+        let row_index = if let LoweringContext::Insert(_, row_index) = &self.cx {
+            *row_index
+        } else {
+            None
+        };
+        let scope_id = self.state.scopes.push(Scope { stmt_id, row_index });
         let mut dependencies = None;
 
         let mut lower = LowerStatement {
@@ -1109,9 +1134,24 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             state: self.state,
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
-            cx: LoweringContext::Insert(columns),
+            cx: LoweringContext::Insert(columns, None),
             collect_dependencies: self.collect_dependencies,
         }
+    }
+
+    fn lower_insert_with_row(&mut self, row: usize, f: impl FnOnce(&mut Self)) {
+        let LoweringContext::Insert(_, maybe_row) = &mut self.cx else {
+            todo!()
+        };
+        debug_assert!(maybe_row.is_none());
+        *maybe_row = Some(row);
+        f(self);
+
+        let LoweringContext::Insert(_, maybe_row) = &mut self.cx else {
+            todo!()
+        };
+        debug_assert_eq!(Some(row), *maybe_row);
+        *maybe_row = None;
     }
 
     fn lower_insert_row<'child>(

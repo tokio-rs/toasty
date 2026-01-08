@@ -436,12 +436,29 @@ impl ToSql for &stmt::Update {
 
 impl ToSql for (&db::Table, &stmt::Assignments) {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let frags = self.1.iter().map(|(index, assignment)| {
-            let column_name = Ident(&self.0.columns[index].name);
-            (column_name, " = ", &assignment.expr)
-        });
+        let assignments: Vec<_> = self.1.iter().collect();
 
-        fmt!(cx, f, Delimited(frags, ", "));
+        for (i, (index, assignment)) in assignments.iter().enumerate() {
+            if i > 0 {
+                f.dst.push_str(", ");
+            }
+
+            let column = &self.0.columns[*index];
+            let column_name = Ident(&column.name);
+
+            // Serialize column name and equals sign
+            column_name.to_sql(cx, f);
+            f.dst.push_str(" = ");
+
+            // For value expressions, provide type hint from the column
+            if let stmt::Expr::Value(value) = &assignment.expr {
+                let type_hint = Some(&column.ty);
+                let placeholder = f.params.push(value, type_hint);
+                placeholder.to_sql(cx, f);
+            } else {
+                assignment.expr.to_sql(cx, f);
+            }
+        }
     }
 }
 
