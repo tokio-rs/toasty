@@ -398,7 +398,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) {
     #[key(partition = user_id, local = id)]
     struct Todo {
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         user_id: ID,
 
