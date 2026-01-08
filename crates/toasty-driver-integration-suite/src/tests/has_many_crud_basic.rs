@@ -59,7 +59,7 @@ pub async fn crud_user_todos(test: &mut Test) {
         .unwrap();
 
     // Find the todo by ID
-    let list = Todo::filter_by_id(&todo.id)
+    let list = Todo::filter_by_id(todo.id)
         .all(&db)
         .await
         .unwrap()
@@ -71,7 +71,7 @@ pub async fn crud_user_todos(test: &mut Test) {
     assert_eq!(todo.id, list[0].id);
 
     // Find the TODO by user ID
-    let list = Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(user.id)
         .all(&db)
         .await
         .unwrap()
@@ -87,8 +87,8 @@ pub async fn crud_user_todos(test: &mut Test) {
     assert_eq!(user.id, user_reload.id);
 
     let mut created = HashMap::new();
-    let mut ids = vec![todo.id.clone()];
-    created.insert(todo.id.clone(), todo);
+    let mut ids = vec![todo.id];
+    created.insert(todo.id, todo);
 
     // Create a few more TODOs
     for i in 0..5 {
@@ -107,8 +107,8 @@ pub async fn crud_user_todos(test: &mut Test) {
                 .unwrap()
         };
 
-        ids.push(todo.id.clone());
-        assert_none!(created.insert(todo.id.clone(), todo));
+        ids.push(todo.id);
+        assert_none!(created.insert(todo.id, todo));
     }
 
     // Load all TODOs
@@ -123,10 +123,7 @@ pub async fn crud_user_todos(test: &mut Test) {
 
     assert_eq!(6, list.len());
 
-    let loaded: HashMap<_, _> = list
-        .into_iter()
-        .map(|todo| (todo.id.clone(), todo))
-        .collect();
+    let loaded: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
     assert_eq!(6, loaded.len());
 
     for (id, expect) in &created {
@@ -134,16 +131,13 @@ pub async fn crud_user_todos(test: &mut Test) {
     }
 
     // Find all TODOs by user (using the belongs_to queries)
-    let list = Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(user.id)
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
     assert_eq!(6, list.len());
 
-    let by_id: HashMap<_, _> = list
-        .into_iter()
-        .map(|todo| (todo.id.clone(), todo))
-        .collect();
+    let by_id: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
 
     assert_eq!(6, by_id.len());
 
@@ -197,11 +191,7 @@ pub async fn crud_user_todos(test: &mut Test) {
     assert_err!(user.todos().get_by_id(&db, &ids[0]).await);
 
     // Delete a TODO by scope
-    user.todos()
-        .filter_by_id(&ids[1])
-        .delete(&db)
-        .await
-        .unwrap();
+    user.todos().filter_by_id(ids[1]).delete(&db).await.unwrap();
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_id(&db, &ids[1]).await);
@@ -211,7 +201,7 @@ pub async fn crud_user_todos(test: &mut Test) {
 
     // Successfuly a todo by scope
     user.todos()
-        .filter_by_id(&ids[2])
+        .filter_by_id(ids[2])
         .update()
         .title("batch update 1")
         .exec(&db)
@@ -224,7 +214,7 @@ pub async fn crud_user_todos(test: &mut Test) {
     // Now fail to update it by scoping by other user
     user2
         .todos()
-        .filter_by_id(&ids[2])
+        .filter_by_id(ids[2])
         .update()
         .title("batch update 2")
         .exec(&db)
@@ -234,7 +224,7 @@ pub async fn crud_user_todos(test: &mut Test) {
     let todo = Todo::get_by_id(&db, &ids[2]).await.unwrap();
     assert_eq!(todo.title, "batch update 1");
 
-    let id = user.id.clone();
+    let id = user.id;
 
     // Delete the user and associated TODOs are deleted
     user.delete(&db).await.unwrap();
@@ -346,12 +336,12 @@ pub async fn scoped_find_by_id(test: &mut Test) {
     // Trying to find the same todo scoped by user2 is missing
     assert_none!(user2
         .todos()
-        .filter_by_id(&todo.id)
+        .filter_by_id(todo.id)
         .first(&db)
         .await
         .unwrap());
 
-    let reloaded = User::filter_by_id(&user1.id)
+    let reloaded = User::filter_by_id(user1.id)
         .todos()
         .get_by_id(&db, &todo.id)
         .await
@@ -363,7 +353,7 @@ pub async fn scoped_find_by_id(test: &mut Test) {
     // Deleting the TODO from the user 2 scope fails
     user2
         .todos()
-        .filter_by_id(&todo.id)
+        .filter_by_id(todo.id)
         .delete(&db)
         .await
         .unwrap();
@@ -436,7 +426,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) {
         .unwrap();
 
     // Find the todo by ID
-    let list = Todo::filter_by_user_id_and_id(&user.id, &todo.id)
+    let list = Todo::filter_by_user_id_and_id(user.id, todo.id)
         .all(&db)
         .await
         .unwrap()
@@ -448,7 +438,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) {
     assert_eq!(todo.id, list[0].id);
 
     // Find the TODO by user ID
-    let list = Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(user.id)
         .all(&db)
         .await
         .unwrap()
@@ -460,8 +450,8 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) {
     assert_eq!(todo.id, list[0].id);
 
     let mut created = HashMap::new();
-    let mut ids = vec![todo.id.clone()];
-    created.insert(todo.id.clone(), todo);
+    let mut ids = vec![todo.id];
+    created.insert(todo.id, todo);
 
     // Create a few more TODOs
     for i in 0..5 {
@@ -480,8 +470,8 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) {
                 .unwrap()
         };
 
-        ids.push(todo.id.clone());
-        assert_none!(created.insert(todo.id.clone(), todo));
+        ids.push(todo.id);
+        assert_none!(created.insert(todo.id, todo));
     }
 
     // Load all TODOs
@@ -496,10 +486,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) {
 
     assert_eq!(6, list.len());
 
-    let loaded: HashMap<_, _> = list
-        .into_iter()
-        .map(|todo| (todo.id.clone(), todo))
-        .collect();
+    let loaded: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
     assert_eq!(6, loaded.len());
 
     for (id, expect) in &created {
@@ -507,16 +494,13 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) {
     }
 
     // Find all TODOs by user (using the belongs_to queries)
-    let list = Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(user.id)
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
     assert_eq!(6, list.len());
 
-    let by_id: HashMap<_, _> = list
-        .into_iter()
-        .map(|todo| (todo.id.clone(), todo))
-        .collect();
+    let by_id: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
 
     assert_eq!(6, by_id.len());
 
@@ -570,11 +554,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) {
     assert_err!(user.todos().get_by_id(&db, &ids[0]).await);
 
     // Delete a TODO by scope
-    user.todos()
-        .filter_by_id(&ids[1])
-        .delete(&db)
-        .await
-        .unwrap();
+    user.todos().filter_by_id(ids[1]).delete(&db).await.unwrap();
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_user_id_and_id(&db, &user.id, &ids[1]).await);
@@ -584,7 +564,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) {
 
     // Successfuly a todo by scope
     user.todos()
-        .filter_by_id(&ids[2])
+        .filter_by_id(ids[2])
         .update()
         .title("batch update 1")
         .exec(&db)
@@ -598,7 +578,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) {
     // Now fail to update it by scoping by other user
     user2
         .todos()
-        .filter_by_id(&ids[2])
+        .filter_by_id(ids[2])
         .update()
         .title("batch update 2")
         .exec(&db)
@@ -777,7 +757,7 @@ pub async fn associate_new_user_with_todo_on_update_query_via_creation(test: &mu
     assert_eq!(1, todos.len());
     let todo = todos.into_iter().next().unwrap();
 
-    Todo::filter_by_id(&todo.id)
+    Todo::filter_by_id(todo.id)
         .update()
         .user(User::create())
         .exec(&db)
@@ -1019,7 +999,7 @@ pub async fn assign_todo_to_user_on_update_query(test: &mut Test) {
 
     let user = User::create().exec(&db).await.unwrap();
 
-    User::filter_by_id(&user.id)
+    User::filter_by_id(user.id)
         .update()
         .todo(Todo::create().title("hello"))
         .exec(&db)
