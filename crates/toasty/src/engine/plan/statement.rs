@@ -322,7 +322,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     debug_assert!(!returning, "the argument was found in a filter");
 
                     let target = &self.planner.hir[target_id];
-                    let node_id = target.output.get().expect("bug");
+                    let Some(node_id) = target.output.get() else {
+                        panic!("bug: expected target statement to be planned; curr={:#?}; target={:#?}", self.stmt_info, target);
+                    };
                     let (index, _) = self.load_data.inputs.insert_full(node_id);
                     batch_load_index.set(insert_row);
                     input.set(Some(index));

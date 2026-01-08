@@ -69,6 +69,8 @@ impl LoweringState<'_> {
         let stmt_info = &mut self.hir[stmt_id];
         stmt_info.stmt = Some(Box::new(stmt));
 
+        self.scopes.pop();
+
         debug_assert!(collect_dependencies.is_none());
 
         stmt_id
@@ -147,13 +149,7 @@ index_vec::define_index_type! {
 
 impl LowerStatement<'_, '_> {
     fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> hir::StmtId {
-        // Need to reset the scope stack as the statement cannot reference the
-        // current scope.
-        // let scopes = mem::take(&mut self.state.scopes);
-
         let stmt_id = self.state.lower_stmt(self.expr_cx, stmt.into());
-
-        // self.state.scopes = scopes;
 
         if let Some(dependencies) = &mut self.collect_dependencies {
             dependencies.insert(stmt_id);
@@ -309,6 +305,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         if expr_column.nesting > 0 {
                             let source_id = self.scope_stmt_id();
                             let target_id = self.resolve_stmt_id(expr_column.nesting);
+
+                            // the current scope ID should also be the top of the stack
+                            debug_assert_eq!(self.state.scopes.len(), self.scope_id + 1);
 
                             // The statement is not independent. Walk up the
                             // scope stack until the referened target statement
