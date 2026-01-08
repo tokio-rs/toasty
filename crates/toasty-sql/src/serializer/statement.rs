@@ -438,6 +438,11 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         let assignments: Vec<_> = self.1.iter().collect();
 
+        // TODO: ideally this could be used with TypeHintedField, but that is
+        // actually pretty brittle as it is tied to an insert context instead of
+        // being more generic. Being more generic would be ideal, but we really
+        // should extract a more generic "scope walker" kind of thing from the
+        // lowering logic.
         for (i, (index, assignment)) in assignments.iter().enumerate() {
             if i > 0 {
                 f.dst.push_str(", ");
