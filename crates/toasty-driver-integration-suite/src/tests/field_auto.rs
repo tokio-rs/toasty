@@ -74,7 +74,7 @@ pub async fn auto_increment_implicit(test: &mut Test) {
 
 // Test that auto-increment with composite primary keys is rejected
 // This only applies to numeric types since UUID uses a different auto strategy
-#[driver_test]
+#[driver_test(requires(auto_increment))]
 pub async fn auto_increment_with_composite_key_errors(test: &mut Test) {
     #[derive(toasty::Model)]
     #[key(partition = user_id, local = id)]
