@@ -1,7 +1,10 @@
 use super::{Column, ColumnId, Index, IndexId, PrimaryKey};
-use crate::stmt;
+use crate::{
+    schema::db::{column::ColumnsDiff, index::IndicesDiff},
+    stmt,
+};
 
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 /// A database table
 #[derive(Debug)]
@@ -77,4 +80,57 @@ impl fmt::Debug for TableId {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(fmt, "TableId({})", self.0)
     }
+}
+
+pub struct TablesDiff<'a> {
+    items: Vec<TablesDiffItem<'a>>,
+}
+
+impl<'a> TablesDiff<'a> {
+    pub fn from(from: &'a [Table], to: &'a [Table]) -> Self {
+        let mut items = vec![];
+
+        let from_map = HashMap::<&str, &'a Table>::from_iter(
+            from.iter().map(|from| (from.name.as_str(), from)),
+        );
+        let to_map =
+            HashMap::<&str, &'a Table>::from_iter(to.iter().map(|to| (to.name.as_str(), to)));
+
+        for from in from {
+            match to_map.get(from.name.as_str()) {
+                Some(to) => {
+                    let columns = ColumnsDiff::from(&from.columns, &to.columns);
+                    let indices = IndicesDiff::from(&from.indices, &to.indices);
+                    if from.name != to.name || !columns.is_empty() || !indices.is_empty() {
+                        items.push(TablesDiffItem::AlterTable {
+                            from,
+                            to,
+                            columns,
+                            indices,
+                        });
+                    }
+                }
+                None => items.push(TablesDiffItem::DropTable(from)),
+            }
+        }
+
+        for to in to {
+            if !from_map.contains_key(to.name.as_str()) {
+                items.push(TablesDiffItem::CreateTable(to));
+            }
+        }
+
+        Self { items }
+    }
+}
+
+pub enum TablesDiffItem<'a> {
+    CreateTable(&'a Table),
+    DropTable(&'a Table),
+    AlterTable {
+        from: &'a Table,
+        to: &'a Table,
+        columns: ColumnsDiff<'a>,
+        indices: IndicesDiff<'a>,
+    },
 }

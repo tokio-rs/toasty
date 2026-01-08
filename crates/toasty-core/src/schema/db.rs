@@ -1,6 +1,9 @@
 mod column;
 pub use column::{Column, ColumnId};
 
+mod diff;
+pub use diff::Diff;
+
 mod index;
 pub use index::{Index, IndexColumn, IndexId, IndexOp, IndexScope};
 
