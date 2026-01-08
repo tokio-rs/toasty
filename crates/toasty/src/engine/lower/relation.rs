@@ -632,8 +632,9 @@ impl RelationSource for &stmt::Delete {
 }
 
 impl RelationSource for UpdateRelationSource<'_> {
-    fn selection(&self, nesting: usize) -> stmt::Query {
-        assert_eq!(nesting, 1, "TODO");
+    fn selection(&self, _nesting: usize) -> stmt::Query {
+        // In this context, the nesting does not matter. The filter entirely
+        // references the returned query.
         stmt::Query::new_select(self.model, self.filter.clone())
     }
 
