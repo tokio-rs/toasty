@@ -1,17 +1,16 @@
 //! Test basic has_many associations without any preloading of associations
 //! during query time. All associations are accessed via queries on demand.
 
+use crate::prelude::*;
 use std::collections::HashMap;
-use std_util::{assert_empty, assert_err, assert_none, num::NumUtil};
-use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
 
-async fn crud_user_todos(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn crud_user_todos(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -21,10 +20,10 @@ async fn crud_user_todos(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -38,14 +37,17 @@ async fn crud_user_todos(test: &mut DbTest) {
     let user = User::create().exec(&db).await.unwrap();
 
     // No TODOs
-    assert_empty!(user
-        .todos()
-        .all(&db)
-        .await
-        .unwrap()
-        .collect::<Vec<_>>()
-        .await
-        .unwrap());
+    assert_eq!(
+        0,
+        user.todos()
+            .all(&db)
+            .await
+            .unwrap()
+            .collect::<Vec<_>>()
+            .await
+            .unwrap()
+            .len()
+    );
 
     // Create a Todo associated with the user
     let todo = user
@@ -57,7 +59,7 @@ async fn crud_user_todos(test: &mut DbTest) {
         .unwrap();
 
     // Find the todo by ID
-    let list = Todo::filter_by_id(&todo.id)
+    let list = Todo::filter_by_id(todo.id)
         .all(&db)
         .await
         .unwrap()
@@ -69,7 +71,7 @@ async fn crud_user_todos(test: &mut DbTest) {
     assert_eq!(todo.id, list[0].id);
 
     // Find the TODO by user ID
-    let list = Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(user.id)
         .all(&db)
         .await
         .unwrap()
@@ -85,8 +87,8 @@ async fn crud_user_todos(test: &mut DbTest) {
     assert_eq!(user.id, user_reload.id);
 
     let mut created = HashMap::new();
-    let mut ids = vec![todo.id.clone()];
-    created.insert(todo.id.clone(), todo);
+    let mut ids = vec![todo.id];
+    created.insert(todo.id, todo);
 
     // Create a few more TODOs
     for i in 0..5 {
@@ -105,8 +107,8 @@ async fn crud_user_todos(test: &mut DbTest) {
                 .unwrap()
         };
 
-        ids.push(todo.id.clone());
-        assert_none!(created.insert(todo.id.clone(), todo));
+        ids.push(todo.id);
+        assert_none!(created.insert(todo.id, todo));
     }
 
     // Load all TODOs
@@ -121,10 +123,7 @@ async fn crud_user_todos(test: &mut DbTest) {
 
     assert_eq!(6, list.len());
 
-    let loaded: HashMap<_, _> = list
-        .into_iter()
-        .map(|todo| (todo.id.clone(), todo))
-        .collect();
+    let loaded: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
     assert_eq!(6, loaded.len());
 
     for (id, expect) in &created {
@@ -132,16 +131,13 @@ async fn crud_user_todos(test: &mut DbTest) {
     }
 
     // Find all TODOs by user (using the belongs_to queries)
-    let list = Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(user.id)
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
     assert_eq!(6, list.len());
 
-    let by_id: HashMap<_, _> = list
-        .into_iter()
-        .map(|todo| (todo.id.clone(), todo))
-        .collect();
+    let by_id: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
 
     assert_eq!(6, by_id.len());
 
@@ -153,14 +149,18 @@ async fn crud_user_todos(test: &mut DbTest) {
     let user2 = User::create().exec(&db).await.unwrap();
 
     // No TODOs associated with `user2`
-    assert_empty!(user2
-        .todos()
-        .all(&db)
-        .await
-        .unwrap()
-        .collect::<Vec<_>>()
-        .await
-        .unwrap());
+    assert_eq!(
+        0,
+        user2
+            .todos()
+            .all(&db)
+            .await
+            .unwrap()
+            .collect::<Vec<_>>()
+            .await
+            .unwrap()
+            .len()
+    );
 
     // Create a TODO for user2
     let u2_todo = user2
@@ -191,11 +191,7 @@ async fn crud_user_todos(test: &mut DbTest) {
     assert_err!(user.todos().get_by_id(&db, &ids[0]).await);
 
     // Delete a TODO by scope
-    user.todos()
-        .filter_by_id(&ids[1])
-        .delete(&db)
-        .await
-        .unwrap();
+    user.todos().filter_by_id(ids[1]).delete(&db).await.unwrap();
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_id(&db, &ids[1]).await);
@@ -205,7 +201,7 @@ async fn crud_user_todos(test: &mut DbTest) {
 
     // Successfuly a todo by scope
     user.todos()
-        .filter_by_id(&ids[2])
+        .filter_by_id(ids[2])
         .update()
         .title("batch update 1")
         .exec(&db)
@@ -218,7 +214,7 @@ async fn crud_user_todos(test: &mut DbTest) {
     // Now fail to update it by scoping by other user
     user2
         .todos()
-        .filter_by_id(&ids[2])
+        .filter_by_id(ids[2])
         .update()
         .title("batch update 2")
         .exec(&db)
@@ -228,7 +224,7 @@ async fn crud_user_todos(test: &mut DbTest) {
     let todo = Todo::get_by_id(&db, &ids[2]).await.unwrap();
     assert_eq!(todo.title, "batch update 1");
 
-    let id = user.id.clone();
+    let id = user.id;
 
     // Delete the user and associated TODOs are deleted
     user.delete(&db).await.unwrap();
@@ -236,12 +232,13 @@ async fn crud_user_todos(test: &mut DbTest) {
     assert_err!(Todo::get_by_id(&db, &ids[2]).await);
 }
 
-async fn has_many_insert_on_update(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn has_many_insert_on_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -253,10 +250,10 @@ async fn has_many_insert_on_update(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -289,12 +286,13 @@ async fn has_many_insert_on_update(test: &mut DbTest) {
     assert_eq!(todos[0].title, "change name");
 }
 
-async fn scoped_find_by_id(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn scoped_find_by_id(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -304,10 +302,10 @@ async fn scoped_find_by_id(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -338,12 +336,12 @@ async fn scoped_find_by_id(test: &mut DbTest) {
     // Trying to find the same todo scoped by user2 is missing
     assert_none!(user2
         .todos()
-        .filter_by_id(&todo.id)
+        .filter_by_id(todo.id)
         .first(&db)
         .await
         .unwrap());
 
-    let reloaded = User::filter_by_id(&user1.id)
+    let reloaded = User::filter_by_id(user1.id)
         .todos()
         .get_by_id(&db, &todo.id)
         .await
@@ -355,7 +353,7 @@ async fn scoped_find_by_id(test: &mut DbTest) {
     // Deleting the TODO from the user 2 scope fails
     user2
         .todos()
-        .filter_by_id(&todo.id)
+        .filter_by_id(todo.id)
         .delete(&db)
         .await
         .unwrap();
@@ -365,19 +363,22 @@ async fn scoped_find_by_id(test: &mut DbTest) {
 
 // The has_many association uses the target's primary key as the association's
 // foreign key. In this case, the relation's query should not be duplicated.
-async fn has_many_on_target_pk(_test: &mut DbTest) {}
+#[driver_test(id(ID))]
+pub async fn has_many_on_target_pk(_test: &mut Test) {}
 
 // The target model has an explicit index on (FK, PK). In this case, the query
 // generated by the (FK, PK) pair should not be duplicated by the relation.
-async fn has_many_when_target_indexes_fk_and_pk(_test: &mut DbTest) {}
+#[driver_test(id(ID))]
+pub async fn has_many_when_target_indexes_fk_and_pk(_test: &mut Test) {}
 
 // When the FK is composite, things should still work
-async fn has_many_when_fk_is_composite(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn has_many_when_fk_is_composite(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -387,9 +388,9 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
     #[key(partition = user_id, local = id)]
     struct Todo {
         #[auto]
-        id: Id<Self>,
+        id: uuid::Uuid,
 
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -403,14 +404,17 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
     let user = User::create().exec(&db).await.unwrap();
 
     // No TODOs
-    assert_empty!(user
-        .todos()
-        .all(&db)
-        .await
-        .unwrap()
-        .collect::<Vec<_>>()
-        .await
-        .unwrap());
+    assert_eq!(
+        0,
+        user.todos()
+            .all(&db)
+            .await
+            .unwrap()
+            .collect::<Vec<_>>()
+            .await
+            .unwrap()
+            .len()
+    );
 
     // Create a Todo associated with the user
     let todo = user
@@ -422,7 +426,7 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
         .unwrap();
 
     // Find the todo by ID
-    let list = Todo::filter_by_user_id_and_id(&user.id, &todo.id)
+    let list = Todo::filter_by_user_id_and_id(user.id, todo.id)
         .all(&db)
         .await
         .unwrap()
@@ -434,7 +438,7 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
     assert_eq!(todo.id, list[0].id);
 
     // Find the TODO by user ID
-    let list = Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(user.id)
         .all(&db)
         .await
         .unwrap()
@@ -446,8 +450,8 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
     assert_eq!(todo.id, list[0].id);
 
     let mut created = HashMap::new();
-    let mut ids = vec![todo.id.clone()];
-    created.insert(todo.id.clone(), todo);
+    let mut ids = vec![todo.id];
+    created.insert(todo.id, todo);
 
     // Create a few more TODOs
     for i in 0..5 {
@@ -466,8 +470,8 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
                 .unwrap()
         };
 
-        ids.push(todo.id.clone());
-        assert_none!(created.insert(todo.id.clone(), todo));
+        ids.push(todo.id);
+        assert_none!(created.insert(todo.id, todo));
     }
 
     // Load all TODOs
@@ -482,10 +486,7 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
 
     assert_eq!(6, list.len());
 
-    let loaded: HashMap<_, _> = list
-        .into_iter()
-        .map(|todo| (todo.id.clone(), todo))
-        .collect();
+    let loaded: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
     assert_eq!(6, loaded.len());
 
     for (id, expect) in &created {
@@ -493,16 +494,13 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
     }
 
     // Find all TODOs by user (using the belongs_to queries)
-    let list = Todo::filter_by_user_id(&user.id)
+    let list = Todo::filter_by_user_id(user.id)
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
     assert_eq!(6, list.len());
 
-    let by_id: HashMap<_, _> = list
-        .into_iter()
-        .map(|todo| (todo.id.clone(), todo))
-        .collect();
+    let by_id: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
 
     assert_eq!(6, by_id.len());
 
@@ -514,14 +512,18 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
     let user2 = User::create().exec(&db).await.unwrap();
 
     // No TODOs associated with `user2`
-    assert_empty!(user2
-        .todos()
-        .all(&db)
-        .await
-        .unwrap()
-        .collect::<Vec<_>>()
-        .await
-        .unwrap());
+    assert_eq!(
+        0,
+        user2
+            .todos()
+            .all(&db)
+            .await
+            .unwrap()
+            .collect::<Vec<_>>()
+            .await
+            .unwrap()
+            .len()
+    );
 
     // Create a TODO for user2
     let u2_todo = user2
@@ -552,11 +554,7 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
     assert_err!(user.todos().get_by_id(&db, &ids[0]).await);
 
     // Delete a TODO by scope
-    user.todos()
-        .filter_by_id(&ids[1])
-        .delete(&db)
-        .await
-        .unwrap();
+    user.todos().filter_by_id(ids[1]).delete(&db).await.unwrap();
 
     // Can no longer get the todo via id
     assert_err!(Todo::get_by_user_id_and_id(&db, &user.id, &ids[1]).await);
@@ -566,7 +564,7 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
 
     // Successfuly a todo by scope
     user.todos()
-        .filter_by_id(&ids[2])
+        .filter_by_id(ids[2])
         .update()
         .title("batch update 1")
         .exec(&db)
@@ -580,7 +578,7 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
     // Now fail to update it by scoping by other user
     user2
         .todos()
-        .filter_by_id(&ids[2])
+        .filter_by_id(ids[2])
         .update()
         .title("batch update 2")
         .exec(&db)
@@ -593,17 +591,20 @@ async fn has_many_when_fk_is_composite(test: &mut DbTest) {
 }
 
 // When the PK is composite, things should still work
-async fn has_many_when_pk_is_composite(_test: &mut DbTest) {}
+#[driver_test(id(ID))]
+pub async fn has_many_when_pk_is_composite(_test: &mut Test) {}
 
 // When both the FK and PK are composite, things should still work
-async fn has_many_when_fk_and_pk_are_composite(_test: &mut DbTest) {}
+#[driver_test(id(ID))]
+pub async fn has_many_when_fk_and_pk_are_composite(_test: &mut Test) {}
 
-async fn belongs_to_required(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn belongs_to_required(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         #[allow(dead_code)]
@@ -614,11 +615,11 @@ async fn belongs_to_required(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
         #[allow(dead_code)]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         #[allow(dead_code)]
@@ -627,15 +628,16 @@ async fn belongs_to_required(test: &mut DbTest) {
 
     let db = test.setup_db(models!(User, Todo)).await;
 
-    Todo::create().exec(&db).await.unwrap();
+    assert_err!(Todo::create().exec(&db).await);
 }
 
-async fn delete_when_belongs_to_optional(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn delete_when_belongs_to_optional(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -645,10 +647,10 @@ async fn delete_when_belongs_to_optional(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -676,12 +678,13 @@ async fn delete_when_belongs_to_optional(test: &mut DbTest) {
     // Deleting a user leaves hte todo in place.
 }
 
-async fn associate_new_user_with_todo_on_update_via_creation(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn associate_new_user_with_todo_on_update_via_creation(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -691,10 +694,10 @@ async fn associate_new_user_with_todo_on_update_via_creation(test: &mut DbTest) 
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -719,12 +722,13 @@ async fn associate_new_user_with_todo_on_update_via_creation(test: &mut DbTest) 
     todo.update().user(User::create()).exec(&db).await.unwrap();
 }
 
-async fn associate_new_user_with_todo_on_update_query_via_creation(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn associate_new_user_with_todo_on_update_query_via_creation(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -734,10 +738,10 @@ async fn associate_new_user_with_todo_on_update_query_via_creation(test: &mut Db
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -753,7 +757,7 @@ async fn associate_new_user_with_todo_on_update_query_via_creation(test: &mut Db
     assert_eq!(1, todos.len());
     let todo = todos.into_iter().next().unwrap();
 
-    Todo::filter_by_id(&todo.id)
+    Todo::filter_by_id(todo.id)
         .update()
         .user(User::create())
         .exec(&db)
@@ -761,12 +765,14 @@ async fn associate_new_user_with_todo_on_update_query_via_creation(test: &mut Db
         .unwrap();
 }
 
-async fn update_user_with_null_todo_is_err(test: &mut DbTest) {
+#[driver_test(id(ID))]
+#[should_panic]
+pub async fn update_user_with_null_todo_is_err(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -776,10 +782,10 @@ async fn update_user_with_null_todo_is_err(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -808,12 +814,13 @@ async fn update_user_with_null_todo_is_err(test: &mut DbTest) {
     assert_eq!(u1_reloaded.id, u1.id);
 }
 
-async fn assign_todo_that_already_has_user_on_create(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn assign_todo_that_already_has_user_on_create(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -823,10 +830,10 @@ async fn assign_todo_that_already_has_user_on_create(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -846,7 +853,7 @@ async fn assign_todo_that_already_has_user_on_create(test: &mut DbTest) {
 
     // First user has no todos
     let todos: Vec<_> = u1.todos().collect(&db).await.unwrap();
-    assert_empty!(todos);
+    assert_eq!(0, todos.len());
 
     // Second user has the todo
     let todos: Vec<_> = u2.todos().collect(&db).await.unwrap();
@@ -854,12 +861,13 @@ async fn assign_todo_that_already_has_user_on_create(test: &mut DbTest) {
     assert_eq!(todo.id, todos[0].id);
 }
 
-async fn assign_todo_that_already_has_user_on_update(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn assign_todo_that_already_has_user_on_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -869,10 +877,10 @@ async fn assign_todo_that_already_has_user_on_update(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -895,7 +903,7 @@ async fn assign_todo_that_already_has_user_on_update(test: &mut DbTest) {
 
     // First user has no todos
     let todos: Vec<_> = u1.todos().collect(&db).await.unwrap();
-    assert_empty!(todos);
+    assert_eq!(0, todos.len());
 
     // Second user has the todo
     let todos: Vec<_> = u2.todos().collect(&db).await.unwrap();
@@ -903,12 +911,13 @@ async fn assign_todo_that_already_has_user_on_update(test: &mut DbTest) {
     assert_eq!(todo.id, todos[0].id);
 }
 
-async fn assign_existing_user_to_todo(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn assign_existing_user_to_todo(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -918,10 +927,10 @@ async fn assign_existing_user_to_todo(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -951,7 +960,7 @@ async fn assign_existing_user_to_todo(test: &mut DbTest) {
 
     // First user has no todos
     let todos: Vec<_> = u1.todos().collect(&db).await.unwrap();
-    assert_empty!(todos);
+    assert_eq!(0, todos.len());
 
     // Second user has the todo
     let todos: Vec<_> = u2.todos().collect(&db).await.unwrap();
@@ -959,12 +968,13 @@ async fn assign_existing_user_to_todo(test: &mut DbTest) {
     assert_eq!(todo.id, todos[0].id);
 }
 
-async fn assign_todo_to_user_on_update_query(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn assign_todo_to_user_on_update_query(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -974,10 +984,10 @@ async fn assign_todo_to_user_on_update_query(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -989,7 +999,7 @@ async fn assign_todo_to_user_on_update_query(test: &mut DbTest) {
 
     let user = User::create().exec(&db).await.unwrap();
 
-    User::filter_by_id(&user.id)
+    User::filter_by_id(user.id)
         .update()
         .todo(Todo::create().title("hello"))
         .exec(&db)
@@ -1000,25 +1010,3 @@ async fn assign_todo_to_user_on_update_query(test: &mut DbTest) {
     assert_eq!(1, todos.len());
     assert_eq!("hello", todos[0].title);
 }
-
-tests!(
-    crud_user_todos,
-    has_many_insert_on_update,
-    scoped_find_by_id,
-    has_many_on_target_pk,
-    has_many_when_target_indexes_fk_and_pk,
-    has_many_when_fk_is_composite,
-    has_many_when_pk_is_composite,
-    has_many_when_fk_and_pk_are_composite,
-    #[should_panic] // TODO: Err?
-    belongs_to_required,
-    delete_when_belongs_to_optional,
-    associate_new_user_with_todo_on_update_via_creation,
-    associate_new_user_with_todo_on_update_query_via_creation,
-    #[should_panic]
-    update_user_with_null_todo_is_err,
-    assign_todo_that_already_has_user_on_create,
-    assign_todo_that_already_has_user_on_update,
-    assign_existing_user_to_todo,
-    assign_todo_to_user_on_update_query,
-);

@@ -30,9 +30,9 @@ enum Mutation {
     },
 }
 
-trait RelationSource {
+trait RelationSource: std::fmt::Debug {
     /// Return a query representing the source selection
-    fn selection(&self) -> stmt::Query;
+    fn selection(&self, nesting: usize) -> stmt::Query;
 
     /// Update a source field expression
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr);
@@ -282,7 +282,7 @@ impl LowerStatement<'_, '_> {
         .update();
 
         stmt.assignments
-            .set(pair.id, stmt::Expr::stmt(source.selection()));
+            .set(pair.id, stmt::Expr::stmt(source.selection(2)));
 
         self.new_dependency(stmt);
     }
@@ -469,7 +469,7 @@ impl LowerStatement<'_, '_> {
         });
 
         self.with_dependencies(dependencies, |lower| match expr {
-            expr if expr.is_value() => {
+            expr if expr.is_value() || expr.is_expr_reference() => {
                 assert!(!expr.is_value_null());
 
                 lower.set_relation_field(field, expr, source);
@@ -477,7 +477,7 @@ impl LowerStatement<'_, '_> {
             stmt::Expr::Stmt(expr_stmt) => {
                 lower.plan_mut_belongs_to_associate_stmt(field, *expr_stmt.stmt, source);
             }
-            _ => todo!("expr={expr:#?}"),
+            _ => todo!("field={field:#?}; expr={expr:#?}"),
         });
     }
 
@@ -548,7 +548,7 @@ impl LowerStatement<'_, '_> {
                     .map(|fk_field| fk_field.target)
                     .collect();
 
-                let Some(expr) = Simplify::new(self.schema()).extract_key_value(&fields, &query)
+                let Some(expr) = Simplify::new(self.schema()).extract_key_expr(&fields, &query)
                 else {
                     todo!("belongs_to={:#?}; stmt={:#?}", belongs_to, query);
                 };
@@ -566,7 +566,7 @@ impl LowerStatement<'_, '_> {
     }
 
     fn relation_pair_filter(&self, pair: FieldId, source: &dyn RelationSource) -> stmt::Expr {
-        stmt::Expr::in_subquery(stmt::Expr::ref_self_field(pair), source.selection())
+        stmt::Expr::in_subquery(stmt::Expr::ref_self_field(pair), source.selection(1))
     }
 
     fn relation_step(&mut self, field: &Field, f: impl FnOnce(&mut LowerStatement)) {
@@ -605,7 +605,7 @@ impl LowerStatement<'_, '_> {
                         );
                     }
                 }
-                stmt::Expr::Value(_) => {
+                stmt::Expr::Value(_) | stmt::Expr::Reference(_) => {
                     let [fk_field] = &fk_fields[..] else { todo!() };
 
                     source.set_source_field(fk_field.source, expr);
@@ -617,7 +617,8 @@ impl LowerStatement<'_, '_> {
 }
 
 impl RelationSource for &stmt::Delete {
-    fn selection(&self) -> stmt::Query {
+    fn selection(&self, nesting: usize) -> stmt::Query {
+        assert_eq!(nesting, 1, "TODO");
         stmt::Delete::selection(self)
     }
 
@@ -631,7 +632,9 @@ impl RelationSource for &stmt::Delete {
 }
 
 impl RelationSource for UpdateRelationSource<'_> {
-    fn selection(&self) -> stmt::Query {
+    fn selection(&self, _nesting: usize) -> stmt::Query {
+        // In this context, the nesting does not matter. The filter entirely
+        // references the returned query.
         stmt::Query::new_select(self.model, self.filter.clone())
     }
 
@@ -669,7 +672,7 @@ impl RelationSource for UpdateRelationSource<'_> {
 }
 
 impl RelationSource for InsertRelationSource<'_> {
-    fn selection(&self) -> stmt::Query {
+    fn selection(&self, nesting: usize) -> stmt::Query {
         let mut args = vec![];
 
         for pk_field in self.model.primary_key_fields() {
@@ -678,7 +681,7 @@ impl RelationSource for InsertRelationSource<'_> {
             if entry.is_value() {
                 args.push(entry.to_expr());
             } else if entry.is_expr_default() {
-                args.push(stmt::Expr::ref_parent_field(pk_field.id))
+                args.push(stmt::Expr::ref_field(nesting, pk_field.id))
             } else {
                 todo!("{entry:#?}");
             }

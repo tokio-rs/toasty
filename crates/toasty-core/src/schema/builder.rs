@@ -106,7 +106,7 @@ impl Builder {
         };
 
         // Verify the schema structure
-        schema.verify();
+        schema.verify()?;
 
         Ok(schema)
     }

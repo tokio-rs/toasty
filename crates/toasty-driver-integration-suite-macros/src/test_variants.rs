@@ -18,6 +18,8 @@ struct Input {
     requires: Vec<(String, bool)>,
     /// Capabilities supported by the driver
     capabilities: std::collections::HashMap<String, bool>,
+    /// Test attributes (e.g., #[should_panic], #[ignore])
+    attrs: Vec<syn::Attribute>,
 }
 
 impl Parse for Input {
@@ -38,6 +40,7 @@ impl Parse for Input {
 
         let mut requires = Vec::new();
         let mut capabilities = std::collections::HashMap::new();
+        let mut attrs = Vec::new();
 
         while !input.is_empty() {
             let key: Ident = input.parse()?;
@@ -67,6 +70,18 @@ impl Parse for Input {
                         }
                     }
                 }
+                "attrs" => {
+                    // Parse attrs: (#[attr1] #[attr2] ...)
+                    // Attributes are passed as a parenthesized group
+                    let content;
+                    syn::parenthesized!(content in input);
+
+                    // Parse attributes using Attribute::parse_outer
+                    // Only parse if there's content
+                    if !content.is_empty() {
+                        attrs = syn::Attribute::parse_outer(&content)?;
+                    }
+                }
                 _ => {
                     // Parse capability flags: name: true/false
                     let lit: syn::LitBool = input.parse()?;
@@ -86,6 +101,7 @@ impl Parse for Input {
             driver_expr,
             requires,
             capabilities,
+            attrs,
         })
     }
 }
@@ -149,9 +165,11 @@ fn generate_variant(input: &Input, variant_name: &str) -> TokenStream2 {
     let test_path = &input.test_path;
     let driver_expr = &input.driver_expr;
     let variant_ident = Ident::new(variant_name, proc_macro2::Span::call_site());
+    let attrs = &input.attrs;
 
     quote! {
         #[test]
+        #(#attrs)*
         fn #variant_ident() {
             let mut test = #krate::Test::new(
                 ::std::sync::Arc::new(#driver_expr)

@@ -115,8 +115,11 @@ impl LowerStatement<'_, '_> {
 
         assert!(!values.is_empty(), "TODO: handle this case");
 
-        let LoweringContext::Insert(columns) = &self.cx else {
-            panic!("not currently lowering an insert statement")
+        let LoweringContext::Insert(columns, None) = &self.cx else {
+            panic!(
+                "not currently lowering an insert statement; cx={:#?}",
+                self.cx
+            );
         };
 
         // ==== Phase 1: Analyze which columns can be constantized ====
@@ -249,8 +252,11 @@ impl LowerStatement<'_, '_> {
 
         assert!(!values.is_empty(), "TODO: handle this case");
 
-        let LoweringContext::Insert(columns) = &self.cx else {
-            panic!("not currently lowering an insert statement")
+        let LoweringContext::Insert(columns, None) = &self.cx else {
+            panic!(
+                "not currently lowering an insert statement; cx={:#?}",
+                self.cx
+            )
         };
 
         #[derive(Debug)]

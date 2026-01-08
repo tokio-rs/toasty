@@ -47,6 +47,9 @@ fn generate_variant(input: &ItemFn, kind: &Kind, requires: &[Capability]) -> Ite
     // Update function name using Kind's method
     variant.sig.ident = syn::Ident::new(kind.name(), input.sig.ident.span());
 
+    // Preserve all attributes from the original function (e.g., #[should_panic], #[ignore])
+    // The clone() above already copies them, so no additional work needed here
+
     // Rewrite ID types to target type using Kind's configuration
     let mut rewriter = IdRewriter::new(kind.ident(), kind.target_type());
     rewriter.visit_item_fn_mut(&mut variant);

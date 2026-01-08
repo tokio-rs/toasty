@@ -3,7 +3,7 @@ mod paginate;
 mod relation;
 mod returning;
 
-use std::{cell::Cell, collections::HashSet, mem};
+use std::{cell::Cell, collections::HashSet};
 
 use index_vec::IndexVec;
 use toasty_core::{
@@ -36,7 +36,7 @@ impl Engine {
             dependencies: HashSet::new(),
         };
 
-        state.lower_stmt(stmt::ExprContext::new(schema), stmt);
+        state.lower_stmt(stmt::ExprContext::new(schema), None, stmt);
 
         if let Some(err) = state.errors.into_iter().next() {
             return Err(err);
@@ -47,11 +47,16 @@ impl Engine {
 }
 
 impl LoweringState<'_> {
-    fn lower_stmt(&mut self, expr_cx: stmt::ExprContext, mut stmt: stmt::Statement) -> hir::StmtId {
-        self.engine.simplify_stmt(&mut stmt);
+    fn lower_stmt(
+        &mut self,
+        expr_cx: stmt::ExprContext,
+        row_index: Option<usize>,
+        mut stmt: stmt::Statement,
+    ) -> hir::StmtId {
+        Simplify::with_context(expr_cx).visit_mut(&mut stmt);
 
         let stmt_id = self.hir.new_statement_info(self.dependencies.clone());
-        let scope_id = self.scopes.push(Scope { stmt_id });
+        let scope_id = self.scopes.push(Scope { stmt_id, row_index });
         let mut collect_dependencies = None;
 
         // Map the statement
@@ -68,6 +73,8 @@ impl LoweringState<'_> {
 
         let stmt_info = &mut self.hir[stmt_id];
         stmt_info.stmt = Some(Box::new(stmt));
+
+        self.scopes.pop();
 
         debug_assert!(collect_dependencies.is_none());
 
@@ -123,7 +130,7 @@ enum LoweringContext<'a> {
     Assignment(&'a stmt::Assignments),
 
     /// Lowering an insertion statement
-    Insert(&'a [ColumnId]),
+    Insert(&'a [ColumnId], Option<usize>),
 
     /// Lowering a value row being inserted
     InsertRow(&'a stmt::Expr),
@@ -137,8 +144,12 @@ enum LoweringContext<'a> {
 
 #[derive(Debug)]
 struct Scope {
-    /// Identifier of the statement in the partitioner state.
+    /// Identifier of the statement in the lowering state
     stmt_id: hir::StmtId,
+
+    /// If the statement is called from an insert's values (i.e. the parent
+    /// statement is an insert), this tracks the row index
+    row_index: Option<usize>,
 }
 
 index_vec::define_index_type! {
@@ -147,15 +158,13 @@ index_vec::define_index_type! {
 
 impl LowerStatement<'_, '_> {
     fn new_dependency(&mut self, stmt: impl Into<stmt::Statement>) -> hir::StmtId {
-        // Need to reset the scope stack as the statement cannot reference the
-        // current scope.
-        let scopes = mem::take(&mut self.state.scopes);
+        let row_index = if let LoweringContext::Insert(_, row_index) = self.cx {
+            row_index
+        } else {
+            None
+        };
 
-        let stmt_id = self
-            .state
-            .lower_stmt(stmt::ExprContext::new(self.schema()), stmt.into());
-
-        self.state.scopes = scopes;
+        let stmt_id = self.state.lower_stmt(self.expr_cx, row_index, stmt.into());
 
         if let Some(dependencies) = &mut self.collect_dependencies {
             dependencies.insert(stmt_id);
@@ -311,6 +320,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         if expr_column.nesting > 0 {
                             let source_id = self.scope_stmt_id();
                             let target_id = self.resolve_stmt_id(expr_column.nesting);
+
+                            // the current scope ID should also be the top of the stack
+                            debug_assert_eq!(self.state.scopes.len(), self.scope_id + 1);
 
                             // The statement is not independent. Walk up the
                             // scope stack until the referened target statement
@@ -802,10 +814,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 mapping.table_to_model.lower_expr_reference(nesting, index)
             }
             LoweringContext::Assignment(assignments) => {
-                assert_eq!(nesting, 0, "TODO");
-                let assignment = &assignments[index];
-                assert!(assignment.op.is_set(), "TODO");
-                assignment.expr.clone()
+                if nesting == 0 {
+                    assert!(nesting == 0, "TODO");
+                    let assignment = &assignments[index];
+                    assert!(assignment.op.is_set(), "TODO");
+                    assignment.expr.clone()
+                } else {
+                    // TODO: we may need a smarter way to pull out assignments
+                    // from elsewhere in the statement tree.
+                    let mapping = self.mapping_at_unwrap(nesting);
+                    mapping.table_to_model.lower_expr_reference(nesting, index)
+                }
             }
             LoweringContext::InsertRow(row) => {
                 // If nesting > 0, this references a parent scope, not the current row
@@ -947,7 +966,12 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             nesting,
             data_load_input: Cell::new(None),
             returning_input: Cell::new(None),
-            batch_load_index: Cell::new(None),
+            batch_load_index: if let Some(row_index) = self.state.scopes[self.scope_id].row_index {
+                debug_assert_eq!(1, nesting, "TODO");
+                Cell::new(Some(row_index))
+            } else {
+                Cell::new(None)
+            },
         });
 
         arg
@@ -1034,13 +1058,23 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     /// Get the StmtId for the specified nesting level
     fn resolve_stmt_id(&self, nesting: usize) -> hir::StmtId {
+        debug_assert!(
+            self.scope_id >= nesting,
+            "invalid nesting; nesting={nesting:#?}; scopes={:#?}",
+            self.state.scopes
+        );
         self.state.scopes[self.scope_id - nesting].stmt_id
     }
 
     /// Plan a sub-statement that is able to reference the parent statement
     fn scope_statement(&mut self, f: impl FnOnce(&mut LowerStatement<'_, '_>)) -> hir::StmtId {
         let stmt_id = self.new_statement_info();
-        let scope_id = self.state.scopes.push(Scope { stmt_id });
+        let row_index = if let LoweringContext::Insert(_, row_index) = &self.cx {
+            *row_index
+        } else {
+            None
+        };
+        let scope_id = self.state.scopes.push(Scope { stmt_id, row_index });
         let mut dependencies = None;
 
         let mut lower = LowerStatement {
@@ -1100,9 +1134,24 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             state: self.state,
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
-            cx: LoweringContext::Insert(columns),
+            cx: LoweringContext::Insert(columns, None),
             collect_dependencies: self.collect_dependencies,
         }
+    }
+
+    fn lower_insert_with_row(&mut self, row: usize, f: impl FnOnce(&mut Self)) {
+        let LoweringContext::Insert(_, maybe_row) = &mut self.cx else {
+            todo!()
+        };
+        debug_assert!(maybe_row.is_none());
+        *maybe_row = Some(row);
+        f(self);
+
+        let LoweringContext::Insert(_, maybe_row) = &mut self.cx else {
+            todo!()
+        };
+        debug_assert_eq!(Some(row), *maybe_row);
+        *maybe_row = None;
     }
 
     fn lower_insert_row<'child>(

@@ -189,6 +189,18 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
                             })
                             .collect();
 
+                        // Collect test attributes (e.g., #[should_panic], #[ignore])
+                        // Convert attributes to token streams that can be passed through macro_rules!
+                        let test_attrs = &test.attrs;
+
+                        // Only add attrs parameter if there are attributes
+                        let attrs_param = if !test_attrs.is_empty() {
+                            // Pass attributes as raw token trees
+                            quote! { , attrs: (#(#test_attrs)*) }
+                        } else {
+                            quote! {}
+                        };
+
                         quote! {
                             mod #test_ident {
                                 use super::*;
@@ -198,6 +210,7 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
                                     #module_ident::#test_ident,
                                     $driver_expr,
                                     requires: [#(#requires_list),*]
+                                    #attrs_param
                                         $(, $($t)* )?
                                 );
                             }
