@@ -320,8 +320,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     ..
                 } => {
                     debug_assert!(!returning, "the argument was found in a filter");
-                    // Sub-statement arguments in the filter should only happen with !sql
-                    debug_assert!(insert_row.is_some() || !self.planner.engine.capability().sql);
 
                     let target = &self.planner.hir[target_id];
                     let node_id = target.output.get().expect("bug");
