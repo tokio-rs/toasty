@@ -1,7 +1,7 @@
 use super::{Column, ColumnId, Schema, TableId};
 use crate::stmt;
 
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 #[derive(Debug)]
 pub struct Index {
@@ -24,6 +24,20 @@ pub struct Index {
     pub primary_key: bool,
 }
 
+impl Index {
+    fn has_diff(&self, other: &Index) -> bool {
+        self.name != other.name
+            || self.columns.len() != other.columns.len()
+            || self
+                .columns
+                .iter()
+                .zip(other.columns.iter())
+                .any(|(s, o)| s.op != o.op || s.scope != o.scope)
+            || self.unique != other.unique
+            || self.primary_key != other.primary_key
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct IndexId {
     pub table: TableId,
@@ -42,13 +56,13 @@ pub struct IndexColumn {
     pub scope: IndexScope,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum IndexOp {
     Eq,
     Sort(stmt::Direction),
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum IndexScope {
     /// The index column is used to partition rows across nodes of a distributed database.
     Partition,
@@ -86,4 +100,49 @@ impl fmt::Debug for IndexId {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(fmt, "IndexId({}/{})", self.table.0, self.index)
     }
+}
+
+pub struct IndicesDiff<'a> {
+    items: Vec<IndicesDiffItem<'a>>,
+}
+
+impl<'a> IndicesDiff<'a> {
+    pub fn from(from: &'a [Index], to: &'a [Index]) -> Self {
+        let mut items = vec![];
+
+        let from_map = HashMap::<&str, &'a Index>::from_iter(
+            from.iter().map(|from| (from.name.as_str(), from)),
+        );
+        let to_map =
+            HashMap::<&str, &'a Index>::from_iter(to.iter().map(|to| (to.name.as_str(), to)));
+
+        for from in from {
+            match to_map.get(from.name.as_str()) {
+                Some(to) => {
+                    if from.has_diff(to) {
+                        items.push(IndicesDiffItem::AlterIndex { from, to });
+                    }
+                }
+                None => items.push(IndicesDiffItem::DropIndex(from)),
+            }
+        }
+
+        for to in to {
+            if !from_map.contains_key(to.name.as_str()) {
+                items.push(IndicesDiffItem::CreateIndex(to));
+            }
+        }
+
+        Self { items }
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+}
+
+pub enum IndicesDiffItem<'a> {
+    CreateIndex(&'a Index),
+    DropIndex(&'a Index),
+    AlterIndex { from: &'a Index, to: &'a Index },
 }
