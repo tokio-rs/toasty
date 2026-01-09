@@ -86,7 +86,7 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) {
     // The profile is none
     assert!(user.profile().get(&db).await.unwrap().is_none());
 
-    let profile_reloaded = Profile::filter_by_id(&profile.id).get(&db).await.unwrap();
+    let profile_reloaded = Profile::filter_by_id(profile.id).get(&db).await.unwrap();
     assert_none!(profile_reloaded.user_id);
 
     user.update()
@@ -388,7 +388,7 @@ pub async fn set_has_one_by_value_in_update_query(test: &mut Test) {
     let user = User::create().exec(&db).await.unwrap();
     let profile = Profile::create().exec(&db).await.unwrap();
 
-    User::filter_by_id(&user.id)
+    User::filter_by_id(user.id)
         .update()
         .profile(&profile)
         .exec(&db)
@@ -441,7 +441,7 @@ pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test
 
     assert_eq!(user.id, profile.user_id);
 
-    User::filter_by_id(&user.id)
+    User::filter_by_id(user.id)
         .update()
         .profile(None)
         .exec(&db)
