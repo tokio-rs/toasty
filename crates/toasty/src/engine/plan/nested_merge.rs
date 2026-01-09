@@ -165,11 +165,13 @@ impl NestedMergePlanner<'_> {
                 let (s, _) = self.inputs.insert_full(node_id);
                 source = s;
 
-                let stmt::Type::List(ty) = self.mir[node_id].ty().clone() else {
-                    todo!()
+                // Flatten list (bit of a hack)
+                let ty = match self.mir[node_id].ty().clone() {
+                    stmt::Type::List(ty) => *ty,
+                    ty => ty,
                 };
 
-                eval::Func::from_stmt(stmt::Expr::arg(0), vec![*ty])
+                eval::Func::from_stmt(stmt::Expr::arg(0), vec![ty])
             }
         };
 
