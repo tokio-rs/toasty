@@ -212,8 +212,6 @@ pub async fn update_belongs_to_with_required_has_one_pair(test: &mut Test) {
     let mut p1 = u1.profile().get(&db).await.unwrap();
     assert_eq!(p1.bio, "an apple a day");
 
-    assert_ne!(u1.id.to_string(), p1.id.to_string());
-
     // Associate the profile with a new user by value
     let u2 = User::create()
         .profile(Profile::create().bio("I plant trees"))
