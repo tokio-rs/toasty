@@ -1,10 +1,10 @@
 use super::{Column, ColumnId, Index, IndexId, PrimaryKey};
 use crate::{
-    schema::db::{column::ColumnsDiff, index::IndicesDiff},
+    schema::db::{column::ColumnsDiff, diff::DiffContext, index::IndicesDiff},
     stmt,
 };
 
-use std::{collections::HashMap, fmt};
+use std::{collections::{HashMap, HashSet}, fmt};
 
 /// A database table
 #[derive(Debug)]
@@ -87,16 +87,16 @@ pub struct TablesDiff<'a> {
 }
 
 impl<'a> TablesDiff<'a> {
-    pub fn from(from: &'a [Table], to: &'a [Table]) -> Self {
+    pub fn from(cx: &DiffContext<'_>, from: &'a [Table], to: &'a [Table]) -> Self {
         let mut items = vec![];
+        let create_set = HashSet::from_iter(to);
 
-        let from_map = HashMap::<&str, &'a Table>::from_iter(
-            from.iter().map(|from| (from.name.as_str(), from)),
-        );
         let to_map =
             HashMap::<&str, &'a Table>::from_iter(to.iter().map(|to| (to.name.as_str(), to)));
 
         for from in from {
+            if cx.rename_hints()
+
             match to_map.get(from.name.as_str()) {
                 Some(to) => {
                     let columns = ColumnsDiff::from(&from.columns, &to.columns);

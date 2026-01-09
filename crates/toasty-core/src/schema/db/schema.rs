@@ -1,4 +1,6 @@
-use super::{Column, ColumnId, Index, IndexId, Table, TableId};
+use super::{
+    Column, ColumnId, DiffContext, Index, IndexId, RenameHints, Table, TableId, TablesDiff,
+};
 
 #[derive(Debug, Default)]
 pub struct Schema {
@@ -25,5 +27,18 @@ impl Schema {
 
     pub fn table(&self, id: impl Into<TableId>) -> &Table {
         self.tables.get(id.into().0).expect("invalid table ID")
+    }
+}
+
+pub struct SchemaDiff<'a> {
+    tables: TablesDiff<'a>,
+}
+
+impl<'a> SchemaDiff<'a> {
+    pub fn from(from: &'a Schema, to: &'a Schema, rename_hints: &RenameHints) -> Self {
+        let cx = &DiffContext::new(from, to, rename_hints);
+        Self {
+            tables: TablesDiff::from(cx, &from.tables, &to.tables),
+        }
     }
 }

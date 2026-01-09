@@ -1,20 +1,20 @@
 mod column;
-pub use column::{Column, ColumnId};
+pub use column::*;
 
 mod diff;
-pub use diff::Diff;
+pub use diff::*;
 
 mod index;
-pub use index::{Index, IndexColumn, IndexId, IndexOp, IndexScope};
+pub use index::*;
 
 mod pk;
-pub use pk::PrimaryKey;
+pub use pk::*;
 
 mod schema;
-pub use schema::Schema;
+pub use schema::*;
 
 mod table;
-pub use table::{Table, TableId};
+pub use table::*;
 
 mod ty;
-pub use ty::Type;
+pub use ty::*;
