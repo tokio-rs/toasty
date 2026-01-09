@@ -30,6 +30,18 @@ impl RenameHints {
     pub fn add_index_hint(&mut self, from: IndexId, to: IndexId) {
         self.indices.insert(from, to);
     }
+
+    pub fn get_table(&self, from: TableId) -> Option<TableId> {
+        self.tables.get(&from).copied()
+    }
+
+    pub fn get_column(&self, from: ColumnId) -> Option<ColumnId> {
+        self.columns.get(&from).copied()
+    }
+
+    pub fn get_index(&self, from: IndexId) -> Option<IndexId> {
+        self.indices.get(&from).copied()
+    }
 }
 
 pub struct DiffContext<'a> {
@@ -50,5 +62,13 @@ impl<'a> DiffContext<'a> {
 
     pub fn rename_hints(&self) -> &'a RenameHints {
         self.rename_hints
+    }
+
+    pub fn schema_from(&self) -> &'a Schema {
+        self.from
+    }
+
+    pub fn schema_to(&self) -> &'a Schema {
+        self.to
     }
 }

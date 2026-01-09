@@ -1,7 +1,7 @@
-use super::{table, TableId, Type};
+use super::{table, DiffContext, TableId, Type};
 use crate::stmt;
 
-use std::{collections::HashMap, fmt};
+use std::{collections::{HashMap, HashSet}, fmt};
 
 #[derive(Debug, PartialEq)]
 pub struct Column {

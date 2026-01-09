@@ -4,7 +4,10 @@ use crate::{
     stmt,
 };
 
-use std::{collections::{HashMap, HashSet}, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 /// A database table
 #[derive(Debug)]
@@ -87,37 +90,39 @@ pub struct TablesDiff<'a> {
 }
 
 impl<'a> TablesDiff<'a> {
-    pub fn from(cx: &DiffContext<'_>, from: &'a [Table], to: &'a [Table]) -> Self {
+    pub fn from(cx: &DiffContext<'a>, from: &'a [Table], to: &'a [Table]) -> Self {
         let mut items = vec![];
-        let create_set = HashSet::from_iter(to);
+        let mut create_ids: HashSet<_> = to.iter().map(|to| to.id).collect();
 
         let to_map =
             HashMap::<&str, &'a Table>::from_iter(to.iter().map(|to| (to.name.as_str(), to)));
 
         for from in from {
-            if cx.rename_hints()
+            let to = if let Some(to_id) = cx.rename_hints().get_table(from.id) {
+                cx.schema_to().table(to_id)
+            } else if let Some(to) = to_map.get(from.name.as_str()) {
+                to
+            } else {
+                items.push(TablesDiffItem::DropTable(from));
+                continue;
+            };
 
-            match to_map.get(from.name.as_str()) {
-                Some(to) => {
-                    let columns = ColumnsDiff::from(&from.columns, &to.columns);
-                    let indices = IndicesDiff::from(&from.indices, &to.indices);
-                    if from.name != to.name || !columns.is_empty() || !indices.is_empty() {
-                        items.push(TablesDiffItem::AlterTable {
-                            from,
-                            to,
-                            columns,
-                            indices,
-                        });
-                    }
-                }
-                None => items.push(TablesDiffItem::DropTable(from)),
+            create_ids.remove(&to.id);
+
+            let columns = ColumnsDiff::from(&from.columns, &to.columns);
+            let indices = IndicesDiff::from(&from.indices, &to.indices);
+            if from.name != to.name || !columns.is_empty() || !indices.is_empty() {
+                items.push(TablesDiffItem::AlterTable {
+                    from,
+                    to,
+                    columns,
+                    indices,
+                });
             }
         }
 
-        for to in to {
-            if !from_map.contains_key(to.name.as_str()) {
-                items.push(TablesDiffItem::CreateTable(to));
-            }
+        for table_id in create_ids {
+            items.push(TablesDiffItem::CreateTable(cx.schema_to().table(table_id)));
         }
 
         Self { items }
