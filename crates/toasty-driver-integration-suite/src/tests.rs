@@ -8,5 +8,6 @@ pub mod field_column_name;
 pub mod field_column_type;
 pub mod has_many_batch_create;
 pub mod has_many_crud_basic;
+pub mod has_many_n_1;
 pub mod has_one_crud_basic;
 pub mod one_model_crud;
