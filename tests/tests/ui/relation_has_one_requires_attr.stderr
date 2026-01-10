@@ -12,5 +12,5 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Pr
             Rc<T>
             bigdecimal::BigDecimal
             bool
-            i16
+            chrono::datetime::DateTime<chrono::offset::utc::Utc>
           and $N others
