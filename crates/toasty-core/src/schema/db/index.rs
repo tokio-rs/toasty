@@ -94,16 +94,40 @@ pub struct IndicesDiff<'a> {
 
 impl<'a> IndicesDiff<'a> {
     pub fn from(cx: &DiffContext<'a>, from: &'a [Index], to: &'a [Index]) -> Self {
-        fn has_diff(from: &Index, to: &Index) -> bool {
-            from.name != to.name
+        fn has_diff(cx: &DiffContext<'_>, from: &Index, to: &Index) -> bool {
+            // Check basic properties
+            if from.name != to.name
                 || from.columns.len() != to.columns.len()
-                || from
-                    .columns
-                    .iter()
-                    .zip(to.columns.iter())
-                    .any(|(s, o)| s.op != o.op || s.scope != o.scope)
                 || from.unique != to.unique
                 || from.primary_key != to.primary_key
+            {
+                return true;
+            }
+
+            // Check if index columns have changed
+            for (from_col, to_col) in from.columns.iter().zip(to.columns.iter()) {
+                // Check if op or scope changed
+                if from_col.op != to_col.op || from_col.scope != to_col.scope {
+                    return true;
+                }
+
+                // Check if the column changed (accounting for renames)
+                let columns_match = if let Some(renamed_to) = cx.rename_hints().get_column(from_col.column) {
+                    // Column was renamed - check if it matches the target column
+                    renamed_to == to_col.column
+                } else {
+                    // No rename hint - check if columns match by name
+                    let from_column = cx.schema_from().column(from_col.column);
+                    let to_column = cx.schema_to().column(to_col.column);
+                    from_column.name == to_column.name
+                };
+
+                if !columns_match {
+                    return true;
+                }
+            }
+
+            false
         }
 
         let mut items = vec![];
@@ -124,7 +148,7 @@ impl<'a> IndicesDiff<'a> {
 
             create_ids.remove(&to.id);
 
-            if has_diff(from, to) {
+            if has_diff(cx, from, to) {
                 items.push(IndicesDiffItem::AlterIndex { from, to });
             }
         }
