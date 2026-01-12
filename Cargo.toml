@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/toasty",
+    "crates/toasty-cli",
     "crates/toasty-codegen",
     "crates/toasty-core",
     "crates/toasty-macros",
