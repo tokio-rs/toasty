@@ -12,6 +12,7 @@ use std::{
 
 /// A database table
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Table {
     /// Uniquely identifies a table
     pub id: TableId,
@@ -29,6 +30,7 @@ pub struct Table {
 
 /// Uniquely identifies a table
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TableId(pub usize);
 
 impl Table {

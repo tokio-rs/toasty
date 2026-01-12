@@ -8,6 +8,7 @@ use std::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Column {
     /// Uniquely identifies the column in the schema.
     pub id: ColumnId,
@@ -34,6 +35,7 @@ pub struct Column {
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ColumnId {
     pub table: TableId,
     pub index: usize,

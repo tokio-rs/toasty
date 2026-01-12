@@ -3,6 +3,7 @@ use super::{
 };
 
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Schema {
     pub tables: Vec<Table>,
 }

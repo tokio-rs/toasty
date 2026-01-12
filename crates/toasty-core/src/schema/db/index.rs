@@ -4,6 +4,7 @@ use crate::stmt;
 use std::{collections::{HashMap, HashSet}, fmt, ops::Deref};
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Index {
     /// Uniquely identifies the index within the schema
     pub id: IndexId,
@@ -25,12 +26,14 @@ pub struct Index {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexId {
     pub table: TableId,
     pub index: usize,
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IndexColumn {
     /// The column being indexed
     pub column: ColumnId,
@@ -43,12 +46,14 @@ pub struct IndexColumn {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum IndexOp {
     Eq,
     Sort(stmt::Direction),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum IndexScope {
     /// The index column is used to partition rows across nodes of a distributed database.
     Partition,
