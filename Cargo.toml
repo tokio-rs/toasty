@@ -24,6 +24,7 @@ members = [
     # Examples
     "examples/composite-key",
     "examples/hello-toasty",
+    "examples/todo-with-cli",
     "examples/user-has-one-profile",
 
     # Tests
@@ -36,6 +37,7 @@ members = [
 [workspace.dependencies]
 # Toasty crates
 toasty = { path = "crates/toasty" }
+toasty-cli = { path = "crates/toasty-cli" }
 toasty-codegen = { path = "crates/toasty-codegen" }
 toasty-core = { path = "crates/toasty-core" }
 toasty-macros = { path = "crates/toasty-macros" }
