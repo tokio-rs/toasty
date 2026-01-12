@@ -1,18 +1,10 @@
 use crate::migration::MigrationConfig;
 
 /// Configuration for Toasty CLI operations
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Config {
     /// Migration-related configuration
     pub migration: MigrationConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            migration: MigrationConfig::default(),
-        }
-    }
 }
 
 impl Config {

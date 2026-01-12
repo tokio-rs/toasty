@@ -2,7 +2,7 @@ use super::{
     Column, ColumnId, DiffContext, Index, IndexId, RenameHints, Table, TableId, TablesDiff,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Schema {
     pub tables: Vec<Table>,

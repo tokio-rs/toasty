@@ -1,7 +1,8 @@
 mod config;
 mod migration;
 
-pub use config::{Config, MigrationPrefixStyle};
+pub use config::*;
+pub use migration::*;
 
 use anyhow::Result;
 use clap::Parser;

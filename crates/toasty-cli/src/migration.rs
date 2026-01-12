@@ -1,6 +1,8 @@
 mod config;
+mod lock_file;
 
 pub use config::*;
+pub use lock_file::*;
 
 use crate::Config;
 use anyhow::Result;
