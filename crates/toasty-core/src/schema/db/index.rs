@@ -24,20 +24,6 @@ pub struct Index {
     pub primary_key: bool,
 }
 
-impl Index {
-    fn has_diff(&self, other: &Index) -> bool {
-        self.name != other.name
-            || self.columns.len() != other.columns.len()
-            || self
-                .columns
-                .iter()
-                .zip(other.columns.iter())
-                .any(|(s, o)| s.op != o.op || s.scope != o.scope)
-            || self.unique != other.unique
-            || self.primary_key != other.primary_key
-    }
-}
-
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct IndexId {
     pub table: TableId,
@@ -108,6 +94,18 @@ pub struct IndicesDiff<'a> {
 
 impl<'a> IndicesDiff<'a> {
     pub fn from(cx: &DiffContext<'a>, from: &'a [Index], to: &'a [Index]) -> Self {
+        fn has_diff(from: &Index, to: &Index) -> bool {
+            from.name != to.name
+                || from.columns.len() != to.columns.len()
+                || from
+                    .columns
+                    .iter()
+                    .zip(to.columns.iter())
+                    .any(|(s, o)| s.op != o.op || s.scope != o.scope)
+                || from.unique != to.unique
+                || from.primary_key != to.primary_key
+        }
+
         let mut items = vec![];
         let mut create_ids: HashSet<_> = to.iter().map(|to| to.id).collect();
 
@@ -126,7 +124,7 @@ impl<'a> IndicesDiff<'a> {
 
             create_ids.remove(&to.id);
 
-            if from.has_diff(to) {
+            if has_diff(from, to) {
                 items.push(IndicesDiffItem::AlterIndex { from, to });
             }
         }

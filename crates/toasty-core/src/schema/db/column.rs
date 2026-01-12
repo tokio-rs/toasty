@@ -35,16 +35,6 @@ pub struct ColumnId {
     pub index: usize,
 }
 
-impl Column {
-    fn has_diff(&self, other: &Column) -> bool {
-        self.name != other.name
-            || self.storage_ty != other.storage_ty
-            || self.nullable != other.nullable
-            || self.primary_key != other.primary_key
-            || self.auto_increment != other.auto_increment
-    }
-}
-
 impl ColumnId {
     pub(crate) fn placeholder() -> Self {
         Self {
@@ -72,6 +62,14 @@ pub struct ColumnsDiff<'a> {
 
 impl<'a> ColumnsDiff<'a> {
     pub fn from(cx: &DiffContext<'a>, from: &'a [Column], to: &'a [Column]) -> Self {
+        fn has_diff(from: &Column, to: &Column) -> bool {
+            from.name != to.name
+                || from.storage_ty != to.storage_ty
+                || from.nullable != to.nullable
+                || from.primary_key != to.primary_key
+                || from.auto_increment != to.auto_increment
+        }
+
         let mut items = vec![];
         let mut add_ids: HashSet<_> = to.iter().map(|to| to.id).collect();
 
@@ -90,7 +88,7 @@ impl<'a> ColumnsDiff<'a> {
 
             add_ids.remove(&to.id);
 
-            if from.has_diff(to) {
+            if has_diff(from, to) {
                 items.push(ColumnsDiffItem::AlterColumn { from, to });
             }
         }
