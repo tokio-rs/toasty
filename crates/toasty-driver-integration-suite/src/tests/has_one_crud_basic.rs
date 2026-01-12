@@ -1,13 +1,12 @@
-use std_util::{assert_err, assert_none};
-use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
+use crate::prelude::*;
 
-async fn crud_has_one_bi_direction_optional(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn crud_has_one_bi_direction_optional(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -19,10 +18,10 @@ async fn crud_has_one_bi_direction_optional(test: &mut DbTest) {
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -46,8 +45,6 @@ async fn crud_has_one_bi_direction_optional(test: &mut DbTest) {
         .exec(&db)
         .await
         .unwrap();
-
-    assert_ne!(user.id.to_string(), profile.id.to_string());
 
     // Load the profile
     let profile_reload = user.profile().get(&db).await.unwrap().unwrap();
@@ -89,7 +86,7 @@ async fn crud_has_one_bi_direction_optional(test: &mut DbTest) {
     // The profile is none
     assert!(user.profile().get(&db).await.unwrap().is_none());
 
-    let profile_reloaded = Profile::filter_by_id(&profile.id).get(&db).await.unwrap();
+    let profile_reloaded = Profile::filter_by_id(profile.id).get(&db).await.unwrap();
     assert_none!(profile_reloaded.user_id);
 
     user.update()
@@ -124,12 +121,14 @@ async fn crud_has_one_bi_direction_optional(test: &mut DbTest) {
     assert_none!(profile_reloaded.user_id);
 }
 
-async fn crud_has_one_required_belongs_to_optional(test: &mut DbTest) {
+#[driver_test(id(ID))]
+#[should_panic]
+pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_one]
         profile: toasty::HasOne<Profile>,
@@ -139,10 +138,10 @@ async fn crud_has_one_required_belongs_to_optional(test: &mut DbTest) {
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -174,12 +173,13 @@ async fn crud_has_one_required_belongs_to_optional(test: &mut DbTest) {
     assert_err!(User::create().exec(&db).await);
 }
 
-async fn update_belongs_to_with_required_has_one_pair(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn update_belongs_to_with_required_has_one_pair(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_one]
         profile: toasty::HasOne<Profile>,
@@ -189,10 +189,10 @@ async fn update_belongs_to_with_required_has_one_pair(test: &mut DbTest) {
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -211,8 +211,6 @@ async fn update_belongs_to_with_required_has_one_pair(test: &mut DbTest) {
 
     let mut p1 = u1.profile().get(&db).await.unwrap();
     assert_eq!(p1.bio, "an apple a day");
-
-    assert_ne!(u1.id.to_string(), p1.id.to_string());
 
     // Associate the profile with a new user by value
     let u2 = User::create()
@@ -282,12 +280,13 @@ async fn update_belongs_to_with_required_has_one_pair(test: &mut DbTest) {
     */
 }
 
-async fn crud_has_one_optional_belongs_to_required(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_one]
         profile: toasty::HasOne<Option<Profile>>,
@@ -297,10 +296,10 @@ async fn crud_has_one_optional_belongs_to_required(test: &mut DbTest) {
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -330,7 +329,8 @@ async fn crud_has_one_optional_belongs_to_required(test: &mut DbTest) {
 
 // TODO: implement this for proc macros
 /*
-async fn has_one_must_specify_be_uniquely_indexed(_test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn has_one_must_specify_be_uniquely_indexed(_test: &mut Test) {
     toasty_core::schema::from_str(
         "
         model User {
@@ -358,12 +358,13 @@ async fn has_one_must_specify_be_uniquely_indexed(_test: &mut DbTest) {
 }
 */
 
-async fn set_has_one_by_value_in_update_query(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn set_has_one_by_value_in_update_query(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_one]
         profile: toasty::HasOne<Option<Profile>>,
@@ -373,10 +374,10 @@ async fn set_has_one_by_value_in_update_query(test: &mut DbTest) {
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -387,7 +388,7 @@ async fn set_has_one_by_value_in_update_query(test: &mut DbTest) {
     let user = User::create().exec(&db).await.unwrap();
     let profile = Profile::create().exec(&db).await.unwrap();
 
-    User::filter_by_id(&user.id)
+    User::filter_by_id(user.id)
         .update()
         .profile(&profile)
         .exec(&db)
@@ -400,14 +401,17 @@ async fn set_has_one_by_value_in_update_query(test: &mut DbTest) {
     assert_eq!(profile_reload.user_id.as_ref().unwrap(), &user.id);
 }
 
-async fn unset_has_one_in_batch_update(_test: &mut DbTest) {}
+#[driver_test(id(ID))]
+#[ignore]
+pub async fn unset_has_one_in_batch_update(_test: &mut Test) {}
 
-async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_one]
         profile: toasty::HasOne<Option<Profile>>,
@@ -417,10 +421,10 @@ async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut DbTest) 
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -437,7 +441,7 @@ async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut DbTest) 
 
     assert_eq!(user.id, profile.user_id);
 
-    User::filter_by_id(&user.id)
+    User::filter_by_id(user.id)
         .update()
         .profile(None)
         .exec(&db)
@@ -448,12 +452,13 @@ async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut DbTest) 
     assert_err!(Profile::get_by_id(&db, &profile.id).await);
 }
 
-async fn unset_has_one_with_required_pair_in_non_pk_query_update(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn unset_has_one_with_required_pair_in_non_pk_query_update(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
         email: String,
@@ -466,10 +471,10 @@ async fn unset_has_one_with_required_pair_in_non_pk_query_update(test: &mut DbTe
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -497,12 +502,13 @@ async fn unset_has_one_with_required_pair_in_non_pk_query_update(test: &mut DbTe
     assert_err!(Profile::get_by_id(&db, &profile.id).await);
 }
 
-async fn associate_has_one_by_val_on_insert(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn associate_has_one_by_val_on_insert(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_one]
         profile: toasty::HasOne<Profile>,
@@ -512,10 +518,10 @@ async fn associate_has_one_by_val_on_insert(test: &mut DbTest) {
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -541,13 +547,15 @@ async fn associate_has_one_by_val_on_insert(test: &mut DbTest) {
     assert_eq!(profile.bio, profile_reloaded.bio);
 }
 
-async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut DbTest) {
+#[driver_test(id(ID))]
+#[ignore]
+pub async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut Test) {
     /*
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -559,10 +567,10 @@ async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut DbTest
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -610,20 +618,3 @@ async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut DbTest
         .unwrap();
     */
 }
-
-tests!(
-    crud_has_one_bi_direction_optional,
-    // TODO: this should not actually panic
-    #[should_panic]
-    crud_has_one_required_belongs_to_optional,
-    update_belongs_to_with_required_has_one_pair,
-    crud_has_one_optional_belongs_to_required,
-    set_has_one_by_value_in_update_query,
-    #[ignore]
-    unset_has_one_in_batch_update,
-    unset_has_one_with_required_pair_in_pk_query_update,
-    unset_has_one_with_required_pair_in_non_pk_query_update,
-    associate_has_one_by_val_on_insert,
-    #[ignore]
-    associate_has_one_by_val_on_update_query_with_filter,
-);

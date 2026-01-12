@@ -1,11 +1,14 @@
-use tests::{assert_eq_unordered, models, tests, DbTest};
+//! Test querying models with various filters and constraints
 
-async fn query_index_eq(test: &mut DbTest) {
+use crate::prelude::*;
+
+#[driver_test(id(ID))]
+pub async fn query_index_eq(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: toasty::stmt::Id<Self>,
+        id: ID,
 
         #[index]
         name: String,
@@ -64,7 +67,8 @@ async fn query_index_eq(test: &mut DbTest) {
     assert_eq!("one@example.com", users[1].email);
 }
 
-async fn query_partition_key_string_eq(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn query_partition_key_string_eq(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[key(partition = league, local = name)]
     struct Team {
@@ -198,7 +202,8 @@ async fn query_partition_key_string_eq(test: &mut DbTest) {
     assert!(teams.is_empty());
 }
 
-async fn query_local_key_cmp(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn query_local_key_cmp(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[key(partition = kind, local = timestamp)]
     struct Event {
@@ -296,7 +301,8 @@ async fn query_local_key_cmp(test: &mut DbTest) {
     );
 }
 
-async fn query_arbitrary_constraint(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn query_arbitrary_constraint(test: &mut Test) {
     // Only supported by SQL
     if !test.capability().sql {
         return;
@@ -306,7 +312,7 @@ async fn query_arbitrary_constraint(test: &mut DbTest) {
     struct Event {
         #[key]
         #[auto]
-        id: toasty::stmt::Id<Self>,
+        id: ID,
 
         kind: String,
 
@@ -448,10 +454,3 @@ async fn query_arbitrary_constraint(test: &mut DbTest) {
         [&0, &2, &4, &6, &8, &10]
     );
 }
-
-tests!(
-    query_index_eq,
-    query_partition_key_string_eq,
-    query_local_key_cmp,
-    query_arbitrary_constraint,
-);
