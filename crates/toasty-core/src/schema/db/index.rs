@@ -1,7 +1,7 @@
-use super::{Column, ColumnId, Schema, TableId};
+use super::{Column, ColumnId, DiffContext, Schema, TableId};
 use crate::stmt;
 
-use std::{collections::HashMap, fmt};
+use std::{collections::{HashMap, HashSet}, fmt};
 
 #[derive(Debug)]
 pub struct Index {
@@ -38,7 +38,7 @@ impl Index {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct IndexId {
     pub table: TableId,
     pub index: usize,
@@ -107,30 +107,32 @@ pub struct IndicesDiff<'a> {
 }
 
 impl<'a> IndicesDiff<'a> {
-    pub fn from(from: &'a [Index], to: &'a [Index]) -> Self {
+    pub fn from(cx: &DiffContext<'a>, from: &'a [Index], to: &'a [Index]) -> Self {
         let mut items = vec![];
+        let mut create_ids: HashSet<_> = to.iter().map(|to| to.id).collect();
 
-        let from_map = HashMap::<&str, &'a Index>::from_iter(
-            from.iter().map(|from| (from.name.as_str(), from)),
-        );
         let to_map =
             HashMap::<&str, &'a Index>::from_iter(to.iter().map(|to| (to.name.as_str(), to)));
 
         for from in from {
-            match to_map.get(from.name.as_str()) {
-                Some(to) => {
-                    if from.has_diff(to) {
-                        items.push(IndicesDiffItem::AlterIndex { from, to });
-                    }
-                }
-                None => items.push(IndicesDiffItem::DropIndex(from)),
+            let to = if let Some(to_id) = cx.rename_hints().get_index(from.id) {
+                cx.schema_to().index(to_id)
+            } else if let Some(to) = to_map.get(from.name.as_str()) {
+                to
+            } else {
+                items.push(IndicesDiffItem::DropIndex(from));
+                continue;
+            };
+
+            create_ids.remove(&to.id);
+
+            if from.has_diff(to) {
+                items.push(IndicesDiffItem::AlterIndex { from, to });
             }
         }
 
-        for to in to {
-            if !from_map.contains_key(to.name.as_str()) {
-                items.push(IndicesDiffItem::CreateIndex(to));
-            }
+        for index_id in create_ids {
+            items.push(IndicesDiffItem::CreateIndex(cx.schema_to().index(index_id)));
         }
 
         Self { items }

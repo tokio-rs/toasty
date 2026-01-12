@@ -1,11 +1,6 @@
 use std::collections::HashMap;
 
-use crate::schema::{
-    app::IndexId,
-    db::{ColumnId, TableId},
-};
-
-use super::Schema;
+use crate::schema::db::{ColumnId, IndexId, Schema, TableId};
 
 #[derive(Default)]
 pub struct RenameHints {

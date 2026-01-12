@@ -71,30 +71,32 @@ pub struct ColumnsDiff<'a> {
 }
 
 impl<'a> ColumnsDiff<'a> {
-    pub fn from(from: &'a [Column], to: &'a [Column]) -> Self {
+    pub fn from(cx: &DiffContext<'a>, from: &'a [Column], to: &'a [Column]) -> Self {
         let mut items = vec![];
+        let mut add_ids: HashSet<_> = to.iter().map(|to| to.id).collect();
 
-        let from_map = HashMap::<&str, &'a Column>::from_iter(
-            from.iter().map(|from| (from.name.as_str(), from)),
-        );
         let to_map =
             HashMap::<&str, &'a Column>::from_iter(to.iter().map(|to| (to.name.as_str(), to)));
 
         for from in from {
-            match to_map.get(from.name.as_str()) {
-                Some(to) => {
-                    if from.has_diff(to) {
-                        items.push(ColumnsDiffItem::AlterColumn { from, to });
-                    }
-                }
-                None => items.push(ColumnsDiffItem::DropColumn(from)),
+            let to = if let Some(to_id) = cx.rename_hints().get_column(from.id) {
+                cx.schema_to().column(to_id)
+            } else if let Some(to) = to_map.get(from.name.as_str()) {
+                to
+            } else {
+                items.push(ColumnsDiffItem::DropColumn(from));
+                continue;
+            };
+
+            add_ids.remove(&to.id);
+
+            if from.has_diff(to) {
+                items.push(ColumnsDiffItem::AlterColumn { from, to });
             }
         }
 
-        for to in to {
-            if !from_map.contains_key(to.name.as_str()) {
-                items.push(ColumnsDiffItem::AddColumn(to));
-            }
+        for column_id in add_ids {
+            items.push(ColumnsDiffItem::AddColumn(cx.schema_to().column(column_id)));
         }
 
         Self { items }

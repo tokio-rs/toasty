@@ -35,7 +35,7 @@ pub struct SchemaDiff<'a> {
 }
 
 impl<'a> SchemaDiff<'a> {
-    pub fn from(from: &'a Schema, to: &'a Schema, rename_hints: &RenameHints) -> Self {
+    pub fn from(from: &'a Schema, to: &'a Schema, rename_hints: &'a RenameHints) -> Self {
         let cx = &DiffContext::new(from, to, rename_hints);
         Self {
             tables: TablesDiff::from(cx, &from.tables, &to.tables),

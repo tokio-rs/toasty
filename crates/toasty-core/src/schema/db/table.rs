@@ -109,8 +109,8 @@ impl<'a> TablesDiff<'a> {
 
             create_ids.remove(&to.id);
 
-            let columns = ColumnsDiff::from(&from.columns, &to.columns);
-            let indices = IndicesDiff::from(&from.indices, &to.indices);
+            let columns = ColumnsDiff::from(cx, &from.columns, &to.columns);
+            let indices = IndicesDiff::from(cx, &from.indices, &to.indices);
             if from.name != to.name || !columns.is_empty() || !indices.is_empty() {
                 items.push(TablesDiffItem::AlterTable {
                     from,
