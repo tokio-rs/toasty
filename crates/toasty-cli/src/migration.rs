@@ -1,3 +1,4 @@
+use crate::Config;
 use anyhow::Result;
 use clap::Parser;
 use toasty::Db;
@@ -22,15 +23,17 @@ pub struct GenerateCommand {
     // name: Option<String>,
 }
 
-pub(crate) fn run(cmd: MigrationCommand, db: &Db) -> Result<()> {
+pub(crate) fn run(cmd: MigrationCommand, db: &Db, config: &Config) -> Result<()> {
     match cmd.subcommand {
-        MigrationSubcommand::Generate(generate) => generate_migration(generate, db),
+        MigrationSubcommand::Generate(generate) => generate_migration(generate, db, config),
     }
 }
 
-fn generate_migration(_cmd: GenerateCommand, _db: &Db) -> Result<()> {
+fn generate_migration(_cmd: GenerateCommand, _db: &Db, config: &Config) -> Result<()> {
     // TODO: Implement migration generation logic
     println!("Generating migration...");
+    println!("Migrations path: {:?}", config.migrations_path);
+    println!("Prefix style: {:?}", config.migration_prefix_style);
     println!("Migration generation is not yet implemented");
     Ok(())
 }

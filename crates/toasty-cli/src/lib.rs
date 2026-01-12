@@ -1,4 +1,7 @@
+mod config;
 mod migration;
+
+pub use config::{Config, MigrationPrefixStyle};
 
 use anyhow::Result;
 use clap::Parser;
@@ -7,12 +10,26 @@ use toasty::Db;
 /// Toasty CLI library for building custom command-line tools
 pub struct ToastyCli {
     db: Db,
+    config: Config,
 }
 
 impl ToastyCli {
     /// Create a new ToastyCli instance with the given database connection
     pub fn new(db: Db) -> Self {
-        Self { db }
+        Self {
+            db,
+            config: Config::default(),
+        }
+    }
+
+    /// Create a new ToastyCli instance with a custom configuration
+    pub fn with_config(db: Db, config: Config) -> Self {
+        Self { db, config }
+    }
+
+    /// Get a reference to the configuration
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
     /// Parse and execute CLI commands from command-line arguments
@@ -33,7 +50,7 @@ impl ToastyCli {
 
     fn run(&self, cli: Cli) -> Result<()> {
         match cli.command {
-            Command::Migration(cmd) => migration::run(cmd, &self.db),
+            Command::Migration(cmd) => migration::run(cmd, &self.db, &self.config),
         }
     }
 }
