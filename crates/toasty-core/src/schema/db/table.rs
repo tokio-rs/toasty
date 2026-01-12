@@ -7,6 +7,7 @@ use crate::{
 use std::{
     collections::{HashMap, HashSet},
     fmt,
+    ops::Deref,
 };
 
 /// A database table
@@ -126,6 +127,14 @@ impl<'a> TablesDiff<'a> {
         }
 
         Self { items }
+    }
+}
+
+impl<'a> Deref for TablesDiff<'a> {
+    type Target = Vec<TablesDiffItem<'a>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.items
     }
 }
 

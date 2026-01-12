@@ -4,6 +4,7 @@ use crate::stmt;
 use std::{
     collections::{HashMap, HashSet},
     fmt,
+    ops::Deref,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -105,6 +106,14 @@ impl<'a> ColumnsDiff<'a> {
 
     pub const fn is_empty(&self) -> bool {
         self.items.is_empty()
+    }
+}
+
+impl<'a> Deref for ColumnsDiff<'a> {
+    type Target = Vec<ColumnsDiffItem<'a>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.items
     }
 }
 

@@ -1,7 +1,7 @@
 use super::{Column, ColumnId, DiffContext, Schema, TableId};
 use crate::stmt;
 
-use std::{collections::{HashMap, HashSet}, fmt};
+use std::{collections::{HashMap, HashSet}, fmt, ops::Deref};
 
 #[derive(Debug, Clone)]
 pub struct Index {
@@ -162,6 +162,14 @@ impl<'a> IndicesDiff<'a> {
 
     pub const fn is_empty(&self) -> bool {
         self.items.is_empty()
+    }
+}
+
+impl<'a> Deref for IndicesDiff<'a> {
+    type Target = Vec<IndicesDiffItem<'a>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.items
     }
 }
 
