@@ -11,4 +11,5 @@ pub mod has_many_crud_basic;
 pub mod has_many_crud_multi_relations;
 pub mod has_many_n_1;
 pub mod has_one_crud_basic;
+pub mod one_model_batch_create;
 pub mod one_model_crud;
