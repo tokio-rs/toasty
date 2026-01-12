@@ -51,7 +51,7 @@ impl ToastyCli {
 
     fn run(&self, cli: Cli) -> Result<()> {
         match cli.command {
-            Command::Migration(cmd) => migration::run(cmd, &self.db, &self.config),
+            Command::Migration(cmd) => cmd.run(&self.db, &self.config),
         }
     }
 }
