@@ -1,3 +1,7 @@
+mod config;
+
+pub use config::*;
+
 use crate::Config;
 use anyhow::Result;
 use clap::Parser;
@@ -32,8 +36,8 @@ pub(crate) fn run(cmd: MigrationCommand, db: &Db, config: &Config) -> Result<()>
 fn generate_migration(_cmd: GenerateCommand, _db: &Db, config: &Config) -> Result<()> {
     // TODO: Implement migration generation logic
     println!("Generating migration...");
-    println!("Migrations path: {:?}", config.migrations_path);
-    println!("Prefix style: {:?}", config.migration_prefix_style);
+    println!("Migrations path: {:?}", config.migration.migrations_path);
+    println!("Prefix style: {:?}", config.migration.prefix_style);
     println!("Migration generation is not yet implemented");
     Ok(())
 }
