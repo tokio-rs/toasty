@@ -3,11 +3,7 @@
 use crate::prelude::*;
 use std::collections::HashSet;
 
-#[driver_test(
-    id(ID),
-    matrix(single, composite),
-    requires(or(single, and(composite, not(auto_increment))))
-)]
+#[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
 pub async fn scoped_query_eq(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -23,10 +19,10 @@ pub async fn scoped_query_eq(test: &mut Test) {
     #[driver_test_cfg(composite, key(partition = user_id, local = id))]
     struct Todo {
         #[auto]
-        #[key]
+        #[driver_test_cfg(single, key)]
         id: ID,
 
-        #[index]
+        #[driver_test_cfg(single, index)]
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]

@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use syn::{parse_macro_input, visit::Visit, Ident, ItemFn, LitStr};
 
-use crate::parse::{Capability, DriverTest, DriverTestAttr};
+use crate::parse::{BoolExpr, DriverTest, DriverTestAttr};
 
 pub fn expand(input: TokenStream) -> TokenStream {
     // Parse the relative path to the tests directory (relative to CARGO_MANIFEST_DIR)
@@ -66,9 +66,18 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
             // Parse the file and extract test functions
             let tests = extract_tests_from_file(&path);
 
+            for test in &tests {
+                eprintln!(
+                    "  - {} (expansions: {}, has_expansion_params: {})",
+                    test.name,
+                    test.expansions.len(),
+                    test.has_expansion_params
+                );
+            }
+
             // Collect all unique requires from these tests
             for test in &tests {
-                for req in &test.requires {
+                if let Some(ref req) = test.requires {
                     all_requires.insert(req.clone());
                 }
             }
@@ -79,21 +88,44 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
         }
     }
 
+    // Extract all capability identifiers from the BoolExpr requirements
+    let mut capability_names = std::collections::HashSet::new();
+    for req_expr in &all_requires {
+        extract_capability_names(req_expr, &mut capability_names);
+    }
+
     // Always include auto_increment as it's implicitly required by ID expansion
-    all_requires.insert(Capability {
-        name: "auto_increment".to_string(),
-        negated: false,
-    });
+    capability_names.insert("auto_increment".to_string());
 
     // Convert HashSet to sorted Vec of Idents
-    let mut requires_vec: Vec<_> = all_requires.into_iter().collect();
+    let mut requires_vec: Vec<_> = capability_names.into_iter().collect();
     requires_vec.sort();
     structure.requires = requires_vec
         .into_iter()
-        .map(|cap| Ident::new(&cap.name, proc_macro2::Span::call_site()))
+        .map(|name| Ident::new(&name, proc_macro2::Span::call_site()))
         .collect();
 
     structure
+}
+
+/// Extract all capability names from a BoolExpr (ignoring matrix identifiers)
+fn extract_capability_names(expr: &BoolExpr, result: &mut std::collections::HashSet<String>) {
+    match expr {
+        BoolExpr::Ident(name) => {
+            // Skip common matrix identifiers
+            if name != "single" && name != "composite" && name != "id_u64" && name != "id_uuid" {
+                result.insert(name.clone());
+            }
+        }
+        BoolExpr::Or(exprs) | BoolExpr::And(exprs) => {
+            for e in exprs {
+                extract_capability_names(e, result);
+            }
+        }
+        BoolExpr::Not(inner) => {
+            extract_capability_names(inner, result);
+        }
+    }
 }
 
 fn extract_tests_from_file(path: &Path) -> Vec<DriverTest> {
@@ -128,7 +160,8 @@ impl<'ast> Visit<'ast> for TestVisitor {
                 // Empty attribute: #[driver_test]
                 DriverTestAttr {
                     id_ident: None,
-                    requires: Vec::new(),
+                    matrix: Vec::new(),
+                    requires: None,
                 }
             } else {
                 // Parse attribute arguments: #[driver_test(id(ID), requires(...))]
@@ -156,13 +189,26 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
 
             let test_modules: Vec<TokenStream2> = tests
                 .iter()
-                .map(|test| {
+                .filter_map(|test| {
                     let test_ident = &test.name;
 
-                    // If test has no kinds, it's not ID-parameterized, so generate a single test
-                    // Otherwise, generate a module with variants
-                    if test.kinds.is_empty() {
-                        quote! {
+                    // If test had expansion params (id/matrix) but all expansions were filtered out,
+                    // the driver_test macro generated a #[cfg(any())] module that's never compiled.
+                    // We should not generate anything for it here.
+                    if test.has_expansion_params && test.expansions.is_empty() {
+                        return None; // Skip this test entirely
+                    }
+
+                    // If test has 1 expansion with empty name (only requires, no id/matrix),
+                    // driver_test already generated it as a standalone function with #[tokio::test].
+                    // We don't need to do anything - skip it.
+                    if test.expansions.len() == 1 && !test.has_expansion_params {
+                        return None;
+                    }
+
+                    // If test has no expansions at all, generate a simple test wrapper
+                    if test.expansions.is_empty() {
+                        Some(quote! {
                             #[test]
                             fn #test_ident() {
                                 let mut test = $crate::Test::new(
@@ -173,48 +219,37 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
                                     $crate::tests::#module_ident::#test_ident(t).await;
                                 });
                             }
-                        }
+                        })
                     } else {
-                        // Generate requires list as capability specifications
-                        // Format: "capability_name" or "!capability_name" for negated
-                        let requires_list: Vec<_> = test
-                            .requires
-                            .iter()
-                            .map(|cap| {
-                                if cap.negated {
-                                    format!("!{}", cap.name)
-                                } else {
-                                    cap.name.clone()
+                        // For tests with expansions, the driver_test macro already generated
+                        // a module with regular async functions. We need to create test wrappers
+                        // for each function that add the #[test] attribute and Test setup.
+
+                        let test_wrappers: Vec<_> = test.expansions.iter()
+                            .map(|expansion| {
+                                let name = expansion.name();
+                                let fn_ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
+                                // Create a unique wrapper name by combining test name and expansion name
+                                let wrapper_name = format!("{}_{}", test_ident, name);
+                                let wrapper_ident = syn::Ident::new(&wrapper_name, proc_macro2::Span::call_site());
+                                quote! {
+                                    #[test]
+                                    fn #wrapper_ident() {
+                                        let mut test = $crate::Test::new(
+                                            ::std::sync::Arc::new($driver_expr)
+                                        );
+
+                                        test.run(async move |t| {
+                                            $crate::tests::#module_ident::#test_ident::#fn_ident(t).await;
+                                        });
+                                    }
                                 }
                             })
                             .collect();
 
-                        // Collect test attributes (e.g., #[should_panic], #[ignore])
-                        // Convert attributes to token streams that can be passed through macro_rules!
-                        let test_attrs = &test.attrs;
-
-                        // Only add attrs parameter if there are attributes
-                        let attrs_param = if !test_attrs.is_empty() {
-                            // Pass attributes as raw token trees
-                            quote! { , attrs: (#(#test_attrs)*) }
-                        } else {
-                            quote! {}
-                        };
-
-                        quote! {
-                            mod #test_ident {
-                                use super::*;
-
-                                $crate::generate_driver_test_variants!(
-                                    $crate,
-                                    #module_ident::#test_ident,
-                                    $driver_expr,
-                                    requires: [#(#requires_list),*]
-                                    #attrs_param
-                                        $(, $($t)* )?
-                                );
-                            }
-                        }
+                        Some(quote! {
+                            #(#test_wrappers)*
+                        })
                     }
                 })
                 .collect();
