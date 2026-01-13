@@ -299,6 +299,47 @@ impl BoolExpr {
             BoolExpr::Not(expr) => !expr.eval(is_true),
         }
     }
+
+    /// Evaluate with three-valued logic (true, false, unknown).
+    /// Returns None for unknown, Some(true) for true, Some(false) for false.
+    /// Used during driver_test expansion where database capabilities are unknown.
+    pub fn eval_three_valued<F>(&self, get_value: &F) -> Option<bool>
+    where
+        F: Fn(&str) -> Option<bool>,
+    {
+        match self {
+            BoolExpr::Ident(name) => get_value(name),
+            BoolExpr::Not(expr) => {
+                match expr.eval_three_valued(get_value) {
+                    Some(true) => Some(false),
+                    Some(false) => Some(true),
+                    None => None, // not(unknown) = unknown
+                }
+            }
+            BoolExpr::And(exprs) => {
+                let mut result = Some(true);
+                for e in exprs {
+                    match e.eval_three_valued(get_value) {
+                        Some(false) => return Some(false), // false short-circuits
+                        Some(true) => {}                   // continue
+                        None => result = None,             // unknown, but keep checking for false
+                    }
+                }
+                result
+            }
+            BoolExpr::Or(exprs) => {
+                let mut result = Some(false);
+                for e in exprs {
+                    match e.eval_three_valued(get_value) {
+                        Some(true) => return Some(true), // true short-circuits
+                        Some(false) => {}                // continue
+                        None => result = None,           // unknown, but keep checking for true
+                    }
+                }
+                result
+            }
+        }
+    }
 }
 
 impl DriverTest {
@@ -367,35 +408,37 @@ impl DriverTest {
                     matrix_values: matrix_values.clone(),
                 };
 
-                // Filter by requires expression if present
-                // Only evaluate with respect to matrix/ID identifiers
-                // Database capabilities are checked at runtime, not compile time
+                // Filter by requires expression if present using three-valued logic
+                // Matrix/ID identifiers are known (true/false), database capabilities are unknown (None)
+                // Only filter out expansions that evaluate to Some(false)
                 if let Some(ref requires_expr) = attr.requires {
-                    let result = requires_expr.eval(&|ident| {
+                    let result = requires_expr.eval_three_valued(&|ident| {
                         // Check if this is a matrix identifier
                         if expansion.matrix_values.contains_key(ident) {
-                            expansion.matrix_values[ident]
+                            Some(expansion.matrix_values[ident])
                         } else if ident == "id_u64" || ident == "id_uuid" {
                             // ID variant identifier
                             if ident == "id_u64" {
-                                matches!(
+                                Some(matches!(
                                     expansion.id_variant,
                                     Some(crate::parse::KindVariant::IdU64)
-                                )
+                                ))
                             } else {
-                                matches!(
+                                Some(matches!(
                                     expansion.id_variant,
                                     Some(crate::parse::KindVariant::IdUuid)
-                                )
+                                ))
                             }
                         } else {
-                            // Unknown identifier (database capability) - assume true for compile-time filtering
-                            // The actual check will happen at runtime
-                            true
+                            // Unknown identifier (database capability)
+                            // Return None to indicate unknown - will be checked at runtime
+                            None
                         }
                     });
 
-                    if !result {
+                    // Only filter out if result is definitely false
+                    // Keep if true or unknown (None)
+                    if result == Some(false) {
                         continue;
                     }
                 }
