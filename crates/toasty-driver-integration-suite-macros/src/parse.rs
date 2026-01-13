@@ -20,6 +20,9 @@ pub struct DriverTest {
 
     /// Whether the test had id() or matrix() parameters (even if all expansions filtered out)
     pub has_expansion_params: bool,
+
+    /// The parsed attribute
+    pub attr: DriverTestAttr,
 }
 
 /// A single test expansion with specific matrix values
@@ -153,15 +156,40 @@ impl KindVariant {
 }
 
 /// Attribute arguments for `#[driver_test(...)]`
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DriverTestAttr {
     pub id_ident: Option<String>,
     pub matrix: Vec<String>,
     pub requires: Option<BoolExpr>,
+    /// The original syn::Attribute
+    pub ast: syn::Attribute,
+}
+
+impl DriverTestAttr {
+    /// Parse from a syn::Attribute
+    pub fn from_attribute(attr: &syn::Attribute) -> syn::Result<Self> {
+        if attr.meta.require_path_only().is_ok() {
+            // Empty attribute: #[driver_test]
+            Ok(DriverTestAttr {
+                id_ident: None,
+                matrix: Vec::new(),
+                requires: None,
+                ast: attr.clone(),
+            })
+        } else {
+            // Parse attribute arguments: #[driver_test(id(ID), requires(...))]
+            let mut parsed = attr.parse_args::<DriverTestAttr>()?;
+            parsed.ast = attr.clone();
+            Ok(parsed)
+        }
+    }
 }
 
 impl Parse for DriverTestAttr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Capture the input as tokens to reconstruct the attribute
+        let input_tokens = input.cursor().token_stream();
+
         let mut id_ident = None;
         let mut matrix = Vec::new();
         let mut requires = None;
@@ -183,10 +211,14 @@ impl Parse for DriverTestAttr {
             }
         }
 
+        // Reconstruct the full attribute from the parsed tokens
+        let ast = syn::parse_quote! { #[driver_test(#input_tokens)] };
+
         Ok(DriverTestAttr {
             id_ident,
             matrix,
             requires,
+            ast,
         })
     }
 }
@@ -353,15 +385,13 @@ impl DriverTest {
         let attrs: Vec<_> = input
             .attrs
             .iter()
-            .filter(|attr| !attr.path().is_ident("driver_test"))
+            .filter(|a| !a.path().is_ident("driver_test"))
             .cloned()
             .collect();
 
         // Remove the #[driver_test] attribute from the function, but keep all other attributes
         // (e.g., #[should_panic], #[ignore], etc.)
-        input
-            .attrs
-            .retain(|attr| !attr.path().is_ident("driver_test"));
+        input.attrs.retain(|a| !a.path().is_ident("driver_test"));
 
         // Generate expansion matrix
         let expansions = Self::generate_expansions(&attr);
@@ -373,6 +403,7 @@ impl DriverTest {
             requires,
             attrs,
             has_expansion_params,
+            attr,
         }
     }
 

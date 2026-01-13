@@ -155,19 +155,9 @@ impl<'ast> Visit<'ast> for TestVisitor {
             .find(|attr| attr.path().is_ident("driver_test"));
 
         if let Some(attr) = driver_test_attr {
-            // Parse the attribute arguments
-            let parsed_attr = if attr.meta.require_path_only().is_ok() {
-                // Empty attribute: #[driver_test]
-                DriverTestAttr {
-                    id_ident: None,
-                    matrix: Vec::new(),
-                    requires: None,
-                }
-            } else {
-                // Parse attribute arguments: #[driver_test(id(ID), requires(...))]
-                attr.parse_args::<DriverTestAttr>()
-                    .unwrap_or_else(|e| panic!("Failed to parse #[driver_test] attribute: {}", e))
-            };
+            // Parse the attribute using from_attribute
+            let parsed_attr = DriverTestAttr::from_attribute(attr)
+                .unwrap_or_else(|e| panic!("Failed to parse #[driver_test] attribute: {}", e));
 
             // Use the shared parsing logic
             let driver_test = DriverTest::from_item_fn(node.clone(), parsed_attr);
@@ -180,76 +170,22 @@ impl<'ast> Visit<'ast> for TestVisitor {
 }
 
 fn generate_macro(structure: TestStructure) -> TokenStream {
-    // Generate the module structure with all tests inlined
+    // Generate the module structure with test invocations
     let modules: Vec<TokenStream2> = structure
         .modules
         .iter()
         .map(|(module_name, tests)| {
             let module_ident = Ident::new(module_name, proc_macro2::Span::call_site());
 
-            let test_modules: Vec<TokenStream2> = tests
+            let test_invocations: Vec<TokenStream2> = tests
                 .iter()
-                .filter_map(|test| {
+                .map(|test| {
                     let test_ident = &test.name;
+                    let attr = &test.attr.ast;
 
-                    // If test had expansion params (id/matrix) but all expansions were filtered out,
-                    // the driver_test macro generated a #[cfg(any())] module that's never compiled.
-                    // We should not generate anything for it here.
-                    if test.has_expansion_params && test.expansions.is_empty() {
-                        return None; // Skip this test entirely
-                    }
-
-                    // If test has 1 expansion with empty name (only requires, no id/matrix),
-                    // driver_test already generated it as a standalone function with #[tokio::test].
-                    // We don't need to do anything - skip it.
-                    if test.expansions.len() == 1 && !test.has_expansion_params {
-                        return None;
-                    }
-
-                    // If test has no expansions at all, generate a simple test wrapper
-                    if test.expansions.is_empty() {
-                        Some(quote! {
-                            #[test]
-                            fn #test_ident() {
-                                let mut test = $crate::Test::new(
-                                    ::std::sync::Arc::new($driver_expr)
-                                );
-
-                                test.run(async move |t| {
-                                    $crate::tests::#module_ident::#test_ident(t).await;
-                                });
-                            }
-                        })
-                    } else {
-                        // For tests with expansions, the driver_test macro already generated
-                        // a module with regular async functions. We need to create test wrappers
-                        // for each function that add the #[test] attribute and Test setup.
-
-                        let test_wrappers: Vec<_> = test.expansions.iter()
-                            .map(|expansion| {
-                                let name = expansion.name();
-                                let fn_ident = syn::Ident::new(&name, proc_macro2::Span::call_site());
-                                // Create a unique wrapper name by combining test name and expansion name
-                                let wrapper_name = format!("{}_{}", test_ident, name);
-                                let wrapper_ident = syn::Ident::new(&wrapper_name, proc_macro2::Span::call_site());
-                                quote! {
-                                    #[test]
-                                    fn #wrapper_ident() {
-                                        let mut test = $crate::Test::new(
-                                            ::std::sync::Arc::new($driver_expr)
-                                        );
-
-                                        test.run(async move |t| {
-                                            $crate::tests::#module_ident::#test_ident::#fn_ident(t).await;
-                                        });
-                                    }
-                                }
-                            })
-                            .collect();
-
-                        Some(quote! {
-                            #(#test_wrappers)*
-                        })
+                    // Generate the full module path with driver_test attribute
+                    quote! {
+                        $crate::generate_driver_test_variants!(#module_ident::#test_ident, #attr);
                     }
                 })
                 .collect();
@@ -258,7 +194,7 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
                 mod #module_ident {
                     use super::*;
 
-                    #(#test_modules)*
+                    #(#test_invocations)*
                 }
             }
         })
