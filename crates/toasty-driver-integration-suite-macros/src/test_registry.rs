@@ -185,7 +185,7 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
 
                     // Generate the full module path with driver_test attribute
                     quote! {
-                        $crate::generate_driver_test_variants!(#module_ident::#test_ident, #attr);
+                        $crate::generate_driver_test_variants!(#module_ident::#test_ident, #attr, capability( $( $($t)* )? ));
                     }
                 })
                 .collect();

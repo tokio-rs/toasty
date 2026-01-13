@@ -1,15 +1,19 @@
+use std::collections::HashMap;
+
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Token};
+use syn::{parse_macro_input, token::Token, Token};
 
 /// Input to the `generate_driver_test_variants!` macro
-/// Expects: module_name::test_name, #[driver_test(...)]
+/// Expects: module_name::test_name, #[driver_test(...)], capability(...)
 #[derive(Debug)]
 struct Input {
     /// The full test path (module::test_name)
     test_path: syn::Path,
     /// The driver_test attribute
     driver_test_attr: syn::Attribute,
+    /// The capability arguments as a string
+    capabilities: HashMap<syn::Ident, bool>,
 }
 
 impl syn::parse::Parse for Input {
@@ -24,17 +28,35 @@ impl syn::parse::Parse for Input {
             .next()
             .ok_or_else(|| input.error("expected driver_test attribute"))?;
 
-        // Consume any trailing tokens
-        while !input.is_empty() {
-            input.parse::<Token![,]>()?;
-            if !input.is_empty() {
-                let _: proc_macro2::TokenTree = input.parse()?;
+        input.parse::<Token![,]>()?;
+
+        // Parse capability(...)
+        let capability_ident: syn::Ident = input.parse()?;
+        if capability_ident != "capability" {
+            return Err(input.error("expected 'capability'"));
+        }
+
+        let content;
+        syn::parenthesized!(content in input);
+
+        let mut capabilities = HashMap::new();
+        while !content.is_empty() {
+            let key: syn::Ident = content.parse()?;
+            content.parse::<Token![:]>()?;
+            let lit: syn::LitBool = content.parse()?;
+
+            capabilities.insert(key, lit.value);
+
+            // Parse trailing comma if present
+            if content.peek(Token![,]) {
+                content.parse::<Token![,]>()?;
             }
         }
 
         Ok(Input {
             test_path,
             driver_test_attr,
+            capabilities,
         })
     }
 }
@@ -50,14 +72,16 @@ pub fn expand(input: TokenStream) -> TokenStream {
         .expect("test path should have at least one segment");
     let test_ident = &test_name.ident;
 
-    // Debug print the attribute
+    // Debug print the attribute and capability args
     let attr_debug = format!("{:#?}", input.driver_test_attr);
+    let capabilities = format!("{:#?}", input.capabilities);
 
     // Generate a single stub test
     quote! {
         #[test]
         fn #test_ident() {
-            println!("{}", #attr_debug);
+            println!("Attribute:\n{}", #attr_debug);
+            println!("\nCapabilities: {}", #capabilities);
         }
     }
     .into()
