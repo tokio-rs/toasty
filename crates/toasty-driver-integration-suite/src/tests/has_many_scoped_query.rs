@@ -1,25 +1,29 @@
-use std::collections::HashSet;
-use tests::{assert_eq_unordered, models, tests, DbTest};
-use toasty::stmt::Id;
+//! Test scoped queries on has_many associations
 
-async fn scoped_query_eq(test: &mut DbTest) {
+use crate::prelude::*;
+use std::collections::HashSet;
+
+#[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
+pub async fn scoped_query_eq(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
-    #[key(partition = user_id, local = id)]
+    #[driver_test_cfg(composite, key(partition = user_id, local = id))]
     struct Todo {
         #[auto]
-        id: Id<Self>,
+        #[driver_test_cfg(single, key)]
+        id: ID,
 
-        user_id: Id<User>,
+        #[driver_test_cfg(single, index)]
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -55,7 +59,7 @@ async fn scoped_query_eq(test: &mut DbTest) {
             .exec(&db)
             .await
             .unwrap();
-        u1_todo_ids.push(todo.id.clone());
+        u1_todo_ids.push(todo.id);
     }
 
     // Create a TODO for user 2
@@ -116,12 +120,10 @@ async fn scoped_query_eq(test: &mut DbTest) {
         .unwrap();
 
     while let Some(todo) = todos.next().await {
-        assert!(actual.insert(todo.unwrap().id.clone()));
+        assert!(actual.insert(todo.unwrap().id));
     }
 
-    let expect: HashSet<_> = [u1_todo_ids[0].clone(), order_0_todo.id.clone()]
-        .into_iter()
-        .collect();
+    let expect: HashSet<_> = [u1_todo_ids[0], order_0_todo.id].into_iter().collect();
 
     assert_eq!(expect, actual);
 
@@ -139,24 +141,27 @@ async fn scoped_query_eq(test: &mut DbTest) {
     assert!(todos.is_empty());
 }
 
-async fn scoped_query_gt(test: &mut DbTest) {
+#[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
+pub async fn scoped_query_gt(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
     }
 
     #[derive(Debug, toasty::Model)]
-    #[key(partition = user_id, local = id)]
+    #[driver_test_cfg(composite, key(partition = user_id, local = id))]
     struct Todo {
         #[auto]
-        id: Id<Self>,
+        #[driver_test_cfg(single, key)]
+        id: ID,
 
-        user_id: Id<User>,
+        #[driver_test_cfg(single, index)]
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -251,5 +256,3 @@ async fn scoped_query_gt(test: &mut DbTest) {
         ["First", "Second", "Third"]
     );
 }
-
-tests!(scoped_query_eq, scoped_query_gt,);
