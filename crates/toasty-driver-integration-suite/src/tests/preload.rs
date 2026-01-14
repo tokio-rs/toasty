@@ -1,12 +1,12 @@
-use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
+use crate::prelude::*;
 
-async fn basic_has_many_and_belongs_to_preload(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -16,11 +16,11 @@ async fn basic_has_many_and_belongs_to_preload(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
         #[allow(dead_code)]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -59,12 +59,13 @@ async fn basic_has_many_and_belongs_to_preload(test: &mut DbTest) {
     assert_eq!(user.id, todo.user_id);
 }
 
-async fn multiple_includes_same_model(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn multiple_includes_same_model(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[allow(dead_code)]
         name: String,
@@ -80,14 +81,14 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
     struct Post {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[allow(dead_code)]
         title: String,
 
         #[index]
         #[allow(dead_code)]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -97,14 +98,14 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
     struct Comment {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[allow(dead_code)]
         text: String,
 
         #[index]
         #[allow(dead_code)]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -179,12 +180,13 @@ async fn multiple_includes_same_model(test: &mut DbTest) {
     assert_eq!(3, loaded_user.comments.get().len());
 }
 
-async fn basic_has_one_and_belongs_to_preload(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -196,12 +198,12 @@ async fn basic_has_one_and_belongs_to_preload(test: &mut DbTest) {
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         bio: String,
 
         #[unique]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -242,13 +244,14 @@ async fn basic_has_one_and_belongs_to_preload(test: &mut DbTest) {
     assert_eq!("John Doe", profile.user.get().as_ref().unwrap().name);
 }
 
-async fn multiple_includes_with_has_one(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn multiple_includes_with_has_one(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -264,12 +267,12 @@ async fn multiple_includes_with_has_one(test: &mut DbTest) {
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         bio: String,
 
         #[unique]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -280,12 +283,12 @@ async fn multiple_includes_with_has_one(test: &mut DbTest) {
     struct Settings {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         theme: String,
 
         #[unique]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -342,13 +345,14 @@ async fn multiple_includes_with_has_one(test: &mut DbTest) {
     assert_eq!("dark", loaded_user.settings.get().as_ref().unwrap().theme);
 }
 
-async fn combined_has_many_and_has_one_preload(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn combined_has_many_and_has_one_preload(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         name: String,
 
@@ -364,12 +368,12 @@ async fn combined_has_many_and_has_one_preload(test: &mut DbTest) {
     struct Profile {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         bio: String,
 
         #[unique]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -380,12 +384,12 @@ async fn combined_has_many_and_has_one_preload(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         title: String,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -429,7 +433,8 @@ async fn combined_has_many_and_has_one_preload(test: &mut DbTest) {
     assert!(todo_titles.contains(&"Task 3"));
 }
 
-async fn preload_on_empty_table(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn preload_on_empty_table(test: &mut Test) {
     if !test.capability().sql {
         return;
     }
@@ -438,7 +443,7 @@ async fn preload_on_empty_table(test: &mut DbTest) {
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         #[allow(dead_code)]
@@ -449,11 +454,11 @@ async fn preload_on_empty_table(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
         #[allow(dead_code)]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         #[allow(dead_code)]
@@ -472,12 +477,13 @@ async fn preload_on_empty_table(test: &mut DbTest) {
     assert_eq!(0, users.len());
 }
 
-async fn preload_on_empty_query(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn preload_on_empty_query(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
         #[allow(dead_code)]
@@ -492,11 +498,11 @@ async fn preload_on_empty_query(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
         #[allow(dead_code)]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         #[allow(dead_code)]
@@ -514,13 +520,3 @@ async fn preload_on_empty_query(test: &mut DbTest) {
 
     assert_eq!(0, users.len());
 }
-
-tests!(
-    basic_has_many_and_belongs_to_preload,
-    multiple_includes_same_model,
-    basic_has_one_and_belongs_to_preload,
-    multiple_includes_with_has_one,
-    combined_has_many_and_has_one_preload,
-    preload_on_empty_table,
-    preload_on_empty_query,
-);

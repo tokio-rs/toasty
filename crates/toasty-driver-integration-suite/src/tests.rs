@@ -17,3 +17,4 @@ pub mod one_model_batch_create;
 pub mod one_model_crud;
 pub mod one_model_query;
 pub mod one_model_sort_limit;
+pub mod preload;
