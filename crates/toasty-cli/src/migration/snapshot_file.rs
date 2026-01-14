@@ -4,69 +4,69 @@ use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
 use toasty_core::schema::db::Schema;
-use toml_edit::{DocumentMut, InlineTable, Item, Table, value};
+use toml_edit::{DocumentMut, Item};
 
-const LOCK_FILE_VERSION: u32 = 1;
+const SNAPSHOT_FILE_VERSION: u32 = 1;
 
-/// Lock file containing the current database schema state
+/// Snapshot file containing the current database schema state
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LockFile {
-    /// Lock file format version
+pub struct SnapshotFile {
+    /// Snapshot file format version
     version: u32,
 
     /// The database schema
     pub schema: Schema,
 }
 
-impl LockFile {
-    /// Create a new lock file with the given schema
+impl SnapshotFile {
+    /// Create a new snapshot file with the given schema
     pub fn new(schema: Schema) -> Self {
         Self {
-            version: LOCK_FILE_VERSION,
+            version: SNAPSHOT_FILE_VERSION,
             schema,
         }
     }
 
-    /// Load a lock file from a TOML file
+    /// Load a snapshot file from a TOML file
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         let contents = std::fs::read_to_string(path.as_ref())?;
         contents.parse()
     }
 
-    /// Save the lock file to a TOML file
+    /// Save the snapshot file to a TOML file
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
         std::fs::write(path.as_ref(), self.to_string())?;
         Ok(())
     }
 }
 
-impl FromStr for LockFile {
+impl FromStr for SnapshotFile {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        let lock_file: LockFile = toml::from_str(s)?;
+        let file: SnapshotFile = toml::from_str(s)?;
 
         // Validate version
-        if lock_file.version != LOCK_FILE_VERSION {
+        if file.version != SNAPSHOT_FILE_VERSION {
             bail!(
-                "Unsupported lock file version: {}. Expected version {}",
-                lock_file.version,
-                LOCK_FILE_VERSION
+                "Unsupported snapshot file version: {}. Expected version {}",
+                file.version,
+                SNAPSHOT_FILE_VERSION
             );
         }
 
-        Ok(lock_file)
+        Ok(file)
     }
 }
 
-impl fmt::Display for LockFile {
+impl fmt::Display for SnapshotFile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let doc = self.to_toml_document().map_err(|_| fmt::Error)?;
         write!(f, "{}", doc)
     }
 }
 
-impl LockFile {
+impl SnapshotFile {
     fn to_toml_document(&self) -> Result<DocumentMut> {
         let mut doc = toml_edit::ser::to_document(self)?;
         for (_key, item) in doc.as_table_mut().iter_mut() {

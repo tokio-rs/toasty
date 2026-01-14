@@ -1,8 +1,8 @@
 mod config;
-mod lock_file;
+mod snapshot_file;
 
 pub use config::*;
-pub use lock_file::*;
+pub use snapshot_file::*;
 
 use crate::Config;
 use anyhow::Result;
@@ -65,7 +65,7 @@ impl GenerateCommand {
 
 impl LockCommand {
     fn run(self, db: &Db, _config: &Config) -> Result<()> {
-        let lock_file = LockFile::new(toasty::schema::db::Schema::clone(&db.schema().db));
+        let lock_file = SnapshotFile::new(toasty::schema::db::Schema::clone(&db.schema().db));
         println!("{}", lock_file);
         Ok(())
     }
