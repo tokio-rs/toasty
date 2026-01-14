@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Token};
 
-use crate::parse::{BoolExpr, DriverTestAttr, Expansion};
+use crate::parse::{DriverTestAttr, ThreeValuedBool};
 
 /// Input to the `generate_driver_test_variants!` macro
 /// Expects: module_name::test_name, #[driver_test(...)], capability(...)
@@ -105,8 +105,15 @@ pub fn expand(input: TokenStream) -> TokenStream {
     let test_functions: Vec<_> = expansions
         .iter()
         .filter_map(|expansion| {
-            // Evaluate the predicate for this expansion
-            if !evaluate_predicate(&attr.requires, expansion, &capabilities) {
+            // Evaluate the predicate for this expansion using should_include
+            if !expansion.should_include(|ident| {
+                // All capabilities are known at runtime
+                match capabilities.get(ident) {
+                    Some(true) => ThreeValuedBool::True,
+                    Some(false) => ThreeValuedBool::False,
+                    None => ThreeValuedBool::True, // Default to true if not specified
+                }
+            }) {
                 return None; // Skip this expansion
             }
 
@@ -154,51 +161,8 @@ pub fn expand(input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    let ident = test_path.segments.last().unwrap().ident.clone();
-    let output = format!("{:#?}", test_functions);
-
     quote! {
         #(#test_functions)*
     }
     .into()
-}
-
-/// Evaluate the predicate for a given expansion and capabilities
-fn evaluate_predicate(
-    requires: &Option<BoolExpr>,
-    expansion: &Expansion,
-    capabilities: &HashMap<String, bool>,
-) -> bool {
-    // If no requires clause, the test always passes
-    let Some(ref expr) = requires else {
-        return true;
-    };
-
-    // Evaluate the boolean expression
-    evaluate_bool_expr(expr, expansion, capabilities)
-}
-
-/// Recursively evaluate a boolean expression
-fn evaluate_bool_expr(
-    expr: &BoolExpr,
-    expansion: &Expansion,
-    capabilities: &HashMap<String, bool>,
-) -> bool {
-    match expr {
-        BoolExpr::Ident(name) => {
-            // Check if this is a matrix dimension or expansion identifier (e.g., "single", "id_u64")
-            if expansion.is_ident_true(name) {
-                return true;
-            }
-            // Otherwise check capabilities (defaulting to true if not specified)
-            capabilities.get(name).copied().unwrap_or(true)
-        }
-        BoolExpr::Or(exprs) => exprs
-            .iter()
-            .any(|e| evaluate_bool_expr(e, expansion, capabilities)),
-        BoolExpr::And(exprs) => exprs
-            .iter()
-            .all(|e| evaluate_bool_expr(e, expansion, capabilities)),
-        BoolExpr::Not(inner) => !evaluate_bool_expr(inner, expansion, capabilities),
-    }
 }

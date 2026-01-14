@@ -25,6 +25,43 @@ pub struct DriverTest {
     pub attr: DriverTestAttr,
 }
 
+/// Three-valued boolean logic for predicate evaluation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThreeValuedBool {
+    True,
+    False,
+    Unknown,
+}
+
+impl ThreeValuedBool {
+    /// Logical OR for three-valued logic
+    pub fn or(self, other: Self) -> Self {
+        match (self, other) {
+            (ThreeValuedBool::True, _) | (_, ThreeValuedBool::True) => ThreeValuedBool::True,
+            (ThreeValuedBool::False, ThreeValuedBool::False) => ThreeValuedBool::False,
+            _ => ThreeValuedBool::Unknown,
+        }
+    }
+
+    /// Logical AND for three-valued logic
+    pub fn and(self, other: Self) -> Self {
+        match (self, other) {
+            (ThreeValuedBool::False, _) | (_, ThreeValuedBool::False) => ThreeValuedBool::False,
+            (ThreeValuedBool::True, ThreeValuedBool::True) => ThreeValuedBool::True,
+            _ => ThreeValuedBool::Unknown,
+        }
+    }
+
+    /// Logical NOT for three-valued logic
+    pub fn not(self) -> Self {
+        match self {
+            ThreeValuedBool::True => ThreeValuedBool::False,
+            ThreeValuedBool::False => ThreeValuedBool::True,
+            ThreeValuedBool::Unknown => ThreeValuedBool::Unknown,
+        }
+    }
+}
+
 /// A single test expansion with specific matrix values
 #[derive(Debug, Clone)]
 pub struct Expansion {
@@ -36,6 +73,9 @@ pub struct Expansion {
 
     /// Matrix dimension values (e.g., {"single": true, "composite": false})
     pub matrix_values: std::collections::HashMap<String, bool>,
+
+    /// The predicate to evaluate for this expansion
+    pub predicate: Option<BoolExpr>,
 }
 
 impl Expansion {
@@ -72,6 +112,76 @@ impl Expansion {
             match variant {
                 KindVariant::IdU64 if ident == "id_u64" => return true,
                 KindVariant::IdUuid if ident == "id_uuid" => return true,
+                _ => {}
+            }
+        }
+
+        false
+    }
+
+    /// Determine if this expansion should be included based on the predicate
+    ///
+    /// Returns true if:
+    /// - No predicate exists
+    /// - Predicate evaluates to True
+    /// - Predicate evaluates to Unknown (conservative inclusion)
+    ///
+    /// Returns false only if predicate evaluates to False
+    pub fn should_include<F>(&self, get_value: F) -> bool
+    where
+        F: Fn(&str) -> ThreeValuedBool,
+    {
+        let Some(ref predicate) = self.predicate else {
+            return true; // No predicate means always include
+        };
+
+        match self.evaluate_predicate(predicate, &get_value) {
+            ThreeValuedBool::False => false,
+            ThreeValuedBool::True | ThreeValuedBool::Unknown => true,
+        }
+    }
+
+    /// Evaluate a boolean expression using three-valued logic
+    fn evaluate_predicate<F>(&self, expr: &BoolExpr, get_value: &F) -> ThreeValuedBool
+    where
+        F: Fn(&str) -> ThreeValuedBool,
+    {
+        match expr {
+            BoolExpr::Ident(name) => {
+                // Check if this is a matrix dimension or ID variant identifier
+                if self.is_ident_true(name) {
+                    return ThreeValuedBool::True;
+                }
+                if self.is_ident_explicitly_false(name) {
+                    return ThreeValuedBool::False;
+                }
+                // Otherwise check via the get_value closure (for capabilities)
+                get_value(name)
+            }
+            BoolExpr::Or(exprs) => exprs
+                .iter()
+                .map(|e| self.evaluate_predicate(e, get_value))
+                .fold(ThreeValuedBool::False, |acc, val| acc.or(val)),
+            BoolExpr::And(exprs) => exprs
+                .iter()
+                .map(|e| self.evaluate_predicate(e, get_value))
+                .fold(ThreeValuedBool::True, |acc, val| acc.and(val)),
+            BoolExpr::Not(inner) => self.evaluate_predicate(inner, get_value).not(),
+        }
+    }
+
+    /// Check if an identifier is explicitly false for this expansion
+    fn is_ident_explicitly_false(&self, ident: &str) -> bool {
+        // Check matrix values for explicit false
+        if let Some(&value) = self.matrix_values.get(ident) {
+            return !value;
+        }
+
+        // Check ID variant identifiers for explicit false
+        if let Some(ref variant) = self.id_variant {
+            match variant {
+                KindVariant::IdU64 if ident == "id_uuid" => return true,
+                KindVariant::IdUuid if ident == "id_u64" => return true,
                 _ => {}
             }
         }
@@ -437,41 +547,13 @@ impl DriverTest {
                     id_variant: id_variant.clone(),
                     id_ident: attr.id_ident.clone(),
                     matrix_values: matrix_values.clone(),
+                    predicate: attr.requires.clone(),
                 };
 
-                // Filter by requires expression if present using three-valued logic
-                // Matrix/ID identifiers are known (true/false), database capabilities are unknown (None)
-                // Only filter out expansions that evaluate to Some(false)
-                if let Some(ref requires_expr) = attr.requires {
-                    let result = requires_expr.eval_three_valued(&|ident| {
-                        // Check if this is a matrix identifier
-                        if expansion.matrix_values.contains_key(ident) {
-                            Some(expansion.matrix_values[ident])
-                        } else if ident == "id_u64" || ident == "id_uuid" {
-                            // ID variant identifier
-                            if ident == "id_u64" {
-                                Some(matches!(
-                                    expansion.id_variant,
-                                    Some(crate::parse::KindVariant::IdU64)
-                                ))
-                            } else {
-                                Some(matches!(
-                                    expansion.id_variant,
-                                    Some(crate::parse::KindVariant::IdUuid)
-                                ))
-                            }
-                        } else {
-                            // Unknown identifier (database capability)
-                            // Return None to indicate unknown - will be checked at runtime
-                            None
-                        }
-                    });
-
-                    // Only filter out if result is definitely false
-                    // Keep if true or unknown (None)
-                    if result == Some(false) {
-                        continue;
-                    }
+                // Filter using should_include with three-valued logic
+                // Capabilities are unknown at compile time
+                if !expansion.should_include(|_ident| ThreeValuedBool::Unknown) {
+                    continue; // Skip this expansion
                 }
 
                 expansions.push(expansion);
