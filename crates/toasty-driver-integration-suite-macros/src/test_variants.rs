@@ -151,7 +151,6 @@ pub fn expand(input: TokenStream) -> TokenStream {
     let driver_expr = &input.driver_expr;
     let krate = &input.krate;
     let extra_attrs = &input.extra_attrs;
-    let test_path = &input.test_path;
 
     // Parse the driver_test attribute to get the expansions
     let attr = DriverTestAttr::from_attribute(&input.driver_test_attr)

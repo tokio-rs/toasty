@@ -31,9 +31,6 @@ pub struct DriverTest {
     /// Non-driver_test attributes (e.g., #[should_panic], #[ignore])
     pub attrs: Vec<syn::Attribute>,
 
-    /// Whether the test had id() or matrix() parameters (even if all expansions filtered out)
-    pub has_expansion_params: bool,
-
     /// The parsed attribute
     pub attr: DriverTestAttr,
 }
@@ -218,15 +215,6 @@ impl Expansion {
     }
 }
 
-/// A capability requirement, optionally negated
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Capability {
-    /// The capability name
-    pub name: String,
-    /// Whether this capability should NOT be present
-    pub negated: bool,
-}
-
 /// A boolean expression for requires() evaluation
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BoolExpr {
@@ -240,15 +228,6 @@ pub enum BoolExpr {
     Not(Box<BoolExpr>),
 }
 
-/// Kinds of test variants to generate
-#[derive(Debug, Clone)]
-pub struct Kind {
-    /// The identifier to replace (e.g., "ID")
-    pub ident: String,
-    /// The target type variant
-    pub variant: KindVariant,
-}
-
 /// Type variants for ID replacement
 #[derive(Debug, Clone)]
 pub enum KindVariant {
@@ -258,37 +237,12 @@ pub enum KindVariant {
     IdUuid,
 }
 
-impl Kind {
-    /// Get the variant function name (e.g., "id_u64")
-    pub fn name(&self) -> &'static str {
-        self.variant.name()
-    }
-
-    /// Get the target type for ID replacement
-    pub fn target_type(&self) -> syn::Type {
-        self.variant.target_type()
-    }
-
-    /// Get the identifier to replace
-    pub fn ident(&self) -> &str {
-        &self.ident
-    }
-}
-
 impl KindVariant {
     /// Get the variant function name (e.g., "id_u64")
     pub fn name(&self) -> &'static str {
         match self {
             KindVariant::IdU64 => "id_u64",
             KindVariant::IdUuid => "id_uuid",
-        }
-    }
-
-    /// Get the target type for ID replacement
-    pub fn target_type(&self) -> syn::Type {
-        match self {
-            KindVariant::IdU64 => syn::parse_quote!(u64),
-            KindVariant::IdUuid => syn::parse_quote!(uuid::Uuid),
         }
     }
 }
@@ -456,60 +410,6 @@ impl BoolExpr {
             }
         }
     }
-
-    /// Evaluate the boolean expression given a set of true identifiers
-    pub fn eval<F>(&self, is_true: &F) -> bool
-    where
-        F: Fn(&str) -> bool,
-    {
-        match self {
-            BoolExpr::Ident(name) => is_true(name),
-            BoolExpr::Or(exprs) => exprs.iter().any(|e| e.eval(is_true)),
-            BoolExpr::And(exprs) => exprs.iter().all(|e| e.eval(is_true)),
-            BoolExpr::Not(expr) => !expr.eval(is_true),
-        }
-    }
-
-    /// Evaluate with three-valued logic (true, false, unknown).
-    /// Returns None for unknown, Some(true) for true, Some(false) for false.
-    /// Used during driver_test expansion where database capabilities are unknown.
-    pub fn eval_three_valued<F>(&self, get_value: &F) -> Option<bool>
-    where
-        F: Fn(&str) -> Option<bool>,
-    {
-        match self {
-            BoolExpr::Ident(name) => get_value(name),
-            BoolExpr::Not(expr) => {
-                match expr.eval_three_valued(get_value) {
-                    Some(true) => Some(false),
-                    Some(false) => Some(true),
-                    None => None, // not(unknown) = unknown
-                }
-            }
-            BoolExpr::And(exprs) => {
-                let mut result = Some(true);
-                for e in exprs {
-                    match e.eval_three_valued(get_value) {
-                        Some(false) => return Some(false), // false short-circuits
-                        Some(true) => {}                   // continue
-                        None => result = None,             // unknown, but keep checking for false
-                    }
-                }
-                result
-            }
-            BoolExpr::Or(exprs) => {
-                let mut result = Some(false);
-                for e in exprs {
-                    match e.eval_three_valued(get_value) {
-                        Some(true) => return Some(true), // true short-circuits
-                        Some(false) => {}                // continue
-                        None => result = None,           // unknown, but keep checking for true
-                    }
-                }
-                result
-            }
-        }
-    }
 }
 
 impl DriverTest {
@@ -517,7 +417,6 @@ impl DriverTest {
     pub fn from_item_fn(mut input: ItemFn, attr: DriverTestAttr) -> Self {
         let name = input.sig.ident.clone();
         let requires = attr.requires.clone();
-        let has_expansion_params = attr.id_ident.is_some() || !attr.matrix.is_empty();
 
         // Collect non-driver_test attributes to preserve them
         let attrs: Vec<_> = input
@@ -540,7 +439,6 @@ impl DriverTest {
             expansions,
             requires,
             attrs,
-            has_expansion_params,
             attr,
         }
     }
