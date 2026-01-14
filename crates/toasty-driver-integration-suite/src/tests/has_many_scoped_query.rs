@@ -141,7 +141,7 @@ pub async fn scoped_query_eq(test: &mut Test) {
     assert!(todos.is_empty());
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
 pub async fn scoped_query_gt(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -154,11 +154,13 @@ pub async fn scoped_query_gt(test: &mut Test) {
     }
 
     #[derive(Debug, toasty::Model)]
-    #[key(partition = user_id, local = id)]
+    #[driver_test_cfg(composite, key(partition = user_id, local = id))]
     struct Todo {
         #[auto]
+        #[driver_test_cfg(single, key)]
         id: ID,
 
+        #[driver_test_cfg(single, index)]
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
