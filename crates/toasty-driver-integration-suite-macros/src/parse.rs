@@ -408,7 +408,7 @@ impl DriverTest {
     }
 
     /// Generate all expansions based on the attribute
-    fn generate_expansions(attr: &DriverTestAttr) -> Vec<Expansion> {
+    pub(crate) fn generate_expansions(attr: &DriverTestAttr) -> Vec<Expansion> {
         let has_id = attr.id_ident.is_some();
         let has_matrix = !attr.matrix.is_empty();
         let has_requires = attr.requires.is_some();
