@@ -79,6 +79,9 @@ fn generate_variant(
     // Process driver_test_cfg attributes
     process_driver_test_cfg_attrs(&mut variant, expansion);
 
+    // Rewrite driver_test_cfg! macro calls to boolean literals
+    rewrite_driver_test_cfg_macros(&mut variant, expansion);
+
     // Rewrite ID types if expansion has an ID variant
     if let (Some(ref id_ident), Some(ref id_variant)) = (&expansion.id_ident, &expansion.id_variant)
     {
@@ -267,6 +270,64 @@ fn extract_db_capabilities(expr: &BoolExpr, expansion: &Expansion) -> Vec<(Strin
     let mut result = Vec::new();
     extract_recursive(expr, expansion, false, &mut result);
     result
+}
+
+/// Rewrite driver_test_cfg! macro calls to boolean literals based on the expansion
+fn rewrite_driver_test_cfg_macros(func: &mut ItemFn, expansion: &Expansion) {
+    struct MacroRewriter<'a> {
+        expansion: &'a Expansion,
+    }
+
+    impl<'a> VisitMut for MacroRewriter<'a> {
+        fn visit_expr_mut(&mut self, expr: &mut syn::Expr) {
+            // Check if this is a macro call to driver_test_cfg!
+            if let syn::Expr::Macro(expr_macro) = expr {
+                if expr_macro.mac.path.is_ident("driver_test_cfg") {
+                    // Parse the boolean expression from the macro tokens
+                    let tokens = expr_macro.mac.tokens.clone();
+                    if let Ok(bool_expr) = syn::parse::Parser::parse2(
+                        |input: syn::parse::ParseStream| BoolExpr::parse(input),
+                        tokens,
+                    ) {
+                        // Evaluate the expression for this expansion
+                        let result = self.expansion.evaluate_predicate(&bool_expr, &|_ident| {
+                            // Database capabilities are unknown at compile time
+                            // Return Unknown, which should not affect evaluation of
+                            // compile-time known values (matrix and ID variants)
+                            crate::parse::ThreeValuedBool::Unknown
+                        });
+
+                        // Convert to boolean literal
+                        let bool_value = match result {
+                            crate::parse::ThreeValuedBool::True => true,
+                            crate::parse::ThreeValuedBool::False => false,
+                            crate::parse::ThreeValuedBool::Unknown => {
+                                // Unknown means the expression references database capabilities,
+                                // which can only be checked at runtime, not compile time.
+                                // This is a compile error - driver_test_cfg! should only be used
+                                // for compile-time known values (ID variants, matrix dimensions).
+                                panic!(
+                                    "driver_test_cfg! can only be used with compile-time known values \
+                                     (id_u64, id_uuid, matrix dimensions). Database capabilities must \
+                                     be checked at runtime using test.capability()"
+                                );
+                            }
+                        };
+
+                        // Replace the macro call with a boolean literal
+                        *expr = syn::parse_quote!(#bool_value);
+                        return;
+                    }
+                }
+            }
+
+            // Continue visiting nested expressions
+            syn::visit_mut::visit_expr_mut(self, expr);
+        }
+    }
+
+    let mut rewriter = MacroRewriter { expansion };
+    rewriter.visit_item_fn_mut(func);
 }
 
 /// Visitor that rewrites type references to a configurable target type

@@ -1,4 +1,4 @@
-use super::{Type, Value};
+use super::{Expr, Type, Value};
 
 macro_rules! try_from {
     ($v:expr, $ty:ty) => {
@@ -47,6 +47,33 @@ macro_rules! impl_num {
         }
 
         $(
+            impl PartialEq<$ty> for Value {
+                fn eq(&self, other: &$ty) -> bool {
+                    try_from!(*self, $ty).map(|v| v == *other).unwrap_or(false)
+                }
+            }
+
+            impl PartialEq<Value> for $ty {
+                fn eq(&self, other: &Value) -> bool {
+                    other.eq(self)
+                }
+            }
+
+            impl PartialEq<$ty> for Expr {
+                fn eq(&self, other: &$ty) -> bool {
+                    match self {
+                        Expr::Value(value) => value.eq(other),
+                        _ => false,
+                    }
+                }
+            }
+
+            impl PartialEq<Expr> for $ty {
+                fn eq(&self, other: &Expr) -> bool {
+                    other.eq(self)
+                }
+            }
+
             impl From<$ty> for Value {
                 fn from(value: $ty) -> Self {
                     Self::$variant(value)

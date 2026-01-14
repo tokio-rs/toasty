@@ -152,7 +152,7 @@ impl Expansion {
     }
 
     /// Evaluate a boolean expression using three-valued logic
-    fn evaluate_predicate<F>(&self, expr: &BoolExpr, get_value: &F) -> ThreeValuedBool
+    pub(crate) fn evaluate_predicate<F>(&self, expr: &BoolExpr, get_value: &F) -> ThreeValuedBool
     where
         F: Fn(&str) -> ThreeValuedBool,
     {

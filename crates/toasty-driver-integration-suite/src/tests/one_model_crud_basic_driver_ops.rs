@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement},
+    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement, Type, Value},
 };
 
 #[driver_test(id(ID))]
@@ -58,20 +58,40 @@ pub async fn basic_crud(test: &mut Test) {
         ..
     }));
 
-    if driver_test_cfg!(id_u64) {
-        todo!()
+    if driver_test_cfg!(id_u64) && test.capability().returning_from_mutation {
+        assert_struct!(op, Operation::QuerySql(_ {
+            ret: Some([Type::U64]),
+            last_insert_id_hack: None,
+            ..
+        }));
+
+        let rows = resp.rows.collect_as_value().await.unwrap();
+
+        // Check response
+        assert_struct!(rows, Value::List([Value::Record([1])]));
+    } else if driver_test_cfg!(id_u64) {
+        assert_struct!(op, Operation::QuerySql(_ {
+            ret: None,
+            last_insert_id_hack: Some(1),
+            ..
+        }));
+
+        let rows = resp.rows.collect_as_value().await.unwrap();
+
+        // Check response
+        assert_struct!(rows, Value::List([Value::Record([1])]));
     } else {
         assert_struct!(op, Operation::QuerySql(_ {
             ret: None,
             ..
-        }))
-    }
+        }));
 
-    // Check response
-    assert_struct!(resp, _ {
-        rows: Rows::Count(1),
-        ..
-    });
+        // Check response
+        assert_struct!(resp, _ {
+            rows: Rows::Count(1),
+            ..
+        });
+    }
 
     let user_id = user.id;
 
