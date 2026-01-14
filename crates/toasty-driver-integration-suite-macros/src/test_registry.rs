@@ -66,15 +66,6 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
             // Parse the file and extract test functions
             let tests = extract_tests_from_file(&path);
 
-            for test in &tests {
-                eprintln!(
-                    "  - {} (expansions: {}, has_expansion_params: {})",
-                    test.name,
-                    test.expansions.len(),
-                    test.has_expansion_params
-                );
-            }
-
             // Collect all unique requires from these tests
             for test in &tests {
                 if let Some(ref req) = test.requires {

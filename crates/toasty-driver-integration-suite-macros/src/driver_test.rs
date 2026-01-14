@@ -11,12 +11,6 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Parse the driver test using shared logic
     let driver_test = DriverTest::from_item_fn(input, attr);
 
-    eprintln!(
-        "DEBUG driver_test: {} has {} expansions",
-        driver_test.name,
-        driver_test.expansions.len()
-    );
-
     let mod_name = &driver_test.name;
     let vis = &driver_test.input.vis;
 
@@ -43,13 +37,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let variant_fns: Vec<_> = driver_test
         .expansions
         .iter()
-        .map(|expansion| {
-            eprintln!(
-                "DEBUG: Generating variant for expansion: {}",
-                expansion.name()
-            );
-            generate_variant(&driver_test.input, expansion, &driver_test.requires)
-        })
+        .map(|expansion| generate_variant(&driver_test.input, expansion, &driver_test.requires))
         .collect();
 
     let result = quote! {
@@ -59,11 +47,6 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
             #(#variant_fns)*
         }
     };
-
-    eprintln!(
-        "DEBUG: Generated module with {} variants",
-        variant_fns.len()
-    );
 
     result.into()
 }
