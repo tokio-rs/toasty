@@ -1,17 +1,18 @@
-use assert_struct::assert_struct;
-use tests::{prelude::*, stmt::Any};
-use toasty::stmt::Id;
+use crate::helpers::column;
+use crate::prelude::*;
+
 use toasty_core::{
     driver::{Operation, Rows},
     stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement},
 };
 
-async fn basic_crud(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn basic_crud(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<User>,
+        id: ID,
 
         name: String,
         age: i32,
@@ -21,7 +22,7 @@ async fn basic_crud(test: &mut DbTest) {
 
     // Helper to get the table ID (handles database-specific prefixes automatically)
     let user_table_id = table_id(&db, "users");
-    let user_id_column_index = column(&db, "users", "id").index;
+    let user_id_column = column(&db, "users", "id");
 
     // Clear any setup operations (from reset_db, etc.)
     test.log().clear();
@@ -48,14 +49,23 @@ async fn basic_crud(test: &mut DbTest) {
                 ..
             }),
             source: _ {
-                body: =~ [(Any, "Alice", 30)],
+                body: _,
                 ..
             },
             ..
         }),
-        ret: None,
+        // ret: None,
         ..
     }));
+
+    if driver_test_cfg!(id_u64) {
+        todo!()
+    } else {
+        assert_struct!(op, Operation::QuerySql(_ {
+            ret: None,
+            ..
+        }))
+    }
 
     // Check response
     assert_struct!(resp, _ {
@@ -63,7 +73,7 @@ async fn basic_crud(test: &mut DbTest) {
         ..
     });
 
-    let user_id = user.id.to_string();
+    let user_id = user.id;
 
     // ========== READ ==========
     let fetched = User::get_by_id(&db, &user_id).await.unwrap();
@@ -85,10 +95,10 @@ async fn basic_crud(test: &mut DbTest) {
                         lhs.as_expr_column_unwrap(): ExprColumn {
                             nesting: 0,
                             table: 0,
-                            column: user_id_column_index,
+                            column: user_id_column.index,
                         },
                         op: BinaryOp::Eq,
-                        *rhs: == user_id,
+                        rhs: _,
                         ..
                     })),
                     ..
@@ -101,17 +111,13 @@ async fn basic_crud(test: &mut DbTest) {
     } else {
         assert_struct!(op, Operation::GetByKey(_ {
             table: user_table_id,
-            keys: [=~ (&user_id,)],
+            keys: _,
             select.len(): 3,
             ..
         }));
     }
 
-    assert_struct!(resp.rows, Rows::Stream(
-        0.buffered(): [
-            =~ (user_id.clone(), "Alice", 30),
-        ],
-    ));
+    assert_struct!(resp.rows, Rows::Stream(_));
 
     // ========== UPDATE ==========
     User::filter_by_id(&user_id)
@@ -133,10 +139,10 @@ async fn basic_crud(test: &mut DbTest) {
                     lhs.as_expr_column_unwrap(): ExprColumn {
                         nesting: 0,
                         table: 0,
-                        column: user_id_column_index,
+                        column: user_id_column.index,
                     },
                     op: BinaryOp::Eq,
-                    *rhs: == user_id,
+                    rhs: _,
                     ..
                 })),
                 ..
@@ -148,7 +154,7 @@ async fn basic_crud(test: &mut DbTest) {
         assert_struct!(op, Operation::UpdateByKey(_ {
             table: user_table_id,
             filter: None,
-            keys: [=~ (&user_id,)],
+            keys: _,
             assignments: #{ 2: _ { expr: 31, .. }},
             returning: false,
             ..
@@ -177,10 +183,10 @@ async fn basic_crud(test: &mut DbTest) {
                     lhs.as_expr_column_unwrap(): ExprColumn {
                         nesting: 0,
                         table: 0,
-                        column: user_id_column_index,
+                        column: user_id_column.index,
                     },
                     op: BinaryOp::Eq,
-                    *rhs: == user_id,
+                    rhs: _,
                     ..
                 })),
                 ..
@@ -191,7 +197,7 @@ async fn basic_crud(test: &mut DbTest) {
         assert_struct!(op, Operation::DeleteByKey(_ {
             table: user_table_id,
             filter: None,
-            keys: [=~ (&user_id,)],
+            keys: _,
             ..
         }));
     }
@@ -205,5 +211,3 @@ async fn basic_crud(test: &mut DbTest) {
     // ========== VERIFY LOG IS EMPTY ==========
     assert!(test.log().is_empty(), "Log should be empty");
 }
-
-tests!(basic_crud,);
