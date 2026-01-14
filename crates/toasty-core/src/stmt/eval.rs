@@ -93,7 +93,11 @@ impl Expr {
                 match expr_binary_op.op {
                     BinaryOp::Eq => Ok((lhs == rhs).into()),
                     BinaryOp::Ne => Ok((lhs != rhs).into()),
-                    _ => todo!("{:#?}", self),
+                    BinaryOp::Ge => Ok((lhs >= rhs).into()),
+                    BinaryOp::Gt => Ok((lhs > rhs).into()),
+                    BinaryOp::Le => Ok((lhs <= rhs).into()),
+                    BinaryOp::Lt => Ok((lhs < rhs).into()),
+                    BinaryOp::IsA => todo!("IsA binary op not yet implemented"),
                 }
             }
             Expr::Cast(expr_cast) => expr_cast.ty.cast(expr_cast.expr.eval_ref(scope, input)?),
