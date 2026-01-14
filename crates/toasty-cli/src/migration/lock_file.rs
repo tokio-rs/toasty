@@ -86,7 +86,7 @@ impl LockFile {
                                 if item.is_array() {
                                     let mut placeholder = Item::None;
                                     std::mem::swap(item, &mut placeholder);
-                                    let mut array = placeholder.into_array_of_tables().unwrap();
+                                    let array = placeholder.into_array_of_tables().unwrap();
                                     *item = array.into();
                                 }
                             }
