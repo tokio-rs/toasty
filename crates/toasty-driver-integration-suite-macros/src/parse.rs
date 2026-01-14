@@ -543,11 +543,26 @@ impl DriverTest {
         // Combine ID variants with matrix combinations
         for id_variant in &id_variants {
             for matrix_values in &matrix_combinations {
+                // Build the predicate for this expansion
+                let predicate = if matches!(id_variant, Some(KindVariant::IdU64)) {
+                    // For id_u64 expansions, add auto_increment to the predicate
+                    let auto_increment = BoolExpr::Ident("auto_increment".to_string());
+                    match &attr.requires {
+                        Some(existing) => {
+                            Some(BoolExpr::And(vec![existing.clone(), auto_increment]))
+                        }
+                        None => Some(auto_increment),
+                    }
+                } else {
+                    // For non-id_u64 expansions, use the original predicate
+                    attr.requires.clone()
+                };
+
                 let expansion = Expansion {
                     id_variant: id_variant.clone(),
                     id_ident: attr.id_ident.clone(),
                     matrix_values: matrix_values.clone(),
-                    predicate: attr.requires.clone(),
+                    predicate,
                 };
 
                 // Filter using should_include with three-valued logic
