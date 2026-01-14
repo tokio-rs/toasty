@@ -182,10 +182,12 @@ fn generate_macro(structure: TestStructure) -> TokenStream {
                 .map(|test| {
                     let test_ident = &test.name;
                     let attr = &test.attr.ast;
+                    let extra_attrs = &test.attrs;
 
-                    // Generate the full module path with driver_test attribute
+                    // Generate the full module path with driver_test attribute and extra attributes
+                    // Pass attrs as token trees to avoid macro escaping issues
                     quote! {
-                        $crate::generate_driver_test_variants!($driver_expr, $crate, #module_ident::#test_ident, #attr, capability( $( $($t)* )? ));
+                        $crate::generate_driver_test_variants!($driver_expr, $crate, #module_ident::#test_ident, #attr, attrs[#(#extra_attrs)*], capability( $( $($t)* )? ));
                     }
                 })
                 .collect();

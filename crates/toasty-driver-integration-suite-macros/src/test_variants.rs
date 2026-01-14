@@ -7,7 +7,7 @@ use syn::{parse_macro_input, Token};
 use crate::parse::{DriverTestAttr, ThreeValuedBool};
 
 /// Input to the `generate_driver_test_variants!` macro
-/// Expects: module_name::test_name, #[driver_test(...)], capability(...)
+/// Expects: driver_expr, crate, module_name::test_name, #[driver_test(...)], attrs(...), capability(...)
 #[derive(Debug)]
 struct Input {
     /// Crate
@@ -21,6 +21,10 @@ struct Input {
 
     /// The driver_test attribute
     driver_test_attr: syn::Attribute,
+
+    /// Extra attributes (e.g., #[should_panic], #[ignore])
+    extra_attrs: Vec<syn::Attribute>,
+
     /// Parsed capability flags
     capabilities: HashMap<syn::Ident, bool>,
 }
@@ -42,6 +46,20 @@ impl syn::parse::Parse for Input {
             .into_iter()
             .next()
             .ok_or_else(|| input.error("expected driver_test attribute"))?;
+
+        input.parse::<Token![,]>()?;
+
+        // Parse attrs[...]
+        let attrs_ident: syn::Ident = input.parse()?;
+        if attrs_ident != "attrs" {
+            return Err(input.error("expected 'attrs'"));
+        }
+
+        let attrs_content;
+        syn::bracketed!(attrs_content in input);
+
+        // Parse attributes from the bracketed content
+        let extra_attrs = syn::Attribute::parse_outer(&attrs_content)?;
 
         input.parse::<Token![,]>()?;
 
@@ -73,6 +91,7 @@ impl syn::parse::Parse for Input {
             krate,
             test_path,
             driver_test_attr,
+            extra_attrs,
             capabilities,
         })
     }
@@ -83,6 +102,7 @@ pub fn expand(input: TokenStream) -> TokenStream {
 
     let driver_expr = &input.driver_expr;
     let krate = &input.krate;
+    let extra_attrs = &input.extra_attrs;
 
     // Parse the driver_test attribute to get the expansions
     let attr = DriverTestAttr::from_attribute(&input.driver_test_attr)
@@ -145,8 +165,9 @@ pub fn expand(input: TokenStream) -> TokenStream {
                 quote! { #krate::tests::#test_path::#expansion_ident }
             };
 
-            // Generate the test function
+            // Generate the test function with extra attributes
             Some(quote! {
+                #(#extra_attrs)*
                 #[test]
                 fn #test_fn_name() {
                     let mut test = #krate::Test::new(
