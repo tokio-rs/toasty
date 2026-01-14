@@ -449,9 +449,15 @@ impl DriverTest {
         let has_matrix = !attr.matrix.is_empty();
         let has_requires = attr.requires.is_some();
 
-        // If no expansions needed, return empty
+        // If no expansions needed, return a single empty expansion
+        // This handles the case where #[driver_test] is used without arguments
         if !has_id && !has_matrix && !has_requires {
-            return vec![];
+            return vec![Expansion {
+                id_variant: None,
+                id_ident: None,
+                matrix_values: std::collections::HashMap::new(),
+                predicate: None,
+            }];
         }
 
         let mut expansions = Vec::new();

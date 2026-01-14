@@ -1,6 +1,7 @@
-use tests::{models, tests, DbTest};
+use crate::prelude::*;
 
-async fn batch_get_by_key(test: &mut DbTest) {
+#[driver_test]
+pub async fn batch_get_by_key(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -41,5 +42,3 @@ async fn batch_get_by_key(test: &mut DbTest) {
         assert!(keys.iter().any(|key| foo.one == key.0 && foo.two == key.1));
     }
 }
-
-tests!(batch_get_by_key,);
