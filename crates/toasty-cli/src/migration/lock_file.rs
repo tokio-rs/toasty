@@ -73,17 +73,30 @@ impl LockFile {
             if item.is_inline_table() {
                 let mut placeholder = Item::None;
                 std::mem::swap(item, &mut placeholder);
-                *item = placeholder.into_table().unwrap().into();
-            }
+                let mut table = placeholder.into_table().unwrap();
 
-            if let Item::Table(t) = item {
-                for (_sub_key, sub_item) in t.iter_mut() {
-                    if sub_item.is_array() {
+                for (_key, item) in table.iter_mut() {
+                    if item.is_array() {
                         let mut placeholder = Item::None;
-                        std::mem::swap(sub_item, &mut placeholder);
-                        *sub_item = placeholder.into_array_of_tables().unwrap().into();
+                        std::mem::swap(item, &mut placeholder);
+                        let mut array = placeholder.into_array_of_tables().unwrap();
+
+                        for table in array.iter_mut() {
+                            for (_key, item) in table.iter_mut() {
+                                if item.is_array() {
+                                    let mut placeholder = Item::None;
+                                    std::mem::swap(item, &mut placeholder);
+                                    let mut array = placeholder.into_array_of_tables().unwrap();
+                                    *item = array.into();
+                                }
+                            }
+                        }
+
+                        *item = array.into();
                     }
                 }
+
+                *item = table.into();
             }
         }
 
