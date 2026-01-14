@@ -12,4 +12,4 @@ anyhow.workspace = true
 clap.workspace = true
 serde.workspace = true
 toml.workspace = true
-toml_edit.workspace = true
+toml_edit = { workspace = true, features = ["serde"] }

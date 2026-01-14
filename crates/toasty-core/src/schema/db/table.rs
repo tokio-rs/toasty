@@ -197,14 +197,8 @@ mod tests {
 
     #[test]
     fn test_no_diff_same_tables() {
-        let from_tables = vec![
-            make_table(0, "users", 2),
-            make_table(1, "posts", 3),
-        ];
-        let to_tables = vec![
-            make_table(0, "users", 2),
-            make_table(1, "posts", 3),
-        ];
+        let from_tables = vec![make_table(0, "users", 2), make_table(1, "posts", 3)];
+        let to_tables = vec![make_table(0, "users", 2), make_table(1, "posts", 3)];
 
         let from_schema = make_schema(from_tables.clone());
         let to_schema = make_schema(to_tables.clone());
@@ -218,10 +212,7 @@ mod tests {
     #[test]
     fn test_create_table() {
         let from_tables = vec![make_table(0, "users", 2)];
-        let to_tables = vec![
-            make_table(0, "users", 2),
-            make_table(1, "posts", 3),
-        ];
+        let to_tables = vec![make_table(0, "users", 2), make_table(1, "posts", 3)];
 
         let from_schema = make_schema(from_tables.clone());
         let to_schema = make_schema(to_tables.clone());
@@ -238,10 +229,7 @@ mod tests {
 
     #[test]
     fn test_drop_table() {
-        let from_tables = vec![
-            make_table(0, "users", 2),
-            make_table(1, "posts", 3),
-        ];
+        let from_tables = vec![make_table(0, "users", 2), make_table(1, "posts", 3)];
         let to_tables = vec![make_table(0, "users", 2)];
 
         let from_schema = make_schema(from_tables.clone());
@@ -326,9 +314,9 @@ mod tests {
             make_table(2, "old_table", 1),
         ];
         let to_tables = vec![
-            make_table(0, "users", 3), // added column
+            make_table(0, "users", 3),     // added column
             make_table(1, "new_posts", 3), // renamed
-            make_table(2, "comments", 2), // new table (reused ID 2)
+            make_table(2, "comments", 2),  // new table (reused ID 2)
         ];
 
         let from_schema = make_schema(from_tables.clone());
