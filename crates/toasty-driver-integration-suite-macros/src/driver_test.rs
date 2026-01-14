@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, visit_mut::VisitMut, ItemFn, Type, TypePath};
 
-use crate::parse::{BoolExpr, DriverTest, DriverTestAttr, Expansion};
+use crate::parse::{BoolExpr, DriverTest, DriverTestAttr, Expansion, ExpansionList};
 
 pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
@@ -19,48 +19,58 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
         "driver_test={driver_test:#?}"
     );
 
-    // If there's only one expansion and it has an empty name (no id/matrix params),
-    // return the function directly without wrapping in a module
-    if driver_test.expansions.len() == 1 && driver_test.expansions[0].name().is_empty() {
+    // Check if we need to wrap variants in a module
+    if driver_test.expansions.needs_module_wrapper() {
+        // Generate variants using expansion logic
+        // When inside a module, use the expansion name as the function name
+        let variant_fns: Vec<_> = driver_test
+            .expansions
+            .iter()
+            .map(|expansion| {
+                generate_variant(&driver_test.input, expansion, &driver_test.requires, true)
+            })
+            .collect();
+
+        quote! {
+            #vis mod #mod_name {
+                use super::*;
+
+                #(#variant_fns)*
+            }
+        }
+        .into()
+    } else {
+        // Single expansion with no name - return the function directly
         let variant = generate_variant(
             &driver_test.input,
             &driver_test.expansions[0],
             &driver_test.requires,
+            false, // Don't use expansion name as function name
         );
-        return quote! {
+        quote! {
             #variant
         }
-        .into();
+        .into()
     }
-
-    // Generate variants using expansion logic
-    let variant_fns: Vec<_> = driver_test
-        .expansions
-        .iter()
-        .map(|expansion| generate_variant(&driver_test.input, expansion, &driver_test.requires))
-        .collect();
-
-    let result = quote! {
-        #vis mod #mod_name {
-            use super::*;
-
-            #(#variant_fns)*
-        }
-    };
-
-    result.into()
 }
 
 /// Generate a test variant with ID rewritten to the target type
-fn generate_variant(input: &ItemFn, expansion: &Expansion, requires: &Option<BoolExpr>) -> ItemFn {
+fn generate_variant(
+    input: &ItemFn,
+    expansion: &Expansion,
+    requires: &Option<BoolExpr>,
+    use_expansion_name: bool,
+) -> ItemFn {
     let mut variant = input.clone();
 
-    // Update function name using Expansion's method, but only if the expansion has a non-empty name
-    // For tests with only requires() and no id/matrix, the name will be empty, so keep original name
-    let expansion_name = expansion.name();
-    if !expansion_name.is_empty() {
-        variant.sig.ident = syn::Ident::new(&expansion_name, input.sig.ident.span());
+    // Update function name based on whether we're inside a module
+    if use_expansion_name {
+        if let Some(expansion_ident) = expansion.to_ident() {
+            // Inside a module: use just the expansion name (e.g., "id_uuid")
+            variant.sig.ident = expansion_ident;
+        }
     }
+    // Otherwise keep the original function name
 
     // Don't add #[tokio::test] or #[test] attributes - the test registry in the consuming
     // crate will add them. If we add test attributes here, the functions become test-only

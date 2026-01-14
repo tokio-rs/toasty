@@ -1,5 +1,18 @@
 use syn::{parse::Parse, punctuated::Punctuated, token::Comma, Ident, ItemFn};
 
+/// Helper trait for working with collections of expansions
+pub trait ExpansionList {
+    /// Check if these expansions require a module wrapper
+    /// Returns true if there are multiple expansions or a single expansion with a non-empty name
+    fn needs_module_wrapper(&self) -> bool;
+}
+
+impl ExpansionList for [Expansion] {
+    fn needs_module_wrapper(&self) -> bool {
+        self.len() > 1 || (self.len() == 1 && self[0].has_expansion())
+    }
+}
+
 /// Parsed representation of a `#[driver_test]` function
 #[derive(Debug, Clone)]
 pub struct DriverTest {
@@ -187,6 +200,21 @@ impl Expansion {
         }
 
         false
+    }
+
+    /// Check if this expansion has a non-empty name (i.e., has id() or matrix() parameters)
+    pub fn has_expansion(&self) -> bool {
+        !self.name().is_empty()
+    }
+
+    /// Generate a syn::Ident for this expansion's name
+    pub fn to_ident(&self) -> Option<syn::Ident> {
+        let name = self.name();
+        if name.is_empty() {
+            None
+        } else {
+            Some(syn::Ident::new(&name, proc_macro2::Span::call_site()))
+        }
     }
 }
 
