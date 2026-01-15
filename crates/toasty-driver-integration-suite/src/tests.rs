@@ -13,6 +13,7 @@ pub mod has_many_link_unlink;
 pub mod has_many_n_1;
 pub mod has_many_scoped_query;
 pub mod has_one_crud_basic;
+pub mod jiff;
 pub mod one_model_batch_create;
 pub mod one_model_composite_key;
 pub mod one_model_crud;
