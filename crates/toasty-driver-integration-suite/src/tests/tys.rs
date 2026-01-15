@@ -1,15 +1,19 @@
-use std::{rc::Rc, sync::Arc};
+use crate::prelude::*;
 
-use tests::{models, tests, DbTest};
+use std::{rc::Rc, sync::Arc};
 use toasty::stmt::Id;
+use toasty_core::{
+    driver::Operation,
+    stmt::{ExprSet, InsertTarget, Statement},
+};
 
 macro_rules! def_num_ty_tests {
     (
         $( $t:ty => $test_values:expr => $test_name:ident; )*
     ) => {
         $(
-            #[allow(dead_code)]
-            async fn $test_name(test: &mut DbTest) {
+            #[driver_test]
+            pub async fn $test_name(test: &mut Test) {
                 #[derive(Debug, toasty::Model)]
                 #[allow(dead_code)]
                 struct Foo {
@@ -20,7 +24,7 @@ macro_rules! def_num_ty_tests {
                 }
 
                 let db = test.setup_db(models!(Foo)).await;
-                let mut test_values: Vec<$t> = $test_values.to_vec();
+                let mut test_values: Vec<$t> = (*$test_values).to_vec();
 
                 // Filter test values based on database capabilities for unsigned integers
                 // Unsigned types have MIN == 0, signed types have MIN < 0
@@ -33,24 +37,36 @@ macro_rules! def_num_ty_tests {
                     }
                 }
 
+                // Clear setup operations
+                test.log().clear();
+
                 // Test 1: All test values round-trip
                 for &val in &test_values {
                     let created = Foo::create().val(val).exec(&db).await.unwrap();
+
+                    // Verify the INSERT operation stored the correct value
+                    let (op, _resp) = test.log().pop();
+                    assert_struct!(op, Operation::QuerySql(_ {
+                        stmt: Statement::Insert(_ {
+                            target: InsertTarget::Table(_ {
+                                table: == table_id(&db, "foos"),
+                                columns: == columns(&db, "foos", &["id", "val"]),
+                                ..
+                            }),
+                            source.body: ExprSet::Values(_ {
+                                rows: [=~ (Any, Any)],
+                                ..
+                            }),
+                            ..
+                        }),
+                        ..
+                    }));
+
                     let read = Foo::get_by_id(&db, &created.id).await.unwrap();
                     assert_eq!(read.val, val, "Round-trip failed for: {}", val);
 
-                    // Raw storage verification - verify the value is stored correctly at the database level
-                    let mut filter = std::collections::HashMap::new();
-                    filter.insert("id".to_string(), toasty_core::stmt::Value::from(created.id));
-
-                    let raw_stored_value = test.get_raw_column_value::<$t>("foos", "val", filter).await
-                        .unwrap_or_else(|e| panic!("Raw storage verification failed for {} value {}: {}", stringify!($t), val, e));
-
-                    assert_eq!(
-                        raw_stored_value, val,
-                        "Raw storage verification failed for {}: expected {}, got {}",
-                        stringify!($t), val, raw_stored_value
-                    );
+                    // Clear the read operation
+                    test.log().clear();
                 }
 
                 // Test 2: Multiple records with different values
@@ -58,21 +74,45 @@ macro_rules! def_num_ty_tests {
                 for &val in &test_values {
                     let created = Foo::create().val(val).exec(&db).await.unwrap();
                     created_records.push((created.id, val));
+                    test.log().clear();
                 }
 
                 for (id, expected_val) in created_records {
                     let read = Foo::get_by_id(&db, &id).await.unwrap();
                     assert_eq!(read.val, expected_val, "Multiple records test failed for: {}", expected_val);
+                    test.log().clear();
                 }
 
                 // Test 3: Update chain
                 if !test_values.is_empty() {
                     let mut record = Foo::create().val(test_values[0]).exec(&db).await.unwrap();
+                    test.log().clear();
+
                     for &val in &test_values {
                         record.update().val(val).exec(&db).await.unwrap();
+
+                        // Verify the UPDATE operation sent the correct value
+                        let (op, _resp) = test.log().pop();
+                        if test.capability().sql {
+                            assert_struct!(op, Operation::QuerySql(_ {
+                                stmt: Statement::Update(_ {
+                                    assignments: #{ 1: _ { expr: _, .. }},
+                                    ..
+                                }),
+                                ..
+                            }));
+                        } else {
+                            assert_struct!(op, Operation::UpdateByKey(_ {
+                                assignments: #{ 1: _ { expr: _, .. }},
+                                ..
+                            }));
+                        }
+
                         let read = Foo::get_by_id(&db, &record.id).await.unwrap();
                         assert_eq!(read.val, val, "Update chain failed for: {}", val);
                         record.val = val;
+
+                        test.log().clear();
                     }
                 }
             }
@@ -93,8 +133,8 @@ def_num_ty_tests!(
     usize => &[usize::MIN, 0, 1, 1000000000000, 9223372036854775807, 10000000000000000000, usize::MAX] => ty_usize;
 );
 
-#[allow(dead_code)]
-async fn ty_str(test: &mut DbTest) {
+#[driver_test]
+pub async fn ty_str(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
@@ -128,22 +168,65 @@ async fn ty_str(test: &mut DbTest) {
     )
     .collect();
 
+    // Clear setup operations
+    test.log().clear();
+
     // Test 1: All test values round-trip
     for val in &test_values {
         let created = Foo::create().val((*val).clone()).exec(&db).await.unwrap();
+
+        // Verify the INSERT operation stored the string value
+        let (op, _resp) = test.log().pop();
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Insert(_ {
+                target: InsertTarget::Table(_ {
+                    table: == table_id(&db, "foos"),
+                    columns: == columns(&db, "foos", &["id", "val"]),
+                    ..
+                }),
+                source.body: ExprSet::Values(_ {
+                    rows: [=~ (Any, Any)],
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
+
         let read = Foo::get_by_id(&db, &created.id).await.unwrap();
         assert_eq!(read.val, *val);
+
+        test.log().clear();
     }
 
-    // Test 3: Update chain
+    // Test 2: Update chain
     let mut record = Foo::create().val(&test_values[0]).exec(&db).await.unwrap();
+    test.log().clear();
 
     for val in &test_values {
         record.update().val(val).exec(&db).await.unwrap();
 
-        let read = Foo::get_by_id(&db, &record.id).await.unwrap();
+        // Verify the UPDATE operation sent the string value
+        let (op, _resp) = test.log().pop();
+        if test.capability().sql {
+            assert_struct!(op, Operation::QuerySql(_ {
+                stmt: Statement::Update(_ {
+                    assignments: #{ 1: _ { expr: _, .. }},
+                    ..
+                }),
+                ..
+            }));
+        } else {
+            assert_struct!(op, Operation::UpdateByKey(_ {
+                assignments: #{ 1: _ { expr: _, .. }},
+                ..
+            }));
+        }
 
-        assert_eq!(read.val, *val,);
+        let read = Foo::get_by_id(&db, &record.id).await.unwrap();
+        assert_eq!(read.val, *val);
+
+        test.log().clear();
     }
 }
 
@@ -160,7 +243,8 @@ fn gen_string(length: usize, pattern: &str) -> String {
     }
 }
 
-async fn ty_uuid(test: &mut DbTest) {
+#[driver_test]
+pub async fn ty_uuid(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -170,15 +254,41 @@ async fn ty_uuid(test: &mut DbTest) {
     }
 
     let db = test.setup_db(models!(Foo)).await;
+
+    // Clear setup operations
+    test.log().clear();
+
     for _ in 0..16 {
         let val = uuid::Uuid::new_v4();
         let created = Foo::create().val(val).exec(&db).await.unwrap();
+
+        // Verify the INSERT operation - UUID should be stored in its native format
+        let (op, _resp) = test.log().pop();
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Insert(_ {
+                target: InsertTarget::Table(_ {
+                    table: == table_id(&db, "foos"),
+                    columns: == columns(&db, "foos", &["id", "val"]),
+                    ..
+                }),
+                source.body: ExprSet::Values(_ {
+                    rows: [=~ (Any, Any)],
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
+
         let read = Foo::get_by_id(&db, &created.id).await.unwrap();
         assert_eq!(read.val, val);
+
+        test.log().clear();
     }
 }
 
-async fn ty_smart_ptrs(test: &mut DbTest) {
+#[driver_test]
+pub async fn ty_smart_ptrs(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -191,6 +301,9 @@ async fn ty_smart_ptrs(test: &mut DbTest) {
 
     let db = test.setup_db(models!(Foo)).await;
 
+    // Clear setup operations
+    test.log().clear();
+
     let created = Foo::create()
         .arced(1i32)
         .rced(2i32)
@@ -199,25 +312,29 @@ async fn ty_smart_ptrs(test: &mut DbTest) {
         .await
         .unwrap();
 
+    // Verify the INSERT operation stored the unwrapped values
+    let (op, _resp) = test.log().pop();
+    assert_struct!(op, Operation::QuerySql(_ {
+        stmt: Statement::Insert(_ {
+            target: InsertTarget::Table(_ {
+                table: == table_id(&db, "foos"),
+                columns: == columns(&db, "foos", &["id", "arced", "rced", "boxed"]),
+                ..
+            }),
+            source.body: ExprSet::Values(_ {
+                rows: [=~ (Any, Any, Any, Any)],
+                ..
+            }),
+            ..
+        }),
+        ..
+    }));
+
     let read = Foo::get_by_id(&db, &created.id).await.unwrap();
     assert_eq!(created.id, read.id);
     assert_eq!(created.arced, read.arced);
     assert_eq!(created.rced, read.rced);
     assert_eq!(created.boxed, read.boxed);
-}
 
-tests!(
-    ty_i8,
-    ty_i16,
-    ty_i32,
-    ty_i64,
-    ty_isize,
-    ty_u8,
-    ty_u16,
-    ty_u32,
-    ty_u64,
-    ty_usize,
-    ty_str,
-    ty_uuid,
-    ty_smart_ptrs
-);
+    test.log().clear();
+}

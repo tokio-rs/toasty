@@ -79,19 +79,6 @@ impl Like<&str> for Expr {
     }
 }
 
-/// Convenience implementation for matching Value against i32
-impl Like<i32> for Value {
-    fn like(&self, pattern: &i32) -> bool {
-        matches!(self, Value::I32(v) if v == pattern)
-    }
-}
-
-impl Like<i32> for Expr {
-    fn like(&self, pattern: &i32) -> bool {
-        matches!(self, Expr::Value(Value::I32(v)) if v == pattern)
-    }
-}
-
 /// Convenience implementation for matching Value against String
 impl Like<String> for Value {
     fn like(&self, pattern: &String) -> bool {

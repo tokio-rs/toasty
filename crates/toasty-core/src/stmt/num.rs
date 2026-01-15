@@ -95,6 +95,20 @@ macro_rules! impl_num {
                     })
                 }
             }
+
+            #[cfg(feature = "assert-struct")]
+            impl assert_struct::Like<$ty> for Value {
+                fn like(&self, pattern: &$ty) -> bool {
+                    matches!(self, Value::$variant(v) if v == pattern)
+                }
+            }
+
+            #[cfg(feature = "assert-struct")]
+            impl assert_struct::Like<$ty> for Expr {
+                fn like(&self, pattern: &$ty) -> bool {
+                    matches!(self, Expr::Value(Value::$variant(v)) if v == pattern)
+                }
+            }
         )*
     };
 }
