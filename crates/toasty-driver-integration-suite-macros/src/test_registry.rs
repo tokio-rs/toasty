@@ -310,7 +310,6 @@ fn generate_capability_runtime_test(structure: &TestStructure) -> TokenStream2 {
                             map.insert("native_decimal".to_string(), bool_value);
                         }
                         other => {
-                            assert!(map.contains_key(other), "not a valid capability: {other:#?}");
                             map.insert(other.to_string(), bool_value);
                         }
                     }

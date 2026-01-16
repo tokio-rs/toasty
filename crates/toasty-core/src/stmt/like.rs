@@ -9,6 +9,7 @@
 
 use super::{Expr, ExprSet, Value};
 use assert_struct::Like;
+use uuid::Uuid;
 
 /// Helper function to extract Values from an Expr (handles both polymorphic representations)
 fn extract_exprs_from_record(expr: &Expr) -> Option<Vec<Expr>> {
@@ -66,29 +67,27 @@ impl Like<&[Value]> for Expr {
     }
 }
 
-/// Convenience implementation for matching Value against string literals
 impl Like<&str> for Value {
     fn like(&self, pattern: &&str) -> bool {
-        matches!(self, Value::String(s) if s == pattern)
+        matches!(self, Value::String(value) if value == pattern)
     }
 }
 
 impl Like<&str> for Expr {
     fn like(&self, pattern: &&str) -> bool {
-        matches!(self, Expr::Value(Value::String(s)) if s == pattern)
+        matches!(self, Expr::Value(value) if value.like(pattern))
     }
 }
 
-/// Convenience implementation for matching Value against i32
-impl Like<i32> for Value {
-    fn like(&self, pattern: &i32) -> bool {
-        matches!(self, Value::I32(v) if v == pattern)
+impl Like<&[u8]> for Value {
+    fn like(&self, pattern: &&[u8]) -> bool {
+        matches!(self, Value::Bytes(value) if value == pattern)
     }
 }
 
-impl Like<i32> for Expr {
-    fn like(&self, pattern: &i32) -> bool {
-        matches!(self, Expr::Value(Value::I32(v)) if v == pattern)
+impl Like<&[u8]> for Expr {
+    fn like(&self, pattern: &&[u8]) -> bool {
+        matches!(self, Expr::Value(value) if value.like(pattern))
     }
 }
 
@@ -109,6 +108,24 @@ impl Like<&String> for Value {
 impl Like<String> for Expr {
     fn like(&self, pattern: &String) -> bool {
         self == pattern
+    }
+}
+
+impl Like<&String> for Expr {
+    fn like(&self, pattern: &&String) -> bool {
+        self == *pattern
+    }
+}
+
+impl Like<Uuid> for Value {
+    fn like(&self, other: &Uuid) -> bool {
+        matches!(self, Value::Uuid(value) if value == other)
+    }
+}
+
+impl Like<Uuid> for Expr {
+    fn like(&self, other: &Uuid) -> bool {
+        matches!(self, Expr::Value(value) if value.like(other))
     }
 }
 
@@ -222,5 +239,11 @@ impl<const N: usize> Like<[&str; N]> for Expr {
             }
             _ => false,
         }
+    }
+}
+
+impl<const N: usize> Like<&[u8; N]> for Expr {
+    fn like(&self, other: &&[u8; N]) -> bool {
+        self.like(&&other[..])
     }
 }

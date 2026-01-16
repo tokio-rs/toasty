@@ -36,14 +36,6 @@ macro_rules! impl_value_eq {
 // Implement PartialEq for all numeric and boolean types
 impl_value_eq! {
     bool => Bool,
-    i8 => I8,
-    i16 => I16,
-    i32 => I32,
-    i64 => I64,
-    u8 => U8,
-    u16 => U16,
-    u32 => U32,
-    u64 => U64,
 }
 
 // String types need special handling since they all map to Value::String

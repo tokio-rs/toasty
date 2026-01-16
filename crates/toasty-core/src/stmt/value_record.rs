@@ -11,6 +11,10 @@ impl ValueRecord {
     pub fn from_vec(fields: Vec<Value>) -> Self {
         Self { fields }
     }
+
+    pub fn as_slice(&self) -> &[Value] {
+        &self[..]
+    }
 }
 
 impl ops::Deref for ValueRecord {
