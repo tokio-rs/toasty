@@ -38,7 +38,7 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) {
         .unwrap();
 
     // Find the user, include TODOs
-    let user = User::filter_by_id(&user.id)
+    let user = User::filter_by_id(user.id)
         .include(User::FIELDS.todos())
         .get(&db)
         .await
@@ -47,9 +47,9 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) {
     // This will panic
     assert_eq!(3, user.todos.get().len());
 
-    let id = user.todos.get()[0].id.clone();
+    let id = user.todos.get()[0].id;
 
-    let todo = Todo::filter_by_id(&id)
+    let todo = Todo::filter_by_id(id)
         .include(Todo::FIELDS.user())
         .get(&db)
         .await
@@ -154,14 +154,14 @@ pub async fn multiple_includes_same_model(test: &mut Test) {
         .unwrap();
 
     // Test individual includes work (baseline)
-    let user_with_posts = User::filter_by_id(&user.id)
+    let user_with_posts = User::filter_by_id(user.id)
         .include(User::FIELDS.posts())
         .get(&db)
         .await
         .unwrap();
     assert_eq!(2, user_with_posts.posts.get().len());
 
-    let user_with_comments = User::filter_by_id(&user.id)
+    let user_with_comments = User::filter_by_id(user.id)
         .include(User::FIELDS.comments())
         .get(&db)
         .await
@@ -169,7 +169,7 @@ pub async fn multiple_includes_same_model(test: &mut Test) {
     assert_eq!(3, user_with_comments.comments.get().len());
 
     // Test multiple includes in one query
-    let loaded_user = User::filter_by_id(&user.id)
+    let loaded_user = User::filter_by_id(user.id)
         .include(User::FIELDS.posts()) // First include
         .include(User::FIELDS.comments()) // Second include
         .get(&db)
@@ -220,7 +220,7 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) {
         .unwrap();
 
     // Find the user, include profile
-    let user = User::filter_by_id(&user.id)
+    let user = User::filter_by_id(user.id)
         .include(User::FIELDS.profile())
         .get(&db)
         .await
@@ -231,10 +231,10 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) {
     assert_eq!("A person", profile.bio);
     assert_eq!(user.id, *profile.user_id.as_ref().unwrap());
 
-    let profile_id = profile.id.clone();
+    let profile_id = profile.id;
 
     // Test the reciprocal belongs_to preload
-    let profile = Profile::filter_by_id(&profile_id)
+    let profile = Profile::filter_by_id(profile_id)
         .include(Profile::FIELDS.user())
         .get(&db)
         .await
@@ -306,7 +306,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
         .unwrap();
 
     // Test individual includes work (baseline)
-    let user_with_profile = User::filter_by_id(&user.id)
+    let user_with_profile = User::filter_by_id(user.id)
         .include(User::FIELDS.profile())
         .get(&db)
         .await
@@ -317,7 +317,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
         user_with_profile.profile.get().as_ref().unwrap().bio
     );
 
-    let user_with_settings = User::filter_by_id(&user.id)
+    let user_with_settings = User::filter_by_id(user.id)
         .include(User::FIELDS.settings())
         .get(&db)
         .await
@@ -329,7 +329,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
     );
 
     // Test multiple includes in one query
-    let loaded_user = User::filter_by_id(&user.id)
+    let loaded_user = User::filter_by_id(user.id)
         .include(User::FIELDS.profile()) // First include
         .include(User::FIELDS.settings()) // Second include
         .get(&db)
@@ -409,7 +409,7 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) {
         .unwrap();
 
     // Test combined has_one and has_many preload in a single query
-    let loaded_user = User::filter_by_id(&user.id)
+    let loaded_user = User::filter_by_id(user.id)
         .include(User::FIELDS.profile()) // has_one include
         .include(User::FIELDS.todos()) // has_many include
         .get(&db)

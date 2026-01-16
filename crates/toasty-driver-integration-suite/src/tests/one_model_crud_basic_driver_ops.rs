@@ -140,7 +140,7 @@ pub async fn basic_crud(test: &mut Test) {
     assert_struct!(resp.rows, Rows::Stream(_));
 
     // ========== UPDATE ==========
-    User::filter_by_id(&user_id)
+    User::filter_by_id(user_id)
         .update()
         .age(31)
         .exec(&db)
@@ -187,7 +187,7 @@ pub async fn basic_crud(test: &mut Test) {
     });
 
     // ========== DELETE ==========
-    User::filter_by_id(&user_id).delete(&db).await.unwrap();
+    User::filter_by_id(user_id).delete(&db).await.unwrap();
 
     // Check the DELETE operation
     let (op, resp) = test.log().pop();
