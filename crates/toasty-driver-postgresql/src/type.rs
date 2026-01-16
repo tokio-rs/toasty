@@ -27,13 +27,21 @@ impl TypeExt for stmt::Type {
             #[cfg(feature = "rust_decimal")]
             stmt::Type::Decimal => Type::NUMERIC,
             #[cfg(feature = "jiff")]
-            stmt::Type::Timestamp => Type::TIMESTAMPTZ,
+            stmt::Type::JiffTimestamp => Type::TIMESTAMPTZ,
             #[cfg(feature = "jiff")]
-            stmt::Type::Date => Type::DATE,
+            stmt::Type::JiffDate => Type::DATE,
             #[cfg(feature = "jiff")]
-            stmt::Type::Time => Type::TIME,
+            stmt::Type::JiffTime => Type::TIME,
             #[cfg(feature = "jiff")]
-            stmt::Type::DateTime => Type::TIMESTAMP,
+            stmt::Type::JiffDateTime => Type::TIMESTAMP,
+            #[cfg(feature = "chrono")]
+            stmt::Type::ChronoDateTimeUtc => Type::TIMESTAMPTZ,
+            #[cfg(feature = "chrono")]
+            stmt::Type::ChronoNaiveDateTime => Type::TIMESTAMP,
+            #[cfg(feature = "chrono")]
+            stmt::Type::ChronoNaiveDate => Type::DATE,
+            #[cfg(feature = "chrono")]
+            stmt::Type::ChronoNaiveTime => Type::TIME,
 
             _ => todo!("to_postgres_type; ty={:#?}", self),
         }

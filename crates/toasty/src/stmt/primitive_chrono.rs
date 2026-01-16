@@ -1,10 +1,11 @@
 use crate::stmt::Primitive;
+use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use toasty_core::{
     stmt::{Type, Value},
     Result,
 };
 
-macro_rules! impl_jiff_primitive {
+macro_rules! impl_chrono_primitive {
     ($ty:ty, $name:ident, $lit:literal) => {
         impl Primitive for $ty {
             fn ty() -> Type {
@@ -21,8 +22,7 @@ macro_rules! impl_jiff_primitive {
     };
 }
 
-impl_jiff_primitive!(jiff::Timestamp, JiffTimestamp, "jiff::Timestamp");
-impl_jiff_primitive!(jiff::Zoned, JiffZoned, "jiff::Zoned");
-impl_jiff_primitive!(jiff::civil::Date, JiffDate, "jiff::civil::Date");
-impl_jiff_primitive!(jiff::civil::Time, JiffTime, "jiff::civil::Time");
-impl_jiff_primitive!(jiff::civil::DateTime, JiffDateTime, "jiff::civil::DateTime");
+impl_chrono_primitive!(DateTime<Utc>, ChronoDateTimeUtc, "chrono::DateTime<Utc>");
+impl_chrono_primitive!(NaiveDateTime, ChronoNaiveDateTime, "chrono::NaiveDateTime");
+impl_chrono_primitive!(NaiveDate, ChronoNaiveDate, "chrono::NaiveDate");
+impl_chrono_primitive!(NaiveTime, ChronoNaiveTime, "chrono::NaiveTime");

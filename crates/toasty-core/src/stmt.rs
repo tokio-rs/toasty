@@ -224,6 +224,9 @@ pub use ty_enum::{EnumVariant, TypeEnum};
 #[cfg(feature = "jiff")]
 mod ty_jiff;
 
+#[cfg(feature = "chrono")]
+mod ty_chrono;
+
 mod update;
 pub use update::{Update, UpdateTarget};
 
@@ -240,6 +243,9 @@ pub use value_enum::ValueEnum;
 
 #[cfg(feature = "jiff")]
 mod value_jiff;
+
+#[cfg(feature = "chrono")]
+mod value_chrono;
 
 mod value_record;
 pub use value_record::ValueRecord;
