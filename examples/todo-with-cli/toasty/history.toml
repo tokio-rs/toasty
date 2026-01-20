@@ -1,5 +1,5 @@
 version = 1
-next_migration_number = 3
+next_migration_number = 2
 
 [[migrations]]
 name = "0000_migration.sql"
@@ -8,7 +8,3 @@ snapshot_name = "0000_snapshot.toml"
 [[migrations]]
 name = "0001_migration.sql"
 snapshot_name = "0001_snapshot.toml"
-
-[[migrations]]
-name = "0002_migration.sql"
-snapshot_name = "0002_snapshot.toml"
