@@ -13,6 +13,13 @@ pub struct MigrationConfig {
     /// Whether the history file should store and verify checksums of the migration files so that
     /// they may not be changed.
     pub checksums: bool,
+
+    /// Whether to add statement breakpoint comments to generated SQL migration files.
+    /// These comments mark boundaries where SQL statements should be split for execution.
+    /// This is needed because different databases have different batching capabilities:
+    /// some (like PostgreSQL) can execute multiple statements in one batch, while others
+    /// require each statement to be executed separately.
+    pub statement_breakpoints: bool,
 }
 
 /// Style for migration file name prefixes
@@ -31,6 +38,7 @@ impl Default for MigrationConfig {
             path: PathBuf::from("toasty"),
             prefix_style: MigrationPrefixStyle::Sequential,
             checksums: false,
+            statement_breakpoints: true,
         }
     }
 }
