@@ -43,12 +43,13 @@ impl GenerateCommand {
 
         let schema = toasty::schema::db::Schema::clone(&db.schema().db);
         let snapshot = SnapshotFile::new(schema.clone());
-        let snapshot_name = format!("{:04}_snapshot.toml", history.migrations().len());
+        let migration_number = history.next_migration_number();
+        let snapshot_name = format!("{:04}_snapshot.toml", migration_number);
         let snapshot_path = config.migration.get_snapshots_dir().join(&snapshot_name);
 
         let migration_name = format!(
             "{:04}_{}.sql",
-            history.migrations().len(),
+            migration_number,
             self.name.as_deref().unwrap_or("migration")
         );
         let _migration_path = config.migration.get_migrations_dir().join(&migration_name);

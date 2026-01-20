@@ -12,6 +12,10 @@ pub struct HistoryFile {
     /// History file format version
     version: u32,
 
+    /// Next migration number to use (independent of array length)
+    #[serde(default)]
+    next_migration_number: u32,
+
     /// Migration history
     migrations: Vec<HistoryFileMigration>,
 }
@@ -34,6 +38,7 @@ impl HistoryFile {
     pub fn new() -> Self {
         Self {
             version: HISTORY_FILE_VERSION,
+            next_migration_number: 0,
             migrations: Vec::new(),
         }
     }
@@ -62,9 +67,15 @@ impl HistoryFile {
         &self.migrations
     }
 
-    /// Add a migration to the history
+    /// Get the next migration number without incrementing
+    pub fn next_migration_number(&self) -> u32 {
+        self.next_migration_number
+    }
+
+    /// Add a migration to the history and increment the migration number
     pub fn add_migration(&mut self, migration: HistoryFileMigration) {
         self.migrations.push(migration);
+        self.next_migration_number += 1;
     }
 
     /// Remove a migration from the history by index
