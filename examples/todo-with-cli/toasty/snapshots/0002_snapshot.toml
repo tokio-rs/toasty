@@ -76,8 +76,8 @@ auto_increment = false
 [[schema.tables.columns]]
 id = { table = 1, index = 2 }
 name = "title"
-ty = "String"
-storage_ty = "Text"
+ty = "I32"
+storage_ty = { Integer = 4 }
 nullable = false
 primary_key = false
 auto_increment = false

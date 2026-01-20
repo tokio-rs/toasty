@@ -27,7 +27,7 @@ pub struct Todo {
     #[belongs_to(key = user_id, references = id)]
     pub user: toasty::BelongsTo<User>,
 
-    pub title: String,
+    pub title: i32,
 
     pub completed: bool,
 }

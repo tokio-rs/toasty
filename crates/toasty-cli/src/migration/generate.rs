@@ -53,6 +53,7 @@ impl GenerateCommand {
             println!(
                 "  {}",
                 style("The current schema matches the previous snapshot. No migration needed.")
+                    .magenta()
                     .dim()
             );
             println!();
@@ -93,8 +94,7 @@ impl GenerateCommand {
 
         println!();
         println!(
-            "  {} {}",
-            style("").magenta(),
+            "  {}",
             style(format!(
                 "Migration '{}' generated successfully",
                 migration_name
