@@ -1,9 +1,9 @@
-use crate::Config;
 use super::HistoryFile;
+use crate::Config;
 use anyhow::Result;
 use clap::Parser;
 use console::style;
-use dialoguer::{theme::ColorfulTheme, Select};
+use dialoguer::{Select, theme::ColorfulTheme};
 use std::fs;
 use toasty::Db;
 
@@ -49,13 +49,7 @@ impl DropCommand {
                 .migrations()
                 .iter()
                 .enumerate()
-                .map(|(i, m)| {
-                    if i == history.migrations().len() - 1 {
-                        format!("{} {}", style("").cyan(), style(&m.name).bold())
-                    } else {
-                        format!("  {}", m.name)
-                    }
-                })
+                .map(|(i, m)| format!("  {}", m.name))
                 .collect();
 
             let theme = ColorfulTheme {
@@ -99,7 +93,9 @@ impl DropCommand {
             println!(
                 "  {} {}",
                 style("⚠").yellow().bold(),
-                style(format!("Migration file not found: {}", migration_name)).yellow().dim()
+                style(format!("Migration file not found: {}", migration_name))
+                    .yellow()
+                    .dim()
             );
         }
 
@@ -116,7 +112,9 @@ impl DropCommand {
             println!(
                 "  {} {}",
                 style("⚠").yellow().bold(),
-                style(format!("Snapshot file not found: {}", snapshot_name)).yellow().dim()
+                style(format!("Snapshot file not found: {}", snapshot_name))
+                    .yellow()
+                    .dim()
             );
         }
 
@@ -133,9 +131,12 @@ impl DropCommand {
         println!(
             "  {} {}",
             style("").magenta(),
-            style(format!("Migration '{}' successfully dropped", migration_name))
-                .green()
-                .bold()
+            style(format!(
+                "Migration '{}' successfully dropped",
+                migration_name
+            ))
+            .green()
+            .bold()
         );
         println!();
 
