@@ -66,6 +66,11 @@ impl HistoryFile {
     pub fn add_migration(&mut self, migration: HistoryFileMigration) {
         self.migrations.push(migration);
     }
+
+    /// Remove a migration from the history by index
+    pub fn remove_migration(&mut self, index: usize) {
+        self.migrations.remove(index);
+    }
 }
 
 impl Default for HistoryFile {
