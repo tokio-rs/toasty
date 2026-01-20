@@ -4,10 +4,14 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub struct MigrationConfig {
     /// Path to the migrations folder
-    pub migrations_path: PathBuf,
+    pub path: PathBuf,
 
     /// Style of migration file prefixes
     pub prefix_style: MigrationPrefixStyle,
+
+    /// Whether the history file should store and verify checksums of the migration files so that
+    /// they may not be changed.
+    pub checksums: bool,
 }
 
 /// Style for migration file name prefixes
@@ -23,8 +27,9 @@ pub enum MigrationPrefixStyle {
 impl Default for MigrationConfig {
     fn default() -> Self {
         Self {
-            migrations_path: PathBuf::from("migrations"),
+            path: PathBuf::from("toasty"),
             prefix_style: MigrationPrefixStyle::Sequential,
+            checksums: false,
         }
     }
 }
@@ -36,8 +41,8 @@ impl MigrationConfig {
     }
 
     /// Set the migrations path
-    pub fn migrations_path(mut self, path: impl Into<PathBuf>) -> Self {
-        self.migrations_path = path.into();
+    pub fn path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.path = path.into();
         self
     }
 
@@ -45,5 +50,20 @@ impl MigrationConfig {
     pub fn prefix_style(mut self, style: MigrationPrefixStyle) -> Self {
         self.prefix_style = style;
         self
+    }
+
+    /// Returns the directory of the migration files derived from `path`.
+    pub fn get_migrations_dir(&self) -> PathBuf {
+        self.path.join("migrations")
+    }
+
+    /// Returns the directory of the snapshot files derived from `path`.
+    pub fn get_snapshots_dir(&self) -> PathBuf {
+        self.path.join("snapshots")
+    }
+
+    /// Get the path to the history file
+    pub fn get_history_file_path(&self) -> PathBuf {
+        self.path.join("history.toml")
     }
 }

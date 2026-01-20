@@ -1,0 +1,9 @@
+version = 1
+
+[[migrations]]
+name = "0000_migration.sql"
+snapshot_name = "0000_snapshot.toml"
+
+[[migrations]]
+name = "0001_migration.sql"
+snapshot_name = "0001_snapshot.toml"
