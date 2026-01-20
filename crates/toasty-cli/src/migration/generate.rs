@@ -1,5 +1,5 @@
-use crate::Config;
 use super::{HistoryFile, HistoryFileMigration, SnapshotFile};
+use crate::Config;
 use anyhow::Result;
 use clap::Parser;
 use console::style;
@@ -19,7 +19,10 @@ pub struct GenerateCommand {
 impl GenerateCommand {
     pub(crate) fn run(self, db: &Db, config: &Config) -> Result<()> {
         println!();
-        println!("  {}", style("Generate Migration").cyan().bold().underlined());
+        println!(
+            "  {}",
+            style("Generate Migration").cyan().bold().underlined()
+        );
         println!();
 
         let history_path = config.migration.get_history_file_path();
@@ -42,6 +45,20 @@ impl GenerateCommand {
             .unwrap_or_else(Schema::default);
 
         let schema = toasty::schema::db::Schema::clone(&db.schema().db);
+
+        let rename_hints = RenameHints::default();
+        let diff = SchemaDiff::from(&previous_schema, &schema, &rename_hints);
+
+        if diff.is_empty() {
+            println!(
+                "  {}",
+                style("The current schema matches the previous snapshot. No migration needed.")
+                    .dim()
+            );
+            println!();
+            return Ok(());
+        }
+
         let snapshot = SnapshotFile::new(schema.clone());
         let migration_number = history.next_migration_number();
         let snapshot_name = format!("{:04}_snapshot.toml", migration_number);
@@ -53,8 +70,6 @@ impl GenerateCommand {
             self.name.as_deref().unwrap_or("migration")
         );
         let _migration_path = config.migration.get_migrations_dir().join(&migration_name);
-
-        let _diff = SchemaDiff::from(&previous_schema, &schema, &RenameHints::default());
 
         history.add_migration(HistoryFileMigration {
             name: migration_name.clone(),
@@ -80,9 +95,12 @@ impl GenerateCommand {
         println!(
             "  {} {}",
             style("").magenta(),
-            style(format!("Migration '{}' generated successfully", migration_name))
-                .green()
-                .bold()
+            style(format!(
+                "Migration '{}' generated successfully",
+                migration_name
+            ))
+            .green()
+            .bold()
         );
         println!();
 

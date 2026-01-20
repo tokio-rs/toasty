@@ -42,4 +42,8 @@ impl<'a> SchemaDiff<'a> {
             tables: TablesDiff::from(cx, &from.tables, &to.tables),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.tables.is_empty()
+    }
 }
