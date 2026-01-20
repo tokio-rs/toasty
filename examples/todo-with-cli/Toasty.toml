@@ -1,0 +1,4 @@
+[migration]
+path = "toasty"
+prefix_style = "Sequential"
+checksums = false

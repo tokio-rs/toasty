@@ -1,7 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Configuration for migration operations
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MigrationConfig {
     /// Path to the migrations folder
     pub path: PathBuf,
@@ -15,7 +16,7 @@ pub struct MigrationConfig {
 }
 
 /// Style for migration file name prefixes
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MigrationPrefixStyle {
     /// Sequential numbering (e.g., 0001_, 0002_, 0003_)
     Sequential,

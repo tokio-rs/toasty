@@ -48,8 +48,7 @@ impl DropCommand {
             let migration_display: Vec<String> = history
                 .migrations()
                 .iter()
-                .enumerate()
-                .map(|(i, m)| format!("  {}", m.name))
+                .map(|m| format!("  {}", m.name))
                 .collect();
 
             let theme = ColorfulTheme {
