@@ -2,6 +2,8 @@ use crate::Config;
 use super::HistoryFile;
 use anyhow::Result;
 use clap::Parser;
+use console::style;
+use dialoguer::{theme::ColorfulTheme, Select};
 use std::fs;
 use toasty::Db;
 
@@ -22,6 +24,7 @@ impl DropCommand {
         let mut history = HistoryFile::load_or_default(&history_path)?;
 
         if history.migrations().is_empty() {
+            eprintln!("{}", style("No migrations found in history").red().bold());
             anyhow::bail!("No migrations found in history");
         }
 
@@ -37,21 +40,47 @@ impl DropCommand {
                 .position(|m| m.name == *name)
                 .ok_or_else(|| anyhow::anyhow!("Migration '{}' not found", name))?
         } else {
-            // Interactive picker
-            use dialoguer::Select;
+            // Interactive picker with fancy theme
+            println!();
+            println!("  {}", style("Drop Migration").cyan().bold().underlined());
+            println!();
 
-            let migration_names: Vec<String> = history
+            let migration_display: Vec<String> = history
                 .migrations()
                 .iter()
-                .map(|m| m.name.clone())
+                .enumerate()
+                .map(|(i, m)| {
+                    if i == history.migrations().len() - 1 {
+                        format!("{} {}", style("").cyan(), style(&m.name).bold())
+                    } else {
+                        format!("  {}", m.name)
+                    }
+                })
                 .collect();
 
-            Select::new()
-                .with_prompt("Select migration to drop")
-                .items(&migration_names)
-                .default(migration_names.len() - 1)
+            let theme = ColorfulTheme {
+                active_item_style: console::Style::new().cyan().bold(),
+                active_item_prefix: console::style("❯".to_string()).cyan().bold(),
+                inactive_item_prefix: console::style(" ".to_string()),
+                checked_item_prefix: console::style("✔".to_string()).green(),
+                unchecked_item_prefix: console::style("✖".to_string()).red(),
+                prompt_style: console::Style::new().bold(),
+                prompt_prefix: console::style("?".to_string()).yellow().bold(),
+                success_prefix: console::style("✔".to_string()).green().bold(),
+                error_prefix: console::style("✖".to_string()).red().bold(),
+                hint_style: console::Style::new().dim(),
+                values_style: console::Style::new().cyan(),
+                ..Default::default()
+            };
+
+            Select::with_theme(&theme)
+                .with_prompt("  Select migration to drop")
+                .items(&migration_display)
+                .default(migration_display.len() - 1)
                 .interact()?
         };
+
+        println!();
 
         let migration = &history.migrations()[migration_index];
         let migration_name = migration.name.clone();
@@ -61,25 +90,54 @@ impl DropCommand {
         let migration_path = config.migration.get_migrations_dir().join(&migration_name);
         if migration_path.exists() {
             fs::remove_file(&migration_path)?;
-            println!("Deleted migration file: {}", migration_name);
+            println!(
+                "  {} {}",
+                style("✓").green().bold(),
+                style(format!("Deleted migration: {}", migration_name)).dim()
+            );
         } else {
-            eprintln!("Warning: Migration file not found: {}", migration_name);
+            println!(
+                "  {} {}",
+                style("⚠").yellow().bold(),
+                style(format!("Migration file not found: {}", migration_name)).yellow().dim()
+            );
         }
 
         // Delete snapshot file
         let snapshot_path = config.migration.get_snapshots_dir().join(&snapshot_name);
         if snapshot_path.exists() {
             fs::remove_file(&snapshot_path)?;
-            println!("Deleted snapshot file: {}", snapshot_name);
+            println!(
+                "  {} {}",
+                style("✓").green().bold(),
+                style(format!("Deleted snapshot: {}", snapshot_name)).dim()
+            );
         } else {
-            eprintln!("Warning: Snapshot file not found: {}", snapshot_name);
+            println!(
+                "  {} {}",
+                style("⚠").yellow().bold(),
+                style(format!("Snapshot file not found: {}", snapshot_name)).yellow().dim()
+            );
         }
 
         // Remove from history
         history.remove_migration(migration_index);
         history.save(&history_path)?;
 
-        println!("Removed migration '{}' from history", migration_name);
+        println!(
+            "  {} {}",
+            style("✓").green().bold(),
+            style("Updated migration history").dim()
+        );
+        println!();
+        println!(
+            "  {} {}",
+            style("").magenta(),
+            style(format!("Migration '{}' successfully dropped", migration_name))
+                .green()
+                .bold()
+        );
+        println!();
 
         Ok(())
     }

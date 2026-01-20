@@ -2,6 +2,7 @@ use crate::Config;
 use super::{HistoryFile, HistoryFileMigration, SnapshotFile};
 use anyhow::Result;
 use clap::Parser;
+use console::style;
 use std::fs;
 use toasty::{
     Db,
@@ -17,7 +18,10 @@ pub struct GenerateCommand {
 
 impl GenerateCommand {
     pub(crate) fn run(self, db: &Db, config: &Config) -> Result<()> {
-        println!("Generating migration...");
+        println!();
+        println!("  {}", style("Generate Migration").cyan().bold().underlined());
+        println!();
+
         let history_path = config.migration.get_history_file_path();
 
         fs::create_dir_all(config.migration.get_migrations_dir())?;
@@ -52,14 +56,34 @@ impl GenerateCommand {
         let _diff = SchemaDiff::from(&previous_schema, &schema, &RenameHints::default());
 
         history.add_migration(HistoryFileMigration {
-            name: migration_name,
-            snapshot_name,
+            name: migration_name.clone(),
+            snapshot_name: snapshot_name.clone(),
             checksum: None,
         });
 
-        eprintln!("{:?}", snapshot_path);
         snapshot.save(&snapshot_path)?;
+        println!(
+            "  {} {}",
+            style("✓").green().bold(),
+            style(format!("Created snapshot: {}", snapshot_name)).dim()
+        );
+
         history.save(&history_path)?;
+        println!(
+            "  {} {}",
+            style("✓").green().bold(),
+            style("Updated migration history").dim()
+        );
+
+        println!();
+        println!(
+            "  {} {}",
+            style("").magenta(),
+            style(format!("Migration '{}' generated successfully", migration_name))
+                .green()
+                .bold()
+        );
+        println!();
 
         Ok(())
     }

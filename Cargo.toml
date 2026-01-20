@@ -66,6 +66,7 @@ bit-set = "0.8.0"
 by_address = "1.2.1"
 cfg-if = "1.0.0"
 clap = { version = "4.5.20", features = ["derive"] }
+console = "0.16"
 deadpool = { version = "0.12.3", features = ["rt_tokio_1"] }
 dialoguer = "0.12"
 heck = "0.5.0"

@@ -10,6 +10,7 @@ toasty-core = { workspace = true, features = ["serde"] }
 
 anyhow.workspace = true
 clap.workspace = true
+console.workspace = true
 dialoguer.workspace = true
 serde.workspace = true
 toml.workspace = true
