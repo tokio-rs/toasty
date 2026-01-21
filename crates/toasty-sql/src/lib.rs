@@ -1,3 +1,5 @@
+pub mod diff;
+
 pub mod serializer;
 pub use serializer::{Params, Serializer, TypedValue};
 

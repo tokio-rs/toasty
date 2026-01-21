@@ -43,6 +43,10 @@ impl<'a> SchemaDiff<'a> {
         }
     }
 
+    pub fn tables(&self) -> &TablesDiff<'a> {
+        &self.tables
+    }
+
     pub fn is_empty(&self) -> bool {
         self.tables.is_empty()
     }

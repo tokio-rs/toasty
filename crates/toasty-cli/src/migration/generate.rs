@@ -8,6 +8,7 @@ use toasty::{
     Db,
     schema::db::{RenameHints, Schema, SchemaDiff},
 };
+use toasty_sql::Statement;
 
 #[derive(Parser, Debug)]
 pub struct GenerateCommand {
@@ -71,6 +72,7 @@ impl GenerateCommand {
             self.name.as_deref().unwrap_or("migration")
         );
         let _migration_path = config.migration.get_migrations_dir().join(&migration_name);
+        let statements = Statement::from_schema_diff(&diff, db.capability());
 
         history.add_migration(HistoryFileMigration {
             name: migration_name.clone(),

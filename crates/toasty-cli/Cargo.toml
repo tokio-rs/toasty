@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 toasty.workspace = true
 toasty-core = { workspace = true, features = ["serde"] }
+toasty-sql.workspace = true
 
 anyhow.workspace = true
 clap.workspace = true

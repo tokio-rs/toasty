@@ -117,6 +117,10 @@ impl Db {
     pub fn schema(&self) -> &Schema {
         &self.engine.schema
     }
+
+    pub fn capability(&self) -> &Capability {
+        self.engine.capability()
+    }
 }
 
 impl Drop for Db {
