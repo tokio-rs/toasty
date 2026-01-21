@@ -1,19 +1,22 @@
-use tests::{models, tests, DbTest};
-use toasty::{stmt::Id, Page};
+//! Test sorting and pagination of query results
 
-#[derive(toasty::Model)]
-struct Foo {
-    #[key]
-    #[auto]
-    id: Id<Self>,
+use crate::prelude::*;
+use toasty::Page;
 
-    #[index]
-    order: i64,
-}
-
-async fn sort_asc(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn sort_asc(test: &mut Test) {
     if !test.capability().sql {
         return;
+    }
+
+    #[derive(toasty::Model)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        order: i64,
     }
 
     let db = test.setup_db(models!(Foo)).await;
@@ -47,9 +50,20 @@ async fn sort_asc(test: &mut DbTest) {
     }
 }
 
-async fn paginate(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn paginate(test: &mut Test) {
     if !test.capability().sql {
         return;
+    }
+
+    #[derive(toasty::Model)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        order: i64,
     }
 
     let db = test.setup_db(models!(Foo)).await;
@@ -101,5 +115,3 @@ async fn paginate(test: &mut DbTest) {
         assert_eq!(foos[i].order, order);
     }
 }
-
-tests!(sort_asc, paginate,);

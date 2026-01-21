@@ -20,4 +20,13 @@ impl toasty_driver_integration_suite::Setup for SqliteSetup {
 }
 
 // Generate all driver tests
-toasty_driver_integration_suite::generate_driver_tests!(SqliteSetup::new(), native_decimal: false, bigdecimal_implemented: false, decimal_arbitrary_precision: false);
+toasty_driver_integration_suite::generate_driver_tests!(
+    SqliteSetup::new(),
+    native_decimal: false,
+    bigdecimal_implemented: false,
+    decimal_arbitrary_precision: false,
+    native_timestamp: false,
+    native_date: false,
+    native_time: false,
+    native_datetime: false,
+);

@@ -1,13 +1,14 @@
-use std_util::{assert_err, assert_none, assert_ok};
-use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
+//! Test linking and unlinking has_many associations
 
-async fn remove_add_single_relation_option_belongs_to(test: &mut DbTest) {
+use crate::prelude::*;
+
+#[driver_test(id(ID))]
+pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -17,10 +18,10 @@ async fn remove_add_single_relation_option_belongs_to(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -50,7 +51,7 @@ async fn remove_add_single_relation_option_belongs_to(test: &mut DbTest) {
     assert_err!(user.todos().get_by_id(&db, &todos[0].id).await);
 
     // The todo is not deleted, but user is now None
-    let todo = Todo::get_by_id(&db, &todos[0].id).await.unwrap();
+    let todo = Todo::get_by_id(&db, todos[0].id).await.unwrap();
     assert_none!(todo.user_id);
 
     // Create a second user w/ a TODO. We will ensure that unlinking *only*
@@ -62,7 +63,7 @@ async fn remove_add_single_relation_option_belongs_to(test: &mut DbTest) {
     assert_err!(user.todos().remove(&db, &u2_todos[0]).await);
 
     // Reload u2's todo
-    let u2_todo = Todo::get_by_id(&db, &u2_todos[0].id).await.unwrap();
+    let u2_todo = Todo::get_by_id(&db, u2_todos[0].id).await.unwrap();
     assert_eq!(*u2_todo.user_id.as_ref().unwrap(), u2.id);
 
     // Link the TODO back up
@@ -71,15 +72,16 @@ async fn remove_add_single_relation_option_belongs_to(test: &mut DbTest) {
     // The TODO is in the association again
     let todos_reloaded: Vec<_> = user.todos().collect(&db).await.unwrap();
     assert!(todos_reloaded.iter().any(|t| t.id == todos[0].id));
-    assert_ok!(user.todos().get_by_id(&db, &todos[0].id).await);
+    assert_ok!(user.todos().get_by_id(&db, todos[0].id).await);
 }
 
-async fn add_remove_single_relation_required_belongs_to(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn add_remove_single_relation_required_belongs_to(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -89,10 +91,10 @@ async fn add_remove_single_relation_required_belongs_to(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -108,7 +110,7 @@ async fn add_remove_single_relation_required_belongs_to(test: &mut DbTest) {
     let t2 = user.todos().create().exec(&db).await.unwrap();
     let t3 = user.todos().create().exec(&db).await.unwrap();
 
-    let ids = vec![t1.id.clone(), t2.id.clone(), t3.id.clone()];
+    let ids = vec![t1.id, t2.id, t3.id];
 
     let todos_reloaded: Vec<_> = user.todos().collect(&db).await.unwrap();
     assert_eq!(todos_reloaded.len(), 3);
@@ -121,19 +123,20 @@ async fn add_remove_single_relation_required_belongs_to(test: &mut DbTest) {
     user.todos().remove(&db, &todos_reloaded[0]).await.unwrap();
 
     // The TODO no longer exists
-    assert_err!(Todo::get_by_id(&db, &todos_reloaded[0].id).await);
+    assert_err!(Todo::get_by_id(&db, todos_reloaded[0].id).await);
 
     // Rest of the todos exist
     let todos_reloaded: Vec<_> = user.todos().collect(&db).await.unwrap();
     assert_eq!(todos_reloaded.len(), 2);
 }
 
-async fn reassign_relation_required_belongs_to(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn reassign_relation_required_belongs_to(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -143,10 +146,10 @@ async fn reassign_relation_required_belongs_to(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
@@ -173,12 +176,13 @@ async fn reassign_relation_required_belongs_to(test: &mut DbTest) {
     assert_eq!(t1.id, todos[0].id);
 }
 
-async fn add_remove_multiple_relation_option_belongs_to(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn add_remove_multiple_relation_option_belongs_to(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -188,10 +192,10 @@ async fn add_remove_multiple_relation_option_belongs_to(test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Option<Id<User>>,
+        user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<Option<User>>,
@@ -207,7 +211,7 @@ async fn add_remove_multiple_relation_option_belongs_to(test: &mut DbTest) {
     let t2 = Todo::create().exec(&db).await.unwrap();
     let t3 = Todo::create().exec(&db).await.unwrap();
 
-    let ids = vec![t1.id.clone(), t2.id.clone(), t3.id.clone()];
+    let ids = vec![t1.id, t2.id, t3.id];
 
     // Associate the todos with the user
     user.todos().insert(&db, &[t1, t2, t3]).await.unwrap();
@@ -219,10 +223,3 @@ async fn add_remove_multiple_relation_option_belongs_to(test: &mut DbTest) {
         assert!(todos_reloaded.iter().any(|t| t.id == id));
     }
 }
-
-tests!(
-    remove_add_single_relation_option_belongs_to,
-    add_remove_single_relation_required_belongs_to,
-    reassign_relation_required_belongs_to,
-    add_remove_multiple_relation_option_belongs_to,
-);

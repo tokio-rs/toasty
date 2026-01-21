@@ -120,7 +120,10 @@ impl Exec<'_> {
         for var_id in &action.inputs {
             inputs.push(match self.vars.load(*var_id).await? {
                 Rows::Count(count) => Input::Count(count),
-                Rows::Value(value) => Input::Value(value.unwrap_list()),
+                Rows::Value(value) => Input::Value(match value {
+                    stmt::Value::List(items) => items,
+                    value => vec![value],
+                }),
                 Rows::Stream(value_stream) => Input::Value(value_stream.collect().await?),
             });
         }

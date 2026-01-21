@@ -1,23 +1,36 @@
-use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
+//! Test batch creation of models
 
-#[derive(Debug, toasty::Model)]
-struct Todo {
-    #[key]
-    #[auto]
-    id: Id<Self>,
+use crate::prelude::*;
 
-    title: String,
-}
+#[driver_test(id(ID))]
+pub async fn batch_create_empty(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
 
-async fn batch_create_empty(test: &mut DbTest) {
+        #[allow(dead_code)]
+        title: String,
+    }
+
     let db = test.setup_db(models!(Todo)).await;
 
     let res = Todo::create_many().exec(&db).await.unwrap();
     assert!(res.is_empty());
 }
 
-async fn batch_create_one(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn batch_create_one(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+    }
+
     let db = test.setup_db(models!(Todo)).await;
 
     let res = Todo::create_many()
@@ -30,12 +43,22 @@ async fn batch_create_one(test: &mut DbTest) {
 
     assert_eq!(res[0].title, "hello");
 
-    let reloaded: Vec<_> = Todo::filter_by_id(&res[0].id).collect(&db).await.unwrap();
+    let reloaded: Vec<_> = Todo::filter_by_id(res[0].id).collect(&db).await.unwrap();
     assert_eq!(1, reloaded.len());
     assert_eq!(reloaded[0].id, res[0].id);
 }
 
-async fn batch_create_many(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn batch_create_many(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+    }
+
     let db = test.setup_db(models!(Todo)).await;
 
     let res = Todo::create_many()
@@ -51,14 +74,16 @@ async fn batch_create_many(test: &mut DbTest) {
     assert_eq!(res[1].title, "todo 2");
 
     for todo in &res {
-        let reloaded: Vec<_> = Todo::filter_by_id(&todo.id).collect(&db).await.unwrap();
+        let reloaded: Vec<_> = Todo::filter_by_id(todo.id).collect(&db).await.unwrap();
         assert_eq!(1, reloaded.len());
         assert_eq!(reloaded[0].id, todo.id);
     }
 }
 
 // TODO: is a batch supposed to be atomic? Probably not.
-async fn batch_create_fails_if_any_record_missing_fields(test: &mut DbTest) {
+#[driver_test(id(ID))]
+#[should_panic]
+pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -87,12 +112,13 @@ async fn batch_create_fails_if_any_record_missing_fields(test: &mut DbTest) {
     assert!(users.is_empty());
 }
 
-async fn batch_create_model_with_unique_field_index_all_unique(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn batch_create_model_with_unique_field_index_all_unique(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
         email: String,
@@ -116,7 +142,7 @@ async fn batch_create_model_with_unique_field_index_all_unique(test: &mut DbTest
 
     // We can fetch the user by ID and email
     for user in &res {
-        let found = User::get_by_id(&db, &user.id).await.unwrap();
+        let found = User::get_by_id(&db, user.id).await.unwrap();
         assert_eq!(found.id, user.id);
         assert_eq!(found.email, user.email);
 
@@ -126,12 +152,14 @@ async fn batch_create_model_with_unique_field_index_all_unique(test: &mut DbTest
     }
 }
 
-async fn batch_create_model_with_unique_field_index_all_dups(test: &mut DbTest) {
+#[driver_test(id(ID))]
+#[should_panic]
+pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[unique]
         #[allow(dead_code)]
@@ -147,14 +175,3 @@ async fn batch_create_model_with_unique_field_index_all_dups(test: &mut DbTest) 
         .await
         .unwrap();
 }
-
-tests!(
-    batch_create_empty,
-    batch_create_one,
-    batch_create_many,
-    #[should_panic] // TODO: should it panic?
-    batch_create_fails_if_any_record_missing_fields,
-    batch_create_model_with_unique_field_index_all_unique,
-    #[should_panic] // TODO: probaby shouldn't actually panic?
-    batch_create_model_with_unique_field_index_all_dups,
-);

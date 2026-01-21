@@ -54,4 +54,8 @@ toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new(),
     decimal_arbitrary_precision: false,
     native_decimal: false,
     native_varchar: false,
+    native_timestamp: false,
+    native_date: false,
+    native_time: false,
+    native_datetime: false,
 );

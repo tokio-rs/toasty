@@ -1,14 +1,14 @@
-use tests::{tests, DbTest};
-// use toasty::stmt::Id;
+//! Test N+1 query behavior with has_many associations
 
-// What is this testing?
-async fn hello_world(_test: &mut DbTest) {
-    /*
+use crate::prelude::*;
+
+#[driver_test(id(ID))]
+pub async fn hello_world(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
         todos: toasty::HasMany<Todo>,
@@ -18,16 +18,16 @@ async fn hello_world(_test: &mut DbTest) {
     struct Todo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[index]
-        user_id: Id<User>,
+        user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::BelongsTo<User>,
 
         #[index]
-        category_id: Id<Category>,
+        category_id: ID,
 
         #[belongs_to(key = category_id, references = id)]
         category: toasty::BelongsTo<Category>,
@@ -39,11 +39,13 @@ async fn hello_world(_test: &mut DbTest) {
     struct Category {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
 
         #[has_many]
+        #[allow(dead_code)]
         todos: toasty::HasMany<Todo>,
 
+        #[allow(dead_code)]
         name: String,
     }
 
@@ -61,15 +63,8 @@ async fn hello_world(_test: &mut DbTest) {
         .await
         .unwrap();
 
-    // Collect all categories
-    // let mut cats = vec![];
-
     let todos = user.todos().all(&db).await.unwrap();
 
-    for todos in todos {
-        println!("todo: {:?}", todos);
-    }
-    */
+    let todos: Vec<_> = todos.collect().await.unwrap();
+    assert_eq!(3, todos.len());
 }
-
-tests!(hello_world,);

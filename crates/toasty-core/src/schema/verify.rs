@@ -14,13 +14,13 @@ struct Verify<'a> {
 }
 
 impl Schema {
-    pub(super) fn verify(&self) {
-        Verify { schema: self }.verify();
+    pub(super) fn verify(&self) -> Result<()> {
+        Verify { schema: self }.verify()
     }
 }
 
 impl Verify<'_> {
-    fn verify(&self) {
+    fn verify(&self) -> Result<()> {
         debug_assert!(self.verify_ids_populated());
 
         for model in self.schema.app.models() {
@@ -33,9 +33,11 @@ impl Verify<'_> {
         self.verify_model_indices_are_scoped_correctly();
         self.verify_each_table_has_one_primary_key();
         self.verify_indices_have_columns();
-        self.verify_index_names_are_unique().unwrap();
+        self.verify_index_names_are_unique()?;
         self.verify_table_indices_and_nullable();
-        self.verify_auto_increment_columns();
+        self.verify_auto_increment_columns()?;
+
+        Ok(())
     }
 
     // TODO: move these methods to separate modules?
@@ -148,38 +150,43 @@ impl Verify<'_> {
         }
     }
 
-    fn verify_auto_increment_columns(&self) {
+    fn verify_auto_increment_columns(&self) -> Result<()> {
         for table in &self.schema.db.tables {
             for column in &table.columns {
                 if column.auto_increment {
                     // Verify the column has a numeric type
-                    assert!(
-                        column.ty.is_numeric(),
-                        "auto_increment column `{}` in table `{}` must have a numeric type, found {:?}",
-                        column.name,
-                        table.name,
-                        column.ty
-                    );
+                    if !column.ty.is_numeric() {
+                        anyhow::bail!(
+                            "auto_increment column `{}` in table `{}` must have a numeric type, found {:?}",
+                            column.name,
+                            table.name,
+                            column.ty
+                        );
+                    }
 
                     // Verify it's the only column in the primary key
-                    assert_eq!(
-                        table.primary_key.columns.len(),
-                        1,
-                        "auto_increment column `{}` in table `{}` must be the only column in the primary key",
-                        column.name,
-                        table.name
-                    );
+                    if table.primary_key.columns.len() != 1 {
+                        anyhow::bail!(
+                            "auto_increment column `{}` in table `{}` cannot be used with composite primary keys (partition/local keys). Use UUID or remove the composite key.",
+                            column.name,
+                            table.name
+                        );
+                    }
 
                     // Verify the auto_increment column is actually in the primary key
                     let pk_column = &table.columns[table.primary_key.columns[0].index];
-                    assert_eq!(
-                        pk_column.id, column.id,
-                        "auto_increment column `{}` in table `{}` must be part of the primary key",
-                        column.name, table.name
-                    );
+                    if pk_column.id != column.id {
+                        anyhow::bail!(
+                            "auto_increment column `{}` in table `{}` must be part of the primary key",
+                            column.name,
+                            table.name
+                        );
+                    }
                 }
             }
         }
+
+        Ok(())
     }
 
     fn verify_auto_field_type(&self, field: &super::app::Field) {

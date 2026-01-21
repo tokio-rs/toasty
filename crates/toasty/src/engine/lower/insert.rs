@@ -51,8 +51,10 @@ impl LowerStatement<'_, '_> {
         let mut set_fields: BitSet<usize> = BitSet::default();
 
         // First, apply any defaults while also tracking all the fields that are set.
-        for row in &mut values.rows {
-            self.apply_app_level_insertion_defaults(model, row, &mut set_fields);
+        for (index, row) in values.rows.iter_mut().enumerate() {
+            self.lower_insert_with_row(index, |lower| {
+                lower.apply_app_level_insertion_defaults(model, row, &mut set_fields);
+            });
         }
 
         // If there are any has_n associations included in the insertion, the
@@ -61,8 +63,10 @@ impl LowerStatement<'_, '_> {
         self.convert_returning_for_insert(values, returning, source.single);
 
         for (index, row) in values.rows.iter_mut().enumerate() {
-            self.plan_stmt_insert_relations(row, returning, index);
-            self.verify_field_constraints(model, row);
+            self.lower_insert_with_row(index, |lower| {
+                lower.plan_stmt_insert_relations(row, returning, index);
+                lower.verify_field_constraints(model, row);
+            });
         }
     }
 

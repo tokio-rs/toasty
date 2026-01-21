@@ -1,7 +1,7 @@
-use tests::{models, tests, DbTest};
-use toasty::stmt::Id;
+use crate::prelude::*;
 
-async fn ty_timestamp(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn ty_timestamp(test: &mut Test) {
     use jiff::Timestamp;
 
     #[derive(Debug, toasty::Model)]
@@ -9,7 +9,7 @@ async fn ty_timestamp(test: &mut DbTest) {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         val: Timestamp,
     }
 
@@ -32,7 +32,8 @@ async fn ty_timestamp(test: &mut DbTest) {
     }
 }
 
-async fn ty_zoned(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn ty_zoned(test: &mut Test) {
     use jiff::Zoned;
 
     #[derive(Debug, toasty::Model)]
@@ -40,7 +41,7 @@ async fn ty_zoned(test: &mut DbTest) {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         val: Zoned,
     }
 
@@ -67,7 +68,8 @@ async fn ty_zoned(test: &mut DbTest) {
     }
 }
 
-async fn ty_date(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn ty_date(test: &mut Test) {
     use jiff::civil::Date;
 
     #[derive(Debug, toasty::Model)]
@@ -75,7 +77,7 @@ async fn ty_date(test: &mut DbTest) {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         val: Date,
     }
 
@@ -99,7 +101,8 @@ async fn ty_date(test: &mut DbTest) {
     }
 }
 
-async fn ty_time(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn ty_time(test: &mut Test) {
     use jiff::civil::Time;
 
     #[derive(Debug, toasty::Model)]
@@ -107,7 +110,7 @@ async fn ty_time(test: &mut DbTest) {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         val: Time,
     }
 
@@ -129,7 +132,8 @@ async fn ty_time(test: &mut DbTest) {
     }
 }
 
-async fn ty_datetime(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn ty_datetime(test: &mut Test) {
     use jiff::civil::DateTime;
 
     #[derive(Debug, toasty::Model)]
@@ -137,7 +141,7 @@ async fn ty_datetime(test: &mut DbTest) {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         val: DateTime,
     }
 
@@ -161,20 +165,16 @@ async fn ty_datetime(test: &mut DbTest) {
     }
 }
 
-async fn ty_timestamp_precision_2(test: &mut DbTest) {
+#[driver_test(id(ID), requires(native_timestamp))]
+pub async fn ty_timestamp_precision_2(test: &mut Test) {
     use jiff::Timestamp;
-
-    // Skip if database doesn't have native timestamp support
-    if !test.capability().native_timestamp {
-        return;
-    }
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = timestamp(2))]
         val: Timestamp,
     }
@@ -204,20 +204,16 @@ async fn ty_timestamp_precision_2(test: &mut DbTest) {
     );
 }
 
-async fn ty_time_precision_2(test: &mut DbTest) {
+#[driver_test(id(ID), requires(native_time))]
+pub async fn ty_time_precision_2(test: &mut Test) {
     use jiff::civil::Time;
-
-    // Skip if database doesn't have native time support
-    if !test.capability().native_time {
-        return;
-    }
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = time(2))]
         val: Time,
     }
@@ -241,20 +237,16 @@ async fn ty_time_precision_2(test: &mut DbTest) {
     );
 }
 
-async fn ty_datetime_precision_2(test: &mut DbTest) {
+#[driver_test(id(ID), requires(native_datetime))]
+pub async fn ty_datetime_precision_2(test: &mut Test) {
     use jiff::civil::DateTime;
-
-    // Skip if database doesn't have native datetime support
-    if !test.capability().native_datetime {
-        return;
-    }
 
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = datetime(2))]
         val: DateTime,
     }
@@ -278,7 +270,8 @@ async fn ty_datetime_precision_2(test: &mut DbTest) {
     );
 }
 
-async fn ty_timestamp_as_text(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn ty_timestamp_as_text(test: &mut Test) {
     use jiff::Timestamp;
 
     #[derive(Debug, toasty::Model)]
@@ -286,7 +279,7 @@ async fn ty_timestamp_as_text(test: &mut DbTest) {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = text)]
         val: Timestamp,
     }
@@ -306,7 +299,8 @@ async fn ty_timestamp_as_text(test: &mut DbTest) {
     }
 }
 
-async fn ty_date_as_text(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn ty_date_as_text(test: &mut Test) {
     use jiff::civil::Date;
 
     #[derive(Debug, toasty::Model)]
@@ -314,7 +308,7 @@ async fn ty_date_as_text(test: &mut DbTest) {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = text)]
         val: Date,
     }
@@ -334,7 +328,8 @@ async fn ty_date_as_text(test: &mut DbTest) {
     }
 }
 
-async fn ty_time_as_text(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn ty_time_as_text(test: &mut Test) {
     use jiff::civil::Time;
 
     #[derive(Debug, toasty::Model)]
@@ -342,7 +337,7 @@ async fn ty_time_as_text(test: &mut DbTest) {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = text)]
         val: Time,
     }
@@ -363,7 +358,8 @@ async fn ty_time_as_text(test: &mut DbTest) {
     }
 }
 
-async fn ty_datetime_as_text(test: &mut DbTest) {
+#[driver_test(id(ID))]
+pub async fn ty_datetime_as_text(test: &mut Test) {
     use jiff::civil::DateTime;
 
     #[derive(Debug, toasty::Model)]
@@ -371,7 +367,7 @@ async fn ty_datetime_as_text(test: &mut DbTest) {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: ID,
         #[column(type = text)]
         val: DateTime,
     }
@@ -390,18 +386,3 @@ async fn ty_datetime_as_text(test: &mut DbTest) {
         assert_eq!(read.val, *val, "Round-trip failed for: {}", val);
     }
 }
-
-tests!(
-    ty_timestamp,
-    ty_zoned,
-    ty_date,
-    ty_time,
-    ty_datetime,
-    ty_timestamp_precision_2,
-    ty_time_precision_2,
-    ty_datetime_precision_2,
-    ty_timestamp_as_text,
-    ty_date_as_text,
-    ty_time_as_text,
-    ty_datetime_as_text
-);
