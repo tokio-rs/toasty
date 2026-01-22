@@ -22,6 +22,9 @@ pub trait Model: Sized {
     /// Query builder type for this model
     type Query;
 
+    /// Create builder type for this model
+    type Create;
+
     /// Unique identifier for this model within the schema.
     ///
     /// Identifiers are *not* unique across schemas.
@@ -39,6 +42,7 @@ pub trait Model: Sized {
 // macro. This should be removed once the proc macro is implemented.
 impl<T: Model> Model for Option<T> {
     type Query = T::Query;
+    type Create = T::Create;
 
     fn id() -> ModelId {
         T::id()

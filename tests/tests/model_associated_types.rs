@@ -16,6 +16,10 @@ fn check_type<T>(_value: &T) {}
 #[allow(dead_code)]
 fn use_model_query_in_generic<M: Model>(_query: M::Query) {}
 
+// Test that Model::Create can be used in generic contexts
+#[allow(dead_code)]
+fn use_model_create_in_generic<M: Model>(_create: M::Create) {}
+
 #[test]
 fn model_query_type_is_accessible() {
     // Get a query using the generated API
@@ -23,4 +27,13 @@ fn model_query_type_is_accessible() {
 
     // Verify that the type matches Model::Query associated type
     check_type::<<User as Model>::Query>(&query);
+}
+
+#[test]
+fn model_create_type_is_accessible() {
+    // Get a create builder using the generated API
+    let create = User::create();
+
+    // Verify that the type matches Model::Create associated type
+    check_type::<<User as Model>::Create>(&create);
 }
