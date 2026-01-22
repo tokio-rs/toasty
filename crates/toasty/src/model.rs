@@ -28,6 +28,9 @@ pub trait Model: Sized {
     /// Update builder type for this model
     type Update<'a>;
 
+    /// Update by query builder type for this model
+    type UpdateQuery;
+
     /// Unique identifier for this model within the schema.
     ///
     /// Identifiers are *not* unique across schemas.
@@ -47,6 +50,7 @@ impl<T: Model> Model for Option<T> {
     type Query = T::Query;
     type Create = T::Create;
     type Update<'a> = T::Update<'a>;
+    type UpdateQuery = T::UpdateQuery;
 
     fn id() -> ModelId {
         T::id()

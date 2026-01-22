@@ -9,9 +9,14 @@ struct User {
 }
 
 // Type aliases for User's associated types
+#[allow(dead_code)]
 type UserQuery = <User as Model>::Query;
+#[allow(dead_code)]
 type UserCreate = <User as Model>::Create;
+#[allow(dead_code)]
 type UserUpdate<'a> = <User as Model>::Update<'a>;
+#[allow(dead_code)]
+type UserUpdateQuery = <User as Model>::UpdateQuery;
 
 // Helper function to verify type identity at compile time
 #[allow(dead_code)]
@@ -28,6 +33,10 @@ fn use_model_create_in_generic<M: Model>(_create: M::Create) {}
 // Test that Model::Update can be used in generic contexts
 #[allow(dead_code)]
 fn use_model_update_in_generic<M: Model>(_update: M::Update<'_>) {}
+
+// Test that Model::UpdateQuery can be used in generic contexts
+#[allow(dead_code)]
+fn use_model_update_query_in_generic<M: Model>(_update_query: M::UpdateQuery) {}
 
 #[test]
 fn model_query_type_is_accessible() {
@@ -55,4 +64,13 @@ fn model_update_type_is_accessible() {
 
     // Verify that the type matches Model::Update associated type
     check_type::<<User as Model>::Update<'_>>(&update);
+}
+
+#[test]
+fn model_update_query_type_is_accessible() {
+    // Get an update query using the generated API
+    let update_query = User::all().update();
+
+    // Verify that the type matches Model::UpdateQuery associated type
+    check_type::<<User as Model>::UpdateQuery>(&update_query);
 }
