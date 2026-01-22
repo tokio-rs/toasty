@@ -24,7 +24,7 @@ impl Statement {
         match self {
             Statement::Query(query) => {
                 if query.with.is_some() {
-                    anyhow::bail!("cannot eval statement; stmt={self:#?}");
+                    crate::bail!("cannot eval statement; stmt={self:#?}");
                 }
 
                 assert!(query.order_by.is_none(), "TODO");
@@ -33,7 +33,7 @@ impl Statement {
 
                 query.body.eval_ref(scope, input)
             }
-            _ => anyhow::bail!("cannot eval statement; stmt={self:#?}"),
+            _ => crate::bail!("cannot eval statement; stmt={self:#?}"),
         }
     }
 }
@@ -41,7 +41,7 @@ impl Statement {
 impl ExprSet {
     fn eval_ref(&self, scope: &ScopeStack<'_>, input: &mut impl Input) -> Result<Value> {
         let ExprSet::Values(values) = self else {
-            anyhow::bail!("cannot eval {self:#?}")
+            crate::bail!("cannot eval {self:#?}")
         };
 
         let mut ret = vec![];
@@ -82,7 +82,7 @@ impl Expr {
             }
             Expr::Arg(expr_arg) => {
                 let Some(expr) = scope.resolve_arg(expr_arg, &Projection::identity(), input) else {
-                    anyhow::bail!("failed to resolve argument")
+                    crate::bail!("failed to resolve argument")
                 };
                 expr.eval_ref(scope, input)
             }
@@ -106,7 +106,7 @@ impl Expr {
 
                 for expr in &expr_concat_str.exprs {
                     let Value::String(s) = expr.eval_ref(scope, input)? else {
-                        anyhow::bail!("not a string")
+                        crate::bail!("not a string")
                     };
 
                     ret.push_str(&s);
@@ -114,7 +114,7 @@ impl Expr {
 
                 Ok(ret.into())
             }
-            Expr::Default => anyhow::bail!("default can only be evaluated by the database"),
+            Expr::Default => crate::bail!("default can only be evaluated by the database"),
             Expr::IsNull(expr_is_null) => {
                 let value = expr_is_null.expr.eval_ref(scope, input)?;
                 Ok(value.is_null().into())
@@ -151,7 +151,7 @@ impl Expr {
                 Expr::Arg(expr_arg) => {
                     let Some(expr) = scope.resolve_arg(expr_arg, &expr_project.projection, input)
                     else {
-                        anyhow::bail!("failed to resolve argument")
+                        crate::bail!("failed to resolve argument")
                     };
 
                     expr.eval_ref(scope, input)
@@ -159,7 +159,7 @@ impl Expr {
                 Expr::Reference(expr_reference) => {
                     let Some(expr) = input.resolve_ref(expr_reference, &expr_project.projection)
                     else {
-                        anyhow::bail!("failed to resolve reference")
+                        crate::bail!("failed to resolve reference")
                     };
 
                     expr.eval_ref(scope, input)
@@ -180,7 +180,7 @@ impl Expr {
             }
             Expr::Reference(expr_reference) => {
                 let Some(expr) = input.resolve_ref(expr_reference, &Projection::identity()) else {
-                    anyhow::bail!("failed to resolve reference")
+                    crate::bail!("failed to resolve reference")
                 };
 
                 expr.eval_ref(scope, input)
@@ -206,7 +206,7 @@ impl Expr {
     fn eval_ref_bool(&self, scope: &ScopeStack<'_>, input: &mut impl Input) -> Result<bool> {
         match self.eval_ref(scope, input)? {
             Value::Bool(ret) => Ok(ret),
-            _ => anyhow::bail!("not boolean value"),
+            _ => crate::bail!("not boolean value"),
         }
     }
 }

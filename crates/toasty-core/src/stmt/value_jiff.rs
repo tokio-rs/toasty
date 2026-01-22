@@ -14,7 +14,7 @@ macro_rules! impl_jiff_conversions {
             fn try_from(value: Value) -> Result<Self, Self::Error> {
                 match value {
                     Value::$name(value) => Ok(value),
-                    _ => Err(anyhow::anyhow!("value is not of type {}", $lit)),
+                    _ => Err(crate::err!("value is not of type {}", $lit)),
                 }
             }
         }
