@@ -19,6 +19,9 @@ pub fn generate_unique_id() -> ModelId {
 }
 
 pub trait Model: Sized {
+    /// Query builder type for this model
+    type Query;
+
     /// Unique identifier for this model within the schema.
     ///
     /// Identifiers are *not* unique across schemas.
@@ -35,6 +38,8 @@ pub trait Model: Sized {
 // TODO: This is a hack to aid in the transition from schema code gen to proc
 // macro. This should be removed once the proc macro is implemented.
 impl<T: Model> Model for Option<T> {
+    type Query = T::Query;
+
     fn id() -> ModelId {
         T::id()
     }
