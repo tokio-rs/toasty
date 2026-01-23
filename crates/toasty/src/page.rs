@@ -1,8 +1,8 @@
 use std::ops::Deref;
 
 use crate::stmt::{Paginate, Select};
+use crate::Result;
 use crate::{Db, Model};
-use anyhow::Result;
 use toasty_core::stmt;
 
 /// A page of results from a paginated query.
@@ -55,7 +55,7 @@ impl<M: Model> Page<M> {
     ///
     /// ```no_run
     /// # use toasty::Db;
-    /// # async fn example<T: toasty::Model>(db: &Db, page: toasty::Page<T>) -> anyhow::Result<()> {
+    /// # async fn example<T: toasty::Model>(db: &Db, page: toasty::Page<T>) -> toasty::Result<()> {
     /// if let Some(next_page) = page.next(db).await? {
     ///     println!("Found {} items in next page", next_page.items.len());
     /// }
@@ -83,7 +83,7 @@ impl<M: Model> Page<M> {
     ///
     /// ```no_run
     /// # use toasty::Db;
-    /// # async fn example<T: toasty::Model>(db: &Db, page: toasty::Page<T>) -> anyhow::Result<()> {
+    /// # async fn example<T: toasty::Model>(db: &Db, page: toasty::Page<T>) -> toasty::Result<()> {
     /// if let Some(prev_page) = page.prev(db).await? {
     ///     println!("Found {} items in previous page", prev_page.items.len());
     /// }

@@ -1,5 +1,3 @@
-use anyhow::anyhow;
-
 use super::{sparse_record::SparseRecord, Entry, EntryPath, Id, Type, ValueEnum, ValueRecord};
 use std::cmp::Ordering;
 use std::hash::Hash;
@@ -419,7 +417,7 @@ impl TryFrom<Value> for String {
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::String(value) => Ok(value),
-            _ => Err(anyhow!("value is not of type string")),
+            _ => Err(crate::err!("value is not of type string")),
         }
     }
 }
@@ -436,7 +434,7 @@ impl TryFrom<Value> for Vec<u8> {
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::Bytes(value) => Ok(value),
-            _ => Err(anyhow!("value is not of type Bytes")),
+            _ => Err(crate::err!("value is not of type Bytes")),
         }
     }
 }
@@ -453,7 +451,7 @@ impl TryFrom<Value> for uuid::Uuid {
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::Uuid(value) => Ok(value),
-            _ => Err(anyhow!("value is not of type UUID")),
+            _ => Err(crate::err!("value is not of type UUID")),
         }
     }
 }
@@ -472,7 +470,7 @@ impl TryFrom<Value> for rust_decimal::Decimal {
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::Decimal(value) => Ok(value),
-            _ => Err(anyhow!("value is not of type Decimal")),
+            _ => Err(crate::err!("value is not of type Decimal")),
         }
     }
 }
@@ -491,7 +489,7 @@ impl TryFrom<Value> for bigdecimal::BigDecimal {
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::BigDecimal(value) => Ok(value),
-            _ => Err(anyhow!("value is not of type BigDecimal")),
+            _ => Err(crate::err!("value is not of type BigDecimal")),
         }
     }
 }

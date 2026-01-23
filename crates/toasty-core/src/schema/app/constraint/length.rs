@@ -21,10 +21,10 @@ impl ConstraintLength {
 
             if value.len() < min {
                 if self.max == self.min {
-                    anyhow::bail!("value is too short; expected length of {min}");
+                    crate::bail!("value is too short; expected length of {min}");
                 }
 
-                anyhow::bail!("value is too short: {value:?} < {min}");
+                crate::bail!("value is too short: {value:?} < {min}");
             }
         }
 
@@ -32,7 +32,7 @@ impl ConstraintLength {
             let max = max as usize;
 
             if value.len() > max {
-                anyhow::bail!("value is too long: {value:?} > {max}");
+                crate::bail!("value is too long: {value:?} > {max}");
             }
         }
 

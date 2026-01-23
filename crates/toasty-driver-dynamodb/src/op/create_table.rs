@@ -104,7 +104,8 @@ impl Connection {
             .set_global_secondary_indexes(if gsis.is_empty() { None } else { Some(gsis) })
             .provisioned_throughput(pt.clone())
             .send()
-            .await?;
+            .await
+            .map_err(toasty_core::Error::driver)?;
 
         // Now, create separate tables for each unique index
         for index in table.indices.iter().filter(|i| !i.primary_key && i.unique) {
@@ -126,7 +127,8 @@ impl Connection {
                 )
                 .provisioned_throughput(pt.clone())
                 .send()
-                .await?;
+                .await
+                .map_err(toasty_core::Error::driver)?;
         }
 
         Ok(())

@@ -14,7 +14,7 @@ macro_rules! impl_jiff_primitive {
             fn load(value: Value) -> Result<Self> {
                 match value {
                     Value::$name(v) => Ok(v),
-                    _ => anyhow::bail!("cannot convert value to {} {value:#?}", $lit),
+                    _ => crate::bail!("cannot convert value to {} {value:#?}", $lit),
                 }
             }
         }

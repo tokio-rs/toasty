@@ -26,26 +26,26 @@ pub struct MySQL {
 impl MySQL {
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str)?;
+        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver)?;
 
         if url.scheme() != "mysql" {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::err!(
                 "connection url does not have a `mysql` scheme; url={}",
                 url
             ));
         }
 
         url.host_str()
-            .ok_or_else(|| anyhow::anyhow!("missing host in connection URL; url={}", url))?;
+            .ok_or_else(|| toasty_core::err!("missing host in connection URL; url={}", url))?;
 
         if url.path().is_empty() {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::err!(
                 "no database specified - missing path in connection URL; url={}",
                 url
             ));
         }
 
-        let opts = mysql_async::Opts::from_url(url.as_ref())?;
+        let opts = mysql_async::Opts::from_url(url.as_ref()).map_err(toasty_core::Error::driver)?;
         let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
 
         let pool = Pool::new(opts);
@@ -62,7 +62,11 @@ impl From<Pool> for MySQL {
 #[async_trait]
 impl Driver for MySQL {
     async fn connect(&self) -> Result<Box<dyn toasty_core::driver::Connection>> {
-        let conn = self.pool.get_conn().await?;
+        let conn = self
+            .pool
+            .get_conn()
+            .await
+            .map_err(toasty_core::Error::driver)?;
         Ok(Box::new(Connection::new(conn)))
     }
 }
@@ -92,7 +96,10 @@ impl Connection {
             "creating a table shouldn't involve any parameters"
         );
 
-        self.conn.exec_drop(&sql, ()).await?;
+        self.conn
+            .exec_drop(&sql, ())
+            .await
+            .map_err(toasty_core::Error::driver)?;
 
         for index in &table.indices {
             if index.primary_key {
@@ -106,7 +113,10 @@ impl Connection {
                 "creating an index shouldn't involve any parameters"
             );
 
-            self.conn.exec_drop(&sql, ()).await?;
+            self.conn
+                .exec_drop(&sql, ())
+                .await
+                .map_err(toasty_core::Error::driver)?;
         }
 
         Ok(())
@@ -133,7 +143,10 @@ impl Connection {
             "dropping a table shouldn't involve any parameters"
         );
 
-        self.conn.exec_drop(&sql, ()).await?;
+        self.conn
+            .exec_drop(&sql, ())
+            .await
+            .map_err(toasty_core::Error::driver)?;
         Ok(())
     }
 }
@@ -154,15 +167,24 @@ impl toasty_core::driver::Connection for Connection {
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
             Operation::Transaction(Transaction::Start) => {
-                self.conn.query_drop("START TRANSACTION").await?;
+                self.conn
+                    .query_drop("START TRANSACTION")
+                    .await
+                    .map_err(toasty_core::Error::driver)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
-                self.conn.query_drop("COMMIT").await?;
+                self.conn
+                    .query_drop("COMMIT")
+                    .await
+                    .map_err(toasty_core::Error::driver)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {
-                self.conn.query_drop("ROLLBACK").await?;
+                self.conn
+                    .query_drop("ROLLBACK")
+                    .await
+                    .map_err(toasty_core::Error::driver)?;
                 return Ok(Response::count(0));
             }
             op => todo!("op={:#?}", op),
@@ -181,13 +203,18 @@ impl toasty_core::driver::Connection for Connection {
             .map(|param| param.to_value())
             .collect::<Vec<_>>();
 
-        let statement = self.conn.prep(&sql_as_str).await?;
+        let statement = self
+            .conn
+            .prep(&sql_as_str)
+            .await
+            .map_err(toasty_core::Error::driver)?;
 
         if ret.is_none() {
             let count = self
                 .conn
                 .exec_iter(&statement, mysql_async::Params::Positional(args))
-                .await?
+                .await
+                .map_err(toasty_core::Error::driver)?
                 .affected_rows();
 
             // Handle the last_insert_id_hack for MySQL INSERT with RETURNING
@@ -202,8 +229,9 @@ impl toasty_core::driver::Connection for Connection {
                 let first_id: u64 = self
                     .conn
                     .query_first("SELECT LAST_INSERT_ID()")
-                    .await?
-                    .ok_or_else(|| anyhow::anyhow!("LAST_INSERT_ID() returned no rows"))?;
+                    .await
+                    .map_err(toasty_core::Error::driver)?
+                    .ok_or_else(|| toasty_core::err!("LAST_INSERT_ID() returned no rows"))?;
 
                 // Generate rows with sequential IDs
                 let results = (0..num_rows).map(move |offset| {
@@ -220,7 +248,11 @@ impl toasty_core::driver::Connection for Connection {
             return Ok(Response::count(count));
         }
 
-        let rows: Vec<mysql_async::Row> = self.conn.exec(&statement, &args).await?;
+        let rows: Vec<mysql_async::Row> = self
+            .conn
+            .exec(&statement, &args)
+            .await
+            .map_err(toasty_core::Error::driver)?;
 
         if let Some(returning) = ret {
             let results = rows.into_iter().map(move |mut row| {
@@ -250,7 +282,7 @@ impl toasty_core::driver::Connection for Connection {
             if total == condition_matched {
                 Ok(Response::count(total as _))
             } else {
-                anyhow::bail!("update condition did not match");
+                toasty_core::bail!("update condition did not match");
             }
         }
     }

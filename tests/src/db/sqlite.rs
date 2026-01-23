@@ -59,23 +59,23 @@ impl SetupSqlite {
         let conn = self
             .raw_connection
             .lock()
-            .map_err(|e| toasty::Error::msg(format!("Failed to acquire connection lock: {e}")))?;
+            .map_err(|e| toasty::err!("Failed to acquire connection lock: {e}"))?;
 
         // Query the raw value from the database
         let query = format!("SELECT {column_name} FROM {table_name} WHERE id = ?");
 
         let mut stmt = conn
             .prepare(&query)
-            .map_err(|e| toasty::Error::msg(format!("Failed to prepare query: {e}")))?;
+            .map_err(|e| toasty::err!("Failed to prepare query: {e}"))?;
 
         let raw_value: String = stmt
             .query_row([id_value], |row| row.get(0))
-            .map_err(|e| toasty::Error::msg(format!("Failed to query raw value: {e}")))?;
+            .map_err(|e| toasty::err!("Failed to query raw value: {e}"))?;
 
         // Parse the raw value to the expected type
-        raw_value.parse::<T>().map_err(|e| {
-            toasty::Error::msg(format!("Failed to parse raw value '{raw_value}': {e:?}"))
-        })
+        raw_value
+            .parse::<T>()
+            .map_err(|e| toasty::err!("Failed to parse raw value '{raw_value}': {e:?}"))
     }
 
     /// Helper method to convert SQLite row values to stmt::Value for unsigned integer support
@@ -88,7 +88,7 @@ impl SetupSqlite {
 
         let value_ref = row
             .get_ref(col)
-            .map_err(|e| toasty::Error::msg(format!("SQLite column access failed: {e}")))?;
+            .map_err(|e| toasty::err!("SQLite column access failed: {e}"))?;
 
         match value_ref {
             ValueRef::Integer(i) => Ok(toasty_core::stmt::Value::I64(i)),

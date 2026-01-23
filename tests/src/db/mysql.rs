@@ -59,7 +59,7 @@ impl Setup for SetupMySQL {
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         self.cleanup_mysql_tables_impl()
             .await
-            .map_err(|e| toasty::Error::msg(format!("MySQL cleanup failed: {e}")))
+            .map_err(|e| toasty::err!("MySQL cleanup failed: {e}"))
     }
 
     async fn get_raw_column_value(
@@ -183,14 +183,13 @@ impl SetupMySQL {
 
         let value = row
             .as_ref(col)
-            .ok_or_else(|| toasty::Error::msg(format!("MySQL column {col} not found")))?;
+            .ok_or_else(|| toasty::err!("MySQL column {col} not found"))?;
 
         match value {
             Value::NULL => Ok(toasty_core::stmt::Value::Null),
             Value::Bytes(bytes) => {
-                let text = String::from_utf8(bytes.clone()).map_err(|e| {
-                    toasty::Error::msg(format!("MySQL bytes to string conversion failed: {e}"))
-                })?;
+                let text = String::from_utf8(bytes.clone())
+                    .map_err(|e| toasty::err!("MySQL bytes to string conversion failed: {e}"))?;
                 Ok(toasty_core::stmt::Value::String(text))
             }
             Value::Int(i) => Ok(toasty_core::stmt::Value::I64(*i)),

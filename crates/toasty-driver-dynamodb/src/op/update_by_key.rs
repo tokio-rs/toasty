@@ -143,7 +143,7 @@ impl Connection {
                             // TODO: probably map the error, but for now fall through
                         }
 
-                        return Err(SdkError::ServiceError(e).into());
+                        return Err(toasty_core::Error::driver(SdkError::ServiceError(e)));
                     }
                 } else {
                     let mut transact_items = vec![];
@@ -216,10 +216,11 @@ impl Connection {
                     .set_key(Some(ddb_key(table, key)))
                     .set_attributes_to_get(Some(attributes_to_get))
                     .send()
-                    .await?;
+                    .await
+                    .map_err(toasty_core::Error::driver)?;
 
                 let Some(mut curr_unique_values) = res.item else {
-                    anyhow::bail!("item not found")
+                    toasty_core::bail!("item not found")
                 };
 
                 // Which unique attributes are being updated
@@ -379,7 +380,7 @@ impl Connection {
 
                     if let Err(SdkError::ServiceError(e)) = res {
                         // TODO: do some checks on the error
-                        anyhow::bail!("failed to update = {:#?}", e);
+                        toasty_core::bail!("failed to update = {:#?}", e);
                     }
 
                     assert!(res.is_ok());

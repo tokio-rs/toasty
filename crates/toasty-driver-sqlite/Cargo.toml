@@ -7,8 +7,6 @@ publish = false
 [dependencies]
 toasty-core.workspace = true
 toasty-sql.workspace = true
-
-anyhow.workspace = true
 rusqlite.workspace = true
 url.workspace = true
 uuid.workspace = true

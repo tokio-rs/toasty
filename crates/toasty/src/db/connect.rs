@@ -20,31 +20,31 @@ impl std::fmt::Debug for Connect {
 
 impl Connect {
     pub fn new(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
+        let url = Url::parse(url).map_err(toasty_core::Error::driver)?;
 
         let driver: Box<dyn Driver> = match url.scheme() {
             #[cfg(feature = "dynamodb")]
             "dynamodb" => Box::new(toasty_driver_dynamodb::DynamoDb::new(url.to_string())),
             #[cfg(not(feature = "dynamodb"))]
-            "dynamodb" => Err(anyhow::anyhow!("`dynamodb` feature not enabled"))?, // Note the ?
+            "dynamodb" => Err(crate::err!("`dynamodb` feature not enabled"))?, // Note the ?
 
             #[cfg(feature = "mysql")]
             "mysql" => Box::new(toasty_driver_mysql::MySQL::new(url.to_string())?),
             #[cfg(not(feature = "mysql"))]
-            "mysql" => Err(anyhow::anyhow!("`mysql` feature not enabled"))?,
+            "mysql" => Err(crate::err!("`mysql` feature not enabled"))?,
 
             #[cfg(feature = "postgresql")]
             "postgresql" => Box::new(toasty_driver_postgresql::PostgreSQL::new(url)?),
             #[cfg(not(feature = "postgresql"))]
-            "postgresql" => Err(anyhow::anyhow!("`postgresql` feature not enabled"))?,
+            "postgresql" => Err(crate::err!("`postgresql` feature not enabled"))?,
 
             #[cfg(feature = "sqlite")]
             "sqlite" => Box::new(toasty_driver_sqlite::Sqlite::new(url)?),
             #[cfg(not(feature = "sqlite"))]
-            "sqlite" => Err(anyhow::anyhow!("`sqlite` feature not enabled"))?,
+            "sqlite" => Err(crate::err!("`sqlite` feature not enabled"))?,
 
             scheme => {
-                return Err(anyhow::anyhow!(
+                return Err(crate::err!(
                     "unsupported database; schema={scheme}; url={url}"
                 ))
             }

@@ -6,5 +6,3 @@ publish = false
 
 [dependencies]
 toasty-core.workspace = true
-
-anyhow.workspace = true

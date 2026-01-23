@@ -211,7 +211,7 @@ impl LowerStatement<'_, '_> {
             if !field.nullable && field_expr.is_value_null() {
                 // Relations are handled differently
                 if !field.ty.is_relation() && field.auto.is_none() {
-                    self.state.errors.push(anyhow::anyhow!(
+                    self.state.errors.push(crate::err!(
                         "Insert missing non-nullable field; model={}; field={:#?}; expr={:#?}",
                         model.name.upper_camel_case(),
                         field,

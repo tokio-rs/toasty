@@ -13,7 +13,7 @@ pub use name::Name;
 
 mod verify;
 
-use anyhow::Result;
+use crate::Result;
 use app::ModelId;
 use db::{ColumnId, Table, TableId};
 use std::sync::Arc;

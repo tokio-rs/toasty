@@ -91,7 +91,7 @@ macro_rules! impl_num {
 
                 fn try_from(value: Value) -> crate::Result<Self> {
                     value.$to().ok_or_else(|| {
-                        anyhow::anyhow!("cannot convert {:?} to {}", value.infer_ty(), stringify!($ty))
+                        crate::err!("cannot convert {:?} to {}", value.infer_ty(), stringify!($ty))
                     })
                 }
             }
@@ -236,10 +236,10 @@ impl TryFrom<&Value> for usize {
     fn try_from(value: &Value) -> crate::Result<Self> {
         let u64_val = value
             .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("cannot convert {:?} to usize", value))?;
+            .ok_or_else(|| crate::err!("cannot convert {:?} to usize", value))?;
         u64_val
             .try_into()
-            .map_err(|_| anyhow::anyhow!("value {} is out of range for usize", u64_val))
+            .map_err(|_| crate::err!("value {} is out of range for usize", u64_val))
     }
 }
 
@@ -257,9 +257,9 @@ impl TryFrom<&Value> for isize {
     fn try_from(value: &Value) -> crate::Result<Self> {
         let i64_val = value
             .to_i64()
-            .ok_or_else(|| anyhow::anyhow!("cannot convert {:?} to isize", value))?;
+            .ok_or_else(|| crate::err!("cannot convert {:?} to isize", value))?;
         i64_val
             .try_into()
-            .map_err(|_| anyhow::anyhow!("value {} is out of range for isize", i64_val))
+            .map_err(|_| crate::err!("value {} is out of range for isize", i64_val))
     }
 }

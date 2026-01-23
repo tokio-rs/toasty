@@ -96,7 +96,7 @@ impl Primitive for String {
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
             stmt::Value::String(v) => Ok(v),
-            _ => anyhow::bail!("cannot convert value to String {value:#?}"),
+            _ => crate::bail!("cannot convert value to String {value:#?}"),
         }
     }
 }
@@ -155,7 +155,7 @@ impl Primitive for uuid::Uuid {
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
             stmt::Value::Uuid(v) => Ok(v),
-            _ => anyhow::bail!("cannot convert value to uuid::Uuid {value:#?}"),
+            _ => crate::bail!("cannot convert value to uuid::Uuid {value:#?}"),
         }
     }
 }
@@ -172,7 +172,7 @@ impl Primitive for bool {
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
             stmt::Value::Bool(v) => Ok(v),
-            _ => anyhow::bail!("cannot convert value to bool: {value:#?}"),
+            _ => crate::bail!("cannot convert value to bool: {value:#?}"),
         }
     }
 }
@@ -216,7 +216,7 @@ impl Primitive for rust_decimal::Decimal {
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
             stmt::Value::Decimal(v) => Ok(v),
-            _ => anyhow::bail!("cannot convert value to rust_decimal::Decimal {value:#?}"),
+            _ => crate::bail!("cannot convert value to rust_decimal::Decimal {value:#?}"),
         }
     }
 }
@@ -230,7 +230,7 @@ impl Primitive for bigdecimal::BigDecimal {
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
             stmt::Value::BigDecimal(v) => Ok(v),
-            _ => anyhow::bail!("cannot convert value to bigdecimal::BigDecimal {value:#?}"),
+            _ => crate::bail!("cannot convert value to bigdecimal::BigDecimal {value:#?}"),
         }
     }
 }

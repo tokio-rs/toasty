@@ -100,16 +100,16 @@ impl Capability {
     /// then `storage_types.varchar` must be Some, and vice versa.
     ///
     /// Returns an error if any inconsistencies are found.
-    pub fn validate(&self) -> anyhow::Result<()> {
+    pub fn validate(&self) -> crate::Result<()> {
         // Validate varchar consistency
         if self.native_varchar && self.storage_types.varchar.is_none() {
-            anyhow::bail!(
+            crate::bail!(
                 "Capability validation failed: native_varchar is true but storage_types.varchar is None"
             );
         }
 
         if !self.native_varchar && self.storage_types.varchar.is_some() {
-            anyhow::bail!(
+            crate::bail!(
                 "Capability validation failed: native_varchar is false but storage_types.varchar is Some"
             );
         }
