@@ -67,13 +67,14 @@ impl Driver for MySQL {
     }
 
     fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
-        let statements = sql::Statement::from_schema_diff(schema_diff, &Capability::MYSQL);
+        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::MYSQL);
 
         let sql_strings: Vec<String> = statements
             .iter()
             .map(|stmt| {
                 let mut params = Vec::<TypedValue>::new();
-                let sql = sql::Serializer::mysql(&Schema::default()).serialize(stmt, &mut params);
+                let sql =
+                    sql::Serializer::mysql(stmt.schema()).serialize(stmt.statement(), &mut params);
                 assert!(
                     params.is_empty(),
                     "migration statements should not have parameters"

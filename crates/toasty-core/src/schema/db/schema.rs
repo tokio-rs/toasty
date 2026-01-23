@@ -32,6 +32,8 @@ impl Schema {
 }
 
 pub struct SchemaDiff<'a> {
+    previous: &'a Schema,
+    next: &'a Schema,
     tables: TablesDiff<'a>,
 }
 
@@ -39,6 +41,8 @@ impl<'a> SchemaDiff<'a> {
     pub fn from(from: &'a Schema, to: &'a Schema, rename_hints: &'a RenameHints) -> Self {
         let cx = &DiffContext::new(from, to, rename_hints);
         Self {
+            previous: from,
+            next: to,
             tables: TablesDiff::from(cx, &from.tables, &to.tables),
         }
     }
@@ -49,5 +53,13 @@ impl<'a> SchemaDiff<'a> {
 
     pub fn is_empty(&self) -> bool {
         self.tables.is_empty()
+    }
+
+    pub fn previous(&self) -> &'a Schema {
+        self.previous
+    }
+
+    pub fn next(&self) -> &'a Schema {
+        self.next
     }
 }
