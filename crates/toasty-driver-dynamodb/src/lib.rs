@@ -13,6 +13,7 @@ use toasty_core::{
 };
 
 type Result<T> = std::result::Result<T, toasty_core::Error>;
+
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::update_item::UpdateItemError,
@@ -56,7 +57,7 @@ impl Connection {
     }
 
     pub async fn connect(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
+        let url = Url::parse(url).map_err(toasty_core::Error::database)?;
 
         if url.scheme() != "dynamodb" {
             return Err(toasty_core::err!(

@@ -63,7 +63,7 @@ impl Connection {
                         .table_name(&table.name)
                         .set_item(Some(insert_items))
                         .send()
-                        .await?;
+                        .await.map_err(toasty_core::Error::database)?;
                 } else {
                     let mut request_items = HashMap::new();
                     request_items.insert(
@@ -87,7 +87,7 @@ impl Connection {
                         .batch_write_item()
                         .set_request_items(Some(request_items))
                         .send()
-                        .await?;
+                        .await.map_err(toasty_core::Error::database)?;
                 }
             }
             [index] => {
@@ -156,7 +156,7 @@ impl Connection {
                     .transact_write_items()
                     .set_transact_items(Some(transact_items))
                     .send()
-                    .await?;
+                    .await.map_err(toasty_core::Error::database)?;
             }
             _ => todo!(),
         }

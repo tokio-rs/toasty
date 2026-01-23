@@ -20,7 +20,7 @@ impl Connection {
                 .table_name(&table.name)
                 .set_key(Some(ddb_key(table, &op.keys[0])))
                 .send()
-                .await?;
+                .await.map_err(toasty_core::Error::database)?;
 
             if let Some(item) = res.item() {
                 let row = item_to_record(item, op.select.iter().map(|id| schema.column(*id)))?;
@@ -54,7 +54,7 @@ impl Connection {
                     items
                 }))
                 .send()
-                .await?;
+                .await.map_err(toasty_core::Error::database)?;
 
             let Some(mut responses) = res.responses else {
                 return Ok(Response::empty_value_stream());

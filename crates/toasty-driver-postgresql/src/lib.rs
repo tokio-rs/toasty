@@ -29,7 +29,8 @@ impl PostgreSQL {
     /// Create a new PostgreSQL driver from a connection URL
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str)?;
+        let url = Url::parse(&url_str)
+            .map_err(toasty_core::Error::database)?;
 
         if url.scheme() != "postgresql" {
             return Err(toasty_core::err!(
@@ -106,7 +107,10 @@ impl Connection {
         T: MakeTlsConnect<Socket> + 'static,
         T::Stream: Send,
     {
-        let (client, connection) = config.connect(tls).await?;
+        let (client, connection) = config
+            .connect(tls)
+            .await
+            .map_err(toasty_core::Error::database)?;
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
@@ -132,7 +136,10 @@ impl Connection {
             "creating a table shouldn't involve any parameters"
         );
 
-        self.client.execute(&sql, &[]).await?;
+        self.client
+            .execute(&sql, &[])
+            .await
+            .map_err(toasty_core::Error::database)?;
 
         // NOTE: `params` is guaranteed to be empty based on the assertion above. If
         // that changes, `params.clear()` should be called here.
@@ -148,7 +155,10 @@ impl Connection {
                 "creating an index shouldn't involve any parameters"
             );
 
-            self.client.execute(&sql, &[]).await?;
+            self.client
+                .execute(&sql, &[])
+                .await
+                .map_err(toasty_core::Error::database)?;
         }
 
         Ok(())
@@ -175,7 +185,10 @@ impl Connection {
             "dropping a table shouldn't involve any parameters"
         );
 
-        self.client.execute(&sql, &[]).await?;
+        self.client
+            .execute(&sql, &[])
+            .await
+            .map_err(toasty_core::Error::database)?;
         Ok(())
     }
 }
@@ -227,14 +240,23 @@ impl toasty_core::driver::Connection for Connection {
         let statement = self
             .statement_cache
             .prepare_typed(&mut self.client, &sql_as_str, &param_types)
-            .await?;
+            .await
+            .map_err(toasty_core::Error::database)?;
 
         if width.is_none() {
-            let count = self.client.execute(&statement, &params).await?;
+            let count = self
+                .client
+                .execute(&statement, &params)
+                .await
+                .map_err(toasty_core::Error::database)?;
             return Ok(Response::count(count));
         }
 
-        let rows = self.client.query(&statement, &params).await?;
+        let rows = self
+            .client
+            .query(&statement, &params)
+            .await
+            .map_err(toasty_core::Error::database)?;
 
         if width.is_none() {
             let [row] = &rows[..] else { todo!() };

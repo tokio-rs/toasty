@@ -143,7 +143,7 @@ impl Connection {
                             // TODO: probably map the error, but for now fall through
                         }
 
-                        return Err(SdkError::ServiceError(e).into());
+                        return Err(toasty_core::Error::database(SdkError::ServiceError(e)));
                     }
                 } else {
                     let mut transact_items = vec![];
@@ -216,7 +216,8 @@ impl Connection {
                     .set_key(Some(ddb_key(table, key)))
                     .set_attributes_to_get(Some(attributes_to_get))
                     .send()
-                    .await?;
+                    .await
+                    .map_err(toasty_core::Error::database)?;
 
                 let Some(mut curr_unique_values) = res.item else {
                     toasty_core::bail!("item not found")

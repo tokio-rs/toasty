@@ -50,6 +50,14 @@ impl Error {
         Error::from(ErrorKind::Adhoc(AdhocError::from_args(message)))
     }
 
+    /// Creates an error from a database error.
+    ///
+    /// This is the preferred way to convert database-specific errors (rusqlite, tokio-postgres,
+    /// mysql_async, AWS SDK errors, etc.) into toasty errors.
+    pub fn database(err: impl std::error::Error + Send + Sync + 'static) -> Error {
+        Error::from(ErrorKind::Database(Box::new(err)))
+    }
+
     #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn context(self, consequent: impl IntoError) -> Error {
@@ -128,6 +136,7 @@ impl core::fmt::Debug for Error {
 enum ErrorKind {
     Anyhow(anyhow::Error),
     Adhoc(AdhocError),
+    Database(Box<dyn std::error::Error + Send + Sync>),
     Unknown,
 }
 
@@ -138,6 +147,7 @@ impl core::fmt::Display for ErrorKind {
         match self {
             Anyhow(err) => core::fmt::Display::fmt(err, f),
             Adhoc(err) => core::fmt::Display::fmt(err, f),
+            Database(err) => core::fmt::Display::fmt(err, f),
             Unknown => f.write_str("unknown toasty error"),
         }
     }
@@ -174,56 +184,10 @@ impl From<uuid::Error> for Error {
     }
 }
 
-impl From<url::ParseError> for Error {
-    fn from(err: url::ParseError) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
-impl From<deadpool::managed::BuildError> for Error {
-    fn from(err: deadpool::managed::BuildError) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
 #[cfg(feature = "jiff")]
 impl From<jiff::Error> for Error {
     fn from(err: jiff::Error) -> Error {
         Error::from(anyhow::Error::from(err))
-    }
-}
-
-impl From<rusqlite::Error> for Error {
-    fn from(err: rusqlite::Error) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
-impl From<tokio_postgres::Error> for Error {
-    fn from(err: tokio_postgres::Error) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
-impl From<mysql_async::Error> for Error {
-    fn from(err: mysql_async::Error) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
-impl From<mysql_async::UrlError> for Error {
-    fn from(err: mysql_async::UrlError) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
-impl<E, R> From<aws_sdk_dynamodb::error::SdkError<E, R>> for Error
-where
-    E: std::error::Error + Send + Sync + 'static,
-    R: Send + Sync + 'static,
-{
-    fn from(err: aws_sdk_dynamodb::error::SdkError<E, R>) -> Error {
-        Error::from(anyhow::Error::msg(err.to_string()))
     }
 }
 

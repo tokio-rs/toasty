@@ -58,7 +58,9 @@ impl Pool {
             builder = builder.max_size(max_connections);
         }
 
-        let inner = builder.build()?;
+        let inner = builder
+            .build()
+            .map_err(toasty_core::Error::database)?;
 
         let connection = match inner.get().await {
             Ok(connection) => connection,
