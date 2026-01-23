@@ -189,7 +189,7 @@ impl SetupDynamoDb {
                 } else if let Ok(val) = n.parse::<u64>() {
                     Ok(toasty_core::stmt::Value::U64(val))
                 } else {
-                    Err(anyhow::anyhow!("Failed to parse DynamoDB number: {}", n))
+                    Err(toasty::err!("Failed to parse DynamoDB number: {}", n))
                 }
             }
             AttributeValue::B(b) => Ok(toasty_core::stmt::Value::Bytes(b.clone().into_inner())),
