@@ -61,7 +61,7 @@ impl Connection {
                         return Ok(Response::count(0));
                     }
 
-                    return Err(toasty_core::Error::database(SdkError::ServiceError(e)));
+                    return Err(toasty_core::Error::driver(SdkError::ServiceError(e)));
                 }
 
                 assert!(res.is_ok());
@@ -142,7 +142,7 @@ impl Connection {
             .set_attributes_to_get(Some(attributes_to_get))
             .send()
             .await
-            .map_err(toasty_core::Error::database)?;
+            .map_err(toasty_core::Error::driver)?;
 
         let Some(curr_unique_values) = res.item else {
             return Ok(Response::count(0));
@@ -198,7 +198,7 @@ impl Connection {
             .set_transact_items(Some(transact_items))
             .send()
             .await
-            .map_err(toasty_core::Error::database)?;
+            .map_err(toasty_core::Error::driver)?;
 
         Ok(Response::count(1))
     }

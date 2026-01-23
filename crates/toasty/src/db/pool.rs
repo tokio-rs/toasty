@@ -60,7 +60,7 @@ impl Pool {
 
         let inner = builder
             .build()
-            .map_err(toasty_core::Error::database)?;
+            .map_err(toasty_core::Error::connection_pool)?;
 
         let connection = match inner.get().await {
             Ok(connection) => connection,

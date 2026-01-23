@@ -50,12 +50,19 @@ impl Error {
         Error::from(ErrorKind::Adhoc(AdhocError::from_args(message)))
     }
 
-    /// Creates an error from a database error.
+    /// Creates an error from a driver error.
     ///
-    /// This is the preferred way to convert database-specific errors (rusqlite, tokio-postgres,
+    /// This is the preferred way to convert driver-specific errors (rusqlite, tokio-postgres,
     /// mysql_async, AWS SDK errors, etc.) into toasty errors.
-    pub fn database(err: impl std::error::Error + Send + Sync + 'static) -> Error {
-        Error::from(ErrorKind::Database(Box::new(err)))
+    pub fn driver(err: impl std::error::Error + Send + Sync + 'static) -> Error {
+        Error::from(ErrorKind::Driver(Box::new(err)))
+    }
+
+    /// Creates an error from a connection pool error.
+    ///
+    /// This is used for errors that occur when managing the connection pool (e.g., deadpool errors).
+    pub fn connection_pool(err: impl std::error::Error + Send + Sync + 'static) -> Error {
+        Error::from(ErrorKind::ConnectionPool(Box::new(err)))
     }
 
     #[allow(dead_code)]
@@ -136,7 +143,8 @@ impl core::fmt::Debug for Error {
 enum ErrorKind {
     Anyhow(anyhow::Error),
     Adhoc(AdhocError),
-    Database(Box<dyn std::error::Error + Send + Sync>),
+    Driver(Box<dyn std::error::Error + Send + Sync>),
+    ConnectionPool(Box<dyn std::error::Error + Send + Sync>),
     Unknown,
 }
 
@@ -147,7 +155,8 @@ impl core::fmt::Display for ErrorKind {
         match self {
             Anyhow(err) => core::fmt::Display::fmt(err, f),
             Adhoc(err) => core::fmt::Display::fmt(err, f),
-            Database(err) => core::fmt::Display::fmt(err, f),
+            Driver(err) => core::fmt::Display::fmt(err, f),
+            ConnectionPool(err) => core::fmt::Display::fmt(err, f),
             Unknown => f.write_str("unknown toasty error"),
         }
     }

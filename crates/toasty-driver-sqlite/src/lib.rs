@@ -28,7 +28,7 @@ impl Sqlite {
     /// Create a new SQLite driver with an arbitrary connection URL
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str).map_err(toasty_core::Error::database)?;
+        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver)?;
 
         if url.scheme() != "sqlite" {
             return Err(toasty_core::err!(
@@ -83,7 +83,7 @@ impl Connection {
     }
 
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let connection = RusqliteConnection::open(path).map_err(toasty_core::Error::database)?;
+        let connection = RusqliteConnection::open(path).map_err(toasty_core::Error::driver)?;
         let sqlite = Self { connection };
         Ok(sqlite)
     }
@@ -108,19 +108,19 @@ impl toasty_core::driver::Connection for Connection {
             Operation::Transaction(Transaction::Start) => {
                 self.connection
                     .execute("BEGIN", [])
-                    .map_err(toasty_core::Error::database)?;
+                    .map_err(toasty_core::Error::driver)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
                 self.connection
                     .execute("COMMIT", [])
-                    .map_err(toasty_core::Error::database)?;
+                    .map_err(toasty_core::Error::driver)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {
                 self.connection
                     .execute("ROLLBACK", [])
-                    .map_err(toasty_core::Error::database)?;
+                    .map_err(toasty_core::Error::driver)?;
                 return Ok(Response::count(0));
             }
             _ => todo!("op={:#?}", op),
@@ -163,7 +163,7 @@ impl toasty_core::driver::Connection for Connection {
         if width.is_none() {
             let count = stmt
                 .execute(rusqlite::params_from_iter(params.iter()))
-                .map_err(toasty_core::Error::database)?;
+                .map_err(toasty_core::Error::driver)?;
 
             return Ok(Response::count(count as _));
         }
@@ -191,7 +191,7 @@ impl toasty_core::driver::Connection for Connection {
                 }
                 Ok(None) => break,
                 Err(err) => {
-                    return Err(toasty_core::Error::database(err));
+                    return Err(toasty_core::Error::driver(err));
                 }
             }
         }
@@ -221,7 +221,7 @@ impl Connection {
 
         self.connection
             .execute(&stmt, [])
-            .map_err(toasty_core::Error::database)?;
+            .map_err(toasty_core::Error::driver)?;
 
         // Create any indices
         for index in &table.indices {
@@ -235,7 +235,7 @@ impl Connection {
 
             self.connection
                 .execute(&stmt, [])
-                .map_err(toasty_core::Error::database)?;
+                .map_err(toasty_core::Error::driver)?;
         }
         Ok(())
     }

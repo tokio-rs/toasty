@@ -25,7 +25,7 @@ impl Connection {
                 .set_expression_attribute_names(Some(expr_attrs.attr_names))
                 .set_expression_attribute_values(Some(expr_attrs.attr_values))
                 .send()
-                .await.map_err(toasty_core::Error::database)?
+                .await.map_err(toasty_core::Error::driver)?
         } else {
             self.client
                 .query()
@@ -35,7 +35,7 @@ impl Connection {
                 .set_expression_attribute_names(Some(expr_attrs.attr_names))
                 .set_expression_attribute_values(Some(expr_attrs.attr_values))
                 .send()
-                .await.map_err(toasty_core::Error::database)?
+                .await.map_err(toasty_core::Error::driver)?
         };
 
         let schema = schema.clone();

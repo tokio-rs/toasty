@@ -143,7 +143,7 @@ impl Connection {
                             // TODO: probably map the error, but for now fall through
                         }
 
-                        return Err(toasty_core::Error::database(SdkError::ServiceError(e)));
+                        return Err(toasty_core::Error::driver(SdkError::ServiceError(e)));
                     }
                 } else {
                     let mut transact_items = vec![];
@@ -217,7 +217,7 @@ impl Connection {
                     .set_attributes_to_get(Some(attributes_to_get))
                     .send()
                     .await
-                    .map_err(toasty_core::Error::database)?;
+                    .map_err(toasty_core::Error::driver)?;
 
                 let Some(mut curr_unique_values) = res.item else {
                     toasty_core::bail!("item not found")

@@ -20,8 +20,7 @@ impl std::fmt::Debug for Connect {
 
 impl Connect {
     pub fn new(url: &str) -> Result<Self> {
-        let url =
-            Url::parse(url).map_err(toasty_core::Error::database)?;
+        let url = Url::parse(url).map_err(toasty_core::Error::driver)?;
 
         let driver: Box<dyn Driver> = match url.scheme() {
             #[cfg(feature = "dynamodb")]
