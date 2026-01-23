@@ -108,7 +108,16 @@ impl Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self.kind() {
+            ErrorKind::Driver(err) => Some(err.as_ref()),
+            ErrorKind::ConnectionPool(err) => Some(err.as_ref()),
+            ErrorKind::Anyhow(err) => Some(err.as_ref()),
+            _ => None,
+        }
+    }
+}
 
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -155,8 +164,26 @@ impl core::fmt::Display for ErrorKind {
         match self {
             Anyhow(err) => core::fmt::Display::fmt(err, f),
             Adhoc(err) => core::fmt::Display::fmt(err, f),
-            Driver(err) => core::fmt::Display::fmt(err, f),
-            ConnectionPool(err) => core::fmt::Display::fmt(err, f),
+            Driver(err) => {
+                // Display the error and walk its source chain
+                core::fmt::Display::fmt(err, f)?;
+                let mut source = err.source();
+                while let Some(err) = source {
+                    write!(f, ": {}", err)?;
+                    source = err.source();
+                }
+                Ok(())
+            }
+            ConnectionPool(err) => {
+                // Display the error and walk its source chain
+                core::fmt::Display::fmt(err, f)?;
+                let mut source = err.source();
+                while let Some(err) = source {
+                    write!(f, ": {}", err)?;
+                    source = err.source();
+                }
+                Ok(())
+            }
             Unknown => f.write_str("unknown toasty error"),
         }
     }
