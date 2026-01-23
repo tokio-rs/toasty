@@ -12,7 +12,7 @@ use toasty_core::{
     stmt::{self, ExprContext},
 };
 
-use anyhow::Result;
+type Result<T> = std::result::Result<T, toasty_core::Error>;
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::update_item::UpdateItemError,
@@ -59,7 +59,7 @@ impl Connection {
         let url = Url::parse(url)?;
 
         if url.scheme() != "dynamodb" {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::err!(
                 "connection URL does not have a `dynamodb` scheme; url={url}"
             ));
         }

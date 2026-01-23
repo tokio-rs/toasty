@@ -31,7 +31,7 @@ impl Sqlite {
         let url = Url::parse(&url_str)?;
 
         if url.scheme() != "sqlite" {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::err!(
                 "connection URL does not have a `sqlite` scheme; url={}",
                 url_str
             ));

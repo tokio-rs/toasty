@@ -54,7 +54,7 @@ impl Db {
         match res.next().await {
             Some(Ok(value)) => Ok(value),
             Some(Err(err)) => Err(err),
-            None => anyhow::bail!("failed to find record"),
+            None => crate::bail!("failed to find record"),
         }
     }
 
@@ -79,11 +79,11 @@ impl Db {
     pub async fn exec_one<M: Model>(&self, statement: Statement<M>) -> Result<stmt::Value> {
         let mut res = self.exec(statement).await?;
         let Some(ret) = res.next().await else {
-            anyhow::bail!("empty result set")
+            crate::bail!("empty result set")
         };
         let next = res.next().await;
         let None = next else {
-            anyhow::bail!("more than one record; next={next:#?}")
+            crate::bail!("more than one record; next={next:#?}")
         };
 
         ret

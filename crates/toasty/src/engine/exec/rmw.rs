@@ -54,23 +54,23 @@ impl Exec<'_> {
             .await?;
 
         let Rows::Stream(rows) = res.rows else {
-            anyhow::bail!("expected rows");
+            crate::bail!("expected rows");
         };
 
         let rows = rows.collect().await?;
         assert_eq!(rows.len(), 1);
 
         let stmt::Value::Record(record) = &rows[0] else {
-            anyhow::bail!("expected record");
+            crate::bail!("expected record");
         };
         assert_eq!(record.len(), 2);
 
         let stmt::Value::I64(count) = record[0] else {
-            anyhow::bail!("expected i64");
+            crate::bail!("expected i64");
         };
 
         if record[0] != record[1] {
-            anyhow::bail!("update condition did not match");
+            crate::bail!("update condition did not match");
         }
 
         let res = self
@@ -87,7 +87,7 @@ impl Exec<'_> {
             .await?;
 
         let Rows::Count(actual) = res.rows else {
-            anyhow::bail!("expected count");
+            crate::bail!("expected count");
         };
 
         assert_eq!(actual, count as u64);

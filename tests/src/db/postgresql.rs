@@ -75,7 +75,7 @@ impl Setup for SetupPostgreSQL {
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         self.cleanup_postgresql_tables_impl()
             .await
-            .map_err(|e| toasty::Error::msg(format!("PostgreSQL cleanup failed: {e}")))
+            .map_err(|e| toasty::err!("PostgreSQL cleanup failed: {e}"))
     }
 
     async fn get_raw_column_value(

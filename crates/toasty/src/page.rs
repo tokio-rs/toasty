@@ -1,8 +1,8 @@
 use std::ops::Deref;
 
 use crate::stmt::{Paginate, Select};
+use crate::Result;
 use crate::{Db, Model};
-use anyhow::Result;
 use toasty_core::stmt;
 
 /// A page of results from a paginated query.

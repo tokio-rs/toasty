@@ -8,7 +8,7 @@ use std::sync::Arc;
 #[macro_export]
 macro_rules! bail {
     ($($arg:tt)*) => {
-        return Err($crate::Error::from(anyhow::anyhow!($($arg)*)))
+        return Err($crate::Error::from_args(format_args!($($arg)*)))
     };
 }
 
@@ -20,7 +20,7 @@ macro_rules! bail {
 #[macro_export]
 macro_rules! err {
     ($($arg:tt)*) => {
-        $crate::Error::from(anyhow::anyhow!($($arg)*))
+        $crate::Error::from_args(format_args!($($arg)*))
     };
 }
 
@@ -171,6 +171,59 @@ impl From<std::io::Error> for Error {
 impl From<uuid::Error> for Error {
     fn from(err: uuid::Error) -> Error {
         Error::from(anyhow::Error::from(err))
+    }
+}
+
+impl From<url::ParseError> for Error {
+    fn from(err: url::ParseError) -> Error {
+        Error::from(anyhow::Error::from(err))
+    }
+}
+
+impl From<deadpool::managed::BuildError> for Error {
+    fn from(err: deadpool::managed::BuildError) -> Error {
+        Error::from(anyhow::Error::from(err))
+    }
+}
+
+#[cfg(feature = "jiff")]
+impl From<jiff::Error> for Error {
+    fn from(err: jiff::Error) -> Error {
+        Error::from(anyhow::Error::from(err))
+    }
+}
+
+impl From<rusqlite::Error> for Error {
+    fn from(err: rusqlite::Error) -> Error {
+        Error::from(anyhow::Error::from(err))
+    }
+}
+
+impl From<tokio_postgres::Error> for Error {
+    fn from(err: tokio_postgres::Error) -> Error {
+        Error::from(anyhow::Error::from(err))
+    }
+}
+
+impl From<mysql_async::Error> for Error {
+    fn from(err: mysql_async::Error) -> Error {
+        Error::from(anyhow::Error::from(err))
+    }
+}
+
+impl From<mysql_async::UrlError> for Error {
+    fn from(err: mysql_async::UrlError) -> Error {
+        Error::from(anyhow::Error::from(err))
+    }
+}
+
+impl<E, R> From<aws_sdk_dynamodb::error::SdkError<E, R>> for Error
+where
+    E: std::error::Error + Send + Sync + 'static,
+    R: Send + Sync + 'static,
+{
+    fn from(err: aws_sdk_dynamodb::error::SdkError<E, R>) -> Error {
+        Error::from(anyhow::Error::msg(err.to_string()))
     }
 }
 

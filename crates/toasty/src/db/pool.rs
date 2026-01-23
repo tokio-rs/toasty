@@ -62,7 +62,7 @@ impl Pool {
 
         let connection = match inner.get().await {
             Ok(connection) => connection,
-            Err(err) => return Err(anyhow::anyhow!("failed to establish connection: {err}")),
+            Err(err) => return Err(crate::err!("failed to establish connection: {err}")),
         };
         Ok(Self {
             inner,
@@ -80,7 +80,7 @@ impl Pool {
         Ok(match self.inner.get().await {
             Ok(connection) => PoolConnection { inner: connection },
             Err(err) => {
-                return Err(anyhow::anyhow!(
+                return Err(crate::err!(
                     "failed to retrieve connection from pool: {err}"
                 ))
             }

@@ -32,7 +32,7 @@ impl PostgreSQL {
         let url = Url::parse(&url_str)?;
 
         if url.scheme() != "postgresql" {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::err!(
                 "connection URL does not have a `postgresql` scheme; url={}",
                 url
             ));
@@ -40,10 +40,10 @@ impl PostgreSQL {
 
         let host = url
             .host_str()
-            .ok_or_else(|| anyhow::anyhow!("missing host in connection URL; url={}", url))?;
+            .ok_or_else(|| toasty_core::err!("missing host in connection URL; url={}", url))?;
 
         if url.path().is_empty() {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::err!(
                 "no database specified - missing path in connection URL; url={}",
                 url
             ));
@@ -244,7 +244,7 @@ impl toasty_core::driver::Connection for Connection {
             if total == condition_matched {
                 Ok(Response::count(total as _))
             } else {
-                anyhow::bail!("update condition did not match");
+                toasty_core::bail!("update condition did not match");
             }
         } else {
             let ret_tys = ret_tys.as_ref().unwrap().clone();
