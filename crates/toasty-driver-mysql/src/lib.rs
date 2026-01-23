@@ -26,8 +26,7 @@ pub struct MySQL {
 impl MySQL {
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str)
-            .map_err(toasty_core::Error::driver)?;
+        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver)?;
 
         if url.scheme() != "mysql" {
             return Err(toasty_core::err!(
@@ -46,8 +45,7 @@ impl MySQL {
             ));
         }
 
-        let opts = mysql_async::Opts::from_url(url.as_ref())
-            .map_err(toasty_core::Error::driver)?;
+        let opts = mysql_async::Opts::from_url(url.as_ref()).map_err(toasty_core::Error::driver)?;
         let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
 
         let pool = Pool::new(opts);

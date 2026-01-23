@@ -73,9 +73,9 @@ impl SetupSqlite {
             .map_err(|e| toasty::err!("Failed to query raw value: {e}"))?;
 
         // Parse the raw value to the expected type
-        raw_value.parse::<T>().map_err(|e| {
-            toasty::err!("Failed to parse raw value '{raw_value}': {e:?}")
-        })
+        raw_value
+            .parse::<T>()
+            .map_err(|e| toasty::err!("Failed to parse raw value '{raw_value}': {e:?}"))
     }
 
     /// Helper method to convert SQLite row values to stmt::Value for unsigned integer support

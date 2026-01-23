@@ -188,9 +188,8 @@ impl SetupMySQL {
         match value {
             Value::NULL => Ok(toasty_core::stmt::Value::Null),
             Value::Bytes(bytes) => {
-                let text = String::from_utf8(bytes.clone()).map_err(|e| {
-                    toasty::err!("MySQL bytes to string conversion failed: {e}")
-                })?;
+                let text = String::from_utf8(bytes.clone())
+                    .map_err(|e| toasty::err!("MySQL bytes to string conversion failed: {e}"))?;
                 Ok(toasty_core::stmt::Value::String(text))
             }
             Value::Int(i) => Ok(toasty_core::stmt::Value::I64(*i)),

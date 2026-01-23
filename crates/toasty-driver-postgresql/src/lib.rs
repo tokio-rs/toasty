@@ -29,8 +29,7 @@ impl PostgreSQL {
     /// Create a new PostgreSQL driver from a connection URL
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str)
-            .map_err(toasty_core::Error::driver)?;
+        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver)?;
 
         if url.scheme() != "postgresql" {
             return Err(toasty_core::err!(
