@@ -6,9 +6,8 @@ use console::style;
 use std::fs;
 use toasty::{
     Db,
-    schema::db::{RenameHints, Schema, SchemaDiff},
+    schema::db::{Migration, RenameHints, Schema, SchemaDiff},
 };
-use toasty_sql::Statement;
 
 #[derive(Parser, Debug)]
 pub struct GenerateCommand {
@@ -71,14 +70,22 @@ impl GenerateCommand {
             migration_number,
             self.name.as_deref().unwrap_or("migration")
         );
-        let _migration_path = config.migration.get_migrations_dir().join(&migration_name);
-        let statements = Statement::from_schema_diff(&diff, db.capability());
+        let migration_path = config.migration.get_migrations_dir().join(&migration_name);
+
+        let Migration::Sql(sql) = db.driver().generate_migration(&diff);
 
         history.add_migration(HistoryFileMigration {
             name: migration_name.clone(),
             snapshot_name: snapshot_name.clone(),
             checksum: None,
         });
+
+        std::fs::write(migration_path, sql)?;
+        println!(
+            "  {} {}",
+            style("✓").green().bold(),
+            style(format!("Created migration file: {}", migration_name)).dim()
+        );
 
         snapshot.save(&snapshot_path)?;
         println!(

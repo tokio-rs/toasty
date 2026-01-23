@@ -8,7 +8,7 @@ pub(crate) use value::Value;
 use toasty_core::{
     async_trait,
     driver::{operation::Operation, Capability, Driver, Response},
-    schema::db::{Column, ColumnId, Schema, Table},
+    schema::db::{Column, ColumnId, Migration, Schema, SchemaDiff, Table},
     stmt::{self, ExprContext},
 };
 
@@ -41,6 +41,10 @@ impl DynamoDb {
 impl Driver for DynamoDb {
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         Ok(Box::new(Connection::connect(&self.url).await?))
+    }
+
+    fn generate_migration(&self, _schema_diff: &SchemaDiff<'_>) -> Migration {
+        unimplemented!("DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK.")
     }
 }
 

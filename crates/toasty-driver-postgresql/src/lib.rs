@@ -9,12 +9,12 @@ use std::sync::Arc;
 use toasty_core::{
     async_trait,
     driver::{Capability, Driver, Operation, Response},
-    schema::db::{Schema, Table},
+    schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt,
     stmt::ValueRecord,
     Result,
 };
-use toasty_sql as sql;
+use toasty_sql::{self as sql, TypedValue};
 use tokio_postgres::{Client, Config};
 use url::Url;
 
@@ -80,6 +80,26 @@ impl Driver for PostgreSQL {
         Ok(Box::new(
             Connection::connect(self.config.clone(), tokio_postgres::NoTls).await?,
         ))
+    }
+
+    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+        let statements = sql::Statement::from_schema_diff(schema_diff, &Capability::POSTGRESQL);
+
+        let sql_strings: Vec<String> = statements
+            .iter()
+            .map(|stmt| {
+                let mut params = Vec::<TypedValue>::new();
+                let sql =
+                    sql::Serializer::postgresql(&Schema::default()).serialize(stmt, &mut params);
+                assert!(
+                    params.is_empty(),
+                    "migration statements should not have parameters"
+                );
+                sql
+            })
+            .collect();
+
+        Migration::Sql(sql_strings.join("\n\n"))
     }
 }
 

@@ -11,11 +11,11 @@ use std::sync::Arc;
 use toasty_core::{
     async_trait,
     driver::{operation::Transaction, Capability, Driver, Operation, Response},
-    schema::db::{Schema, Table},
+    schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt::{self, ValueRecord},
     Result,
 };
-use toasty_sql as sql;
+use toasty_sql::{self as sql, TypedValue};
 use url::Url;
 
 #[derive(Debug)]
@@ -64,6 +64,25 @@ impl Driver for MySQL {
     async fn connect(&self) -> Result<Box<dyn toasty_core::driver::Connection>> {
         let conn = self.pool.get_conn().await?;
         Ok(Box::new(Connection::new(conn)))
+    }
+
+    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+        let statements = sql::Statement::from_schema_diff(schema_diff, &Capability::MYSQL);
+
+        let sql_strings: Vec<String> = statements
+            .iter()
+            .map(|stmt| {
+                let mut params = Vec::<TypedValue>::new();
+                let sql = sql::Serializer::mysql(&Schema::default()).serialize(stmt, &mut params);
+                assert!(
+                    params.is_empty(),
+                    "migration statements should not have parameters"
+                );
+                sql
+            })
+            .collect();
+
+        Migration::Sql(sql_strings.join("\n\n"))
     }
 }
 

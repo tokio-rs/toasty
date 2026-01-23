@@ -12,7 +12,7 @@ use tokio::{
 
 use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
 
-use toasty_core::{stmt::ValueStream, Schema};
+use toasty_core::{driver::Driver, stmt::ValueStream, Schema};
 
 #[derive(Debug)]
 pub struct Db {
@@ -112,6 +112,10 @@ impl Db {
             .await?
             .reset_db(&self.engine.schema.db)
             .await
+    }
+
+    pub fn driver(&self) -> &dyn Driver {
+        self.engine.driver()
     }
 
     pub fn schema(&self) -> &Schema {
