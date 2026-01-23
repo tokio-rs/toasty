@@ -72,16 +72,28 @@ impl ToSql for &stmt::CreateIndex {
 
 impl ToSql for &stmt::CreateTable {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let table = f.serializer.table(self.table);
-        let name = Ident(&table.name);
-        let columns = ColumnsWithConstraints(self);
+        match &self.table {
+            stmt::TableName::TableId(table_id) => {
+                let table = f.serializer.table(*table_id);
+                let name = Ident(&table.name);
+                let columns = ColumnsWithConstraints(self);
 
-        // Create new expression scope to serialize the statement
-        let cx = cx.scope(table);
+                // Create new expression scope to serialize the statement
+                let cx = cx.scope(table);
 
-        fmt!(
-            &cx, f, "CREATE TABLE " name " (" columns ")"
-        );
+                fmt!(
+                    &cx, f, "CREATE TABLE " name " (" columns ")"
+                );
+            }
+            stmt::TableName::Ident(ident) => {
+                let name = Ident(ident.0.as_str());
+                let columns = ColumnsWithConstraints(self);
+
+                fmt!(
+                    cx, f, "CREATE TABLE " name " (" columns ")"
+                );
+            }
+        }
     }
 }
 
