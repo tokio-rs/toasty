@@ -4,7 +4,6 @@ CREATE TABLE "users" (
     "email" TEXT NOT NULL,
     PRIMARY KEY ("id")
 );
-
 CREATE TABLE "todos" (
     "id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,

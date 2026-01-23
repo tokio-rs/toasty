@@ -83,7 +83,7 @@ impl Driver for MySQL {
             })
             .collect();
 
-        Migration::Sql(sql_strings.join("\n\n"))
+        Migration::Sql { statements: sql_strings }
     }
 }
 

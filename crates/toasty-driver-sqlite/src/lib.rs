@@ -86,7 +86,7 @@ impl Driver for Sqlite {
             })
             .collect();
 
-        Migration::Sql(sql_strings.join("\n\n"))
+        Migration::Sql { statements: sql_strings }
     }
 }
 
