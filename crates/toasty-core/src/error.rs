@@ -320,7 +320,7 @@ mod tests {
     #[test]
     fn anyhow_bridge() {
         // anyhow::Error converts to our Error
-        let anyhow_err = crate::err!("something failed");
+        let anyhow_err = anyhow::anyhow!("something failed");
         let our_err: Error = anyhow_err.into();
         assert_eq!(our_err.to_string(), "something failed");
     }
