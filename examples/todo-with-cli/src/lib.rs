@@ -29,7 +29,7 @@ pub struct Todo {
 
     pub title: String,
 
-    pub completed: bool,
+    pub lel: bool,
 }
 
 /// Helper function to create a database instance with the schema

@@ -3,10 +3,15 @@ use crate::Config;
 use anyhow::Result;
 use clap::Parser;
 use console::style;
+use dialoguer::{theme::ColorfulTheme, Select};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use toasty::{
     Db,
-    schema::db::{Migration, RenameHints, Schema, SchemaDiff},
+    schema::db::{
+        ColumnId, ColumnsDiffItem, IndexId, IndicesDiffItem, Migration, RenameHints, Schema,
+        SchemaDiff, TableId, TablesDiffItem,
+    },
 };
 
 #[derive(Parser, Debug)]
@@ -14,6 +19,210 @@ pub struct GenerateCommand {
     /// Name for the migration
     #[arg(short, long)]
     name: Option<String>,
+}
+
+/// Collects rename hints by interactively asking the user about potential renames
+fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<RenameHints> {
+    let mut hints = RenameHints::default();
+    let mut ignored_tables = HashSet::<TableId>::new();
+    let mut ignored_columns = HashMap::<TableId, HashSet<ColumnId>>::new();
+    let mut ignored_indices = HashMap::<TableId, HashSet<IndexId>>::new();
+
+    let theme = ColorfulTheme {
+        active_item_style: console::Style::new().cyan().bold(),
+        active_item_prefix: console::style("❯".to_string()).cyan().bold(),
+        inactive_item_prefix: console::style(" ".to_string()),
+        checked_item_prefix: console::style("✔".to_string()).green(),
+        unchecked_item_prefix: console::style("✖".to_string()).red(),
+        prompt_style: console::Style::new().bold(),
+        prompt_prefix: console::style("?".to_string()).yellow().bold(),
+        success_prefix: console::style("✔".to_string()).green().bold(),
+        error_prefix: console::style("✖".to_string()).red().bold(),
+        hint_style: console::Style::new().dim(),
+        values_style: console::Style::new().cyan(),
+        ..Default::default()
+    };
+
+    'main: loop {
+        let diff = SchemaDiff::from(previous_schema, schema, &hints);
+
+        // Check for table renames
+        let dropped_tables: Vec<_> = diff
+            .tables()
+            .iter()
+            .filter_map(|item| match item {
+                TablesDiffItem::DropTable(table) if !ignored_tables.contains(&table.id) => {
+                    Some(*table)
+                }
+                _ => None,
+            })
+            .collect();
+
+        let added_tables: Vec<_> = diff
+            .tables()
+            .iter()
+            .filter_map(|item| match item {
+                TablesDiffItem::CreateTable(table) => Some(*table),
+                _ => None,
+            })
+            .collect();
+
+        // If there are both dropped and added tables, ask about potential renames
+        if !dropped_tables.is_empty() && !added_tables.is_empty() {
+            for dropped_table in &dropped_tables {
+                let mut options = vec![format!("  ✖ Drop \"{}\"", dropped_table.name)];
+                for added_table in &added_tables {
+                    options.push(format!(
+                        "  \"{}\" → \"{}\"",
+                        dropped_table.name, added_table.name
+                    ));
+                }
+
+                let selection = Select::with_theme(&theme)
+                    .with_prompt(format!("  Table \"{}\" is missing", dropped_table.name))
+                    .items(&options)
+                    .default(0)
+                    .interact()?;
+
+                if selection == 0 {
+                    // User confirmed it was dropped
+                    ignored_tables.insert(dropped_table.id);
+                } else {
+                    // User indicated a rename (selection - 1 maps to added_tables index)
+                    let to_table = added_tables[selection - 1];
+                    drop(diff);
+                    hints.add_table_hint(dropped_table.id, to_table.id);
+                    continue 'main; // Regenerate diff with new hint
+                }
+            }
+        }
+
+        // Check for column and index renames within altered tables
+        for item in diff.tables().iter() {
+            if let TablesDiffItem::AlterTable {
+                from,
+                to: _,
+                columns,
+                indices,
+            } = item
+            {
+                // Handle column renames
+                let dropped_columns: Vec<_> = columns
+                    .iter()
+                    .filter_map(|item| match item {
+                        ColumnsDiffItem::DropColumn(column)
+                            if !ignored_columns
+                                .get(&from.id)
+                                .map_or(false, |set| set.contains(&column.id)) =>
+                        {
+                            Some(*column)
+                        }
+                        _ => None,
+                    })
+                    .collect();
+
+                let added_columns: Vec<_> = columns
+                    .iter()
+                    .filter_map(|item| match item {
+                        ColumnsDiffItem::AddColumn(column) => Some(*column),
+                        _ => None,
+                    })
+                    .collect();
+
+                if !dropped_columns.is_empty() && !added_columns.is_empty() {
+                    for dropped_column in &dropped_columns {
+                        let mut options = vec![format!("  ✖ Drop \"{}\"", dropped_column.name)];
+                        for added_column in &added_columns {
+                            options.push(format!(
+                                "  \"{}\" → \"{}\"",
+                                dropped_column.name, added_column.name
+                            ));
+                        }
+
+                        let selection = Select::with_theme(&theme)
+                            .with_prompt(format!(
+                                "  Column \"{}\".\"{}\" is missing",
+                                from.name, dropped_column.name
+                            ))
+                            .items(&options)
+                            .default(0)
+                            .interact()?;
+
+                        if selection == 0 {
+                            // User confirmed it was dropped
+                            ignored_columns
+                                .entry(from.id)
+                                .or_default()
+                                .insert(dropped_column.id);
+                        } else {
+                            // User indicated a rename
+                            let to_column = added_columns[selection - 1];
+                            drop(diff);
+                            hints.add_column_hint(dropped_column.id, to_column.id);
+                            continue 'main; // Regenerate diff with new hint
+                        }
+                    }
+                }
+
+                // Handle index renames
+                let dropped_indices: Vec<_> = indices
+                    .iter()
+                    .filter_map(|item| match item {
+                        IndicesDiffItem::DropIndex(index)
+                            if !ignored_indices
+                                .get(&from.id)
+                                .map_or(false, |set| set.contains(&index.id)) =>
+                        {
+                            Some(*index)
+                        }
+                        _ => None,
+                    })
+                    .collect();
+
+                let added_indices: Vec<_> = indices
+                    .iter()
+                    .filter_map(|item| match item {
+                        IndicesDiffItem::CreateIndex(index) => Some(*index),
+                        _ => None,
+                    })
+                    .collect();
+
+                if !dropped_indices.is_empty() && !added_indices.is_empty() {
+                    for dropped_index in &dropped_indices {
+                        let mut options = vec![format!("  ✖ Drop \"{}\"", dropped_index.name)];
+                        for added_index in &added_indices {
+                            options.push(format!("  \"{}\" → \"{}\"", dropped_index.name, added_index.name));
+                        }
+
+                        let selection = Select::with_theme(&theme)
+                            .with_prompt(format!("  Index \"{}\".\"{}\" is missing", from.name, dropped_index.name))
+                            .items(&options)
+                            .default(0)
+                            .interact()?;
+
+                        if selection == 0 {
+                            // User confirmed it was dropped
+                            ignored_indices
+                                .entry(from.id)
+                                .or_default()
+                                .insert(dropped_index.id);
+                        } else {
+                            // User indicated a rename
+                            let to_index = added_indices[selection - 1];
+                            drop(diff);
+                            hints.add_index_hint(dropped_index.id, to_index.id);
+                            continue 'main; // Regenerate diff with new hint
+                        }
+                    }
+                }
+            }
+        }
+
+        // No more potential renames to ask about
+        break;
+    }
+
+    Ok(hints)
 }
 
 impl GenerateCommand {
@@ -46,7 +255,7 @@ impl GenerateCommand {
 
         let schema = toasty::schema::db::Schema::clone(&db.schema().db);
 
-        let rename_hints = RenameHints::default();
+        let rename_hints = collect_rename_hints(&previous_schema, &schema)?;
         let diff = SchemaDiff::from(&previous_schema, &schema, &rename_hints);
 
         if diff.is_empty() {
