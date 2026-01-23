@@ -10,9 +10,8 @@ use toasty_core::{
     driver::{operation::Operation, Capability, Driver, Response},
     schema::db::{Column, ColumnId, Schema, Table},
     stmt::{self, ExprContext},
+    Result,
 };
-
-type Result<T> = std::result::Result<T, toasty_core::Error>;
 
 use aws_sdk_dynamodb::{
     error::SdkError,
