@@ -96,7 +96,7 @@ impl Primitive for String {
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
             stmt::Value::String(v) => Ok(v),
-            _ => crate::bail!("cannot convert value to String {value:#?}"),
+            _ => Err(toasty_core::Error::type_conversion(value, "String")),
         }
     }
 }
@@ -109,7 +109,7 @@ impl<T: Model> Primitive for Id<T> {
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
             stmt::Value::Id(v) => Ok(Self::from_untyped(v)),
-            _ => panic!("cannot convert value to Id; value={value:#?}"),
+            _ => Err(toasty_core::Error::type_conversion(value, "Id")),
         }
     }
 }
@@ -155,7 +155,7 @@ impl Primitive for uuid::Uuid {
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
             stmt::Value::Uuid(v) => Ok(v),
-            _ => crate::bail!("cannot convert value to uuid::Uuid {value:#?}"),
+            _ => Err(toasty_core::Error::type_conversion(value, "uuid::Uuid")),
         }
     }
 }
@@ -172,7 +172,7 @@ impl Primitive for bool {
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
             stmt::Value::Bool(v) => Ok(v),
-            _ => crate::bail!("cannot convert value to bool: {value:#?}"),
+            _ => Err(toasty_core::Error::type_conversion(value, "bool")),
         }
     }
 }
@@ -216,7 +216,10 @@ impl Primitive for rust_decimal::Decimal {
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
             stmt::Value::Decimal(v) => Ok(v),
-            _ => crate::bail!("cannot convert value to rust_decimal::Decimal {value:#?}"),
+            _ => Err(toasty_core::Error::type_conversion(
+                value,
+                "rust_decimal::Decimal",
+            )),
         }
     }
 }
@@ -230,7 +233,10 @@ impl Primitive for bigdecimal::BigDecimal {
     fn load(value: stmt::Value) -> Result<Self> {
         match value {
             stmt::Value::BigDecimal(v) => Ok(v),
-            _ => crate::bail!("cannot convert value to bigdecimal::BigDecimal {value:#?}"),
+            _ => Err(toasty_core::Error::type_conversion(
+                value,
+                "bigdecimal::BigDecimal",
+            )),
         }
     }
 }

@@ -416,8 +416,8 @@ impl TryFrom<Value> for String {
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
-            Value::String(value) => Ok(value),
-            _ => Err(crate::err!("value is not of type string")),
+            Value::String(v) => Ok(v),
+            _ => Err(crate::Error::type_conversion(value, "String")),
         }
     }
 }
@@ -433,8 +433,8 @@ impl TryFrom<Value> for Vec<u8> {
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Bytes(value) => Ok(value),
-            _ => Err(crate::err!("value is not of type Bytes")),
+            Value::Bytes(v) => Ok(v),
+            _ => Err(crate::Error::type_conversion(value, "Bytes")),
         }
     }
 }
@@ -450,8 +450,8 @@ impl TryFrom<Value> for uuid::Uuid {
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Uuid(value) => Ok(value),
-            _ => Err(crate::err!("value is not of type UUID")),
+            Value::Uuid(v) => Ok(v),
+            _ => Err(crate::Error::type_conversion(value, "uuid::Uuid")),
         }
     }
 }
@@ -469,8 +469,11 @@ impl TryFrom<Value> for rust_decimal::Decimal {
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
-            Value::Decimal(value) => Ok(value),
-            _ => Err(crate::err!("value is not of type Decimal")),
+            Value::Decimal(v) => Ok(v),
+            _ => Err(crate::Error::type_conversion(
+                value,
+                "rust_decimal::Decimal",
+            )),
         }
     }
 }
@@ -488,8 +491,11 @@ impl TryFrom<Value> for bigdecimal::BigDecimal {
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
-            Value::BigDecimal(value) => Ok(value),
-            _ => Err(crate::err!("value is not of type BigDecimal")),
+            Value::BigDecimal(v) => Ok(v),
+            _ => Err(crate::Error::type_conversion(
+                value,
+                "bigdecimal::BigDecimal",
+            )),
         }
     }
 }
