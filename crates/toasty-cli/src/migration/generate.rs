@@ -1,5 +1,5 @@
 use super::{HistoryFile, HistoryFileMigration, SnapshotFile};
-use crate::{theme::dialoguer_theme, Config};
+use crate::{Config, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
 use console::style;
@@ -98,7 +98,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                         ColumnsDiffItem::DropColumn(column)
                             if !ignored_columns
                                 .get(&from.id)
-                                .map_or(false, |set| set.contains(&column.id)) =>
+                                .is_some_and(|set| set.contains(&column.id)) =>
                         {
                             Some(*column)
                         }
@@ -156,7 +156,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                         IndicesDiffItem::DropIndex(index)
                             if !ignored_indices
                                 .get(&from.id)
-                                .map_or(false, |set| set.contains(&index.id)) =>
+                                .is_some_and(|set| set.contains(&index.id)) =>
                         {
                             Some(*index)
                         }
