@@ -18,7 +18,10 @@ pub struct HistoryFile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryFileMigration {
-    /// Migration name/identifier
+    /// Random unique identifier for this migration.
+    pub id: u64,
+
+    /// Migration name/identifier.
     pub name: String,
 
     /// Name of the snapshot generated alongside this migration.

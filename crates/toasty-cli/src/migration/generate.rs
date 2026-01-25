@@ -272,15 +272,17 @@ impl GenerateCommand {
         );
         let migration_path = config.migration.get_migrations_dir().join(&migration_name);
 
-        let Migration::Sql { statements } = db.driver().generate_migration(&diff);
+        let migration = db.driver().generate_migration(&diff);
 
         history.add_migration(HistoryFileMigration {
+            id: rand::random(),
             name: migration_name.clone(),
             snapshot_name: snapshot_name.clone(),
             checksum: None,
         });
 
-        std::fs::write(migration_path, statements.join("\n"))?;
+        let Migration::Sql(sql) = migration;
+        std::fs::write(migration_path, sql)?;
         println!(
             "  {} {}",
             style("✓").green().bold(),

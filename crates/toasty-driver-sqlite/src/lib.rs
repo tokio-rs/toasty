@@ -86,7 +86,7 @@ impl Driver for Sqlite {
             })
             .collect();
 
-        Migration::Sql { statements: sql_strings }
+        Migration::new_sql_with_breakpoints(&sql_strings)
     }
 }
 

@@ -99,7 +99,7 @@ impl Driver for PostgreSQL {
             })
             .collect();
 
-        Migration::Sql { statements: sql_strings }
+        Migration::new_sql(sql_strings.join("\n"))
     }
 }
 
