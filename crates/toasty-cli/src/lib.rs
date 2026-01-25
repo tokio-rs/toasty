@@ -35,24 +35,24 @@ impl ToastyCli {
     }
 
     /// Parse and execute CLI commands from command-line arguments
-    pub fn parse_and_run(&self) -> Result<()> {
+    pub async fn parse_and_run(&self) -> Result<()> {
         let cli = Cli::parse();
-        self.run(cli)
+        self.run(cli).await
     }
 
     /// Parse and execute CLI commands from an iterator of arguments
-    pub fn parse_from<I, T>(&self, args: I) -> Result<()>
+    pub async fn parse_from<I, T>(&self, args: I) -> Result<()>
     where
         I: IntoIterator<Item = T>,
         T: Into<std::ffi::OsString> + Clone,
     {
         let cli = Cli::parse_from(args);
-        self.run(cli)
+        self.run(cli).await
     }
 
-    fn run(&self, cli: Cli) -> Result<()> {
+    async fn run(&self, cli: Cli) -> Result<()> {
         match cli.command {
-            Command::Migration(cmd) => cmd.run(&self.db, &self.config),
+            Command::Migration(cmd) => cmd.run(&self.db, &self.config).await,
         }
     }
 }

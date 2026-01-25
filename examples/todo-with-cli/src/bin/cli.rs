@@ -13,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
     let cli = ToastyCli::with_config(db, config);
 
     // Parse and run CLI commands
-    cli.parse_and_run()?;
+    cli.parse_and_run().await?;
 
     Ok(())
 }

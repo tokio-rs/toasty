@@ -283,4 +283,62 @@ impl toasty_core::driver::Connection for Connection {
 
         Ok(())
     }
+
+    async fn applied_migrations(&mut self) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
+        // Ensure the migrations table exists
+        self.conn.exec_drop(
+            "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id BIGINT UNSIGNED PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMP NOT NULL
+            )",
+            (),
+        ).await?;
+
+        // Query all applied migrations
+        let rows: Vec<u64> = self.conn.exec(
+            "SELECT id FROM __toasty_migrations ORDER BY applied_at",
+            (),
+        ).await?;
+
+        Ok(rows.into_iter().map(|id| {
+            toasty_core::schema::db::AppliedMigration::new(id)
+        }).collect())
+    }
+
+    async fn apply_migration(&mut self, id: u64, name: String, migration: &toasty_core::schema::db::Migration) -> Result<()> {
+        // Ensure the migrations table exists
+        self.conn.exec_drop(
+            "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id BIGINT UNSIGNED PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMP NOT NULL
+            )",
+            (),
+        ).await?;
+
+        // Start transaction
+        let mut transaction = self.conn.start_transaction(Default::default()).await?;
+
+        // Execute each migration statement
+        for statement in migration.statements() {
+            if let Err(e) = transaction.query_drop(statement).await {
+                transaction.rollback().await?;
+                return Err(e.into());
+            }
+        }
+
+        // Record the migration
+        if let Err(e) = transaction.exec_drop(
+            "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES (?, ?, NOW())",
+            (id, name),
+        ).await {
+            transaction.rollback().await?;
+            return Err(e.into());
+        }
+
+        // Commit transaction
+        transaction.commit().await?;
+        Ok(())
+    }
 }

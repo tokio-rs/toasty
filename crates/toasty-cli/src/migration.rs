@@ -1,3 +1,4 @@
+mod apply;
 mod config;
 mod drop;
 mod generate;
@@ -5,6 +6,7 @@ mod history_file;
 mod snapshot;
 mod snapshot_file;
 
+pub use apply::*;
 pub use config::*;
 pub use drop::*;
 pub use generate::*;
@@ -25,6 +27,9 @@ pub struct MigrationCommand {
 
 #[derive(Parser, Debug)]
 enum MigrationSubcommand {
+    /// Apply pending migrations to the database
+    Apply(ApplyCommand),
+
     /// Generate a new migration based on schema changes
     Generate(GenerateCommand),
 
@@ -36,14 +41,15 @@ enum MigrationSubcommand {
 }
 
 impl MigrationCommand {
-    pub(crate) fn run(self, db: &Db, config: &Config) -> Result<()> {
-        self.subcommand.run(db, config)
+    pub(crate) async fn run(self, db: &Db, config: &Config) -> Result<()> {
+        self.subcommand.run(db, config).await
     }
 }
 
 impl MigrationSubcommand {
-    fn run(self, db: &Db, config: &Config) -> Result<()> {
+    async fn run(self, db: &Db, config: &Config) -> Result<()> {
         match self {
+            Self::Apply(cmd) => cmd.run(db, config).await,
             Self::Generate(cmd) => cmd.run(db, config),
             Self::Snapshot(cmd) => cmd.run(db, config),
             Self::Drop(cmd) => cmd.run(db, config),

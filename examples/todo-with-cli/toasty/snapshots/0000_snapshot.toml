@@ -84,7 +84,7 @@ auto_increment = false
 
 [[schema.tables.columns]]
 id = { table = 1, index = 3 }
-name = "completed"
+name = "lel"
 ty = "Bool"
 storage_ty = "Boolean"
 nullable = false
