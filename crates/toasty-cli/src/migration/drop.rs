@@ -1,9 +1,9 @@
 use super::HistoryFile;
-use crate::Config;
+use crate::{theme::dialoguer_theme, Config};
 use anyhow::Result;
 use clap::Parser;
 use console::style;
-use dialoguer::{Select, theme::ColorfulTheme};
+use dialoguer::Select;
 use std::fs;
 use toasty::Db;
 
@@ -51,22 +51,7 @@ impl DropCommand {
                 .map(|m| format!("  {}", m.name))
                 .collect();
 
-            let theme = ColorfulTheme {
-                active_item_style: console::Style::new().cyan().bold(),
-                active_item_prefix: console::style("❯".to_string()).cyan().bold(),
-                inactive_item_prefix: console::style(" ".to_string()),
-                checked_item_prefix: console::style("✔".to_string()).green(),
-                unchecked_item_prefix: console::style("✖".to_string()).red(),
-                prompt_style: console::Style::new().bold(),
-                prompt_prefix: console::style("?".to_string()).yellow().bold(),
-                success_prefix: console::style("✔".to_string()).green().bold(),
-                error_prefix: console::style("✖".to_string()).red().bold(),
-                hint_style: console::Style::new().dim(),
-                values_style: console::Style::new().cyan(),
-                ..Default::default()
-            };
-
-            Select::with_theme(&theme)
+            Select::with_theme(&dialoguer_theme())
                 .with_prompt("  Select migration to drop")
                 .items(&migration_display)
                 .default(migration_display.len() - 1)

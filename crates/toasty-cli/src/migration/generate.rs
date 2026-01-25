@@ -1,9 +1,9 @@
 use super::{HistoryFile, HistoryFileMigration, SnapshotFile};
-use crate::Config;
+use crate::{theme::dialoguer_theme, Config};
 use anyhow::Result;
 use clap::Parser;
 use console::style;
-use dialoguer::{theme::ColorfulTheme, Select};
+use dialoguer::Select;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use toasty::{
@@ -27,21 +27,6 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
     let mut ignored_tables = HashSet::<TableId>::new();
     let mut ignored_columns = HashMap::<TableId, HashSet<ColumnId>>::new();
     let mut ignored_indices = HashMap::<TableId, HashSet<IndexId>>::new();
-
-    let theme = ColorfulTheme {
-        active_item_style: console::Style::new().cyan().bold(),
-        active_item_prefix: console::style("❯".to_string()).cyan().bold(),
-        inactive_item_prefix: console::style(" ".to_string()),
-        checked_item_prefix: console::style("✔".to_string()).green(),
-        unchecked_item_prefix: console::style("✖".to_string()).red(),
-        prompt_style: console::Style::new().bold(),
-        prompt_prefix: console::style("?".to_string()).yellow().bold(),
-        success_prefix: console::style("✔".to_string()).green().bold(),
-        error_prefix: console::style("✖".to_string()).red().bold(),
-        hint_style: console::Style::new().dim(),
-        values_style: console::Style::new().cyan(),
-        ..Default::default()
-    };
 
     'main: loop {
         let diff = SchemaDiff::from(previous_schema, schema, &hints);
@@ -70,15 +55,15 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
         // If there are both dropped and added tables, ask about potential renames
         if !dropped_tables.is_empty() && !added_tables.is_empty() {
             for dropped_table in &dropped_tables {
-                let mut options = vec![format!("  ✖ Drop \"{}\"", dropped_table.name)];
+                let mut options = vec![format!("  Drop \"{}\" ✖", dropped_table.name)];
                 for added_table in &added_tables {
                     options.push(format!(
-                        "  \"{}\" → \"{}\"",
+                        "  Rename \"{}\" → \"{}\"",
                         dropped_table.name, added_table.name
                     ));
                 }
 
-                let selection = Select::with_theme(&theme)
+                let selection = Select::with_theme(&dialoguer_theme())
                     .with_prompt(format!("  Table \"{}\" is missing", dropped_table.name))
                     .items(&options)
                     .default(0)
@@ -131,15 +116,15 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
 
                 if !dropped_columns.is_empty() && !added_columns.is_empty() {
                     for dropped_column in &dropped_columns {
-                        let mut options = vec![format!("  ✖ Drop \"{}\"", dropped_column.name)];
+                        let mut options = vec![format!("  Drop \"{}\" ✖", dropped_column.name)];
                         for added_column in &added_columns {
                             options.push(format!(
-                                "  \"{}\" → \"{}\"",
+                                "  Rename \"{}\" → \"{}\"",
                                 dropped_column.name, added_column.name
                             ));
                         }
 
-                        let selection = Select::with_theme(&theme)
+                        let selection = Select::with_theme(&dialoguer_theme())
                             .with_prompt(format!(
                                 "  Column \"{}\".\"{}\" is missing",
                                 from.name, dropped_column.name
@@ -189,13 +174,19 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
 
                 if !dropped_indices.is_empty() && !added_indices.is_empty() {
                     for dropped_index in &dropped_indices {
-                        let mut options = vec![format!("  ✖ Drop \"{}\"", dropped_index.name)];
+                        let mut options = vec![format!("  Drop \"{}\" ✖", dropped_index.name)];
                         for added_index in &added_indices {
-                            options.push(format!("  \"{}\" → \"{}\"", dropped_index.name, added_index.name));
+                            options.push(format!(
+                                "  Rename \"{}\" → \"{}\"",
+                                dropped_index.name, added_index.name
+                            ));
                         }
 
-                        let selection = Select::with_theme(&theme)
-                            .with_prompt(format!("  Index \"{}\".\"{}\" is missing", from.name, dropped_index.name))
+                        let selection = Select::with_theme(&dialoguer_theme())
+                            .with_prompt(format!(
+                                "  Index \"{}\".\"{}\" is missing",
+                                from.name, dropped_index.name
+                            ))
                             .items(&options)
                             .default(0)
                             .interact()?;

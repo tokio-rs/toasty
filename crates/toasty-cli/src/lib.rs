@@ -1,5 +1,6 @@
 mod config;
 mod migration;
+mod theme;
 
 pub use config::*;
 pub use migration::*;
