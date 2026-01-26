@@ -1,7 +1,9 @@
+mod condition_failed;
 mod record_not_found;
 mod type_conversion;
 mod validation;
 
+use self::condition_failed::ConditionFailedError;
 use self::record_not_found::RecordNotFoundError;
 use self::type_conversion::TypeConversionError;
 use self::validation::ValidationError;
@@ -122,6 +124,20 @@ impl Error {
         }))
     }
 
+    /// Creates a condition failed error.
+    ///
+    /// This is used when a conditional operation's condition evaluates to false, such as:
+    /// - An UPDATE with a WHERE clause that matches no rows
+    /// - A DynamoDB conditional write that fails
+    /// - An optimistic lock version check that fails
+    ///
+    /// The context parameter provides information about what condition failed.
+    pub fn condition_failed(context: impl Into<String>) -> Error {
+        Error::from(ErrorKind::ConditionFailed(
+            condition_failed::ConditionFailedError::new(Some(context.into().into())),
+        ))
+    }
+
     /// Adds context to this error.
     ///
     /// Context is displayed in reverse order: the most recently added context is shown first,
@@ -217,6 +233,7 @@ enum ErrorKind {
     TypeConversion(TypeConversionError),
     RecordNotFound(RecordNotFoundError),
     Validation(ValidationError),
+    ConditionFailed(ConditionFailedError),
     Unknown,
 }
 
@@ -250,6 +267,7 @@ impl core::fmt::Display for ErrorKind {
             TypeConversion(err) => core::fmt::Display::fmt(err, f),
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
             Validation(err) => core::fmt::Display::fmt(err, f),
+            ConditionFailed(err) => core::fmt::Display::fmt(err, f),
             Unknown => f.write_str("unknown toasty error"),
         }
     }
@@ -446,5 +464,28 @@ mod tests {
     fn validation_length_max_only() {
         let err = Error::validation_length(15, None, Some(10));
         assert_eq!(err.to_string(), "value length 15 is too long (maximum: 10)");
+    }
+
+    #[test]
+    fn condition_failed_with_context() {
+        let err = Error::condition_failed("optimistic lock version mismatch");
+        assert_eq!(
+            err.to_string(),
+            "condition failed: optimistic lock version mismatch"
+        );
+    }
+
+    #[test]
+    fn condition_failed_with_format() {
+        let expected = 1;
+        let actual = 0;
+        let err = Error::condition_failed(format!(
+            "expected {} row affected, got {}",
+            expected, actual
+        ));
+        assert_eq!(
+            err.to_string(),
+            "condition failed: expected 1 row affected, got 0"
+        );
     }
 }
