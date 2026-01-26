@@ -1,3 +1,8 @@
+mod record_not_found;
+mod type_conversion;
+
+use self::record_not_found::RecordNotFoundError;
+use self::type_conversion::TypeConversionError;
 use std::sync::Arc;
 
 /// Temporary helper macro during migration from anyhow.
@@ -69,10 +74,9 @@ impl Error {
     ///
     /// This is used when a value cannot be converted to the expected type.
     pub fn type_conversion(value: crate::stmt::Value, to_type: &'static str) -> Error {
-        Error::from(ErrorKind::TypeConversion(TypeConversionError {
-            value,
-            to_type,
-        }))
+        Error::from(ErrorKind::TypeConversion(
+            type_conversion::TypeConversionError { value, to_type },
+        ))
     }
 
     /// Creates a record not found error.
@@ -98,9 +102,9 @@ impl Error {
     /// assert_eq!(err.to_string(), "record not found: table=users key=123");
     /// ```
     pub fn record_not_found(context: impl Into<String>) -> Error {
-        Error::from(ErrorKind::RecordNotFound(RecordNotFoundError::new(Some(
-            context.into().into(),
-        ))))
+        Error::from(ErrorKind::RecordNotFound(
+            record_not_found::RecordNotFoundError::new(Some(context.into().into())),
+        ))
     }
 
     /// Adds context to this error.
@@ -186,48 +190,6 @@ impl core::fmt::Debug for Error {
                 .field("cause", &inner.cause)
                 .finish()
         }
-    }
-}
-
-#[derive(Debug)]
-struct TypeConversionError {
-    value: crate::stmt::Value,
-    to_type: &'static str,
-}
-
-impl std::error::Error for TypeConversionError {}
-
-impl core::fmt::Display for TypeConversionError {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        write!(
-            f,
-            "cannot convert {:?} to {}",
-            self.value.infer_ty(),
-            self.to_type
-        )
-    }
-}
-
-#[derive(Debug)]
-struct RecordNotFoundError {
-    context: Option<Box<str>>,
-}
-
-impl RecordNotFoundError {
-    fn new(context: Option<Box<str>>) -> Self {
-        RecordNotFoundError { context }
-    }
-}
-
-impl std::error::Error for RecordNotFoundError {}
-
-impl core::fmt::Display for RecordNotFoundError {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        f.write_str("record not found")?;
-        if let Some(ref ctx) = self.context {
-            write!(f, ": {}", ctx)?;
-        }
-        Ok(())
     }
 }
 
