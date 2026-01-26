@@ -16,23 +16,21 @@ impl ConstraintLength {
             return Ok(());
         };
 
-        if let Some(min) = self.min {
-            let min = min as usize;
+        let value_len = value.len();
+        let min = self.min.map(|m| m as usize);
+        let max = self.max.map(|m| m as usize);
 
-            if value.len() < min {
-                if self.max == self.min {
-                    crate::bail!("value is too short; expected length of {min}");
-                }
-
-                crate::bail!("value is too short: {value:?} < {min}");
+        // Check minimum length
+        if let Some(min_val) = min {
+            if value_len < min_val {
+                return Err(crate::Error::validation_length(value_len, min, max));
             }
         }
 
-        if let Some(max) = self.max {
-            let max = max as usize;
-
-            if value.len() > max {
-                crate::bail!("value is too long: {value:?} > {max}");
+        // Check maximum length
+        if let Some(max_val) = max {
+            if value_len > max_val {
+                return Err(crate::Error::validation_length(value_len, min, max));
             }
         }
 
