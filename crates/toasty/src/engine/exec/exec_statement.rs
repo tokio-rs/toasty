@@ -137,7 +137,9 @@ impl Exec<'_> {
             assert_eq!(record.len(), 2);
 
             if record[0] != record[1] {
-                crate::bail!("update condition did not match");
+                return Err(toasty_core::Error::condition_failed(
+                    "update condition did not match",
+                ));
             }
 
             res.rows = Rows::Count(record[0].to_u64_unwrap());

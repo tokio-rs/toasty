@@ -140,7 +140,9 @@ impl Connection {
                             // TODO: can we check?
                             // assert!(!condition.eval_bool(&record).unwrap());
 
-                            // TODO: probably map the error, but for now fall through
+                            return Err(toasty_core::Error::condition_failed(
+                                "DynamoDB conditional check failed",
+                            ));
                         }
 
                         return Err(toasty_core::Error::driver(SdkError::ServiceError(e)));

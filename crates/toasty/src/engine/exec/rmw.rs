@@ -70,7 +70,9 @@ impl Exec<'_> {
         };
 
         if record[0] != record[1] {
-            crate::bail!("update condition did not match");
+            return Err(toasty_core::Error::condition_failed(
+                "update condition did not match",
+            ));
         }
 
         let res = self
