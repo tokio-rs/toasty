@@ -220,7 +220,10 @@ impl Connection {
                     .map_err(toasty_core::Error::driver)?;
 
                 let Some(mut curr_unique_values) = res.item else {
-                    toasty_core::bail!("item not found")
+                    return Err(toasty_core::Error::record_not_found(format!(
+                        "table={} key={:?}",
+                        table.name, key
+                    )));
                 };
 
                 // Which unique attributes are being updated
