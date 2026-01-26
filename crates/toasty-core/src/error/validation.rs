@@ -35,8 +35,8 @@ impl core::fmt::Display for ValidationError {
                 }
 
                 // Check which constraint was violated
-                let too_short = min.map_or(false, |m| *value_len < m);
-                let too_long = max.map_or(false, |m| *value_len > m);
+                let too_short = min.is_some_and(|m| *value_len < m);
+                let too_long = max.is_some_and(|m| *value_len > m);
 
                 if too_short {
                     write!(
