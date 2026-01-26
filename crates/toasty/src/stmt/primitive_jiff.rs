@@ -14,7 +14,7 @@ macro_rules! impl_jiff_primitive {
             fn load(value: Value) -> Result<Self> {
                 match value {
                     Value::$name(v) => Ok(v),
-                    _ => crate::bail!("cannot convert value to {} {value:#?}", $lit),
+                    _ => Err(toasty_core::Error::type_conversion(value, $lit)),
                 }
             }
         }

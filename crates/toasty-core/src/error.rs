@@ -65,6 +65,16 @@ impl Error {
         Error::from(ErrorKind::ConnectionPool(Box::new(err)))
     }
 
+    /// Creates a type conversion error.
+    ///
+    /// This is used when a value cannot be converted to the expected type.
+    pub fn type_conversion(value: crate::stmt::Value, to_type: &'static str) -> Error {
+        Error::from(ErrorKind::TypeConversion(TypeConversionError {
+            value,
+            to_type,
+        }))
+    }
+
     #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn context(self, consequent: impl IntoError) -> Error {
@@ -149,11 +159,31 @@ impl core::fmt::Debug for Error {
 }
 
 #[derive(Debug)]
+struct TypeConversionError {
+    value: crate::stmt::Value,
+    to_type: &'static str,
+}
+
+impl std::error::Error for TypeConversionError {}
+
+impl core::fmt::Display for TypeConversionError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(
+            f,
+            "cannot convert {:?} to {}",
+            self.value.infer_ty(),
+            self.to_type
+        )
+    }
+}
+
+#[derive(Debug)]
 enum ErrorKind {
     Anyhow(anyhow::Error),
     Adhoc(AdhocError),
     Driver(Box<dyn std::error::Error + Send + Sync>),
     ConnectionPool(Box<dyn std::error::Error + Send + Sync>),
+    TypeConversion(TypeConversionError),
     Unknown,
 }
 
@@ -184,6 +214,7 @@ impl core::fmt::Display for ErrorKind {
                 }
                 Ok(())
             }
+            TypeConversion(err) => core::fmt::Display::fmt(err, f),
             Unknown => f.write_str("unknown toasty error"),
         }
     }
@@ -331,5 +362,20 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
         let our_err: Error = io_err.into();
         assert!(our_err.to_string().contains("file not found"));
+    }
+
+    #[test]
+    fn type_conversion_error() {
+        let value = crate::stmt::Value::I64(42);
+        let err = Error::type_conversion(value, "String");
+        assert_eq!(err.to_string(), "cannot convert I64 to String");
+    }
+
+    #[test]
+    fn type_conversion_error_range() {
+        // Simulates usize conversion failure due to range
+        let value = crate::stmt::Value::U64(u64::MAX);
+        let err = Error::type_conversion(value, "usize");
+        assert_eq!(err.to_string(), "cannot convert U64 to usize");
     }
 }
