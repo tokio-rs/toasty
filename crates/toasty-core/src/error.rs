@@ -75,9 +75,40 @@ impl Error {
         }))
     }
 
-    #[allow(dead_code)]
+    /// Creates a record not found error.
+    ///
+    /// This is the root cause error when a record lookup (by query or key) returns no results.
+    ///
+    /// The context parameter provides immediate context about what was not found.
+    /// Additional context can be added at each layer via `.context()`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::Error;
+    ///
+    /// // With context describing what wasn't found (string literal)
+    /// let err = Error::record_not_found("table=users key={id: 123}");
+    /// assert_eq!(err.to_string(), "record not found: table=users key={id: 123}");
+    ///
+    /// // With context from format! or String
+    /// let table = "users";
+    /// let key = 123;
+    /// let err = Error::record_not_found(format!("table={} key={}", table, key));
+    /// assert_eq!(err.to_string(), "record not found: table=users key=123");
+    /// ```
+    pub fn record_not_found(context: impl Into<String>) -> Error {
+        Error::from(ErrorKind::RecordNotFound(RecordNotFoundError::new(Some(
+            context.into().into(),
+        ))))
+    }
+
+    /// Adds context to this error.
+    ///
+    /// Context is displayed in reverse order: the most recently added context is shown first,
+    /// followed by earlier context, ending with the root cause.
     #[inline(always)]
-    pub(crate) fn context(self, consequent: impl IntoError) -> Error {
+    pub fn context(self, consequent: impl IntoError) -> Error {
         self.context_impl(consequent.into_error())
     }
 
@@ -178,12 +209,36 @@ impl core::fmt::Display for TypeConversionError {
 }
 
 #[derive(Debug)]
+struct RecordNotFoundError {
+    context: Option<Box<str>>,
+}
+
+impl RecordNotFoundError {
+    fn new(context: Option<Box<str>>) -> Self {
+        RecordNotFoundError { context }
+    }
+}
+
+impl std::error::Error for RecordNotFoundError {}
+
+impl core::fmt::Display for RecordNotFoundError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        f.write_str("record not found")?;
+        if let Some(ref ctx) = self.context {
+            write!(f, ": {}", ctx)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
 enum ErrorKind {
     Anyhow(anyhow::Error),
     Adhoc(AdhocError),
     Driver(Box<dyn std::error::Error + Send + Sync>),
     ConnectionPool(Box<dyn std::error::Error + Send + Sync>),
     TypeConversion(TypeConversionError),
+    RecordNotFound(RecordNotFoundError),
     Unknown,
 }
 
@@ -215,6 +270,7 @@ impl core::fmt::Display for ErrorKind {
                 Ok(())
             }
             TypeConversion(err) => core::fmt::Display::fmt(err, f),
+            RecordNotFound(err) => core::fmt::Display::fmt(err, f),
             Unknown => f.write_str("unknown toasty error"),
         }
     }
@@ -285,8 +341,9 @@ impl core::fmt::Debug for AdhocError {
     }
 }
 
-#[allow(dead_code)]
-pub(crate) trait IntoError {
+/// Trait for types that can be converted into an Error.
+pub trait IntoError {
+    /// Converts this type into an Error.
     fn into_error(self) -> Error;
 }
 
@@ -294,27 +351,6 @@ impl IntoError for Error {
     #[inline(always)]
     fn into_error(self) -> Error {
         self
-    }
-}
-
-#[allow(dead_code)]
-pub(crate) trait ErrorContext<T, E> {
-    fn context(self, consequent: impl IntoError) -> Result<T, Error>;
-    fn with_context<C: IntoError>(self, consequent: impl FnOnce() -> C) -> Result<T, Error>;
-}
-
-impl<T, E> ErrorContext<T, E> for Result<T, E>
-where
-    E: IntoError,
-{
-    #[inline(always)]
-    fn context(self, consequent: impl IntoError) -> Result<T, Error> {
-        self.map_err(|err| err.into_error().context_impl(consequent.into_error()))
-    }
-
-    #[inline(always)]
-    fn with_context<C: IntoError>(self, consequent: impl FnOnce() -> C) -> Result<T, Error> {
-        self.map_err(|err| err.into_error().context_impl(consequent().into_error()))
     }
 }
 
@@ -377,5 +413,26 @@ mod tests {
         let value = crate::stmt::Value::U64(u64::MAX);
         let err = Error::type_conversion(value, "usize");
         assert_eq!(err.to_string(), "cannot convert U64 to usize");
+    }
+
+    #[test]
+    fn record_not_found_with_immediate_context() {
+        let err = Error::record_not_found("table=users key={id: 123}");
+        assert_eq!(
+            err.to_string(),
+            "record not found: table=users key={id: 123}"
+        );
+    }
+
+    #[test]
+    fn record_not_found_with_context_chain() {
+        let err = Error::record_not_found("table=users key={id: 123}")
+            .context(err!("update query failed"))
+            .context(err!("User.update() operation"));
+
+        assert_eq!(
+            err.to_string(),
+            "User.update() operation: update query failed: record not found: table=users key={id: 123}"
+        );
     }
 }
