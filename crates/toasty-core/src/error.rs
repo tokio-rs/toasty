@@ -354,30 +354,6 @@ impl IntoError for Error {
     }
 }
 
-/// Extension trait for adding context to Results.
-pub trait ErrorContext<T, E> {
-    /// Adds context to the error if the Result is Err.
-    fn context(self, consequent: impl IntoError) -> Result<T, Error>;
-
-    /// Adds lazily-evaluated context to the error if the Result is Err.
-    fn with_context<C: IntoError>(self, consequent: impl FnOnce() -> C) -> Result<T, Error>;
-}
-
-impl<T, E> ErrorContext<T, E> for Result<T, E>
-where
-    E: IntoError,
-{
-    #[inline(always)]
-    fn context(self, consequent: impl IntoError) -> Result<T, Error> {
-        self.map_err(|err| err.into_error().context_impl(consequent.into_error()))
-    }
-
-    #[inline(always)]
-    fn with_context<C: IntoError>(self, consequent: impl FnOnce() -> C) -> Result<T, Error> {
-        self.map_err(|err| err.into_error().context_impl(consequent().into_error()))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
