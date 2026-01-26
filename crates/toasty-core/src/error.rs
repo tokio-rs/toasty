@@ -1,8 +1,10 @@
 mod record_not_found;
 mod type_conversion;
+mod validation;
 
 use self::record_not_found::RecordNotFoundError;
 use self::type_conversion::TypeConversionError;
+use self::validation::ValidationError;
 use std::sync::Arc;
 
 /// Temporary helper macro during migration from anyhow.
@@ -107,6 +109,19 @@ impl Error {
         ))
     }
 
+    /// Creates a validation error for a length constraint violation.
+    ///
+    /// This is used when a string value violates minimum or maximum length constraints.
+    pub fn validation_length(value_len: usize, min: Option<usize>, max: Option<usize>) -> Error {
+        Error::from(ErrorKind::Validation(validation::ValidationError {
+            kind: validation::ValidationErrorKind::Length {
+                value_len,
+                min,
+                max,
+            },
+        }))
+    }
+
     /// Adds context to this error.
     ///
     /// Context is displayed in reverse order: the most recently added context is shown first,
@@ -201,6 +216,7 @@ enum ErrorKind {
     ConnectionPool(Box<dyn std::error::Error + Send + Sync>),
     TypeConversion(TypeConversionError),
     RecordNotFound(RecordNotFoundError),
+    Validation(ValidationError),
     Unknown,
 }
 
@@ -233,6 +249,7 @@ impl core::fmt::Display for ErrorKind {
             }
             TypeConversion(err) => core::fmt::Display::fmt(err, f),
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
+            Validation(err) => core::fmt::Display::fmt(err, f),
             Unknown => f.write_str("unknown toasty error"),
         }
     }
@@ -396,5 +413,38 @@ mod tests {
             err.to_string(),
             "User.update() operation: update query failed: record not found: table=users key={id: 123}"
         );
+    }
+
+    #[test]
+    fn validation_length_too_short() {
+        let err = Error::validation_length(3, Some(5), Some(10));
+        assert_eq!(err.to_string(), "value length 3 is too short (minimum: 5)");
+    }
+
+    #[test]
+    fn validation_length_too_long() {
+        let err = Error::validation_length(15, Some(5), Some(10));
+        assert_eq!(err.to_string(), "value length 15 is too long (maximum: 10)");
+    }
+
+    #[test]
+    fn validation_length_exact_mismatch() {
+        let err = Error::validation_length(3, Some(5), Some(5));
+        assert_eq!(
+            err.to_string(),
+            "value length 3 does not match required length 5"
+        );
+    }
+
+    #[test]
+    fn validation_length_min_only() {
+        let err = Error::validation_length(3, Some(5), None);
+        assert_eq!(err.to_string(), "value length 3 is too short (minimum: 5)");
+    }
+
+    #[test]
+    fn validation_length_max_only() {
+        let err = Error::validation_length(15, None, Some(10));
+        assert_eq!(err.to_string(), "value length 15 is too long (maximum: 10)");
     }
 }
