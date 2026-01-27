@@ -2,22 +2,22 @@ use super::Error;
 
 /// An ad-hoc error created from a format string.
 #[derive(Debug)]
-pub(super) struct AdhocError {
+pub(super) struct Adhoc {
     pub(super) message: Box<str>,
 }
 
-impl AdhocError {
-    pub(super) fn from_args<'a>(message: core::fmt::Arguments<'a>) -> AdhocError {
+impl Adhoc {
+    pub(super) fn from_args<'a>(message: core::fmt::Arguments<'a>) -> Adhoc {
         use std::string::ToString;
 
         let message = message.to_string().into_boxed_str();
-        AdhocError { message }
+        Adhoc { message }
     }
 }
 
-impl std::error::Error for AdhocError {}
+impl std::error::Error for Adhoc {}
 
-impl core::fmt::Display for AdhocError {
+impl core::fmt::Display for Adhoc {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         core::fmt::Display::fmt(&self.message, f)
     }
@@ -34,7 +34,7 @@ impl Error {
     /// let err = Error::from_args(format_args!("value {} is invalid", "foo"));
     /// ```
     pub fn from_args<'a>(message: core::fmt::Arguments<'a>) -> Error {
-        Error::from(super::ErrorKind::Adhoc(AdhocError::from_args(message)))
+        Error::from(super::ErrorKind::Adhoc(Adhoc::from_args(message)))
     }
 
     /// Returns `true` if this error is an adhoc error.

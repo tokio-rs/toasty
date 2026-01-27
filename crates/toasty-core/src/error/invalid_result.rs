@@ -10,13 +10,13 @@ use super::Error;
 /// This indicates the database returned valid data, but its structure doesn't match
 /// what the query operation expected based on the schema and query type.
 #[derive(Debug)]
-pub(super) struct InvalidResultError {
+pub(super) struct InvalidResult {
     message: Box<str>,
 }
 
-impl std::error::Error for InvalidResultError {}
+impl std::error::Error for InvalidResult {}
 
-impl core::fmt::Display for InvalidResultError {
+impl core::fmt::Display for InvalidResult {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "invalid result: {}", self.message)
     }
@@ -28,7 +28,7 @@ impl Error {
     /// This is used when a query result has an unexpected structure - the database
     /// returned valid data, but its shape doesn't match what the operation expected.
     pub fn invalid_result(message: impl Into<String>) -> Error {
-        Error::from(super::ErrorKind::InvalidResult(InvalidResultError {
+        Error::from(super::ErrorKind::InvalidResult(InvalidResult {
             message: message.into().into(),
         }))
     }

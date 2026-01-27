@@ -87,7 +87,7 @@ impl Db {
         };
         let next = res.next().await;
         let None = next else {
-            return Err(toasty_core::Error::too_many_records(
+            return Err(toasty_core::Error::invalid_record_count(
                 "expected 1 record, found multiple",
             ));
         };

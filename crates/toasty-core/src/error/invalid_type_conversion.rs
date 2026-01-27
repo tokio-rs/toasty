@@ -3,14 +3,14 @@ use crate::stmt::Value;
 
 /// Error when a value cannot be converted to the expected type.
 #[derive(Debug)]
-pub(super) struct TypeConversionError {
+pub(super) struct InvalidTypeConversion {
     pub(super) value: Value,
     pub(super) to_type: &'static str,
 }
 
-impl std::error::Error for TypeConversionError {}
+impl std::error::Error for InvalidTypeConversion {}
 
-impl core::fmt::Display for TypeConversionError {
+impl core::fmt::Display for InvalidTypeConversion {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(
             f,
@@ -26,14 +26,13 @@ impl Error {
     ///
     /// This is used when a value cannot be converted to the expected type.
     pub fn type_conversion(value: crate::stmt::Value, to_type: &'static str) -> Error {
-        Error::from(super::ErrorKind::TypeConversion(TypeConversionError {
-            value,
-            to_type,
-        }))
+        Error::from(super::ErrorKind::InvalidTypeConversion(
+            InvalidTypeConversion { value, to_type },
+        ))
     }
 
     /// Returns `true` if this error is a type conversion error.
     pub fn is_type_conversion(&self) -> bool {
-        matches!(self.kind(), super::ErrorKind::TypeConversion(_))
+        matches!(self.kind(), super::ErrorKind::InvalidTypeConversion(_))
     }
 }
