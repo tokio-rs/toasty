@@ -3,6 +3,7 @@ mod condition_failed;
 mod connection_pool;
 mod driver;
 mod invalid_result;
+mod invalid_schema;
 mod record_not_found;
 mod too_many_records;
 mod type_conversion;
@@ -13,6 +14,7 @@ use condition_failed::ConditionFailedError;
 use connection_pool::ConnectionPoolError;
 use driver::DriverError;
 use invalid_result::InvalidResultError;
+use invalid_schema::InvalidSchemaError;
 use record_not_found::RecordNotFoundError;
 use std::sync::Arc;
 use too_many_records::TooManyRecordsError;
@@ -152,6 +154,7 @@ enum ErrorKind {
     RecordNotFound(RecordNotFoundError),
     TooManyRecords(TooManyRecordsError),
     InvalidResult(InvalidResultError),
+    InvalidSchema(InvalidSchemaError),
     Validation(ValidationError),
     ConditionFailed(ConditionFailedError),
     Unknown,
@@ -170,6 +173,7 @@ impl core::fmt::Display for ErrorKind {
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
             TooManyRecords(err) => core::fmt::Display::fmt(err, f),
             InvalidResult(err) => core::fmt::Display::fmt(err, f),
+            InvalidSchema(err) => core::fmt::Display::fmt(err, f),
             Validation(err) => core::fmt::Display::fmt(err, f),
             ConditionFailed(err) => core::fmt::Display::fmt(err, f),
             Unknown => f.write_str("unknown toasty error"),
@@ -381,6 +385,27 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "condition failed: expected 1 row affected, got 0"
+        );
+    }
+
+    #[test]
+    fn invalid_schema_error() {
+        let err = Error::invalid_schema("duplicate index name `idx_users`");
+        assert_eq!(
+            err.to_string(),
+            "invalid schema: duplicate index name `idx_users`"
+        );
+    }
+
+    #[test]
+    fn invalid_schema_with_context() {
+        let err = Error::invalid_schema(
+            "auto_increment column `id` in table `users` must have a numeric type, found String",
+        )
+        .context(err!("schema verification failed"));
+        assert_eq!(
+            err.to_string(),
+            "schema verification failed: invalid schema: auto_increment column `id` in table `users` must have a numeric type, found String"
         );
     }
 }
