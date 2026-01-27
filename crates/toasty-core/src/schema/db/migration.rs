@@ -16,14 +16,14 @@ impl Migration {
             .iter()
             .map(|s| s.as_ref())
             .collect::<Vec<_>>()
-            .join("\n-- [toasty::breakpoint]\n");
+            .join("\n-- #[toasty::breakpoint]\n");
         Migration::Sql(sql)
     }
 
     /// Get individual SQL statements by splitting on breakpoint markers.
     pub fn statements(&self) -> Vec<&str> {
         match self {
-            Migration::Sql(sql) => sql.split("\n-- [toasty::breakpoint]\n").collect(),
+            Migration::Sql(sql) => sql.split("\n-- #[toasty::breakpoint]\n").collect(),
         }
     }
 }

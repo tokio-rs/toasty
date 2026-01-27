@@ -73,6 +73,20 @@ impl ToSql for &stmt::CreateIndex {
     }
 }
 
+impl ToSql for &stmt::AddColumn {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        let table = f.serializer.table(self.table);
+        let table_name = Ident(&table.name);
+
+        // Create new expression scope to serialize the statement
+        let cx = cx.scope(table);
+
+        fmt!(
+            &cx, f, "ALTER TABLE " table_name " ADD COLUMN " self.column
+        );
+    }
+}
+
 impl ToSql for &stmt::CreateTable {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         let table = f.serializer.table(self.table);
@@ -117,6 +131,26 @@ impl ToSql for &stmt::Direction {
             stmt::Direction::Asc => fmt!(cx, f, "ASC"),
             stmt::Direction::Desc => fmt!(cx, f, "DESC"),
         }
+    }
+}
+
+impl ToSql for &stmt::DropColumn {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        let table = f.serializer.table(self.table);
+        let table_name = Ident(&table.name);
+        let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
+
+        // Create new expression scope to serialize the statement
+        let cx = cx.scope(table);
+
+        fmt!(&cx, f, "ALTER TABLE " table_name " DROP COLUMN " if_exists self.name);
+    }
+}
+
+impl ToSql for &stmt::DropIndex {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
+        fmt!(cx, f, "DROP INDEX " if_exists self.name);
     }
 }
 
@@ -318,8 +352,11 @@ impl ToSql for &toasty_core::stmt::Statement {
 impl ToSql for &stmt::Statement {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         match self {
+            stmt::Statement::AddColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateIndex(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateTable(stmt) => stmt.to_sql(cx, f),
+            stmt::Statement::DropColumn(stmt) => stmt.to_sql(cx, f),
+            stmt::Statement::DropIndex(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropTable(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::Delete(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::Insert(stmt) => stmt.to_sql(cx, f),

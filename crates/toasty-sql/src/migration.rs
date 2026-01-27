@@ -1,6 +1,6 @@
 use toasty_core::{
     driver::Capability,
-    schema::db::{Schema, SchemaDiff, TablesDiffItem},
+    schema::db::{ColumnsDiffItem, IndicesDiffItem, Schema, SchemaDiff, TablesDiffItem},
 };
 
 use crate::stmt::Statement;
@@ -31,15 +31,67 @@ impl<'a> MigrationStatement<'a> {
                     statement: Statement::drop_table(table),
                     schema: schema_diff.previous(),
                 }),
-                TablesDiffItem::AlterTable { from, to, .. } => {
-                    result.push(MigrationStatement {
-                        statement: Statement::drop_table(from),
-                        schema: schema_diff.previous(),
-                    });
-                    result.push(MigrationStatement {
-                        statement: Statement::create_table(to, capability),
-                        schema: schema_diff.next(),
-                    });
+                TablesDiffItem::AlterTable {
+                    from,
+                    to,
+                    columns,
+                    indices,
+                } => {
+                    // Columns diff
+                    for item in columns.iter() {
+                        match item {
+                            ColumnsDiffItem::AddColumn(column) => {
+                                result.push(MigrationStatement {
+                                    statement: Statement::add_column(column, capability),
+                                    schema: schema_diff.next(),
+                                });
+                            }
+                            ColumnsDiffItem::DropColumn(column) => {
+                                result.push(MigrationStatement {
+                                    statement: Statement::drop_column(column),
+                                    schema: schema_diff.previous(),
+                                });
+                            }
+                            ColumnsDiffItem::AlterColumn { from, to } => {
+                                result.push(MigrationStatement {
+                                    statement: Statement::drop_column(from),
+                                    schema: schema_diff.previous(),
+                                });
+                                result.push(MigrationStatement {
+                                    statement: Statement::add_column(to, capability),
+                                    schema: schema_diff.next(),
+                                });
+                            }
+                        }
+                    }
+
+                    // Indices diff
+                    for item in indices.iter() {
+                        match item {
+                            IndicesDiffItem::CreateIndex(index) => {
+                                result.push(MigrationStatement {
+                                    statement: Statement::create_index(index),
+                                    schema: schema_diff.next(),
+                                });
+                            }
+                            IndicesDiffItem::DropIndex(index) => {
+                                result.push(MigrationStatement {
+                                    statement: Statement::drop_index(index),
+                                    schema: schema_diff.previous(),
+                                });
+                            }
+                            IndicesDiffItem::AlterIndex { from, to } => {
+                                result.push(MigrationStatement {
+                                    statement: Statement::drop_index(from),
+                                    schema: schema_diff.previous(),
+                                });
+                                result.push(MigrationStatement {
+                                    statement: Statement::create_index(to),
+                                    schema: schema_diff.next(),
+                                });
+                            }
+                        }
+                    }
                 }
             }
         }
