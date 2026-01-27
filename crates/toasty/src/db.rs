@@ -87,7 +87,9 @@ impl Db {
         };
         let next = res.next().await;
         let None = next else {
-            crate::bail!("more than one record; next={next:#?}")
+            return Err(toasty_core::Error::too_many_records(
+                "expected 1 record, found multiple",
+            ));
         };
 
         ret

@@ -3,6 +3,7 @@ mod condition_failed;
 mod connection_pool;
 mod driver;
 mod record_not_found;
+mod too_many_records;
 mod type_conversion;
 mod validation;
 
@@ -12,6 +13,7 @@ use connection_pool::ConnectionPoolError;
 use driver::DriverError;
 use record_not_found::RecordNotFoundError;
 use std::sync::Arc;
+use too_many_records::TooManyRecordsError;
 use type_conversion::TypeConversionError;
 use validation::ValidationError;
 
@@ -146,6 +148,7 @@ enum ErrorKind {
     ConnectionPool(ConnectionPoolError),
     TypeConversion(TypeConversionError),
     RecordNotFound(RecordNotFoundError),
+    TooManyRecords(TooManyRecordsError),
     Validation(ValidationError),
     ConditionFailed(ConditionFailedError),
     Unknown,
@@ -162,6 +165,7 @@ impl core::fmt::Display for ErrorKind {
             ConnectionPool(err) => core::fmt::Display::fmt(err, f),
             TypeConversion(err) => core::fmt::Display::fmt(err, f),
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
+            TooManyRecords(err) => core::fmt::Display::fmt(err, f),
             Validation(err) => core::fmt::Display::fmt(err, f),
             ConditionFailed(err) => core::fmt::Display::fmt(err, f),
             Unknown => f.write_str("unknown toasty error"),
@@ -299,6 +303,15 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "User.update() operation: update query failed: record not found: table=users key={id: 123}"
+        );
+    }
+
+    #[test]
+    fn too_many_records_with_context() {
+        let err = Error::too_many_records("expected 1 record, found multiple");
+        assert_eq!(
+            err.to_string(),
+            "too many records: expected 1 record, found multiple"
         );
     }
 
