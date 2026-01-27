@@ -2,6 +2,7 @@ mod adhoc;
 mod condition_failed;
 mod connection_pool;
 mod driver;
+mod invalid_result;
 mod record_not_found;
 mod too_many_records;
 mod type_conversion;
@@ -11,6 +12,7 @@ use adhoc::AdhocError;
 use condition_failed::ConditionFailedError;
 use connection_pool::ConnectionPoolError;
 use driver::DriverError;
+use invalid_result::InvalidResultError;
 use record_not_found::RecordNotFoundError;
 use std::sync::Arc;
 use too_many_records::TooManyRecordsError;
@@ -149,6 +151,7 @@ enum ErrorKind {
     TypeConversion(TypeConversionError),
     RecordNotFound(RecordNotFoundError),
     TooManyRecords(TooManyRecordsError),
+    InvalidResult(InvalidResultError),
     Validation(ValidationError),
     ConditionFailed(ConditionFailedError),
     Unknown,
@@ -166,6 +169,7 @@ impl core::fmt::Display for ErrorKind {
             TypeConversion(err) => core::fmt::Display::fmt(err, f),
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
             TooManyRecords(err) => core::fmt::Display::fmt(err, f),
+            InvalidResult(err) => core::fmt::Display::fmt(err, f),
             Validation(err) => core::fmt::Display::fmt(err, f),
             ConditionFailed(err) => core::fmt::Display::fmt(err, f),
             Unknown => f.write_str("unknown toasty error"),
@@ -312,6 +316,15 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "too many records: expected 1 record, found multiple"
+        );
+    }
+
+    #[test]
+    fn invalid_result_error() {
+        let err = Error::invalid_result("expected Stream, got Count");
+        assert_eq!(
+            err.to_string(),
+            "invalid result: expected Stream, got Count"
         );
     }
 
