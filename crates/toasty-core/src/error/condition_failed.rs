@@ -1,3 +1,5 @@
+use super::Error;
+
 /// Error when a conditional operation's condition evaluates to false.
 ///
 /// This occurs when:
@@ -6,14 +8,7 @@
 /// - An optimistic lock version check fails
 #[derive(Debug)]
 pub(super) struct ConditionFailedError {
-    /// Optional context describing what condition failed
-    pub(super) context: Option<Box<str>>,
-}
-
-impl ConditionFailedError {
-    pub(super) fn new(context: Option<Box<str>>) -> Self {
-        ConditionFailedError { context }
-    }
+    context: Option<Box<str>>,
 }
 
 impl std::error::Error for ConditionFailedError {}
@@ -25,5 +20,21 @@ impl core::fmt::Display for ConditionFailedError {
             write!(f, ": {}", ctx)?;
         }
         Ok(())
+    }
+}
+
+impl Error {
+    /// Creates a condition failed error.
+    ///
+    /// This is used when a conditional operation's condition evaluates to false, such as:
+    /// - An UPDATE with a WHERE clause that matches no rows
+    /// - A DynamoDB conditional write that fails
+    /// - An optimistic lock version check that fails
+    ///
+    /// The context parameter provides information about what condition failed.
+    pub fn condition_failed(context: impl Into<String>) -> Error {
+        Error::from(super::ErrorKind::ConditionFailed(ConditionFailedError {
+            context: Some(context.into().into()),
+        }))
     }
 }

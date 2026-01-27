@@ -1,7 +1,9 @@
+use super::Error;
+
 /// Error when a value fails validation constraints.
 #[derive(Debug)]
 pub(super) struct ValidationError {
-    pub(super) kind: ValidationErrorKind,
+    kind: ValidationErrorKind,
 }
 
 #[derive(Debug)]
@@ -57,5 +59,20 @@ impl core::fmt::Display for ValidationError {
                 }
             }
         }
+    }
+}
+
+impl Error {
+    /// Creates a validation error for a length constraint violation.
+    ///
+    /// This is used when a string value violates minimum or maximum length constraints.
+    pub fn validation_length(value_len: usize, min: Option<usize>, max: Option<usize>) -> Error {
+        Error::from(super::ErrorKind::Validation(ValidationError {
+            kind: ValidationErrorKind::Length {
+                value_len,
+                min,
+                max,
+            },
+        }))
     }
 }

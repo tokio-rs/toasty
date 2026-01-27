@@ -1,13 +1,19 @@
+mod adhoc;
 mod condition_failed;
+mod connection_pool;
+mod driver;
 mod record_not_found;
 mod type_conversion;
 mod validation;
 
-use self::condition_failed::ConditionFailedError;
-use self::record_not_found::RecordNotFoundError;
-use self::type_conversion::TypeConversionError;
-use self::validation::ValidationError;
+use adhoc::AdhocError;
+use condition_failed::ConditionFailedError;
+use connection_pool::ConnectionPoolError;
+use driver::DriverError;
+use record_not_found::RecordNotFoundError;
 use std::sync::Arc;
+use type_conversion::TypeConversionError;
+use validation::ValidationError;
 
 /// Temporary helper macro during migration from anyhow.
 ///
@@ -46,98 +52,6 @@ struct ErrorInner {
 }
 
 impl Error {
-    /// Creates an error from a format string.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use toasty_core::Error;
-    ///
-    /// let err = Error::from_args(format_args!("value {} is invalid", "foo"));
-    /// ```
-    pub fn from_args<'a>(message: core::fmt::Arguments<'a>) -> Error {
-        Error::from(ErrorKind::Adhoc(AdhocError::from_args(message)))
-    }
-
-    /// Creates an error from a driver error.
-    ///
-    /// This is the preferred way to convert driver-specific errors (rusqlite, tokio-postgres,
-    /// mysql_async, AWS SDK errors, etc.) into toasty errors.
-    pub fn driver(err: impl std::error::Error + Send + Sync + 'static) -> Error {
-        Error::from(ErrorKind::Driver(Box::new(err)))
-    }
-
-    /// Creates an error from a connection pool error.
-    ///
-    /// This is used for errors that occur when managing the connection pool (e.g., deadpool errors).
-    pub fn connection_pool(err: impl std::error::Error + Send + Sync + 'static) -> Error {
-        Error::from(ErrorKind::ConnectionPool(Box::new(err)))
-    }
-
-    /// Creates a type conversion error.
-    ///
-    /// This is used when a value cannot be converted to the expected type.
-    pub fn type_conversion(value: crate::stmt::Value, to_type: &'static str) -> Error {
-        Error::from(ErrorKind::TypeConversion(
-            type_conversion::TypeConversionError { value, to_type },
-        ))
-    }
-
-    /// Creates a record not found error.
-    ///
-    /// This is the root cause error when a record lookup (by query or key) returns no results.
-    ///
-    /// The context parameter provides immediate context about what was not found.
-    /// Additional context can be added at each layer via `.context()`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use toasty_core::Error;
-    ///
-    /// // With context describing what wasn't found (string literal)
-    /// let err = Error::record_not_found("table=users key={id: 123}");
-    /// assert_eq!(err.to_string(), "record not found: table=users key={id: 123}");
-    ///
-    /// // With context from format! or String
-    /// let table = "users";
-    /// let key = 123;
-    /// let err = Error::record_not_found(format!("table={} key={}", table, key));
-    /// assert_eq!(err.to_string(), "record not found: table=users key=123");
-    /// ```
-    pub fn record_not_found(context: impl Into<String>) -> Error {
-        Error::from(ErrorKind::RecordNotFound(
-            record_not_found::RecordNotFoundError::new(Some(context.into().into())),
-        ))
-    }
-
-    /// Creates a validation error for a length constraint violation.
-    ///
-    /// This is used when a string value violates minimum or maximum length constraints.
-    pub fn validation_length(value_len: usize, min: Option<usize>, max: Option<usize>) -> Error {
-        Error::from(ErrorKind::Validation(validation::ValidationError {
-            kind: validation::ValidationErrorKind::Length {
-                value_len,
-                min,
-                max,
-            },
-        }))
-    }
-
-    /// Creates a condition failed error.
-    ///
-    /// This is used when a conditional operation's condition evaluates to false, such as:
-    /// - An UPDATE with a WHERE clause that matches no rows
-    /// - A DynamoDB conditional write that fails
-    /// - An optimistic lock version check that fails
-    ///
-    /// The context parameter provides information about what condition failed.
-    pub fn condition_failed(context: impl Into<String>) -> Error {
-        Error::from(ErrorKind::ConditionFailed(
-            condition_failed::ConditionFailedError::new(Some(context.into().into())),
-        ))
-    }
-
     /// Adds context to this error.
     ///
     /// Context is displayed in reverse order: the most recently added context is shown first,
@@ -187,8 +101,8 @@ impl Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self.kind() {
-            ErrorKind::Driver(err) => Some(err.as_ref()),
-            ErrorKind::ConnectionPool(err) => Some(err.as_ref()),
+            ErrorKind::Driver(err) => Some(err),
+            ErrorKind::ConnectionPool(err) => Some(err),
             ErrorKind::Anyhow(err) => Some(err.as_ref()),
             _ => None,
         }
@@ -228,8 +142,8 @@ impl core::fmt::Debug for Error {
 enum ErrorKind {
     Anyhow(anyhow::Error),
     Adhoc(AdhocError),
-    Driver(Box<dyn std::error::Error + Send + Sync>),
-    ConnectionPool(Box<dyn std::error::Error + Send + Sync>),
+    Driver(DriverError),
+    ConnectionPool(ConnectionPoolError),
     TypeConversion(TypeConversionError),
     RecordNotFound(RecordNotFoundError),
     Validation(ValidationError),
@@ -244,26 +158,8 @@ impl core::fmt::Display for ErrorKind {
         match self {
             Anyhow(err) => core::fmt::Display::fmt(err, f),
             Adhoc(err) => core::fmt::Display::fmt(err, f),
-            Driver(err) => {
-                // Display the error and walk its source chain
-                core::fmt::Display::fmt(err, f)?;
-                let mut source = err.source();
-                while let Some(err) = source {
-                    write!(f, ": {}", err)?;
-                    source = err.source();
-                }
-                Ok(())
-            }
-            ConnectionPool(err) => {
-                // Display the error and walk its source chain
-                core::fmt::Display::fmt(err, f)?;
-                let mut source = err.source();
-                while let Some(err) = source {
-                    write!(f, ": {}", err)?;
-                    source = err.source();
-                }
-                Ok(())
-            }
+            Driver(err) => core::fmt::Display::fmt(err, f),
+            ConnectionPool(err) => core::fmt::Display::fmt(err, f),
             TypeConversion(err) => core::fmt::Display::fmt(err, f),
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
             Validation(err) => core::fmt::Display::fmt(err, f),
@@ -308,33 +204,6 @@ impl From<uuid::Error> for Error {
 impl From<jiff::Error> for Error {
     fn from(err: jiff::Error) -> Error {
         Error::from(anyhow::Error::from(err))
-    }
-}
-
-struct AdhocError {
-    message: Box<str>,
-}
-
-impl AdhocError {
-    fn from_args<'a>(message: core::fmt::Arguments<'a>) -> AdhocError {
-        use std::string::ToString;
-
-        let message = message.to_string().into_boxed_str();
-        AdhocError { message }
-    }
-}
-
-impl std::error::Error for AdhocError {}
-
-impl core::fmt::Display for AdhocError {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        core::fmt::Display::fmt(&self.message, f)
-    }
-}
-
-impl core::fmt::Debug for AdhocError {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        core::fmt::Debug::fmt(&self.message, f)
     }
 }
 
