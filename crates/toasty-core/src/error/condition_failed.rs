@@ -37,4 +37,9 @@ impl Error {
             context: Some(context.into().into()),
         }))
     }
+
+    /// Returns `true` if this error is a condition failed error.
+    pub fn is_condition_failed(&self) -> bool {
+        matches!(self.kind(), super::ErrorKind::ConditionFailed(_))
+    }
 }

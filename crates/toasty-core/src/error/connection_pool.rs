@@ -34,4 +34,9 @@ impl Error {
             inner: Box::new(err),
         }))
     }
+
+    /// Returns `true` if this error is a connection pool error.
+    pub fn is_connection_pool(&self) -> bool {
+        matches!(self.kind(), super::ErrorKind::ConnectionPool(_))
+    }
 }
