@@ -7,13 +7,13 @@ use super::Error;
 /// - A DynamoDB conditional write fails (ConditionalCheckFailedException)
 /// - An optimistic lock version check fails
 #[derive(Debug)]
-pub(super) struct ConditionFailedError {
+pub(super) struct ConditionFailed {
     context: Option<Box<str>>,
 }
 
-impl std::error::Error for ConditionFailedError {}
+impl std::error::Error for ConditionFailed {}
 
-impl core::fmt::Display for ConditionFailedError {
+impl core::fmt::Display for ConditionFailed {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.write_str("condition failed")?;
         if let Some(ref ctx) = self.context {
@@ -33,7 +33,7 @@ impl Error {
     ///
     /// The context parameter provides information about what condition failed.
     pub fn condition_failed(context: impl Into<String>) -> Error {
-        Error::from(super::ErrorKind::ConditionFailed(ConditionFailedError {
+        Error::from(super::ErrorKind::ConditionFailed(ConditionFailed {
             context: Some(context.into().into()),
         }))
     }

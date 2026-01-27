@@ -10,13 +10,13 @@ use super::Error;
 ///
 /// These errors are caught during schema construction/validation, typically at build time.
 #[derive(Debug)]
-pub(super) struct InvalidSchemaError {
+pub(super) struct InvalidSchema {
     message: Box<str>,
 }
 
-impl std::error::Error for InvalidSchemaError {}
+impl std::error::Error for InvalidSchema {}
 
-impl core::fmt::Display for InvalidSchemaError {
+impl core::fmt::Display for InvalidSchema {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "invalid schema: {}", self.message)
     }
@@ -29,7 +29,7 @@ impl Error {
     /// invalid column configurations, incompatible features, etc.
     /// These errors are typically caught at build/migration time.
     pub fn invalid_schema(message: impl Into<String>) -> Error {
-        Error::from(super::ErrorKind::InvalidSchema(InvalidSchemaError {
+        Error::from(super::ErrorKind::InvalidSchema(InvalidSchema {
             message: message.into().into(),
         }))
     }

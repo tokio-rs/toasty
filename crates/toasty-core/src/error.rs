@@ -2,24 +2,24 @@ mod adhoc;
 mod condition_failed;
 mod connection_pool;
 mod driver;
+mod invalid_record_count;
 mod invalid_result;
 mod invalid_schema;
+mod invalid_type_conversion;
 mod record_not_found;
-mod too_many_records;
-mod type_conversion;
 mod validation;
 
-use adhoc::AdhocError;
-use condition_failed::ConditionFailedError;
-use connection_pool::ConnectionPoolError;
-use driver::DriverError;
-use invalid_result::InvalidResultError;
-use invalid_schema::InvalidSchemaError;
-use record_not_found::RecordNotFoundError;
+use adhoc::Adhoc;
+use condition_failed::ConditionFailed;
+use connection_pool::ConnectionPool;
+use driver::DriverOperationFailed;
+use invalid_record_count::InvalidRecordCount;
+use invalid_result::InvalidResult;
+use invalid_schema::InvalidSchema;
+use invalid_type_conversion::InvalidTypeConversion;
+use record_not_found::RecordNotFound;
 use std::sync::Arc;
-use too_many_records::TooManyRecordsError;
-use type_conversion::TypeConversionError;
-use validation::ValidationError;
+use validation::ValidationFailed;
 
 /// Temporary helper macro during migration from anyhow.
 ///
@@ -107,7 +107,7 @@ impl Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self.kind() {
-            ErrorKind::Driver(err) => Some(err),
+            ErrorKind::DriverOperationFailed(err) => Some(err),
             ErrorKind::ConnectionPool(err) => Some(err),
             ErrorKind::Anyhow(err) => Some(err.as_ref()),
             _ => None,
@@ -147,16 +147,16 @@ impl core::fmt::Debug for Error {
 #[derive(Debug)]
 enum ErrorKind {
     Anyhow(anyhow::Error),
-    Adhoc(AdhocError),
-    Driver(DriverError),
-    ConnectionPool(ConnectionPoolError),
-    TypeConversion(TypeConversionError),
-    RecordNotFound(RecordNotFoundError),
-    TooManyRecords(TooManyRecordsError),
-    InvalidResult(InvalidResultError),
-    InvalidSchema(InvalidSchemaError),
-    Validation(ValidationError),
-    ConditionFailed(ConditionFailedError),
+    Adhoc(Adhoc),
+    DriverOperationFailed(DriverOperationFailed),
+    ConnectionPool(ConnectionPool),
+    InvalidTypeConversion(InvalidTypeConversion),
+    InvalidRecordCount(InvalidRecordCount),
+    RecordNotFound(RecordNotFound),
+    InvalidResult(InvalidResult),
+    InvalidSchema(InvalidSchema),
+    ValidationFailed(ValidationFailed),
+    ConditionFailed(ConditionFailed),
     Unknown,
 }
 
@@ -167,14 +167,14 @@ impl core::fmt::Display for ErrorKind {
         match self {
             Anyhow(err) => core::fmt::Display::fmt(err, f),
             Adhoc(err) => core::fmt::Display::fmt(err, f),
-            Driver(err) => core::fmt::Display::fmt(err, f),
+            DriverOperationFailed(err) => core::fmt::Display::fmt(err, f),
             ConnectionPool(err) => core::fmt::Display::fmt(err, f),
-            TypeConversion(err) => core::fmt::Display::fmt(err, f),
+            InvalidTypeConversion(err) => core::fmt::Display::fmt(err, f),
+            InvalidRecordCount(err) => core::fmt::Display::fmt(err, f),
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
-            TooManyRecords(err) => core::fmt::Display::fmt(err, f),
             InvalidResult(err) => core::fmt::Display::fmt(err, f),
             InvalidSchema(err) => core::fmt::Display::fmt(err, f),
-            Validation(err) => core::fmt::Display::fmt(err, f),
+            ValidationFailed(err) => core::fmt::Display::fmt(err, f),
             ConditionFailed(err) => core::fmt::Display::fmt(err, f),
             Unknown => f.write_str("unknown toasty error"),
         }
@@ -315,11 +315,11 @@ mod tests {
     }
 
     #[test]
-    fn too_many_records_with_context() {
-        let err = Error::too_many_records("expected 1 record, found multiple");
+    fn invalid_record_count_with_context() {
+        let err = Error::invalid_record_count("expected 1 record, found multiple");
         assert_eq!(
             err.to_string(),
-            "too many records: expected 1 record, found multiple"
+            "invalid record count: expected 1 record, found multiple"
         );
     }
 

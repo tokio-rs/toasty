@@ -2,13 +2,13 @@ use super::Error;
 
 /// Error when a record lookup (by query or key) returns no results.
 #[derive(Debug)]
-pub(super) struct RecordNotFoundError {
+pub(super) struct RecordNotFound {
     context: Option<Box<str>>,
 }
 
-impl std::error::Error for RecordNotFoundError {}
+impl std::error::Error for RecordNotFound {}
 
-impl core::fmt::Display for RecordNotFoundError {
+impl core::fmt::Display for RecordNotFound {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.write_str("record not found")?;
         if let Some(ref ctx) = self.context {
@@ -42,7 +42,7 @@ impl Error {
     /// assert_eq!(err.to_string(), "record not found: table=users key=123");
     /// ```
     pub fn record_not_found(context: impl Into<String>) -> Error {
-        Error::from(super::ErrorKind::RecordNotFound(RecordNotFoundError {
+        Error::from(super::ErrorKind::RecordNotFound(RecordNotFound {
             context: Some(context.into().into()),
         }))
     }

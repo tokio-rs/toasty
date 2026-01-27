@@ -2,12 +2,12 @@ use super::Error;
 
 /// Error when a value fails validation constraints.
 #[derive(Debug)]
-pub(super) struct ValidationError {
-    kind: ValidationErrorKind,
+pub(super) struct ValidationFailed {
+    kind: ValidationFailedKind,
 }
 
 #[derive(Debug)]
-pub(super) enum ValidationErrorKind {
+pub(super) enum ValidationFailedKind {
     /// String length constraint violation
     Length {
         value_len: usize,
@@ -16,12 +16,12 @@ pub(super) enum ValidationErrorKind {
     },
 }
 
-impl std::error::Error for ValidationError {}
+impl std::error::Error for ValidationFailed {}
 
-impl core::fmt::Display for ValidationError {
+impl core::fmt::Display for ValidationFailed {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match &self.kind {
-            ValidationErrorKind::Length {
+            ValidationFailedKind::Length {
                 value_len,
                 min,
                 max,
@@ -67,8 +67,8 @@ impl Error {
     ///
     /// This is used when a string value violates minimum or maximum length constraints.
     pub fn validation_length(value_len: usize, min: Option<usize>, max: Option<usize>) -> Error {
-        Error::from(super::ErrorKind::Validation(ValidationError {
-            kind: ValidationErrorKind::Length {
+        Error::from(super::ErrorKind::ValidationFailed(ValidationFailed {
+            kind: ValidationFailedKind::Length {
                 value_len,
                 min,
                 max,
@@ -78,6 +78,6 @@ impl Error {
 
     /// Returns `true` if this error is a validation error.
     pub fn is_validation(&self) -> bool {
-        matches!(self.kind(), super::ErrorKind::Validation(_))
+        matches!(self.kind(), super::ErrorKind::ValidationFailed(_))
     }
 }
