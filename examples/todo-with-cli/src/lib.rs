@@ -37,15 +37,8 @@ pub async fn create_db() -> toasty::Result<toasty::Db> {
     let db = toasty::Db::builder()
         .register::<User>()
         .register::<Todo>()
-        .connect(
-            std::env::var("TOASTY_CONNECTION_URL")
-                .as_deref()
-                .unwrap_or("sqlite::memory:"),
-        )
+        .connect("sqlite:./test.db")
         .await?;
-
-    // For now, reset the database
-    db.reset_db().await?;
 
     Ok(db)
 }
