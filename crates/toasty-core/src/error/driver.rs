@@ -35,4 +35,9 @@ impl Error {
             inner: Box::new(err),
         }))
     }
+
+    /// Returns `true` if this error is a driver error.
+    pub fn is_driver(&self) -> bool {
+        matches!(self.kind(), super::ErrorKind::Driver(_))
+    }
 }

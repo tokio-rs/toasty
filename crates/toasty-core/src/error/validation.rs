@@ -75,4 +75,9 @@ impl Error {
             },
         }))
     }
+
+    /// Returns `true` if this error is a validation error.
+    pub fn is_validation(&self) -> bool {
+        matches!(self.kind(), super::ErrorKind::Validation(_))
+    }
 }

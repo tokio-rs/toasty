@@ -36,4 +36,9 @@ impl Error {
     pub fn from_args<'a>(message: core::fmt::Arguments<'a>) -> Error {
         Error::from(super::ErrorKind::Adhoc(AdhocError::from_args(message)))
     }
+
+    /// Returns `true` if this error is an adhoc error.
+    pub fn is_adhoc(&self) -> bool {
+        matches!(self.kind(), super::ErrorKind::Adhoc(_))
+    }
 }

@@ -46,4 +46,9 @@ impl Error {
             context: Some(context.into().into()),
         }))
     }
+
+    /// Returns `true` if this error is a record not found error.
+    pub fn is_record_not_found(&self) -> bool {
+        matches!(self.kind(), super::ErrorKind::RecordNotFound(_))
+    }
 }

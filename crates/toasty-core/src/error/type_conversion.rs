@@ -31,4 +31,9 @@ impl Error {
             to_type,
         }))
     }
+
+    /// Returns `true` if this error is a type conversion error.
+    pub fn is_type_conversion(&self) -> bool {
+        matches!(self.kind(), super::ErrorKind::TypeConversion(_))
+    }
 }
