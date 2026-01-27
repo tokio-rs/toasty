@@ -219,7 +219,9 @@ impl toasty_core::driver::Connection for Connection {
         Ok(())
     }
 
-    async fn applied_migrations(&mut self) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
+    async fn applied_migrations(
+        &mut self,
+    ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
         // Ensure the migrations table exists
         self.connection.execute(
             "CREATE TABLE IF NOT EXISTS __toasty_migrations (
@@ -231,7 +233,8 @@ impl toasty_core::driver::Connection for Connection {
         )?;
 
         // Query all applied migrations
-        let mut stmt = self.connection
+        let mut stmt = self
+            .connection
             .prepare("SELECT id FROM __toasty_migrations ORDER BY applied_at")?;
 
         let rows = stmt.query_map([], |row| {
@@ -242,7 +245,12 @@ impl toasty_core::driver::Connection for Connection {
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
-    async fn apply_migration(&mut self, id: u64, name: String, migration: &toasty_core::schema::db::Migration) -> Result<()> {
+    async fn apply_migration(
+        &mut self,
+        id: u64,
+        name: String,
+        migration: &toasty_core::schema::db::Migration,
+    ) -> Result<()> {
         // Ensure the migrations table exists
         self.connection.execute(
             "CREATE TABLE IF NOT EXISTS __toasty_migrations (

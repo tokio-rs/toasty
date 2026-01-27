@@ -15,22 +15,30 @@ impl<'a> MigrationStatement<'a> {
         let mut result = Vec::new();
         for table in schema_diff.tables().iter() {
             match table {
-                TablesDiffItem::CreateTable(table) => result.push(MigrationStatement {
-                    statement: Statement::create_table(table, capability),
-                    schema: schema_diff.next(),
-                }),
+                TablesDiffItem::CreateTable(table) => {
+                    result.push(MigrationStatement {
+                        statement: Statement::create_table(table, capability),
+                        schema: schema_diff.next(),
+                    });
+                    for index in &table.indices {
+                        result.push(MigrationStatement {
+                            statement: Statement::create_index(index),
+                            schema: schema_diff.next(),
+                        });
+                    }
+                }
                 TablesDiffItem::DropTable(table) => result.push(MigrationStatement {
                     statement: Statement::drop_table(table),
                     schema: schema_diff.previous(),
                 }),
                 TablesDiffItem::AlterTable { from, to, .. } => {
                     result.push(MigrationStatement {
-                        statement: Statement::create_table(to, capability),
-                        schema: schema_diff.next(),
-                    });
-                    result.push(MigrationStatement {
                         statement: Statement::drop_table(from),
                         schema: schema_diff.previous(),
+                    });
+                    result.push(MigrationStatement {
+                        statement: Statement::create_table(to, capability),
+                        schema: schema_diff.next(),
                     });
                 }
             }

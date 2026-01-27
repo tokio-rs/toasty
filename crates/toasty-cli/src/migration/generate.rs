@@ -4,8 +4,9 @@ use anyhow::Result;
 use clap::Parser;
 use console::style;
 use dialoguer::Select;
+use rand::Rng;
 use std::collections::{HashMap, HashSet};
-use std::fs;
+use std::{fs, i64};
 use toasty::{
     Db,
     schema::db::{
@@ -275,7 +276,8 @@ impl GenerateCommand {
         let migration = db.driver().generate_migration(&diff);
 
         history.add_migration(HistoryFileMigration {
-            id: rand::random(),
+            // Some databases only supported signed 64-bit integers.
+            id: rand::thread_rng().gen_range(0..i64::MAX) as u64,
             name: migration_name.clone(),
             snapshot_name: snapshot_name.clone(),
             checksum: None,
