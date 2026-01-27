@@ -115,7 +115,10 @@ impl Verify<'_> {
         for table in &self.schema.db.tables {
             for index in &table.indices {
                 if !names.insert(&index.name) {
-                    crate::bail!("duplicate index name `{}`", index.name);
+                    return Err(crate::Error::invalid_schema(format!(
+                        "duplicate index name `{}`",
+                        index.name
+                    )));
                 }
             }
         }
@@ -156,31 +159,31 @@ impl Verify<'_> {
                 if column.auto_increment {
                     // Verify the column has a numeric type
                     if !column.ty.is_numeric() {
-                        crate::bail!(
+                        return Err(crate::Error::invalid_schema(format!(
                             "auto_increment column `{}` in table `{}` must have a numeric type, found {:?}",
                             column.name,
                             table.name,
                             column.ty
-                        );
+                        )));
                     }
 
                     // Verify it's the only column in the primary key
                     if table.primary_key.columns.len() != 1 {
-                        crate::bail!(
+                        return Err(crate::Error::invalid_schema(format!(
                             "auto_increment column `{}` in table `{}` cannot be used with composite primary keys (partition/local keys). Use UUID or remove the composite key.",
                             column.name,
                             table.name
-                        );
+                        )));
                     }
 
                     // Verify the auto_increment column is actually in the primary key
                     let pk_column = &table.columns[table.primary_key.columns[0].index];
                     if pk_column.id != column.id {
-                        crate::bail!(
+                        return Err(crate::Error::invalid_schema(format!(
                             "auto_increment column `{}` in table `{}` must be part of the primary key",
                             column.name,
                             table.name
-                        );
+                        )));
                     }
                 }
             }
