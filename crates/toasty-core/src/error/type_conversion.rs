@@ -1,3 +1,4 @@
+use super::Error;
 use crate::stmt::Value;
 
 /// Error when a value cannot be converted to the expected type.
@@ -17,5 +18,17 @@ impl core::fmt::Display for TypeConversionError {
             self.value.infer_ty(),
             self.to_type
         )
+    }
+}
+
+impl Error {
+    /// Creates a type conversion error.
+    ///
+    /// This is used when a value cannot be converted to the expected type.
+    pub fn type_conversion(value: crate::stmt::Value, to_type: &'static str) -> Error {
+        Error::from(super::ErrorKind::TypeConversion(TypeConversionError {
+            value,
+            to_type,
+        }))
     }
 }
