@@ -3,6 +3,7 @@ mod condition_failed;
 mod connection_pool;
 mod driver_operation_failed;
 mod expression_evaluation_failed;
+mod invalid_connection_url;
 mod invalid_driver_configuration;
 mod invalid_record_count;
 mod invalid_result;
@@ -17,6 +18,7 @@ use condition_failed::ConditionFailed;
 use connection_pool::ConnectionPool;
 use driver_operation_failed::DriverOperationFailed;
 use expression_evaluation_failed::ExpressionEvaluationFailed;
+use invalid_connection_url::InvalidConnectionUrl;
 use invalid_driver_configuration::InvalidDriverConfiguration;
 use invalid_record_count::InvalidRecordCount;
 use invalid_result::InvalidResult;
@@ -145,6 +147,7 @@ enum ErrorKind {
     DriverOperationFailed(DriverOperationFailed),
     ConnectionPool(ConnectionPool),
     ExpressionEvaluationFailed(ExpressionEvaluationFailed),
+    InvalidConnectionUrl(InvalidConnectionUrl),
     InvalidDriverConfiguration(InvalidDriverConfiguration),
     InvalidTypeConversion(InvalidTypeConversion),
     InvalidRecordCount(InvalidRecordCount),
@@ -167,6 +170,7 @@ impl core::fmt::Display for ErrorKind {
             DriverOperationFailed(err) => core::fmt::Display::fmt(err, f),
             ConnectionPool(err) => core::fmt::Display::fmt(err, f),
             ExpressionEvaluationFailed(err) => core::fmt::Display::fmt(err, f),
+            InvalidConnectionUrl(err) => core::fmt::Display::fmt(err, f),
             InvalidDriverConfiguration(err) => core::fmt::Display::fmt(err, f),
             InvalidTypeConversion(err) => core::fmt::Display::fmt(err, f),
             InvalidRecordCount(err) => core::fmt::Display::fmt(err, f),

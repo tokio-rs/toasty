@@ -31,10 +31,10 @@ impl Sqlite {
         let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "sqlite" {
-            return Err(toasty_core::err!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `sqlite` scheme; url={}",
                 url_str
-            ));
+            )));
         }
 
         if url.path() == ":memory:" {

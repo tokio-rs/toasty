@@ -32,21 +32,24 @@ impl PostgreSQL {
         let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "postgresql" {
-            return Err(toasty_core::err!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `postgresql` scheme; url={}",
                 url
-            ));
+            )));
         }
 
-        let host = url
-            .host_str()
-            .ok_or_else(|| toasty_core::err!("missing host in connection URL; url={}", url))?;
+        let host = url.host_str().ok_or_else(|| {
+            toasty_core::Error::invalid_connection_url(format!(
+                "missing host in connection URL; url={}",
+                url
+            ))
+        })?;
 
         if url.path().is_empty() {
-            return Err(toasty_core::err!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "no database specified - missing path in connection URL; url={}",
                 url
-            ));
+            )));
         }
 
         let mut config = Config::new();

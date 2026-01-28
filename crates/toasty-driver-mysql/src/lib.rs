@@ -29,20 +29,24 @@ impl MySQL {
         let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "mysql" {
-            return Err(toasty_core::err!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection url does not have a `mysql` scheme; url={}",
                 url
-            ));
+            )));
         }
 
-        url.host_str()
-            .ok_or_else(|| toasty_core::err!("missing host in connection URL; url={}", url))?;
+        url.host_str().ok_or_else(|| {
+            toasty_core::Error::invalid_connection_url(format!(
+                "missing host in connection URL; url={}",
+                url
+            ))
+        })?;
 
         if url.path().is_empty() {
-            return Err(toasty_core::err!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "no database specified - missing path in connection URL; url={}",
                 url
-            ));
+            )));
         }
 
         let opts = mysql_async::Opts::from_url(url.as_ref())
@@ -232,7 +236,12 @@ impl toasty_core::driver::Connection for Connection {
                     .query_first("SELECT LAST_INSERT_ID()")
                     .await
                     .map_err(toasty_core::Error::driver_operation_failed)?
-                    .ok_or_else(|| toasty_core::err!("LAST_INSERT_ID() returned no rows"))?;
+                    .ok_or_else(|| {
+                        toasty_core::Error::driver_operation_failed(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "LAST_INSERT_ID() returned no rows",
+                        ))
+                    })?;
 
                 // Generate rows with sequential IDs
                 let results = (0..num_rows).map(move |offset| {
