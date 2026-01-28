@@ -29,18 +29,6 @@ use std::sync::Arc;
 use unsupported_feature::UnsupportedFeature;
 use validation::ValidationFailed;
 
-/// Temporary helper macro for creating errors during migration from anyhow.
-///
-/// This wraps `anyhow::anyhow!` and converts to our Error type.
-/// Once we have structured errors, we'll replace uses of this macro with
-/// proper error types.
-#[macro_export]
-macro_rules! err {
-    ($($arg:tt)*) => {
-        $crate::Error::from_args(format_args!($($arg)*))
-    };
-}
-
 /// An error that can occur in Toasty.
 #[derive(Clone)]
 pub struct Error {
@@ -309,8 +297,8 @@ mod tests {
     #[test]
     fn record_not_found_with_context_chain() {
         let err = Error::record_not_found("table=users key={id: 123}")
-            .context(err!("update query failed"))
-            .context(err!("User.update() operation"));
+            .context(Error::from_args(format_args!("update query failed")))
+            .context(Error::from_args(format_args!("User.update() operation")));
 
         assert_eq!(
             err.to_string(),
@@ -406,7 +394,7 @@ mod tests {
         let err = Error::invalid_schema(
             "auto_increment column `id` in table `users` must have a numeric type, found String",
         )
-        .context(err!("schema verification failed"));
+        .context(Error::from_args(format_args!("schema verification failed")));
         assert_eq!(
             err.to_string(),
             "schema verification failed: invalid schema: auto_increment column `id` in table `users` must have a numeric type, found String"
@@ -425,7 +413,7 @@ mod tests {
     #[test]
     fn expression_evaluation_failed_with_context() {
         let err = Error::expression_evaluation_failed("expected boolean value")
-            .context(err!("query execution failed"));
+            .context(Error::from_args(format_args!("query execution failed")));
         assert_eq!(
             err.to_string(),
             "query execution failed: expression evaluation failed: expected boolean value"
@@ -444,7 +432,7 @@ mod tests {
     #[test]
     fn unsupported_feature_with_context() {
         let err = Error::unsupported_feature("type List is not supported by this database")
-            .context(err!("schema creation failed"));
+            .context(Error::from_args(format_args!("schema creation failed")));
         assert_eq!(
             err.to_string(),
             "schema creation failed: unsupported feature: type List is not supported by this database"
@@ -464,8 +452,9 @@ mod tests {
 
     #[test]
     fn invalid_driver_configuration_with_context() {
-        let err = Error::invalid_driver_configuration("inconsistent capability flags")
-            .context(err!("driver initialization failed"));
+        let err = Error::invalid_driver_configuration("inconsistent capability flags").context(
+            Error::from_args(format_args!("driver initialization failed")),
+        );
         assert_eq!(
             err.to_string(),
             "driver initialization failed: invalid driver configuration: inconsistent capability flags"

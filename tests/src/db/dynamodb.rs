@@ -66,7 +66,7 @@ impl Setup for SetupDynamoDb {
     async fn cleanup_my_tables(&self) -> toasty::Result<()> {
         self.cleanup_dynamodb_tables_impl()
             .await
-            .map_err(|e| toasty::err!("DynamoDB cleanup failed: {e}"))
+            .map_err(|e| toasty::Error::from_args(format_args!("DynamoDB cleanup failed: {e}")))
     }
 
     async fn get_raw_column_value(
@@ -189,7 +189,10 @@ impl SetupDynamoDb {
                 } else if let Ok(val) = n.parse::<u64>() {
                     Ok(toasty_core::stmt::Value::U64(val))
                 } else {
-                    Err(toasty::err!("Failed to parse DynamoDB number: {}", n))
+                    Err(toasty::Error::from_args(format_args!(
+                        "Failed to parse DynamoDB number: {}",
+                        n
+                    )))
                 }
             }
             AttributeValue::B(b) => Ok(toasty_core::stmt::Value::Bytes(b.clone().into_inner())),
