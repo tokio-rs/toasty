@@ -124,11 +124,9 @@ impl Expr {
 
                 Ok(ret.into())
             }
-            Expr::Default => {
-                return Err(crate::Error::expression_evaluation_failed(
-                    "DEFAULT can only be evaluated by the database",
-                ));
-            }
+            Expr::Default => Err(crate::Error::expression_evaluation_failed(
+                "DEFAULT can only be evaluated by the database",
+            )),
             Expr::IsNull(expr_is_null) => {
                 let value = expr_is_null.expr.eval_ref(scope, input)?;
                 Ok(value.is_null().into())
