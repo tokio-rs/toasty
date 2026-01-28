@@ -24,7 +24,9 @@ impl Statement {
         match self {
             Statement::Query(query) => {
                 if query.with.is_some() {
-                    crate::bail!("cannot eval statement; stmt={self:#?}");
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "cannot evaluate statement with WITH clause",
+                    ));
                 }
 
                 assert!(query.order_by.is_none(), "TODO");
@@ -33,7 +35,9 @@ impl Statement {
 
                 query.body.eval_ref(scope, input)
             }
-            _ => crate::bail!("cannot eval statement; stmt={self:#?}"),
+            _ => Err(crate::Error::expression_evaluation_failed(
+                "can only evaluate Query statements",
+            )),
         }
     }
 }
@@ -41,7 +45,9 @@ impl Statement {
 impl ExprSet {
     fn eval_ref(&self, scope: &ScopeStack<'_>, input: &mut impl Input) -> Result<Value> {
         let ExprSet::Values(values) = self else {
-            crate::bail!("cannot eval {self:#?}")
+            return Err(crate::Error::expression_evaluation_failed(
+                "can only evaluate Values expressions",
+            ));
         };
 
         let mut ret = vec![];
@@ -82,7 +88,9 @@ impl Expr {
             }
             Expr::Arg(expr_arg) => {
                 let Some(expr) = scope.resolve_arg(expr_arg, &Projection::identity(), input) else {
-                    crate::bail!("failed to resolve argument")
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "failed to resolve argument",
+                    ));
                 };
                 expr.eval_ref(scope, input)
             }
@@ -106,7 +114,9 @@ impl Expr {
 
                 for expr in &expr_concat_str.exprs {
                     let Value::String(s) = expr.eval_ref(scope, input)? else {
-                        crate::bail!("not a string")
+                        return Err(crate::Error::expression_evaluation_failed(
+                            "string concatenation requires string values",
+                        ));
                     };
 
                     ret.push_str(&s);
@@ -114,7 +124,9 @@ impl Expr {
 
                 Ok(ret.into())
             }
-            Expr::Default => crate::bail!("default can only be evaluated by the database"),
+            Expr::Default => Err(crate::Error::expression_evaluation_failed(
+                "DEFAULT can only be evaluated by the database",
+            )),
             Expr::IsNull(expr_is_null) => {
                 let value = expr_is_null.expr.eval_ref(scope, input)?;
                 Ok(value.is_null().into())
@@ -151,7 +163,9 @@ impl Expr {
                 Expr::Arg(expr_arg) => {
                     let Some(expr) = scope.resolve_arg(expr_arg, &expr_project.projection, input)
                     else {
-                        crate::bail!("failed to resolve argument")
+                        return Err(crate::Error::expression_evaluation_failed(
+                            "failed to resolve argument",
+                        ));
                     };
 
                     expr.eval_ref(scope, input)
@@ -159,7 +173,9 @@ impl Expr {
                 Expr::Reference(expr_reference) => {
                     let Some(expr) = input.resolve_ref(expr_reference, &expr_project.projection)
                     else {
-                        crate::bail!("failed to resolve reference")
+                        return Err(crate::Error::expression_evaluation_failed(
+                            "failed to resolve reference",
+                        ));
                     };
 
                     expr.eval_ref(scope, input)
@@ -180,7 +196,9 @@ impl Expr {
             }
             Expr::Reference(expr_reference) => {
                 let Some(expr) = input.resolve_ref(expr_reference, &Projection::identity()) else {
-                    crate::bail!("failed to resolve reference")
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "failed to resolve reference",
+                    ));
                 };
 
                 expr.eval_ref(scope, input)
@@ -206,7 +224,9 @@ impl Expr {
     fn eval_ref_bool(&self, scope: &ScopeStack<'_>, input: &mut impl Input) -> Result<bool> {
         match self.eval_ref(scope, input)? {
             Value::Bool(ret) => Ok(ret),
-            _ => crate::bail!("not boolean value"),
+            _ => Err(crate::Error::expression_evaluation_failed(
+                "expected boolean value",
+            )),
         }
     }
 }
