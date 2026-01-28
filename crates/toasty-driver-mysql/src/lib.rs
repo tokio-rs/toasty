@@ -237,8 +237,7 @@ impl toasty_core::driver::Connection for Connection {
                     .await
                     .map_err(toasty_core::Error::driver_operation_failed)?
                     .ok_or_else(|| {
-                        toasty_core::Error::driver_operation_failed(std::io::Error::new(
-                            std::io::ErrorKind::Other,
+                        toasty_core::Error::driver_operation_failed(std::io::Error::other(
                             "LAST_INSERT_ID() returned no rows",
                         ))
                     })?;
