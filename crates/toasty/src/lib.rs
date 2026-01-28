@@ -25,7 +25,7 @@ pub use stmt::Statement;
 
 pub use toasty_macros::{create, query, Model};
 
-pub use toasty_core::{err, Error, Result};
+pub use toasty_core::{Error, Result};
 
 #[doc(hidden)]
 pub mod codegen_support {

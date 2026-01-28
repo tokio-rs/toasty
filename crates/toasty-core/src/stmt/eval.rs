@@ -209,7 +209,12 @@ impl Expr {
                     todo!()
                 };
                 let (decoded_variant, rest) = base.split_once("#").unwrap();
-                let decoded_variant: usize = decoded_variant.parse()?;
+                let decoded_variant: usize = decoded_variant.parse().map_err(|_| {
+                    crate::Error::type_conversion(
+                        Value::String(decoded_variant.to_string()),
+                        "usize",
+                    )
+                })?;
 
                 if decoded_variant != *variant {
                     todo!("error; decoded={decoded_variant:#?}; expr={expr:#?}; ty={ty:#?}; variant={variant:#?}");

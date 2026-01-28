@@ -54,7 +54,7 @@ impl Id {
     pub fn to_int(&self) -> Result<u64> {
         match &self.repr {
             Repr::Int(id) => Ok(*id),
-            Repr::String(_) => Err(crate::err!("Id not an int")),
+            Repr::String(_) => Err(crate::Error::type_conversion(self.clone().into(), "int")),
         }
     }
 
@@ -62,7 +62,7 @@ impl Id {
     pub fn as_str(&self) -> Result<&str> {
         match &self.repr {
             Repr::String(id) => Ok(id.as_str()),
-            Repr::Int(_) => Err(crate::err!("Id not a string")),
+            Repr::Int(_) => Err(crate::Error::type_conversion(self.clone().into(), "string")),
         }
     }
 

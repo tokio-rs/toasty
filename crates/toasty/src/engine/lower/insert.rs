@@ -211,12 +211,13 @@ impl LowerStatement<'_, '_> {
             if !field.nullable && field_expr.is_value_null() {
                 // Relations are handled differently
                 if !field.ty.is_relation() && field.auto.is_none() {
-                    self.state.errors.push(crate::err!(
-                        "Insert missing non-nullable field; model={}; field={:#?}; expr={:#?}",
-                        model.name.upper_camel_case(),
-                        field,
-                        expr
-                    ));
+                    self.state
+                        .errors
+                        .push(toasty_core::Error::validation_failed(format!(
+                            "insert missing non-nullable field `{}` in model `{}`",
+                            field.name.app_name,
+                            model.name.upper_camel_case()
+                        )));
                 }
             }
 

@@ -120,18 +120,20 @@ impl Exec<'_> {
 
         if action.conditional_update_with_no_returning {
             let Rows::Stream(rows) = res.rows else {
-                return Err(crate::err!(
-                    "conditional_update_with_no_returning: expected values, got {res:#?}"
-                ));
+                return Err(toasty_core::Error::invalid_result(format!(
+                    "conditional update expected Stream, got {:?}",
+                    res.rows
+                )));
             };
 
             let rows = rows.collect().await?;
             assert_eq!(rows.len(), 1);
 
             let stmt::Value::Record(record) = &rows[0] else {
-                return Err(crate::err!(
-                    "conditional_update_with_no_returning: expected record, got {rows:#?}"
-                ));
+                return Err(toasty_core::Error::invalid_result(format!(
+                    "conditional update expected Record, got {:?}",
+                    rows[0]
+                )));
             };
 
             assert_eq!(record.len(), 2);
@@ -263,9 +265,10 @@ impl MySQLInsertReturning {
     async fn reconstruct_returning(self, rows: Rows) -> Result<Rows> {
         // The driver executed SELECT LAST_INSERT_ID() and returned rows with IDs.
         let Rows::Stream(id_rows) = rows else {
-            return Err(crate::err!(
-                "Expected value stream from MySQL INSERT with RETURNING, got: {rows:#?}"
-            ));
+            return Err(toasty_core::Error::invalid_result(format!(
+                "MySQL INSERT RETURNING expected Stream, got {:?}",
+                rows
+            )));
         };
 
         let id_values = id_rows.collect().await?;
@@ -285,10 +288,10 @@ impl MySQLInsertReturning {
             // The driver returns a record with one field containing the ID.
             // Extract the ID value from the record wrapper.
             let stmt::Value::Record(record) = id_value_raw else {
-                return Err(crate::err!(
-                    "Expected Record from driver, got: {:?}",
+                return Err(toasty_core::Error::invalid_result(format!(
+                    "MySQL INSERT RETURNING expected Record from driver, got {:?}",
                     id_value_raw
-                ));
+                )));
             };
 
             assert_eq!(

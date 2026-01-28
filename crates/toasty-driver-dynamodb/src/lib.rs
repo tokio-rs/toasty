@@ -59,9 +59,9 @@ impl Connection {
         let url = Url::parse(url).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "dynamodb" {
-            return Err(toasty_core::err!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `dynamodb` scheme; url={url}"
-            ));
+            )));
         }
 
         use aws_config::BehaviorVersion;

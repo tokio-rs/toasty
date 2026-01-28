@@ -14,6 +14,8 @@ pub(super) enum ValidationFailedKind {
         min: Option<usize>,
         max: Option<usize>,
     },
+    /// General validation failure with message
+    Message { message: Box<str> },
 }
 
 impl std::error::Error for ValidationFailed {}
@@ -58,11 +60,23 @@ impl core::fmt::Display for ValidationFailed {
                     f.write_str("length constraint violation")
                 }
             }
+            ValidationFailedKind::Message { message } => {
+                write!(f, "validation failed: {}", message)
+            }
         }
     }
 }
 
 impl Error {
+    /// Creates a general validation error.
+    pub fn validation_failed(message: impl Into<String>) -> Error {
+        Error::from(super::ErrorKind::ValidationFailed(ValidationFailed {
+            kind: ValidationFailedKind::Message {
+                message: message.into().into(),
+            },
+        }))
+    }
+
     /// Creates a validation error for a length constraint violation.
     ///
     /// This is used when a string value violates minimum or maximum length constraints.

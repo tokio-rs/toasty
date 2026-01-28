@@ -3,6 +3,7 @@ mod condition_failed;
 mod connection_pool;
 mod driver_operation_failed;
 mod expression_evaluation_failed;
+mod invalid_connection_url;
 mod invalid_driver_configuration;
 mod invalid_record_count;
 mod invalid_result;
@@ -17,6 +18,7 @@ use condition_failed::ConditionFailed;
 use connection_pool::ConnectionPool;
 use driver_operation_failed::DriverOperationFailed;
 use expression_evaluation_failed::ExpressionEvaluationFailed;
+use invalid_connection_url::InvalidConnectionUrl;
 use invalid_driver_configuration::InvalidDriverConfiguration;
 use invalid_record_count::InvalidRecordCount;
 use invalid_result::InvalidResult;
@@ -27,22 +29,10 @@ use std::sync::Arc;
 use unsupported_feature::UnsupportedFeature;
 use validation::ValidationFailed;
 
-/// Temporary helper macro for creating errors during migration from anyhow.
-///
-/// This wraps `anyhow::anyhow!` and converts to our Error type.
-/// Once we have structured errors, we'll replace uses of this macro with
-/// proper error types.
-#[macro_export]
-macro_rules! err {
-    ($($arg:tt)*) => {
-        $crate::Error::from_args(format_args!($($arg)*))
-    };
-}
-
 /// An error that can occur in Toasty.
 #[derive(Clone)]
 pub struct Error {
-    inner: Option<Arc<ErrorInner>>,
+    inner: Arc<ErrorInner>,
 }
 
 #[derive(Debug)]
@@ -65,15 +55,12 @@ impl Error {
     #[cold]
     fn context_impl(self, consequent: Error) -> Error {
         let mut err = consequent;
-        if err.inner.is_none() {
-            err = Error::from(ErrorKind::Unknown);
-        }
-        let inner = err.inner.as_mut().unwrap();
+        let inner = Arc::get_mut(&mut err.inner).unwrap();
         assert!(
             inner.cause.is_none(),
             "consequent error must not already have a cause"
         );
-        Arc::get_mut(inner).unwrap().cause = Some(self);
+        inner.cause = Some(self);
         err
     }
 
@@ -85,16 +72,13 @@ impl Error {
     fn chain(&self) -> impl Iterator<Item = &Error> {
         let mut err = self;
         core::iter::once(err).chain(core::iter::from_fn(move || {
-            err = err.inner.as_ref().and_then(|inner| inner.cause.as_ref())?;
+            err = err.inner.cause.as_ref()?;
             Some(err)
         }))
     }
 
     fn kind(&self) -> &ErrorKind {
-        self.inner
-            .as_ref()
-            .map(|inner| &inner.kind)
-            .unwrap_or(&ErrorKind::Unknown)
+        &self.inner.kind
     }
 }
 
@@ -103,7 +87,6 @@ impl std::error::Error for Error {
         match self.kind() {
             ErrorKind::DriverOperationFailed(err) => Some(err),
             ErrorKind::ConnectionPool(err) => Some(err),
-            ErrorKind::Anyhow(err) => Some(err.as_ref()),
             _ => None,
         }
     }
@@ -127,12 +110,9 @@ impl core::fmt::Debug for Error {
         if !f.alternate() {
             core::fmt::Display::fmt(self, f)
         } else {
-            let Some(ref inner) = self.inner else {
-                return f.debug_struct("Error").field("kind", &"None").finish();
-            };
             f.debug_struct("Error")
-                .field("kind", &inner.kind)
-                .field("cause", &inner.cause)
+                .field("kind", &self.inner.kind)
+                .field("cause", &self.inner.cause)
                 .finish()
         }
     }
@@ -140,11 +120,11 @@ impl core::fmt::Debug for Error {
 
 #[derive(Debug)]
 enum ErrorKind {
-    Anyhow(anyhow::Error),
     Adhoc(Adhoc),
     DriverOperationFailed(DriverOperationFailed),
     ConnectionPool(ConnectionPool),
     ExpressionEvaluationFailed(ExpressionEvaluationFailed),
+    InvalidConnectionUrl(InvalidConnectionUrl),
     InvalidDriverConfiguration(InvalidDriverConfiguration),
     InvalidTypeConversion(InvalidTypeConversion),
     InvalidRecordCount(InvalidRecordCount),
@@ -154,7 +134,6 @@ enum ErrorKind {
     UnsupportedFeature(UnsupportedFeature),
     ValidationFailed(ValidationFailed),
     ConditionFailed(ConditionFailed),
-    Unknown,
 }
 
 impl core::fmt::Display for ErrorKind {
@@ -162,11 +141,11 @@ impl core::fmt::Display for ErrorKind {
         use self::ErrorKind::*;
 
         match self {
-            Anyhow(err) => core::fmt::Display::fmt(err, f),
             Adhoc(err) => core::fmt::Display::fmt(err, f),
             DriverOperationFailed(err) => core::fmt::Display::fmt(err, f),
             ConnectionPool(err) => core::fmt::Display::fmt(err, f),
             ExpressionEvaluationFailed(err) => core::fmt::Display::fmt(err, f),
+            InvalidConnectionUrl(err) => core::fmt::Display::fmt(err, f),
             InvalidDriverConfiguration(err) => core::fmt::Display::fmt(err, f),
             InvalidTypeConversion(err) => core::fmt::Display::fmt(err, f),
             InvalidRecordCount(err) => core::fmt::Display::fmt(err, f),
@@ -176,7 +155,6 @@ impl core::fmt::Display for ErrorKind {
             UnsupportedFeature(err) => core::fmt::Display::fmt(err, f),
             ValidationFailed(err) => core::fmt::Display::fmt(err, f),
             ConditionFailed(err) => core::fmt::Display::fmt(err, f),
-            Unknown => f.write_str("unknown toasty error"),
         }
     }
 }
@@ -184,38 +162,8 @@ impl core::fmt::Display for ErrorKind {
 impl From<ErrorKind> for Error {
     fn from(kind: ErrorKind) -> Error {
         Error {
-            inner: Some(Arc::new(ErrorInner { kind, cause: None })),
+            inner: Arc::new(ErrorInner { kind, cause: None }),
         }
-    }
-}
-
-impl From<anyhow::Error> for Error {
-    fn from(err: anyhow::Error) -> Error {
-        Error::from(ErrorKind::Anyhow(err))
-    }
-}
-impl From<std::num::ParseIntError> for Error {
-    fn from(err: std::num::ParseIntError) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
-impl From<uuid::Error> for Error {
-    fn from(err: uuid::Error) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
-#[cfg(feature = "jiff")]
-impl From<jiff::Error> for Error {
-    fn from(err: jiff::Error) -> Error {
-        Error::from(anyhow::Error::from(err))
     }
 }
 
@@ -263,22 +211,6 @@ mod tests {
     }
 
     #[test]
-    fn anyhow_bridge() {
-        // anyhow::Error converts to our Error
-        let anyhow_err = anyhow::anyhow!("something failed");
-        let our_err: Error = anyhow_err.into();
-        assert_eq!(our_err.to_string(), "something failed");
-    }
-
-    #[test]
-    fn std_error_bridge() {
-        // std::io::Error converts via anyhow bridge
-        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
-        let our_err: Error = io_err.into();
-        assert!(our_err.to_string().contains("file not found"));
-    }
-
-    #[test]
     fn type_conversion_error() {
         let value = crate::stmt::Value::I64(42);
         let err = Error::type_conversion(value, "String");
@@ -305,8 +237,8 @@ mod tests {
     #[test]
     fn record_not_found_with_context_chain() {
         let err = Error::record_not_found("table=users key={id: 123}")
-            .context(err!("update query failed"))
-            .context(err!("User.update() operation"));
+            .context(Error::from_args(format_args!("update query failed")))
+            .context(Error::from_args(format_args!("User.update() operation")));
 
         assert_eq!(
             err.to_string(),
@@ -402,7 +334,7 @@ mod tests {
         let err = Error::invalid_schema(
             "auto_increment column `id` in table `users` must have a numeric type, found String",
         )
-        .context(err!("schema verification failed"));
+        .context(Error::from_args(format_args!("schema verification failed")));
         assert_eq!(
             err.to_string(),
             "schema verification failed: invalid schema: auto_increment column `id` in table `users` must have a numeric type, found String"
@@ -421,7 +353,7 @@ mod tests {
     #[test]
     fn expression_evaluation_failed_with_context() {
         let err = Error::expression_evaluation_failed("expected boolean value")
-            .context(err!("query execution failed"));
+            .context(Error::from_args(format_args!("query execution failed")));
         assert_eq!(
             err.to_string(),
             "query execution failed: expression evaluation failed: expected boolean value"
@@ -440,7 +372,7 @@ mod tests {
     #[test]
     fn unsupported_feature_with_context() {
         let err = Error::unsupported_feature("type List is not supported by this database")
-            .context(err!("schema creation failed"));
+            .context(Error::from_args(format_args!("schema creation failed")));
         assert_eq!(
             err.to_string(),
             "schema creation failed: unsupported feature: type List is not supported by this database"
@@ -460,8 +392,9 @@ mod tests {
 
     #[test]
     fn invalid_driver_configuration_with_context() {
-        let err = Error::invalid_driver_configuration("inconsistent capability flags")
-            .context(err!("driver initialization failed"));
+        let err = Error::invalid_driver_configuration("inconsistent capability flags").context(
+            Error::from_args(format_args!("driver initialization failed")),
+        );
         assert_eq!(
             err.to_string(),
             "driver initialization failed: invalid driver configuration: inconsistent capability flags"

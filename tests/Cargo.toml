@@ -13,7 +13,6 @@ dynamodb = ["toasty/dynamodb"]
 postgresql = ["toasty/postgresql"]
 
 [dependencies]
-anyhow.workspace = true
 assert-struct.workspace = true
 async-trait.workspace = true
 rust_decimal.workspace = true
