@@ -27,18 +27,6 @@ use std::sync::Arc;
 use unsupported_feature::UnsupportedFeature;
 use validation::ValidationFailed;
 
-/// Temporary helper macro during migration from anyhow.
-///
-/// This wraps `anyhow::bail!` and converts the result to our Error type.
-/// Once we have structured errors, we'll replace uses of this macro with
-/// proper error types.
-#[macro_export]
-macro_rules! bail {
-    ($($arg:tt)*) => {
-        return Err($crate::Error::from_args(format_args!($($arg)*)))
-    };
-}
-
 /// Temporary helper macro for creating errors during migration from anyhow.
 ///
 /// This wraps `anyhow::anyhow!` and converts to our Error type.
