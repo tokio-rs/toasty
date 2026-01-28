@@ -29,7 +29,7 @@ impl PostgreSQL {
     /// Create a new PostgreSQL driver from a connection URL
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver)?;
+        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "postgresql" {
             return Err(toasty_core::err!(
@@ -109,7 +109,7 @@ impl Connection {
         let (client, connection) = config
             .connect(tls)
             .await
-            .map_err(toasty_core::Error::driver)?;
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
@@ -138,7 +138,7 @@ impl Connection {
         self.client
             .execute(&sql, &[])
             .await
-            .map_err(toasty_core::Error::driver)?;
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         // NOTE: `params` is guaranteed to be empty based on the assertion above. If
         // that changes, `params.clear()` should be called here.
@@ -157,7 +157,7 @@ impl Connection {
             self.client
                 .execute(&sql, &[])
                 .await
-                .map_err(toasty_core::Error::driver)?;
+                .map_err(toasty_core::Error::driver_operation_failed)?;
         }
 
         Ok(())
@@ -187,7 +187,7 @@ impl Connection {
         self.client
             .execute(&sql, &[])
             .await
-            .map_err(toasty_core::Error::driver)?;
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }
@@ -240,14 +240,14 @@ impl toasty_core::driver::Connection for Connection {
             .statement_cache
             .prepare_typed(&mut self.client, &sql_as_str, &param_types)
             .await
-            .map_err(toasty_core::Error::driver)?;
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         if width.is_none() {
             let count = self
                 .client
                 .execute(&statement, &params)
                 .await
-                .map_err(toasty_core::Error::driver)?;
+                .map_err(toasty_core::Error::driver_operation_failed)?;
             return Ok(Response::count(count));
         }
 
@@ -255,7 +255,7 @@ impl toasty_core::driver::Connection for Connection {
             .client
             .query(&statement, &params)
             .await
-            .map_err(toasty_core::Error::driver)?;
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         if width.is_none() {
             let [row] = &rows[..] else { todo!() };
@@ -265,7 +265,9 @@ impl toasty_core::driver::Connection for Connection {
             if total == condition_matched {
                 Ok(Response::count(total as _))
             } else {
-                toasty_core::bail!("update condition did not match");
+                Err(toasty_core::Error::condition_failed(
+                    "update condition did not match",
+                ))
             }
         } else {
             let ret_tys = ret_tys.as_ref().unwrap().clone();
