@@ -304,7 +304,14 @@ impl Type {
             }
             // Bytes <-> Uuid
             (Value::Uuid(value), Self::Bytes) => Value::Bytes(value.as_bytes().to_vec()),
-            (Value::Bytes(value), Self::Uuid) => Value::Uuid(value.try_into()?),
+            (Value::Bytes(value), Self::Uuid) => {
+                let bytes = value.clone();
+                Value::Uuid(
+                    value
+                        .try_into()
+                        .map_err(|_| crate::Error::type_conversion(Value::Bytes(bytes), "Uuid"))?,
+                )
+            }
             // String <-> Decimal
             #[cfg(feature = "rust_decimal")]
             (Value::Decimal(value), Self::String) => Value::String(value.to_string()),

@@ -87,7 +87,6 @@ impl std::error::Error for Error {
         match self.kind() {
             ErrorKind::DriverOperationFailed(err) => Some(err),
             ErrorKind::ConnectionPool(err) => Some(err),
-            ErrorKind::Anyhow(err) => Some(err.as_ref()),
             _ => None,
         }
     }
@@ -121,7 +120,6 @@ impl core::fmt::Debug for Error {
 
 #[derive(Debug)]
 enum ErrorKind {
-    Anyhow(anyhow::Error),
     Adhoc(Adhoc),
     DriverOperationFailed(DriverOperationFailed),
     ConnectionPool(ConnectionPool),
@@ -143,7 +141,6 @@ impl core::fmt::Display for ErrorKind {
         use self::ErrorKind::*;
 
         match self {
-            Anyhow(err) => core::fmt::Display::fmt(err, f),
             Adhoc(err) => core::fmt::Display::fmt(err, f),
             DriverOperationFailed(err) => core::fmt::Display::fmt(err, f),
             ConnectionPool(err) => core::fmt::Display::fmt(err, f),
@@ -167,36 +164,6 @@ impl From<ErrorKind> for Error {
         Error {
             inner: Arc::new(ErrorInner { kind, cause: None }),
         }
-    }
-}
-
-impl From<anyhow::Error> for Error {
-    fn from(err: anyhow::Error) -> Error {
-        Error::from(ErrorKind::Anyhow(err))
-    }
-}
-impl From<std::num::ParseIntError> for Error {
-    fn from(err: std::num::ParseIntError) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
-impl From<uuid::Error> for Error {
-    fn from(err: uuid::Error) -> Error {
-        Error::from(anyhow::Error::from(err))
-    }
-}
-
-#[cfg(feature = "jiff")]
-impl From<jiff::Error> for Error {
-    fn from(err: jiff::Error) -> Error {
-        Error::from(anyhow::Error::from(err))
     }
 }
 
@@ -241,22 +208,6 @@ mod tests {
             chained.to_string(),
             "top context: middle context: root cause"
         );
-    }
-
-    #[test]
-    fn anyhow_bridge() {
-        // anyhow::Error converts to our Error
-        let anyhow_err = anyhow::anyhow!("something failed");
-        let our_err: Error = anyhow_err.into();
-        assert_eq!(our_err.to_string(), "something failed");
-    }
-
-    #[test]
-    fn std_error_bridge() {
-        // std::io::Error converts via anyhow bridge
-        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
-        let our_err: Error = io_err.into();
-        assert!(our_err.to_string().contains("file not found"));
     }
 
     #[test]
