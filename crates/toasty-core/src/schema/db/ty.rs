@@ -151,7 +151,10 @@ impl Type {
                 stmt::Type::Id(_) => Ok(db.default_string_type.clone()),
                 // Enum types are stored as strings in the database
                 stmt::Type::Enum(_) => Ok(db.default_string_type.clone()),
-                _ => crate::bail!("unsupported type: {ty:?}"),
+                _ => Err(crate::Error::unsupported_feature(format!(
+                    "type {:?} is not supported by this database",
+                    ty
+                ))),
             },
         }
     }
@@ -172,10 +175,13 @@ impl Type {
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
         match *self {
             Type::VarChar(size) => match db.storage_types.varchar {
-                Some(max) if size > max => {
-                    crate::bail!("max varchar capacity exceeded: {size} > {max}")
-                }
-                None => crate::bail!("varchar storage type not supported"),
+                Some(max) if size > max => Err(crate::Error::unsupported_feature(format!(
+                    "VARCHAR({}) exceeds database maximum of {}",
+                    size, max
+                ))),
+                None => Err(crate::Error::unsupported_feature(
+                    "VARCHAR type is not supported by this database",
+                )),
                 _ => Ok(()),
             },
             _ => Ok(()),
