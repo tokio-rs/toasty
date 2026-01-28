@@ -21,7 +21,7 @@ impl Connection {
                 .set_key(Some(ddb_key(table, &op.keys[0])))
                 .send()
                 .await
-                .map_err(toasty_core::Error::driver)?;
+                .map_err(toasty_core::Error::driver_operation_failed)?;
 
             if let Some(item) = res.item() {
                 let row = item_to_record(item, op.select.iter().map(|id| schema.column(*id)))?;
@@ -56,7 +56,7 @@ impl Connection {
                 }))
                 .send()
                 .await
-                .map_err(toasty_core::Error::driver)?;
+                .map_err(toasty_core::Error::driver_operation_failed)?;
 
             let Some(mut responses) = res.responses else {
                 return Ok(Response::empty_value_stream());

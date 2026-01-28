@@ -31,7 +31,7 @@ impl Connection {
             .set_expression_attribute_values(Some(expr_attrs.attr_values))
             .send()
             .await
-            .map_err(toasty_core::Error::driver)?;
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         let schema = schema.clone();
 

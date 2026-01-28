@@ -37,7 +37,7 @@ impl Error {
     ///
     /// This is the preferred way to convert driver-specific errors (rusqlite, tokio-postgres,
     /// mysql_async, AWS SDK errors, etc.) into toasty errors.
-    pub fn driver(err: impl std::error::Error + Send + Sync + 'static) -> Error {
+    pub fn driver_operation_failed(err: impl std::error::Error + Send + Sync + 'static) -> Error {
         Error::from(super::ErrorKind::DriverOperationFailed(
             DriverOperationFailed {
                 inner: Box::new(err),
@@ -46,7 +46,7 @@ impl Error {
     }
 
     /// Returns `true` if this error is a driver operation failure.
-    pub fn is_driver(&self) -> bool {
+    pub fn is_driver_operation_failed(&self) -> bool {
         matches!(self.kind(), super::ErrorKind::DriverOperationFailed(_))
     }
 }

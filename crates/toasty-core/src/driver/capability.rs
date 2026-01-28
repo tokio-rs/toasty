@@ -103,15 +103,15 @@ impl Capability {
     pub fn validate(&self) -> crate::Result<()> {
         // Validate varchar consistency
         if self.native_varchar && self.storage_types.varchar.is_none() {
-            crate::bail!(
-                "Capability validation failed: native_varchar is true but storage_types.varchar is None"
-            );
+            return Err(crate::Error::invalid_driver_configuration(
+                "native_varchar is true but storage_types.varchar is None",
+            ));
         }
 
         if !self.native_varchar && self.storage_types.varchar.is_some() {
-            crate::bail!(
-                "Capability validation failed: native_varchar is false but storage_types.varchar is Some"
-            );
+            return Err(crate::Error::invalid_driver_configuration(
+                "native_varchar is false but storage_types.varchar is Some",
+            ));
         }
 
         Ok(())

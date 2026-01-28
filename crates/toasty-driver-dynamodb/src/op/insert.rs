@@ -64,7 +64,7 @@ impl Connection {
                         .set_item(Some(insert_items))
                         .send()
                         .await
-                        .map_err(toasty_core::Error::driver)?;
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
                 } else {
                     let mut request_items = HashMap::new();
                     request_items.insert(
@@ -89,7 +89,7 @@ impl Connection {
                         .set_request_items(Some(request_items))
                         .send()
                         .await
-                        .map_err(toasty_core::Error::driver)?;
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
                 }
             }
             [index] => {
@@ -159,7 +159,7 @@ impl Connection {
                     .set_transact_items(Some(transact_items))
                     .send()
                     .await
-                    .map_err(toasty_core::Error::driver)?;
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
             }
             _ => todo!(),
         }

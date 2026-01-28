@@ -105,7 +105,7 @@ impl Connection {
             .provisioned_throughput(pt.clone())
             .send()
             .await
-            .map_err(toasty_core::Error::driver)?;
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         // Now, create separate tables for each unique index
         for index in table.indices.iter().filter(|i| !i.primary_key && i.unique) {
@@ -128,7 +128,7 @@ impl Connection {
                 .provisioned_throughput(pt.clone())
                 .send()
                 .await
-                .map_err(toasty_core::Error::driver)?;
+                .map_err(toasty_core::Error::driver_operation_failed)?;
         }
 
         Ok(())

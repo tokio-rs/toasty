@@ -1,8 +1,9 @@
 mod adhoc;
 mod condition_failed;
 mod connection_pool;
-mod driver;
+mod driver_operation_failed;
 mod expression_evaluation_failed;
+mod invalid_driver_configuration;
 mod invalid_record_count;
 mod invalid_result;
 mod invalid_schema;
@@ -14,8 +15,9 @@ mod validation;
 use adhoc::Adhoc;
 use condition_failed::ConditionFailed;
 use connection_pool::ConnectionPool;
-use driver::DriverOperationFailed;
+use driver_operation_failed::DriverOperationFailed;
 use expression_evaluation_failed::ExpressionEvaluationFailed;
+use invalid_driver_configuration::InvalidDriverConfiguration;
 use invalid_record_count::InvalidRecordCount;
 use invalid_result::InvalidResult;
 use invalid_schema::InvalidSchema;
@@ -155,6 +157,7 @@ enum ErrorKind {
     DriverOperationFailed(DriverOperationFailed),
     ConnectionPool(ConnectionPool),
     ExpressionEvaluationFailed(ExpressionEvaluationFailed),
+    InvalidDriverConfiguration(InvalidDriverConfiguration),
     InvalidTypeConversion(InvalidTypeConversion),
     InvalidRecordCount(InvalidRecordCount),
     RecordNotFound(RecordNotFound),
@@ -176,6 +179,7 @@ impl core::fmt::Display for ErrorKind {
             DriverOperationFailed(err) => core::fmt::Display::fmt(err, f),
             ConnectionPool(err) => core::fmt::Display::fmt(err, f),
             ExpressionEvaluationFailed(err) => core::fmt::Display::fmt(err, f),
+            InvalidDriverConfiguration(err) => core::fmt::Display::fmt(err, f),
             InvalidTypeConversion(err) => core::fmt::Display::fmt(err, f),
             InvalidRecordCount(err) => core::fmt::Display::fmt(err, f),
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
@@ -452,6 +456,27 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "schema creation failed: unsupported feature: type List is not supported by this database"
+        );
+    }
+
+    #[test]
+    fn invalid_driver_configuration() {
+        let err = Error::invalid_driver_configuration(
+            "native_varchar is true but storage_types.varchar is None",
+        );
+        assert_eq!(
+            err.to_string(),
+            "invalid driver configuration: native_varchar is true but storage_types.varchar is None"
+        );
+    }
+
+    #[test]
+    fn invalid_driver_configuration_with_context() {
+        let err = Error::invalid_driver_configuration("inconsistent capability flags")
+            .context(err!("driver initialization failed"));
+        assert_eq!(
+            err.to_string(),
+            "driver initialization failed: invalid driver configuration: inconsistent capability flags"
         );
     }
 }
