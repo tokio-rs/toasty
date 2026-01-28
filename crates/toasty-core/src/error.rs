@@ -8,6 +8,7 @@ mod invalid_result;
 mod invalid_schema;
 mod invalid_type_conversion;
 mod record_not_found;
+mod unsupported_feature;
 mod validation;
 
 use adhoc::Adhoc;
@@ -21,6 +22,7 @@ use invalid_schema::InvalidSchema;
 use invalid_type_conversion::InvalidTypeConversion;
 use record_not_found::RecordNotFound;
 use std::sync::Arc;
+use unsupported_feature::UnsupportedFeature;
 use validation::ValidationFailed;
 
 /// Temporary helper macro during migration from anyhow.
@@ -158,6 +160,7 @@ enum ErrorKind {
     RecordNotFound(RecordNotFound),
     InvalidResult(InvalidResult),
     InvalidSchema(InvalidSchema),
+    UnsupportedFeature(UnsupportedFeature),
     ValidationFailed(ValidationFailed),
     ConditionFailed(ConditionFailed),
     Unknown,
@@ -178,6 +181,7 @@ impl core::fmt::Display for ErrorKind {
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
             InvalidResult(err) => core::fmt::Display::fmt(err, f),
             InvalidSchema(err) => core::fmt::Display::fmt(err, f),
+            UnsupportedFeature(err) => core::fmt::Display::fmt(err, f),
             ValidationFailed(err) => core::fmt::Display::fmt(err, f),
             ConditionFailed(err) => core::fmt::Display::fmt(err, f),
             Unknown => f.write_str("unknown toasty error"),
@@ -429,6 +433,25 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "query execution failed: expression evaluation failed: expected boolean value"
+        );
+    }
+
+    #[test]
+    fn unsupported_feature() {
+        let err = Error::unsupported_feature("VARCHAR type is not supported by this database");
+        assert_eq!(
+            err.to_string(),
+            "unsupported feature: VARCHAR type is not supported by this database"
+        );
+    }
+
+    #[test]
+    fn unsupported_feature_with_context() {
+        let err = Error::unsupported_feature("type List is not supported by this database")
+            .context(err!("schema creation failed"));
+        assert_eq!(
+            err.to_string(),
+            "schema creation failed: unsupported feature: type List is not supported by this database"
         );
     }
 }
