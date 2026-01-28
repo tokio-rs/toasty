@@ -38,6 +38,10 @@ impl Driver for LoggingDriver {
             ops_log: self.ops_log_handle(),
         }))
     }
+
+    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+        self.driver.generate_migration(schema_diff)
+    }
 }
 
 #[derive(Debug)]

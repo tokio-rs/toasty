@@ -11,11 +11,11 @@ use std::sync::Arc;
 use toasty_core::{
     async_trait,
     driver::{operation::Transaction, Capability, Driver, Operation, Response},
-    schema::db::{Schema, Table},
+    schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt::{self, ValueRecord},
     Result,
 };
-use toasty_sql as sql;
+use toasty_sql::{self as sql, TypedValue};
 use url::Url;
 
 #[derive(Debug)]
@@ -69,6 +69,26 @@ impl Driver for MySQL {
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(Box::new(Connection::new(conn)))
+    }
+
+    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::MYSQL);
+
+        let sql_strings: Vec<String> = statements
+            .iter()
+            .map(|stmt| {
+                let mut params = Vec::<TypedValue>::new();
+                let sql =
+                    sql::Serializer::mysql(stmt.schema()).serialize(stmt.statement(), &mut params);
+                assert!(
+                    params.is_empty(),
+                    "migration statements should not have parameters"
+                );
+                sql
+            })
+            .collect();
+
+        Migration::new_sql_with_breakpoints(&sql_strings)
     }
 }
 
@@ -296,6 +316,64 @@ impl toasty_core::driver::Connection for Connection {
             self.create_table(schema, table).await?;
         }
 
+        Ok(())
+    }
+
+    async fn applied_migrations(&mut self) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
+        // Ensure the migrations table exists
+        self.conn.exec_drop(
+            "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id BIGINT UNSIGNED PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMP NOT NULL
+            )",
+            (),
+        ).await?;
+
+        // Query all applied migrations
+        let rows: Vec<u64> = self.conn.exec(
+            "SELECT id FROM __toasty_migrations ORDER BY applied_at",
+            (),
+        ).await?;
+
+        Ok(rows.into_iter().map(|id| {
+            toasty_core::schema::db::AppliedMigration::new(id)
+        }).collect())
+    }
+
+    async fn apply_migration(&mut self, id: u64, name: String, migration: &toasty_core::schema::db::Migration) -> Result<()> {
+        // Ensure the migrations table exists
+        self.conn.exec_drop(
+            "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id BIGINT UNSIGNED PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMP NOT NULL
+            )",
+            (),
+        ).await?;
+
+        // Start transaction
+        let mut transaction = self.conn.start_transaction(Default::default()).await?;
+
+        // Execute each migration statement
+        for statement in migration.statements() {
+            if let Err(e) = transaction.query_drop(statement).await {
+                transaction.rollback().await?;
+                return Err(e.into());
+            }
+        }
+
+        // Record the migration
+        if let Err(e) = transaction.exec_drop(
+            "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES (?, ?, NOW())",
+            (id, name),
+        ).await {
+            transaction.rollback().await?;
+            return Err(e.into());
+        }
+
+        // Commit transaction
+        transaction.commit().await?;
         Ok(())
     }
 }

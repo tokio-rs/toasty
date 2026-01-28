@@ -10,8 +10,14 @@ pub use create_table::CreateTable;
 mod drop_table;
 pub use drop_table::DropTable;
 
+mod ident;
+pub use ident::Ident;
+
 mod name;
 pub use name::Name;
+
+mod table_name;
+pub use table_name::TableName;
 
 pub use toasty_core::stmt::*;
 
