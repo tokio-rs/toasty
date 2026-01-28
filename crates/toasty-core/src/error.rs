@@ -32,7 +32,7 @@ use validation::ValidationFailed;
 /// An error that can occur in Toasty.
 #[derive(Clone)]
 pub struct Error {
-    inner: Option<Arc<ErrorInner>>,
+    inner: Arc<ErrorInner>,
 }
 
 #[derive(Debug)]
@@ -55,15 +55,12 @@ impl Error {
     #[cold]
     fn context_impl(self, consequent: Error) -> Error {
         let mut err = consequent;
-        if err.inner.is_none() {
-            err = Error::from(ErrorKind::Unknown);
-        }
-        let inner = err.inner.as_mut().unwrap();
+        let inner = Arc::get_mut(&mut err.inner).unwrap();
         assert!(
             inner.cause.is_none(),
             "consequent error must not already have a cause"
         );
-        Arc::get_mut(inner).unwrap().cause = Some(self);
+        inner.cause = Some(self);
         err
     }
 
@@ -75,16 +72,13 @@ impl Error {
     fn chain(&self) -> impl Iterator<Item = &Error> {
         let mut err = self;
         core::iter::once(err).chain(core::iter::from_fn(move || {
-            err = err.inner.as_ref().and_then(|inner| inner.cause.as_ref())?;
+            err = err.inner.cause.as_ref()?;
             Some(err)
         }))
     }
 
     fn kind(&self) -> &ErrorKind {
-        self.inner
-            .as_ref()
-            .map(|inner| &inner.kind)
-            .unwrap_or(&ErrorKind::Unknown)
+        &self.inner.kind
     }
 }
 
@@ -117,12 +111,9 @@ impl core::fmt::Debug for Error {
         if !f.alternate() {
             core::fmt::Display::fmt(self, f)
         } else {
-            let Some(ref inner) = self.inner else {
-                return f.debug_struct("Error").field("kind", &"None").finish();
-            };
             f.debug_struct("Error")
-                .field("kind", &inner.kind)
-                .field("cause", &inner.cause)
+                .field("kind", &self.inner.kind)
+                .field("cause", &self.inner.cause)
                 .finish()
         }
     }
@@ -145,7 +136,6 @@ enum ErrorKind {
     UnsupportedFeature(UnsupportedFeature),
     ValidationFailed(ValidationFailed),
     ConditionFailed(ConditionFailed),
-    Unknown,
 }
 
 impl core::fmt::Display for ErrorKind {
@@ -168,7 +158,6 @@ impl core::fmt::Display for ErrorKind {
             UnsupportedFeature(err) => core::fmt::Display::fmt(err, f),
             ValidationFailed(err) => core::fmt::Display::fmt(err, f),
             ConditionFailed(err) => core::fmt::Display::fmt(err, f),
-            Unknown => f.write_str("unknown toasty error"),
         }
     }
 }
@@ -176,7 +165,7 @@ impl core::fmt::Display for ErrorKind {
 impl From<ErrorKind> for Error {
     fn from(kind: ErrorKind) -> Error {
         Error {
-            inner: Some(Arc::new(ErrorInner { kind, cause: None })),
+            inner: Arc::new(ErrorInner { kind, cause: None }),
         }
     }
 }
