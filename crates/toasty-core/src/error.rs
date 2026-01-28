@@ -2,6 +2,7 @@ mod adhoc;
 mod condition_failed;
 mod connection_pool;
 mod driver;
+mod expression_evaluation_failed;
 mod invalid_record_count;
 mod invalid_result;
 mod invalid_schema;
@@ -13,6 +14,7 @@ use adhoc::Adhoc;
 use condition_failed::ConditionFailed;
 use connection_pool::ConnectionPool;
 use driver::DriverOperationFailed;
+use expression_evaluation_failed::ExpressionEvaluationFailed;
 use invalid_record_count::InvalidRecordCount;
 use invalid_result::InvalidResult;
 use invalid_schema::InvalidSchema;
@@ -150,6 +152,7 @@ enum ErrorKind {
     Adhoc(Adhoc),
     DriverOperationFailed(DriverOperationFailed),
     ConnectionPool(ConnectionPool),
+    ExpressionEvaluationFailed(ExpressionEvaluationFailed),
     InvalidTypeConversion(InvalidTypeConversion),
     InvalidRecordCount(InvalidRecordCount),
     RecordNotFound(RecordNotFound),
@@ -169,6 +172,7 @@ impl core::fmt::Display for ErrorKind {
             Adhoc(err) => core::fmt::Display::fmt(err, f),
             DriverOperationFailed(err) => core::fmt::Display::fmt(err, f),
             ConnectionPool(err) => core::fmt::Display::fmt(err, f),
+            ExpressionEvaluationFailed(err) => core::fmt::Display::fmt(err, f),
             InvalidTypeConversion(err) => core::fmt::Display::fmt(err, f),
             InvalidRecordCount(err) => core::fmt::Display::fmt(err, f),
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
@@ -406,6 +410,25 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "schema verification failed: invalid schema: auto_increment column `id` in table `users` must have a numeric type, found String"
+        );
+    }
+
+    #[test]
+    fn expression_evaluation_failed() {
+        let err = Error::expression_evaluation_failed("failed to resolve argument");
+        assert_eq!(
+            err.to_string(),
+            "expression evaluation failed: failed to resolve argument"
+        );
+    }
+
+    #[test]
+    fn expression_evaluation_failed_with_context() {
+        let err = Error::expression_evaluation_failed("expected boolean value")
+            .context(err!("query execution failed"));
+        assert_eq!(
+            err.to_string(),
+            "query execution failed: expression evaluation failed: expected boolean value"
         );
     }
 }
