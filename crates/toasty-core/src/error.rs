@@ -35,10 +35,34 @@ pub struct Error {
     inner: Arc<ErrorInner>,
 }
 
+/// Trait for types that can be converted into an Error.
+pub trait IntoError {
+    /// Converts this type into an Error.
+    fn into_error(self) -> Error;
+}
+
 #[derive(Debug)]
 struct ErrorInner {
     kind: ErrorKind,
     cause: Option<Error>,
+}
+
+#[derive(Debug)]
+enum ErrorKind {
+    Adhoc(Adhoc),
+    DriverOperationFailed(DriverOperationFailed),
+    ConnectionPool(ConnectionPool),
+    ExpressionEvaluationFailed(ExpressionEvaluationFailed),
+    InvalidConnectionUrl(InvalidConnectionUrl),
+    InvalidDriverConfiguration(InvalidDriverConfiguration),
+    InvalidTypeConversion(InvalidTypeConversion),
+    InvalidRecordCount(InvalidRecordCount),
+    RecordNotFound(RecordNotFound),
+    InvalidResult(InvalidResult),
+    InvalidSchema(InvalidSchema),
+    UnsupportedFeature(UnsupportedFeature),
+    ValidationFailed(ValidationFailed),
+    ConditionFailed(ConditionFailed),
 }
 
 impl Error {
@@ -46,13 +70,10 @@ impl Error {
     ///
     /// Context is displayed in reverse order: the most recently added context is shown first,
     /// followed by earlier context, ending with the root cause.
-    #[inline(always)]
     pub fn context(self, consequent: impl IntoError) -> Error {
         self.context_impl(consequent.into_error())
     }
 
-    #[inline(never)]
-    #[cold]
     fn context_impl(self, consequent: Error) -> Error {
         let mut err = consequent;
         let inner = Arc::get_mut(&mut err.inner).unwrap();
@@ -62,11 +83,6 @@ impl Error {
         );
         inner.cause = Some(self);
         err
-    }
-
-    #[allow(dead_code)]
-    fn root(&self) -> &Error {
-        self.chain().last().unwrap()
     }
 
     fn chain(&self) -> impl Iterator<Item = &Error> {
@@ -118,24 +134,6 @@ impl core::fmt::Debug for Error {
     }
 }
 
-#[derive(Debug)]
-enum ErrorKind {
-    Adhoc(Adhoc),
-    DriverOperationFailed(DriverOperationFailed),
-    ConnectionPool(ConnectionPool),
-    ExpressionEvaluationFailed(ExpressionEvaluationFailed),
-    InvalidConnectionUrl(InvalidConnectionUrl),
-    InvalidDriverConfiguration(InvalidDriverConfiguration),
-    InvalidTypeConversion(InvalidTypeConversion),
-    InvalidRecordCount(InvalidRecordCount),
-    RecordNotFound(RecordNotFound),
-    InvalidResult(InvalidResult),
-    InvalidSchema(InvalidSchema),
-    UnsupportedFeature(UnsupportedFeature),
-    ValidationFailed(ValidationFailed),
-    ConditionFailed(ConditionFailed),
-}
-
 impl core::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         use self::ErrorKind::*;
@@ -167,14 +165,7 @@ impl From<ErrorKind> for Error {
     }
 }
 
-/// Trait for types that can be converted into an Error.
-pub trait IntoError {
-    /// Converts this type into an Error.
-    fn into_error(self) -> Error;
-}
-
 impl IntoError for Error {
-    #[inline(always)]
     fn into_error(self) -> Error {
         self
     }
