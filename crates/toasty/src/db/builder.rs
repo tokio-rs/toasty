@@ -46,7 +46,7 @@ impl Builder {
     }
 
     pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
-        let pool = Pool::new(driver).await?;
+        let pool = Pool::new(driver)?;
 
         // Validate capability consistency
         pool.capability().validate()?;

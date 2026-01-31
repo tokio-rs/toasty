@@ -82,6 +82,10 @@ impl Connect {
 
 #[async_trait]
 impl Driver for Connect {
+    fn capability(&self) -> &'static Capability {
+        self.driver.capability()
+    }
+
     async fn connect(&self) -> Result<Box<dyn Connection>> {
         self.driver.connect().await
     }

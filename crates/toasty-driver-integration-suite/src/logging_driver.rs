@@ -32,6 +32,10 @@ impl LoggingDriver {
 
 #[async_trait]
 impl Driver for LoggingDriver {
+    fn capability(&self) -> &'static Capability {
+        self.inner.capability()
+    }
+
     async fn connect(&self) -> Result<Box<dyn Connection>> {
         Ok(Box::new(LoggingConnection {
             inner: self.inner.connect().await?,
@@ -59,10 +63,6 @@ pub struct LoggingConnection {
 
 #[async_trait]
 impl Connection for LoggingConnection {
-    fn capability(&self) -> &'static Capability {
-        self.inner.capability()
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, operation: Operation) -> Result<Response> {
         // Clone the operation for logging
         let operation_clone = operation.clone();

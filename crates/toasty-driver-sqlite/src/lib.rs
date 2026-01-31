@@ -57,6 +57,10 @@ impl Sqlite {
 
 #[async_trait]
 impl Driver for Sqlite {
+    fn capability(&self) -> &'static Capability {
+        &Capability::SQLITE
+    }
+
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::Connection>> {
         let connection = match self {
             Sqlite::File(path) => Connection::open(path)?,
@@ -92,10 +96,6 @@ impl Connection {
 
 #[toasty_core::async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn capability(&self) -> &'static Capability {
-        &Capability::SQLITE
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::QuerySql(op) => {

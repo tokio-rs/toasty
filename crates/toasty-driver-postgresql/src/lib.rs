@@ -79,6 +79,10 @@ impl PostgreSQL {
 
 #[async_trait]
 impl Driver for PostgreSQL {
+    fn capability(&self) -> &'static Capability {
+        &Capability::POSTGRESQL
+    }
+
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         Ok(Box::new(
             Connection::connect(self.config.clone(), tokio_postgres::NoTls).await?,
@@ -206,10 +210,6 @@ impl From<Client> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn capability(&self) -> &'static Capability {
-        &Capability::POSTGRESQL
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::Insert(op) => (op.stmt.into(), None),
