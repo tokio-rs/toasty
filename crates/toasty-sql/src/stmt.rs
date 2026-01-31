@@ -1,3 +1,9 @@
+mod add_column;
+pub use add_column::AddColumn;
+
+mod alter_column;
+pub use alter_column::{AlterColumn, AlterColumnChanges};
+
 mod column_def;
 pub use column_def::ColumnDef;
 
@@ -7,19 +13,35 @@ pub use create_index::CreateIndex;
 mod create_table;
 pub use create_table::CreateTable;
 
+mod drop_column;
+pub use drop_column::DropColumn;
+
+mod drop_index;
+pub use drop_index::DropIndex;
+
 mod drop_table;
 pub use drop_table::DropTable;
 
+mod ident;
+pub use ident::Ident;
+
 mod name;
 pub use name::Name;
+
+mod table_name;
+pub use table_name::TableName;
 
 pub use toasty_core::stmt::*;
 
 #[derive(Debug, Clone)]
 pub enum Statement {
+    AddColumn(AddColumn),
+    AlterColumn(AlterColumn),
     CreateIndex(CreateIndex),
     CreateTable(CreateTable),
+    DropColumn(DropColumn),
     DropTable(DropTable),
+    DropIndex(DropIndex),
     Delete(Delete),
     Insert(Insert),
     Query(Query),

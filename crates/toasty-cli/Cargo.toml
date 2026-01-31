@@ -1,0 +1,19 @@
+[package]
+name = "toasty-cli"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+toasty.workspace = true
+toasty-core = { workspace = true, features = ["serde"] }
+toasty-sql.workspace = true
+
+anyhow = "1.0.100"
+clap.workspace = true
+console.workspace = true
+dialoguer.workspace = true
+rand.workspace = true
+serde.workspace = true
+toml.workspace = true
+toml_edit = { workspace = true, features = ["serde"] }

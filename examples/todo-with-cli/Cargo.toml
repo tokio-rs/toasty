@@ -1,0 +1,27 @@
+[package]
+name = "example-todo-with-cli"
+version = "0.1.0"
+edition = "2024"
+publish = false
+default-run = "todo-app"
+
+[features]
+default = [ "sqlite" ]
+dynamodb = [ "toasty/dynamodb" ]
+mysql = [ "toasty/mysql" ]
+postgresql = [ "toasty/postgresql" ]
+sqlite = [ "toasty/sqlite" ]
+
+[dependencies]
+toasty.workspace = true
+toasty-cli.workspace = true
+tokio.workspace = true
+anyhow = "1.0.100"
+
+[[bin]]
+name = "todo-app"
+path = "src/bin/app.rs"
+
+[[bin]]
+name = "todo-cli"
+path = "src/bin/cli.rs"
