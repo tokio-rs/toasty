@@ -232,26 +232,32 @@ impl toasty_core::driver::Connection for Connection {
         &mut self,
     ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
         // Ensure the migrations table exists
-        self.connection.execute(
-            "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+        self.connection
+            .execute(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
                 applied_at TEXT NOT NULL
             )",
-            [],
-        )?;
+                [],
+            )
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         // Query all applied migrations
         let mut stmt = self
             .connection
-            .prepare("SELECT id FROM __toasty_migrations ORDER BY applied_at")?;
+            .prepare("SELECT id FROM __toasty_migrations ORDER BY applied_at")
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
-        let rows = stmt.query_map([], |row| {
-            let id: u64 = row.get(0)?;
-            Ok(toasty_core::schema::db::AppliedMigration::new(id))
-        })?;
+        let rows = stmt
+            .query_map([], |row| {
+                let id: u64 = row.get(0)?;
+                Ok(toasty_core::schema::db::AppliedMigration::new(id))
+            })
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
-        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(toasty_core::Error::driver_operation_failed)
     }
 
     async fn apply_migration(
@@ -261,23 +267,33 @@ impl toasty_core::driver::Connection for Connection {
         migration: &toasty_core::schema::db::Migration,
     ) -> Result<()> {
         // Ensure the migrations table exists
-        self.connection.execute(
-            "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+        self.connection
+            .execute(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
                 applied_at TEXT NOT NULL
             )",
-            [],
-        )?;
+                [],
+            )
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         // Start transaction
-        self.connection.execute("BEGIN", [])?;
+        self.connection
+            .execute("BEGIN", [])
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         // Execute each migration statement
         for statement in migration.statements() {
-            if let Err(e) = self.connection.execute(statement, []) {
-                self.connection.execute("ROLLBACK", [])?;
-                return Err(e.into());
+            if let Err(e) = self
+                .connection
+                .execute(statement, [])
+                .map_err(toasty_core::Error::driver_operation_failed)
+            {
+                self.connection
+                    .execute("ROLLBACK", [])
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
+                return Err(e);
             }
         }
 
@@ -285,13 +301,15 @@ impl toasty_core::driver::Connection for Connection {
         if let Err(e) = self.connection.execute(
             "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES (?1, ?2, datetime('now'))",
             rusqlite::params![id, name],
-        ) {
-            self.connection.execute("ROLLBACK", [])?;
-            return Err(e.into());
+        ).map_err(toasty_core::Error::driver_operation_failed) {
+            self.connection.execute("ROLLBACK", []).map_err(toasty_core::Error::driver_operation_failed)?;
+            return Err(e);
         }
 
         // Commit transaction
-        self.connection.execute("COMMIT", [])?;
+        self.connection
+            .execute("COMMIT", [])
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }

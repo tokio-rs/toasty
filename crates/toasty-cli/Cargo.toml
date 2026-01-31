@@ -9,7 +9,7 @@ toasty.workspace = true
 toasty-core = { workspace = true, features = ["serde"] }
 toasty-sql.workspace = true
 
-anyhow.workspace = true
+anyhow = "1.0.100"
 clap.workspace = true
 console.workspace = true
 dialoguer.workspace = true

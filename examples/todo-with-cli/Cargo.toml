@@ -16,7 +16,7 @@ sqlite = [ "toasty/sqlite" ]
 toasty.workspace = true
 toasty-cli.workspace = true
 tokio.workspace = true
-anyhow.workspace = true
+anyhow = "1.0.100"
 
 [[bin]]
 name = "todo-app"

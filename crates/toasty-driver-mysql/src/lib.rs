@@ -340,17 +340,19 @@ impl toasty_core::driver::Connection for Connection {
             )",
                 (),
             )
-            .await?;
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         // Query all applied migrations
         let rows: Vec<u64> = self
             .conn
             .exec("SELECT id FROM __toasty_migrations ORDER BY applied_at", ())
-            .await?;
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         Ok(rows
             .into_iter()
-            .map(|id| toasty_core::schema::db::AppliedMigration::new(id))
+            .map(toasty_core::schema::db::AppliedMigration::new)
             .collect())
     }
 
@@ -370,16 +372,28 @@ impl toasty_core::driver::Connection for Connection {
             )",
                 (),
             )
-            .await?;
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         // Start transaction
-        let mut transaction = self.conn.start_transaction(Default::default()).await?;
+        let mut transaction = self
+            .conn
+            .start_transaction(Default::default())
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         // Execute each migration statement
         for statement in migration.statements() {
-            if let Err(e) = transaction.query_drop(statement).await {
-                transaction.rollback().await?;
-                return Err(e.into());
+            if let Err(e) = transaction
+                .query_drop(statement)
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)
+            {
+                transaction
+                    .rollback()
+                    .await
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
+                return Err(e);
             }
         }
 
@@ -390,13 +404,20 @@ impl toasty_core::driver::Connection for Connection {
                 (id, name),
             )
             .await
+            .map_err(toasty_core::Error::driver_operation_failed)
         {
-            transaction.rollback().await?;
-            return Err(e.into());
+            transaction
+                .rollback()
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+            return Err(e);
         }
 
         // Commit transaction
-        transaction.commit().await?;
+        transaction
+            .commit()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }
