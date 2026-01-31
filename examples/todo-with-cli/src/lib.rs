@@ -28,7 +28,7 @@ pub struct Todo {
     pub user: toasty::BelongsTo<User>,
 
     #[index]
-    pub title2: String,
+    pub title: String,
 
     pub completed: bool,
 }
