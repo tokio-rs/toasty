@@ -1,5 +1,5 @@
-use crate::Config;
 use super::SnapshotFile;
+use crate::Config;
 use anyhow::Result;
 use clap::Parser;
 use console::style;
@@ -13,7 +13,10 @@ pub struct SnapshotCommand {
 impl SnapshotCommand {
     pub(crate) fn run(self, db: &Db, _config: &Config) -> Result<()> {
         println!();
-        println!("  {}", style("Current Schema Snapshot").cyan().bold().underlined());
+        println!(
+            "  {}",
+            style("Current Schema Snapshot").cyan().bold().underlined()
+        );
         println!();
 
         let snapshot_file = SnapshotFile::new(toasty::schema::db::Schema::clone(&db.schema().db));

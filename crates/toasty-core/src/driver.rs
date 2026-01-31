@@ -46,5 +46,10 @@ pub trait Connection: Debug + Send + 'static {
     }
 
     async fn applied_migrations(&mut self) -> crate::Result<Vec<AppliedMigration>>;
-    async fn apply_migration(&mut self, id: u64, name: String, migration: &Migration) -> crate::Result<()>;
+    async fn apply_migration(
+        &mut self,
+        id: u64,
+        name: String,
+        migration: &Migration,
+    ) -> crate::Result<()>;
 }

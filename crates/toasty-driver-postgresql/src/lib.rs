@@ -89,8 +89,8 @@ impl Driver for PostgreSQL {
             .iter()
             .map(|stmt| {
                 let mut params = Vec::<TypedValue>::new();
-                let sql =
-                    sql::Serializer::postgresql(stmt.schema()).serialize(stmt.statement(), &mut params);
+                let sql = sql::Serializer::postgresql(stmt.schema())
+                    .serialize(stmt.statement(), &mut params);
                 assert!(
                     params.is_empty(),
                     "migration statements should not have parameters"
@@ -292,39 +292,56 @@ impl toasty_core::driver::Connection for Connection {
         Ok(())
     }
 
-    async fn applied_migrations(&mut self) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
+    async fn applied_migrations(
+        &mut self,
+    ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
         // Ensure the migrations table exists
-        self.client.execute(
-            "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+        self.client
+            .execute(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
                 id BIGINT PRIMARY KEY,
                 name TEXT NOT NULL,
                 applied_at TIMESTAMP NOT NULL
             )",
-            &[],
-        ).await?;
+                &[],
+            )
+            .await?;
 
         // Query all applied migrations
-        let rows = self.client.query(
-            "SELECT id FROM __toasty_migrations ORDER BY applied_at",
-            &[],
-        ).await?;
+        let rows = self
+            .client
+            .query(
+                "SELECT id FROM __toasty_migrations ORDER BY applied_at",
+                &[],
+            )
+            .await?;
 
-        Ok(rows.iter().map(|row| {
-            let id: i64 = row.get(0);
-            toasty_core::schema::db::AppliedMigration::new(id as u64)
-        }).collect())
+        Ok(rows
+            .iter()
+            .map(|row| {
+                let id: i64 = row.get(0);
+                toasty_core::schema::db::AppliedMigration::new(id as u64)
+            })
+            .collect())
     }
 
-    async fn apply_migration(&mut self, id: u64, name: String, migration: &toasty_core::schema::db::Migration) -> Result<()> {
+    async fn apply_migration(
+        &mut self,
+        id: u64,
+        name: String,
+        migration: &toasty_core::schema::db::Migration,
+    ) -> Result<()> {
         // Ensure the migrations table exists
-        self.client.execute(
-            "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+        self.client
+            .execute(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
                 id BIGINT PRIMARY KEY,
                 name TEXT NOT NULL,
                 applied_at TIMESTAMP NOT NULL
             )",
-            &[],
-        ).await?;
+                &[],
+            )
+            .await?;
 
         // Start transaction
         let transaction = self.client.transaction().await?;
@@ -338,10 +355,13 @@ impl toasty_core::driver::Connection for Connection {
         }
 
         // Record the migration
-        if let Err(e) = transaction.execute(
-            "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES ($1, $2, NOW())",
-            &[&(id as i64), &name],
-        ).await {
+        if let Err(e) = transaction
+            .execute(
+                "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES ($1, $2, NOW())",
+                &[&(id as i64), &name],
+            )
+            .await
+        {
             transaction.rollback().await?;
             return Err(e.into());
         }

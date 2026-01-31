@@ -1,7 +1,11 @@
 use super::{Column, ColumnId, DiffContext, Schema, TableId};
 use crate::stmt;
 
-use std::{collections::{HashMap, HashSet}, fmt, ops::Deref};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    ops::Deref,
+};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -117,15 +121,16 @@ impl<'a> IndicesDiff<'a> {
                 }
 
                 // Check if the column changed (accounting for renames)
-                let columns_match = if let Some(renamed_to) = cx.rename_hints().get_column(from_col.column) {
-                    // Column was renamed - check if it matches the target column
-                    renamed_to == to_col.column
-                } else {
-                    // No rename hint - check if columns match by name
-                    let from_column = cx.schema_from().column(from_col.column);
-                    let to_column = cx.schema_to().column(to_col.column);
-                    from_column.name == to_column.name
-                };
+                let columns_match =
+                    if let Some(renamed_to) = cx.rename_hints().get_column(from_col.column) {
+                        // Column was renamed - check if it matches the target column
+                        renamed_to == to_col.column
+                    } else {
+                        // No rename hint - check if columns match by name
+                        let from_column = cx.schema_from().column(from_col.column);
+                        let to_column = cx.schema_to().column(to_col.column);
+                        from_column.name == to_column.name
+                    };
 
                 if !columns_match {
                     return true;
@@ -261,10 +266,7 @@ mod tests {
 
     #[test]
     fn test_no_diff_same_indices() {
-        let columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "name"),
-        ];
+        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
 
         let from_indices = vec![make_index(
             0,
@@ -292,10 +294,7 @@ mod tests {
 
     #[test]
     fn test_create_index() {
-        let columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "name"),
-        ];
+        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
 
         let from_indices = vec![];
         let to_indices = vec![make_index(
@@ -321,10 +320,7 @@ mod tests {
 
     #[test]
     fn test_drop_index() {
-        let columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "name"),
-        ];
+        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
 
         let from_indices = vec![make_index(
             0,
@@ -350,10 +346,7 @@ mod tests {
 
     #[test]
     fn test_alter_index_unique() {
-        let columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "name"),
-        ];
+        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
 
         let from_indices = vec![make_index(
             0,
@@ -418,10 +411,7 @@ mod tests {
 
     #[test]
     fn test_alter_index_op() {
-        let columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "name"),
-        ];
+        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
 
         let from_indices = vec![make_index(
             0,
@@ -450,10 +440,7 @@ mod tests {
 
     #[test]
     fn test_alter_index_scope() {
-        let columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "name"),
-        ];
+        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
 
         let from_indices = vec![make_index(
             0,
@@ -482,10 +469,7 @@ mod tests {
 
     #[test]
     fn test_rename_index_with_hint() {
-        let columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "name"),
-        ];
+        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
 
         let from_indices = vec![make_index(
             0,
@@ -529,10 +513,7 @@ mod tests {
 
     #[test]
     fn test_rename_index_without_hint_is_drop_and_create() {
-        let columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "name"),
-        ];
+        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
 
         let from_indices = vec![make_index(
             0,
@@ -571,14 +552,8 @@ mod tests {
 
     #[test]
     fn test_index_with_renamed_column() {
-        let from_columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "old_name"),
-        ];
-        let to_columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "new_name"),
-        ];
+        let from_columns = vec![make_column(0, 0, "id"), make_column(0, 1, "old_name")];
+        let to_columns = vec![make_column(0, 0, "id"), make_column(0, 1, "new_name")];
 
         let from_indices = vec![make_index(
             0,

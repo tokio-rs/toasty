@@ -1,5 +1,5 @@
 use super::HistoryFile;
-use crate::{theme::dialoguer_theme, Config};
+use crate::{Config, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
 use console::style;

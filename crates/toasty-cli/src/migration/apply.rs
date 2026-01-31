@@ -14,10 +14,7 @@ pub struct ApplyCommand {}
 impl ApplyCommand {
     pub(crate) async fn run(self, db: &Db, config: &Config) -> Result<()> {
         println!();
-        println!(
-            "  {}",
-            style("Apply Migrations").cyan().bold().underlined()
-        );
+        println!("  {}", style("Apply Migrations").cyan().bold().underlined());
         println!();
 
         let history_path = config.migration.get_history_file_path();
@@ -41,10 +38,7 @@ impl ApplyCommand {
 
         // Get list of already applied migrations
         let applied_migrations = conn.applied_migrations().await?;
-        let applied_ids: HashSet<u64> = applied_migrations
-            .iter()
-            .map(|m| m.id())
-            .collect();
+        let applied_ids: HashSet<u64> = applied_migrations.iter().map(|m| m.id()).collect();
 
         // Find migrations that haven't been applied yet
         let pending_migrations: Vec<_> = history
