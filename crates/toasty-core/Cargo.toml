@@ -5,7 +5,6 @@ edition = "2021"
 publish = false
 
 [dependencies]
-anyhow.workspace = true
 assert-struct = { workspace = true, optional = true }
 async-trait.workspace = true
 bit-set.workspace = true

@@ -9,11 +9,46 @@ impl Type {
     pub fn cast_jiff(&self, value: &Value) -> Result<Option<Value>> {
         Ok(Some(match (value, self) {
             // String -> jiff
-            (Value::String(value), Type::Timestamp) => Value::Timestamp(value.parse()?),
-            (Value::String(value), Type::Zoned) => Value::Zoned(value.parse()?),
-            (Value::String(value), Type::Date) => Value::Date(value.parse()?),
-            (Value::String(value), Type::Time) => Value::Time(value.parse()?),
-            (Value::String(value), Type::DateTime) => Value::DateTime(value.parse()?),
+            (Value::String(value), Type::Timestamp) => {
+                let v = value.clone();
+                Value::Timestamp(
+                    value.parse().map_err(|_| {
+                        crate::Error::type_conversion(Value::String(v), "Timestamp")
+                    })?,
+                )
+            }
+            (Value::String(value), Type::Zoned) => {
+                let v = value.clone();
+                Value::Zoned(
+                    value
+                        .parse()
+                        .map_err(|_| crate::Error::type_conversion(Value::String(v), "Zoned"))?,
+                )
+            }
+            (Value::String(value), Type::Date) => {
+                let v = value.clone();
+                Value::Date(
+                    value
+                        .parse()
+                        .map_err(|_| crate::Error::type_conversion(Value::String(v), "Date"))?,
+                )
+            }
+            (Value::String(value), Type::Time) => {
+                let v = value.clone();
+                Value::Time(
+                    value
+                        .parse()
+                        .map_err(|_| crate::Error::type_conversion(Value::String(v), "Time"))?,
+                )
+            }
+            (Value::String(value), Type::DateTime) => {
+                let v = value.clone();
+                Value::DateTime(
+                    value
+                        .parse()
+                        .map_err(|_| crate::Error::type_conversion(Value::String(v), "DateTime"))?,
+                )
+            }
 
             // jiff -> String
             (Value::Timestamp(value), Type::String) => Value::String(value.to_string()),

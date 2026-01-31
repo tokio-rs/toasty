@@ -43,7 +43,6 @@ serde_core = { version = "1.0.221", optional = true }
 
 bit-set.workspace = true
 by_address.workspace = true
-anyhow.workspace = true
 async-stream.workspace = true
 rust_decimal = { workspace = true, optional = true }
 bigdecimal = { workspace = true, optional = true }

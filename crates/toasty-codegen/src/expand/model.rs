@@ -64,6 +64,11 @@ impl Expand<'_> {
             }
 
             impl #toasty::Model for #model_ident {
+                type Query = #query_struct_ident;
+                type Create = #create_struct_ident;
+                type Update<'a> = #update_struct_ident<'a>;
+                type UpdateQuery = #update_query_struct_ident;
+
                 fn id() -> #toasty::ModelId {
                     static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
                     *ID.get_or_init(|| #toasty::generate_unique_id())

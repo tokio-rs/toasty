@@ -10,9 +10,9 @@ use toasty_core::{
     driver::{operation::Operation, Capability, Driver, Response},
     schema::db::{Column, ColumnId, Migration, Schema, SchemaDiff, Table},
     stmt::{self, ExprContext},
+    Result,
 };
 
-use anyhow::Result;
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::update_item::UpdateItemError,
@@ -60,12 +60,12 @@ impl Connection {
     }
 
     pub async fn connect(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
+        let url = Url::parse(url).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "dynamodb" {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `dynamodb` scheme; url={url}"
-            ));
+            )));
         }
 
         use aws_config::BehaviorVersion;

@@ -61,7 +61,9 @@ impl Connection {
                         return Ok(Response::count(0));
                     }
 
-                    return Err(SdkError::ServiceError(e).into());
+                    return Err(toasty_core::Error::driver_operation_failed(
+                        SdkError::ServiceError(e),
+                    ));
                 }
 
                 assert!(res.is_ok());
@@ -141,7 +143,8 @@ impl Connection {
             .set_key(Some(ddb_key(table, key)))
             .set_attributes_to_get(Some(attributes_to_get))
             .send()
-            .await?;
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         let Some(curr_unique_values) = res.item else {
             return Ok(Response::count(0));
@@ -196,7 +199,8 @@ impl Connection {
             .transact_write_items()
             .set_transact_items(Some(transact_items))
             .send()
-            .await?;
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         Ok(Response::count(1))
     }

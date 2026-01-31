@@ -28,13 +28,13 @@ impl Sqlite {
     /// Create a new SQLite driver with an arbitrary connection URL
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str)?;
+        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "sqlite" {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `sqlite` scheme; url={}",
                 url_str
-            ));
+            )));
         }
 
         if url.path() == ":memory:" {
@@ -103,7 +103,8 @@ impl Connection {
     }
 
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let connection = RusqliteConnection::open(path)?;
+        let connection =
+            RusqliteConnection::open(path).map_err(toasty_core::Error::driver_operation_failed)?;
         let sqlite = Self { connection };
         Ok(sqlite)
     }
@@ -126,15 +127,21 @@ impl toasty_core::driver::Connection for Connection {
             }
             // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(Transaction::Start) => {
-                self.connection.execute("BEGIN", [])?;
+                self.connection
+                    .execute("BEGIN", [])
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
-                self.connection.execute("COMMIT", [])?;
+                self.connection
+                    .execute("COMMIT", [])
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {
-                self.connection.execute("ROLLBACK", [])?;
+                self.connection
+                    .execute("ROLLBACK", [])
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             _ => todo!("op={:#?}", op),
@@ -175,7 +182,9 @@ impl toasty_core::driver::Connection for Connection {
             .collect::<Vec<_>>();
 
         if width.is_none() {
-            let count = stmt.execute(rusqlite::params_from_iter(params.iter()))?;
+            let count = stmt
+                .execute(rusqlite::params_from_iter(params.iter()))
+                .map_err(toasty_core::Error::driver_operation_failed)?;
 
             return Ok(Response::count(count as _));
         }
@@ -203,7 +212,7 @@ impl toasty_core::driver::Connection for Connection {
                 }
                 Ok(None) => break,
                 Err(err) => {
-                    return Err(err.into());
+                    return Err(toasty_core::Error::driver_operation_failed(err));
                 }
             }
         }
@@ -298,7 +307,9 @@ impl Connection {
         );
         assert!(params.is_empty());
 
-        self.connection.execute(&stmt, [])?;
+        self.connection
+            .execute(&stmt, [])
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         // Create any indices
         for index in &table.indices {
@@ -310,7 +321,9 @@ impl Connection {
             let stmt = serializer.serialize(&sql::Statement::create_index(index), &mut params);
             assert!(params.is_empty());
 
-            self.connection.execute(&stmt, [])?;
+            self.connection
+                .execute(&stmt, [])
+                .map_err(toasty_core::Error::driver_operation_failed)?;
         }
         Ok(())
     }

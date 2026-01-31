@@ -4,13 +4,15 @@ mod macros;
 pub mod driver;
 pub use driver::Connection;
 
-#[macro_use]
 mod error;
+pub use error::Error;
 
 pub mod schema;
 pub use schema::Schema;
 
 pub mod stmt;
 
-pub use anyhow::{Error, Result};
+/// A Result type alias that uses Toasty's [`Error`] type.
+pub type Result<T> = core::result::Result<T, Error>;
+
 pub use async_trait::async_trait;

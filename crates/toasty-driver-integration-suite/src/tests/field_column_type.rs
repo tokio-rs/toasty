@@ -52,7 +52,7 @@ pub async fn specify_invalid_varchar_size(test: &mut Test) {
     let err = assert_err!(test.try_setup_db(models!(User)).await);
     assert_eq!(
         err.to_string(),
-        format!("max varchar capacity exceeded: 1000000000000 > {max}")
+        format!("unsupported feature: VARCHAR(1000000000000) exceeds database maximum of {max}")
     );
 }
 
@@ -71,7 +71,10 @@ pub async fn specify_varchar_ty_when_not_supported(test: &mut Test) {
 
     // Try to setup a database with varchar when not supported
     let err = assert_err!(test.try_setup_db(models!(User)).await);
-    assert_eq!(err.to_string(), "varchar storage type not supported");
+    assert_eq!(
+        err.to_string(),
+        "unsupported feature: VARCHAR type is not supported by this database"
+    );
 }
 
 #[driver_test(id(ID))]

@@ -58,12 +58,14 @@ impl Pool {
             builder = builder.max_size(max_connections);
         }
 
-        let inner = builder.build()?;
+        let inner = builder
+            .build()
+            .map_err(toasty_core::Error::connection_pool)?;
 
-        let connection = match inner.get().await {
-            Ok(connection) => connection,
-            Err(err) => return Err(anyhow::anyhow!("failed to establish connection: {err}")),
-        };
+        let connection = inner
+            .get()
+            .await
+            .map_err(toasty_core::Error::connection_pool)?;
         Ok(Self {
             inner,
             capability: connection.capability(),
@@ -77,14 +79,12 @@ impl Pool {
 
     /// Retrieves a connection from the pool.
     pub async fn get(&self) -> crate::Result<PoolConnection> {
-        Ok(match self.inner.get().await {
-            Ok(connection) => PoolConnection { inner: connection },
-            Err(err) => {
-                return Err(anyhow::anyhow!(
-                    "failed to retrieve connection from pool: {err}"
-                ))
-            }
-        })
+        let connection = self
+            .inner
+            .get()
+            .await
+            .map_err(toasty_core::Error::connection_pool)?;
+        Ok(PoolConnection { inner: connection })
     }
 
     /// Returns the database driver this pool uses to create connections.
