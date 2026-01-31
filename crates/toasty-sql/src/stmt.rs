@@ -2,7 +2,7 @@ mod add_column;
 pub use add_column::AddColumn;
 
 mod alter_column;
-pub use alter_column::AlterColumn;
+pub use alter_column::{AlterColumn, AlterColumnChanges};
 
 mod column_def;
 pub use column_def::ColumnDef;
