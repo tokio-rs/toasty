@@ -2,7 +2,7 @@ mod add_column;
 pub use add_column::AddColumn;
 
 mod alter_column;
-pub use alter_column::{AlterColumn, ColumnTypeChange};
+pub use alter_column::AlterColumn;
 
 mod column_def;
 pub use column_def::ColumnDef;
@@ -36,6 +36,7 @@ pub use toasty_core::stmt::*;
 #[derive(Debug, Clone)]
 pub enum Statement {
     AddColumn(AddColumn),
+    AlterColumn(AlterColumn),
     CreateIndex(CreateIndex),
     CreateTable(CreateTable),
     DropColumn(DropColumn),

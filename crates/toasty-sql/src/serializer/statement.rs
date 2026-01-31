@@ -2,7 +2,10 @@ use std::mem;
 
 use super::{ColumnAlias, Comma, Delimited, Ident, Params, ToSql};
 
-use crate::{serializer::ExprContext, stmt};
+use crate::{
+    serializer::{ExprContext, Flavor},
+    stmt::{self, ColumnDef},
+};
 use toasty_core::{schema::db, stmt::SourceTableId};
 
 struct ColumnsWithConstraints<'a>(&'a stmt::CreateTable);
@@ -84,6 +87,39 @@ impl ToSql for &stmt::AddColumn {
         fmt!(
             &cx, f, "ALTER TABLE " table_name " ADD COLUMN " self.column
         );
+    }
+}
+
+impl ToSql for &stmt::AlterColumn {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        let table = f.serializer.table(self.table);
+        let table_name = Ident(&table.name);
+
+        // Create new expression scope to serialize the statement
+        let cx = cx.scope(table);
+
+        match f.serializer.flavor {
+            Flavor::Postgresql => match (&self.new_name, &self.new_ty, &self.new_not_null) {
+                (Some(name), None, None) => fmt!(&cx, f, "ALTER TABLE " table_name " RENAME COLUMN " self.column_def.name.as_str() " TO " name.as_str()),
+                (None, Some(ty), None) => fmt!(&cx, f, "ALTER TABLE " table_name " ALTER COLUMN " self.column_def.name.as_str() " TYPE " ty),
+                (None, None, Some(true)) => fmt!(&cx, f, "ALTER TABLE " table_name " ALTER COLUMN " self.column_def.name.as_str() " DROP NOT NULL"),
+                (None, None, Some(false)) => fmt!(&cx, f, "ALTER TABLE " table_name " ALTER COLUMN " self.column_def.name.as_str() " SET NOT NULL"),
+                _ => panic!("PostgreSQL does not support modifying multiple column properties in one ALTER TABLE statement")
+            },
+            Flavor::Mysql => {
+                let new_column_def = ColumnDef {
+                    name: self.new_name.as_ref().unwrap_or(&self.column_def.name).clone(),
+                    ty: self.new_ty.as_ref().unwrap_or(&self.column_def.ty).clone(),
+                    not_null: self.new_not_null.unwrap_or(self.column_def.not_null),
+                    auto_increment: self.new_auto_increment.unwrap_or(self.column_def.auto_increment),
+                };
+                fmt!(&cx, f, "ALTER TABLE " table_name " CHANGE COLUMN " self.column_def.name.as_str() new_column_def)
+            },
+            Flavor::Sqlite => match (&self.new_name, &self.new_ty, &self.new_not_null) {
+                (Some(name), None, None) => fmt!(&cx, f, "ALTER TABLE " table_name " RENAME COLUMN " self.column_def.name.as_str() " TO " name.as_str()),
+                _ => panic!("SQLite only supports renaming columns in ALTER TABLE statement")
+            },
+        }
     }
 }
 
@@ -353,6 +389,7 @@ impl ToSql for &stmt::Statement {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         match self {
             stmt::Statement::AddColumn(stmt) => stmt.to_sql(cx, f),
+            stmt::Statement::AlterColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateIndex(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateTable(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropColumn(stmt) => stmt.to_sql(cx, f),
