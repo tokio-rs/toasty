@@ -1,10 +1,9 @@
 mod primitive;
 pub use primitive::FieldPrimitive;
 
-mod embedded;
-pub use embedded::{Embedded, EmbeddedField, FieldAttr};
-
-use super::{AutoStrategy, BelongsTo, Constraint, HasMany, HasOne, Model, ModelId, Schema};
+use super::{
+    AutoStrategy, BelongsTo, Constraint, Embedded, HasMany, HasOne, Model, ModelId, Schema,
+};
 use crate::{driver, stmt, Result};
 use std::fmt;
 
@@ -122,11 +121,7 @@ impl Field {
     pub fn expr_ty(&self) -> &stmt::Type {
         match &self.ty {
             FieldTy::Primitive(primitive) => &primitive.ty,
-            FieldTy::Embedded(_) => {
-                // TODO: For now, embedded fields don't have an expression type
-                // This will be determined during query compilation
-                todo!("embedded field expression type")
-            }
+            FieldTy::Embedded(embedded) => &embedded.expr_ty,
             FieldTy::BelongsTo(belongs_to) => &belongs_to.expr_ty,
             FieldTy::HasMany(has_many) => &has_many.expr_ty,
             FieldTy::HasOne(has_one) => &has_one.expr_ty,

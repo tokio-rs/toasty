@@ -9,6 +9,9 @@ pub use auto::{AutoStrategy, UuidVersion};
 mod constraint;
 pub use constraint::{Constraint, ConstraintLength};
 
+mod embedded;
+pub use embedded::Embedded;
+
 mod field;
 pub use field::{Field, FieldId, FieldName, FieldPrimitive, FieldTy};
 

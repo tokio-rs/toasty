@@ -13,9 +13,8 @@ pub struct Model {
     /// Fields contained by the model
     pub fields: Vec<Field>,
 
-    /// References the index that represents the model's primary key. This must
-    /// be a unique index.
-    pub primary_key: PrimaryKey,
+    /// Distinguishes root models (with tables and primary keys) from embedded models
+    pub kind: ModelKind,
 
     pub indices: Vec<Index>,
 
@@ -23,10 +22,44 @@ pub struct Model {
     pub table_name: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub enum ModelKind {
+    /// Root model that maps to a database table and can be queried directly
+    Root {
+        /// The primary key for this model. Root models must have a primary key.
+        primary_key: PrimaryKey,
+    },
+    /// Embedded model that is flattened into its parent model's table
+    Embedded,
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct ModelId(pub usize);
 
 impl Model {
+    /// Returns true if this is a root model (has a table and primary key)
+    pub fn is_root(&self) -> bool {
+        matches!(self.kind, ModelKind::Root { .. })
+    }
+
+    /// Returns true if this is an embedded model (flattened into parent)
+    pub fn is_embedded(&self) -> bool {
+        matches!(self.kind, ModelKind::Embedded)
+    }
+
+    /// Returns the primary key if this is a root model, None if embedded
+    pub fn primary_key(&self) -> Option<&PrimaryKey> {
+        match &self.kind {
+            ModelKind::Root { primary_key } => Some(primary_key),
+            ModelKind::Embedded => None,
+        }
+    }
+
+    /// Returns true if this model can be the target of a relation
+    pub fn can_be_relation_target(&self) -> bool {
+        self.is_root()
+    }
+
     pub fn primitives_mut(&mut self) -> impl Iterator<Item = &mut FieldPrimitive> + '_ {
         self.fields
             .iter_mut()
@@ -53,7 +86,11 @@ impl Model {
     }
 
     pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {
-        let filter = match &self.primary_key.fields[..] {
+        let primary_key = self
+            .primary_key()
+            .expect("find_by_id requires a root model with primary key");
+
+        let filter = match &primary_key.fields[..] {
             [pk_field] => stmt::Expr::eq(
                 stmt::Expr::ref_self_field(pk_field),
                 input
@@ -80,12 +117,14 @@ impl Model {
     }
 
     /// Iterate over the fields used for the model's primary key.
+    /// Returns None if this is an embedded model.
     /// TODO: extract type?
-    pub fn primary_key_fields(&self) -> impl ExactSizeIterator<Item = &'_ Field> {
-        self.primary_key
-            .fields
-            .iter()
-            .map(|pk_field| &self.fields[pk_field.index])
+    pub fn primary_key_fields(&self) -> Option<impl ExactSizeIterator<Item = &'_ Field>> {
+        self.primary_key().map(|pk| {
+            pk.fields
+                .iter()
+                .map(|pk_field| &self.fields[pk_field.index])
+        })
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {

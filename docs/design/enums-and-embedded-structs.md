@@ -469,9 +469,10 @@ Implement in two phases:
 ### Phase 1: Embedded Struct Support
 
 **Step 1: Schema Type Extensions** (Current)
-- Add `Embedded` variant to `FieldTy` enum
-- Define `Embedded`, `EmbeddedField`, `FieldAttr` types
-- Validation enforces: no relations in embedded types
+- Add `ModelKind` enum to distinguish `Root` vs `Embedded` models
+- Update `Model` struct to use `ModelKind` instead of always having `primary_key`
+- Update `FieldTy::Embedded` to reference `ModelId` instead of inline struct
+- Both root and embedded models use the same `Model` type
 - See "Schema Design" section below for details
 
 **Step 2: Column Flattening**
@@ -525,130 +526,155 @@ Implement in two phases:
 
 ## Step 1 Detailed Design: Schema Type Extensions
 
-### Core Schema Types (toasty-core)
+### Unified Model/Embedded Approach
 
-Add new variant to `FieldTy` enum in `crates/toasty-core/src/schema/app/field.rs`:
+Instead of creating separate `Embedded` types, we unify root models and embedded models under the same `Model` type, distinguished by `ModelKind`.
+
+#### Update Model in `crates/toasty-core/src/schema/app/model.rs`:
+
+```rust
+#[derive(Debug, Clone)]
+pub struct Model {
+    pub id: ModelId,
+    pub name: Name,
+    pub fields: Vec<Field>,
+    pub kind: ModelKind,        // NEW: distinguishes root vs embedded
+    pub indices: Vec<Index>,
+    pub table_name: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ModelKind {
+    /// Root model that maps to a database table and can be queried directly
+    Root {
+        /// The primary key for this model. Root models must have a primary key.
+        primary_key: PrimaryKey,
+    },
+    /// Embedded model that is flattened into its parent model's table
+    Embedded,
+}
+
+impl Model {
+    /// Returns true if this is a root model (has a table and primary key)
+    pub fn is_root(&self) -> bool {
+        matches!(self.kind, ModelKind::Root { .. })
+    }
+
+    /// Returns true if this is an embedded model (flattened into parent)
+    pub fn is_embedded(&self) -> bool {
+        matches!(self.kind, ModelKind::Embedded)
+    }
+
+    /// Returns the primary key if this is a root model, None if embedded
+    pub fn primary_key(&self) -> Option<&PrimaryKey> {
+        match &self.kind {
+            ModelKind::Root { primary_key } => Some(primary_key),
+            ModelKind::Embedded => None,
+        }
+    }
+
+    /// Returns true if this model can be the target of a relation
+    pub fn can_be_relation_target(&self) -> bool {
+        self.is_root()
+    }
+}
+```
+
+#### Add Embedded type in `crates/toasty-core/src/schema/app/embedded.rs`:
+
+```rust
+use crate::{
+    schema::app::{Model, ModelId, Schema},
+    stmt,
+};
+
+#[derive(Debug, Clone)]
+pub struct Embedded {
+    /// The embedded model being referenced
+    pub target: ModelId,
+
+    /// The embedded field's expression type. This is the type the field evaluates
+    /// to from a user's point of view.
+    pub expr_ty: stmt::Type,
+}
+
+impl Embedded {
+    pub fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
+        schema.model(self.target)
+    }
+}
+```
+
+#### Update FieldTy in `crates/toasty-core/src/schema/app/field.rs`:
 
 ```rust
 pub enum FieldTy {
     Primitive(FieldPrimitive),
-    Embedded(Embedded),        // NEW
+    Embedded(Embedded),       // NEW: Reference to an embedded model
     BelongsTo(BelongsTo),
     HasMany(HasMany),
     HasOne(HasOne),
 }
-```
 
-Add helper methods to `FieldTy`:
-
-```rust
 impl FieldTy {
     pub fn is_embedded(&self) -> bool {
-        matches!(self, FieldTy::Embedded(_))
+        matches!(self, Self::Embedded(..))
     }
     
     pub fn as_embedded(&self) -> Option<&Embedded> {
         match self {
-            FieldTy::Embedded(v) => Some(v),
+            Self::Embedded(embedded) => Some(embedded),
             _ => None,
         }
     }
     
     pub fn expect_embedded(&self) -> &Embedded {
-        self.as_embedded().expect("expected embedded")
+        match self {
+            Self::Embedded(embedded) => embedded,
+            _ => panic!("expected embedded field"),
+        }
     }
     
     pub fn expect_embedded_mut(&mut self) -> &mut Embedded {
         match self {
-            FieldTy::Embedded(v) => v,
-            _ => panic!("expected embedded"),
+            Self::Embedded(embedded) => embedded,
+            _ => panic!("expected embedded field"),
         }
     }
 }
 ```
 
-Define embedded type structures in `crates/toasty-core/src/schema/app/field/embedded.rs`:
-
-```rust
-use super::FieldName;
-use crate::schema::Name;
-
-#[derive(Debug, Clone)]
-pub struct Embedded {
-    /// Name of the embedded struct
-    pub name: Name,
-    
-    /// Fields of the embedded struct
-    pub fields: Vec<EmbeddedField>,
-}
-
-#[derive(Debug, Clone)]
-pub struct EmbeddedField {
-    /// Field name (includes app_name and optional storage_name from #[column])
-    pub name: FieldName,
-    
-    /// The field's type (can be Primitive or Embedded, not relations)
-    /// Relations are forbidden and checked during schema validation
-    pub ty: FieldTy,
-    
-    /// Whether this field is nullable
-    pub nullable: bool,
-    
-    /// Field attributes (auto, unique, index, constraints, etc.)
-    /// Note: primary_key is tracked on the parent Field, not here
-    pub attrs: FieldAttr,
-}
-
-#[derive(Debug, Clone)]
-pub struct FieldAttr {
-    /// Specifies if and how Toasty should automatically populate this field
-    pub auto: Option<AutoStrategy>,
-    
-    /// True if the field should be unique
-    pub unique: bool,
-    
-    /// True if the field should be indexed
-    pub index: bool,
-    
-    /// Additional field constraints (e.g., length)
-    pub constraints: Vec<Constraint>,
-}
-```
-
-Update module exports in `crates/toasty-core/src/schema/app/field/mod.rs`:
-
-```rust
-mod primitive;
-pub use primitive::FieldPrimitive;
-
-mod embedded;  // NEW
-pub use embedded::{Embedded, EmbeddedField, FieldAttr};  // NEW
-
-// ... existing code
-```
-
 ### Key Design Decisions
 
-- **`EmbeddedField::name`** is `FieldName` (not `String`) to track `#[column("...")]` overrides
-- **`EmbeddedField::ty`** is `FieldTy` (not `stmt::Type`) to support nested embedded structs
-- **`EmbeddedField::attrs`** is `FieldAttr` to track `#[auto]`, `#[unique]`, `#[index]`, and constraints
-- **`FieldAttr`** is defined in toasty-core (not just codegen) so it can be stored in the schema
-- **Validation** enforces that embedded fields cannot contain relations (checked during schema building)
-- **Reuse** existing types (`FieldName`, `FieldTy`) rather than creating parallel structures
+- **Unified representation**: Both root and embedded models use the same `Model` type
+- **`ModelKind` distinguishes them**: `Root { primary_key }` vs `Embedded`
+- **`Embedded` type follows relation pattern**: Like `BelongsTo`, `HasMany`, `HasOne`, it contains `target: ModelId` and `expr_ty: stmt::Type`
+- **`FieldTy::Embedded(Embedded)`**: Not a bare `ModelId` - has expression type for queries
+- **All models get `ModelId`**: Solves the type reference problem - can look up any model by ID
+- **Primary key only for root models**: Type-safe via `ModelKind::Root { primary_key }`
+- **Embedded models can have indices**: They're full models, just with different storage strategy
+- **Validation enforces rules**: Embedded models cannot be relation targets, checked at schema build time
+- **Extensibility**: Easy to add more kinds later (e.g., `Enum { discriminator }`)
 
-Note: `#[key]` is not tracked in `FieldAttr` because embedded fields cannot be primary keys - only top-level model fields can be keys.
+### Benefits of This Approach
+
+1. **Code reuse**: Same field processing, validation, indexing for all models
+2. **Consistent API**: `schema.model(model_id)` works for both root and embedded
+3. **Type safety**: Primary key only exists on root models (compile-time safe)
+4. **Flexibility**: Embedded models can have indices, constraints, all the features
+5. **Future-proof**: Easy to add enums as another `ModelKind` variant
 
 ### Column Flattening Strategy (for future steps)
 
 **Approach**: Flatten at schema build time
-- Embedded fields expand to multiple `db::Column` entries
+- Embedded model fields expand to multiple `db::Column` entries in the parent model's table
 - Column names follow pattern: `{field_name}_{embedded_field_name}`
-- Nested embedded structs flatten recursively: `{field}_{embedded}_{nested}`
+- Nested embedded models flatten recursively: `{field}_{embedded}_{nested}`
 - Each embedded sub-field gets its own entry in the mapping layer
 
 ### Validation Rules (for future steps)
 
 Schema validation (`toasty-core/src/schema/verify`) must enforce:
-- Embedded types cannot contain `BelongsTo`, `HasMany`, or `HasOne` fields
-- Nested embedded structs are allowed (recursive flattening)
+- Embedded models (where `kind == ModelKind::Embedded`) cannot be relation targets
+- Nested embedded models are allowed (recursive flattening)
 - All `#[column(variant = N)]` values are unique within an enum (Phase 2)

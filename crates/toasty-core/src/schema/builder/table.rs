@@ -294,7 +294,11 @@ impl BuildMapping<'_> {
                     )
                 };
 
-                for (i, field_id) in model.primary_key.fields.iter().enumerate() {
+                let primary_key = model
+                    .primary_key()
+                    .expect("primary key required for model_pk_to_table");
+
+                for (i, field_id) in primary_key.fields.iter().enumerate() {
                     if field_id.index == *step {
                         let mut p = projection.clone();
                         p[0] = i;
@@ -307,7 +311,7 @@ impl BuildMapping<'_> {
                     "boom; projection={:?}; mapping={:#?}; PK={:#?}",
                     projection,
                     self.model_to_table,
-                    model.primary_key
+                    primary_key
                 );
             });
 
