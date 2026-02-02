@@ -14,6 +14,13 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
     }
 }
 
+#[proc_macro_derive(Embed, attributes(column))]
+pub fn derive_embed(_input: TokenStream) -> TokenStream {
+    // No-op for now - embedded types don't need to generate any code themselves
+    // The parent model will handle schema registration and field generation
+    TokenStream::new()
+}
+
 #[proc_macro]
 pub fn include_schema(_input: TokenStream) -> TokenStream {
     todo!()

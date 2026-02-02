@@ -23,7 +23,7 @@ pub mod schema;
 pub mod stmt;
 pub use stmt::Statement;
 
-pub use toasty_macros::{create, query, Model};
+pub use toasty_macros::{create, query, Embed, Model};
 
 pub use toasty_core::{Error, Result};
 
