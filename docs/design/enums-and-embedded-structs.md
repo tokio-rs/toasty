@@ -470,7 +470,7 @@ Implement in two phases:
 
 **Step 1: Schema Type Extensions** (Current)
 - Add `Embedded` variant to `FieldTy` enum
-- Define `Embedded`, `EmbeddedTy`, `EmbeddedField` types
+- Define `Embedded`, `EmbeddedField`, `FieldAttr` types
 - Validation enforces: no relations in embedded types
 - See "Schema Design" section below for details
 
@@ -575,12 +575,6 @@ use crate::schema::Name;
 
 #[derive(Debug, Clone)]
 pub struct Embedded {
-    /// The embedded type definition
-    pub ty: EmbeddedTy,
-}
-
-#[derive(Debug, Clone)]
-pub struct EmbeddedTy {
     /// Name of the embedded struct
     pub name: Name,
     
@@ -628,7 +622,7 @@ mod primitive;
 pub use primitive::FieldPrimitive;
 
 mod embedded;  // NEW
-pub use embedded::{Embedded, EmbeddedTy, EmbeddedField, FieldAttr};  // NEW
+pub use embedded::{Embedded, EmbeddedField, FieldAttr};  // NEW
 
 // ... existing code
 ```

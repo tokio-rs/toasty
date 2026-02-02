@@ -119,6 +119,10 @@ impl BuildTableFromModels<'_> {
                 app::FieldTy::Primitive(simple) => {
                     self.create_column_for_primitive(field, simple, prefix.as_deref());
                 }
+                app::FieldTy::Embedded(_) => {
+                    // TODO: Implement column flattening for embedded fields
+                    todo!("embedded field column flattening")
+                }
                 // HasMany/HasOne relationships do not have columns... for now?
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
                 }
@@ -164,6 +168,7 @@ impl BuildTableFromModels<'_> {
                         op: index_field.op,
                         scope: index_field.scope,
                     }),
+                    app::FieldTy::Embedded(_) => todo!("embedded field indexing"),
                     app::FieldTy::BelongsTo(_) => todo!(),
                     app::FieldTy::HasMany(_) => todo!(),
                     app::FieldTy::HasOne(_) => todo!(),
@@ -252,6 +257,10 @@ impl BuildMapping<'_> {
                     let expr = self.map_table_column_to_model(field.id, primitive);
                     self.table_to_model.push(expr);
                 }
+                app::FieldTy::Embedded(_) => {
+                    // TODO: Implement table -> model mapping for embedded fields
+                    todo!("embedded field table to model mapping")
+                }
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
                     self.table_to_model.push(stmt::Value::Null.into());
                 }
@@ -325,6 +334,10 @@ impl BuildMapping<'_> {
                     let mapping = self.mapping.fields[field.id.index].as_ref().unwrap();
                     assert_ne!(mapping.column, ColumnId::placeholder());
                     self.map_primitive(field.id, primitive);
+                }
+                app::FieldTy::Embedded(_) => {
+                    // TODO: Implement model -> table mapping for embedded fields
+                    todo!("embedded field model to table mapping")
                 }
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
                 }
