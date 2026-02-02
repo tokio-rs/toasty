@@ -174,7 +174,7 @@ enum Creature {
 
 // Columns:
 // - creature (discriminator)
-// - name (shared between Human and Animal)
+// - creature_name (shared between Human and Animal)
 // - creature_human_profession
 // - creature_animal_species
 ```
