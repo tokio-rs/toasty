@@ -457,3 +457,204 @@ User::all().filter(
     User::FIELDS.contact().matches(ContactMethod::VARIANTS.email())
 )
 ```
+
+## Implementation Plan
+
+### High-Level Strategy
+
+Implement in two phases:
+1. **Phase 1: Embedded Structs** - Simpler, no discriminator logic
+2. **Phase 2: Enums** - Builds on embedded struct patterns + discriminator
+
+### Phase 1: Embedded Struct Support
+
+**Step 1: Schema Type Extensions** (Current)
+- Add `Embedded` variant to `FieldTy` enum
+- Define `Embedded`, `EmbeddedTy`, `EmbeddedField` types
+- Validation enforces: no relations in embedded types
+- See "Schema Design" section below for details
+
+**Step 2: Column Flattening**
+- Extend schema builder to flatten embedded fields into columns
+- Implement `{field}_{embedded_field}` naming pattern
+- Handle `Option<EmbeddedStruct>` by making all columns nullable
+
+**Step 3: Codegen - Parsing**
+- Parse `#[derive(toasty::Embed)]` attribute
+- Build `Embedded` field type in schema representation
+- Validate embedded type invariants during parsing
+
+**Step 4: Codegen - Expansion**
+- Generate field accessors for embedded struct fields
+- Generate struct constructors/deconstructors
+- No query support yet
+
+**Step 5: Engine - CRUD Support**
+- Update insert to handle flattened fields
+- Update query to reconstruct embedded structs from columns
+- Handle NULL semantics for `Option<EmbeddedStruct>`
+
+**Step 6: Testing**
+- Add comprehensive tests for embedded structs
+- Test nested embedded structs
+- Test `Option<EmbeddedStruct>`
+- Test custom column names via `#[column("...")]`
+
+### Phase 2: Enum Support
+
+**Step 7: Schema for Unit Enums**
+- Add discriminator column representation
+- Parse `#[column(variant = N)]` attributes
+- Validate unique variant values
+
+**Step 8: Unit Enum CRUD**
+- Generate enum ↔ integer conversions
+- Update engine for discriminator handling
+
+**Step 9: Data-Carrying Enums**
+- Combine discriminator + field flattening
+- Implement `{field}_{variant}_{field}` naming
+- Handle variant field nullability
+
+**Step 10: Query Support**
+- Generate `is_*()` and `matches()` methods
+- Update engine to translate variant queries
+
+**Step 11-12: Advanced Features**
+- Tuple variants, shared columns, customization options
+
+## Step 1 Detailed Design: Schema Type Extensions
+
+### Core Schema Types (toasty-core)
+
+Add new variant to `FieldTy` enum in `crates/toasty-core/src/schema/app/field.rs`:
+
+```rust
+pub enum FieldTy {
+    Primitive(FieldPrimitive),
+    Embedded(Embedded),        // NEW
+    BelongsTo(BelongsTo),
+    HasMany(HasMany),
+    HasOne(HasOne),
+}
+```
+
+Add helper methods to `FieldTy`:
+
+```rust
+impl FieldTy {
+    pub fn is_embedded(&self) -> bool {
+        matches!(self, FieldTy::Embedded(_))
+    }
+    
+    pub fn as_embedded(&self) -> Option<&Embedded> {
+        match self {
+            FieldTy::Embedded(v) => Some(v),
+            _ => None,
+        }
+    }
+    
+    pub fn expect_embedded(&self) -> &Embedded {
+        self.as_embedded().expect("expected embedded")
+    }
+    
+    pub fn expect_embedded_mut(&mut self) -> &mut Embedded {
+        match self {
+            FieldTy::Embedded(v) => v,
+            _ => panic!("expected embedded"),
+        }
+    }
+}
+```
+
+Define embedded type structures in `crates/toasty-core/src/schema/app/field/embedded.rs`:
+
+```rust
+use super::FieldName;
+use crate::schema::Name;
+
+#[derive(Debug, Clone)]
+pub struct Embedded {
+    /// The embedded type definition
+    pub ty: EmbeddedTy,
+}
+
+#[derive(Debug, Clone)]
+pub struct EmbeddedTy {
+    /// Name of the embedded struct
+    pub name: Name,
+    
+    /// Fields of the embedded struct
+    pub fields: Vec<EmbeddedField>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EmbeddedField {
+    /// Field name (includes app_name and optional storage_name from #[column])
+    pub name: FieldName,
+    
+    /// The field's type (can be Primitive or Embedded, not relations)
+    /// Relations are forbidden and checked during schema validation
+    pub ty: FieldTy,
+    
+    /// Whether this field is nullable
+    pub nullable: bool,
+    
+    /// Field attributes (auto, unique, index, constraints, etc.)
+    /// Note: primary_key is tracked on the parent Field, not here
+    pub attrs: FieldAttr,
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldAttr {
+    /// Specifies if and how Toasty should automatically populate this field
+    pub auto: Option<AutoStrategy>,
+    
+    /// True if the field should be unique
+    pub unique: bool,
+    
+    /// True if the field should be indexed
+    pub index: bool,
+    
+    /// Additional field constraints (e.g., length)
+    pub constraints: Vec<Constraint>,
+}
+```
+
+Update module exports in `crates/toasty-core/src/schema/app/field/mod.rs`:
+
+```rust
+mod primitive;
+pub use primitive::FieldPrimitive;
+
+mod embedded;  // NEW
+pub use embedded::{Embedded, EmbeddedTy, EmbeddedField, FieldAttr};  // NEW
+
+// ... existing code
+```
+
+### Key Design Decisions
+
+- **`EmbeddedField::name`** is `FieldName` (not `String`) to track `#[column("...")]` overrides
+- **`EmbeddedField::ty`** is `FieldTy` (not `stmt::Type`) to support nested embedded structs
+- **`EmbeddedField::attrs`** is `FieldAttr` to track `#[auto]`, `#[unique]`, `#[index]`, and constraints
+- **`FieldAttr`** is defined in toasty-core (not just codegen) so it can be stored in the schema
+- **Validation** enforces that embedded fields cannot contain relations (checked during schema building)
+- **Reuse** existing types (`FieldName`, `FieldTy`) rather than creating parallel structures
+
+Note: `#[key]` is not tracked in `FieldAttr` because embedded fields cannot be primary keys - only top-level model fields can be keys.
+
+### Column Flattening Strategy (for future steps)
+
+**Approach**: Flatten at schema build time
+- Embedded fields expand to multiple `db::Column` entries
+- Column names follow pattern: `{field_name}_{embedded_field_name}`
+- Nested embedded structs flatten recursively: `{field}_{embedded}_{nested}`
+- Each embedded sub-field gets its own entry in the mapping layer
+
+### Validation Rules (for future steps)
+
+Schema validation (`toasty-core/src/schema/verify`) must enforce:
+- Embedded types cannot contain `BelongsTo`, `HasMany`, or `HasOne` fields
+- Nested embedded structs are allowed (recursive flattening)
+- All `#[column(variant = N)]` values are unique within an enum (Phase 2)
