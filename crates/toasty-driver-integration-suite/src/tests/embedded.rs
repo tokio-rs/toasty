@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 #[driver_test]
-pub async fn basic_embedded_struct(test: &mut Test) {
+pub async fn basic_embedded_struct(_test: &mut Test) {
     #[derive(toasty::Embed)]
     struct Address {
         street: String,
@@ -12,10 +12,16 @@ pub async fn basic_embedded_struct(test: &mut Test) {
     let mut builder = toasty::Db::builder();
     builder.register::<Address>();
 
-    // For now, just verify the struct with #[derive(Embed)] compiles
-    // and can be registered.
-    let _ = Address {
-        street: "123 Main St".to_string(),
-        city: "Springfield".to_string(),
-    };
+    // Verify the Address type is in the app-level schema
+    let schema = <Address as toasty::Register>::schema();
+
+    assert_struct!(schema, toasty::schema::app::Model {
+        name.upper_camel_case(): "Address",
+        kind: toasty::schema::app::ModelKind::Embedded,
+        fields: [
+            _ { name.app_name: "street", .. },
+            _ { name.app_name: "city", .. }
+        ],
+        ..
+    });
 }
