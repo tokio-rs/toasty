@@ -8,7 +8,12 @@ pub async fn basic_embedded_struct(test: &mut Test) {
         city: String,
     }
 
-    // For now, just verify the struct with #[derive(Embed)] compiles.
+    // Register the embedded model with the database schema
+    let mut builder = toasty::Db::builder();
+    builder.register::<Address>();
+
+    // For now, just verify the struct with #[derive(Embed)] compiles
+    // and can be registered.
     let _ = Address {
         street: "123 Main St".to_string(),
         city: "Springfield".to_string(),
