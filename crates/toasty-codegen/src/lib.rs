@@ -19,19 +19,10 @@ pub fn generate_embed(input: TokenStream) -> syn::Result<TokenStream> {
         const _: () = {
             use toasty as _toasty;
 
-            impl _toasty::Model for #name {
-                type Query = ();
-                type Create = ();
-                type Update<'a> = ();
-                type UpdateQuery = ();
-
+            impl _toasty::Register for #name {
                 fn id() -> _toasty::codegen_support::ModelId {
                     static ID: std::sync::OnceLock<_toasty::codegen_support::ModelId> = std::sync::OnceLock::new();
                     *ID.get_or_init(|| _toasty::codegen_support::generate_unique_id())
-                }
-
-                fn load(_row: _toasty::codegen_support::ValueRecord) -> Result<Self, _toasty::Error> {
-                    panic!("embedded types cannot be loaded directly")
                 }
 
                 fn schema() -> _toasty::codegen_support::schema::app::Model {
@@ -49,6 +40,8 @@ pub fn generate_embed(input: TokenStream) -> syn::Result<TokenStream> {
                     }
                 }
             }
+
+            impl _toasty::Embed for #name {}
         };
     };
 

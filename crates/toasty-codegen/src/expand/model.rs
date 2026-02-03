@@ -63,24 +63,26 @@ impl Expand<'_> {
                 }
             }
 
+            impl #toasty::Register for #model_ident {
+                fn id() -> #toasty::ModelId {
+                    static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
+                    *ID.get_or_init(|| #toasty::generate_unique_id())
+                }
+
+                #model_schema
+            }
+
             impl #toasty::Model for #model_ident {
                 type Query = #query_struct_ident;
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<'a>;
                 type UpdateQuery = #update_query_struct_ident;
 
-                fn id() -> #toasty::ModelId {
-                    static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
-                    *ID.get_or_init(|| #toasty::generate_unique_id())
-                }
-
                 fn load(mut record: #toasty::ValueRecord) -> #toasty::Result<Self> {
                     Ok(Self {
                         #struct_load_fields
                     })
                 }
-
-                #model_schema
             }
 
             impl #toasty::Relation for #model_ident {
