@@ -46,7 +46,7 @@ impl Expand<'_> {
     }
 }
 
-pub(super) fn model(model: &Model) -> TokenStream {
+pub(super) fn root_model(model: &Model) -> TokenStream {
     let toasty = quote!(_toasty::codegen_support);
 
     Expand {
@@ -57,7 +57,7 @@ pub(super) fn model(model: &Model) -> TokenStream {
     .expand()
 }
 
-pub(super) fn embed(model: &Model) -> TokenStream {
+pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let toasty = quote!(_toasty::codegen_support);
     let model_ident = &model.ident;
 
