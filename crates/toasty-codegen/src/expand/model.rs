@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::FieldTy;
+use crate::schema::{FieldTy, ModelKind};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -9,10 +9,24 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_struct_ident = &self.model.query_struct_ident;
-        let create_struct_ident = &self.model.create_struct_ident;
-        let update_struct_ident = &self.model.update_struct_ident;
-        let update_query_struct_ident = &self.model.update_query_struct_ident;
+
+        let (
+            query_struct_ident,
+            create_struct_ident,
+            update_struct_ident,
+            update_query_struct_ident,
+        ) = match &self.model.kind {
+            ModelKind::Root(root) => (
+                &root.query_struct_ident,
+                &root.create_struct_ident,
+                &root.update_struct_ident,
+                &root.update_query_struct_ident,
+            ),
+            ModelKind::Embedded => {
+                // Embedded models don't generate CRUD methods, just return early
+                return TokenStream::new();
+            }
+        };
         let model_schema = self.expand_model_schema();
         let model_fields = self.expand_model_field_struct_init();
         let struct_load_fields = self.expand_struct_load_fields();
@@ -146,7 +160,7 @@ impl Expand<'_> {
 
     pub(super) fn expand_model_into_select_body(&self, by_ref: bool) -> TokenStream {
         let filter = self.primary_key_filter();
-        let query_struct_ident = &self.model.query_struct_ident;
+        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let arg_idents = self.expand_filter_arg_idents(filter);
         let amp = if by_ref { quote!(&) } else { quote!() };

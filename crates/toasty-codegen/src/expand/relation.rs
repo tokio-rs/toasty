@@ -9,8 +9,8 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_ident = &self.model.query_struct_ident;
-        let create_builder_ident = &self.model.create_struct_ident;
+        let query_ident = &self.model.kind.expect_root().query_struct_ident;
+        let create_builder_ident = &self.model.kind.expect_root().create_struct_ident;
         let filter_methods = self.expand_relation_filter_methods();
 
         quote! {

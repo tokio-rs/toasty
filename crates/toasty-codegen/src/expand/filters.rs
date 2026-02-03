@@ -87,7 +87,7 @@ impl Expand<'_> {
     fn expand_model_filter_method(&self, filter: &Filter, self_into_select: bool) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let query_struct_ident = &self.model.query_struct_ident;
+        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let args = self.expand_filter_args(filter);
         let arg_idents = self.expand_filter_arg_idents(filter);
@@ -124,7 +124,7 @@ impl Expand<'_> {
     ) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let query_struct_ident = &self.model.query_struct_ident;
+        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let filter_method_batch_ident = &filter.filter_method_batch_ident;
         let bound = self.expand_filter_batch_arg_bound(filter);
         let self_arg;
@@ -192,7 +192,7 @@ impl Expand<'_> {
 
     fn expand_query_filter_method(&self, filter: &Filter) -> TokenStream {
         let vis = &self.model.vis;
-        let query_struct_ident = &self.model.query_struct_ident;
+        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let args = self.expand_filter_args(filter);
         let expr = self.expand_query_filter_expr(filter);
@@ -225,7 +225,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_struct_ident = &self.model.query_struct_ident;
+        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let query_filter_batch_ident = &filter.filter_method_batch_ident;
         let bound = self.expand_filter_batch_arg_bound(filter);
 
@@ -251,8 +251,14 @@ impl Expand<'_> {
     pub(crate) fn expand_model_into_expr_body(&self, by_ref: bool) -> TokenStream {
         let toasty = &self.toasty;
 
-        if self.model.primary_key.fields.len() == 1 {
-            let expr = self.model.primary_key_fields().map(|field| {
+        let pk_fields: Vec<_> = self
+            .model
+            .primary_key_fields()
+            .expect("into_expr called on model without primary key")
+            .collect();
+
+        if pk_fields.len() == 1 {
+            let expr = pk_fields.iter().map(|field| {
                 let field_ident = &field.name.ident;
                 let ty = match &field.ty {
                     FieldTy::Primitive(ty) => ty,
@@ -273,19 +279,22 @@ impl Expand<'_> {
 
             quote!( #( #expr )* )
         } else {
-            let expr = self.model.primary_key_fields().map(|field| {
-                let field_ident = &field.name.ident;
-                let amp = if by_ref { quote!(&) } else { quote!() };
-                quote!( #amp self.#field_ident)
-            });
+            let expr = pk_fields
+                .iter()
+                .map(|field| {
+                    let field_ident = &field.name.ident;
+                    let amp = if by_ref { quote!(&) } else { quote!() };
+                    quote!( #amp self.#field_ident)
+                })
+                .collect::<Vec<_>>();
 
-            let ty = self
-                .model
-                .primary_key_fields()
+            let ty = pk_fields
+                .iter()
                 .map(|field| match &field.ty {
                     FieldTy::Primitive(ty) => ty,
                     _ => todo!(),
-                });
+                })
+                .collect::<Vec<_>>();
 
             quote! {
                 let expr: #toasty::stmt::Expr<( #( #ty ),* )> =
@@ -345,6 +354,7 @@ impl Expand<'_> {
         let fields = self
             .model
             .primary_key_fields()
+            .expect("primary_key_filter called on model without primary key")
             .map(|field| field.id)
             .collect::<Vec<_>>();
 

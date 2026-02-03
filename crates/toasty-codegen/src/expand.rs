@@ -57,6 +57,32 @@ pub(super) fn model(model: &Model) -> TokenStream {
     .expand()
 }
 
+pub(super) fn embed(model: &Model) -> TokenStream {
+    let toasty = quote!(_toasty::codegen_support);
+    let model_ident = &model.ident;
+
+    let expand = Expand {
+        model,
+        filters: vec![],
+        toasty: toasty.clone(),
+    };
+
+    let model_schema = expand.expand_model_schema();
+
+    wrap_in_const(quote! {
+        impl #toasty::Register for #model_ident {
+            fn id() -> #toasty::ModelId {
+                static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
+                *ID.get_or_init(|| #toasty::generate_unique_id())
+            }
+
+            #model_schema
+        }
+
+        impl #toasty::Embed for #model_ident {}
+    })
+}
+
 fn wrap_in_const(code: TokenStream) -> TokenStream {
     quote! {
         const _: () = {
