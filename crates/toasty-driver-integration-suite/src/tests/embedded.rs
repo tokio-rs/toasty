@@ -1,3 +1,5 @@
+use toasty::schema::app::FieldTy;
+
 use crate::prelude::*;
 
 #[driver_test]
@@ -60,7 +62,14 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
             kind: toasty::schema::app::ModelKind::Root(_),
             fields: [
                 _ { name.app_name: "id", .. },
-                _ { name.app_name: "address", .. }
+                _ {
+                    name.app_name: "address",
+                    ty: FieldTy::Embedded(_ {
+                        target: == Address::id(),
+                        ..
+                    }),
+                    ..
+                }
             ],
             ..
         },
