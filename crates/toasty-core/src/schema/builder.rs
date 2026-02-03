@@ -66,7 +66,13 @@ impl Builder {
 
         // Find all models that specified a table name, ensure a table is
         // created for that model, and link the model with the table.
+        // Skip embedded models as they don't have their own tables.
         for model in app.models() {
+            // Skip embedded models - they are flattened into parent tables
+            if model.is_embedded() {
+                continue;
+            }
+
             let table = builder.build_table_stub_for_model(model);
 
             // Create a mapping stub for the model
