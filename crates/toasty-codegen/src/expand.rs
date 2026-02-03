@@ -85,9 +85,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             const NULLABLE: bool = false;
 
             fn ty() -> #toasty::Type {
-                // TODO: This should return a Record type with the embedded fields
-                // For now, return an empty record as a placeholder
-                #toasty::Type::Record(vec![])
+                #toasty::Type::Model(Self::id())
             }
 
             fn load(_value: #toasty::Value) -> #toasty::Result<Self> {
