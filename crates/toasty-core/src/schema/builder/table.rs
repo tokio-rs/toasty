@@ -37,7 +37,14 @@ struct BuildMapping<'a> {
 
 impl BuildSchema<'_> {
     pub(super) fn build_table_stub_for_model(&mut self, model: &Model) -> TableId {
-        if let Some(table_name) = &model.table_name {
+        let table_name = match &model.kind {
+            app::ModelKind::Root(root) => root.table_name.as_ref(),
+            app::ModelKind::Embedded => {
+                panic!("build_table_stub_for_model called on embedded model")
+            }
+        };
+
+        if let Some(table_name) = table_name {
             let table_name = self.prefix_table_name(table_name);
 
             if !self.table_lookup.contains_key(&table_name) {

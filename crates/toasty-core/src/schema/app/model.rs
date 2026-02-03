@@ -17,9 +17,6 @@ pub struct Model {
     pub kind: ModelKind,
 
     pub indices: Vec<Index>,
-
-    /// If the schema specifies a table to map the model to, this is set.
-    pub table_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +31,9 @@ pub enum ModelKind {
 pub struct ModelRoot {
     /// The primary key for this model. Root models must have a primary key.
     pub primary_key: PrimaryKey,
+
+    /// If the schema specifies a table to map the model to, this is set.
+    pub table_name: Option<String>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]

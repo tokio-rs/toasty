@@ -20,6 +20,7 @@ impl Expand<'_> {
                     #toasty::schema::app::ModelKind::Root(
                         #toasty::schema::app::ModelRoot {
                             primary_key: #primary_key,
+                            table_name: #table_name,
                         }
                     )
                 }
@@ -51,7 +52,6 @@ impl Expand<'_> {
                     fields: #fields,
                     kind: #kind,
                     indices: #indices,
-                    table_name: #table_name,
                 }
             }
         }
