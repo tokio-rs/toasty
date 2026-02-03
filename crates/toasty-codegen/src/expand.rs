@@ -80,6 +80,20 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         }
 
         impl #toasty::Embed for #model_ident {}
+
+        impl #toasty::stmt::Primitive for #model_ident {
+            const NULLABLE: bool = false;
+
+            fn ty() -> #toasty::Type {
+                // TODO: This should return a Record type with the embedded fields
+                // For now, return an empty record as a placeholder
+                #toasty::Type::Record(vec![])
+            }
+
+            fn load(_value: #toasty::Value) -> #toasty::Result<Self> {
+                todo!("embedded type load() not yet implemented")
+            }
+        }
     })
 }
 

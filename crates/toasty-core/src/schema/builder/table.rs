@@ -128,7 +128,7 @@ impl BuildTableFromModels<'_> {
                 }
                 app::FieldTy::Embedded(_) => {
                     // TODO: Implement column flattening for embedded fields
-                    todo!("embedded field column flattening")
+                    // For now, skip embedded fields - they will be handled later
                 }
                 // HasMany/HasOne relationships do not have columns... for now?
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
@@ -348,7 +348,7 @@ impl BuildMapping<'_> {
                 }
                 app::FieldTy::Embedded(_) => {
                     // TODO: Implement model -> table mapping for embedded fields
-                    todo!("embedded field model to table mapping")
+                    // For now, skip embedded fields - they will be handled later
                 }
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
                 }
