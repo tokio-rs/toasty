@@ -17,9 +17,11 @@ impl Expand<'_> {
             ModelKind::Root(_) => {
                 let primary_key = self.expand_primary_key();
                 quote! {
-                    #toasty::schema::app::ModelKind::Root {
-                        primary_key: #primary_key,
-                    }
+                    #toasty::schema::app::ModelKind::Root(
+                        #toasty::schema::app::ModelRoot {
+                            primary_key: #primary_key,
+                        }
+                    )
                 }
             }
             ModelKind::Embedded => {

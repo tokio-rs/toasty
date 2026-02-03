@@ -22,7 +22,7 @@ mod index;
 pub use index::{Index, IndexField, IndexId};
 
 mod model;
-pub use model::{Model, ModelId, ModelKind};
+pub use model::{Model, ModelId, ModelKind, ModelRoot};
 
 mod pk;
 pub use pk::PrimaryKey;

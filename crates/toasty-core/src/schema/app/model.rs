@@ -25,12 +25,15 @@ pub struct Model {
 #[derive(Debug, Clone)]
 pub enum ModelKind {
     /// Root model that maps to a database table and can be queried directly
-    Root {
-        /// The primary key for this model. Root models must have a primary key.
-        primary_key: PrimaryKey,
-    },
+    Root(ModelRoot),
     /// Embedded model that is flattened into its parent model's table
     Embedded,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModelRoot {
+    /// The primary key for this model. Root models must have a primary key.
+    pub primary_key: PrimaryKey,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
@@ -39,7 +42,7 @@ pub struct ModelId(pub usize);
 impl Model {
     /// Returns true if this is a root model (has a table and primary key)
     pub fn is_root(&self) -> bool {
-        matches!(self.kind, ModelKind::Root { .. })
+        matches!(self.kind, ModelKind::Root(_))
     }
 
     /// Returns true if this is an embedded model (flattened into parent)
@@ -50,7 +53,7 @@ impl Model {
     /// Returns the primary key if this is a root model, None if embedded
     pub fn primary_key(&self) -> Option<&PrimaryKey> {
         match &self.kind {
-            ModelKind::Root { primary_key } => Some(primary_key),
+            ModelKind::Root(root) => Some(&root.primary_key),
             ModelKind::Embedded => None,
         }
     }
