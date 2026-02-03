@@ -75,7 +75,15 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
         },
     });
 
-    // TODO: Once embedded field flattening is implemented, verify database schema
-    // For now, we can't build the full database schema because embedded fields
-    // aren't yet flattened into columns
+    assert_struct!(schema.db.tables, [
+        _ {
+            name: =~ r"users$",
+            columns: [
+                _ { name: "id", .. },
+                _ { name: "address_street", .. },
+                _ { name: "address_city", .. },
+            ],
+            ..
+        }
+    ]);
 }

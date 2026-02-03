@@ -11,6 +11,9 @@ use crate::{
 };
 
 struct BuildTableFromModels<'a> {
+    /// Application schema (for looking up model definitions)
+    app: &'a app::Schema,
+
     /// Database-specific capabilities
     db: &'a driver::Capability,
 
@@ -76,6 +79,7 @@ impl BuildSchema<'_> {
             );
 
             BuildTableFromModels {
+                app,
                 db,
                 table,
                 mapping: &mut self.mapping,
@@ -127,9 +131,9 @@ impl BuildTableFromModels<'_> {
                 app::FieldTy::Primitive(simple) => {
                     self.create_column_for_primitive(field, simple, prefix.as_deref());
                 }
-                app::FieldTy::Embedded(_) => {
-                    // TODO: Implement column flattening for embedded fields
-                    // For now, skip embedded fields - they will be handled later
+                app::FieldTy::Embedded(embedded) => {
+                    let field_prefix = field.name.storage_name().to_owned();
+                    self.flatten_embedded_fields(embedded.target, &field_prefix);
                 }
                 // HasMany/HasOne relationships do not have columns... for now?
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
@@ -231,6 +235,71 @@ impl BuildTableFromModels<'_> {
             .column = column.id;
 
         self.table.columns.push(column);
+    }
+
+    fn create_column_for_embedded_primitive(
+        &mut self,
+        column_name: &str,
+        field: &app::Field,
+        primitive: &app::FieldPrimitive,
+    ) {
+        let auto_increment = field.is_auto_increment();
+        let storage_ty = db::Type::from_app(
+            &primitive.ty,
+            primitive.storage_ty.as_ref(),
+            &self.db.storage_types,
+        )
+        .expect("unsupported storage type");
+
+        let column = db::Column {
+            id: ColumnId {
+                table: self.table.id,
+                index: self.table.columns.len(),
+            },
+            name: column_name.to_owned(),
+            ty: storage_ty.bridge_type(&primitive.ty),
+            storage_ty,
+            nullable: field.nullable,
+            primary_key: false,
+            auto_increment: auto_increment && self.db.auto_increment,
+        };
+
+        // Note: We do NOT update field mapping here. Embedded fields don't have
+        // direct mappings - the parent field will be mapped to multiple columns.
+        // This will be handled in a future phase.
+
+        self.table.columns.push(column);
+    }
+
+    /// Recursively flattens embedded struct fields into database columns.
+    ///
+    /// For each field in the embedded model:
+    /// - Primitive fields become columns with names like `{prefix}_{field_name}`
+    /// - Nested embedded fields are recursively flattened with accumulated prefixes
+    /// - Relations are not allowed and will panic
+    fn flatten_embedded_fields(&mut self, embedded_model_id: app::ModelId, prefix: &str) {
+        let embedded_model = self.app.model(embedded_model_id);
+
+        for embedded_field in &embedded_model.fields {
+            match &embedded_field.ty {
+                app::FieldTy::Primitive(primitive) => {
+                    let column_name = format!("{}_{}", prefix, embedded_field.name.storage_name());
+                    self.create_column_for_embedded_primitive(
+                        &column_name,
+                        embedded_field,
+                        primitive,
+                    );
+                }
+                app::FieldTy::Embedded(_nested_embedded) => {
+                    // TODO: Handle nested embedded structs by making this recursive
+                    todo!("nested embedded structs not yet implemented")
+                }
+                // Relations are not allowed in embedded types
+                app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+                    panic!("relations not allowed in embedded types")
+                }
+            }
+        }
     }
 
     fn update_index_names(&mut self) {
