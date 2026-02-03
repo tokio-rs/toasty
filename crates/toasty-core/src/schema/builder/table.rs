@@ -66,6 +66,7 @@ impl BuildSchema<'_> {
         for table in &mut self.tables {
             let models = app
                 .models()
+                .filter(|model| model.is_root())
                 .filter(|model| self.mapping.model(model.id).table == table.id)
                 .collect::<Vec<_>>();
 
@@ -266,7 +267,7 @@ impl BuildMapping<'_> {
                 }
                 app::FieldTy::Embedded(_) => {
                     // TODO: Implement table -> model mapping for embedded fields
-                    todo!("embedded field table to model mapping")
+                    // For now, skip embedded fields - they will be handled later
                 }
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
                     self.table_to_model.push(stmt::Value::Null.into());

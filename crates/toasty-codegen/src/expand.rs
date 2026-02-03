@@ -91,6 +91,15 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             fn load(_value: #toasty::Value) -> #toasty::Result<Self> {
                 todo!("embedded type load() not yet implemented")
             }
+
+            fn field_ty(_storage_ty: Option<#toasty::schema::db::Type>) -> #toasty::schema::app::FieldTy {
+                #toasty::schema::app::FieldTy::Embedded(
+                    #toasty::schema::app::Embedded {
+                        target: Self::id(),
+                        expr_ty: Self::ty(),
+                    }
+                )
+            }
         }
     })
 }
