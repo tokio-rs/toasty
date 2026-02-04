@@ -30,6 +30,7 @@ struct BuildTableFromModels<'a> {
 
 /// Computes a model's maping
 struct BuildMapping<'a> {
+    app: &'a app::Schema,
     table: &'a mut Table,
     mapping: &'a mut mapping::Model,
     lowering_columns: Vec<ColumnId>,
@@ -142,6 +143,7 @@ impl BuildTableFromModels<'_> {
         }
 
         BuildMapping {
+            app: self.app,
             table: self.table,
             mapping: self.mapping.model_mut(model),
             lowering_columns: vec![],
@@ -416,9 +418,9 @@ impl BuildMapping<'_> {
                     assert_ne!(mapping.column, ColumnId::placeholder());
                     self.map_primitive(field.id, primitive);
                 }
-                app::FieldTy::Embedded(_) => {
-                    // TODO: Implement model -> table mapping for embedded fields
-                    // For now, skip embedded fields - they will be handled later
+                app::FieldTy::Embedded(embedded) => {
+                    let field_prefix = field.name.storage_name();
+                    self.map_embedded(model, field.id, embedded.target, field_prefix);
                 }
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
                 }
@@ -434,6 +436,50 @@ impl BuildMapping<'_> {
 
         self.lowering_columns.push(column);
         self.model_to_table.push(lowering);
+    }
+
+    fn map_embedded(
+        &mut self,
+        _source_model: &Model,
+        source_field_id: FieldId,
+        target_model_id: app::ModelId,
+        prefix: &str,
+    ) {
+        let target_model = self.app.model(target_model_id);
+
+        for (target_field_index, target_field) in target_model.fields.iter().enumerate() {
+            match &target_field.ty {
+                app::FieldTy::Primitive(primitive) => {
+                    // Find the column by name pattern: {prefix}_{field_name}
+                    let column_name = format!("{}_{}", prefix, target_field.name.storage_name());
+                    let column_id = self
+                        .table
+                        .columns
+                        .iter()
+                        .find(|col| col.name == column_name)
+                        .map(|col| col.id)
+                        .expect("column should exist for embedded primitive field");
+
+                    // Create a projection expression that accesses the target field:
+                    // Project the source field by the target field's index
+                    // e.g., user.address[0] for street, user.address[1] for city
+                    let base = stmt::Expr::ref_self_field(source_field_id);
+                    let projection = stmt::Projection::from([target_field_index]);
+                    let expr = stmt::Expr::project(base, projection);
+                    let lowering = self.encode_column(column_id, &primitive.ty, expr);
+
+                    self.lowering_columns.push(column_id);
+                    self.model_to_table.push(lowering);
+                }
+                app::FieldTy::Embedded(_) => {
+                    // TODO: Handle nested embedded structs recursively
+                    todo!("nested embedded structs not yet implemented")
+                }
+                app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+                    panic!("relations not allowed in embedded types")
+                }
+            }
+        }
     }
 
     fn encode_column(

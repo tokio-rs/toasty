@@ -1,4 +1,5 @@
 use toasty::schema::app::FieldTy;
+use toasty_core::stmt;
 
 use crate::prelude::*;
 
@@ -86,4 +87,20 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
             ..
         }
     ]);
+
+    // Verify mapping - embedded fields should have projection expressions
+    let user = &schema.app.models[&User::id()];
+    let user_mapping = &schema.mapping.models[&User::id()];
+
+    println!("{:#?}", user_mapping.model_to_table);
+
+    assert_struct!(&schema.mapping.models[&User::id()], _ {
+        columns.len(): 3,
+        model_to_table.fields: [
+            &stmt::Expr::cast(stmt::Expr::ref_self_field(user.fields[0].id), stmt::Type::String),
+            == &stmt::Expr::project(stmt::Expr::ref_self_field(user.fields[1].id), [0]),
+            == &stmt::Expr::project(stmt::Expr::ref_self_field(user.fields[1].id), [1])
+        ],
+        ..
+    });
 }
