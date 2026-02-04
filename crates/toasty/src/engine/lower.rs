@@ -221,8 +221,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         todo!()
                     };
 
-                    let column = field_mapping.column;
-                    let mut lowered = mapping.model_to_table[field_mapping.lowering].clone();
+                    let field_primitive = field_mapping
+                        .as_primitive()
+                        .expect("only primitive fields are assignable");
+                    let column = field_primitive.column;
+                    let mut lowered = mapping.model_to_table[field_primitive.lowering].clone();
                     self.lower_assignment(i).visit_expr_mut(&mut lowered);
                     assignments.set(column, lowered);
                 }

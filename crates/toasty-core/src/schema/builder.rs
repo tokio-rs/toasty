@@ -82,15 +82,22 @@ impl Builder {
                     id: model.id,
                     table,
                     columns: vec![],
-                    // Create a mapping stub for each primitive field
+                    // Create a mapping stub for each field
                     fields: model
                         .fields
                         .iter()
                         .map(|field| match &field.ty {
-                            app::FieldTy::Primitive(_) => Some(mapping::Field {
-                                column: ColumnId::placeholder(),
-                                lowering: 0,
-                            }),
+                            app::FieldTy::Primitive(_) => {
+                                Some(mapping::Field::Primitive(mapping::FieldPrimitive {
+                                    column: ColumnId::placeholder(),
+                                    lowering: 0,
+                                }))
+                            }
+                            app::FieldTy::Embedded(_) => {
+                                Some(mapping::Field::Embedded(mapping::FieldEmbedded {
+                                    fields: vec![],
+                                }))
+                            }
                             _ => None,
                         })
                         .collect(),
