@@ -330,15 +330,19 @@ impl BuildMapping<'_> {
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
 
         // Iterate fields again (including PK fields) and build the table -> model map.
-        for field in &model.fields {
+        for (field_index, field) in model.fields.iter().enumerate() {
             match &field.ty {
                 app::FieldTy::Primitive(primitive) => {
                     let expr = self.map_table_column_to_model(field.id, primitive);
                     self.table_to_model.push(expr);
                 }
-                app::FieldTy::Embedded(embedded) => {
-                    let field_prefix = field.name.storage_name();
-                    let expr = self.map_embedded_to_model(model, embedded.target, field_prefix);
+                app::FieldTy::Embedded(_embedded) => {
+                    // Use the mapping information already built during map_embedded
+                    let field_mapping = &self.mapping.fields[field_index];
+                    let embedded_mapping = field_mapping
+                        .as_embedded()
+                        .expect("embedded field should have embedded mapping");
+                    let expr = self.map_embedded_to_model_from_mapping(embedded_mapping);
                     self.table_to_model.push(expr);
                 }
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
@@ -564,29 +568,19 @@ impl BuildMapping<'_> {
     /// columns. For example, if Address has fields (street, city) stored as
     /// columns (address_street, address_city), this creates:
     /// record(column[1], column[2])
-    fn map_embedded_to_model(
-        &mut self,
-        _source_model: &Model,
-        target_model_id: app::ModelId,
-        prefix: &str,
+    ///
+    /// Uses the field mapping information that was already built during `map_embedded`,
+    /// avoiding the need to recompute column names and perform lookups.
+    fn map_embedded_to_model_from_mapping(
+        &self,
+        embedded_mapping: &mapping::FieldEmbedded,
     ) -> stmt::Expr {
-        let target_model = self.app.model(target_model_id);
         let mut field_exprs = Vec::new();
 
-        for target_field in &target_model.fields {
-            match &target_field.ty {
-                app::FieldTy::Primitive(primitive) => {
-                    // Find the column by name pattern: {prefix}_{field_name}
-                    let column_name = format!("{}_{}", prefix, target_field.name.storage_name());
-                    let column_id = self
-                        .table
-                        .columns
-                        .iter()
-                        .find(|col| col.name == column_name)
-                        .map(|col| col.id)
-                        .expect("column should exist for embedded primitive field");
-
-                    let column = self.table.column(column_id);
+        for field in &embedded_mapping.fields {
+            match field {
+                mapping::Field::Primitive(primitive_mapping) => {
+                    let column_id = primitive_mapping.column;
 
                     // Create a column reference expression
                     let expr_column = stmt::Expr::column(stmt::ExprColumn {
@@ -595,19 +589,13 @@ impl BuildMapping<'_> {
                         column: column_id.index,
                     });
 
-                    // Apply type cast if needed
-                    let expr = match &column.ty {
-                        c_ty if *c_ty == primitive.ty => expr_column,
-                        _ => stmt::Expr::cast(expr_column, &primitive.ty),
-                    };
-
-                    field_exprs.push(expr);
+                    field_exprs.push(expr_column);
                 }
-                app::FieldTy::Embedded(_) => {
+                mapping::Field::Embedded(_) => {
                     // TODO: Handle nested embedded structs recursively
                     todo!("nested embedded structs not yet implemented")
                 }
-                app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+                mapping::Field::Relation => {
                     panic!("relations not allowed in embedded types")
                 }
             }

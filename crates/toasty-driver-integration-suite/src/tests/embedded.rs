@@ -3,6 +3,7 @@ use toasty::schema::{
     mapping::{self, FieldEmbedded, FieldPrimitive},
 };
 use toasty_core::stmt;
+use uuid::Uuid;
 
 use crate::prelude::*;
 
@@ -43,7 +44,8 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
     #[derive(toasty::Model)]
     struct User {
         #[key]
-        id: toasty::stmt::Id<Self>,
+        #[auto]
+        id: Uuid,
         address: Address,
     }
 
@@ -118,31 +120,26 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
             }),
         ],
         model_to_table.fields: [
-            == stmt::Expr::cast(stmt::Expr::ref_self_field(user.fields[0].id), stmt::Type::String),
+            _,
             == stmt::Expr::project(stmt::Expr::ref_self_field(user.fields[1].id), [0]),
             == stmt::Expr::project(stmt::Expr::ref_self_field(user.fields[1].id), [1])
         ],
         ..
     });
 
-    // Verify table -> model mapping (lifting)
-    // Should construct model values from table columns
+    let table_to_model = user_mapping
+        .table_to_model
+        .lower_returning_model()
+        .into_record();
 
-    // Get the expression for the address field (index 1)
-    let address_expr = user_mapping.table_to_model.lower_expr_reference(0, 1);
-
-    // Should be a record that constructs Address from columns
-    // record(column[1], column[2]) builds Address { street, city }
-    assert!(
-        address_expr.is_record(),
-        "table_to_model expression for address field should be a record"
-    );
-
-    // Verify the Address record has 2 fields (street and city)
-    let address_record = address_expr.as_record().unwrap();
-    assert_eq!(
-        address_record.fields.len(),
-        2,
-        "Address record should have 2 fields (street, city)"
+    assert_struct!(
+        table_to_model.fields,
+        [
+            _,
+            stmt::Expr::Record(stmt::ExprRecord { fields: [
+                == stmt::Expr::column(user_table.columns[1].id),
+                == stmt::Expr::column(user_table.columns[2].id),
+            ]}),
+        ]
     );
 }
