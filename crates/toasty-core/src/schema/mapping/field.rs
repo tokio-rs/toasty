@@ -5,7 +5,7 @@ use crate::schema::db::ColumnId;
 /// Different field types have different storage strategies:
 /// - Primitive fields map to a single column
 /// - Embedded fields flatten to multiple columns (one per primitive field in the embedded struct)
-/// - Relation fields don't map directly to columns and are represented as `None`
+/// - Relation fields (`BelongsTo`, `HasMany`, `HasOne`) don't have direct column storage
 #[derive(Debug, Clone)]
 pub enum Field {
     /// A primitive field stored in a single column.
@@ -13,6 +13,12 @@ pub enum Field {
 
     /// An embedded struct field flattened into multiple columns.
     Embedded(FieldEmbedded),
+
+    /// A relation field that doesn't map to columns in this table.
+    ///
+    /// Relations are resolved through joins or foreign keys in other tables,
+    /// so they don't have column mappings in the source model.
+    Relation,
 }
 
 impl Field {
@@ -60,8 +66,7 @@ pub struct FieldPrimitive {
 pub struct FieldEmbedded {
     /// Per-field mappings for the embedded struct's fields.
     ///
-    /// Indexed by field index within the embedded model. Contains `None` for
-    /// relation fields (which aren't allowed in embedded types, but we handle
-    /// gracefully) and nested embedded fields (not yet implemented).
-    pub fields: Vec<Option<Field>>,
+    /// Indexed by field index within the embedded model. Relation fields use
+    /// `Field::Relation` (though they aren't allowed in embedded types).
+    pub fields: Vec<Field>,
 }

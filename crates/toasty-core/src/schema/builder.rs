@@ -88,17 +88,15 @@ impl Builder {
                         .iter()
                         .map(|field| match &field.ty {
                             app::FieldTy::Primitive(_) => {
-                                Some(mapping::Field::Primitive(mapping::FieldPrimitive {
+                                mapping::Field::Primitive(mapping::FieldPrimitive {
                                     column: ColumnId::placeholder(),
                                     lowering: 0,
-                                }))
+                                })
                             }
                             app::FieldTy::Embedded(_) => {
-                                Some(mapping::Field::Embedded(mapping::FieldEmbedded {
-                                    fields: vec![],
-                                }))
+                                mapping::Field::Embedded(mapping::FieldEmbedded { fields: vec![] })
                             }
-                            _ => None,
+                            _ => mapping::Field::Relation,
                         })
                         .collect(),
                     model_to_table: stmt::ExprRecord::default(),

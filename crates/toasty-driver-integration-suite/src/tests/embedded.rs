@@ -100,22 +100,22 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
     assert_struct!(user_mapping, _ {
         columns.len(): 3,
         fields: [
-            Some(mapping::Field::Primitive(FieldPrimitive {
+            mapping::Field::Primitive(FieldPrimitive {
                 column: == user_table.columns[0].id,
                 lowering: 0,
-            })),
-            Some(mapping::Field::Embedded(FieldEmbedded {
+            }),
+            mapping::Field::Embedded(FieldEmbedded {
                 fields: [
-                    Some(mapping::Field::Primitive(FieldPrimitive {
+                    mapping::Field::Primitive(FieldPrimitive {
                         column: == user_table.columns[1].id,
                         lowering: 1,
-                    })),
-                    Some(mapping::Field::Primitive(FieldPrimitive {
+                    }),
+                    mapping::Field::Primitive(FieldPrimitive {
                         column: == user_table.columns[2].id,
                         lowering: 2,
-                    }))
+                    })
                 ],
-            })),
+            }),
         ],
         model_to_table.fields: [
             == stmt::Expr::cast(stmt::Expr::ref_self_field(user.fields[0].id), stmt::Type::String),

@@ -217,10 +217,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 app::FieldTy::Primitive(_) => {
                     let mapping = self.mapping_unwrap();
 
-                    let Some(field_mapping) = &mapping.fields[index] else {
-                        todo!()
-                    };
-
+                    let field_mapping = &mapping.fields[index];
                     let field_primitive = field_mapping
                         .as_primitive()
                         .expect("only primitive fields are assignable");
