@@ -3,7 +3,6 @@ use toasty::schema::{
     mapping::{self, FieldEmbedded, FieldPrimitive},
 };
 use toasty_core::stmt;
-use uuid::Uuid;
 
 use crate::prelude::*;
 
@@ -44,8 +43,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
     #[derive(toasty::Model)]
     struct User {
         #[key]
-        #[auto]
-        id: Uuid,
+        id: toasty::stmt::Id<Self>,
         address: Address,
     }
 
@@ -142,4 +140,42 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
             ]}),
         ]
     );
+}
+
+#[driver_test(id(ID))]
+pub async fn create_and_query_embedded(t: &mut Test) {
+    #[derive(Debug, toasty::Embed)]
+    struct Address {
+        street: String,
+        city: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        address: Address,
+    }
+
+    let db = t.setup_db(models!(User, Address)).await;
+
+    // Create a user with an embedded address
+    let user = User::create()
+        .name("Alice")
+        .address(Address {
+            street: "123 Main St".to_string(),
+            city: "Springfield".to_string(),
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    // Query the user back
+    let found = User::get_by_id(&db, &user.id).await.unwrap();
+
+    assert_eq!(found.name, "Alice");
+    assert_eq!(found.address.street, "123 Main St");
+    assert_eq!(found.address.city, "Springfield");
 }

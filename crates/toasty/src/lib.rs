@@ -45,7 +45,7 @@ pub mod codegen_support {
             self,
             app::{FieldId, ModelId},
         },
-        stmt::{Type, Value, ValueRecord, ValueStream},
+        stmt::{self as core_stmt, Type, Value, ValueRecord, ValueStream},
     };
 }
 

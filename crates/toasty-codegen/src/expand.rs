@@ -68,6 +68,9 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     };
 
     let model_schema = expand.expand_model_schema();
+    let into_expr_body_val = expand.expand_embedded_into_expr_body(false);
+    let into_expr_body_ref = expand.expand_embedded_into_expr_body(true);
+    let load_body = expand.expand_embedded_load_body();
 
     wrap_in_const(quote! {
         impl #toasty::Register for #model_ident {
@@ -88,8 +91,8 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                 #toasty::Type::Model(Self::id())
             }
 
-            fn load(_value: #toasty::Value) -> #toasty::Result<Self> {
-                todo!("embedded type load() not yet implemented")
+            fn load(value: #toasty::Value) -> #toasty::Result<Self> {
+                #load_body
             }
 
             fn field_ty(_storage_ty: Option<#toasty::schema::db::Type>) -> #toasty::schema::app::FieldTy {
@@ -99,6 +102,16 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                         expr_ty: Self::ty(),
                     }
                 )
+            }
+        }
+
+        impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
+            fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
+                #into_expr_body_val
+            }
+
+            fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
+                #into_expr_body_ref
             }
         }
     })

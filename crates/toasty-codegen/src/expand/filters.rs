@@ -304,6 +304,77 @@ impl Expand<'_> {
         }
     }
 
+    pub(crate) fn expand_embedded_into_expr_body(&self, by_ref: bool) -> TokenStream {
+        let toasty = &self.toasty;
+
+        // For embedded types, create a record expression from all fields
+        // Currently only primitive fields are supported in embedded types
+        let field_exprs = self.model.fields.iter().map(|field| {
+            let field_ident = &field.name.ident;
+            let ty = match &field.ty {
+                FieldTy::Primitive(ty) => ty,
+                _ => {
+                    // Relations and nested embedded types are not yet supported
+                    panic!("only primitive fields are supported in embedded types")
+                }
+            };
+
+            let into_expr = if by_ref {
+                quote!((&self.#field_ident))
+            } else {
+                quote!(self.#field_ident)
+            };
+
+            quote! {
+                {
+                    let expr: #toasty::stmt::Expr<#ty> = #toasty::IntoExpr::into_expr(#into_expr);
+                    let untyped: #toasty::core_stmt::Expr = expr.into();
+                    untyped
+                }
+            }
+        });
+
+        quote! {
+            #toasty::stmt::Expr::from_untyped(
+                #toasty::core_stmt::Expr::record([
+                    #( #field_exprs ),*
+                ])
+            )
+        }
+    }
+
+    pub(crate) fn expand_embedded_load_body(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+
+        // Extract each field from the record value
+        let field_loads = self.model.fields.iter().enumerate().map(|(index, field)| {
+            let field_ident = &field.name.ident;
+            let ty = match &field.ty {
+                FieldTy::Primitive(ty) => ty,
+                _ => panic!("only primitive fields are supported in embedded types"),
+            };
+
+            quote! {
+                #field_ident: {
+                    let field_value = &record[#index];
+                    <#ty as #toasty::stmt::Primitive>::load(field_value.clone())?
+                }
+            }
+        });
+
+        quote! {
+            match value {
+                #toasty::Value::Record(record) => {
+                    Ok(#model_ident {
+                        #( #field_loads ),*
+                    })
+                }
+                value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
+            }
+        }
+    }
+
     fn expand_filter_args<'b>(
         &'b self,
         filter: &'b Filter,
