@@ -66,6 +66,10 @@ impl From<Pool> for MySQL {
 
 #[async_trait]
 impl Driver for MySQL {
+    fn capability(&self) -> &'static Capability {
+        &Capability::MYSQL
+    }
+
     async fn connect(&self) -> Result<Box<dyn toasty_core::driver::Connection>> {
         let conn = self
             .pool
@@ -164,10 +168,6 @@ impl From<Conn> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn capability(&self) -> &'static Capability {
-        &Capability::MYSQL
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),

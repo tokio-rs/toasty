@@ -13,6 +13,9 @@ use std::{fmt::Debug, sync::Arc};
 
 #[async_trait]
 pub trait Driver: Debug + Send + Sync + 'static {
+    /// Describes the driver's capability, which informs the query planner.
+    fn capability(&self) -> &'static Capability;
+
     /// Creates a new connection to the database.
     ///
     /// This method is called by the [`Pool`] whenever a [`Connection`] is requested while none is
@@ -28,9 +31,6 @@ pub trait Driver: Debug + Send + Sync + 'static {
 
 #[async_trait]
 pub trait Connection: Debug + Send + 'static {
-    /// Describes the driver's capability, which informs the query planner.
-    fn capability(&self) -> &'static Capability;
-
     /// Execute a database operation
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response>;
 

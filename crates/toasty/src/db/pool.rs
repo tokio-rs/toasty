@@ -40,15 +40,15 @@ impl Default for PoolConfig {
 #[derive(Debug)]
 pub struct Pool {
     inner: deadpool::managed::Pool<Manager>,
-    // TODO: Capability should just be constant for each driver and not require an active
-    // connection to determine.
     capability: &'static Capability,
 }
 
 impl Pool {
     /// Creates a new connection pool from the given driver.
-    pub async fn new(driver: impl Driver) -> crate::Result<Self> {
+    pub fn new(driver: impl Driver) -> crate::Result<Self> {
+        let capability = driver.capability();
         let max_connections = driver.max_connections();
+
         let mut builder = deadpool::managed::Pool::builder(Manager {
             driver: Box::new(driver),
         })
@@ -62,19 +62,12 @@ impl Pool {
             .build()
             .map_err(toasty_core::Error::connection_pool)?;
 
-        let connection = inner
-            .get()
-            .await
-            .map_err(toasty_core::Error::connection_pool)?;
-        Ok(Self {
-            inner,
-            capability: connection.capability(),
-        })
+        Ok(Self { inner, capability })
     }
 
     /// Creates a new connection pool from a connection URL.
-    pub async fn connect(url: &str) -> crate::Result<Self> {
-        Self::new(Connect::new(url)?).await
+    pub fn connect(url: &str) -> crate::Result<Self> {
+        Self::new(Connect::new(url)?)
     }
 
     /// Retrieves a connection from the pool.

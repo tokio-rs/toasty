@@ -39,6 +39,10 @@ impl DynamoDb {
 
 #[async_trait]
 impl Driver for DynamoDb {
+    fn capability(&self) -> &'static Capability {
+        &Capability::DYNAMODB
+    }
+
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         Ok(Box::new(Connection::connect(&self.url).await?))
     }
@@ -107,10 +111,6 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn capability(&self) -> &'static Capability {
-        &Capability::DYNAMODB
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         self.exec2(schema, op).await
     }
