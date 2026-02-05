@@ -16,11 +16,7 @@ impl<T: Model> HasMany<T> {
                 let mut values = vec![];
 
                 for value in items {
-                    let Value::Record(record) = value else {
-                        panic!("unexpected input; value={value:#?}")
-                    };
-
-                    values.push(T::load(record)?);
+                    values.push(T::load(value)?);
                 }
 
                 Ok(Self {

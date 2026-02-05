@@ -51,8 +51,10 @@ pub trait Model: Register + Sized {
     /// Update by query builder type for this model
     type UpdateQuery;
 
-    /// Load an instance of the model, populating fields using the given row.
-    fn load(row: stmt::ValueRecord) -> Result<Self, Error>;
+    /// Load an instance of the model from a value.
+    ///
+    /// The value is expected to be a `Value::Record` containing the model's fields.
+    fn load(value: stmt::Value) -> Result<Self, Error>;
 }
 
 /// Trait for embedded types that are flattened into their parent model's table.
@@ -83,7 +85,7 @@ impl<T: Model> Model for Option<T> {
     type Update<'a> = T::Update<'a>;
     type UpdateQuery = T::UpdateQuery;
 
-    fn load(row: stmt::ValueRecord) -> Result<Self, Error> {
-        Ok(Some(T::load(row)?))
+    fn load(value: stmt::Value) -> Result<Self, Error> {
+        Ok(Some(T::load(value)?))
     }
 }

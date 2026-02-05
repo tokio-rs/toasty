@@ -92,10 +92,15 @@ impl Expand<'_> {
                 type Update<'a> = #update_struct_ident<'a>;
                 type UpdateQuery = #update_query_struct_ident;
 
-                fn load(mut record: #toasty::ValueRecord) -> #toasty::Result<Self> {
-                    Ok(Self {
-                        #struct_load_fields
-                    })
+                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
+                    match value {
+                        #toasty::Value::Record(mut record) => {
+                            Ok(Self {
+                                #struct_load_fields
+                            })
+                        }
+                        value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
+                    }
                 }
             }
 
