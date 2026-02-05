@@ -1,4 +1,4 @@
-use super::Expand;
+use super::{util, Expand};
 use crate::schema::{FieldTy, Index, Model};
 
 use proc_macro2::{Span, TokenStream};
@@ -354,18 +354,16 @@ impl Expand<'_> {
                 FieldTy::Primitive(ty) => ty,
                 _ => panic!("only primitive fields are supported in embedded types"),
             };
+            let index_tokenized = util::int(index);
 
             quote! {
-                #field_ident: {
-                    let field_value = &record[#index];
-                    <#ty as #toasty::stmt::Primitive>::load(field_value.clone())?
-                }
+                #field_ident: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take())?
             }
         });
 
         quote! {
             match value {
-                #toasty::Value::Record(record) => {
+                #toasty::Value::Record(mut record) => {
                     Ok(#model_ident {
                         #( #field_loads ),*
                     })
