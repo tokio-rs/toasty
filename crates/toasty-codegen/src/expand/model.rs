@@ -29,7 +29,7 @@ impl Expand<'_> {
         };
         let model_schema = self.expand_model_schema();
         let model_fields = self.expand_model_field_struct_init();
-        let struct_load_fields = self.expand_struct_load_fields();
+        let load_body = self.expand_load_body();
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
         let relation_methods = self.expand_model_relation_methods();
@@ -93,14 +93,7 @@ impl Expand<'_> {
                 type UpdateQuery = #update_query_struct_ident;
 
                 fn load(value: #toasty::Value) -> #toasty::Result<Self> {
-                    match value {
-                        #toasty::Value::Record(mut record) => {
-                            Ok(Self {
-                                #struct_load_fields
-                            })
-                        }
-                        value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
-                    }
+                    #load_body
                 }
             }
 
@@ -175,34 +168,5 @@ impl Expand<'_> {
                 .#filter_method_ident( #( #amp self.#arg_idents ),* )
                 .stmt
         }
-    }
-
-    fn expand_struct_load_fields(&self) -> TokenStream {
-        let toasty = &self.toasty;
-
-        self.model
-            .fields
-            .iter()
-            .enumerate()
-            .map(|(index, field)| {
-                let index_tokenized = util::int(index);
-                let name = &field.name.ident;
-
-                match &field.ty {
-                    FieldTy::BelongsTo(_) => {
-                        quote!(#name: #toasty::BelongsTo::load(record[#index].take())?,)
-                    }
-                    FieldTy::HasMany(_) => {
-                        quote!(#name: #toasty::HasMany::load(record[#index].take())?,)
-                    }
-                    FieldTy::HasOne(_) => {
-                        quote!(#name: #toasty::HasOne::load(record[#index].take())?,)
-                    }
-                    FieldTy::Primitive(ty) => {
-                        quote!(#name: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take())?,)
-                    }
-                }
-            })
-            .collect()
     }
 }

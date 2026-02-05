@@ -343,21 +343,36 @@ impl Expand<'_> {
         }
     }
 
-    pub(crate) fn expand_embedded_load_body(&self) -> TokenStream {
+    /// Generates the body for loading a model or embedded type from a Value.
+    ///
+    /// This method is used by both:
+    /// - Root models (in `Model::load`) - supports all field types
+    /// - Embedded types (in `Primitive::load`) - only primitive fields
+    ///
+    /// The generated code pattern matches on `Value::Record`, extracts fields,
+    /// and constructs the struct.
+    pub(crate) fn expand_load_body(&self) -> TokenStream {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
 
-        // Extract each field from the record value
+        // Generate field loading expressions
         let field_loads = self.model.fields.iter().enumerate().map(|(index, field)| {
             let field_ident = &field.name.ident;
-            let ty = match &field.ty {
-                FieldTy::Primitive(ty) => ty,
-                _ => panic!("only primitive fields are supported in embedded types"),
-            };
             let index_tokenized = util::int(index);
 
-            quote! {
-                #field_ident: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take())?
+            match &field.ty {
+                FieldTy::Primitive(ty) => {
+                    quote!(#field_ident: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take())?,)
+                }
+                FieldTy::BelongsTo(_) => {
+                    quote!(#field_ident: #toasty::BelongsTo::load(record[#index].take())?,)
+                }
+                FieldTy::HasMany(_) => {
+                    quote!(#field_ident: #toasty::HasMany::load(record[#index].take())?,)
+                }
+                FieldTy::HasOne(_) => {
+                    quote!(#field_ident: #toasty::HasOne::load(record[#index].take())?,)
+                }
             }
         });
 
@@ -365,7 +380,7 @@ impl Expand<'_> {
             match value {
                 #toasty::Value::Record(mut record) => {
                     Ok(#model_ident {
-                        #( #field_loads ),*
+                        #( #field_loads )*
                     })
                 }
                 value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),

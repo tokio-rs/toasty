@@ -70,7 +70,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let model_schema = expand.expand_model_schema();
     let into_expr_body_val = expand.expand_embedded_into_expr_body(false);
     let into_expr_body_ref = expand.expand_embedded_into_expr_body(true);
-    let load_body = expand.expand_embedded_load_body();
+    let load_body = expand.expand_load_body();
 
     wrap_in_const(quote! {
         impl #toasty::Register for #model_ident {
