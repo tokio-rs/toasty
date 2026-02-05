@@ -44,6 +44,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
     struct User {
         #[key]
         id: toasty::stmt::Id<Self>,
+        #[allow(dead_code)]
         address: Address,
     }
 
@@ -196,7 +197,7 @@ pub async fn create_and_query_embedded(t: &mut Test) {
     assert_eq!(found.address.city, "Shelbyville");
 
     // Update using filter_by_id pattern
-    User::filter_by_id(&user.id)
+    User::filter_by_id(user.id)
         .update()
         .name("Bob")
         .address(Address {
@@ -214,7 +215,7 @@ pub async fn create_and_query_embedded(t: &mut Test) {
     assert_eq!(found.address.city, "Capital City");
 
     // Delete the user
-    let id = user.id.clone();
+    let id = user.id;
     user.delete(&db).await.unwrap();
 
     // Verify deletion
