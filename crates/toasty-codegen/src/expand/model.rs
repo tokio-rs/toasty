@@ -1,5 +1,5 @@
-use super::{util, Expand};
-use crate::schema::{FieldTy, ModelKind};
+use super::Expand;
+use crate::schema::ModelKind;
 
 use proc_macro2::TokenStream;
 use quote::quote;

@@ -162,7 +162,7 @@ pub async fn create_and_query_embedded(t: &mut Test) {
     let db = t.setup_db(models!(User, Address)).await;
 
     // Create a user with an embedded address
-    let user = User::create()
+    let mut user = User::create()
         .name("Alice")
         .address(Address {
             street: "123 Main St".to_string(),
@@ -178,4 +178,45 @@ pub async fn create_and_query_embedded(t: &mut Test) {
     assert_eq!(found.name, "Alice");
     assert_eq!(found.address.street, "123 Main St");
     assert_eq!(found.address.city, "Springfield");
+
+    // Update using instance method
+    user.update()
+        .address(Address {
+            street: "456 Oak Ave".to_string(),
+            city: "Shelbyville".to_string(),
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    // Reload and verify update
+    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    assert_eq!(found.name, "Alice");
+    assert_eq!(found.address.street, "456 Oak Ave");
+    assert_eq!(found.address.city, "Shelbyville");
+
+    // Update using filter_by_id pattern
+    User::filter_by_id(&user.id)
+        .update()
+        .name("Bob")
+        .address(Address {
+            street: "789 Pine Rd".to_string(),
+            city: "Capital City".to_string(),
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    // Reload and verify second update
+    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    assert_eq!(found.name, "Bob");
+    assert_eq!(found.address.street, "789 Pine Rd");
+    assert_eq!(found.address.city, "Capital City");
+
+    // Delete the user
+    let id = user.id.clone();
+    user.delete(&db).await.unwrap();
+
+    // Verify deletion
+    assert_err!(User::get_by_id(&db, &id).await);
 }

@@ -226,6 +226,34 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.lower_assignment(i).visit_expr_mut(&mut lowered);
                     assignments.set(column, lowered);
                 }
+                app::FieldTy::Embedded(_) => {
+                    let mapping = self.mapping_unwrap();
+
+                    let field_mapping = &mapping.fields[index];
+                    let field_embedded = field_mapping
+                        .as_embedded()
+                        .expect("field should be embedded");
+
+                    // Get the assignment value for the embedded field
+                    let assignment = &i[index];
+                    assert!(
+                        assignment.op.is_set(),
+                        "only SET supported for embedded fields"
+                    );
+
+                    // Recursively process each field in the embedded struct
+                    for (field_index, embedded_field) in field_embedded.fields.iter().enumerate() {
+                        match embedded_field {
+                            mapping::Field::Primitive(field_primitive) => {
+                                let column = field_primitive.column;
+                                // Project into the embedded value to get this field
+                                let value_expr = stmt::Expr::project(assignment.expr.clone(), [field_index]);
+                                assignments.set(column, value_expr);
+                            }
+                            _ => panic!("nested embedded fields not supported yet; field={embedded_field:#?}"),
+                        }
+                    }
+                }
                 _ => panic!("relation fields should already have been handled; field={field:#?}"),
             }
         }
@@ -533,7 +561,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     for i in field_set.iter() {
                         let field = &model.fields[i];
 
-                        if field.ty.is_primitive() {
+                        if field.ty.is_primitive() || field.ty.is_embedded() {
                             fields.push(stmt::Expr::ref_self_field(app::FieldId {
                                 model: model.id,
                                 index: i,
