@@ -80,10 +80,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         impl #model_ident {
             pub fn fields() -> #field_struct_ident {
                 #field_struct_ident {
-                    path: #toasty::Path::new(toasty_core::stmt::Path {
-                        root: <#model_ident as #toasty::Register>::id(),
-                        projection: toasty_core::stmt::Projection::identity(),
-                    }),
+                    path: #toasty::Path::root(),
                 }
             }
         }
