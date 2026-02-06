@@ -213,7 +213,7 @@ impl Expand<'_> {
             let target = &fk_field.target;
 
             quote! {
-                <#ty as #toasty::Relation>::Model::FIELDS.#target().eq(&self.#source_field_ident)
+                <#ty as #toasty::Relation>::Model::fields().#target().eq(&self.#source_field_ident)
             }
         });
 
@@ -326,7 +326,7 @@ impl Expand<'_> {
                 #pair_check
 
                 <#ty as #toasty::Relation>::Many::from_stmt(
-                    #toasty::stmt::Association::many(self.into_select(), Self::FIELDS.#field_ident().into())
+                    #toasty::stmt::Association::many(self.into_select(), Self::fields().#field_ident().into())
                 )
             }
         }
@@ -389,7 +389,7 @@ impl Expand<'_> {
                 #pair_check
 
                 <#ty as #toasty::Relation>::One::from_stmt(
-                    #toasty::stmt::Association::one(self.into_select(), Self::FIELDS.#field_ident().into()).into_select()
+                    #toasty::stmt::Association::one(self.into_select(), Self::fields().#field_ident().into()).into_select()
                 )
             }
         }

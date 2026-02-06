@@ -242,11 +242,22 @@ pub async fn embedded_struct_fields_codegen(test: &mut Test) {
 
     let _db = test.setup_db(models!(User, Address)).await;
 
-    // Test that User::FIELDS.address() returns AddressFields
+    // Test that User::fields().address() returns AddressFields
     // and we can directly chain to access nested fields
-    let _city_path = User::FIELDS.address().city();
-    let _street_path = User::FIELDS.address().street();
-    let _zip_path = User::FIELDS.address().zip();
+    let _city_path = User::fields().address().city();
+    let _street_path = User::fields().address().street();
+    let _zip_path = User::fields().address().zip();
+
+    // Test that AddressFields works correctly when returned from User::fields()
+    let address_fields = User::fields().address();
+    let _city_path_2 = address_fields.city();
+    let _street_path_2 = address_fields.street();
+    let _zip_path_2 = address_fields.zip();
+
+    // Test that Address::fields() also works directly
+    let _address_city = Address::fields().city();
+    let _address_street = Address::fields().street();
+    let _address_zip = Address::fields().zip();
 
     // Verify the paths have the correct type for use in queries
     // (This is a compile-time check that the types are correct)

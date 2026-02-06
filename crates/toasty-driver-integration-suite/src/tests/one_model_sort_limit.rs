@@ -26,7 +26,7 @@ pub async fn sort_asc(test: &mut Test) {
     }
 
     let foos_asc: Vec<_> = Foo::all()
-        .order_by(Foo::FIELDS.order().asc())
+        .order_by(Foo::fields().order().asc())
         .collect(&db)
         .await
         .unwrap();
@@ -38,7 +38,7 @@ pub async fn sort_asc(test: &mut Test) {
     }
 
     let foos_desc: Vec<_> = Foo::all()
-        .order_by(Foo::FIELDS.order().desc())
+        .order_by(Foo::fields().order().desc())
         .collect(&db)
         .await
         .unwrap();
@@ -73,7 +73,7 @@ pub async fn paginate(test: &mut Test) {
     }
 
     let foos: Page<_> = Foo::all()
-        .order_by(Foo::FIELDS.order().desc())
+        .order_by(Foo::fields().order().desc())
         .paginate(10)
         .collect(&db)
         .await
@@ -85,7 +85,7 @@ pub async fn paginate(test: &mut Test) {
     }
 
     let foos: Page<_> = Foo::all()
-        .order_by(Foo::FIELDS.order().desc())
+        .order_by(Foo::fields().order().desc())
         .paginate(10)
         .after(90)
         .collect(&db)

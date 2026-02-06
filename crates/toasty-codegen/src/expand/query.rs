@@ -126,7 +126,7 @@ impl Expand<'_> {
                 use #toasty::IntoSelect;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many_via_one(
-                        self.stmt, #model_ident::FIELDS.#field_ident().into()
+                        self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_select()
                 )
             }
@@ -145,7 +145,7 @@ impl Expand<'_> {
                 use #toasty::IntoSelect;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many(
-                        self.stmt, #model_ident::FIELDS.#field_ident().into()
+                        self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_select()
                 )
             }
@@ -164,7 +164,7 @@ impl Expand<'_> {
                 use #toasty::IntoSelect;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many_via_one(
-                        self.stmt, #model_ident::FIELDS.#field_ident().into()
+                        self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_select()
                 )
             }

@@ -73,14 +73,19 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let into_expr_body_ref = expand.expand_embedded_into_expr_body(true);
     let load_body = expand.expand_load_body();
     let embedded_field_struct = expand.expand_embedded_field_struct();
-    let embedded_field_struct_init = expand.expand_embedded_field_struct_init();
 
-    // Generate the fields struct outside the const block so it's accessible
     wrap_in_const(quote! {
         #embedded_field_struct
 
         impl #model_ident {
-            #embedded_field_struct_init
+            pub fn fields() -> #field_struct_ident {
+                #field_struct_ident {
+                    path: #toasty::Path::new(toasty_core::stmt::Path {
+                        root: <#model_ident as #toasty::Register>::id(),
+                        projection: toasty_core::stmt::Projection::identity(),
+                    }),
+                }
+            }
         }
 
         impl #toasty::Register for #model_ident {

@@ -211,7 +211,7 @@ impl Expand<'_> {
             let field = &self.model.fields[*index];
             let field_ident = &field.name.ident;
 
-            quote!(#model_ident::FIELDS.#field_ident().eq(#field_ident))
+            quote!(#model_ident::fields().#field_ident().eq(#field_ident))
         });
 
         if filter.fields.len() == 1 {
@@ -232,7 +232,7 @@ impl Expand<'_> {
         let lhs = filter.fields.iter().map(|index| {
             let field = &self.model.fields[*index];
             let field_ident = &field.name.ident;
-            quote!(#model_ident::FIELDS.#field_ident())
+            quote!(#model_ident::fields().#field_ident())
         });
 
         let lhs = if filter.fields.len() == 1 {
