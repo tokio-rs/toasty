@@ -456,6 +456,88 @@ pub async fn query_or_and_combined(test: &mut Test) {
 }
 
 #[driver_test(id(ID))]
+pub async fn query_or_with_index(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = team, local = name)]
+    struct Player {
+        team: String,
+
+        name: String,
+
+        position: String,
+
+        number: i64,
+    }
+
+    let db = test.setup_db(models!(Player)).await;
+
+    // Create some players on different teams
+    for (team, name, position, number) in [
+        ("Timbers", "Diego Valeri", "Midfielder", 8),
+        ("Timbers", "Darlington Nagbe", "Midfielder", 6),
+        ("Timbers", "Diego Chara", "Midfielder", 21),
+        ("Timbers", "Fanendo Adi", "Forward", 9),
+        ("Timbers", "Adam Kwarasey", "Goalkeeper", 1),
+        ("Sounders", "Clint Dempsey", "Forward", 2),
+        ("Sounders", "Obafemi Martins", "Forward", 9),
+        ("Sounders", "Osvaldo Alonso", "Midfielder", 6),
+    ] {
+        Player::create()
+            .team(team)
+            .name(name)
+            .position(position)
+            .number(number)
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Query with partition key AND OR conditions on non-indexed fields
+    // This should work on both SQL and DynamoDB
+    let players = Player::filter(
+        Player::FIELDS.team().eq("Timbers").and(
+            Player::FIELDS
+                .position()
+                .eq("Forward")
+                .or(Player::FIELDS.position().eq("Goalkeeper")),
+        ),
+    )
+    .all(&db)
+    .await
+    .unwrap()
+    .collect::<Vec<_>>()
+    .await
+    .unwrap();
+
+    assert_eq!(2, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Adam Kwarasey", "Fanendo Adi"]);
+
+    // Query with partition key AND more complex OR conditions
+    let players = Player::filter(
+        Player::FIELDS.team().eq("Timbers").and(
+            Player::FIELDS
+                .number()
+                .eq(8)
+                .or(Player::FIELDS.number().eq(21))
+                .or(Player::FIELDS.number().eq(9)),
+        ),
+    )
+    .all(&db)
+    .await
+    .unwrap()
+    .collect::<Vec<_>>()
+    .await
+    .unwrap();
+
+    assert_eq!(3, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Diego Chara", "Diego Valeri", "Fanendo Adi"]);
+}
+
+#[driver_test(id(ID))]
 pub async fn query_arbitrary_constraint(test: &mut Test) {
     // Only supported by SQL
     if !test.capability().sql {

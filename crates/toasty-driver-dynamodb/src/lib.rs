@@ -253,6 +253,24 @@ fn ddb_expression(
             let substr = ddb_expression(cx, attrs, primary, &begins_with.pattern);
             format!("begins_with({expr}, {substr})")
         }
+        stmt::Expr::InList(in_list) => {
+            let expr = ddb_expression(cx, attrs, primary, &in_list.expr);
+
+            // Extract the list items and create individual attribute values
+            let items = match &*in_list.list {
+                stmt::Expr::Value(stmt::Value::List(vals)) => vals
+                    .iter()
+                    .map(|val| attrs.value(val))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                _ => {
+                    // If it's not a literal list, treat it as a single expression
+                    ddb_expression(cx, attrs, primary, &in_list.list)
+                }
+            };
+
+            format!("{expr} IN ({items})")
+        }
         _ => todo!("FILTER = {:#?}", expr),
     }
 }
