@@ -1,22 +1,24 @@
 use super::{ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey};
 
 #[derive(Debug)]
-pub(crate) struct Model {
-    /// Model name
-    pub(crate) name: Name,
+pub(crate) enum ModelKind {
+    /// Root model with table, primary key, and query builders
+    Root(ModelRoot),
+    /// Embedded model that is flattened into parent
+    Embedded,
+}
 
-    /// Model visibility
-    pub(crate) vis: syn::Visibility,
+impl ModelKind {
+    pub(crate) fn expect_root(&self) -> &ModelRoot {
+        match self {
+            ModelKind::Root(root) => root,
+            ModelKind::Embedded => panic!("expected root model, found embedded"),
+        }
+    }
+}
 
-    /// Type identifier
-    pub(crate) ident: syn::Ident,
-
-    /// Model fields
-    pub(crate) fields: Vec<Field>,
-
-    /// Model indices
-    pub(crate) indices: Vec<Index>,
-
+#[derive(Debug)]
+pub(crate) struct ModelRoot {
     /// Tracks fields in the primary key
     pub(crate) primary_key: PrimaryKey,
 
@@ -34,13 +36,34 @@ pub(crate) struct Model {
 
     /// Update by query builder struct identifier
     pub(crate) update_query_struct_ident: syn::Ident,
+}
+
+#[derive(Debug)]
+pub(crate) struct Model {
+    /// Model name
+    pub(crate) name: Name,
+
+    /// Model visibility
+    pub(crate) vis: syn::Visibility,
+
+    /// Type identifier
+    pub(crate) ident: syn::Ident,
+
+    /// Model fields
+    pub(crate) fields: Vec<Field>,
+
+    /// Distinguishes root models from embedded models
+    pub(crate) kind: ModelKind,
+
+    /// Model indices
+    pub(crate) indices: Vec<Index>,
 
     /// Optional table to map the model to
     pub(crate) table: Option<syn::LitStr>,
 }
 
 impl Model {
-    pub(crate) fn from_ast(ast: &syn::ItemStruct) -> syn::Result<Self> {
+    pub(crate) fn from_ast(ast: &syn::ItemStruct, is_embedded: bool) -> syn::Result<Self> {
         let syn::Fields::Named(node) = &ast.fields else {
             return Err(syn::Error::new_spanned(
                 &ast.fields,
@@ -126,27 +149,41 @@ impl Model {
             }
         }
 
-        // Return an error if no primary key fields were found
-        if pk_index_fields.is_empty() {
+        // Return an error if no primary key fields were found (only for root models)
+        if !is_embedded && pk_index_fields.is_empty() {
             return Err(syn::Error::new_spanned(
                 ast,
                 "model must either have a struct-level `#[key]` attribute or at least one field-level `#[key]` attribute",
             ));
         }
 
-        let pk_fields = pk_index_fields
-            .iter()
-            .map(|index_field| index_field.field)
-            .collect();
+        // Build ModelKind based on whether this is embedded or root
+        let kind = if is_embedded {
+            ModelKind::Embedded
+        } else {
+            let pk_fields = pk_index_fields
+                .iter()
+                .map(|index_field| index_field.field)
+                .collect();
 
-        // Create an index for the primary key
-        indices.push(Index {
-            fields: pk_index_fields,
-            unique: true,
-            primary_key: true,
-        });
+            // Create an index for the primary key
+            indices.push(Index {
+                fields: pk_index_fields,
+                unique: true,
+                primary_key: true,
+            });
 
-        // Create indices for all fields annotated with unique
+            ModelKind::Root(ModelRoot {
+                primary_key: PrimaryKey { fields: pk_fields },
+                field_struct_ident: struct_ident("Fields", ast),
+                query_struct_ident: struct_ident("Query", ast),
+                create_struct_ident: struct_ident("Create", ast),
+                update_struct_ident: struct_ident("Update", ast),
+                update_query_struct_ident: struct_ident("UpdateQuery", ast),
+            })
+        };
+
+        // Create indices for all fields annotated with unique or index
         for (index, field) in fields.iter().enumerate() {
             if field.attrs.unique {
                 indices.push(Index {
@@ -174,22 +211,22 @@ impl Model {
             name: Name::from_ident(&ast.ident),
             ident: ast.ident.clone(),
             fields,
+            kind,
             indices,
-            primary_key: PrimaryKey { fields: pk_fields },
-            field_struct_ident: struct_ident("Fields", ast),
-            query_struct_ident: struct_ident("Query", ast),
-            create_struct_ident: struct_ident("Create", ast),
-            update_struct_ident: struct_ident("Update", ast),
-            update_query_struct_ident: struct_ident("UpdateQuery", ast),
             table: model_attr.table,
         })
     }
 
-    pub fn primary_key_fields(&self) -> impl ExactSizeIterator<Item = &'_ Field> {
-        self.primary_key
-            .fields
-            .iter()
-            .map(|index| &self.fields[*index])
+    pub fn primary_key_fields(&self) -> Option<impl ExactSizeIterator<Item = &'_ Field>> {
+        match &self.kind {
+            ModelKind::Root(root) => Some(
+                root.primary_key
+                    .fields
+                    .iter()
+                    .map(|index| &self.fields[*index]),
+            ),
+            ModelKind::Embedded => None,
+        }
     }
 }
 

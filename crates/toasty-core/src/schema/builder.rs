@@ -66,7 +66,13 @@ impl Builder {
 
         // Find all models that specified a table name, ensure a table is
         // created for that model, and link the model with the table.
+        // Skip embedded models as they don't have their own tables.
         for model in app.models() {
+            // Skip embedded models - they are flattened into parent tables
+            if model.is_embedded() {
+                continue;
+            }
+
             let table = builder.build_table_stub_for_model(model);
 
             // Create a mapping stub for the model
@@ -76,16 +82,21 @@ impl Builder {
                     id: model.id,
                     table,
                     columns: vec![],
-                    // Create a mapping stub for each primitive field
+                    // Create a mapping stub for each field
                     fields: model
                         .fields
                         .iter()
                         .map(|field| match &field.ty {
-                            app::FieldTy::Primitive(_) => Some(mapping::Field {
-                                column: ColumnId::placeholder(),
-                                lowering: 0,
-                            }),
-                            _ => None,
+                            app::FieldTy::Primitive(_) => {
+                                mapping::Field::Primitive(mapping::FieldPrimitive {
+                                    column: ColumnId::placeholder(),
+                                    lowering: 0,
+                                })
+                            }
+                            app::FieldTy::Embedded(_) => {
+                                mapping::Field::Embedded(mapping::FieldEmbedded { fields: vec![] })
+                            }
+                            _ => mapping::Field::Relation,
                         })
                         .collect(),
                     model_to_table: stmt::ExprRecord::default(),

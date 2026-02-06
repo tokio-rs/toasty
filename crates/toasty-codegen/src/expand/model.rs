@@ -1,5 +1,5 @@
-use super::{util, Expand};
-use crate::schema::FieldTy;
+use super::Expand;
+use crate::schema::ModelKind;
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -9,13 +9,27 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_struct_ident = &self.model.query_struct_ident;
-        let create_struct_ident = &self.model.create_struct_ident;
-        let update_struct_ident = &self.model.update_struct_ident;
-        let update_query_struct_ident = &self.model.update_query_struct_ident;
+
+        let (
+            query_struct_ident,
+            create_struct_ident,
+            update_struct_ident,
+            update_query_struct_ident,
+        ) = match &self.model.kind {
+            ModelKind::Root(root) => (
+                &root.query_struct_ident,
+                &root.create_struct_ident,
+                &root.update_struct_ident,
+                &root.update_query_struct_ident,
+            ),
+            ModelKind::Embedded => {
+                // Embedded models don't generate CRUD methods, just return early
+                return TokenStream::new();
+            }
+        };
         let model_schema = self.expand_model_schema();
         let model_fields = self.expand_model_field_struct_init();
-        let struct_load_fields = self.expand_struct_load_fields();
+        let load_body = self.expand_load_body();
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
         let relation_methods = self.expand_model_relation_methods();
@@ -63,24 +77,24 @@ impl Expand<'_> {
                 }
             }
 
+            impl #toasty::Register for #model_ident {
+                fn id() -> #toasty::ModelId {
+                    static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
+                    *ID.get_or_init(|| #toasty::generate_unique_id())
+                }
+
+                #model_schema
+            }
+
             impl #toasty::Model for #model_ident {
                 type Query = #query_struct_ident;
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<'a>;
                 type UpdateQuery = #update_query_struct_ident;
 
-                fn id() -> #toasty::ModelId {
-                    static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
-                    *ID.get_or_init(|| #toasty::generate_unique_id())
+                fn load(value: #toasty::Value) -> #toasty::Result<Self> {
+                    #load_body
                 }
-
-                fn load(mut record: #toasty::ValueRecord) -> #toasty::Result<Self> {
-                    Ok(Self {
-                        #struct_load_fields
-                    })
-                }
-
-                #model_schema
             }
 
             impl #toasty::Relation for #model_ident {
@@ -144,7 +158,7 @@ impl Expand<'_> {
 
     pub(super) fn expand_model_into_select_body(&self, by_ref: bool) -> TokenStream {
         let filter = self.primary_key_filter();
-        let query_struct_ident = &self.model.query_struct_ident;
+        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let arg_idents = self.expand_filter_arg_idents(filter);
         let amp = if by_ref { quote!(&) } else { quote!() };
@@ -154,34 +168,5 @@ impl Expand<'_> {
                 .#filter_method_ident( #( #amp self.#arg_idents ),* )
                 .stmt
         }
-    }
-
-    fn expand_struct_load_fields(&self) -> TokenStream {
-        let toasty = &self.toasty;
-
-        self.model
-            .fields
-            .iter()
-            .enumerate()
-            .map(|(index, field)| {
-                let index_tokenized = util::int(index);
-                let name = &field.name.ident;
-
-                match &field.ty {
-                    FieldTy::BelongsTo(_) => {
-                        quote!(#name: #toasty::BelongsTo::load(record[#index].take())?,)
-                    }
-                    FieldTy::HasMany(_) => {
-                        quote!(#name: #toasty::HasMany::load(record[#index].take())?,)
-                    }
-                    FieldTy::HasOne(_) => {
-                        quote!(#name: #toasty::HasOne::load(record[#index].take())?,)
-                    }
-                    FieldTy::Primitive(ty) => {
-                        quote!(#name: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take())?,)
-                    }
-                }
-            })
-            .collect()
     }
 }

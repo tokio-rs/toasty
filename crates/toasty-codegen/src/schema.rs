@@ -26,7 +26,7 @@ mod key_attr;
 pub(crate) use key_attr::KeyAttr;
 
 mod model;
-pub(crate) use model::Model;
+pub(crate) use model::{Model, ModelKind};
 
 mod model_attr;
 pub(crate) use model_attr::ModelAttr;

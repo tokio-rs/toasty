@@ -23,7 +23,11 @@ impl Simplify<'_> {
         if let stmt::Expr::Key(expr_key) = &mut *expr.expr {
             let model = self.model(expr_key.model);
 
-            let [pk_field_id] = &model.primary_key.fields[..] else {
+            let primary_key = model
+                .primary_key()
+                .expect("IN list on model requires root model with primary key");
+
+            let [pk_field_id] = &primary_key.fields[..] else {
                 todo!()
             };
             let pk = self.field(*pk_field_id);

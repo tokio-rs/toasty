@@ -10,7 +10,7 @@ pub use db::Db;
 mod engine;
 
 mod model;
-pub use model::Model;
+pub use model::{Embed, Model, Register};
 
 mod page;
 pub use page::Page;
@@ -23,7 +23,7 @@ pub mod schema;
 pub mod stmt;
 pub use stmt::Statement;
 
-pub use toasty_macros::{create, query, Model};
+pub use toasty_macros::{create, query, Embed, Model};
 
 pub use toasty_core::{Error, Result};
 
@@ -36,7 +36,7 @@ pub mod codegen_support {
         relation::Relation,
         relation::{BelongsTo, HasMany, HasOne},
         stmt::{self, Id, IntoExpr, IntoInsert, IntoSelect, Path},
-        Db, Error, Model, Result, Statement,
+        Db, Embed, Error, Model, Register, Result, Statement,
     };
     pub use std::{convert::Into, default::Default, option::Option};
     pub use toasty_core::{
@@ -45,7 +45,7 @@ pub mod codegen_support {
             self,
             app::{FieldId, ModelId},
         },
-        stmt::{Type, Value, ValueRecord, ValueStream},
+        stmt::{self as core_stmt, Type, Value, ValueRecord, ValueStream},
     };
 }
 

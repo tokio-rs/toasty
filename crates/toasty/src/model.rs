@@ -18,7 +18,27 @@ pub fn generate_unique_id() -> ModelId {
     ModelId(id)
 }
 
-pub trait Model: Sized {
+/// Base trait for types that can be registered with the database schema.
+///
+/// This trait is implemented by both root models (via `Model`) and embedded
+/// types (via `Embed`). It provides the minimal interface needed for schema
+/// registration.
+pub trait Register {
+    /// Unique identifier for this type within the schema.
+    ///
+    /// Identifiers are *not* unique across schemas.
+    fn id() -> ModelId;
+
+    /// Returns the schema definition for this type.
+    fn schema() -> app::Model;
+}
+
+/// Trait for root models that map to database tables and can be queried.
+///
+/// Root models have primary keys, can be queried independently, and support
+/// full CRUD operations. They extend `Register` with queryability and
+/// deserialization capabilities.
+pub trait Model: Register + Sized {
     /// Query builder type for this model
     type Query;
 
@@ -31,36 +51,41 @@ pub trait Model: Sized {
     /// Update by query builder type for this model
     type UpdateQuery;
 
-    /// Unique identifier for this model within the schema.
+    /// Load an instance of the model from a value.
     ///
-    /// Identifiers are *not* unique across schemas.
-    fn id() -> ModelId;
+    /// The value is expected to be a `Value::Record` containing the model's fields.
+    fn load(value: stmt::Value) -> Result<Self, Error>;
+}
 
-    /// Load an instance of the model, populating fields using the given row.
-    fn load(row: stmt::ValueRecord) -> Result<Self, Error>;
-
-    fn schema() -> app::Model {
-        todo!()
-    }
+/// Trait for embedded types that are flattened into their parent model's table.
+///
+/// Embedded types don't have their own tables or primary keys. They can't be
+/// queried independently or used as relation targets. Their fields are flattened
+/// into the parent model's table columns.
+pub trait Embed: Register {
+    // Inherits id() and schema() from Register
+    // No additional methods needed
 }
 
 // TODO: This is a hack to aid in the transition from schema code gen to proc
 // macro. This should be removed once the proc macro is implemented.
+impl<T: Model> Register for Option<T> {
+    fn id() -> ModelId {
+        T::id()
+    }
+
+    fn schema() -> app::Model {
+        T::schema()
+    }
+}
+
 impl<T: Model> Model for Option<T> {
     type Query = T::Query;
     type Create = T::Create;
     type Update<'a> = T::Update<'a>;
     type UpdateQuery = T::UpdateQuery;
 
-    fn id() -> ModelId {
-        T::id()
-    }
-
-    fn load(row: stmt::ValueRecord) -> Result<Self, Error> {
-        Ok(Some(T::load(row)?))
-    }
-
-    fn schema() -> app::Model {
-        todo!()
+    fn load(value: stmt::Value) -> Result<Self, Error> {
+        Ok(Some(T::load(value)?))
     }
 }

@@ -16,7 +16,11 @@ impl Simplify<'_> {
                         .resolve_expr_reference(expr_reference)
                         .expect_model();
 
-                    let [pk_field] = &model.primary_key.fields[..] else {
+                    let primary_key = model.primary_key().expect(
+                        "binary op on model reference requires root model with primary key",
+                    );
+
+                    let [pk_field] = &primary_key.fields[..] else {
                         todo!("handle composite keys");
                     };
 
@@ -30,6 +34,10 @@ impl Simplify<'_> {
 
                     match &field.ty {
                         FieldTy::Primitive(_) => {}
+                        FieldTy::Embedded(_) => {
+                            // TODO: Handle embedded field references in binary operations
+                            todo!("embedded field in binary op")
+                        }
                         FieldTy::HasMany(_) | FieldTy::HasOne(_) => todo!(),
                         FieldTy::BelongsTo(rel) => {
                             let [fk_field] = &rel.foreign_key.fields[..] else {
@@ -194,7 +202,7 @@ impl Simplify<'_> {
 mod tests {
     use super::*;
     use crate as toasty;
-    use crate::Model as _;
+    use crate::model::Register;
     use toasty_core::{
         driver::Capability,
         schema::{app, Builder},

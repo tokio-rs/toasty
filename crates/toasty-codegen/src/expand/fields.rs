@@ -7,7 +7,7 @@ impl Expand<'_> {
     pub(super) fn expand_model_field_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let field_struct_ident = &self.model.field_struct_ident;
+        let field_struct_ident = &self.model.kind.expect_root().field_struct_ident;
         let model_ident = &self.model.ident;
 
         // Generate methods that return field paths for the model
@@ -76,7 +76,7 @@ impl Expand<'_> {
 
     pub(super) fn expand_model_field_struct_init(&self) -> TokenStream {
         let vis = &self.model.vis;
-        let field_struct_ident = &self.model.field_struct_ident;
+        let field_struct_ident = &self.model.kind.expect_root().field_struct_ident;
 
         // Generate simple const FIELDS with empty struct initialization
         quote!(
@@ -101,7 +101,7 @@ impl Expand<'_> {
 
         quote! {
             fn field_name_to_id(name: &str) -> #toasty::FieldId {
-                use #toasty::{FieldId, Model};
+                use #toasty::{FieldId, Model, Register};
 
                 match name {
                     #( #fields )*

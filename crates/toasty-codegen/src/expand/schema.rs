@@ -1,5 +1,5 @@
 use super::{util, Expand};
-use crate::schema::{AutoStrategy, Column, FieldTy, Name, UuidVersion};
+use crate::schema::{AutoStrategy, Column, FieldTy, ModelKind, Name, UuidVersion};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -10,9 +10,27 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let name = self.expand_model_name();
         let fields = self.expand_model_fields();
-        let primary_key = self.expand_primary_key();
         let indices = self.expand_model_indices();
         let table_name = self.expand_table_name();
+
+        let kind = match &self.model.kind {
+            ModelKind::Root(_) => {
+                let primary_key = self.expand_primary_key();
+                quote! {
+                    #toasty::schema::app::ModelKind::Root(
+                        #toasty::schema::app::ModelRoot {
+                            primary_key: #primary_key,
+                            table_name: #table_name,
+                        }
+                    )
+                }
+            }
+            ModelKind::Embedded => {
+                quote! {
+                    #toasty::schema::app::ModelKind::Embedded
+                }
+            }
+        };
 
         quote! {
             fn schema() -> #toasty::schema::app::Model {
@@ -32,9 +50,8 @@ impl Expand<'_> {
                     id,
                     name: #name,
                     fields: #fields,
-                    primary_key: #primary_key,
+                    kind: #kind,
                     indices: #indices,
-                    table_name: #table_name,
                 }
             }
         }
@@ -77,10 +94,7 @@ impl Expand<'_> {
                     };
 
                     nullable = quote!(<#ty as #toasty::stmt::Primitive>::NULLABLE);
-                    field_ty = quote!(FieldTy::Primitive(FieldPrimitive {
-                        ty: <#ty as #toasty::stmt::Primitive>::ty(),
-                        storage_ty: #storage_ty,
-                    }));
+                    field_ty = quote!(<#ty as #toasty::stmt::Primitive>::field_ty(#storage_ty));
                 }
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
@@ -143,7 +157,9 @@ impl Expand<'_> {
                 }
             }
 
-            let primary_key = self.model.primary_key.fields.contains(&index);
+            let primary_key = self.model.primary_key_fields()
+                .map(|mut fields| fields.any(|f| self.model.fields.iter().position(|field| std::ptr::eq(field, f)) == Some(index)))
+                .unwrap_or(false);
             let auto = match &field.attrs.auto {
                 None => quote! { None },
                 Some(auto) => {
@@ -184,16 +200,25 @@ impl Expand<'_> {
     }
 
     fn expand_primary_key(&self) -> TokenStream {
-        let fields = self.model.primary_key.fields.iter().map(|field| {
-            let field_tokenized = util::int(*field);
+        let primary_key = match &self.model.kind {
+            ModelKind::Root(root) => &root.primary_key,
+            ModelKind::Embedded => panic!("expand_primary_key called on embedded model"),
+        };
 
-            quote! {
-                FieldId {
-                    model: id,
-                    index: #field_tokenized,
+        let fields = primary_key
+            .fields
+            .iter()
+            .map(|field| {
+                let field_tokenized = util::int(*field);
+
+                quote! {
+                    FieldId {
+                        model: id,
+                        index: #field_tokenized,
+                    }
                 }
-            }
-        });
+            })
+            .collect::<Vec<_>>();
 
         quote! {
             PrimaryKey {

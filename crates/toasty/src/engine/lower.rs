@@ -126,9 +126,6 @@ struct LoweringState<'a> {
 
 #[derive(Debug, Clone, Copy)]
 enum LoweringContext<'a> {
-    /// Lowering update assignments
-    Assignment(&'a stmt::Assignments),
-
     /// Lowering an insertion statement
     Insert(&'a [ColumnId], Option<usize>),
 
@@ -213,20 +210,63 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 todo!("updating PK not supported yet");
             }
 
+            // Phase 1: Lower the assignment expression
+            let assignment = &i[index];
+            assert!(assignment.op.is_set(), "only SET supported");
+            let mut lowered_field_value = assignment.expr.clone();
+            self.visit_expr_mut(&mut lowered_field_value);
+
+            // Phase 2: For each impacted column, lower model_to_table expr and substitute
+            let mapping = self.mapping_unwrap();
+            let field_mapping = &mapping.fields[index];
+
             match &field.ty {
                 app::FieldTy::Primitive(_) => {
-                    let mapping = self.mapping_unwrap();
-
-                    let Some(field_mapping) = &mapping.fields[index] else {
-                        todo!()
+                    let field_primitive = field_mapping
+                        .as_primitive()
+                        .expect("only primitive fields are assignable");
+                    let column = field_primitive.column;
+                    let mut lowering_expr =
+                        mapping.model_to_table[field_primitive.lowering].clone();
+                    // Substitute field reference with lowered value (handles identity projection)
+                    let input = AssignmentInput {
+                        field_id: field.id,
+                        value: &lowered_field_value,
                     };
-
-                    let column = field_mapping.column;
-                    let mut lowered = mapping.model_to_table[field_mapping.lowering].clone();
-                    self.lower_assignment(i).visit_expr_mut(&mut lowered);
-                    assignments.set(column, lowered);
+                    lowering_expr.substitute(input);
+                    // Lower the result
+                    self.visit_expr_mut(&mut lowering_expr);
+                    assignments.set(column, lowering_expr);
                 }
-                _ => panic!("relation fields should already have been handled; field={field:#?}"),
+                app::FieldTy::Embedded(_) => {
+                    let field_embedded = field_mapping
+                        .as_embedded()
+                        .expect("field should be embedded");
+
+                    // For each field in the embedded struct
+                    for embedded_field in field_embedded.fields.iter() {
+                        match embedded_field {
+                            mapping::Field::Primitive(field_primitive) => {
+                                let column = field_primitive.column;
+                                let mut lowering_expr = mapping.model_to_table[field_primitive.lowering].clone();
+                                // Substitute field reference (handles projection into embedded value automatically)
+                                let input = AssignmentInput {
+                                    field_id: field.id,
+                                    value: &lowered_field_value,
+                                };
+                                lowering_expr.substitute(input);
+                                // Lower the result
+                                self.visit_expr_mut(&mut lowering_expr);
+                                assignments.set(column, lowering_expr);
+                            }
+                            _ => panic!("nested embedded fields not supported yet; field={embedded_field:#?}"),
+                        }
+                    }
+                }
+                _ => panic!(
+                    "relation fields should already have been handled; field_ty={:#?}",
+                    field.ty
+                ),
             }
         }
 
@@ -533,7 +573,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     for i in field_set.iter() {
                         let field = &model.fields[i];
 
-                        if field.ty.is_primitive() {
+                        if field.ty.is_primitive() || field.ty.is_embedded() {
                             fields.push(stmt::Expr::ref_self_field(app::FieldId {
                                 model: model.id,
                                 index: i,
@@ -569,6 +609,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
+            // Use the lowered assignments (which are now column-indexed)
             lower.constantize_update_returning(returning, &stmt.assignments);
         }
 
@@ -813,19 +854,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 let mapping = self.mapping_at_unwrap(nesting);
                 mapping.table_to_model.lower_expr_reference(nesting, index)
             }
-            LoweringContext::Assignment(assignments) => {
-                if nesting == 0 {
-                    assert!(nesting == 0, "TODO");
-                    let assignment = &assignments[index];
-                    assert!(assignment.op.is_set(), "TODO");
-                    assignment.expr.clone()
-                } else {
-                    // TODO: we may need a smarter way to pull out assignments
-                    // from elsewhere in the statement tree.
-                    let mapping = self.mapping_at_unwrap(nesting);
-                    mapping.table_to_model.lower_expr_reference(nesting, index)
-                }
-            }
             LoweringContext::InsertRow(row) => {
                 // If nesting > 0, this references a parent scope, not the current row
                 if nesting > 0 {
@@ -1021,12 +1049,12 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         self.schema().app.field(id.into())
     }
 
-    fn model(&self) -> Option<&Model> {
+    fn model(&self) -> Option<&'a Model> {
         self.expr_cx.target().as_model()
     }
 
     #[track_caller]
-    fn model_unwrap(&self) -> &Model {
+    fn model_unwrap(&self) -> &'a Model {
         self.expr_cx.target().as_model_unwrap()
     }
 
@@ -1101,19 +1129,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             expr_cx: self.expr_cx.scope(target),
             scope_id: self.scope_id,
             cx: self.cx,
-            collect_dependencies: self.collect_dependencies,
-        }
-    }
-
-    fn lower_assignment<'child>(
-        &'child mut self,
-        assignments: &'child stmt::Assignments,
-    ) -> LowerStatement<'child, 'b> {
-        LowerStatement {
-            state: self.state,
-            expr_cx: self.expr_cx,
-            scope_id: self.scope_id,
-            cx: LoweringContext::Assignment(assignments),
             collect_dependencies: self.collect_dependencies,
         }
     }
@@ -1212,5 +1227,52 @@ impl LoweringContext<'_> {
 
     fn is_returning(&self) -> bool {
         matches!(self, LoweringContext::Returning)
+    }
+}
+
+/// Input implementation for assignment substitution.
+///
+/// Provides assignment values when substituting field references in `model_to_table`
+/// expressions. Handles projections automatically for embedded fields.
+struct AssignmentInput<'a> {
+    field_id: app::FieldId,
+    value: &'a stmt::Expr,
+}
+
+impl stmt::Input for AssignmentInput<'_> {
+    fn resolve_ref(
+        &mut self,
+        expr_reference: &stmt::ExprReference,
+        projection: &stmt::Projection,
+    ) -> Option<stmt::Expr> {
+        // Check if this reference is to our field
+        if let stmt::ExprReference::Field { nesting: 0, index } = expr_reference {
+            if *index == self.field_id.index {
+                // For embedded fields, the value is a Record and projection extracts nested fields
+                // For primitive fields, projection is identity
+                if projection.is_identity() {
+                    return Some(self.value.clone());
+                } else {
+                    // Handle projection into the value
+                    return match self.value {
+                        stmt::Expr::Value(value) => {
+                            // Use Value's entry method which handles projections
+                            Some(value.entry(projection).to_expr())
+                        }
+                        stmt::Expr::Record(record) => {
+                            // For Expr::Record, manually project
+                            let indices = projection.as_slice();
+                            if indices.len() == 1 {
+                                record.fields.get(indices[0]).cloned()
+                            } else {
+                                None
+                            }
+                        }
+                        _ => None,
+                    };
+                }
+            }
+        }
+        None
     }
 }

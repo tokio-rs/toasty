@@ -115,7 +115,7 @@ impl Simplify<'_> {
 mod tests {
     use super::*;
     use crate as toasty;
-    use crate::Model as _;
+    use crate::model::Register;
     use toasty_core::{
         driver::Capability,
         schema::{app, Builder},

@@ -675,7 +675,13 @@ impl RelationSource for InsertRelationSource<'_> {
     fn selection(&self, nesting: usize) -> stmt::Query {
         let mut args = vec![];
 
-        for pk_field in self.model.primary_key_fields() {
+        // Relations only work with root models (which have primary keys)
+        let pk_fields = self
+            .model
+            .primary_key_fields()
+            .expect("relation source must be a root model with primary key");
+
+        for pk_field in pk_fields {
             let entry = self.row.entry(pk_field.id.index).unwrap();
 
             if entry.is_value() {

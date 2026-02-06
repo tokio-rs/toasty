@@ -189,6 +189,10 @@ impl Steps {
         for step in rest {
             let target = match &projected.ty {
                 Primitive(..) => panic!("failed to resolve path"),
+                Embedded(_) => {
+                    // TODO: Handle path projection through embedded fields
+                    todo!("embedded field path projection")
+                }
                 BelongsTo(belongs_to) => belongs_to.target(schema),
                 HasMany(has_many) => has_many.target(schema),
                 HasOne(_) => todo!(),

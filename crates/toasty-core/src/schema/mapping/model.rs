@@ -31,12 +31,12 @@ pub struct Model {
     /// column here.
     pub columns: Vec<ColumnId>,
 
-    /// Per-field mappings for primitive fields.
+    /// Per-field mappings.
     ///
-    /// Indexed by field index within the model. Contains `None` for relation
-    /// fields (`BelongsTo`, `HasMany`, `HasOne`) since they do not map directly
-    /// to columns.
-    pub fields: Vec<Option<Field>>,
+    /// Indexed by field index within the model. Primitive fields and embedded
+    /// fields have their respective mappings, while relation fields use
+    /// `Field::Relation` since they don't map directly to columns.
+    pub fields: Vec<Field>,
 
     /// Expression template for converting model field values to table column
     /// values.

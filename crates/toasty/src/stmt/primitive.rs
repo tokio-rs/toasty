@@ -15,6 +15,18 @@ pub trait Primitive: Sized {
     fn ty() -> stmt::Type;
 
     fn load(value: stmt::Value) -> Result<Self>;
+
+    /// Returns the app-level field type for this primitive.
+    /// Default implementation returns a Primitive field type.
+    /// Embedded types override this to return Embedded field type.
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
+            ty: Self::ty(),
+            storage_ty,
+        })
+    }
 }
 
 #[diagnostic::on_unimplemented(
