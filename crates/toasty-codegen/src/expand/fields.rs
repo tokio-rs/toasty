@@ -27,9 +27,7 @@ impl Expand<'_> {
                         quote! {
                             #vis fn #field_ident(&self) -> <#ty as #toasty::stmt::Primitive>::FieldAccessor {
                                 <#ty as #toasty::stmt::Primitive>::make_field_accessor(
-                                    self.path().chain(#toasty::Path::new(
-                                        toasty_core::stmt::Path::from_index(<#model_ident as #toasty::Register>::id(), #field_offset)
-                                    ))
+                                    self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
                                 )
                             }
                         }
