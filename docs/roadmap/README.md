@@ -23,6 +23,13 @@ Toasty aims to be an easy-to-use ORM for Rust that supports both SQL and NoSQL d
   - Cursor-based pagination with bidirectional navigation
   - Page<T> return type with navigation cursors
   - Cursor serialization for web APIs
+- [**Query Constraints & Filtering**](./query-constraints.md) 🟡
+  - OR, NOT, IS NULL constraints (AST exists, needs user API)
+  - String operations: contains, starts with, ends with, LIKE
+  - Case-insensitive matching
+  - BETWEEN / range queries
+  - Relation filtering (filter by associated model fields)
+  - Aggregate queries and GROUP BY / HAVING
 
 ### Data Types & Validation
 - **Extended Data Types** 🔴
