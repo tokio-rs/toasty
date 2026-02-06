@@ -29,7 +29,7 @@ struct Expand<'a> {
 impl Expand<'_> {
     fn expand(&self) -> TokenStream {
         let model_impls = self.expand_model_impls();
-        let model_field_struct = self.expand_model_field_struct();
+        let model_field_struct = self.expand_field_struct();
         let query_struct = self.expand_query_struct();
         let create_builder = self.expand_create_builder();
         let update_builder = self.expand_update_builder();
@@ -72,7 +72,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let into_expr_body_val = expand.expand_embedded_into_expr_body(false);
     let into_expr_body_ref = expand.expand_embedded_into_expr_body(true);
     let load_body = expand.expand_load_body();
-    let embedded_field_struct = expand.expand_embedded_field_struct();
+    let embedded_field_struct = expand.expand_field_struct();
     let embedded_model_impls = expand.expand_embedded_model_impls();
 
     wrap_in_const(quote! {

@@ -4,58 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 impl Expand<'_> {
-    pub(super) fn expand_embedded_field_struct(&self) -> TokenStream {
-        let toasty = &self.toasty;
-        let vis = &self.model.vis;
-        let model_ident = &self.model.ident;
-        let field_struct_ident = self.field_struct_ident();
-
-        // Generate methods for the fields struct
-        let methods = self
-            .model
-            .fields
-            .iter()
-            .enumerate()
-            .map(move |(offset, field)| {
-                let field_ident = &field.name.ident;
-                let field_offset = util::int(offset);
-
-                match &field.ty {
-                    Primitive(ty) => {
-                        // Use the Primitive trait's FieldAccessor to determine the return type
-                        // The path segment uses the embedded struct's model ID, not the field type's
-                        quote! {
-                            #vis fn #field_ident(&self) -> <#ty as #toasty::stmt::Primitive>::FieldAccessor {
-                                <#ty as #toasty::stmt::Primitive>::make_field_accessor(
-                                    self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
-                                )
-                            }
-                        }
-                    }
-                    _ => {
-                        // Relations are not allowed in embedded models
-                        quote!()
-                    }
-                }
-            });
-
-        // Generate the fields struct with path field
-        quote!(
-            #vis struct #field_struct_ident {
-                path: #toasty::Path<#model_ident>,
-            }
-
-            impl #field_struct_ident {
-                fn path(&self) -> #toasty::Path<#model_ident> {
-                    self.path.clone()
-                }
-
-                #( #methods )*
-            }
-        )
-    }
-
-    pub(super) fn expand_model_field_struct(&self) -> TokenStream {
+    pub(super) fn expand_field_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let field_struct_ident = self.field_struct_ident();
