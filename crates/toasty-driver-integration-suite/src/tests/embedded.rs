@@ -240,6 +240,7 @@ pub async fn embedded_struct_fields_codegen(test: &mut Test) {
     }
 
     #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
     struct User {
         #[key]
         #[auto]
@@ -281,6 +282,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) {
 
     #[derive(Debug, toasty::Model)]
     #[key(partition = country, local = id)]
+    #[allow(dead_code)]
     struct User {
         #[auto]
         id: uuid::Uuid,
@@ -388,6 +390,7 @@ pub async fn query_embedded_fields_comparison_ops(t: &mut Test) {
     }
 
     #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
     struct Player {
         #[key]
         #[auto]
@@ -459,6 +462,7 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) {
     }
 
     #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
     struct Location {
         #[key]
         #[auto]
@@ -535,6 +539,7 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) {
     }
 
     #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
     struct Document {
         #[key]
         #[auto]
