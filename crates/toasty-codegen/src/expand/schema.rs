@@ -25,7 +25,7 @@ impl Expand<'_> {
                     )
                 }
             }
-            ModelKind::Embedded => {
+            ModelKind::Embedded(_) => {
                 quote! {
                     #toasty::schema::app::ModelKind::Embedded
                 }
@@ -202,7 +202,7 @@ impl Expand<'_> {
     fn expand_primary_key(&self) -> TokenStream {
         let primary_key = match &self.model.kind {
             ModelKind::Root(root) => &root.primary_key,
-            ModelKind::Embedded => panic!("expand_primary_key called on embedded model"),
+            ModelKind::Embedded(_) => panic!("expand_primary_key called on embedded model"),
         };
 
         let fields = primary_key

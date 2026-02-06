@@ -22,7 +22,7 @@ impl Expand<'_> {
                 &root.update_struct_ident,
                 &root.update_query_struct_ident,
             ),
-            ModelKind::Embedded => {
+            ModelKind::Embedded(_) => {
                 // Embedded models don't generate CRUD methods, just return early
                 return TokenStream::new();
             }

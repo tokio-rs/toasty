@@ -1,14 +1,14 @@
 use super::{util, Expand};
 use crate::schema::FieldTy::{BelongsTo, HasMany, HasOne, Primitive};
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 
 impl Expand<'_> {
     pub(super) fn expand_embedded_field_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let field_struct_ident = format_ident!("{}Fields", model_ident);
+        let field_struct_ident = &self.model.kind.expect_embedded().field_struct_ident;
 
         // Generate methods for the fields struct
         let methods = self
