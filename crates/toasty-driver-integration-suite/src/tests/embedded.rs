@@ -261,4 +261,142 @@ pub async fn embedded_struct_fields_codegen(test: &mut Test) {
 
     // Verify the paths have the correct type for use in queries
     // (This is a compile-time check that the types are correct)
+
+    // Test that the path can be used in a filter expression
+    let _query = User::all().filter(User::fields().address().city().eq("Seattle"));
+}
+
+#[driver_test]
+pub async fn query_embedded_struct_fields(t: &mut Test) {
+    #[derive(Debug, toasty::Embed)]
+    struct Address {
+        street: String,
+        city: String,
+        zip: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = country, local = id)]
+    struct User {
+        #[auto]
+        id: uuid::Uuid,
+        country: String,
+        name: String,
+        address: Address,
+    }
+
+    let db = t.setup_db(models!(User, Address)).await;
+
+    // Create users in different countries and cities
+    let users_data = [
+        ("USA", "Alice", "123 Main St", "Seattle", "98101"),
+        ("USA", "Bob", "456 Oak Ave", "Seattle", "98102"),
+        ("USA", "Charlie", "789 Pine Rd", "Portland", "97201"),
+        ("USA", "Diana", "321 Elm St", "Portland", "97202"),
+        ("CAN", "Eve", "111 Maple Dr", "Vancouver", "V6B 1A1"),
+        ("CAN", "Frank", "222 Cedar Ln", "Vancouver", "V6B 2B2"),
+        ("CAN", "Grace", "333 Birch Way", "Toronto", "M5H 1A1"),
+    ];
+
+    for (country, name, street, city, zip) in users_data {
+        User::create()
+            .country(country)
+            .name(name)
+            .address(Address {
+                street: street.to_string(),
+                city: city.to_string(),
+                zip: zip.to_string(),
+            })
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Verify all users were created by querying each partition
+    // (DynamoDB with composite keys requires partition key in queries)
+    let mut all_users = Vec::new();
+    for country in ["USA", "CAN"] {
+        let mut users = User::filter(User::fields().country().eq(country))
+            .collect::<Vec<_>>(&db)
+            .await
+            .unwrap();
+        all_users.append(&mut users);
+    }
+    assert_eq!(all_users.len(), 7);
+
+    // Verify basic partition key filtering works
+    let usa_users = User::filter(User::fields().country().eq("USA"))
+        .collect::<Vec<_>>(&db)
+        .await
+        .unwrap();
+    assert_eq!(usa_users.len(), 4);
+
+    // Query by partition key (country) and embedded field (city)
+    let seattle_users = User::filter(
+        User::fields()
+            .country()
+            .eq("USA")
+            .and(User::fields().address().city().eq("Seattle")),
+    )
+    .collect::<Vec<_>>(&db)
+    .await
+    .unwrap();
+
+    assert_eq!(seattle_users.len(), 2);
+    let mut names: Vec<_> = seattle_users.iter().map(|u| u.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Alice", "Bob"]);
+
+    // Verify the addresses are correct
+    for user in &seattle_users {
+        assert_eq!(user.address.city, "Seattle");
+        assert_eq!(user.country, "USA");
+    }
+
+    // Query by partition key and different embedded field (zip)
+    let portland_users = User::filter(
+        User::fields()
+            .country()
+            .eq("USA")
+            .and(User::fields().address().city().eq("Portland")),
+    )
+    .collect::<Vec<_>>(&db)
+    .await
+    .unwrap();
+
+    assert_eq!(portland_users.len(), 2);
+    let mut names: Vec<_> = portland_users.iter().map(|u| u.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Charlie", "Diana"]);
+
+    // Query Canadian users in Vancouver
+    let vancouver_users = User::filter(
+        User::fields()
+            .country()
+            .eq("CAN")
+            .and(User::fields().address().city().eq("Vancouver")),
+    )
+    .collect::<Vec<_>>(&db)
+    .await
+    .unwrap();
+
+    assert_eq!(vancouver_users.len(), 2);
+    let mut names: Vec<_> = vancouver_users.iter().map(|u| u.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Eve", "Frank"]);
+
+    // Verify we can query by zip code as well
+    let user_98101 = User::filter(
+        User::fields()
+            .country()
+            .eq("USA")
+            .and(User::fields().address().zip().eq("98101")),
+    )
+    .collect::<Vec<_>>(&db)
+    .await
+    .unwrap();
+
+    assert_eq!(user_98101.len(), 1);
+    assert_eq!(user_98101[0].name, "Alice");
+    assert_eq!(user_98101[0].address.street, "123 Main St");
 }
