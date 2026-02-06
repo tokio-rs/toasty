@@ -400,3 +400,214 @@ pub async fn query_embedded_struct_fields(t: &mut Test) {
     assert_eq!(user_98101[0].name, "Alice");
     assert_eq!(user_98101[0].address.street, "123 Main St");
 }
+
+#[driver_test(requires(sql))]
+pub async fn query_embedded_fields_comparison_ops(t: &mut Test) {
+    #[derive(Debug, toasty::Embed)]
+    struct Stats {
+        score: i64,
+        rank: i64,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Player {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+        stats: Stats,
+    }
+
+    let db = t.setup_db(models!(Player, Stats)).await;
+
+    // Create players with different scores
+    for (name, score, rank) in [
+        ("Alice", 100, 1),
+        ("Bob", 85, 2),
+        ("Charlie", 70, 3),
+        ("Diana", 55, 4),
+        ("Eve", 40, 5),
+    ] {
+        Player::create()
+            .name(name)
+            .stats(Stats { score, rank })
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Test greater than
+    let high_scorers = Player::filter(Player::fields().stats().score().gt(80))
+        .collect::<Vec<_>>(&db)
+        .await
+        .unwrap();
+    assert_eq!(high_scorers.len(), 2); // Alice and Bob
+
+    // Test less than or equal
+    let low_scorers = Player::filter(Player::fields().stats().score().le(55))
+        .collect::<Vec<_>>(&db)
+        .await
+        .unwrap();
+    assert_eq!(low_scorers.len(), 2); // Diana and Eve
+
+    // Test not equal
+    let not_charlie = Player::filter(Player::fields().stats().score().ne(70))
+        .collect::<Vec<_>>(&db)
+        .await
+        .unwrap();
+    assert_eq!(not_charlie.len(), 4);
+
+    // Test greater than or equal
+    let mid_to_high = Player::filter(Player::fields().stats().score().ge(70))
+        .collect::<Vec<_>>(&db)
+        .await
+        .unwrap();
+    assert_eq!(mid_to_high.len(), 3); // Alice, Bob, Charlie
+}
+
+#[driver_test(requires(sql))]
+pub async fn query_embedded_multiple_fields(t: &mut Test) {
+    #[derive(Debug, toasty::Embed)]
+    struct Coordinates {
+        x: i64,
+        y: i64,
+        z: i64,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Location {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+        coords: Coordinates,
+    }
+
+    let db = t.setup_db(models!(Location, Coordinates)).await;
+
+    // Create locations
+    for (name, x, y, z) in [
+        ("Origin", 0, 0, 0),
+        ("Point A", 10, 20, 0),
+        ("Point B", 10, 30, 0),
+        ("Point C", 10, 20, 5),
+        ("Point D", 20, 20, 0),
+    ] {
+        Location::create()
+            .name(name)
+            .coords(Coordinates { x, y, z })
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Query by multiple embedded fields: x=10 AND y=20
+    let matching = Location::filter(
+        Location::fields()
+            .coords()
+            .x()
+            .eq(10)
+            .and(Location::fields().coords().y().eq(20)),
+    )
+    .collect::<Vec<_>>(&db)
+    .await
+    .unwrap();
+
+    assert_eq!(matching.len(), 2); // Point A and Point C
+    let mut names: Vec<_> = matching.iter().map(|l| l.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Point A", "Point C"]);
+
+    // Query by three embedded fields: x=10 AND y=20 AND z=0
+    let exact_match = Location::filter(
+        Location::fields()
+            .coords()
+            .x()
+            .eq(10)
+            .and(Location::fields().coords().y().eq(20))
+            .and(Location::fields().coords().z().eq(0)),
+    )
+    .collect::<Vec<_>>(&db)
+    .await
+    .unwrap();
+
+    assert_eq!(exact_match.len(), 1);
+    assert_eq!(exact_match[0].name, "Point A");
+}
+
+#[driver_test(requires(sql))]
+pub async fn update_with_embedded_field_filter(t: &mut Test) {
+    #[derive(Debug, toasty::Embed)]
+    struct Metadata {
+        version: i64,
+        status: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Document {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        title: String,
+        meta: Metadata,
+    }
+
+    let db = t.setup_db(models!(Document, Metadata)).await;
+
+    // Create documents
+    for (title, version, status) in [
+        ("Doc A", 1, "draft"),
+        ("Doc B", 2, "draft"),
+        ("Doc C", 1, "published"),
+    ] {
+        Document::create()
+            .title(title)
+            .meta(Metadata {
+                version,
+                status: status.to_string(),
+            })
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Update all draft documents with version 1
+    Document::filter(
+        Document::fields()
+            .meta()
+            .status()
+            .eq("draft")
+            .and(Document::fields().meta().version().eq(1)),
+    )
+    .update()
+    .meta(Metadata {
+        version: 2,
+        status: "draft".to_string(),
+    })
+    .exec(&db)
+    .await
+    .unwrap();
+
+    // Verify the update
+    let updated = Document::filter(Document::fields().title().eq("Doc A"))
+        .collect::<Vec<_>>(&db)
+        .await
+        .unwrap();
+
+    assert_eq!(updated.len(), 1);
+    assert_eq!(updated[0].meta.version, 2);
+    assert_eq!(updated[0].meta.status, "draft");
+
+    // Other documents should be unchanged
+    let unchanged = Document::filter(Document::fields().title().eq("Doc B"))
+        .collect::<Vec<_>>(&db)
+        .await
+        .unwrap();
+    assert_eq!(unchanged[0].meta.version, 2); // Already version 2
+
+    let published = Document::filter(Document::fields().title().eq("Doc C"))
+        .collect::<Vec<_>>(&db)
+        .await
+        .unwrap();
+    assert_eq!(published[0].meta.version, 1); // Still version 1 (status was "published")
+}
