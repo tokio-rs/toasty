@@ -60,7 +60,7 @@ pub(super) fn root_model(model: &Model) -> TokenStream {
 pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let toasty = quote!(_toasty::codegen_support);
     let model_ident = &model.ident;
-    let field_struct_ident = quote::format_ident!("{}Fields", model_ident);
+    let field_struct_ident = &model.kind.expect_embedded().field_struct_ident;
 
     let expand = Expand {
         model,
@@ -73,17 +73,12 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let into_expr_body_ref = expand.expand_embedded_into_expr_body(true);
     let load_body = expand.expand_load_body();
     let embedded_field_struct = expand.expand_embedded_field_struct();
+    let embedded_model_impls = expand.expand_embedded_model_impls();
 
     wrap_in_const(quote! {
         #embedded_field_struct
 
-        impl #model_ident {
-            pub fn fields() -> #field_struct_ident {
-                #field_struct_ident {
-                    path: #toasty::Path::root(),
-                }
-            }
-        }
+        #embedded_model_impls
 
         impl #toasty::Register for #model_ident {
             fn id() -> #toasty::ModelId {

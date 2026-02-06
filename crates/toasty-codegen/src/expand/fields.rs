@@ -8,7 +8,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let field_struct_ident = &self.model.kind.expect_embedded().field_struct_ident;
+        let field_struct_ident = self.field_struct_ident();
 
         // Generate methods for the fields struct
         let methods = self
@@ -58,7 +58,7 @@ impl Expand<'_> {
     pub(super) fn expand_model_field_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let field_struct_ident = &self.model.kind.expect_root().field_struct_ident;
+        let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
 
         // Generate methods that return field paths for the model
@@ -139,7 +139,7 @@ impl Expand<'_> {
     pub(super) fn expand_model_field_struct_init(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let field_struct_ident = &self.model.kind.expect_root().field_struct_ident;
+        let field_struct_ident = self.field_struct_ident();
 
         // Generate fields() as a method instead of const to avoid const initialization issues
         // This will be placed inside the existing impl block for the model
@@ -150,6 +150,15 @@ impl Expand<'_> {
                 }
             }
         )
+    }
+
+    fn field_struct_ident(&self) -> &syn::Ident {
+        use crate::schema::ModelKind;
+
+        match &self.model.kind {
+            ModelKind::Root(root) => &root.field_struct_ident,
+            ModelKind::Embedded(embedded) => &embedded.field_struct_ident,
+        }
     }
 
     pub(super) fn expand_field_name_to_id(&self) -> TokenStream {

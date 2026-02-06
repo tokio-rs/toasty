@@ -156,6 +156,17 @@ impl Expand<'_> {
         }
     }
 
+    pub(super) fn expand_embedded_model_impls(&self) -> TokenStream {
+        let model_ident = &self.model.ident;
+        let model_fields = self.expand_model_field_struct_init();
+
+        quote! {
+            impl #model_ident {
+                #model_fields
+            }
+        }
+    }
+
     pub(super) fn expand_model_into_select_body(&self, by_ref: bool) -> TokenStream {
         let filter = self.primary_key_filter();
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
