@@ -127,7 +127,7 @@ jobs:
         - name: Start dynamodb-local
           run: sudo docker run --name dynamodb -d -p 8000:8000 amazon/dynamodb-local:latest -jar DynamoDBLocal.jar -port 8000
         - name: cargo test
-          run: cargo test --workspace --no-default-features --features dynamodb
+          run: cargo test --workspace --no-default-features --features dynamodb -- --test-threads 1
 
     test-all-os:
         needs: check
