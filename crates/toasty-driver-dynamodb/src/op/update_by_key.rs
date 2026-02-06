@@ -33,8 +33,10 @@ impl Connection {
             .collect::<Vec<_>>();
 
         let filter_expression = match (&op.filter, &op.condition) {
-            (Some(filter), None) => Some(ddb_expression(&cx, &mut expr_attrs, false, filter)),
-            (None, Some(condition)) => Some(ddb_expression(&cx, &mut expr_attrs, false, condition)),
+            (Some(filter), None) => Some(ddb_expression(&cx, &mut expr_attrs, false, filter)?),
+            (None, Some(condition)) => {
+                Some(ddb_expression(&cx, &mut expr_attrs, false, condition)?)
+            }
             (Some(_), Some(_)) => {
                 todo!()
             }

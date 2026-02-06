@@ -15,7 +15,7 @@ impl Connection {
         let cx = ExprContext::new_with_target(&**schema, table);
 
         let mut expr_attrs = ExprAttrs::default();
-        let key_expression = ddb_expression(&cx, &mut expr_attrs, false, &op.filter);
+        let key_expression = ddb_expression(&cx, &mut expr_attrs, false, &op.filter)?;
 
         let res = if index.unique {
             self.client

@@ -118,6 +118,10 @@ impl Query {
         self.body.as_select_mut_unwrap().add_filter(filter);
     }
 
+    pub fn or_filter(&mut self, filter: impl Into<Filter>) {
+        self.body.as_select_mut_unwrap().or_filter(filter);
+    }
+
     pub fn add_union(&mut self, other: impl Into<Self>) {
         let rhs = other.into();
 

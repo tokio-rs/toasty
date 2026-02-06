@@ -46,6 +46,11 @@ impl<M: Model> Select<M> {
         self
     }
 
+    pub fn or(mut self, filter: Expr<bool>) -> Self {
+        self.untyped.or_filter(filter.untyped);
+        self
+    }
+
     pub fn union(mut self, other: Self) -> Self {
         self.untyped.add_union(other.untyped);
         self

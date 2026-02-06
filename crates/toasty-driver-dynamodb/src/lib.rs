@@ -208,42 +208,45 @@ fn ddb_expression(
     attrs: &mut ExprAttrs,
     primary: bool,
     expr: &stmt::Expr,
-) -> String {
+) -> Result<String> {
     match expr {
         stmt::Expr::BinaryOp(expr_binary_op) => {
-            let lhs = ddb_expression(cx, attrs, primary, &expr_binary_op.lhs);
-            let rhs = ddb_expression(cx, attrs, primary, &expr_binary_op.rhs);
+            let lhs = ddb_expression(cx, attrs, primary, &expr_binary_op.lhs)?;
+            let rhs = ddb_expression(cx, attrs, primary, &expr_binary_op.rhs)?;
 
             match expr_binary_op.op {
-                stmt::BinaryOp::Eq => format!("{lhs} = {rhs}"),
+                stmt::BinaryOp::Eq => Ok(format!("{lhs} = {rhs}")),
                 stmt::BinaryOp::Ne if primary => {
                     todo!("!= conditions on primary key not supported")
                 }
-                stmt::BinaryOp::Ne => format!("{lhs} <> {rhs}"),
-                stmt::BinaryOp::Gt => format!("{lhs} > {rhs}"),
-                stmt::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
-                stmt::BinaryOp::Lt => format!("{lhs} < {rhs}"),
-                stmt::BinaryOp::Le => format!("{lhs} <= {rhs}"),
+                stmt::BinaryOp::Ne => Ok(format!("{lhs} <> {rhs}")),
+                stmt::BinaryOp::Gt => Ok(format!("{lhs} > {rhs}")),
+                stmt::BinaryOp::Ge => Ok(format!("{lhs} >= {rhs}")),
+                stmt::BinaryOp::Lt => Ok(format!("{lhs} < {rhs}")),
+                stmt::BinaryOp::Le => Ok(format!("{lhs} <= {rhs}")),
                 _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
         stmt::Expr::Reference(expr_reference) => {
             let column = cx.resolve_expr_reference(expr_reference).expect_column();
-            attrs.column(column).to_string()
+            Ok(attrs.column(column).to_string())
         }
-        stmt::Expr::Value(val) => attrs.value(val),
+        stmt::Expr::Value(val) => Ok(attrs.value(val)),
         stmt::Expr::And(expr_and) => {
             let operands = expr_and
                 .operands
                 .iter()
                 .map(|operand| ddb_expression(cx, attrs, primary, operand))
-                .collect::<Vec<_>>();
-            operands.join(" AND ")
+                .collect::<Result<Vec<_>>>()?;
+            Ok(operands.join(" AND "))
         }
+        stmt::Expr::Or(_) => Err(toasty_core::Error::unsupported_feature(
+            "OR expressions are not supported by DynamoDB",
+        )),
         stmt::Expr::Pattern(stmt::ExprPattern::BeginsWith(begins_with)) => {
-            let expr = ddb_expression(cx, attrs, primary, &begins_with.expr);
-            let substr = ddb_expression(cx, attrs, primary, &begins_with.pattern);
-            format!("begins_with({expr}, {substr})")
+            let expr = ddb_expression(cx, attrs, primary, &begins_with.expr)?;
+            let substr = ddb_expression(cx, attrs, primary, &begins_with.pattern)?;
+            Ok(format!("begins_with({expr}, {substr})"))
         }
         _ => todo!("FILTER = {:#?}", expr),
     }

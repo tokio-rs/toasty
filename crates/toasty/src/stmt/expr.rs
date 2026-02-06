@@ -63,6 +63,22 @@ impl Expr<bool> {
             .unwrap_or_else(|| Self::from_untyped(true))
     }
 
+    pub fn or(self, rhs: impl IntoExpr<bool>) -> Self {
+        Self::from_untyped(stmt::Expr::or(self.untyped, rhs.into_expr().untyped))
+    }
+
+    pub fn or_all<E>(exprs: impl IntoIterator<Item = E>) -> Self
+    where
+        E: IntoExpr<bool>,
+    {
+        exprs
+            .into_iter()
+            .map(|expr| expr.into_expr().untyped)
+            .reduce(stmt::Expr::or)
+            .map(Self::from_untyped)
+            .unwrap_or_else(|| Self::from_untyped(false))
+    }
+
     pub fn in_list<L, R, T>(lhs: L, rhs: R) -> Self
     where
         L: IntoExpr<T>,

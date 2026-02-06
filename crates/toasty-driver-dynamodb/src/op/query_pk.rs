@@ -14,12 +14,13 @@ impl Connection {
         let cx = ExprContext::new_with_target(&**schema, table);
 
         let mut expr_attrs = ExprAttrs::default();
-        let key_expression = ddb_expression(&cx, &mut expr_attrs, true, &op.pk_filter);
+        let key_expression = ddb_expression(&cx, &mut expr_attrs, true, &op.pk_filter)?;
 
         let filter_expression = op
             .filter
             .as_ref()
-            .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr));
+            .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr))
+            .transpose()?;
 
         let res = self
             .client

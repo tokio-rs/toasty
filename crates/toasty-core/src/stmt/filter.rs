@@ -57,6 +57,18 @@ impl Filter {
         }
     }
 
+    pub fn or_filter(&mut self, filter: impl Into<Filter>) {
+        match (self.expr.take(), filter.into().expr) {
+            (Some(expr), Some(other)) => {
+                self.expr = Some(Expr::or(expr, other));
+            }
+            // None means "match all" — OR with "match all" is "match all"
+            _ => {
+                self.expr = None;
+            }
+        }
+    }
+
     /// Takes the filter out, leaving an empty filter in its place.
     ///
     /// # Examples

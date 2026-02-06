@@ -20,7 +20,7 @@ impl Connection {
         let mut filter_expression = None;
 
         if let Some(filter) = &op.filter {
-            filter_expression = Some(ddb_expression(&cx, &mut expr_attrs, false, filter));
+            filter_expression = Some(ddb_expression(&cx, &mut expr_attrs, false, filter)?);
         }
 
         let unique_indices = table

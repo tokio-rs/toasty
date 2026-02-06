@@ -37,6 +37,10 @@ impl Select {
     pub fn add_filter(&mut self, filter: impl Into<Filter>) {
         self.filter.add_filter(filter);
     }
+
+    pub fn or_filter(&mut self, filter: impl Into<Filter>) {
+        self.filter.or_filter(filter);
+    }
 }
 
 impl Statement {
