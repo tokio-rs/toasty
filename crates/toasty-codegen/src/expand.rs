@@ -60,6 +60,7 @@ pub(super) fn root_model(model: &Model) -> TokenStream {
 pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let toasty = quote!(_toasty::codegen_support);
     let model_ident = &model.ident;
+    let field_struct_ident = quote::format_ident!("{}Fields", model_ident);
 
     let expand = Expand {
         model,
@@ -71,8 +72,17 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let into_expr_body_val = expand.expand_embedded_into_expr_body(false);
     let into_expr_body_ref = expand.expand_embedded_into_expr_body(true);
     let load_body = expand.expand_load_body();
+    let embedded_field_struct = expand.expand_embedded_field_struct();
+    let embedded_field_struct_init = expand.expand_embedded_field_struct_init();
 
+    // Generate the fields struct outside the const block so it's accessible
     wrap_in_const(quote! {
+        #embedded_field_struct
+
+        impl #model_ident {
+            #embedded_field_struct_init
+        }
+
         impl #toasty::Register for #model_ident {
             fn id() -> #toasty::ModelId {
                 static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
@@ -85,6 +95,8 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         impl #toasty::Embed for #model_ident {}
 
         impl #toasty::stmt::Primitive for #model_ident {
+            type FieldAccessor = #field_struct_ident;
+
             const NULLABLE: bool = false;
 
             fn ty() -> #toasty::Type {
@@ -93,6 +105,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
             fn load(value: #toasty::Value) -> #toasty::Result<Self> {
                 #load_body
+            }
+
+            fn make_field_accessor(path: #toasty::Path<Self>) -> Self::FieldAccessor {
+                #field_struct_ident { path }
             }
 
             fn field_ty(_storage_ty: Option<#toasty::schema::db::Type>) -> #toasty::schema::app::FieldTy {

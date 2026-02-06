@@ -221,3 +221,33 @@ pub async fn create_and_query_embedded(t: &mut Test) {
     // Verify deletion
     assert_err!(User::get_by_id(&db, &id).await);
 }
+
+#[driver_test]
+pub async fn embedded_struct_fields_codegen(test: &mut Test) {
+    #[derive(Debug, toasty::Embed)]
+    struct Address {
+        street: String,
+        city: String,
+        zip: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: toasty::stmt::Id<Self>,
+        name: String,
+        address: Address,
+    }
+
+    let _db = test.setup_db(models!(User, Address)).await;
+
+    // Test that User::FIELDS.address() returns AddressFields
+    // and we can directly chain to access nested fields
+    let _city_path = User::FIELDS.address().city();
+    let _street_path = User::FIELDS.address().street();
+    let _zip_path = User::FIELDS.address().zip();
+
+    // Verify the paths have the correct type for use in queries
+    // (This is a compile-time check that the types are correct)
+}
