@@ -240,6 +240,14 @@ fn ddb_expression(
                 .collect::<Vec<_>>();
             operands.join(" AND ")
         }
+        stmt::Expr::Or(expr_or) => {
+            let operands = expr_or
+                .operands
+                .iter()
+                .map(|operand| ddb_expression(cx, attrs, primary, operand))
+                .collect::<Vec<_>>();
+            operands.join(" OR ")
+        }
         stmt::Expr::Pattern(stmt::ExprPattern::BeginsWith(begins_with)) => {
             let expr = ddb_expression(cx, attrs, primary, &begins_with.expr);
             let substr = ddb_expression(cx, attrs, primary, &begins_with.pattern);

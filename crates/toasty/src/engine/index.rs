@@ -4,12 +4,12 @@ use index_match::{IndexColumnMatch, IndexMatch};
 mod index_plan;
 pub(crate) use index_plan::IndexPlan;
 
-use crate::engine::Engine;
+use crate::{engine::Engine, Result};
 use std::collections::HashMap;
 use toasty_core::{driver::Capability, schema::db::Table, stmt};
 
 impl Engine {
-    pub(crate) fn plan_index_path<'a>(&'a self, stmt: &stmt::Statement) -> IndexPlan<'a> {
+    pub(crate) fn plan_index_path<'a>(&'a self, stmt: &stmt::Statement) -> Result<IndexPlan<'a>> {
         let cx = self.expr_cx();
         let cx = cx.scope(stmt);
         // Get a handle to the expression target so it can be passed into the planner
@@ -29,7 +29,7 @@ impl Engine {
             index_paths: vec![],
         };
 
-        let index_path = index_planner.plan_index_path();
+        let index_path = index_planner.plan_index_path()?;
 
         let mut cx = PartitionCtx {
             capability: self.capability(),
@@ -39,7 +39,7 @@ impl Engine {
         let index_match = &index_planner.index_matches[index_path.index_match];
         let (index_filter, result_filter) = index_match.partition_filter(&mut cx, filter);
 
-        IndexPlan {
+        Ok(IndexPlan {
             // Reload the index to make lifetimes happy.
             index: self.schema.db.index(index_match.index.id),
             index_filter,
@@ -53,7 +53,7 @@ impl Engine {
             } else {
                 None
             },
-        }
+        })
     }
 }
 
@@ -84,7 +84,7 @@ struct PartitionCtx<'a> {
 }
 
 impl IndexPlanner<'_> {
-    fn plan_index_path(&mut self) -> IndexPath {
+    fn plan_index_path(&mut self) -> Result<IndexPath> {
         // A preprocessing step that matches filter clauses to various index columns.
         self.build_index_matches();
 
@@ -92,14 +92,19 @@ impl IndexPlanner<'_> {
         self.build_single_index_paths();
 
         if self.index_paths.is_empty() {
-            todo!("check OR options; matches={:#?}", self.index_matches);
+            return Err(toasty_core::Error::unsupported_feature(
+                "This database requires queries to use an index. The current filter cannot be \
+                 satisfied by any available index. Consider adding an index that matches your \
+                 query filter, or restructure the query to use indexed fields.",
+            ));
         }
 
-        self.index_paths
+        Ok(self
+            .index_paths
             .iter()
             .min_by_key(|index_path| index_path.cost)
             .unwrap()
-            .clone()
+            .clone())
     }
 
     fn build_index_matches(&mut self) {

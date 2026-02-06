@@ -302,6 +302,160 @@ pub async fn query_local_key_cmp(test: &mut Test) {
 }
 
 #[driver_test(id(ID))]
+pub async fn query_or_basic(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        age: i64,
+    }
+
+    let db = test.setup_db(models!(User)).await;
+
+    // Create some users
+    for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
+        User::create().name(name).age(age).exec(&db).await.unwrap();
+    }
+
+    // Query with OR condition: name = "Alice" OR age = 35
+    let result = User::filter(
+        User::FIELDS
+            .name()
+            .eq("Alice")
+            .or(User::FIELDS.age().eq(35)),
+    )
+    .collect::<Vec<_>>(&db)
+    .await;
+
+    if test.capability().sql {
+        let users = result.unwrap();
+        assert_eq!(2, users.len());
+        let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["Alice", "Charlie"]);
+    } else {
+        // DynamoDB requires key conditions for queries - OR filters without
+        // key conditions should return an error
+        assert!(
+            result.is_err(),
+            "Expected error for OR query without key condition on non-SQL database"
+        );
+    }
+}
+
+#[driver_test(id(ID))]
+pub async fn query_or_multiple(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        age: i64,
+    }
+
+    let db = test.setup_db(models!(User)).await;
+
+    // Create some users
+    for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
+        User::create().name(name).age(age).exec(&db).await.unwrap();
+    }
+
+    // Query with multiple OR conditions: name = "Alice" OR age = 35 OR age = 40
+    let result = User::filter(
+        User::FIELDS
+            .name()
+            .eq("Alice")
+            .or(User::FIELDS.age().eq(35))
+            .or(User::FIELDS.age().eq(40)),
+    )
+    .collect::<Vec<_>>(&db)
+    .await;
+
+    if test.capability().sql {
+        let users = result.unwrap();
+        assert_eq!(3, users.len());
+        let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["Alice", "Charlie", "Diana"]);
+    } else {
+        // DynamoDB requires key conditions for queries - OR filters without
+        // key conditions should return an error
+        assert!(
+            result.is_err(),
+            "Expected error for OR query without key condition on non-SQL database"
+        );
+    }
+}
+
+#[driver_test(id(ID))]
+pub async fn query_or_and_combined(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        age: i64,
+
+        active: bool,
+    }
+
+    let db = test.setup_db(models!(User)).await;
+
+    // Create some users
+    for (name, age, active) in [
+        ("Alice", 25, true),
+        ("Bob", 30, false),
+        ("Charlie", 35, true),
+        ("Diana", 40, false),
+        ("Eve", 25, false),
+    ] {
+        User::create()
+            .name(name)
+            .age(age)
+            .active(active)
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Query with OR and AND: (name = "Alice" OR age = 35) AND active = true
+    let result = User::filter(
+        User::FIELDS
+            .name()
+            .eq("Alice")
+            .or(User::FIELDS.age().eq(35))
+            .and(User::FIELDS.active().eq(true)),
+    )
+    .collect::<Vec<_>>(&db)
+    .await;
+
+    if test.capability().sql {
+        let users = result.unwrap();
+        assert_eq!(2, users.len());
+        let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["Alice", "Charlie"]);
+    } else {
+        // DynamoDB requires key conditions for queries - OR filters without
+        // key conditions should return an error
+        assert!(
+            result.is_err(),
+            "Expected error for OR query without key condition on non-SQL database"
+        );
+    }
+}
+
+#[driver_test(id(ID))]
 pub async fn query_arbitrary_constraint(test: &mut Test) {
     // Only supported by SQL
     if !test.capability().sql {

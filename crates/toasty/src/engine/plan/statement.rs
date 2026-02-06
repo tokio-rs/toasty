@@ -3,12 +3,15 @@ use std::mem;
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit_mut, Condition};
 
-use crate::engine::{
-    eval,
-    hir::{self},
-    index::{self, IndexPlan},
-    mir,
-    plan::HirPlanner,
+use crate::{
+    engine::{
+        eval,
+        hir::{self},
+        index::{self, IndexPlan},
+        mir,
+        plan::HirPlanner,
+    },
+    Result,
 };
 
 #[derive(Debug)]
@@ -47,12 +50,12 @@ struct PlanStatement<'a, 'b> {
 }
 
 impl HirPlanner<'_> {
-    pub(super) fn plan_statement(&mut self, stmt_id: hir::StmtId) {
+    pub(super) fn plan_statement(&mut self, stmt_id: hir::StmtId) -> Result<()> {
         let stmt_info = &self.hir[stmt_id];
 
         // Check if the statement has already been planned
         if stmt_info.load_data_statement.get().is_some() {
-            return;
+            return Ok(());
         }
 
         // First, plan independent dependency statements. These are statments
@@ -60,7 +63,7 @@ impl HirPlanner<'_> {
         // statement.
         for &dep_stmt_id in &stmt_info.deps {
             if self.hir[dep_stmt_id].independent {
-                self.plan_statement(dep_stmt_id);
+                self.plan_statement(dep_stmt_id)?;
             }
         }
 
@@ -78,14 +81,16 @@ impl HirPlanner<'_> {
             },
             remaining_deps: stmt_info.deps.iter().cloned().collect(),
         };
-        planner.plan(stmt);
+        planner.plan(stmt)?;
+
+        Ok(())
     }
 }
 
 impl<'a, 'b> PlanStatement<'a, 'b> {
     // ===== Entry point =====
 
-    fn plan(&mut self, mut stmt: stmt::Statement) {
+    fn plan(&mut self, mut stmt: stmt::Statement) -> Result<()> {
         let mut returning = stmt.take_returning();
 
         // No queries are single at this point.
@@ -115,7 +120,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             self.rewrite_stmt_update_arg_dependencies(update);
         }
 
-        let load_data_node_id = self.plan_data_loading(stmt, &mut returning);
+        let load_data_node_id = self.plan_data_loading(stmt, &mut returning)?;
 
         // Track the exec statement operation node.
         self.stmt_info
@@ -134,7 +139,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .unwrap();
 
         // Plan each child
-        self.plan_child_statements();
+        self.plan_child_statements()?;
 
         // Track sub-statements referenced in the returning clause as inputs, so their
         // results are available when building the return value.
@@ -147,6 +152,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let output_node_id = self.plan_output_node(load_data_node_id, returning_info);
 
         self.stmt_info.output.set(Some(output_node_id));
+
+        Ok(())
     }
 
     // ===== Setup helpers =====
@@ -548,16 +555,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         &mut self,
         stmt: stmt::Statement,
         returning: &mut Returning,
-    ) -> mir::NodeId {
+    ) -> Result<mir::NodeId> {
         if let Some(node_id) = self.plan_const_or_empty_statement(&stmt, returning) {
             debug_assert!(
                 stmt.is_query() || stmt.assignments().map(|a| a.is_empty()).unwrap_or(false),
                 "planned a mutable statement as const; stmt={:#?}",
                 stmt
             );
-            node_id
+            Ok(node_id)
         } else if self.planner.engine.capability().sql || stmt.is_insert() {
-            self.plan_data_loading_sql(stmt)
+            Ok(self.plan_data_loading_sql(stmt))
         } else {
             self.plan_data_loading_nosql(stmt)
         }
@@ -940,14 +947,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     // ===== NoSQL execution =====
 
-    fn plan_data_loading_nosql(&mut self, stmt: stmt::Statement) -> mir::NodeId {
+    fn plan_data_loading_nosql(&mut self, stmt: stmt::Statement) -> Result<mir::NodeId> {
         if stmt.is_insert() {
             debug_assert!(self.load_data.columns.is_empty());
         }
 
         // Without SQL capability, we have to plan the execution of the
         // statement based on available indices.
-        let mut index_plan = self.planner.engine.plan_index_path(&stmt);
+        let mut index_plan = self.planner.engine.plan_index_path(&stmt)?;
         let pk_keys = self.try_build_pk_keys(&stmt, &index_plan);
 
         let post_filter = self.prepare_post_filter(&stmt, &mut index_plan, pk_keys.is_some());
@@ -967,7 +974,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             self.plan_secondary_index_execution(stmt, &mut index_plan, &ty)
         };
 
-        self.apply_post_filter(node_id, post_filter, ty)
+        Ok(self.apply_post_filter(node_id, post_filter, ty))
     }
 
     fn plan_primary_key_execution(
@@ -1196,11 +1203,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
     }
 
-    fn plan_child_statements(&mut self) {
+    fn plan_child_statements(&mut self) -> Result<()> {
         // Plan dependent child statements
         for &dep_stmt_id in &self.stmt_info.deps {
             if !self.planner.hir[dep_stmt_id].independent {
-                self.planner.plan_statement(dep_stmt_id);
+                self.planner.plan_statement(dep_stmt_id)?;
             }
         }
 
@@ -1209,8 +1216,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 continue;
             };
 
-            self.planner.plan_statement(*stmt_id);
+            self.planner.plan_statement(*stmt_id)?;
         }
+
+        Ok(())
     }
 
     fn plan_output_node(
