@@ -168,18 +168,6 @@ impl<'stmt> IndexMatch<'stmt> {
                     false
                 }
             }
-            Value(stmt::Value::Bool(true)) => {
-                // A constant `true` expression doesn't restrict anything and doesn't
-                // match any index column. It's a no-op in terms of index matching.
-                // Returning false here means "doesn't match an index column", which
-                // is correct - AND expressions will ignore it and use the real filters.
-                false
-            }
-            Value(stmt::Value::Bool(false)) => {
-                // A constant `false` expression means nothing matches.
-                // Returning false is appropriate here too.
-                false
-            }
             _ => todo!("expr={:#?}", expr),
         }
     }
