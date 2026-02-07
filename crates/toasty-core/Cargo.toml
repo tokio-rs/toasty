@@ -12,6 +12,7 @@ indexmap.workspace = true
 jiff = { workspace = true, optional = true }
 rust_decimal = { workspace = true, optional = true }
 bigdecimal = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
 std-util.workspace = true
 tokio-stream.workspace = true
 uuid.workspace = true
@@ -22,6 +23,7 @@ assert-struct = ["dep:assert-struct"]
 rust_decimal = ["dep:rust_decimal"]
 bigdecimal = ["dep:bigdecimal"]
 jiff = ["dep:jiff"]
+serde = ["dep:serde", "bit-set/serde"]
 
 [dev-dependencies]
 pretty_assertions.workspace = true

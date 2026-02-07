@@ -12,10 +12,10 @@ use toasty_core::{
         operation::{Operation, Transaction},
         Capability, Driver, Response,
     },
-    schema::db::{Schema, Table},
+    schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt, Result,
 };
-use toasty_sql as sql;
+use toasty_sql::{self as sql, TypedValue};
 use url::Url;
 
 #[derive(Debug)]
@@ -71,6 +71,26 @@ impl Driver for Sqlite {
 
     fn max_connections(&self) -> Option<usize> {
         matches!(self, Self::InMemory).then_some(1)
+    }
+
+    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::SQLITE);
+
+        let sql_strings: Vec<String> = statements
+            .iter()
+            .map(|stmt| {
+                let mut params = Vec::<TypedValue>::new();
+                let sql =
+                    sql::Serializer::sqlite(stmt.schema()).serialize(stmt.statement(), &mut params);
+                assert!(
+                    params.is_empty(),
+                    "migration statements should not have parameters"
+                );
+                sql
+            })
+            .collect();
+
+        Migration::new_sql_with_breakpoints(&sql_strings)
     }
 }
 
@@ -205,6 +225,91 @@ impl toasty_core::driver::Connection for Connection {
             self.create_table(schema, table)?;
         }
 
+        Ok(())
+    }
+
+    async fn applied_migrations(
+        &mut self,
+    ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
+        // Ensure the migrations table exists
+        self.connection
+            .execute(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TEXT NOT NULL
+            )",
+                [],
+            )
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Query all applied migrations
+        let mut stmt = self
+            .connection
+            .prepare("SELECT id FROM __toasty_migrations ORDER BY applied_at")
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                let id: u64 = row.get(0)?;
+                Ok(toasty_core::schema::db::AppliedMigration::new(id))
+            })
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(toasty_core::Error::driver_operation_failed)
+    }
+
+    async fn apply_migration(
+        &mut self,
+        id: u64,
+        name: String,
+        migration: &toasty_core::schema::db::Migration,
+    ) -> Result<()> {
+        // Ensure the migrations table exists
+        self.connection
+            .execute(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TEXT NOT NULL
+            )",
+                [],
+            )
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Start transaction
+        self.connection
+            .execute("BEGIN", [])
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Execute each migration statement
+        for statement in migration.statements() {
+            if let Err(e) = self
+                .connection
+                .execute(statement, [])
+                .map_err(toasty_core::Error::driver_operation_failed)
+            {
+                self.connection
+                    .execute("ROLLBACK", [])
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
+                return Err(e);
+            }
+        }
+
+        // Record the migration
+        if let Err(e) = self.connection.execute(
+            "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES (?1, ?2, datetime('now'))",
+            rusqlite::params![id, name],
+        ).map_err(toasty_core::Error::driver_operation_failed) {
+            self.connection.execute("ROLLBACK", []).map_err(toasty_core::Error::driver_operation_failed)?;
+            return Err(e);
+        }
+
+        // Commit transaction
+        self.connection
+            .execute("COMMIT", [])
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }

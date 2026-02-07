@@ -32,6 +32,7 @@ pub struct Field {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FieldId {
     pub model: ModelId,
     pub index: usize,

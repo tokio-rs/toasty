@@ -80,6 +80,11 @@ impl Pool {
         Ok(PoolConnection { inner: connection })
     }
 
+    /// Returns the database driver this pool uses to create connections.
+    pub fn driver(&self) -> &dyn Driver {
+        self.inner.manager().driver.as_ref()
+    }
+
     /// Returns the database driver's capabilities.
     pub fn capability(&self) -> &Capability {
         self.capability

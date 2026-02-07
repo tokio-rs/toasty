@@ -1,7 +1,11 @@
 use crate::Result;
 
 pub use toasty_core::driver::{operation::Operation, Capability, Connection, Response};
-use toasty_core::{async_trait, driver::Driver};
+use toasty_core::{
+    async_trait,
+    driver::Driver,
+    schema::db::{Migration, SchemaDiff},
+};
 
 use url::Url;
 
@@ -88,5 +92,9 @@ impl Driver for Connect {
 
     async fn connect(&self) -> Result<Box<dyn Connection>> {
         self.driver.connect().await
+    }
+
+    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+        self.driver.generate_migration(schema_diff)
     }
 }
