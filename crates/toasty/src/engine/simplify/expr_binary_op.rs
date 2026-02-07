@@ -178,22 +178,20 @@ impl Simplify<'_> {
                 std::mem::swap(lhs, rhs);
                 Some(Expr::binary_op(lhs.take(), op.commute(), rhs.take()))
             }
-            _ => {
-                // For now, just make sure there are no relations in the expression
-                stmt::visit::for_each_expr(lhs, |expr| {
-                    if let stmt::Expr::Project(_) = expr {
-                        todo!()
-                    }
-                });
-
-                stmt::visit::for_each_expr(rhs, |expr| {
-                    if let stmt::Expr::Project(_) = expr {
-                        todo!()
-                    }
-                });
-
-                None
+            // Self-comparison with projections, e.g.,
+            //
+            //  - `address.city = address.city` → `true`
+            //  - `address.city != address.city` → `false`
+            //
+            // By this point, constant projections and record projections have been simplified.
+            // What remains are projections with opaque bases (e.g., field references).
+            (Expr::Project(lhs), Expr::Project(rhs))
+                if lhs == rhs && (op.is_eq() || op.is_ne()) =>
+            {
+                // TODO: Check if the projected value is nullable
+                Some(Expr::from(op.is_eq()))
             }
+            _ => None,
         }
     }
 }

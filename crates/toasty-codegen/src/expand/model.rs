@@ -22,7 +22,7 @@ impl Expand<'_> {
                 &root.update_struct_ident,
                 &root.update_query_struct_ident,
             ),
-            ModelKind::Embedded => {
+            ModelKind::Embedded(_) => {
                 // Embedded models don't generate CRUD methods, just return early
                 return TokenStream::new();
             }
@@ -152,6 +152,17 @@ impl Expand<'_> {
                 fn into_select(self) -> #toasty::stmt::Select<Self::Model> {
                     #into_select_body_value
                 }
+            }
+        }
+    }
+
+    pub(super) fn expand_embedded_model_impls(&self) -> TokenStream {
+        let model_ident = &self.model.ident;
+        let model_fields = self.expand_model_field_struct_init();
+
+        quote! {
+            impl #model_ident {
+                #model_fields
             }
         }
     }
