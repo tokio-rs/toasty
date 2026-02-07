@@ -1,6 +1,10 @@
 //! Test querying models with various filters and constraints
 
 use crate::prelude::*;
+use toasty_core::{
+    driver::Operation,
+    stmt::{BinaryOp, Expr, ExprSet, Statement, Value},
+};
 
 #[driver_test(id(ID))]
 pub async fn query_index_eq(test: &mut Test) {
@@ -315,11 +319,16 @@ pub async fn query_or_basic(test: &mut Test) {
     }
 
     let db = test.setup_db(models!(User)).await;
+    let name_column = db.schema().table_for(User::id()).columns[1].id;
+    let age_column = db.schema().table_for(User::id()).columns[2].id;
 
     // Create some users
     for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
         User::create().name(name).age(age).exec(&db).await.unwrap();
     }
+
+    // Clear the log after setup
+    test.log().clear();
 
     // Query with OR condition: name = "Alice" OR age = 35
     let result = User::filter(
@@ -337,6 +346,36 @@ pub async fn query_or_basic(test: &mut Test) {
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
         names.sort();
         assert_eq!(names, ["Alice", "Charlie"]);
+
+        // Verify the driver operation contains the expected OR filter
+        let (op, _) = test.log().pop();
+
+        assert_struct!(&op, Operation::QuerySql(_ {
+            stmt: Statement::Query(_ {
+                body: ExprSet::Select(_ {
+                    filter.expr: Some(Expr::Or(_ {
+                        operands: [
+                            Expr::BinaryOp(_ {
+                                op: BinaryOp::Eq,
+                                *lhs: == Expr::column(name_column),
+                                *rhs: Expr::Value(Value::String("Alice")),
+                                ..
+                            }),
+                            Expr::BinaryOp(_ {
+                                op: BinaryOp::Eq,
+                                *lhs: == Expr::column(age_column),
+                                *rhs: Expr::Value(Value::I64(35)),
+                                ..
+                            }),
+                        ],
+                        ..
+                    })),
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
     } else {
         // DynamoDB requires key conditions for queries - OR filters without
         // key conditions should return an error
