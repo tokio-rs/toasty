@@ -627,3 +627,134 @@ Character::all().filter(
     )
 )
 ```
+
+## Updating
+
+### Whole replacement
+
+Setting an embedded struct field on an update replaces all of its columns:
+
+```rust
+// Loaded model update — sets address_street, address_city, address_zip
+user.update()
+    .address(Address { street: "123 Main", city: "Seattle", zip: "98101" })
+    .exec(&db).await?;
+
+// Query-based update — same behavior, no model loaded
+User::filter_by_id(id).update()
+    .address(Address { street: "123 Main", city: "Seattle", zip: "98101" })
+    .exec(&db).await?;
+```
+
+### Partial updates
+
+Each embedded struct generates a companion `{Type}Update` type. It collects individual
+field assignments and only updates the columns for fields that are explicitly set.
+
+```rust
+#[derive(toasty::Embed)]
+struct Address {
+    street: String,
+    city: String,
+    zip: String,
+}
+
+// AddressUpdate is generated automatically by `#[derive(toasty::Embed)]`
+```
+
+The same `.address()` method on the update builder accepts either an `Address` (whole
+replacement) or an `AddressUpdate` (partial update):
+
+```rust
+// Partial update — only address_city is SET
+user.update()
+    .address(AddressUpdate::new().city("Seattle"))
+    .exec(&db).await?;
+
+// Multiple sub-fields — only address_city and address_zip are SET
+user.update()
+    .address(AddressUpdate::new().city("Seattle").zip("98101"))
+    .exec(&db).await?;
+
+// Query-based partial update
+User::filter_by_id(id).update()
+    .address(AddressUpdate::new().city("Seattle"))
+    .exec(&db).await?;
+```
+
+`AddressUpdate` has the same field setter methods as the root update builder — one per
+field, each accepting `impl IntoExpr<T>`:
+
+```rust
+AddressUpdate::new()
+    .street("456 Oak Ave")
+    .city("Portland")
+    .zip("97201")
+```
+
+### Partial updates with nested embedded structs
+
+Nested embedded structs also generate `{Type}Update` types. Pass them to the parent's
+update builder:
+
+```rust
+#[derive(toasty::Embed)]
+struct Office {
+    name: String,
+    location: Address,
+}
+
+// Update only headquarters_location_city
+company.update()
+    .headquarters(OfficeUpdate::new()
+        .location(AddressUpdate::new().city("Seattle"))
+    )
+    .exec(&db).await?;
+
+// Update headquarters_name and headquarters_location_zip
+company.update()
+    .headquarters(OfficeUpdate::new()
+        .name("West Coast HQ")
+        .location(AddressUpdate::new().zip("98101"))
+    )
+    .exec(&db).await?;
+```
+
+### Enum updates
+
+Enums use whole-variant replacement. Setting an enum field replaces the discriminator and
+all variant columns:
+
+```rust
+// Replace the entire enum value — sets discriminator + variant fields,
+// NULLs out fields from the previous variant
+user.update()
+    .contact(ContactMethod::Email { address: "new@example.com".into() })
+    .exec(&db).await?;
+```
+
+For data-carrying variants, use `{Type}Update` to update fields within the current
+variant without changing the discriminator:
+
+```rust
+#[derive(toasty::Embed)]
+enum ContactMethod {
+    #[column(variant = 1)]
+    Email { address: String },
+    #[column(variant = 2)]
+    Phone { country: String, number: String },
+}
+
+// Update only the phone number, leave country and discriminator unchanged
+user.update()
+    .contact(ContactMethodUpdate::phone().number("555-1234"))
+    .exec(&db).await?;
+
+// Query-based
+User::filter_by_id(id).update()
+    .contact(ContactMethodUpdate::email().address("new@example.com"))
+    .exec(&db).await?;
+```
+
+`ContactMethodUpdate` has one constructor per variant. Each constructor returns a builder
+scoped to that variant's fields. The discriminator is not changed by partial updates.
