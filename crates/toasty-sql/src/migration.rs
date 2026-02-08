@@ -46,7 +46,7 @@ impl<'a> MigrationStatement<'a> {
                             statement: Statement::alter_table_rename_to(previous, &next.name),
                             schema: schema.clone(),
                         });
-                        schema.to_mut().table(previous.id).name = next.name.clone();
+                        schema.to_mut().table_mut(previous.id).name = next.name.clone();
                     }
 
                     // Columns diff
@@ -132,7 +132,7 @@ impl<'a> MigrationStatement<'a> {
         &self.statement
     }
 
-    pub fn schema(&self) -> &'a Schema {
+    pub fn schema(&self) -> &Schema {
         &self.schema
     }
 }

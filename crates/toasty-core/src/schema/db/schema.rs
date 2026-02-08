@@ -17,6 +17,14 @@ impl Schema {
             .expect("invalid column ID")
     }
 
+    pub fn column_mut(&mut self, id: impl Into<ColumnId>) -> &mut Column {
+        let id = id.into();
+        self.table_mut(id.table)
+            .columns
+            .get_mut(id.index)
+            .expect("invalid column ID")
+    }
+
     // NOTE: this is unlikely to confuse users given the context.
     #[allow(clippy::should_implement_trait)]
     pub fn index(&self, id: IndexId) -> &Index {
@@ -26,8 +34,21 @@ impl Schema {
             .expect("invalid index ID")
     }
 
+    // NOTE: this is unlikely to confuse users given the context.
+    #[allow(clippy::should_implement_trait)]
+    pub fn index_mut(&mut self, id: IndexId) -> &mut Index {
+        self.table_mut(id.table)
+            .indices
+            .get_mut(id.index)
+            .expect("invalid index ID")
+    }
+
     pub fn table(&self, id: impl Into<TableId>) -> &Table {
         self.tables.get(id.into().0).expect("invalid table ID")
+    }
+
+    pub fn table_mut(&mut self, id: impl Into<TableId>) -> &mut Table {
+        self.tables.get_mut(id.into().0).expect("invalid table ID")
     }
 }
 
