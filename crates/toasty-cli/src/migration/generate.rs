@@ -86,7 +86,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
         // Check for column and index renames within altered tables
         for item in diff.tables().iter() {
             if let TablesDiffItem::AlterTable {
-                previous: previous: from,
+                previous,
                 next: _,
                 columns,
                 indices,
@@ -98,7 +98,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                     .filter_map(|item| match item {
                         ColumnsDiffItem::DropColumn(column)
                             if !ignored_columns
-                                .get(&from.id)
+                                .get(&previous.id)
                                 .is_some_and(|set| set.contains(&column.id)) =>
                         {
                             Some(*column)
@@ -128,7 +128,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                         let selection = Select::with_theme(&dialoguer_theme())
                             .with_prompt(format!(
                                 "  Column \"{}\".\"{}\" is missing",
-                                from.name, dropped_column.name
+                                previous.name, dropped_column.name
                             ))
                             .items(&options)
                             .default(0)
@@ -137,14 +137,14 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                         if selection == 0 {
                             // User confirmed it was dropped
                             ignored_columns
-                                .entry(from.id)
+                                .entry(previous.id)
                                 .or_default()
                                 .insert(dropped_column.id);
                         } else {
                             // User indicated a rename
-                            let to_column = added_columns[selection - 1];
+                            let next_column = added_columns[selection - 1];
                             drop(diff);
-                            hints.add_column_hint(dropped_column.id, to_column.id);
+                            hints.add_column_hint(dropped_column.id, next_column.id);
                             continue 'main; // Regenerate diff with new hint
                         }
                     }
@@ -156,7 +156,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                     .filter_map(|item| match item {
                         IndicesDiffItem::DropIndex(index)
                             if !ignored_indices
-                                .get(&from.id)
+                                .get(&previous.id)
                                 .is_some_and(|set| set.contains(&index.id)) =>
                         {
                             Some(*index)
@@ -186,7 +186,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                         let selection = Select::with_theme(&dialoguer_theme())
                             .with_prompt(format!(
                                 "  Index \"{}\".\"{}\" is missing",
-                                from.name, dropped_index.name
+                                previous.name, dropped_index.name
                             ))
                             .items(&options)
                             .default(0)
@@ -195,7 +195,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                         if selection == 0 {
                             // User confirmed it was dropped
                             ignored_indices
-                                .entry(from.id)
+                                .entry(previous.id)
                                 .or_default()
                                 .insert(dropped_index.id);
                         } else {

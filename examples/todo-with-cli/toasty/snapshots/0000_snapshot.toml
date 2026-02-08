@@ -106,3 +106,11 @@ on = 1
 columns = [{ column = { table = 1, index = 1 }, op = "Eq", scope = "Partition" }]
 unique = false
 primary_key = false
+
+[[schema.tables.indices]]
+id = { table = 1, index = 2 }
+name = "index_todos_by_title"
+on = 1
+columns = [{ column = { table = 1, index = 2 }, op = "Eq", scope = "Partition" }]
+unique = false
+primary_key = false

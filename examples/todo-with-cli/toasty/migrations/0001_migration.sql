@@ -1,1 +1,0 @@
-CREATE INDEX "index_todos_by_title" ON "todos" ("title");

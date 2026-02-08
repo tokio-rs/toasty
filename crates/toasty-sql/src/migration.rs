@@ -32,10 +32,7 @@ impl<'a> MigrationStatement<'a> {
                     schema: schema_diff.previous(),
                 }),
                 TablesDiffItem::AlterTable {
-                    previous: table,
-                    columns,
-                    indices,
-                    ..
+                    columns, indices, ..
                 } => {
                     // Columns diff
                     for item in columns.iter() {
