@@ -6,7 +6,7 @@ use console::style;
 use dialoguer::Select;
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
-use std::{fs, i64};
+use std::fs;
 use toasty::{
     Db,
     schema::db::{

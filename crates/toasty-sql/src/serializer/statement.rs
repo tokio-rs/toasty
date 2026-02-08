@@ -227,6 +227,15 @@ impl ToSql for &stmt::DropIndex {
     }
 }
 
+impl ToSql for &stmt::Pragma {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        match &self.value {
+            Some(value) => fmt!(cx, f, "PRAGMA " self.name.as_str() " = " value.as_str()),
+            None => fmt!(cx, f, "PRAGMA " self.name.as_str()),
+        }
+    }
+}
+
 impl ToSql for &stmt::DropTable {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         let if_exists = if self.if_exists { "IF EXISTS " } else { "" };
@@ -432,6 +441,7 @@ impl ToSql for &stmt::Statement {
             stmt::Statement::DropColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropIndex(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropTable(stmt) => stmt.to_sql(cx, f),
+            stmt::Statement::Pragma(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::Delete(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::Insert(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::Query(stmt) => stmt.to_sql(cx, f),

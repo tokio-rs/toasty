@@ -28,6 +28,9 @@ pub use ident::Ident;
 mod name;
 pub use name::Name;
 
+mod pragma;
+pub use pragma::Pragma;
+
 mod table_name;
 pub use table_name::TableName;
 
@@ -42,6 +45,7 @@ pub enum Statement {
     DropColumn(DropColumn),
     DropTable(DropTable),
     DropIndex(DropIndex),
+    Pragma(Pragma),
     Delete(Delete),
     Insert(Insert),
     Query(Query),
