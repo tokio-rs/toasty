@@ -3,7 +3,7 @@ use toasty_core::{
     schema::db::{ColumnsDiffItem, IndicesDiffItem, Schema, SchemaDiff, TablesDiffItem},
 };
 
-use crate::stmt::Statement;
+use crate::stmt::{AlterColumnChanges, Statement};
 
 pub struct MigrationStatement<'a> {
     statement: Statement,
@@ -32,10 +32,10 @@ impl<'a> MigrationStatement<'a> {
                     schema: schema_diff.previous(),
                 }),
                 TablesDiffItem::AlterTable {
-                    previous: previous: from,
-                    next: to,
+                    previous: table,
                     columns,
                     indices,
+                    ..
                 } => {
                     // Columns diff
                     for item in columns.iter() {
@@ -52,15 +52,33 @@ impl<'a> MigrationStatement<'a> {
                                     schema: schema_diff.previous(),
                                 });
                             }
-                            ColumnsDiffItem::AlterColumn { previous: from, next: to } => {
-                                result.push(MigrationStatement {
-                                    statement: Statement::drop_column(from),
-                                    schema: schema_diff.previous(),
-                                });
-                                result.push(MigrationStatement {
-                                    statement: Statement::add_column(to, capability),
-                                    schema: schema_diff.next(),
-                                });
+                            ColumnsDiffItem::AlterColumn { previous, next } => {
+                                let changes = AlterColumnChanges::from_diff(previous, next);
+                                if !capability.schema_mutations.alter_column_type
+                                    && changes.has_type_change()
+                                {
+                                    todo!();
+                                } else {
+                                    // Split up changes into multiple statements for databases that
+                                    // do not changing multiple column properties in one statement.
+                                    let changes = if capability
+                                        .schema_mutations
+                                        .alter_column_properties_atomic
+                                    {
+                                        vec![changes]
+                                    } else {
+                                        changes.split()
+                                    };
+
+                                    for changes in changes {
+                                        result.push(MigrationStatement {
+                                            statement: Statement::alter_column(
+                                                previous, changes, capability,
+                                            ),
+                                            schema: schema_diff.previous(),
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
@@ -80,13 +98,13 @@ impl<'a> MigrationStatement<'a> {
                                     schema: schema_diff.previous(),
                                 });
                             }
-                            IndicesDiffItem::AlterIndex { previous: from, next: to } => {
+                            IndicesDiffItem::AlterIndex { previous, next } => {
                                 result.push(MigrationStatement {
-                                    statement: Statement::drop_index(from),
+                                    statement: Statement::drop_index(previous),
                                     schema: schema_diff.previous(),
                                 });
                                 result.push(MigrationStatement {
-                                    statement: Statement::create_index(to),
+                                    statement: Statement::create_index(next),
                                     schema: schema_diff.next(),
                                 });
                             }
