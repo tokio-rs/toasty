@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use toasty_core::{
     driver::Capability,
     schema::db::{ColumnsDiffItem, IndicesDiffItem, Schema, SchemaDiff, TablesDiffItem},
@@ -7,7 +9,7 @@ use crate::stmt::{AlterColumnChanges, Statement};
 
 pub struct MigrationStatement<'a> {
     statement: Statement,
-    schema: &'a Schema,
+    schema: Cow<'a, Schema>,
 }
 
 impl<'a> MigrationStatement<'a> {
@@ -18,18 +20,18 @@ impl<'a> MigrationStatement<'a> {
                 TablesDiffItem::CreateTable(table) => {
                     result.push(MigrationStatement {
                         statement: Statement::create_table(table, capability),
-                        schema: schema_diff.next(),
+                        schema: Cow::Borrowed(schema_diff.next()),
                     });
                     for index in &table.indices {
                         result.push(MigrationStatement {
                             statement: Statement::create_index(index),
-                            schema: schema_diff.next(),
+                            schema: Cow::Borrowed(schema_diff.next()),
                         });
                     }
                 }
                 TablesDiffItem::DropTable(table) => result.push(MigrationStatement {
                     statement: Statement::drop_table(table),
-                    schema: schema_diff.previous(),
+                    schema: Cow::Borrowed(schema_diff.previous()),
                 }),
                 TablesDiffItem::AlterTable {
                     previous,
@@ -38,11 +40,13 @@ impl<'a> MigrationStatement<'a> {
                     indices,
                     ..
                 } => {
+                    let mut schema = Cow::Borrowed(schema_diff.previous());
                     if previous.name != next.name {
                         result.push(MigrationStatement {
                             statement: Statement::alter_table_rename_to(previous, &next.name),
-                            schema: schema_diff.previous(),
+                            schema: schema.clone(),
                         });
+                        schema.to_mut().table(previous.id).name = next.name.clone();
                     }
 
                     // Columns diff
@@ -51,13 +55,13 @@ impl<'a> MigrationStatement<'a> {
                             ColumnsDiffItem::AddColumn(column) => {
                                 result.push(MigrationStatement {
                                     statement: Statement::add_column(column, capability),
-                                    schema: schema_diff.next(),
+                                    schema: schema.clone(),
                                 });
                             }
                             ColumnsDiffItem::DropColumn(column) => {
                                 result.push(MigrationStatement {
                                     statement: Statement::drop_column(column),
-                                    schema: schema_diff.next(),
+                                    schema: schema.clone(),
                                 });
                             }
                             ColumnsDiffItem::AlterColumn { previous, next } => {
@@ -83,7 +87,7 @@ impl<'a> MigrationStatement<'a> {
                                             statement: Statement::alter_column(
                                                 previous, changes, capability,
                                             ),
-                                            schema: schema_diff.previous(),
+                                            schema: schema.clone(),
                                         });
                                     }
                                 }
@@ -97,23 +101,23 @@ impl<'a> MigrationStatement<'a> {
                             IndicesDiffItem::CreateIndex(index) => {
                                 result.push(MigrationStatement {
                                     statement: Statement::create_index(index),
-                                    schema: schema_diff.next(),
+                                    schema: Cow::Borrowed(schema_diff.next()),
                                 });
                             }
                             IndicesDiffItem::DropIndex(index) => {
                                 result.push(MigrationStatement {
                                     statement: Statement::drop_index(index),
-                                    schema: schema_diff.previous(),
+                                    schema: Cow::Borrowed(schema_diff.previous()),
                                 });
                             }
                             IndicesDiffItem::AlterIndex { previous, next } => {
                                 result.push(MigrationStatement {
                                     statement: Statement::drop_index(previous),
-                                    schema: schema_diff.previous(),
+                                    schema: Cow::Borrowed(schema_diff.previous()),
                                 });
                                 result.push(MigrationStatement {
                                     statement: Statement::create_index(next),
-                                    schema: schema_diff.next(),
+                                    schema: Cow::Borrowed(schema_diff.next()),
                                 });
                             }
                         }
@@ -129,6 +133,6 @@ impl<'a> MigrationStatement<'a> {
     }
 
     pub fn schema(&self) -> &'a Schema {
-        self.schema
+        &self.schema
     }
 }
