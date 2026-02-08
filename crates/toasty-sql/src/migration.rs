@@ -32,8 +32,19 @@ impl<'a> MigrationStatement<'a> {
                     schema: schema_diff.previous(),
                 }),
                 TablesDiffItem::AlterTable {
-                    columns, indices, ..
+                    previous,
+                    next,
+                    columns,
+                    indices,
+                    ..
                 } => {
+                    if previous.name != next.name {
+                        result.push(MigrationStatement {
+                            statement: Statement::alter_table_rename_to(previous, &next.name),
+                            schema: schema_diff.previous(),
+                        });
+                    }
+
                     // Columns diff
                     for item in columns.iter() {
                         match item {
@@ -46,7 +57,7 @@ impl<'a> MigrationStatement<'a> {
                             ColumnsDiffItem::DropColumn(column) => {
                                 result.push(MigrationStatement {
                                     statement: Statement::drop_column(column),
-                                    schema: schema_diff.previous(),
+                                    schema: schema_diff.next(),
                                 });
                             }
                             ColumnsDiffItem::AlterColumn { previous, next } => {

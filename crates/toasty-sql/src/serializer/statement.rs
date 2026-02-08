@@ -160,6 +160,16 @@ impl ToSql for &stmt::AlterColumn {
     }
 }
 
+impl ToSql for &stmt::AlterTable {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        match &self.action {
+            stmt::AlterTableAction::RenameTo(new_name) => {
+                fmt!(cx, f, "ALTER TABLE " self.name " RENAME TO " new_name);
+            }
+        }
+    }
+}
+
 impl ToSql for &stmt::CreateTable {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         let table = f.serializer.table(self.table);
@@ -229,6 +239,9 @@ impl ToSql for &stmt::DropIndex {
 
 impl ToSql for &stmt::Pragma {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        if !f.serializer.is_sqlite() {
+            panic!("\"PRAGMA\" statements only supported in SQLite");
+        }
         match &self.value {
             Some(value) => fmt!(cx, f, "PRAGMA " self.name.as_str() " = " value.as_str()),
             None => fmt!(cx, f, "PRAGMA " self.name.as_str()),
@@ -436,6 +449,7 @@ impl ToSql for &stmt::Statement {
         match self {
             stmt::Statement::AddColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::AlterColumn(stmt) => stmt.to_sql(cx, f),
+            stmt::Statement::AlterTable(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateIndex(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateTable(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropColumn(stmt) => stmt.to_sql(cx, f),
