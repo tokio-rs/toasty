@@ -172,6 +172,14 @@ impl ToSql for &stmt::AlterTable {
     }
 }
 
+impl ToSql for &stmt::CopyTable {
+    fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
+        let target_cols = Comma(self.columns.iter().map(|(target, _)| target));
+        let source_cols = Comma(self.columns.iter().map(|(_, source)| source));
+        fmt!(cx, f, "INSERT INTO " self.target " (" target_cols ") SELECT " source_cols " FROM " self.source);
+    }
+}
+
 impl ToSql for &stmt::CreateTable {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         let table = f.serializer.table(self.table);
@@ -452,6 +460,7 @@ impl ToSql for &stmt::Statement {
             stmt::Statement::AddColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::AlterColumn(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::AlterTable(stmt) => stmt.to_sql(cx, f),
+            stmt::Statement::CopyTable(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateIndex(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::CreateTable(stmt) => stmt.to_sql(cx, f),
             stmt::Statement::DropColumn(stmt) => stmt.to_sql(cx, f),

@@ -10,6 +10,9 @@ pub use alter_table::{AlterTable, AlterTableAction};
 mod column_def;
 pub use column_def::ColumnDef;
 
+mod copy_table;
+pub use copy_table::CopyTable;
+
 mod create_index;
 pub use create_index::CreateIndex;
 
@@ -44,6 +47,7 @@ pub enum Statement {
     AddColumn(AddColumn),
     AlterColumn(AlterColumn),
     AlterTable(AlterTable),
+    CopyTable(CopyTable),
     CreateIndex(CreateIndex),
     CreateTable(CreateTable),
     DropColumn(DropColumn),
