@@ -92,7 +92,7 @@ impl ToSql for &stmt::AddColumn {
 
 impl ToSql for &stmt::AlterColumn {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let table = f.serializer.table(self.table);
+        let table = f.serializer.table(self.id.table);
         let table_name = Ident(&table.name);
 
         // Create new expression scope to serialize the statement

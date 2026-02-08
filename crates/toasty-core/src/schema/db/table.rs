@@ -93,31 +93,32 @@ pub struct TablesDiff<'a> {
 }
 
 impl<'a> TablesDiff<'a> {
-    pub fn from(cx: &DiffContext<'a>, from: &'a [Table], to: &'a [Table]) -> Self {
+    pub fn from(cx: &DiffContext<'a>, previous: &'a [Table], next: &'a [Table]) -> Self {
         let mut items = vec![];
-        let mut create_ids: HashSet<_> = to.iter().map(|to| to.id).collect();
+        let mut create_ids: HashSet<_> = next.iter().map(|next| next.id).collect();
 
-        let to_map =
-            HashMap::<&str, &'a Table>::from_iter(to.iter().map(|to| (to.name.as_str(), to)));
+        let next_map = HashMap::<&str, &'a Table>::from_iter(
+            next.iter().map(|next| (next.name.as_str(), next)),
+        );
 
-        for from in from {
-            let to = if let Some(to_id) = cx.rename_hints().get_table(from.id) {
-                cx.schema_to().table(to_id)
-            } else if let Some(to) = to_map.get(from.name.as_str()) {
+        for previous in previous {
+            let next = if let Some(next_id) = cx.rename_hints().get_table(previous.id) {
+                cx.next().table(next_id)
+            } else if let Some(to) = next_map.get(previous.name.as_str()) {
                 to
             } else {
-                items.push(TablesDiffItem::DropTable(from));
+                items.push(TablesDiffItem::DropTable(previous));
                 continue;
             };
 
-            create_ids.remove(&to.id);
+            create_ids.remove(&next.id);
 
-            let columns = ColumnsDiff::from(cx, &from.columns, &to.columns);
-            let indices = IndicesDiff::from(cx, &from.indices, &to.indices);
-            if from.name != to.name || !columns.is_empty() || !indices.is_empty() {
+            let columns = ColumnsDiff::from(cx, &previous.columns, &next.columns);
+            let indices = IndicesDiff::from(cx, &previous.indices, &next.indices);
+            if previous.name != next.name || !columns.is_empty() || !indices.is_empty() {
                 items.push(TablesDiffItem::AlterTable {
-                    from,
-                    to,
+                    previous,
+                    next,
                     columns,
                     indices,
                 });
@@ -125,7 +126,7 @@ impl<'a> TablesDiff<'a> {
         }
 
         for table_id in create_ids {
-            items.push(TablesDiffItem::CreateTable(cx.schema_to().table(table_id)));
+            items.push(TablesDiffItem::CreateTable(cx.next().table(table_id)));
         }
 
         Self { items }
@@ -144,8 +145,8 @@ pub enum TablesDiffItem<'a> {
     CreateTable(&'a Table),
     DropTable(&'a Table),
     AlterTable {
-        from: &'a Table,
-        to: &'a Table,
+        previous: &'a Table,
+        next: &'a Table,
         columns: ColumnsDiff<'a>,
         indices: IndicesDiff<'a>,
     },
@@ -260,9 +261,9 @@ mod tests {
         let diff = TablesDiff::from(&cx, &from_tables, &to_tables);
         assert_eq!(diff.items.len(), 1);
         assert!(matches!(diff.items[0], TablesDiffItem::AlterTable { .. }));
-        if let TablesDiffItem::AlterTable { from, to, .. } = &diff.items[0] {
-            assert_eq!(from.name, "old_users");
-            assert_eq!(to.name, "new_users");
+        if let TablesDiffItem::AlterTable { previous, next, .. } = &diff.items[0] {
+            assert_eq!(previous.name, "old_users");
+            assert_eq!(next.name, "new_users");
         }
     }
 

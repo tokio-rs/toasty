@@ -40,17 +40,17 @@ impl RenameHints {
 }
 
 pub struct DiffContext<'a> {
-    from: &'a Schema,
-    to: &'a Schema,
+    previous: &'a Schema,
+    next: &'a Schema,
 
     rename_hints: &'a RenameHints,
 }
 
 impl<'a> DiffContext<'a> {
-    pub fn new(from: &'a Schema, to: &'a Schema, rename_hints: &'a RenameHints) -> Self {
+    pub fn new(previous: &'a Schema, next: &'a Schema, rename_hints: &'a RenameHints) -> Self {
         Self {
-            from,
-            to,
+            previous,
+            next,
             rename_hints,
         }
     }
@@ -59,11 +59,11 @@ impl<'a> DiffContext<'a> {
         self.rename_hints
     }
 
-    pub fn schema_from(&self) -> &'a Schema {
-        self.from
+    pub fn previous(&self) -> &'a Schema {
+        self.previous
     }
 
-    pub fn schema_to(&self) -> &'a Schema {
-        self.to
+    pub fn next(&self) -> &'a Schema {
+        self.next
     }
 }

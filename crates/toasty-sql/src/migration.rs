@@ -32,8 +32,8 @@ impl<'a> MigrationStatement<'a> {
                     schema: schema_diff.previous(),
                 }),
                 TablesDiffItem::AlterTable {
-                    from,
-                    to,
+                    previous: previous: from,
+                    next: to,
                     columns,
                     indices,
                 } => {
@@ -52,7 +52,7 @@ impl<'a> MigrationStatement<'a> {
                                     schema: schema_diff.previous(),
                                 });
                             }
-                            ColumnsDiffItem::AlterColumn { from, to } => {
+                            ColumnsDiffItem::AlterColumn { previous: from, next: to } => {
                                 result.push(MigrationStatement {
                                     statement: Statement::drop_column(from),
                                     schema: schema_diff.previous(),
@@ -80,7 +80,7 @@ impl<'a> MigrationStatement<'a> {
                                     schema: schema_diff.previous(),
                                 });
                             }
-                            IndicesDiffItem::AlterIndex { from, to } => {
+                            IndicesDiffItem::AlterIndex { previous: from, next: to } => {
                                 result.push(MigrationStatement {
                                     statement: Statement::drop_index(from),
                                     schema: schema_diff.previous(),

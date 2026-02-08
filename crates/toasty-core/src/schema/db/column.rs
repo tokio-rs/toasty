@@ -67,40 +67,40 @@ pub struct ColumnsDiff<'a> {
 }
 
 impl<'a> ColumnsDiff<'a> {
-    pub fn from(cx: &DiffContext<'a>, from: &'a [Column], to: &'a [Column]) -> Self {
-        fn has_diff(from: &Column, to: &Column) -> bool {
-            from.name != to.name
-                || from.storage_ty != to.storage_ty
-                || from.nullable != to.nullable
-                || from.primary_key != to.primary_key
-                || from.auto_increment != to.auto_increment
+    pub fn from(cx: &DiffContext<'a>, previous: &'a [Column], next: &'a [Column]) -> Self {
+        fn has_diff(previous: &Column, next: &Column) -> bool {
+            previous.name != next.name
+                || previous.storage_ty != next.storage_ty
+                || previous.nullable != next.nullable
+                || previous.primary_key != next.primary_key
+                || previous.auto_increment != next.auto_increment
         }
 
         let mut items = vec![];
-        let mut add_ids: HashSet<_> = to.iter().map(|to| to.id).collect();
+        let mut add_ids: HashSet<_> = next.iter().map(|next| next.id).collect();
 
-        let to_map =
-            HashMap::<&str, &'a Column>::from_iter(to.iter().map(|to| (to.name.as_str(), to)));
+        let next_map =
+            HashMap::<&str, &'a Column>::from_iter(next.iter().map(|to| (to.name.as_str(), to)));
 
-        for from in from {
-            let to = if let Some(to_id) = cx.rename_hints().get_column(from.id) {
-                cx.schema_to().column(to_id)
-            } else if let Some(to) = to_map.get(from.name.as_str()) {
-                to
+        for previous in previous {
+            let next = if let Some(next_id) = cx.rename_hints().get_column(previous.id) {
+                cx.next().column(next_id)
+            } else if let Some(next) = next_map.get(previous.name.as_str()) {
+                next
             } else {
-                items.push(ColumnsDiffItem::DropColumn(from));
+                items.push(ColumnsDiffItem::DropColumn(previous));
                 continue;
             };
 
-            add_ids.remove(&to.id);
+            add_ids.remove(&next.id);
 
-            if has_diff(from, to) {
-                items.push(ColumnsDiffItem::AlterColumn { from, to });
+            if has_diff(previous, next) {
+                items.push(ColumnsDiffItem::AlterColumn { previous, next });
             }
         }
 
         for column_id in add_ids {
-            items.push(ColumnsDiffItem::AddColumn(cx.schema_to().column(column_id)));
+            items.push(ColumnsDiffItem::AddColumn(cx.next().column(column_id)));
         }
 
         Self { items }
@@ -122,7 +122,10 @@ impl<'a> Deref for ColumnsDiff<'a> {
 pub enum ColumnsDiffItem<'a> {
     AddColumn(&'a Column),
     DropColumn(&'a Column),
-    AlterColumn { from: &'a Column, to: &'a Column },
+    AlterColumn {
+        previous: &'a Column,
+        next: &'a Column,
+    },
 }
 
 #[cfg(test)]
@@ -289,9 +292,9 @@ mod tests {
         let diff = ColumnsDiff::from(&cx, &from_cols, &to_cols);
         assert_eq!(diff.items.len(), 1);
         assert!(matches!(diff.items[0], ColumnsDiffItem::AlterColumn { .. }));
-        if let ColumnsDiffItem::AlterColumn { from, to } = diff.items[0] {
-            assert_eq!(from.name, "old_name");
-            assert_eq!(to.name, "new_name");
+        if let ColumnsDiffItem::AlterColumn { previous, next } = diff.items[0] {
+            assert_eq!(previous.name, "old_name");
+            assert_eq!(next.name, "new_name");
         }
     }
 

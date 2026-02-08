@@ -86,8 +86,8 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
         // Check for column and index renames within altered tables
         for item in diff.tables().iter() {
             if let TablesDiffItem::AlterTable {
-                from,
-                to: _,
+                previous: previous: from,
+                next: _,
                 columns,
                 indices,
             } = item

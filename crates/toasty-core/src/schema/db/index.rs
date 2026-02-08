@@ -102,34 +102,34 @@ pub struct IndicesDiff<'a> {
 }
 
 impl<'a> IndicesDiff<'a> {
-    pub fn from(cx: &DiffContext<'a>, from: &'a [Index], to: &'a [Index]) -> Self {
-        fn has_diff(cx: &DiffContext<'_>, from: &Index, to: &Index) -> bool {
+    pub fn from(cx: &DiffContext<'a>, previous: &'a [Index], next: &'a [Index]) -> Self {
+        fn has_diff(cx: &DiffContext<'_>, previous: &Index, next: &Index) -> bool {
             // Check basic properties
-            if from.name != to.name
-                || from.columns.len() != to.columns.len()
-                || from.unique != to.unique
-                || from.primary_key != to.primary_key
+            if previous.name != next.name
+                || previous.columns.len() != next.columns.len()
+                || previous.unique != next.unique
+                || previous.primary_key != next.primary_key
             {
                 return true;
             }
 
             // Check if index columns have changed
-            for (from_col, to_col) in from.columns.iter().zip(to.columns.iter()) {
+            for (previous_col, next_col) in previous.columns.iter().zip(next.columns.iter()) {
                 // Check if op or scope changed
-                if from_col.op != to_col.op || from_col.scope != to_col.scope {
+                if previous_col.op != next_col.op || previous_col.scope != next_col.scope {
                     return true;
                 }
 
                 // Check if the column changed (accounting for renames)
                 let columns_match =
-                    if let Some(renamed_to) = cx.rename_hints().get_column(from_col.column) {
+                    if let Some(renamed_to) = cx.rename_hints().get_column(previous_col.column) {
                         // Column was renamed - check if it matches the target column
-                        renamed_to == to_col.column
+                        renamed_to == next_col.column
                     } else {
                         // No rename hint - check if columns match by name
-                        let from_column = cx.schema_from().column(from_col.column);
-                        let to_column = cx.schema_to().column(to_col.column);
-                        from_column.name == to_column.name
+                        let previous_column = cx.previous().column(previous_col.column);
+                        let next_column = cx.next().column(next_col.column);
+                        previous_column.name == next_column.name
                     };
 
                 if !columns_match {
@@ -141,30 +141,30 @@ impl<'a> IndicesDiff<'a> {
         }
 
         let mut items = vec![];
-        let mut create_ids: HashSet<_> = to.iter().map(|to| to.id).collect();
+        let mut create_ids: HashSet<_> = next.iter().map(|to| to.id).collect();
 
-        let to_map =
-            HashMap::<&str, &'a Index>::from_iter(to.iter().map(|to| (to.name.as_str(), to)));
+        let next_map =
+            HashMap::<&str, &'a Index>::from_iter(next.iter().map(|to| (to.name.as_str(), to)));
 
-        for from in from {
-            let to = if let Some(to_id) = cx.rename_hints().get_index(from.id) {
-                cx.schema_to().index(to_id)
-            } else if let Some(to) = to_map.get(from.name.as_str()) {
-                to
+        for previous in previous {
+            let next = if let Some(next_id) = cx.rename_hints().get_index(previous.id) {
+                cx.next().index(next_id)
+            } else if let Some(next) = next_map.get(previous.name.as_str()) {
+                next
             } else {
-                items.push(IndicesDiffItem::DropIndex(from));
+                items.push(IndicesDiffItem::DropIndex(previous));
                 continue;
             };
 
-            create_ids.remove(&to.id);
+            create_ids.remove(&next.id);
 
-            if has_diff(cx, from, to) {
-                items.push(IndicesDiffItem::AlterIndex { from, to });
+            if has_diff(cx, previous, next) {
+                items.push(IndicesDiffItem::AlterIndex { previous, next });
             }
         }
 
         for index_id in create_ids {
-            items.push(IndicesDiffItem::CreateIndex(cx.schema_to().index(index_id)));
+            items.push(IndicesDiffItem::CreateIndex(cx.next().index(index_id)));
         }
 
         Self { items }
@@ -186,7 +186,10 @@ impl<'a> Deref for IndicesDiff<'a> {
 pub enum IndicesDiffItem<'a> {
     CreateIndex(&'a Index),
     DropIndex(&'a Index),
-    AlterIndex { from: &'a Index, to: &'a Index },
+    AlterIndex {
+        previous: &'a Index,
+        next: &'a Index,
+    },
 }
 
 #[cfg(test)]
@@ -505,9 +508,9 @@ mod tests {
         let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
         assert_eq!(diff.items.len(), 1);
         assert!(matches!(diff.items[0], IndicesDiffItem::AlterIndex { .. }));
-        if let IndicesDiffItem::AlterIndex { from, to } = diff.items[0] {
-            assert_eq!(from.name, "old_idx_name");
-            assert_eq!(to.name, "new_idx_name");
+        if let IndicesDiffItem::AlterIndex { previous, next } = diff.items[0] {
+            assert_eq!(previous.name, "old_idx_name");
+            assert_eq!(next.name, "new_idx_name");
         }
     }
 
