@@ -173,8 +173,7 @@ impl<'a> MigrationStatement<'a> {
                                     previous,
                                     next: col_next,
                                 } => {
-                                    let changes =
-                                        AlterColumnChanges::from_diff(previous, col_next);
+                                    let changes = AlterColumnChanges::from_diff(previous, col_next);
                                     let changes = if capability
                                         .schema_mutations
                                         .alter_column_properties_atomic
