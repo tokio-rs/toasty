@@ -70,7 +70,12 @@ impl<'a> MigrationStatement<'a> {
 
                     if needs_recreation {
                         Self::emit_table_recreation(
-                            &mut result, &schema, previous, next, columns, capability,
+                            &mut result,
+                            &schema,
+                            previous,
+                            next,
+                            columns,
+                            capability,
                         );
                     } else {
                         Self::emit_column_changes(&mut result, &schema, columns, capability);
@@ -220,20 +225,14 @@ impl<'a> MigrationStatement<'a> {
                     ));
                 }
                 ColumnsDiffItem::DropColumn(column) => {
-                    result.push(Self::new(
-                        Statement::drop_column(column),
-                        schema.clone(),
-                    ));
+                    result.push(Self::new(Statement::drop_column(column), schema.clone()));
                 }
                 ColumnsDiffItem::AlterColumn {
                     previous,
                     next: col_next,
                 } => {
                     let changes = AlterColumnChanges::from_diff(previous, col_next);
-                    let changes = if capability
-                        .schema_mutations
-                        .alter_column_properties_atomic
-                    {
+                    let changes = if capability.schema_mutations.alter_column_properties_atomic {
                         vec![changes]
                     } else {
                         changes.split()
