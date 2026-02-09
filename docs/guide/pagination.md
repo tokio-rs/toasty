@@ -111,29 +111,20 @@ if let Some(prev_cursor) = page.prev_cursor {
 
 ## Web API Integration
 
-### Cursor Serialization
-
-**⚠️ Work in Progress** - Referenced in [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md)
-
-For web APIs, cursors can be serialized to opaque string tokens:
-
-```rust
-// Serialize cursor for JSON response
-let response = json!({
-    "posts": page.items,
-    "next_cursor": page.next_cursor.map(|c| c.encode()),  // ⚠️ Not yet implemented
-    "prev_cursor": page.prev_cursor.map(|c| c.encode()),  // ⚠️ Not yet implemented
-});
-
-// Deserialize cursor from request
-let cursor = Cursor::decode(&request.cursor)?;  // ⚠️ Not yet implemented
-```
-
 ### REST API Example
 
-A typical REST endpoint using Toasty pagination:
+For web APIs, you'll need to serialize cursors (`stmt::Expr`) at the application level. Here's a typical pattern:
 
 ```rust
+use serde::{Serialize, Deserialize};
+use toasty::stmt;
+
+#[derive(Serialize, Deserialize)]
+struct PostsResponse {
+    posts: Vec<Post>,
+    next_cursor: Option<String>,  // Application-level cursor serialization
+}
+
 #[get("/posts?<cursor>&<limit>")]
 async fn list_posts(
     db: &Db,
@@ -146,19 +137,29 @@ async fn list_posts(
         .order_by(Post::FIELDS.created_at().desc())
         .paginate(page_size);
 
-    // Apply cursor if provided
+    // Deserialize cursor at application level
     if let Some(cursor_token) = cursor {
-        let cursor = Cursor::decode(&cursor_token)?;  // ⚠️ Not yet implemented
-        query = query.after(Some(cursor));
+        let cursor = deserialize_cursor(&cursor_token)?;
+        query = query.after(cursor);
     }
 
     let page = query.collect(&db).await?;
 
     Ok(Json(PostsResponse {
         posts: page.items,
-        next_cursor: page.next_cursor.map(|c| c.encode()),  // ⚠️ Not yet implemented
-        prev_cursor: page.prev_cursor.map(|c| c.encode()),  // ⚠️ Not yet implemented
+        next_cursor: page.next_cursor.map(|c| serialize_cursor(&c)),
     }))
+}
+
+// Application-level serialization helpers (implement as needed)
+fn serialize_cursor(expr: &stmt::Expr) -> String {
+    // Serialize stmt::Expr to base64 or other format
+    todo!()
+}
+
+fn deserialize_cursor(token: &str) -> Result<stmt::Expr> {
+    // Deserialize from base64 or other format
+    todo!()
 }
 ```
 
@@ -288,14 +289,14 @@ async fn load_more_posts(
 
 ### Page-Based UI
 
-**⚠️ Work in Progress** - Referenced in [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md)
-
 For traditional page number UIs, you'll need to maintain cursor state:
 
 ```rust
+use toasty::stmt;
+
 // Helper for page-based navigation
 struct PageNavigator {
-    cursors: Vec<Option<Cursor>>,  // Cursor for each page
+    cursors: Vec<Option<stmt::Expr>>,  // Cursor for each page
     current_page: usize,
 }
 
@@ -303,6 +304,7 @@ impl PageNavigator {
     pub async fn goto_page(&mut self, page_num: usize, db: &Db) -> Result<Page<Post>> {
         // Implementation would maintain cursor history
         // and navigate to requested page
+        todo!()
     }
 }
 ```
@@ -311,10 +313,11 @@ impl PageNavigator {
 
 See [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md) for the complete list of remaining features:
 
-- **Cursor serialization** (`.encode()`/`.decode()` methods) - blocks web API usage
-- **Multi-column ordering** (`.then_by()` chaining) - workaround exists
+- **Multi-column ordering** (`.then_by()` chaining) - workaround exists using `OrderBy::from([...])`
 - **Direct `.limit()` method** - for non-paginated queries
 - **`.last()` convenience method**
+
+**Note:** Cursor serialization is intentionally left to the application level, allowing flexibility in how cursors are encoded/transmitted.
 
 ## Best Practices
 
@@ -350,16 +353,15 @@ Check for empty results and missing cursors:
 if page.items.is_empty() {
     return Ok(Json(EmptyResponse { message: "No more results" }));
 }
-```
 
-### 4. Consider UX for Cursor Expiration
-
-**⚠️ Work in Progress** - Future cursor tokens may include expiration
-
-```rust
-// Future: Handle expired cursors gracefully
-match Cursor::decode(&token) {
-    Ok(cursor) => query.after(Some(cursor)),
-    Err(_) => query, // Start from beginning on invalid cursor
+// Handle invalid cursors at application level
+if let Some(cursor_token) = cursor {
+    match deserialize_cursor(&cursor_token) {
+        Ok(cursor) => query = query.after(cursor),
+        Err(_) => {
+            // Start from beginning on invalid/expired cursor
+            // Log the error or return appropriate error response
+        }
+    }
 }
 ```
