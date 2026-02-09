@@ -47,8 +47,26 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 **Query Features**
 - Subquery improvements
-- Raw SQL escape hatch
 - Better conditional/dynamic query building ergonomics
+
+**Raw SQL Support**
+- Execute arbitrary SQL statements directly
+- Parameterized queries with type-safe bindings
+- Raw SQL fragments within typed queries (escape hatch for complex expressions)
+
+### Transactions
+
+**Atomic Batch Operations**
+- Cross-database atomic batch API
+- Supported across SQL and NoSQL databases
+- Type-safe operation batching
+- All-or-nothing semantics
+
+**SQL Transaction API**
+- Manual transaction control for SQL databases
+- BEGIN/COMMIT/ROLLBACK support
+- Savepoints and nested transactions
+- Isolation level configuration
 
 ### Schema Management
 
@@ -61,10 +79,9 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 ### Performance
 
 **Optimization Features**
-- Batch operations
 - Bulk inserts/updates
-- Transaction management
 - Query caching
+- Connection pooling improvements
 
 ### Developer Experience
 
