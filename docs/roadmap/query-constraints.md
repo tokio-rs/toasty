@@ -1,8 +1,8 @@
 # Query Constraints & Filtering
 
-## Current State Analysis
+## Overview
 
-This document inventories the query constraint patterns currently supported by Toasty, identifies gaps compared to mature ORMs, and prioritizes missing features for building real web applications.
+This document identifies gaps in Toasty's query constraint support compared to mature ORMs, and outlines potential additions for building web applications.
 
 ### Terminology
 
@@ -12,82 +12,33 @@ A "query constraint" refers to any predicate used in the WHERE clause of a query
 - **Generic `.filter()` method** accepting `Expr<bool>` for arbitrary conditions
 - **`Model::FIELDS.<field>()` paths** combined with comparison methods (`.eq()`, `.gt()`, etc.)
 
-### What's Implemented & Tested
-
-These constraint patterns have integration tests in [`toasty-driver-integration-suite`](../../crates/toasty-driver-integration-suite/src/tests/) and work end-to-end across all database drivers:
-
-| Constraint | User API | Test Coverage | Example |
-|---|---|---|---|
-| Equality | `Path::eq()` | Extensive | `User::FIELDS.name().eq("Alice")` |
-| Not Equal | `Path::ne()` | Good | `Event::FIELDS.timestamp().ne(10)` |
-| Greater Than | `Path::gt()` | Good | `Event::FIELDS.timestamp().gt(10)` |
-| Greater or Equal | `Path::ge()` | Good | `Event::FIELDS.timestamp().ge(10)` |
-| Less Than | `Path::lt()` | Good | `Event::FIELDS.timestamp().lt(10)` |
-| Less or Equal | `Path::le()` | Good | `Event::FIELDS.timestamp().le(10)` |
-| AND | `Expr::and()` | Extensive | `expr_a.and(expr_b)` |
-| IN (list) | `Path::in_set()` | API exists, not integration-tested | `User::FIELDS.id().in_set(ids)` |
-| IN (subquery) | `Path::in_query()` | API exists, not integration-tested | `User::FIELDS.id().in_query(subquery)` |
-| Filter by PK | `Model::filter_by_id()` | Extensive | `User::filter_by_id(id)` |
-| Filter by index | `Model::filter_by_<field>()` | Good | `User::filter_by_name("Alice")` |
-| Composite key query | Partition + local key | Good | `Team::FIELDS.league().eq("MLS").and(Team::FIELDS.name().eq("Portland"))` |
-
-Key test files:
-- `one_model_query.rs` - Comparison operators, indexed filters, composite keys
-- `has_many_scoped_query.rs` - Constraints on association queries
-- `one_model_sort_limit.rs` - ORDER BY (related to constraints)
-- `has_many_crud_multi_relations.rs` - Filters with foreign key references
-
-### What's in the AST but Not User-Facing
+## Core AST Support Without User API
 
 These expression types exist in `toasty-core` (`crates/toasty-core/src/stmt/expr.rs`) and have SQL serialization, but lack a typed user-facing API on `Path<T>` or `Expr<T>`:
 
 | Expression | Core AST | SQL Serialized | User API | Notes |
 |---|---|---|---|---|
-| OR | `ExprOr` | Yes | **No `.or()` on `Expr<bool>`** | Core + SQL work, but no ergonomic user API |
-| NOT | `ExprNot` | Yes | **No `.not()` on `Expr<bool>`** | Same situation |
-| IS NULL | `ExprIsNull` | Yes | **No `.is_null()` on `Path<T>`** | Core + SQL work, no user API |
-| LIKE | `ExprPattern::Like` | Yes | **None** | SQL serialization exists |
-| Begins With | `ExprPattern::BeginsWith` | Yes | **None** | Converted to `LIKE 'prefix%'` in SQL |
-| EXISTS | `ExprExists` | Yes | **None on user API** | Used internally by engine |
-| COUNT | `ExprFunc::Count` | Yes | **None** | Internal use only |
-
-### What's Missing Entirely
-
-These features have no implementation at any layer:
-
-- BETWEEN / range queries
-- Case-insensitive comparisons (ILIKE)
-- String contains / ends_with
-- NOT IN
-- IS NOT NULL (separate from IS NULL negation)
-- Regex matching
-- Field-to-field comparison
-- HAVING clauses
-- Aggregate filtering
-- JSON field queries
-- Full-text search
-- Dynamic/conditional query building ergonomics
-
----
+| OR | `ExprOr` | Yes | No `.or()` on `Expr<bool>` | Core + SQL work, but no ergonomic user API |
+| NOT | `ExprNot` | Yes | No `.not()` on `Expr<bool>` | Same situation |
+| IS NULL | `ExprIsNull` | Yes | No `.is_null()` on `Path<T>` | Core + SQL work, no user API |
+| LIKE | `ExprPattern::Like` | Yes | None | SQL serialization exists |
+| Begins With | `ExprPattern::BeginsWith` | Yes | None | Converted to `LIKE 'prefix%'` in SQL |
+| EXISTS | `ExprExists` | Yes | None on user API | Used internally by engine |
+| COUNT | `ExprFunc::Count` | Yes | None | Internal use only |
 
 ## ORM Comparison
 
-The following table compares Toasty's constraint support against 8 mature ORMs. Features marked as "AST only" exist in Toasty's internal representation but are not exposed to users.
+The following table compares Toasty's constraint support against 8 mature ORMs, highlighting missing features:
 
 | Feature | Toasty | Prisma | Drizzle | Django | SQLAlchemy | Diesel | SeaORM | Hibernate |
-|---|---|---|---|---|---|---|---|---|
-| **Basic Comparisons** | | | | | | | | |
-| eq / ne / gt / ge / lt / le | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+|---|---|---|---|---|---|---|---|---|---|
 | **Logical Operators** | | | | | | | | |
-| AND | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | OR | AST only | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | NOT | AST only | Yes | Yes | Yes | Yes | Per-op | Yes | Yes |
 | **Null Handling** | | | | | | | | |
 | IS NULL | AST only | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | IS NOT NULL | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | **Set Operations** | | | | | | | | |
-| IN (list) | API exists | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| IN (subquery) | API exists | No | Yes | Yes | Yes | Yes | Yes | Yes |
 | NOT IN | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | **Range** | | | | | | | | |
 | BETWEEN | No | Via gt+lt | Yes | Yes | Yes | Yes | Yes | Yes |
@@ -113,208 +64,177 @@ The following table compares Toasty's constraint support against 8 mature ORMs. 
 | CASE / WHEN | No | No | No | Yes | Yes | No | No | Yes |
 | Dynamic/conditional filters | No | Spread undef | Pass undef | Chain | Chain | BoxableExpr | add_option | Build list |
 
----
+## Potential Future Work
 
-## Priority Roadmap
+### Features with Existing Internal Support
 
-Features are prioritized by how frequently they arise when building real web applications, weighted by:
-- How many applications need the feature (breadth)
-- Whether the lack of the feature forces users to drop to raw SQL (severity)
-- How much internal infrastructure already exists (effort)
+These features have core AST and SQL serialization but need user-facing APIs:
 
-### P0: Essential - Required for basic CRUD applications
+**OR Conditions**
+- Core AST: `ExprOr` exists with SQL serialization
+- Needed: `.or()` method on `Expr<bool>` (similar to existing `.and()`)
+- File: `crates/toasty/src/stmt/expr.rs`
+- Use case: Nearly every search/filter UI needs OR logic (e.g., "status is active OR pending")
 
-These are blocking for any non-trivial application. Most have partial internal support already.
+**NOT Negation**
+- Core AST: `ExprNot` exists with SQL serialization
+- Needed: `.not()` method on `Expr<bool>`
+- File: `crates/toasty/src/stmt/expr.rs`
+- Use case: Excluding results (e.g., "status is NOT deleted", negating complex conditions)
 
-#### 1. OR Conditions
-- **Why:** Nearly every search/filter UI needs OR logic (e.g., "status is active OR pending")
-- **Current state:** `ExprOr` exists in core AST, SQL serialization works, but `Expr<bool>` has no `.or()` method
-- **Effort:** Low - just needs user-facing API on `Expr<bool>` (similar to existing `.and()`)
-- **Reference:** Every surveyed ORM supports this
-- **Files:** `crates/toasty/src/stmt/expr.rs` (add `.or()`)
+**IS NULL / IS NOT NULL**
+- Core AST: `ExprIsNull` exists with SQL serialization
+- Needed: `.is_null()` and `.is_not_null()` on `Path<Option<T>>`
+- File: `crates/toasty/src/stmt/path.rs`
+- Use case: Nullable fields filtering (e.g., "deleted_at IS NULL", "email IS NOT NULL")
 
-#### 2. NOT Negation
-- **Why:** Excluding results is fundamental (e.g., "status is NOT deleted", negating complex conditions)
-- **Current state:** `ExprNot` exists in core AST with SQL serialization, no user API
-- **Effort:** Low - needs `.not()` method on `Expr<bool>`
-- **Reference:** Every surveyed ORM supports this
-- **Files:** `crates/toasty/src/stmt/expr.rs` (add `.not()`)
+**String Pattern Matching**
+- Core AST: `ExprPattern::BeginsWith` and `ExprPattern::Like` exist with SQL serialization
+- Needed:
+  - Add `ExprPattern::EndsWith` and `ExprPattern::Contains` to core AST
+  - Add `.contains()`, `.starts_with()`, `.ends_with()` on `Path<String>`
+  - Add `.like()` for direct pattern matching
+  - Handle LIKE special character escaping (`%`, `_`)
+- Files: `crates/toasty/src/stmt/path.rs`, `crates/toasty-core/src/stmt/expr.rs`
+- Use case: Search functionality (e.g., search users by name fragment)
 
-#### 3. IS NULL / IS NOT NULL
-- **Why:** Nullable fields are ubiquitous; filtering on presence/absence is basic (e.g., "deleted_at IS NULL", "email IS NOT NULL")
-- **Current state:** `ExprIsNull` exists in core with SQL serialization, no user API
-- **Effort:** Low - needs `.is_null()` and `.is_not_null()` on `Path<Option<T>>`
-- **Reference:** Every surveyed ORM supports this
-- **Files:** `crates/toasty/src/stmt/path.rs`
+**NOT IN**
+- Current: `IN` exists but no negated form
+- Needed: `ExprNotInList` or negate the `InList` expression, plus `.not_in_set()` user API
+- Files: `crates/toasty/src/stmt/path.rs`, `crates/toasty-core/src/stmt/expr.rs`
+- Use case: Exclusion lists (e.g., "exclude these IDs from results")
 
-#### 4. String Contains / Starts With / Ends With
-- **Why:** Search functionality is one of the first features any web app needs (e.g., search users by name fragment)
-- **Current state:** `ExprPattern::BeginsWith` and `ExprPattern::Like` exist in core with SQL serialization, no user API
-- **Effort:** Medium - needs `.contains()`, `.starts_with()`, `.ends_with()` on `Path<String>`, plus LIKE pattern escaping
-- **Reference:** Prisma (`contains`, `startsWith`, `endsWith`), Django (`__contains`, `__startswith`, `__endswith`), SeaORM (`.contains()`, `.starts_with()`, `.ends_with()`)
-- **Files:** `crates/toasty/src/stmt/path.rs`, potentially `crates/toasty-core/src/stmt/expr.rs` (for `EndsWith` pattern variant)
+### Features Needing New Implementation
 
-#### 5. NOT IN
-- **Why:** Exclusion lists are common (e.g., "exclude these IDs from results")
-- **Current state:** `IN` exists but no negated form
-- **Effort:** Low - needs `ExprNotInList` or negate the `InList` expression, plus `.not_in_set()` user API
-- **Reference:** Every surveyed ORM supports this
-- **Files:** `crates/toasty/src/stmt/path.rs`, `crates/toasty-core/src/stmt/expr.rs`
+**Case-Insensitive String Matching**
+- Current: No support at any layer
+- Needed: ILIKE support in SQL serialization (PostgreSQL native, LOWER() wrapper for SQLite/MySQL), plus user API
+- Design consideration: How to handle cross-database differences (ILIKE is Pg-only, LOWER()+LIKE is universal but slower)
+- Reference: Prisma (`mode: 'insensitive'`), Django (`__iexact`, `__icontains`)
+- Use case: User-facing search (e.g., email lookup, name search)
 
-### P1: Important - Required for typical web applications
+**BETWEEN / Range Queries**
+- Current: Users must combine `.ge()` and `.le()` manually
+- Needed: Syntactic sugar over AND(ge, le), or a dedicated `ExprBetween`
+- File: `crates/toasty/src/stmt/path.rs`
+- Reference: Drizzle (`between()`), Django (`__range`), Diesel (`.between()`)
+- Use case: Date ranges, price ranges, numeric filtering
 
-These come up frequently in real applications but have workarounds or are needed for specific feature sets.
+**Relation/Association Filtering**
+- Current: Scoped queries exist but no way to filter a top-level query by related model fields
+- Needed: JOIN or EXISTS subquery generation in the engine, plus user API design
+- Complexity: High - requires significant engine work
+- Reference: Prisma (`some`/`none`/`every`), Django (`__` traversal), SQLAlchemy (`.any()`/`.has()`)
+- Use case: Filtering parents by child attributes (e.g., "users who have at least one order over $100")
 
-#### 6. Case-Insensitive String Matching
-- **Why:** User-facing search is almost always case-insensitive (e.g., email lookup, name search)
-- **Current state:** No support at any layer
-- **Effort:** Medium - needs ILIKE support in SQL serialization (PostgreSQL native, LOWER() wrapper for SQLite/MySQL), plus user API (e.g., `.eq_ignore_case()`, `.contains_ignore_case()` or a `mode` parameter)
-- **Reference:** Prisma (`mode: 'insensitive'`), Django (`__iexact`, `__icontains`), Diesel (`.ilike()` Pg-only), Drizzle (`ilike()`)
-- **Design consideration:** How to handle cross-database differences (ILIKE is Pg-only, LOWER()+LIKE is universal but slower)
+**Field-to-Field Comparison**
+- Current: `Path::eq()` requires `IntoExpr<T>`, which accepts values but should also accept paths
+- Needed: Ensure `Path<T>` implements `IntoExpr<T>` and codegen supports cross-field comparisons
+- Reference: Django (`F()` expressions), SQLAlchemy (column comparison)
+- Use case: Comparing two columns (e.g., "updated_at > created_at", "balance > minimum_balance")
 
-#### 7. BETWEEN / Range Queries
-- **Why:** Date ranges, price ranges, and numeric filtering are common in dashboards and listing pages
-- **Current state:** No support; users must combine `.ge()` and `.le()` manually
-- **Effort:** Low - syntactic sugar over AND(ge, le), or a dedicated `ExprBetween`
-- **Reference:** Drizzle (`between()`), Django (`__range`), Diesel (`.between()`), SeaORM (`.between()`)
-- **Files:** `crates/toasty/src/stmt/path.rs`
+**Aggregate Queries**
+- Current: `ExprFunc::Count` exists internally but is not user-facing
+- Needed: User-facing API, return type handling, integration with GROUP BY
+- Complexity: High - requires significant API design
+- Reference: Django's annotation system, SQLAlchemy's `func`
+- Use case: Dashboards, analytics, summary views, pagination metadata
 
-#### 8. Relation/Association Filtering
-- **Why:** Filtering parents by child attributes is extremely common (e.g., "users who have at least one order over $100")
-- **Current state:** Scoped queries exist (e.g., `user.todos().query(...)`) but no way to filter a top-level query by related model fields
-- **Effort:** High - requires JOIN or EXISTS subquery generation in the engine, plus user API design
-- **Reference:** Prisma (`some`/`none`/`every`), Django (`__` traversal), SQLAlchemy (`.any()`/`.has()`), ActiveRecord (`.joins().where()`)
-- **Design consideration:** Prisma's `some`/`every`/`none` quantifiers are the gold standard for ergonomics; Django's double-underscore traversal is the most concise
+**GROUP BY / HAVING**
+- Current: No support at any layer
+- Needed: AST additions, SQL generation, engine support, user API
+- Complexity: High
+- Use case: Aggregate queries, reports, analytics, dashboards
 
-#### 9. Field-to-Field Comparison
-- **Why:** Comparing two columns is needed for business logic (e.g., "updated_at > created_at", "balance > minimum_balance")
-- **Current state:** The `Path::eq()` etc. methods require `IntoExpr<T>`, which accepts values but paths of other fields should also work
-- **Effort:** Medium - needs `Path<T>` to implement `IntoExpr<T>` (it already does), but codegen may need adjustment to make cross-field comparisons ergonomic
-- **Reference:** Django (`F()` expressions), SQLAlchemy (column comparison), Diesel (column-to-column)
+**Raw SQL Escape Hatch**
+- Current: No support
+- Needed: Safe API for parameterized raw SQL fragments within typed queries
+- Design consideration: Full raw queries vs. raw fragments within typed queries vs. both
+- Reference: Drizzle (`` sql`...` `` templates), SQLAlchemy (`text()`), Diesel (`sql()`)
+- Use case: Edge cases that the ORM can't express
 
-#### 10. Aggregate Queries (COUNT, SUM, AVG, MIN, MAX)
-- **Why:** Dashboards, analytics, and summary views need aggregates; COUNT is needed even for pagination metadata
-- **Current state:** `ExprFunc::Count` exists internally but is not user-facing
-- **Effort:** High - needs user-facing API, return type handling, and integration with GROUP BY
-- **Reference:** Every mature ORM supports this; Django's annotation system and SQLAlchemy's `func` are the most flexible
+**Dynamic / Conditional Query Building**
+- Current: Users can chain `.filter()` calls, but no ergonomic way to skip filters when parameters are `None`
+- Needed: Pattern for optional filters
+- Reference: SeaORM (`Condition::add_option()`), Prisma (spread undefined), Diesel (`BoxableExpression`)
+- Use case: Search forms, filter UIs, API endpoints with optional parameters
 
-#### 11. GROUP BY / HAVING
-- **Why:** Aggregate queries are incomplete without grouping; used for reports, analytics, dashboards
-- **Current state:** No support at any layer
-- **Effort:** High - needs AST additions, SQL generation, engine support, and user API
-- **Reference:** Every SQL ORM supports this (Prisma is the notable exception for HAVING)
+**Full-Text Search**
+- Current: No support
+- Complexity: High - database-specific implementations (PostgreSQL tsvector, MySQL FULLTEXT, SQLite FTS5)
+- Design consideration: May be best as database-specific extensions rather than a unified API
+- Use case: Content-heavy applications (blogs, e-commerce, documentation sites)
 
-### P2: Valuable - Needed for specific application types
+**JSON Field Queries**
+- Current: No support
+- Complexity: High - needs path traversal syntax, type handling, database-specific operators
+- Dependency: Depends on JSON/JSONB data type support
+- Reference: Django (`field__key__subkey`), SQLAlchemy (`column['key']`)
+- Use case: Flexible/schemaless data within relational databases
 
-These are important for certain classes of applications but not universally needed.
+### Advanced / Niche Features
 
-#### 12. Raw SQL Escape Hatch
-- **Why:** Every ORM needs an escape hatch for queries it can't express; prevents users from abandoning the ORM entirely for edge cases
-- **Current state:** No support
-- **Effort:** Medium - needs a safe API for parameterized raw SQL fragments within otherwise typed queries
-- **Reference:** Drizzle (`` sql`...` `` templates), SQLAlchemy (`text()`), ActiveRecord (string conditions), Diesel (`sql()`)
-- **Design consideration:** Full raw queries vs. raw fragments within typed queries vs. both
+**Regex Matching**
+- Use case: Power-user filtering, data validation queries
+- Reference: Django (`__regex`, `__iregex`), SQLAlchemy (`regexp_match()`)
 
-#### 13. Dynamic / Conditional Query Building
-- **Why:** Search forms, filter UIs, and API endpoints with optional parameters need to conditionally add constraints
-- **Current state:** Users can chain `.filter()` calls, but there's no ergonomic way to skip a filter when a parameter is `None`
-- **Effort:** Low-Medium - could follow SeaORM's `add_option()` pattern or Prisma's "skip undefined" approach
-- **Reference:** SeaORM (`Condition::add_option()`), Prisma (spread undefined), Diesel (`BoxableExpression`)
+**Array/Collection Operations**
+- Use case: PostgreSQL array columns, MongoDB array fields
+- Dependency: Requires array type support first
+- Reference: Prisma (`has`, `hasEvery`, `hasSome`), Django (ArrayField lookups)
 
-#### 14. LIKE Pattern Matching (Direct)
-- **Why:** Useful for structured pattern matching beyond simple contains/startsWith/endsWith
-- **Current state:** `ExprPattern::Like` exists in core with SQL serialization, no user API
-- **Effort:** Low - expose existing implementation
-- **Files:** `crates/toasty/src/stmt/path.rs`
+**CASE/WHEN Expressions**
+- Use case: Conditional logic within queries for complex business rules
+- Reference: Django (`When()`/`Case()`), SQLAlchemy (`case()`)
 
-#### 15. Full-Text Search
-- **Why:** Critical for content-heavy applications (blogs, e-commerce, documentation sites)
-- **Current state:** No support
-- **Effort:** High - database-specific implementations (PostgreSQL tsvector, MySQL FULLTEXT, SQLite FTS5), hard to abstract uniformly
-- **Reference:** Django (comprehensive Pg support), Prisma (preview), Diesel (via crate)
-- **Design consideration:** May be best as database-specific extensions rather than a unified API
+**Subquery Comparisons (ALL/ANY/SOME)**
+- Use case: Advanced filtering like "price > ALL(SELECT price FROM competitors)"
+- Reference: Hibernate, SQLAlchemy (`all_()`, `any_()`)
 
-#### 16. JSON Field Queries
-- **Why:** JSON columns are increasingly common for flexible/schemaless data within relational databases
-- **Current state:** No support
-- **Effort:** High - needs path traversal syntax, type handling, database-specific operators
-- **Reference:** Django (`field__key__subkey`), SQLAlchemy (`column['key']`), Diesel (Pg JSONB methods)
-- **Design consideration:** Depends on JSON/JSONB data type support (tracked under "Extended Data Types" in the main roadmap)
+**IS DISTINCT FROM**
+- Use case: NULL-safe comparisons without special-casing IS NULL
+- Reference: SQLAlchemy (only ORM with native support)
 
-### P3: Future - Niche or advanced use cases
+## Implementation Considerations
 
-#### 17. Regex Matching
-- **Why:** Power-user filtering, data validation queries
-- **Reference:** Django (`__regex`, `__iregex`), SQLAlchemy (`regexp_match()`)
+### Recommended Approach
 
-#### 18. Array/Collection Operations
-- **Why:** PostgreSQL array columns, MongoDB array fields
-- **Reference:** Prisma (`has`, `hasEvery`, `hasSome`), Django (ArrayField lookups), Diesel (Pg array methods)
-- **Dependency:** Requires array type support first
+Based on the analysis above, the following groupings maximize user value:
 
-#### 19. CASE/WHEN Expressions in Filters
-- **Why:** Conditional logic within queries for complex business rules
-- **Reference:** Django (`When()`/`Case()`), SQLAlchemy (`case()`), Hibernate (`selectCase()`)
+**Group 1: Expose Existing Internals**
+Items with core AST and SQL serialization that only need user-facing methods:
+- `.or()` on `Expr<bool>` (mirrors existing `.and()`)
+- `.not()` on `Expr<bool>`
+- `.is_null()` / `.is_not_null()` on `Path<Option<T>>`
+- `.not_in_set()` on `Path<T>` (negate existing `InList`)
 
-#### 20. Subquery Comparisons (ALL/ANY/SOME Quantifiers)
-- **Why:** Advanced filtering like "price > ALL(SELECT price FROM competitors)"
-- **Reference:** Hibernate (full support), SQLAlchemy (`all_()`, `any_()`), Diesel (Pg `any()`)
+Estimated scope: ~100 lines of user-facing API code + integration tests
 
-#### 21. IS DISTINCT FROM / NULL-Safe Equality
-- **Why:** NULL-safe comparisons without special-casing IS NULL
-- **Reference:** SQLAlchemy (only ORM with native support)
+**Group 2: String Operations**
+Partial AST support that needs completion and exposure:
+- Add `ExprPattern::EndsWith` and `ExprPattern::Contains` to core AST
+- Add SQL serialization for new pattern variants
+- Add `.contains()`, `.starts_with()`, `.ends_with()` to `Path<String>`
+- Handle LIKE special character escaping
 
----
+Estimated scope: ~200 lines across core + SQL + user API
 
-## Implementation Strategy
+**Group 3: Ergonomic Improvements**
+- Case-insensitive matching (ILIKE / LOWER() wrapper)
+- `.between()` convenience method
+- `.like()` direct exposure
+- Conditional/optional filter building helpers
 
-Based on the analysis above, the recommended implementation order follows the principle of maximizing user-facing value per unit of effort:
+**Group 4: Structural Features**
+Requires deeper engine work:
+- Relation filtering (JOIN/EXISTS generation)
+- Aggregate functions (user-facing COUNT/SUM/etc.)
+- GROUP BY / HAVING
+- Raw SQL escape hatch
 
-### Wave 1: Low-hanging fruit (expose existing internals)
+## Reference Implementation Goals
 
-Items 1-3 and 5 already have core AST and SQL serialization. They only need user-facing methods:
-
-1. Add `.or()` to `Expr<bool>` (mirrors existing `.and()`)
-2. Add `.not()` to `Expr<bool>`
-3. Add `.is_null()` / `.is_not_null()` to `Path<Option<T>>`
-4. Add `.not_in_set()` to `Path<T>` (negate existing `InList`)
-
-**Estimated scope:** ~100 lines of user-facing API code + integration tests
-
-### Wave 2: String operations
-
-Item 4 has partial AST support (`BeginsWith`, `Like`) that needs to be completed and exposed:
-
-1. Add `ExprPattern::EndsWith` and `ExprPattern::Contains` to core AST
-2. Add SQL serialization for new pattern variants
-3. Add `.contains()`, `.starts_with()`, `.ends_with()` to `Path<String>`
-4. Handle LIKE special character escaping (`%`, `_`)
-
-**Estimated scope:** ~200 lines across core + SQL + user API
-
-### Wave 3: Ergonomic improvements
-
-Items 6-7 and 13-14 improve daily developer experience:
-
-1. Case-insensitive matching (ILIKE / LOWER() wrapper)
-2. `.between()` convenience method
-3. `.like()` direct exposure
-4. Conditional/optional filter building helpers
-
-### Wave 4: Structural features
-
-Items 8-11 require deeper engine work:
-
-1. Relation filtering (JOIN/EXISTS generation)
-2. Aggregate functions (user-facing COUNT/SUM/etc.)
-3. GROUP BY / HAVING
-4. Raw SQL escape hatch
-
----
-
-## Success Criteria
-
-A complete query constraint system for MVP should allow users to:
+A comprehensive query constraint system would allow users to:
 
 1. Filter on any combination of field conditions using AND, OR, and NOT
 2. Check for NULL/non-NULL values

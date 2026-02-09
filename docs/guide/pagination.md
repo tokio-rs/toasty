@@ -9,26 +9,21 @@ Toasty provides efficient cursor-based pagination that works consistently across
 Basic pagination uses the `.paginate()` method to specify page size:
 
 ```rust
-use toasty::Model;
+use toasty::{Model, Page};
 
 // Get the first page of posts
-let page = Post::all()
+let page: Page<Post> = Post::all()
     .order_by(Post::FIELDS.created_at().desc())
     .paginate(10)
     .collect(&db)
     .await?;
 
 // The page contains items and navigation cursors
-println!("Found {} posts", page.items.len());
+println!("Found {} posts", page.len());
 
-// Navigate to next page if available
-if let Some(next_cursor) = page.next_cursor {
-    let next_page = Post::all()
-        .order_by(Post::FIELDS.created_at().desc())
-        .paginate(10)
-        .after(Some(next_cursor))
-        .collect(&db)
-        .await?;
+// Navigate to next page using convenience method
+if let Some(next_page) = page.next(&db).await? {
+    process_posts(&next_page.items);
 }
 ```
 
@@ -38,9 +33,21 @@ Paginated queries return a `Page<T>` struct containing the results and navigatio
 
 ```rust
 pub struct Page<T> {
-    pub items: Vec<T>,                    // The page results
-    pub next_cursor: Option<Cursor>,      // Navigate forward (None = last page)
-    pub prev_cursor: Option<Cursor>,      // Navigate backward (None = first page)
+    pub items: Vec<T>,                     // The page results
+    pub next_cursor: Option<stmt::Expr>,   // Navigate forward (None = last page)
+    pub prev_cursor: Option<stmt::Expr>,   // Navigate backward (None = first page)
+}
+
+impl<T> Page<T> {
+    pub async fn next(&self, db: &Db) -> Result<Option<Page<T>>>;
+    pub async fn prev(&self, db: &Db) -> Result<Option<Page<T>>>;
+    pub fn has_next(&self) -> bool;
+    pub fn has_prev(&self) -> bool;
+}
+
+// Page<T> derefs to &[T] for convenience
+impl<T> Deref for Page<T> {
+    type Target = [T];
 }
 ```
 
@@ -51,6 +58,7 @@ pub struct Page<T> {
 The most common pagination pattern - moving forward through results:
 
 ```rust
+// Using Page's convenience method
 let mut current_page = Post::all()
     .order_by(Post::FIELDS.created_at().desc())
     .paginate(10)
@@ -58,31 +66,44 @@ let mut current_page = Post::all()
     .await?;
 
 // Continue through pages
-while let Some(next_cursor) = current_page.next_cursor {
-    current_page = Post::all()
+while let Some(next_page) = current_page.next(&db).await? {
+    process_posts(&next_page.items);
+    current_page = next_page;
+}
+
+// Or manually using .after()
+let page = Post::all()
+    .order_by(Post::FIELDS.created_at().desc())
+    .paginate(10)
+    .collect(&db)
+    .await?;
+
+if let Some(next_cursor) = page.next_cursor {
+    let next_page = Post::all()
         .order_by(Post::FIELDS.created_at().desc())
         .paginate(10)
-        .after(Some(next_cursor))
+        .after(next_cursor)
         .collect(&db)
         .await?;
-
-    process_posts(&current_page.items);
 }
 ```
 
 ### Backward Navigation
 
-**⚠️ Work in Progress** - Referenced in [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md)
-
 Moving backward through pages (useful for "Previous Page" functionality):
 
 ```rust
-// Navigate backward
+// Navigate backward using Page's convenience method
+if let Some(prev_page) = page.prev(&db).await? {
+    process_posts(&prev_page.items);
+}
+
+// Or manually using .before()
 if let Some(prev_cursor) = page.prev_cursor {
     let prev_page = Post::all()
         .order_by(Post::FIELDS.created_at().desc())
         .paginate(10)
-        .before(Some(prev_cursor))  // ⚠️ Not yet implemented
+        .before(prev_cursor)
         .collect(&db)
         .await?;
 }
@@ -90,29 +111,20 @@ if let Some(prev_cursor) = page.prev_cursor {
 
 ## Web API Integration
 
-### Cursor Serialization
-
-**⚠️ Work in Progress** - Referenced in [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md)
-
-For web APIs, cursors can be serialized to opaque string tokens:
-
-```rust
-// Serialize cursor for JSON response
-let response = json!({
-    "posts": page.items,
-    "next_cursor": page.next_cursor.map(|c| c.encode()),  // ⚠️ Not yet implemented
-    "prev_cursor": page.prev_cursor.map(|c| c.encode()),  // ⚠️ Not yet implemented
-});
-
-// Deserialize cursor from request
-let cursor = Cursor::decode(&request.cursor)?;  // ⚠️ Not yet implemented
-```
-
 ### REST API Example
 
-A typical REST endpoint using Toasty pagination:
+For web APIs, you'll need to serialize cursors (`stmt::Expr`) at the application level. Here's a typical pattern:
 
 ```rust
+use serde::{Serialize, Deserialize};
+use toasty::stmt;
+
+#[derive(Serialize, Deserialize)]
+struct PostsResponse {
+    posts: Vec<Post>,
+    next_cursor: Option<String>,  // Application-level cursor serialization
+}
+
 #[get("/posts?<cursor>&<limit>")]
 async fn list_posts(
     db: &Db,
@@ -125,19 +137,29 @@ async fn list_posts(
         .order_by(Post::FIELDS.created_at().desc())
         .paginate(page_size);
 
-    // Apply cursor if provided
+    // Deserialize cursor at application level
     if let Some(cursor_token) = cursor {
-        let cursor = Cursor::decode(&cursor_token)?;  // ⚠️ Not yet implemented
-        query = query.after(Some(cursor));
+        let cursor = deserialize_cursor(&cursor_token)?;
+        query = query.after(cursor);
     }
 
     let page = query.collect(&db).await?;
 
     Ok(Json(PostsResponse {
         posts: page.items,
-        next_cursor: page.next_cursor.map(|c| c.encode()),  // ⚠️ Not yet implemented
-        prev_cursor: page.prev_cursor.map(|c| c.encode()),  // ⚠️ Not yet implemented
+        next_cursor: page.next_cursor.map(|c| serialize_cursor(&c)),
     }))
+}
+
+// Application-level serialization helpers (implement as needed)
+fn serialize_cursor(expr: &stmt::Expr) -> String {
+    // Serialize stmt::Expr to base64 or other format
+    todo!()
+}
+
+fn deserialize_cursor(token: &str) -> Result<stmt::Expr> {
+    // Deserialize from base64 or other format
+    todo!()
 }
 ```
 
@@ -247,16 +269,18 @@ let page = User::all()
 Common pattern for web applications:
 
 ```rust
+use toasty::stmt;
+
 async fn load_more_posts(
     db: &Db,
-    last_cursor: Option<Cursor>
+    last_cursor: Option<stmt::Expr>
 ) -> Result<Page<Post>> {
     let mut query = Post::all()
         .order_by(Post::FIELDS.created_at().desc())
         .paginate(20);
 
     if let Some(cursor) = last_cursor {
-        query = query.after(Some(cursor));
+        query = query.after(cursor);
     }
 
     query.collect(db).await
@@ -265,14 +289,14 @@ async fn load_more_posts(
 
 ### Page-Based UI
 
-**⚠️ Work in Progress** - Referenced in [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md)
-
 For traditional page number UIs, you'll need to maintain cursor state:
 
 ```rust
+use toasty::stmt;
+
 // Helper for page-based navigation
 struct PageNavigator {
-    cursors: Vec<Option<Cursor>>,  // Cursor for each page
+    cursors: Vec<Option<stmt::Expr>>,  // Cursor for each page
     current_page: usize,
 }
 
@@ -280,19 +304,20 @@ impl PageNavigator {
     pub async fn goto_page(&mut self, page_num: usize, db: &Db) -> Result<Page<Post>> {
         // Implementation would maintain cursor history
         // and navigate to requested page
+        todo!()
     }
 }
 ```
 
 ## Current Limitations
 
-See [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md) for the complete list of features in progress:
+See [roadmap/order_limit_pagination.md](../roadmap/order_limit_pagination.md) for the complete list of remaining features:
 
-- **Backward navigation** (`.before()` method)
-- **Cursor serialization** (`.encode()`/`.decode()` methods)
-- **Multi-column ordering** (`.then_by()` chaining)
-- **DynamoDB pagination** (native `LastEvaluatedKey` support)
-- **Page-based helpers** (traditional page number APIs)
+- **Multi-column ordering** (`.then_by()` chaining) - workaround exists using `OrderBy::from([...])`
+- **Direct `.limit()` method** - for non-paginated queries
+- **`.last()` convenience method**
+
+**Note:** Cursor serialization is intentionally left to the application level, allowing flexibility in how cursors are encoded/transmitted.
 
 ## Best Practices
 
@@ -328,16 +353,15 @@ Check for empty results and missing cursors:
 if page.items.is_empty() {
     return Ok(Json(EmptyResponse { message: "No more results" }));
 }
-```
 
-### 4. Consider UX for Cursor Expiration
-
-**⚠️ Work in Progress** - Future cursor tokens may include expiration
-
-```rust
-// Future: Handle expired cursors gracefully
-match Cursor::decode(&token) {
-    Ok(cursor) => query.after(Some(cursor)),
-    Err(_) => query, // Start from beginning on invalid cursor
+// Handle invalid cursors at application level
+if let Some(cursor_token) = cursor {
+    match deserialize_cursor(&cursor_token) {
+        Ok(cursor) => query = query.after(cursor),
+        Err(_) => {
+            // Start from beginning on invalid/expired cursor
+            // Log the error or return appropriate error response
+        }
+    }
 }
 ```
