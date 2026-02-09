@@ -5,14 +5,21 @@ pub(crate) enum ModelKind {
     /// Root model with table, primary key, and query builders
     Root(ModelRoot),
     /// Embedded model that is flattened into parent
-    Embedded,
+    Embedded(ModelEmbedded),
 }
 
 impl ModelKind {
     pub(crate) fn expect_root(&self) -> &ModelRoot {
         match self {
             ModelKind::Root(root) => root,
-            ModelKind::Embedded => panic!("expected root model, found embedded"),
+            ModelKind::Embedded(_) => panic!("expected root model, found embedded"),
+        }
+    }
+
+    pub(crate) fn expect_embedded(&self) -> &ModelEmbedded {
+        match self {
+            ModelKind::Embedded(embedded) => embedded,
+            ModelKind::Root(_) => panic!("expected embedded model, found root"),
         }
     }
 }
@@ -36,6 +43,12 @@ pub(crate) struct ModelRoot {
 
     /// Update by query builder struct identifier
     pub(crate) update_query_struct_ident: syn::Ident,
+}
+
+#[derive(Debug)]
+pub(crate) struct ModelEmbedded {
+    /// The field struct identifier
+    pub(crate) field_struct_ident: syn::Ident,
 }
 
 #[derive(Debug)]
@@ -159,7 +172,9 @@ impl Model {
 
         // Build ModelKind based on whether this is embedded or root
         let kind = if is_embedded {
-            ModelKind::Embedded
+            ModelKind::Embedded(ModelEmbedded {
+                field_struct_ident: struct_ident("Fields", ast),
+            })
         } else {
             let pk_fields = pk_index_fields
                 .iter()
@@ -225,7 +240,7 @@ impl Model {
                     .iter()
                     .map(|index| &self.fields[*index]),
             ),
-            ModelKind::Embedded => None,
+            ModelKind::Embedded(_) => None,
         }
     }
 }

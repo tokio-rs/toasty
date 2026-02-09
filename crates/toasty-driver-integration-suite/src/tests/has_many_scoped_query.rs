@@ -75,7 +75,7 @@ pub async fn scoped_query_eq(test: &mut Test) {
     // Query todos scoped by user 1
     let todos = u1
         .todos()
-        .query(Todo::FIELDS.order().eq(0))
+        .query(Todo::fields().order().eq(0))
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
@@ -88,7 +88,7 @@ pub async fn scoped_query_eq(test: &mut Test) {
     // Querying todos scoped by user 2
     let todos = u2
         .todos()
-        .query(Todo::FIELDS.order().eq(0))
+        .query(Todo::fields().order().eq(0))
         .all(&db)
         .await
         .unwrap()
@@ -114,7 +114,7 @@ pub async fn scoped_query_eq(test: &mut Test) {
     // Query for order 0 todos again
     let mut todos = u1
         .todos()
-        .query(Todo::FIELDS.order().eq(0))
+        .query(Todo::fields().order().eq(0))
         .all(&db)
         .await
         .unwrap();
@@ -130,7 +130,7 @@ pub async fn scoped_query_eq(test: &mut Test) {
     // Query for non-existent TODOs
     let todos = u2
         .todos()
-        .query(Todo::FIELDS.order().eq(1))
+        .query(Todo::fields().order().eq(1))
         .all(&db)
         .await
         .unwrap()
@@ -190,7 +190,7 @@ pub async fn scoped_query_gt(test: &mut Test) {
     // Find all != 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::FIELDS.order().ne(2))
+        .query(Todo::fields().order().ne(2))
         .collect(&db)
         .await
         .unwrap();
@@ -207,7 +207,7 @@ pub async fn scoped_query_gt(test: &mut Test) {
     // Find all greater than 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::FIELDS.order().gt(2))
+        .query(Todo::fields().order().gt(2))
         .collect(&db)
         .await
         .unwrap();
@@ -220,7 +220,7 @@ pub async fn scoped_query_gt(test: &mut Test) {
     // Find all greater than or equal to 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::FIELDS.order().ge(2))
+        .query(Todo::fields().order().ge(2))
         .collect(&db)
         .await
         .unwrap();
@@ -233,7 +233,7 @@ pub async fn scoped_query_gt(test: &mut Test) {
     // Find all less than to 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::FIELDS.order().lt(2))
+        .query(Todo::fields().order().lt(2))
         .collect(&db)
         .await
         .unwrap();
@@ -246,7 +246,7 @@ pub async fn scoped_query_gt(test: &mut Test) {
     // Find all less than or equal to 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::FIELDS.order().le(2))
+        .query(Todo::fields().order().le(2))
         .collect(&db)
         .await
         .unwrap();

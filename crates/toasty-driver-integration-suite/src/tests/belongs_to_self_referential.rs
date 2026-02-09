@@ -70,7 +70,7 @@ pub async fn crud_person_self_referential(t: &mut Test) {
 
     // Try preloading this time
     let p1 = Person::filter_by_id(p1.id)
-        .include(Person::FIELDS.children())
+        .include(Person::fields().children())
         .get(&db)
         .await
         .unwrap();

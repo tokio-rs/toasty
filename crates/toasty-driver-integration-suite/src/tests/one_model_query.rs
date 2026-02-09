@@ -114,7 +114,7 @@ pub async fn query_partition_key_string_eq(test: &mut Test) {
     }
 
     // Query on the partition key only
-    let teams = Team::filter(Team::FIELDS.league().eq("EPL"))
+    let teams = Team::filter(Team::fields().league().eq("EPL"))
         .collect::<Vec<_>>(&db)
         .await
         .unwrap();
@@ -129,10 +129,10 @@ pub async fn query_partition_key_string_eq(test: &mut Test) {
 
     // Query on the partition key and local key
     let teams = Team::filter(
-        Team::FIELDS
+        Team::fields()
             .league()
             .eq("MLS")
-            .and(Team::FIELDS.name().eq("Portland Timbers")),
+            .and(Team::fields().name().eq("Portland Timbers")),
     )
     .all(&db)
     .await
@@ -148,10 +148,10 @@ pub async fn query_partition_key_string_eq(test: &mut Test) {
 
     // Query on the partition key and a non-index field
     let teams = Team::filter(
-        Team::FIELDS
+        Team::fields()
             .league()
             .eq("MLS")
-            .and(Team::FIELDS.founded().eq(2009)),
+            .and(Team::fields().founded().eq(2009)),
     )
     .all(&db)
     .await
@@ -167,11 +167,11 @@ pub async fn query_partition_key_string_eq(test: &mut Test) {
 
     // Query on the partition key, local key, and a non-index field with a match
     let teams = Team::filter(
-        Team::FIELDS
+        Team::fields()
             .league()
             .eq("MLS")
-            .and(Team::FIELDS.founded().eq(2009))
-            .and(Team::FIELDS.name().eq("Portland Timbers")),
+            .and(Team::fields().founded().eq(2009))
+            .and(Team::fields().name().eq("Portland Timbers")),
     )
     .all(&db)
     .await
@@ -190,11 +190,11 @@ pub async fn query_partition_key_string_eq(test: &mut Test) {
 
     // Query on the partition key, local key, and a non-index field without a match
     let teams = Team::filter(
-        Team::FIELDS
+        Team::fields()
             .league()
             .eq("MLS")
-            .and(Team::FIELDS.founded().eq(2009))
-            .and(Team::FIELDS.name().eq("LA Galaxy")),
+            .and(Team::fields().founded().eq(2009))
+            .and(Team::fields().name().eq("LA Galaxy")),
     )
     .all(&db)
     .await
@@ -250,7 +250,7 @@ pub async fn query_local_key_cmp(test: &mut Test) {
     }
 
     let events: Vec<_> = Event::filter_by_kind("info")
-        .filter(Event::FIELDS.timestamp().ne(10))
+        .filter(Event::fields().timestamp().ne(10))
         .collect(&db)
         .await
         .unwrap();
@@ -261,7 +261,7 @@ pub async fn query_local_key_cmp(test: &mut Test) {
     );
 
     let events: Vec<_> = Event::filter_by_kind("info")
-        .filter(Event::FIELDS.timestamp().gt(10))
+        .filter(Event::fields().timestamp().gt(10))
         .collect(&db)
         .await
         .unwrap();
@@ -272,7 +272,7 @@ pub async fn query_local_key_cmp(test: &mut Test) {
     );
 
     let events: Vec<_> = Event::filter_by_kind("info")
-        .filter(Event::FIELDS.timestamp().ge(10))
+        .filter(Event::fields().timestamp().ge(10))
         .collect(&db)
         .await
         .unwrap();
@@ -283,7 +283,7 @@ pub async fn query_local_key_cmp(test: &mut Test) {
     );
 
     let events: Vec<_> = Event::filter_by_kind("info")
-        .filter(Event::FIELDS.timestamp().lt(10))
+        .filter(Event::fields().timestamp().lt(10))
         .collect(&db)
         .await
         .unwrap();
@@ -294,7 +294,7 @@ pub async fn query_local_key_cmp(test: &mut Test) {
     );
 
     let events: Vec<_> = Event::filter_by_kind("info")
-        .filter(Event::FIELDS.timestamp().le(10))
+        .filter(Event::fields().timestamp().le(10))
         .collect(&db)
         .await
         .unwrap();
@@ -699,7 +699,7 @@ pub async fn query_arbitrary_constraint(test: &mut Test) {
             .unwrap();
     }
 
-    let events: Vec<_> = Event::filter(Event::FIELDS.timestamp().gt(12))
+    let events: Vec<_> = Event::filter(Event::fields().timestamp().gt(12))
         .collect(&db)
         .await
         .unwrap();
@@ -710,10 +710,10 @@ pub async fn query_arbitrary_constraint(test: &mut Test) {
     );
 
     let events: Vec<_> = Event::filter(
-        Event::FIELDS
+        Event::fields()
             .timestamp()
             .gt(12)
-            .and(Event::FIELDS.kind().ne("info")),
+            .and(Event::fields().kind().ne("info")),
     )
     .collect(&db)
     .await
@@ -727,10 +727,10 @@ pub async fn query_arbitrary_constraint(test: &mut Test) {
     );
 
     let events: Vec<_> = Event::filter(
-        Event::FIELDS
+        Event::fields()
             .kind()
             .eq("info")
-            .and(Event::FIELDS.timestamp().ne(10)),
+            .and(Event::fields().timestamp().ne(10)),
     )
     .collect(&db)
     .await
@@ -742,10 +742,10 @@ pub async fn query_arbitrary_constraint(test: &mut Test) {
     );
 
     let events: Vec<_> = Event::filter(
-        Event::FIELDS
+        Event::fields()
             .kind()
             .eq("info")
-            .and(Event::FIELDS.timestamp().gt(10)),
+            .and(Event::fields().timestamp().gt(10)),
     )
     .collect(&db)
     .await
@@ -757,10 +757,10 @@ pub async fn query_arbitrary_constraint(test: &mut Test) {
     );
 
     let events: Vec<_> = Event::filter(
-        Event::FIELDS
+        Event::fields()
             .kind()
             .eq("info")
-            .and(Event::FIELDS.timestamp().ge(10)),
+            .and(Event::fields().timestamp().ge(10)),
     )
     .collect(&db)
     .await
@@ -772,10 +772,10 @@ pub async fn query_arbitrary_constraint(test: &mut Test) {
     );
 
     let events: Vec<_> = Event::filter(
-        Event::FIELDS
+        Event::fields()
             .kind()
             .eq("info")
-            .and(Event::FIELDS.timestamp().lt(10)),
+            .and(Event::fields().timestamp().lt(10)),
     )
     .collect(&db)
     .await
@@ -787,10 +787,10 @@ pub async fn query_arbitrary_constraint(test: &mut Test) {
     );
 
     let events: Vec<_> = Event::filter(
-        Event::FIELDS
+        Event::fields()
             .kind()
             .eq("info")
-            .and(Event::FIELDS.timestamp().le(10)),
+            .and(Event::fields().timestamp().le(10)),
     )
     .collect(&db)
     .await

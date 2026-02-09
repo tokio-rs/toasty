@@ -4,10 +4,10 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 impl Expand<'_> {
-    pub(super) fn expand_model_field_struct(&self) -> TokenStream {
+    pub(super) fn expand_field_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let field_struct_ident = &self.model.kind.expect_root().field_struct_ident;
+        let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
 
         // Generate methods that return field paths for the model
@@ -22,9 +22,14 @@ impl Expand<'_> {
 
                 match &field.ty {
                     Primitive(ty) => {
+                        // Use the Primitive trait's FieldAccessor to determine the return type
+                        // For primitives, this will be Path<T>
+                        // For embedded types, this will be {Type}Fields
                         quote! {
-                            #vis fn #field_ident(&self) -> #toasty::Path<#ty> {
-                                #toasty::Path::from_field_index::<#model_ident>(#field_offset)
+                            #vis fn #field_ident(&self) -> <#ty as #toasty::stmt::Primitive>::FieldAccessor {
+                                <#ty as #toasty::stmt::Primitive>::make_field_accessor(
+                                    self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
+                                )
                             }
                         }
                     }
@@ -34,7 +39,7 @@ impl Expand<'_> {
                         quote! {
                             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField {
                                 <#ty as #toasty::Relation>::OneField::from_path(
-                                    #toasty::Path::from_field_index::<#model_ident>(#field_offset)
+                                    self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
                                 )
                             }
                         }
@@ -45,7 +50,7 @@ impl Expand<'_> {
                         quote! {
                             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField {
                                 <#ty as #toasty::Relation>::ManyField::from_path(
-                                    #toasty::Path::from_field_index::<#model_ident>(#field_offset)
+                                    self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
                                 )
                             }
                         }
@@ -56,7 +61,7 @@ impl Expand<'_> {
                         quote! {
                             #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField {
                                 <#ty as #toasty::Relation>::OneField::from_path(
-                                    #toasty::Path::from_field_index::<#model_ident>(#field_offset)
+                                    self.path().chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
                                 )
                             }
                         }
@@ -64,24 +69,45 @@ impl Expand<'_> {
                 }
             });
 
-        // Generate empty struct and impl block with methods
+        // Generate struct with path field
         quote!(
-            #vis struct #field_struct_ident;
+            #vis struct #field_struct_ident {
+                path: #toasty::Path<#model_ident>,
+            }
 
             impl #field_struct_ident {
+                fn path(&self) -> #toasty::Path<#model_ident> {
+                    self.path.clone()
+                }
+
                 #( #methods )*
             }
         )
     }
 
     pub(super) fn expand_model_field_struct_init(&self) -> TokenStream {
+        let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let field_struct_ident = &self.model.kind.expect_root().field_struct_ident;
+        let field_struct_ident = self.field_struct_ident();
 
-        // Generate simple const FIELDS with empty struct initialization
+        // Generate fields() as a method instead of const to avoid const initialization issues
+        // This will be placed inside the existing impl block for the model
         quote!(
-            #vis const FIELDS: #field_struct_ident = #field_struct_ident;
+            #vis fn fields() -> #field_struct_ident {
+                #field_struct_ident {
+                    path: #toasty::Path::root(),
+                }
+            }
         )
+    }
+
+    fn field_struct_ident(&self) -> &syn::Ident {
+        use crate::schema::ModelKind;
+
+        match &self.model.kind {
+            ModelKind::Root(root) => &root.field_struct_ident,
+            ModelKind::Embedded(embedded) => &embedded.field_struct_ident,
+        }
     }
 
     pub(super) fn expand_field_name_to_id(&self) -> TokenStream {

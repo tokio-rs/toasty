@@ -610,7 +610,7 @@ pub async fn associate_has_one_by_val_on_update_query_with_filter(_test: &mut Te
 
     // Getting this to work will require a big chunk of work in the planner.
     User::filter_by_id(&u1.id)
-        .filter(User::FIELDS.name().eq("anon"))
+        .filter(User::fields().name().eq("anon"))
         .update()
         .profile(&p1)
         .exec(&db)

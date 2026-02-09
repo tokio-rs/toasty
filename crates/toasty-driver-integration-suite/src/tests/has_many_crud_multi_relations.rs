@@ -167,7 +167,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
         &expect,
         category
             .todos()
-            .query(Todo::FIELDS.user().eq(&user))
+            .query(Todo::fields().user().eq(&user))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
@@ -178,7 +178,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
         &db,
         &expect,
         user.todos()
-            .query(Todo::FIELDS.category().eq(&category))
+            .query(Todo::fields().category().eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),
@@ -189,7 +189,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
         &db,
         &expect,
         Todo::filter_by_user_id(user.id)
-            .filter(Todo::FIELDS.category().eq(&category))
+            .filter(Todo::fields().category().eq(&category))
             .collect::<Vec<_>>(&db)
             .await
             .unwrap(),

@@ -458,223 +458,303 @@ User::all().filter(
 )
 ```
 
-## Implementation Plan
+### Embedded struct field constraints
 
-### High-Level Strategy
-
-Implement in two phases:
-1. **Phase 1: Embedded Structs** - Simpler, no discriminator logic
-2. **Phase 2: Enums** - Builds on embedded struct patterns + discriminator
-
-### Phase 1: Embedded Struct Support
-
-**Step 1: Schema Type Extensions** (Current)
-- Add `ModelKind` enum to distinguish `Root` vs `Embedded` models
-- Update `Model` struct to use `ModelKind` instead of always having `primary_key`
-- Update `FieldTy::Embedded` to reference `ModelId` instead of inline struct
-- Both root and embedded models use the same `Model` type
-- See "Schema Design" section below for details
-
-**Step 2: Column Flattening**
-- Extend schema builder to flatten embedded fields into columns
-- Implement `{field}_{embedded_field}` naming pattern
-- Handle `Option<EmbeddedStruct>` by making all columns nullable
-
-**Step 3: Codegen - Parsing**
-- Parse `#[derive(toasty::Embed)]` attribute
-- Build `Embedded` field type in schema representation
-- Validate embedded type invariants during parsing
-
-**Step 4: Codegen - Expansion**
-- Generate field accessors for embedded struct fields
-- Generate struct constructors/deconstructors
-- No query support yet
-
-**Step 5: Engine - CRUD Support**
-- Update insert to handle flattened fields
-- Update query to reconstruct embedded structs from columns
-- Handle NULL semantics for `Option<EmbeddedStruct>`
-
-**Step 6: Testing**
-- Add comprehensive tests for embedded structs
-- Test nested embedded structs
-- Test `Option<EmbeddedStruct>`
-- Test custom column names via `#[column("...")]`
-
-### Phase 2: Enum Support
-
-**Step 7: Schema for Unit Enums**
-- Add discriminator column representation
-- Parse `#[column(variant = N)]` attributes
-- Validate unique variant values
-
-**Step 8: Unit Enum CRUD**
-- Generate enum ↔ integer conversions
-- Update engine for discriminator handling
-
-**Step 9: Data-Carrying Enums**
-- Combine discriminator + field flattening
-- Implement `{field}_{variant}_{field}` naming
-- Handle variant field nullability
-
-**Step 10: Query Support**
-- Generate `is_*()` and `matches()` methods
-- Update engine to translate variant queries
-
-**Step 11-12: Advanced Features**
-- Tuple variants, shared columns, customization options
-
-## Step 1 Detailed Design: Schema Type Extensions
-
-### Unified Model/Embedded Approach
-
-Instead of creating separate `Embedded` types, we unify root models and embedded models under the same `Model` type, distinguished by `ModelKind`.
-
-#### Update Model in `crates/toasty-core/src/schema/app/model.rs`:
+Embedded struct fields can be accessed directly for filtering, ordering, and other query operations:
 
 ```rust
-#[derive(Debug, Clone)]
-pub struct Model {
-    pub id: ModelId,
-    pub name: Name,
-    pub fields: Vec<Field>,
-    pub kind: ModelKind,        // NEW: distinguishes root vs embedded
-    pub indices: Vec<Index>,
-    pub table_name: Option<String>,
+#[derive(Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+    address: Address,
 }
 
-#[derive(Debug, Clone)]
-pub enum ModelKind {
-    /// Root model that maps to a database table and can be queried directly
-    Root {
-        /// The primary key for this model. Root models must have a primary key.
-        primary_key: PrimaryKey,
+#[derive(toasty::Embed)]
+struct Address {
+    street: String,
+    city: String,
+    zip: String,
+}
+
+// Filter by embedded struct fields
+User::all().filter(User::FIELDS.address().city().eq("Seattle"))
+User::all().filter(User::FIELDS.address().zip().like("98%"))
+
+// Multiple constraints on embedded struct
+User::all().filter(
+    User::FIELDS.address().city().eq("Seattle")
+        .and(User::FIELDS.address().zip().like("98%"))
+)
+
+// Order by embedded struct fields
+User::all().order_by(User::FIELDS.address().city().asc())
+
+// Select embedded struct fields (projection)
+User::all()
+    .select(User::FIELDS.id())
+    .select(User::FIELDS.address().city())
+```
+
+### Nested embedded structs
+
+For nested embedded types, continue chaining field accessors:
+
+```rust
+#[derive(Model)]
+struct Company {
+    #[key]
+    #[auto]
+    id: u64,
+    headquarters: Office,
+}
+
+#[derive(toasty::Embed)]
+struct Office {
+    name: String,
+    location: Address,
+}
+
+#[derive(toasty::Embed)]
+struct Address {
+    street: String,
+    city: String,
+    zip: String,
+}
+
+// Access nested embedded struct fields
+Company::all().filter(
+    Company::FIELDS.headquarters().location().city().eq("Seattle")
+)
+
+Company::all().filter(
+    Company::FIELDS.headquarters().name().eq("Main Office")
+        .and(Company::FIELDS.headquarters().location().zip().like("98%"))
+)
+```
+
+### Combining enum and embedded struct constraints
+
+When an enum variant contains an embedded struct, use `.matches()` to specify the variant, then access the embedded struct's fields:
+
+```rust
+#[derive(Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+    contact: ContactInfo,
+}
+
+#[derive(toasty::Embed)]
+enum ContactInfo {
+    #[column(variant = 1)]
+    Email { address: String },
+    #[column(variant = 2)]
+    Mail { address: Address },
+}
+
+#[derive(toasty::Embed)]
+struct Address {
+    street: String,
+    city: String,
+}
+
+// Filter by embedded struct fields within enum variant
+User::all().filter(
+    User::FIELDS.contact().matches(
+        ContactInfo::VARIANTS.mail().address().city().eq("Seattle")
+    )
+)
+
+// Multiple constraints on embedded struct within variant
+User::all().filter(
+    User::FIELDS.contact().matches(
+        ContactInfo::VARIANTS.mail()
+            .address().city().eq("Seattle")
+            .address().street().contains("Main")
+    )
+)
+```
+
+### Constraints with shared columns
+
+When enum variants share columns, constraints apply based on the variant being matched:
+
+```rust
+#[derive(Model)]
+struct Character {
+    #[key]
+    #[auto]
+    id: u64,
+    creature: Creature,
+}
+
+#[derive(toasty::Embed)]
+enum Creature {
+    #[column(variant = 1)]
+    Human {
+        #[column("name")]
+        name: String,
+        profession: String,
     },
-    /// Embedded model that is flattened into its parent model's table
-    Embedded,
+    #[column(variant = 2)]
+    Animal {
+        #[column("name")]
+        name: String,
+        species: String,
+    },
 }
 
-impl Model {
-    /// Returns true if this is a root model (has a table and primary key)
-    pub fn is_root(&self) -> bool {
-        matches!(self.kind, ModelKind::Root { .. })
-    }
+// Query the shared "name" field for a specific variant
+Character::all().filter(
+    Character::FIELDS.creature().matches(
+        Creature::VARIANTS.human().name().eq("Alice")
+    )
+)
 
-    /// Returns true if this is an embedded model (flattened into parent)
-    pub fn is_embedded(&self) -> bool {
-        matches!(self.kind, ModelKind::Embedded)
-    }
+// Query across variants using the shared column
+// (finds any creature with this name, regardless of variant)
+Character::all().filter(
+    Character::FIELDS.creature().name().eq("Bob")
+)
 
-    /// Returns the primary key if this is a root model, None if embedded
-    pub fn primary_key(&self) -> Option<&PrimaryKey> {
-        match &self.kind {
-            ModelKind::Root { primary_key } => Some(primary_key),
-            ModelKind::Embedded => None,
-        }
-    }
-
-    /// Returns true if this model can be the target of a relation
-    pub fn can_be_relation_target(&self) -> bool {
-        self.is_root()
-    }
-}
+// Variant-specific field
+Character::all().filter(
+    Character::FIELDS.creature().matches(
+        Creature::VARIANTS.human().profession().eq("Knight")
+    )
+)
 ```
 
-#### Add Embedded type in `crates/toasty-core/src/schema/app/embedded.rs`:
+## Updating
+
+### Whole replacement
+
+Setting an embedded struct field on an update replaces all of its columns:
 
 ```rust
-use crate::{
-    schema::app::{Model, ModelId, Schema},
-    stmt,
-};
+// Loaded model update — sets address_street, address_city, address_zip
+user.update()
+    .address(Address { street: "123 Main", city: "Seattle", zip: "98101" })
+    .exec(&db).await?;
 
-#[derive(Debug, Clone)]
-pub struct Embedded {
-    /// The embedded model being referenced
-    pub target: ModelId,
-
-    /// The embedded field's expression type. This is the type the field evaluates
-    /// to from a user's point of view.
-    pub expr_ty: stmt::Type,
-}
-
-impl Embedded {
-    pub fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
-        schema.model(self.target)
-    }
-}
+// Query-based update — same behavior, no model loaded
+User::filter_by_id(id).update()
+    .address(Address { street: "123 Main", city: "Seattle", zip: "98101" })
+    .exec(&db).await?;
 ```
 
-#### Update FieldTy in `crates/toasty-core/src/schema/app/field.rs`:
+### Partial updates
+
+Each embedded struct generates a companion `{Type}Update` type. It collects individual
+field assignments and only updates the columns for fields that are explicitly set.
 
 ```rust
-pub enum FieldTy {
-    Primitive(FieldPrimitive),
-    Embedded(Embedded),       // NEW: Reference to an embedded model
-    BelongsTo(BelongsTo),
-    HasMany(HasMany),
-    HasOne(HasOne),
+#[derive(toasty::Embed)]
+struct Address {
+    street: String,
+    city: String,
+    zip: String,
 }
 
-impl FieldTy {
-    pub fn is_embedded(&self) -> bool {
-        matches!(self, Self::Embedded(..))
-    }
-    
-    pub fn as_embedded(&self) -> Option<&Embedded> {
-        match self {
-            Self::Embedded(embedded) => Some(embedded),
-            _ => None,
-        }
-    }
-    
-    pub fn expect_embedded(&self) -> &Embedded {
-        match self {
-            Self::Embedded(embedded) => embedded,
-            _ => panic!("expected embedded field"),
-        }
-    }
-    
-    pub fn expect_embedded_mut(&mut self) -> &mut Embedded {
-        match self {
-            Self::Embedded(embedded) => embedded,
-            _ => panic!("expected embedded field"),
-        }
-    }
-}
+// AddressUpdate is generated automatically by `#[derive(toasty::Embed)]`
 ```
 
-### Key Design Decisions
+The same `.address()` method on the update builder accepts either an `Address` (whole
+replacement) or an `AddressUpdate` (partial update):
 
-- **Unified representation**: Both root and embedded models use the same `Model` type
-- **`ModelKind` distinguishes them**: `Root { primary_key }` vs `Embedded`
-- **`Embedded` type follows relation pattern**: Like `BelongsTo`, `HasMany`, `HasOne`, it contains `target: ModelId` and `expr_ty: stmt::Type`
-- **`FieldTy::Embedded(Embedded)`**: Not a bare `ModelId` - has expression type for queries
-- **All models get `ModelId`**: Solves the type reference problem - can look up any model by ID
-- **Primary key only for root models**: Type-safe via `ModelKind::Root { primary_key }`
-- **Embedded models can have indices**: They're full models, just with different storage strategy
-- **Validation enforces rules**: Embedded models cannot be relation targets, checked at schema build time
-- **Extensibility**: Easy to add more kinds later (e.g., `Enum { discriminator }`)
+```rust
+// Partial update — only address_city is SET
+user.update()
+    .address(AddressUpdate::new().city("Seattle"))
+    .exec(&db).await?;
 
-### Benefits of This Approach
+// Multiple sub-fields — only address_city and address_zip are SET
+user.update()
+    .address(AddressUpdate::new().city("Seattle").zip("98101"))
+    .exec(&db).await?;
 
-1. **Code reuse**: Same field processing, validation, indexing for all models
-2. **Consistent API**: `schema.model(model_id)` works for both root and embedded
-3. **Type safety**: Primary key only exists on root models (compile-time safe)
-4. **Flexibility**: Embedded models can have indices, constraints, all the features
-5. **Future-proof**: Easy to add enums as another `ModelKind` variant
+// Query-based partial update
+User::filter_by_id(id).update()
+    .address(AddressUpdate::new().city("Seattle"))
+    .exec(&db).await?;
+```
 
-### Column Flattening Strategy (for future steps)
+`AddressUpdate` has the same field setter methods as the root update builder — one per
+field, each accepting `impl IntoExpr<T>`:
 
-**Approach**: Flatten at schema build time
-- Embedded model fields expand to multiple `db::Column` entries in the parent model's table
-- Column names follow pattern: `{field_name}_{embedded_field_name}`
-- Nested embedded models flatten recursively: `{field}_{embedded}_{nested}`
-- Each embedded sub-field gets its own entry in the mapping layer
+```rust
+AddressUpdate::new()
+    .street("456 Oak Ave")
+    .city("Portland")
+    .zip("97201")
+```
 
-### Validation Rules (for future steps)
+### Partial updates with nested embedded structs
 
-Schema validation (`toasty-core/src/schema/verify`) must enforce:
-- Embedded models (where `kind == ModelKind::Embedded`) cannot be relation targets
-- Nested embedded models are allowed (recursive flattening)
-- All `#[column(variant = N)]` values are unique within an enum (Phase 2)
+Nested embedded structs also generate `{Type}Update` types. Pass them to the parent's
+update builder:
+
+```rust
+#[derive(toasty::Embed)]
+struct Office {
+    name: String,
+    location: Address,
+}
+
+// Update only headquarters_location_city
+company.update()
+    .headquarters(OfficeUpdate::new()
+        .location(AddressUpdate::new().city("Seattle"))
+    )
+    .exec(&db).await?;
+
+// Update headquarters_name and headquarters_location_zip
+company.update()
+    .headquarters(OfficeUpdate::new()
+        .name("West Coast HQ")
+        .location(AddressUpdate::new().zip("98101"))
+    )
+    .exec(&db).await?;
+```
+
+### Enum updates
+
+Enums use whole-variant replacement. Setting an enum field replaces the discriminator and
+all variant columns:
+
+```rust
+// Replace the entire enum value — sets discriminator + variant fields,
+// NULLs out fields from the previous variant
+user.update()
+    .contact(ContactMethod::Email { address: "new@example.com".into() })
+    .exec(&db).await?;
+```
+
+For data-carrying variants, use `{Type}Update` to update fields within the current
+variant without changing the discriminator:
+
+```rust
+#[derive(toasty::Embed)]
+enum ContactMethod {
+    #[column(variant = 1)]
+    Email { address: String },
+    #[column(variant = 2)]
+    Phone { country: String, number: String },
+}
+
+// Update only the phone number, leave country and discriminator unchanged
+user.update()
+    .contact(ContactMethodUpdate::phone().number("555-1234"))
+    .exec(&db).await?;
+
+// Query-based
+User::filter_by_id(id).update()
+    .contact(ContactMethodUpdate::email().address("new@example.com"))
+    .exec(&db).await?;
+```
+
+`ContactMethodUpdate` has one constructor per variant. Each constructor returns a builder
+scoped to that variant's fields. The discriminator is not changed by partial updates.

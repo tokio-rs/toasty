@@ -39,7 +39,7 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) {
 
     // Find the user, include TODOs
     let user = User::filter_by_id(user.id)
-        .include(User::FIELDS.todos())
+        .include(User::fields().todos())
         .get(&db)
         .await
         .unwrap();
@@ -50,7 +50,7 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) {
     let id = user.todos.get()[0].id;
 
     let todo = Todo::filter_by_id(id)
-        .include(Todo::FIELDS.user())
+        .include(Todo::fields().user())
         .get(&db)
         .await
         .unwrap();
@@ -155,14 +155,14 @@ pub async fn multiple_includes_same_model(test: &mut Test) {
 
     // Test individual includes work (baseline)
     let user_with_posts = User::filter_by_id(user.id)
-        .include(User::FIELDS.posts())
+        .include(User::fields().posts())
         .get(&db)
         .await
         .unwrap();
     assert_eq!(2, user_with_posts.posts.get().len());
 
     let user_with_comments = User::filter_by_id(user.id)
-        .include(User::FIELDS.comments())
+        .include(User::fields().comments())
         .get(&db)
         .await
         .unwrap();
@@ -170,8 +170,8 @@ pub async fn multiple_includes_same_model(test: &mut Test) {
 
     // Test multiple includes in one query
     let loaded_user = User::filter_by_id(user.id)
-        .include(User::FIELDS.posts()) // First include
-        .include(User::FIELDS.comments()) // Second include
+        .include(User::fields().posts()) // First include
+        .include(User::fields().comments()) // Second include
         .get(&db)
         .await
         .unwrap();
@@ -221,7 +221,7 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) {
 
     // Find the user, include profile
     let user = User::filter_by_id(user.id)
-        .include(User::FIELDS.profile())
+        .include(User::fields().profile())
         .get(&db)
         .await
         .unwrap();
@@ -235,7 +235,7 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) {
 
     // Test the reciprocal belongs_to preload
     let profile = Profile::filter_by_id(profile_id)
-        .include(Profile::FIELDS.user())
+        .include(Profile::fields().user())
         .get(&db)
         .await
         .unwrap();
@@ -307,7 +307,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
 
     // Test individual includes work (baseline)
     let user_with_profile = User::filter_by_id(user.id)
-        .include(User::FIELDS.profile())
+        .include(User::fields().profile())
         .get(&db)
         .await
         .unwrap();
@@ -318,7 +318,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
     );
 
     let user_with_settings = User::filter_by_id(user.id)
-        .include(User::FIELDS.settings())
+        .include(User::fields().settings())
         .get(&db)
         .await
         .unwrap();
@@ -330,8 +330,8 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
 
     // Test multiple includes in one query
     let loaded_user = User::filter_by_id(user.id)
-        .include(User::FIELDS.profile()) // First include
-        .include(User::FIELDS.settings()) // Second include
+        .include(User::fields().profile()) // First include
+        .include(User::fields().settings()) // Second include
         .get(&db)
         .await
         .unwrap();
@@ -410,8 +410,8 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) {
 
     // Test combined has_one and has_many preload in a single query
     let loaded_user = User::filter_by_id(user.id)
-        .include(User::FIELDS.profile()) // has_one include
-        .include(User::FIELDS.todos()) // has_many include
+        .include(User::fields().profile()) // has_one include
+        .include(User::fields().todos()) // has_many include
         .get(&db)
         .await
         .unwrap();
@@ -469,7 +469,7 @@ pub async fn preload_on_empty_table(test: &mut Test) {
 
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::all()
-        .include(User::FIELDS.todos())
+        .include(User::fields().todos())
         .collect(&db)
         .await
         .unwrap();
@@ -513,7 +513,7 @@ pub async fn preload_on_empty_query(test: &mut Test) {
 
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::filter_by_name("foo")
-        .include(User::FIELDS.todos())
+        .include(User::fields().todos())
         .collect(&db)
         .await
         .unwrap();
