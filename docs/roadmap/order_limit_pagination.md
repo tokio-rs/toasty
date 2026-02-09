@@ -50,71 +50,84 @@ let posts = Post::all()
     .await?;
 ```
 
-### ❌ What's Missing for MVP
+### ✅ Recently Implemented
 
 #### 1. **Page<T> Return Type**
-Currently `.paginate().collect()` returns `Vec<T>`, but should return `Page<T>`:
+`.paginate().collect()` now returns `Page<T>`:
 
 **Current API:**
 ```rust
-let posts: Vec<Post> = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
-    .paginate(10)
-    .collect(&db)
-    .await?;
-```
-
-**Target API:**
-```rust
-pub struct Page<T> {
-    pub items: Vec<T>,
-    pub next_cursor: Option<Cursor>,
-    pub prev_cursor: Option<Cursor>,
-}
-
-// collect() now returns Page<T>
 let page: Page<Post> = Post::all()
     .order_by(Post::FIELDS.created_at().desc())
     .paginate(10)
     .collect(&db)
     .await?;
-    
-// Access items via page.items
+
+// Access items via page.items or deref
 for post in &page.items {
     println!("{}", post.title);
 }
 ```
 
-#### 2. **Cursor Type and Serialization**
-Need a `Cursor` type that can be serialized for web APIs:
+#### 2. **Page Navigation Methods**
+Navigate forward and backward through pages:
 
-**Needed API:**
+**Current API:**
 ```rust
-pub struct Cursor {
-    expr: stmt::Expr,
+// Forward navigation
+if let Some(next_page) = page.next(&db).await? {
+    process_posts(&next_page.items);
 }
 
-impl Cursor {
-    pub fn encode(&self) -> String { ... }  // For web APIs
-    pub fn decode(token: &str) -> Result<Self> { ... }
+// Backward navigation
+if let Some(prev_page) = page.prev(&db).await? {
+    process_posts(&prev_page.items);
 }
 ```
 
-#### 3. **Backward Navigation**
-Add `.before()` method for previous page functionality:
+#### 3. **First Convenience Method**
+Get the first matching record:
 
-**Needed API:**
+**Current API:**
 ```rust
-let prev_page = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
-    .paginate(10)
-    .before(page.prev_cursor)  // Navigate backward
-    .collect(&db)
+let first_user: Option<User> = User::all()
+    .order_by(User::FIELDS.created_at().asc())
+    .first(&db)
     .await?;
 ```
 
-#### 4. **Multi-column Ordering**
+### ❌ What's Missing for MVP
+
+#### 1. **Cursor Serialization**
+Need serialization methods for web APIs:
+
+**Needed API:**
+```rust
+// Serialize cursor for JSON response
+let next_token = page.next_cursor.map(|c| c.encode());
+
+// Deserialize cursor from request
+let cursor = Cursor::decode(&token)?;
+```
+
+#### 2. **Multi-column Ordering Convenience**
 Currently requires manual `OrderBy` construction for multiple columns.
+
+**Current Workaround:**
+```rust
+use toasty::stmt::OrderBy;
+
+let order = OrderBy::from([
+    Post::FIELDS.status().asc(),
+    Post::FIELDS.created_at().desc(),
+]);
+
+let page = Post::all()
+    .order_by(order)
+    .paginate(10)
+    .collect(&db)
+    .await?;
+```
 
 **Needed API:**
 ```rust
@@ -127,7 +140,7 @@ let users = User::all()
     .await?;
 ```
 
-#### 5. **Direct Limit Method**
+#### 3. **Direct Limit Method**
 Currently `limit()` is not exposed for non-paginated queries.
 
 **Needed API:**
@@ -140,110 +153,93 @@ let recent_posts: Vec<Post> = Post::all()
     .await?;
 ```
 
-#### 6. **First/Last Convenience Methods**
-Common convenience methods for getting single records.
+#### 4. **Last Convenience Method**
+Get the last matching record:
 
 **Needed API:**
 ```rust
-// Get first/last record
-let first_user: Option<User> = User::all()
-    .order_by(User::FIELDS.created_at().asc())
-    .first(&db)
+let last_user: Option<User> = User::all()
+    .order_by(User::FIELDS.created_at().desc())
+    .last(&db)
     .await?;
 ```
 
 ## Implementation Roadmap
 
-### Phase 1: Core Pagination Types (Priority: High)
+### ✅ Completed Phases
 
-#### 1.1 Create Cursor and Page Types
-- **Files:** `toasty/src/stmt/cursor.rs`, `toasty/src/stmt/page.rs`
-- **Task:** Create basic cursor and page structures
-- **Complexity:** Low
-```rust
-// cursor.rs
-pub struct Cursor {
-    expr: stmt::Expr,
-}
+#### Phase 1: Core Pagination Types
+- ✅ Created `Page<T>` type in `toasty/src/page.rs`
+- ✅ Modified `.paginate().collect()` to return `Page<T>`
+- ✅ Added `.next()` and `.prev()` methods on `Page<T>`
+- ✅ Implemented backward navigation with `.before()` in `toasty/src/stmt/paginate.rs`
 
-// page.rs  
-pub struct Page<T> {
-    pub items: Vec<T>,
-    pub next_cursor: Option<Cursor>,
-    pub prev_cursor: Option<Cursor>,
-}
-```
+#### Phase 2: First Convenience Method
+- ✅ Generated `.first()` method in `toasty-codegen/src/expand/query.rs`
 
-#### 1.2 Modify Paginate to Return Page<T>
-- **File:** `toasty/src/stmt/paginate.rs`
-- **Task:** Change `.collect()` to return `Page<T>` instead of `Vec<T>`
-- **Complexity:** Medium
-- **Breaking Change:** This modifies the existing API
-```rust
-impl<M: Model> Paginate<M> {
-    pub async fn collect(&self, db: &Db) -> Result<Page<M>> {
-        // Fetch limit+1 to determine next_cursor
-        // Build prev_cursor from current position
-        // Return Page with cursors
-    }
-}
-```
+### 🚧 Remaining Work
 
-### Phase 2: Navigation & Serialization (Priority: Medium)
-
-#### 2.1 Add Backward Navigation  
-- **File:** `toasty/src/stmt/paginate.rs`
-- **Task:** Add `.before()` method and backward cursor logic
-- **Complexity:** Medium
-
-#### 2.2 Cursor Serialization
-- **File:** `toasty/src/stmt/cursor.rs`
+#### Phase 3: Cursor Serialization (Priority: High)
 - **Task:** Add `.encode()` and `.decode()` methods for web APIs
 - **Complexity:** Medium
+- **Files:** New file or methods on `stmt::Expr`
+
 ```rust
-impl Cursor {
+// Option 1: Add methods to stmt::Expr
+impl stmt::Expr {
     pub fn encode(&self) -> String {
-        // Base64 encode the stmt::Expr for web transport
+        // Base64 encode the expression for web transport
     }
-    
+
     pub fn decode(token: &str) -> Result<Self> {
         // Deserialize from base64 token
     }
 }
+
+// Option 2: Create a wrapper Cursor type
+pub struct Cursor(stmt::Expr);
+
+impl Cursor {
+    pub fn encode(&self) -> String { ... }
+    pub fn decode(token: &str) -> Result<Self> { ... }
+}
 ```
 
-#### 2.3 Multi-column Ordering
+#### Phase 4: Multi-column Ordering (Priority: Medium)
 - **File:** `toasty-codegen/src/expand/query.rs`
 - **Task:** Add `.then_by()` method for chained ordering
 - **Complexity:** Medium
 
-### Phase 3: Convenience Features (Priority: Low)
+#### Phase 5: Convenience Features (Priority: Low)
 
-#### 3.1 Direct Limit Method
+##### 5.1 Direct Limit Method
 - **File:** `toasty-codegen/src/expand/query.rs`
 - **Task:** Generate `.limit()` method for non-paginated queries
 - **Complexity:** Low
 
-#### 3.2 First/Last Methods
-- **File:** `toasty-codegen/src/expand/query.rs`  
-- **Task:** Generate `.first()` and `.last()` convenience methods
+##### 5.2 Last Method
+- **File:** `toasty-codegen/src/expand/query.rs`
+- **Task:** Generate `.last()` convenience method
 - **Complexity:** Low
 
 ## Testing Requirements
 
-### Unit Tests Needed
-1. ✅ Basic ordering (exists: `one_model_sort_limit.rs`)
-2. ❌ Multi-column ordering
-3. ❌ Limit with offset
-4. ❌ Page-based pagination
-5. ✅ Cursor-based pagination (partial coverage)
-6. ❌ Edge cases (empty results, beyond last page)
+### ✅ Existing Tests
+1. ✅ Basic ordering - `crates/toasty-driver-integration-suite/src/tests/one_model_sort_limit.rs::sort_asc`
+2. ✅ Page-based pagination - `one_model_sort_limit.rs::paginate`
+3. ✅ Forward navigation (`.after()` and `page.next()`)
+4. ✅ Backward navigation (`.prev()`)
+5. ✅ First convenience method - `one_model_crud.rs` and others
 
-### Integration Tests Needed
-1. Test across all database drivers (SQLite, MySQL, PostgreSQL, DynamoDB)
-2. Test with different data types for ordering
-3. Test pagination with complex queries (joins, filters)
-4. Performance tests for large datasets
+### ❌ Tests Still Needed
+1. ❌ Multi-column ordering
+2. ❌ Cursor serialization (`.encode()`/`.decode()`)
+3. ❌ Direct `.limit()` method (non-paginated queries)
+4. ❌ `.last()` convenience method
+5. ❌ Edge cases:
+   - Empty results with pagination
+   - Single page results (no next/prev cursors)
+   - Pagination beyond last page
 
 ## Database-Specific Considerations
 
@@ -258,22 +254,36 @@ impl Cursor {
 
 ## Success Criteria
 
-An MVP for ordering, limits, and pagination should:
+Current status of MVP features:
 
 1. ✅ Allow ordering by any model field (ascending/descending)
-2. ✅ Support efficient cursor-based pagination (current keyset approach)
-3. ❌ Return `Page<T>` struct with navigation cursors
-4. ❌ Support backward navigation with `.before()` method
-5. ❌ Provide cursor serialization for web APIs (`.encode()`/`.decode()`)
-6. ❌ Support multi-column ordering convenience (`.then_by()`)
-7. ❌ Include first/last convenience methods
-8. ❌ Work consistently across all supported databases
+2. ✅ Support efficient cursor-based pagination (keyset approach)
+3. ✅ Return `Page<T>` struct with navigation cursors
+4. ✅ Support backward navigation with `.before()` method and `page.prev()`
+5. ✅ Include `.first()` convenience method
+6. ✅ Work consistently across SQL databases (SQLite, MySQL, PostgreSQL)
+7. ❌ Provide cursor serialization for web APIs (`.encode()`/`.decode()`)
+8. ❌ Support multi-column ordering convenience (`.then_by()`)
+9. ❌ Include `.last()` convenience method
+10. ❌ Include direct `.limit()` method for non-paginated queries
+11. ⚠️ DynamoDB support (partial - needs validation)
 
 ## Next Steps
 
-1. **Phase 1:** Implement `Cursor` and `Page<T>` types
-2. **Phase 1:** Modify `.paginate().collect()` to return `Page<T>`
-3. **Phase 2:** Add backward navigation and cursor serialization
-4. **Phase 3:** Convenience methods and ergonomic improvements
+Priority order for remaining work:
 
-**Decision Made:** Focus on cursor-based pagination exclusively rather than adding traditional offset/limit pagination, as it provides better performance and database consistency.
+1. **High Priority:** Cursor serialization (Phase 3)
+   - Essential for web APIs
+   - Enables stateless pagination
+   - Blocks many real-world use cases
+
+2. **Medium Priority:** Multi-column ordering convenience (Phase 4)
+   - Improves ergonomics
+   - Workaround exists (manual `OrderBy` construction)
+
+3. **Low Priority:** Additional convenience methods (Phase 5)
+   - `.limit()` for non-paginated queries
+   - `.last()` convenience method
+   - Nice-to-have features
+
+**Note:** The core pagination infrastructure is complete and production-ready for applications that can manage cursors internally. Web API support requires cursor serialization.
