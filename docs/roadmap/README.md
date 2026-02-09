@@ -30,9 +30,9 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 ### Data Types & Validation
 
 **Extended Data Types**
-- Enum support (partial implementation)
-- JSON/JSONB support
-- Array types
+- [Embedded struct & enum support](../design/enums-and-embedded-structs.md) (partial implementation)
+- Serde-serialized types (JSON/JSONB columns for arbitrary Rust types)
+- Embedded collections (arrays, maps, sets, etc.)
 - Full date/time types with timezone
 
 ### Relationships & Loading
