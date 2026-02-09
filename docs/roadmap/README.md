@@ -25,6 +25,7 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - BETWEEN / range queries
 - Relation filtering (filter by associated model fields)
 - Field-to-field comparison
+- Arithmetic operations in queries (add, subtract, multiply, divide, modulo)
 - Aggregate queries and GROUP BY / HAVING
 
 ### Data Types
@@ -83,6 +84,23 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Connection pooling improvements
 
 ### Developer Experience
+
+**Ergonomic Macros**
+- `toasty::query!()` - Succinct query syntax that translates to builder DSL
+  ```rust
+  // Instead of: User::all().filter(...).order_by(...).collect(&db).await
+  toasty::query!(User, filter: ..., order_by: ...).collect(&db).await
+  ```
+- `toasty::create!()` - Concise record creation syntax
+  ```rust
+  // Instead of: User::create().name("Alice").age(30).exec(&db).await
+  toasty::create!(User, name: "Alice", age: 30).exec(&db).await
+  ```
+- `toasty::update!()` - Simplified update syntax
+  ```rust
+  // Instead of: user.update().name("Bob").age(31).exec(&db).await
+  toasty::update!(user, name: "Bob", age: 31).exec(&db).await
+  ```
 
 **Tooling & Debugging**
 - Query logging

@@ -59,6 +59,7 @@ The following table compares Toasty's constraint support against 8 mature ORMs, 
 | HAVING | No | No | Yes | Yes | Yes | Yes | Yes | Yes |
 | **Advanced** | | | | | | | | |
 | Field-to-field comparison | No | No | Yes | Yes | Yes | Yes | Yes | Yes |
+| Arithmetic in queries | No | No | Yes | Yes | Yes | Yes | Yes | Yes |
 | Raw SQL escape hatch | No | Full query | Inline | Multiple | Inline | Inline | Inline | Native query |
 | JSON field queries | No | Limited | Via raw | Yes | Yes | Pg | Via raw | No |
 | CASE / WHEN | No | No | No | Yes | Yes | No | No | Yes |
@@ -132,6 +133,31 @@ These features have core AST and SQL serialization but need user-facing APIs:
 - Needed: Ensure `Path<T>` implements `IntoExpr<T>` and codegen supports cross-field comparisons
 - Reference: Django (`F()` expressions), SQLAlchemy (column comparison)
 - Use case: Comparing two columns (e.g., "updated_at > created_at", "balance > minimum_balance")
+
+**Arithmetic Operations in Queries**
+- Current: No support - `BinaryOp` only includes comparison operators (Eq, Ne, Gt, Ge, Lt, Le)
+- Needed:
+  - Add arithmetic operators to AST: `Add`, `Subtract`, `Multiply`, `Divide`, `Modulo`
+  - SQL serialization for arithmetic expressions (standard across databases)
+  - User API to build arithmetic expressions (e.g., `.add()`, `.multiply()`, operator overloading, or expression builder)
+  - Type handling for arithmetic results (ensure type safety)
+- Files: `crates/toasty-core/src/stmt/op_binary.rs`, `crates/toasty-core/src/stmt/expr.rs`, `crates/toasty/src/stmt/path.rs`
+- Reference:
+  - Django: `F('price') * F('quantity') > 100`
+  - SQLAlchemy: `column('price') * column('quantity') > 100`
+  - Diesel: `price.eq(quantity * 2)`
+  - Drizzle: `sql`price * quantity > 100``
+- Use cases:
+  - Computed comparisons: `WHERE age <= 2 * years_in_school`
+  - Price calculations: `WHERE price * quantity > 1000`
+  - Time differences: `WHERE (end_time - start_time) > 3600`
+  - Percentage calculations: `WHERE (actual / budget) * 100 > 110`
+  - Complex business rules: `WHERE (base_price * (1 - discount_rate)) > minimum_price`
+- Design considerations:
+  - Should arithmetic create new expression types or extend `BinaryOp`?
+  - How to handle type coercion (int vs float, time arithmetic)?
+  - Support for parentheses and operator precedence
+  - Whether to support on SELECT side (computed columns) or just WHERE clauses initially
 
 **Aggregate Queries**
 - Current: `ExprFunc::Count` exists internally but is not user-facing
