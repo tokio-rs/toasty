@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document inventories the query constraint patterns currently supported by Toasty, identifies gaps compared to mature ORMs, and outlines potential additions for building web applications.
+This document identifies gaps in Toasty's query constraint support compared to mature ORMs, and outlines potential additions for building web applications.
 
 ### Terminology
 
@@ -12,32 +12,7 @@ A "query constraint" refers to any predicate used in the WHERE clause of a query
 - **Generic `.filter()` method** accepting `Expr<bool>` for arbitrary conditions
 - **`Model::FIELDS.<field>()` paths** combined with comparison methods (`.eq()`, `.gt()`, etc.)
 
-## Current Implementation
-
-These constraint patterns have integration tests in [`toasty-driver-integration-suite`](../../crates/toasty-driver-integration-suite/src/tests/) and work end-to-end across all database drivers:
-
-| Constraint | User API | Test Coverage | Example |
-|---|---|---|---|
-| Equality | `Path::eq()` | Extensive | `User::FIELDS.name().eq("Alice")` |
-| Not Equal | `Path::ne()` | Good | `Event::FIELDS.timestamp().ne(10)` |
-| Greater Than | `Path::gt()` | Good | `Event::FIELDS.timestamp().gt(10)` |
-| Greater or Equal | `Path::ge()` | Good | `Event::FIELDS.timestamp().ge(10)` |
-| Less Than | `Path::lt()` | Good | `Event::FIELDS.timestamp().lt(10)` |
-| Less or Equal | `Path::le()` | Good | `Event::FIELDS.timestamp().le(10)` |
-| AND | `Expr::and()` | Extensive | `expr_a.and(expr_b)` |
-| IN (list) | `Path::in_set()` | API exists, not integration-tested | `User::FIELDS.id().in_set(ids)` |
-| IN (subquery) | `Path::in_query()` | API exists, not integration-tested | `User::FIELDS.id().in_query(subquery)` |
-| Filter by PK | `Model::filter_by_id()` | Extensive | `User::filter_by_id(id)` |
-| Filter by index | `Model::filter_by_<field>()` | Good | `User::filter_by_name("Alice")` |
-| Composite key query | Partition + local key | Good | `Team::FIELDS.league().eq("MLS").and(Team::FIELDS.name().eq("Portland"))` |
-
-Key test files:
-- `one_model_query.rs` - Comparison operators, indexed filters, composite keys
-- `has_many_scoped_query.rs` - Constraints on association queries
-- `one_model_sort_limit.rs` - ORDER BY (related to constraints)
-- `has_many_crud_multi_relations.rs` - Filters with foreign key references
-
-### Core AST Support Without User API
+## Core AST Support Without User API
 
 These expression types exist in `toasty-core` (`crates/toasty-core/src/stmt/expr.rs`) and have SQL serialization, but lack a typed user-facing API on `Path<T>` or `Expr<T>`:
 
@@ -53,22 +28,17 @@ These expression types exist in `toasty-core` (`crates/toasty-core/src/stmt/expr
 
 ## ORM Comparison
 
-The following table compares Toasty's constraint support against 8 mature ORMs.
+The following table compares Toasty's constraint support against 8 mature ORMs, highlighting missing features:
 
 | Feature | Toasty | Prisma | Drizzle | Django | SQLAlchemy | Diesel | SeaORM | Hibernate |
 |---|---|---|---|---|---|---|---|---|---|
-| **Basic Comparisons** | | | | | | | | |
-| eq / ne / gt / ge / lt / le | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | **Logical Operators** | | | | | | | | |
-| AND | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | OR | AST only | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | NOT | AST only | Yes | Yes | Yes | Yes | Per-op | Yes | Yes |
 | **Null Handling** | | | | | | | | |
 | IS NULL | AST only | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | IS NOT NULL | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | **Set Operations** | | | | | | | | |
-| IN (list) | API exists | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| IN (subquery) | API exists | No | Yes | Yes | Yes | Yes | Yes | Yes |
 | NOT IN | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | **Range** | | | | | | | | |
 | BETWEEN | No | Via gt+lt | Yes | Yes | Yes | Yes | Yes | Yes |
@@ -261,10 +231,6 @@ Requires deeper engine work:
 - Aggregate functions (user-facing COUNT/SUM/etc.)
 - GROUP BY / HAVING
 - Raw SQL escape hatch
-
-## Testing
-
-Current test coverage exists in `crates/toasty-driver-integration-suite/src/tests/` for implemented features. Future features would need similar integration test coverage across all database drivers.
 
 ## Reference Implementation Goals
 

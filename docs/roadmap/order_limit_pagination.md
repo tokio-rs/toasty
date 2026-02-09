@@ -6,96 +6,6 @@
 
 Toasty provides cursor-based pagination using keyset pagination, which offers consistent performance and works well across both SQL and NoSQL databases. The implementation converts pagination cursors into WHERE clauses rather than using OFFSET, avoiding the performance issues of traditional offset-based pagination.
 
-## Current Implementation
-
-### Ordering (ORDER BY)
-
-Single column ordering with ascending/descending direction:
-
-```rust
-let users = User::all()
-    .order_by(User::FIELDS.created_at().desc())
-    .collect(&db)
-    .await?;
-```
-
-Multi-column ordering requires manual construction:
-
-```rust
-use toasty::stmt::OrderBy;
-
-let order = OrderBy::from([
-    Post::FIELDS.status().asc(),
-    Post::FIELDS.created_at().desc(),
-]);
-
-let posts = Post::all()
-    .order_by(order)
-    .collect(&db)
-    .await?;
-```
-
-### Cursor-based Pagination
-
-Paginated queries return a `Page<T>` struct:
-
-```rust
-let page: Page<Post> = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
-    .paginate(10)
-    .collect(&db)
-    .await?;
-
-// Access items
-for post in &page.items {
-    println!("{}", post.title);
-}
-
-// Navigate forward
-if let Some(next_page) = page.next(&db).await? {
-    process_posts(&next_page.items);
-}
-
-// Navigate backward
-if let Some(prev_page) = page.prev(&db).await? {
-    process_posts(&prev_page.items);
-}
-```
-
-The `Page<T>` struct provides:
-- `items: Vec<T>` - the results
-- `next_cursor: Option<stmt::Expr>` - cursor for next page
-- `prev_cursor: Option<stmt::Expr>` - cursor for previous page
-- `.next(&db)` - fetch next page
-- `.prev(&db)` - fetch previous page
-- `.has_next()` / `.has_prev()` - check if more pages exist
-
-Manual cursor usage:
-
-```rust
-let page = Post::all()
-    .order_by(Post::FIELDS.id().desc())
-    .paginate(10)
-    .after(cursor)  // or .before(cursor)
-    .collect(&db)
-    .await?;
-```
-
-### Limit
-
-The `Limit` struct exists and is used internally by pagination, but no direct `.limit()` method is exposed for non-paginated queries.
-
-### First Convenience Method
-
-Get the first matching record:
-
-```rust
-let first_user: Option<User> = User::all()
-    .order_by(User::FIELDS.created_at().asc())
-    .first(&db)
-    .await?;
-```
-
 ## Potential Future Work
 
 ### Multi-column Ordering Convenience
@@ -107,6 +17,22 @@ let users = User::all()
     .order_by(User::FIELDS.status().asc())
     .then_by(User::FIELDS.created_at().desc())
     .paginate(10)
+    .collect(&db)
+    .await?;
+```
+
+Current workaround requires manual construction:
+
+```rust
+use toasty::stmt::OrderBy;
+
+let order = OrderBy::from([
+    Post::FIELDS.status().asc(),
+    Post::FIELDS.created_at().desc(),
+]);
+
+let posts = Post::all()
+    .order_by(order)
     .collect(&db)
     .await?;
 ```
@@ -150,23 +76,6 @@ let last_user: Option<User> = User::all()
 - Complexity: Low
 
 ## Testing
-
-### Existing Tests
-
-Located in `crates/toasty-driver-integration-suite/src/tests/`:
-
-- **Basic ordering** - `one_model_sort_limit.rs::sort_asc`
-  - Tests ascending and descending ordering
-  - Verifies correct sort order in results
-
-- **Page-based pagination** - `one_model_sort_limit.rs::paginate`
-  - Tests `.paginate()` with forward navigation
-  - Tests `.after()` for cursor-based navigation
-  - Tests `page.next()` and `page.prev()` methods
-
-- **First convenience method** - `one_model_crud.rs` and others
-  - Tests `.first()` returns first matching record
-  - Tests `.first()` returns None when no matches
 
 ### Additional Test Coverage
 
@@ -232,7 +141,6 @@ This provides:
 
 ## Notes
 
-- The core pagination infrastructure is production-ready for applications
 - Cursors (`stmt::Expr`) can be serialized at the application level if needed for web APIs
 - Pagination requires an explicit ORDER BY clause to ensure consistent results
 - Multi-column ordering works today via manual `OrderBy` construction
