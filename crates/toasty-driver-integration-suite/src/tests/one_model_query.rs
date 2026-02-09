@@ -1,6 +1,10 @@
 //! Test querying models with various filters and constraints
 
 use crate::prelude::*;
+use toasty_core::{
+    driver::Operation,
+    stmt::{Expr, ExprSet, Statement},
+};
 
 #[driver_test(id(ID))]
 pub async fn query_index_eq(test: &mut Test) {
@@ -299,6 +303,349 @@ pub async fn query_local_key_cmp(test: &mut Test) {
         events.iter().map(|event| event.timestamp),
         [&0, &2, &4, &6, &8, &10]
     );
+}
+
+#[driver_test(id(ID))]
+pub async fn query_or_basic(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[allow(dead_code)]
+        age: i64,
+    }
+
+    let db = test.setup_db(models!(User)).await;
+    let _name_column = db.schema().table_for(User::id()).columns[1].id;
+    let _age_column = db.schema().table_for(User::id()).columns[2].id;
+
+    // Create some users
+    for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
+        User::create().name(name).age(age).exec(&db).await.unwrap();
+    }
+
+    // Clear the log after setup
+    test.log().clear();
+
+    // Query with OR condition: name = "Alice" OR age = 35
+    let result = User::filter(
+        User::fields()
+            .name()
+            .eq("Alice")
+            .or(User::fields().age().eq(35)),
+    )
+    .collect::<Vec<_>>(&db)
+    .await;
+
+    if test.capability().sql {
+        let users = result.unwrap();
+        assert_eq!(2, users.len());
+        let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["Alice", "Charlie"]);
+
+        // Verify the driver operation contains the expected OR filter
+        let (op, _) = test.log().pop();
+
+        assert_struct!(&op, Operation::QuerySql(_ {
+            stmt: Statement::Query(_ {
+                body: ExprSet::Select(_ {
+                    filter.expr: Some(Expr::Or(_ {
+                        // TODO: assert_struct! needs a set matcher
+                        /*
+                        operands: [
+                            Expr::BinaryOp(_ {
+                                op: BinaryOp::Eq,
+                                *lhs: == Expr::column(age_column),
+                                *rhs: Expr::Value(Value::I64(35)),
+                                ..
+                            }),
+                            Expr::BinaryOp(_ {
+                                op: BinaryOp::Eq,
+                                *lhs: == Expr::column(name_column),
+                                *rhs: Expr::Value(Value::String("Alice")),
+                                ..
+                            }),
+                        ],
+                        */
+                        ..
+                    })),
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
+    } else {
+        // DynamoDB requires key conditions for queries - OR filters without
+        // key conditions should return an error
+        assert!(
+            result.is_err(),
+            "Expected error for OR query without key condition on non-SQL database"
+        );
+    }
+}
+
+#[driver_test(id(ID))]
+pub async fn query_or_multiple(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[allow(dead_code)]
+        age: i64,
+    }
+
+    let db = test.setup_db(models!(User)).await;
+
+    // Create some users
+    for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
+        User::create().name(name).age(age).exec(&db).await.unwrap();
+    }
+
+    // Query with multiple OR conditions: name = "Alice" OR age = 35 OR age = 40
+    let result = User::filter(
+        User::fields()
+            .name()
+            .eq("Alice")
+            .or(User::fields().age().eq(35))
+            .or(User::fields().age().eq(40)),
+    )
+    .collect::<Vec<_>>(&db)
+    .await;
+
+    if test.capability().sql {
+        let users = result.unwrap();
+        assert_eq!(3, users.len());
+        let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["Alice", "Charlie", "Diana"]);
+    } else {
+        // DynamoDB requires key conditions for queries - OR filters without
+        // key conditions should return an error
+        assert!(
+            result.is_err(),
+            "Expected error for OR query without key condition on non-SQL database"
+        );
+    }
+}
+
+#[driver_test(id(ID))]
+pub async fn query_or_and_combined(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[allow(dead_code)]
+        age: i64,
+
+        #[allow(dead_code)]
+        active: bool,
+    }
+
+    let db = test.setup_db(models!(User)).await;
+
+    // Create some users
+    for (name, age, active) in [
+        ("Alice", 25, true),
+        ("Bob", 30, false),
+        ("Charlie", 35, true),
+        ("Diana", 40, false),
+        ("Eve", 25, false),
+    ] {
+        User::create()
+            .name(name)
+            .age(age)
+            .active(active)
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Query with OR and AND: (name = "Alice" OR age = 35) AND active = true
+    let result = User::filter(
+        User::fields()
+            .name()
+            .eq("Alice")
+            .or(User::fields().age().eq(35))
+            .and(User::fields().active().eq(true)),
+    )
+    .collect::<Vec<_>>(&db)
+    .await;
+
+    if test.capability().sql {
+        let users = result.unwrap();
+        assert_eq!(2, users.len());
+        let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["Alice", "Charlie"]);
+    } else {
+        // DynamoDB requires key conditions for queries - OR filters without
+        // key conditions should return an error
+        assert!(
+            result.is_err(),
+            "Expected error for OR query without key condition on non-SQL database"
+        );
+    }
+}
+
+#[driver_test(id(ID))]
+pub async fn query_or_with_index(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = team, local = name)]
+    struct Player {
+        team: String,
+
+        name: String,
+
+        #[allow(dead_code)]
+        position: String,
+
+        #[allow(dead_code)]
+        number: i64,
+    }
+
+    let db = test.setup_db(models!(Player)).await;
+
+    // Create some players on different teams
+    for (team, name, position, number) in [
+        ("Timbers", "Diego Valeri", "Midfielder", 8),
+        ("Timbers", "Darlington Nagbe", "Midfielder", 6),
+        ("Timbers", "Diego Chara", "Midfielder", 21),
+        ("Timbers", "Fanendo Adi", "Forward", 9),
+        ("Timbers", "Adam Kwarasey", "Goalkeeper", 1),
+        ("Sounders", "Clint Dempsey", "Forward", 2),
+        ("Sounders", "Obafemi Martins", "Forward", 9),
+        ("Sounders", "Osvaldo Alonso", "Midfielder", 6),
+    ] {
+        Player::create()
+            .team(team)
+            .name(name)
+            .position(position)
+            .number(number)
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Query with partition key AND OR conditions on non-indexed fields
+    // This should work on both SQL and DynamoDB
+    let players = Player::filter(
+        Player::fields().team().eq("Timbers").and(
+            Player::fields()
+                .position()
+                .eq("Forward")
+                .or(Player::fields().position().eq("Goalkeeper")),
+        ),
+    )
+    .all(&db)
+    .await
+    .unwrap()
+    .collect::<Vec<_>>()
+    .await
+    .unwrap();
+
+    assert_eq!(2, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Adam Kwarasey", "Fanendo Adi"]);
+
+    // Query with partition key AND more complex OR conditions
+    let players = Player::filter(
+        Player::fields().team().eq("Timbers").and(
+            Player::fields()
+                .number()
+                .eq(8)
+                .or(Player::fields().number().eq(21))
+                .or(Player::fields().number().eq(9)),
+        ),
+    )
+    .all(&db)
+    .await
+    .unwrap()
+    .collect::<Vec<_>>()
+    .await
+    .unwrap();
+
+    assert_eq!(3, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Diego Chara", "Diego Valeri", "Fanendo Adi"]);
+}
+
+#[driver_test(id(ID))]
+pub async fn query_or_with_comparisons(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = team, local = name)]
+    struct Player {
+        team: String,
+
+        name: String,
+
+        #[allow(dead_code)]
+        position: String,
+
+        #[allow(dead_code)]
+        number: i64,
+    }
+
+    let db = test.setup_db(models!(Player)).await;
+
+    // Create some players on different teams
+    for (team, name, position, number) in [
+        ("Timbers", "Diego Valeri", "Midfielder", 8),
+        ("Timbers", "Darlington Nagbe", "Midfielder", 6),
+        ("Timbers", "Diego Chara", "Midfielder", 21),
+        ("Timbers", "Fanendo Adi", "Forward", 9),
+        ("Timbers", "Adam Kwarasey", "Goalkeeper", 1),
+        ("Sounders", "Clint Dempsey", "Forward", 2),
+        ("Sounders", "Obafemi Martins", "Forward", 9),
+        ("Sounders", "Osvaldo Alonso", "Midfielder", 6),
+    ] {
+        Player::create()
+            .team(team)
+            .name(name)
+            .position(position)
+            .number(number)
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Query with partition key AND OR conditions using comparisons (not equality)
+    // This won't be optimized to IN list, so tests actual OR expression handling
+    // Using gt/lt instead of ge/le to avoid boundary condition confusion
+    let players = Player::filter(
+        Player::fields().team().eq("Timbers").and(
+            Player::fields()
+                .number()
+                .gt(20)
+                .or(Player::fields().number().lt(2)),
+        ),
+    )
+    .all(&db)
+    .await
+    .unwrap()
+    .collect::<Vec<_>>()
+    .await
+    .unwrap();
+
+    assert_eq!(2, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Adam Kwarasey", "Diego Chara"]);
 }
 
 #[driver_test(id(ID))]

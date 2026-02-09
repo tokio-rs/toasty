@@ -37,7 +37,7 @@ impl Engine {
             hir: &hir,
             mir: mir::Store::new(),
         }
-        .build_logical_plan();
+        .build_logical_plan()?;
 
         // Build the execution plan from the logical plan
         Ok(self.plan_execution(logical_plan))
@@ -54,9 +54,9 @@ impl Engine {
 }
 
 impl HirPlanner<'_> {
-    fn build_logical_plan(mut self) -> mir::LogicalPlan {
+    fn build_logical_plan(mut self) -> Result<mir::LogicalPlan> {
         let root_id = self.hir.root_id();
-        self.plan_statement(root_id);
+        self.plan_statement(root_id)?;
 
         let exit = self.hir.root().output.get().unwrap();
         let exit_node = &self.mir.store[exit];
@@ -65,6 +65,6 @@ impl HirPlanner<'_> {
         // use of the variable to return to the use.
         exit_node.num_uses.set(exit_node.num_uses.get() + 1);
 
-        mir::LogicalPlan::new(self.mir, exit)
+        Ok(mir::LogicalPlan::new(self.mir, exit))
     }
 }

@@ -121,6 +121,13 @@ impl Value {
                     serde_json::to_string(&v).unwrap()
                 ))
             }
+            stmt::Value::List(vals) => {
+                let items = vals
+                    .iter()
+                    .map(|val| Value(val.clone()).to_ddb())
+                    .collect::<Vec<_>>();
+                AV::L(items)
+            }
             _ => todo!("{:#?}", self.0),
         }
     }
