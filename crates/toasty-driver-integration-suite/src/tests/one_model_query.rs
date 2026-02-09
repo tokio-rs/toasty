@@ -333,10 +333,10 @@ pub async fn query_or_basic(test: &mut Test) {
 
     // Query with OR condition: name = "Alice" OR age = 35
     let result = User::filter(
-        User::FIELDS
+        User::fields()
             .name()
             .eq("Alice")
-            .or(User::FIELDS.age().eq(35)),
+            .or(User::fields().age().eq(35)),
     )
     .collect::<Vec<_>>(&db)
     .await;
@@ -413,11 +413,11 @@ pub async fn query_or_multiple(test: &mut Test) {
 
     // Query with multiple OR conditions: name = "Alice" OR age = 35 OR age = 40
     let result = User::filter(
-        User::FIELDS
+        User::fields()
             .name()
             .eq("Alice")
-            .or(User::FIELDS.age().eq(35))
-            .or(User::FIELDS.age().eq(40)),
+            .or(User::fields().age().eq(35))
+            .or(User::fields().age().eq(40)),
     )
     .collect::<Vec<_>>(&db)
     .await;
@@ -476,11 +476,11 @@ pub async fn query_or_and_combined(test: &mut Test) {
 
     // Query with OR and AND: (name = "Alice" OR age = 35) AND active = true
     let result = User::filter(
-        User::FIELDS
+        User::fields()
             .name()
             .eq("Alice")
-            .or(User::FIELDS.age().eq(35))
-            .and(User::FIELDS.active().eq(true)),
+            .or(User::fields().age().eq(35))
+            .and(User::fields().active().eq(true)),
     )
     .collect::<Vec<_>>(&db)
     .await;
@@ -543,11 +543,11 @@ pub async fn query_or_with_index(test: &mut Test) {
     // Query with partition key AND OR conditions on non-indexed fields
     // This should work on both SQL and DynamoDB
     let players = Player::filter(
-        Player::FIELDS.team().eq("Timbers").and(
-            Player::FIELDS
+        Player::fields().team().eq("Timbers").and(
+            Player::fields()
                 .position()
                 .eq("Forward")
-                .or(Player::FIELDS.position().eq("Goalkeeper")),
+                .or(Player::fields().position().eq("Goalkeeper")),
         ),
     )
     .all(&db)
@@ -564,12 +564,12 @@ pub async fn query_or_with_index(test: &mut Test) {
 
     // Query with partition key AND more complex OR conditions
     let players = Player::filter(
-        Player::FIELDS.team().eq("Timbers").and(
-            Player::FIELDS
+        Player::fields().team().eq("Timbers").and(
+            Player::fields()
                 .number()
                 .eq(8)
-                .or(Player::FIELDS.number().eq(21))
-                .or(Player::FIELDS.number().eq(9)),
+                .or(Player::fields().number().eq(21))
+                .or(Player::fields().number().eq(9)),
         ),
     )
     .all(&db)
@@ -628,11 +628,11 @@ pub async fn query_or_with_comparisons(test: &mut Test) {
     // This won't be optimized to IN list, so tests actual OR expression handling
     // Using gt/lt instead of ge/le to avoid boundary condition confusion
     let players = Player::filter(
-        Player::FIELDS.team().eq("Timbers").and(
-            Player::FIELDS
+        Player::fields().team().eq("Timbers").and(
+            Player::fields()
                 .number()
                 .gt(20)
-                .or(Player::FIELDS.number().lt(2)),
+                .or(Player::fields().number().lt(2)),
         ),
     )
     .all(&db)
