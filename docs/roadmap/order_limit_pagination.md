@@ -1,107 +1,26 @@
 # Query Ordering, Limits & Pagination
 
-> **📖 User Guide:** See [guide/pagination.md](../guide/pagination.md) for complete usage examples and API documentation.
+> **User Guide:** See [guide/pagination.md](../guide/pagination.md) for complete usage examples and API documentation.
 
-## Current State Analysis
+## Overview
 
-### ✅ What's Already Implemented
+Toasty provides cursor-based pagination using keyset pagination, which offers consistent performance and works well across both SQL and NoSQL databases. The implementation converts pagination cursors into WHERE clauses rather than using OFFSET, avoiding the performance issues of traditional offset-based pagination.
 
-#### 1. **Ordering (ORDER BY)**
-- Full AST support with `OrderBy` and `OrderByExpr` types
-- Direction support (ASC/DESC) 
-- SQL generation for ORDER BY clauses
-- Type-safe field access via generated code
-- Working examples in tests
+## Current Implementation
 
-**Current API:**
+### Ordering (ORDER BY)
+
+Single column ordering with ascending/descending direction:
+
 ```rust
-// Single column ordering
 let users = User::all()
     .order_by(User::FIELDS.created_at().desc())
     .collect(&db)
     .await?;
 ```
 
-#### 2. **Basic Limit**
-- AST support for `Limit` struct
-- SQL LIMIT generation (without OFFSET)
-- Integration with query builder
+Multi-column ordering requires manual construction:
 
-**Current API:**
-```rust
-// Note: Currently no direct .limit() method exposed
-// Limit is used internally by pagination
-```
-
-#### 3. **Cursor-based Pagination** 
-- Sophisticated keyset pagination implementation
-- Automatic query rewriting (converts to WHERE clauses)
-- Database-agnostic approach
-- Validation that ORDER BY matches cursor fields
-
-**Current API:**
-```rust
-// Cursor-based pagination
-let posts = Post::all()
-    .order_by(Post::FIELDS.id().desc())
-    .paginate(10)
-    .after(last_post_id)
-    .collect(&db)
-    .await?;
-```
-
-### ✅ Recently Implemented
-
-#### 1. **Page<T> Return Type**
-`.paginate().collect()` now returns `Page<T>`:
-
-**Current API:**
-```rust
-let page: Page<Post> = Post::all()
-    .order_by(Post::FIELDS.created_at().desc())
-    .paginate(10)
-    .collect(&db)
-    .await?;
-
-// Access items via page.items or deref
-for post in &page.items {
-    println!("{}", post.title);
-}
-```
-
-#### 2. **Page Navigation Methods**
-Navigate forward and backward through pages:
-
-**Current API:**
-```rust
-// Forward navigation
-if let Some(next_page) = page.next(&db).await? {
-    process_posts(&next_page.items);
-}
-
-// Backward navigation
-if let Some(prev_page) = page.prev(&db).await? {
-    process_posts(&prev_page.items);
-}
-```
-
-#### 3. **First Convenience Method**
-Get the first matching record:
-
-**Current API:**
-```rust
-let first_user: Option<User> = User::all()
-    .order_by(User::FIELDS.created_at().asc())
-    .first(&db)
-    .await?;
-```
-
-### ❌ What's Missing for MVP
-
-#### 1. **Multi-column Ordering Convenience**
-Currently requires manual `OrderBy` construction for multiple columns.
-
-**Current Workaround:**
 ```rust
 use toasty::stmt::OrderBy;
 
@@ -110,30 +29,98 @@ let order = OrderBy::from([
     Post::FIELDS.created_at().desc(),
 ]);
 
-let page = Post::all()
+let posts = Post::all()
     .order_by(order)
-    .paginate(10)
     .collect(&db)
     .await?;
 ```
 
-**Needed API:**
+### Cursor-based Pagination
+
+Paginated queries return a `Page<T>` struct:
+
 ```rust
-// Chain multiple order_by calls
+let page: Page<Post> = Post::all()
+    .order_by(Post::FIELDS.created_at().desc())
+    .paginate(10)
+    .collect(&db)
+    .await?;
+
+// Access items
+for post in &page.items {
+    println!("{}", post.title);
+}
+
+// Navigate forward
+if let Some(next_page) = page.next(&db).await? {
+    process_posts(&next_page.items);
+}
+
+// Navigate backward
+if let Some(prev_page) = page.prev(&db).await? {
+    process_posts(&prev_page.items);
+}
+```
+
+The `Page<T>` struct provides:
+- `items: Vec<T>` - the results
+- `next_cursor: Option<stmt::Expr>` - cursor for next page
+- `prev_cursor: Option<stmt::Expr>` - cursor for previous page
+- `.next(&db)` - fetch next page
+- `.prev(&db)` - fetch previous page
+- `.has_next()` / `.has_prev()` - check if more pages exist
+
+Manual cursor usage:
+
+```rust
+let page = Post::all()
+    .order_by(Post::FIELDS.id().desc())
+    .paginate(10)
+    .after(cursor)  // or .before(cursor)
+    .collect(&db)
+    .await?;
+```
+
+### Limit
+
+The `Limit` struct exists and is used internally by pagination, but no direct `.limit()` method is exposed for non-paginated queries.
+
+### First Convenience Method
+
+Get the first matching record:
+
+```rust
+let first_user: Option<User> = User::all()
+    .order_by(User::FIELDS.created_at().asc())
+    .first(&db)
+    .await?;
+```
+
+## Potential Future Work
+
+### Multi-column Ordering Convenience
+
+Add `.then_by()` method for chaining multiple order clauses:
+
+```rust
 let users = User::all()
     .order_by(User::FIELDS.status().asc())
-    .then_by(User::FIELDS.created_at().desc())  // Convenience method
+    .then_by(User::FIELDS.created_at().desc())
     .paginate(10)
     .collect(&db)
     .await?;
 ```
 
-#### 2. **Direct Limit Method**
-Currently `limit()` is not exposed for non-paginated queries.
+**Implementation:**
+- File: `toasty-codegen/src/expand/query.rs`
+- Add `.then_by()` method to query builder
+- Complexity: Medium
 
-**Needed API:**
+### Direct Limit Method
+
+Expose `.limit()` for non-paginated queries:
+
 ```rust
-// Get first N records (without pagination)
 let recent_posts: Vec<Post> = Post::all()
     .order_by(Post::FIELDS.created_at().desc())
     .limit(5)
@@ -141,10 +128,15 @@ let recent_posts: Vec<Post> = Post::all()
     .await?;
 ```
 
-#### 3. **Last Convenience Method**
+**Implementation:**
+- File: `toasty-codegen/src/expand/query.rs`
+- Generate `.limit()` method
+- Complexity: Low
+
+### Last Convenience Method
+
 Get the last matching record:
 
-**Needed API:**
 ```rust
 let last_user: Option<User> = User::all()
     .order_by(User::FIELDS.created_at().desc())
@@ -152,93 +144,96 @@ let last_user: Option<User> = User::all()
     .await?;
 ```
 
-## Implementation Roadmap
+**Implementation:**
+- File: `toasty-codegen/src/expand/query.rs`
+- Generate `.last()` method
+- Complexity: Low
 
-### ✅ Completed Phases
+## Testing
 
-#### Phase 1: Core Pagination Types
-- ✅ Created `Page<T>` type in `toasty/src/page.rs`
-- ✅ Modified `.paginate().collect()` to return `Page<T>`
-- ✅ Added `.next()` and `.prev()` methods on `Page<T>`
-- ✅ Implemented backward navigation with `.before()` in `toasty/src/stmt/paginate.rs`
+### Existing Tests
 
-#### Phase 2: First Convenience Method
-- ✅ Generated `.first()` method in `toasty-codegen/src/expand/query.rs`
+Located in `crates/toasty-driver-integration-suite/src/tests/`:
 
-### 🚧 Remaining Work
+- **Basic ordering** - `one_model_sort_limit.rs::sort_asc`
+  - Tests ascending and descending ordering
+  - Verifies correct sort order in results
 
-#### Phase 3: Multi-column Ordering (Priority: Medium)
-- **File:** `toasty-codegen/src/expand/query.rs`
-- **Task:** Add `.then_by()` method for chained ordering
-- **Complexity:** Medium
+- **Page-based pagination** - `one_model_sort_limit.rs::paginate`
+  - Tests `.paginate()` with forward navigation
+  - Tests `.after()` for cursor-based navigation
+  - Tests `page.next()` and `page.prev()` methods
 
-#### Phase 4: Convenience Features (Priority: Low)
+- **First convenience method** - `one_model_crud.rs` and others
+  - Tests `.first()` returns first matching record
+  - Tests `.first()` returns None when no matches
 
-##### 4.1 Direct Limit Method
-- **File:** `toasty-codegen/src/expand/query.rs`
-- **Task:** Generate `.limit()` method for non-paginated queries
-- **Complexity:** Low
+### Additional Test Coverage
 
-##### 4.2 Last Method
-- **File:** `toasty-codegen/src/expand/query.rs`
-- **Task:** Generate `.last()` convenience method
-- **Complexity:** Low
+Tests that could be added:
 
-## Testing Requirements
+- **Multi-column ordering**
+  - Verify correct ordering with multiple columns
+  - Test tie-breaking behavior
 
-### ✅ Existing Tests
-1. ✅ Basic ordering - `crates/toasty-driver-integration-suite/src/tests/one_model_sort_limit.rs::sort_asc`
-2. ✅ Page-based pagination - `one_model_sort_limit.rs::paginate`
-3. ✅ Forward navigation (`.after()` and `page.next()`)
-4. ✅ Backward navigation (`.prev()`)
-5. ✅ First convenience method - `one_model_crud.rs` and others
+- **Direct `.limit()` method** (when implemented)
+  - Non-paginated queries with limit
+  - Verify correct number of results
 
-### ❌ Tests Still Needed
-1. ❌ Multi-column ordering
-2. ❌ Direct `.limit()` method (non-paginated queries)
-3. ❌ `.last()` convenience method
-4. ❌ Edge cases:
-   - Empty results with pagination
-   - Single page results (no next/prev cursors)
-   - Pagination beyond last page
+- **`.last()` convenience method** (when implemented)
+  - Returns last matching record
+  - Returns None when no matches
+
+- **Edge cases**
+  - Empty results with pagination
+  - Single page results (no next/prev cursors)
+  - Pagination beyond last page
+  - Large page sizes
+  - Page size of 1
 
 ## Database-Specific Considerations
 
 ### SQL Databases
-- **MySQL:** Uses `LIMIT n OFFSET m`
-- **PostgreSQL:** Uses `LIMIT n OFFSET m` or `FETCH FIRST`
-- **SQLite:** Uses `LIMIT n OFFSET m`
+
+- **MySQL:** Uses `LIMIT n` for pagination (keyset approach via WHERE)
+- **PostgreSQL:** Uses `LIMIT n` for pagination (keyset approach via WHERE)
+- **SQLite:** Uses `LIMIT n` for pagination (keyset approach via WHERE)
+
+All SQL databases use keyset pagination (WHERE clauses with cursors) rather than OFFSET for consistent performance.
 
 ### NoSQL Databases
-- **DynamoDB:** Limited ordering support, pagination via LastEvaluatedKey
-- Consider maintaining current cursor-based approach for NoSQL
 
-## Success Criteria
+- **DynamoDB:**
+  - Limited ordering support (only on sort keys)
+  - Pagination via LastEvaluatedKey
+  - Cursor-based approach maps well to DynamoDB's native pagination
+  - Needs validation and testing
 
-Current status of MVP features:
+## How Keyset Pagination Works
 
-1. ✅ Allow ordering by any model field (ascending/descending)
-2. ✅ Support efficient cursor-based pagination (keyset approach)
-3. ✅ Return `Page<T>` struct with navigation cursors
-4. ✅ Support backward navigation with `.before()` method and `page.prev()`
-5. ✅ Include `.first()` convenience method
-6. ✅ Work consistently across SQL databases (SQLite, MySQL, PostgreSQL)
-7. ❌ Support multi-column ordering convenience (`.then_by()`)
-8. ❌ Include `.last()` convenience method
-9. ❌ Include direct `.limit()` method for non-paginated queries
-10. ⚠️ DynamoDB support (partial - needs validation)
+Instead of using `OFFSET`, Toasty converts cursors to `WHERE` clauses:
 
-## Next Steps
+```sql
+-- Traditional OFFSET (slow for large offsets)
+SELECT * FROM posts ORDER BY created_at DESC LIMIT 10 OFFSET 10000;
 
-Priority order for remaining work:
+-- Toasty's cursor approach (always fast)
+SELECT * FROM posts
+WHERE (created_at, id) < ('2024-01-15 10:30:00', 12345)
+ORDER BY created_at DESC, id DESC
+LIMIT 10;
+```
 
-1. **Medium Priority:** Multi-column ordering convenience (Phase 3)
-   - Improves ergonomics
-   - Workaround exists (manual `OrderBy` construction)
+This provides:
+- **Consistent Performance:** O(log n) regardless of page number
+- **Stable Results:** New records don't shift pagination boundaries
+- **Database Agnostic:** Works efficiently on NoSQL databases
+- **Real-time Friendly:** Handles concurrent insertions gracefully
 
-2. **Low Priority:** Additional convenience methods (Phase 4)
-   - `.limit()` for non-paginated queries
-   - `.last()` convenience method
-   - Nice-to-have features
+## Notes
 
-**Note:** The core pagination infrastructure is complete and production-ready. Cursors (`stmt::Expr`) can be serialized at the application level if needed for web APIs.
+- The core pagination infrastructure is production-ready for applications
+- Cursors (`stmt::Expr`) can be serialized at the application level if needed for web APIs
+- Pagination requires an explicit ORDER BY clause to ensure consistent results
+- Multi-column ordering works today via manual `OrderBy` construction
+- The `.then_by()` convenience method would improve ergonomics but isn't essential
