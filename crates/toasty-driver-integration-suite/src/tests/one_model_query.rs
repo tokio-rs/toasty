@@ -3,7 +3,7 @@
 use crate::prelude::*;
 use toasty_core::{
     driver::Operation,
-    stmt::{BinaryOp, Expr, ExprSet, Statement, Value},
+    stmt::{Expr, ExprSet, Statement},
 };
 
 #[driver_test(id(ID))]
@@ -315,12 +315,13 @@ pub async fn query_or_basic(test: &mut Test) {
 
         name: String,
 
+        #[allow(dead_code)]
         age: i64,
     }
 
     let db = test.setup_db(models!(User)).await;
-    let name_column = db.schema().table_for(User::id()).columns[1].id;
-    let age_column = db.schema().table_for(User::id()).columns[2].id;
+    let _name_column = db.schema().table_for(User::id()).columns[1].id;
+    let _age_column = db.schema().table_for(User::id()).columns[2].id;
 
     // Create some users
     for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
@@ -399,6 +400,7 @@ pub async fn query_or_multiple(test: &mut Test) {
 
         name: String,
 
+        #[allow(dead_code)]
         age: i64,
     }
 
@@ -446,8 +448,10 @@ pub async fn query_or_and_combined(test: &mut Test) {
 
         name: String,
 
+        #[allow(dead_code)]
         age: i64,
 
+        #[allow(dead_code)]
         active: bool,
     }
 
@@ -506,8 +510,10 @@ pub async fn query_or_with_index(test: &mut Test) {
 
         name: String,
 
+        #[allow(dead_code)]
         position: String,
 
+        #[allow(dead_code)]
         number: i64,
     }
 
@@ -588,8 +594,10 @@ pub async fn query_or_with_comparisons(test: &mut Test) {
 
         name: String,
 
+        #[allow(dead_code)]
         position: String,
 
+        #[allow(dead_code)]
         number: i64,
     }
 
