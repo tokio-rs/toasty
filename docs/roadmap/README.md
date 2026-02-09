@@ -27,7 +27,7 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Field-to-field comparison
 - Aggregate queries and GROUP BY / HAVING
 
-### Data Types & Validation
+### Data Types
 
 **Extended Data Types**
 - [Embedded struct & enum support](../design/enums-and-embedded-structs.md) (partial implementation)
@@ -74,6 +74,7 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Migration generation
 - Rollback support
 - Schema versioning
+- CLI tools for schema management
 
 ### Performance
 
@@ -86,34 +87,6 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 **Tooling & Debugging**
 - Query logging
-- Performance monitoring
-- Better error messages
-- CLI tools for schema management
-
-### Data Integrity
-
-**Validations & Features**
-- Soft deletes
-- Optimistic locking
-- Model-level validations
-
-## Documentation Structure
-
-This roadmap works alongside the user documentation:
-
-- **Roadmap docs** (this directory): Technical implementation details, gaps analysis, and potential enhancements
-- **User guide** ([`guide/`](../guide/)): API documentation and usage examples
-
-Each roadmap document includes:
-- Core AST support without user API
-- Potential future work
-- Technical design considerations
-- Implementation approaches
-
-Each guide document shows:
-- Complete API examples
-- Usage patterns and best practices
-- Integration examples
 
 ## Notes
 
