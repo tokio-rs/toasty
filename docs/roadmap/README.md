@@ -38,7 +38,6 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 **Relationships**
 - Many-to-many relationships
-- Self-referential relationships
 - Polymorphic associations
 - Nested preloading (multi-level `.include()` support)
 
