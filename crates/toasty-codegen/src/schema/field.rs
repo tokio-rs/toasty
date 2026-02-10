@@ -50,10 +50,10 @@ pub(crate) enum FieldTy {
 
 impl FieldTy {
     pub(crate) fn is_relation(&self) -> bool {
-        match self {
-            FieldTy::Primitive(_) => false,
-            _ => true,
-        }
+        matches!(
+            self,
+            Self::BelongsTo(..) | Self::HasMany(..) | Self::HasOne(..)
+        )
     }
 }
 
