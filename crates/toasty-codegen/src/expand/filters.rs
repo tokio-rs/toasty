@@ -26,6 +26,7 @@ pub(super) struct Filter {
     /// Filter method batch identifier
     filter_method_batch_ident: syn::Ident,
 
+    /// Update method identifier
     update_method_ident: syn::Ident,
 }
 
