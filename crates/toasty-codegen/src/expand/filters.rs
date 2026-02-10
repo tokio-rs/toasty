@@ -438,8 +438,8 @@ impl Expand<'_> {
 
     pub(super) fn expand_model_update_method(&self, filter: &Filter) -> TokenStream {
         let vis = &self.model.vis;
-        let query_struct_ident = &self.model.query_struct_ident;
-        let update_query_struct_ident = &self.model.update_query_struct_ident;
+        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
+        let update_query_struct_ident = &self.model.kind.expect_root().update_query_struct_ident;
         let update_method_ident = &filter.update_method_ident;
         let filter_method_ident = &filter.filter_method_ident;
         let args = self.expand_filter_args(filter);
