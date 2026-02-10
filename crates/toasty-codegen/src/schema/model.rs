@@ -243,6 +243,10 @@ impl Model {
             ModelKind::Embedded(_) => None,
         }
     }
+
+    pub(crate) fn has_associations(&self) -> bool {
+        self.fields.iter().any(|f| f.ty.is_relation())
+    }
 }
 
 fn struct_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
