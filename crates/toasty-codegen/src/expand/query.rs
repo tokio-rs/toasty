@@ -13,6 +13,7 @@ impl Expand<'_> {
         let update_query_struct_ident = &self.model.kind.expect_root().update_query_struct_ident;
         let filter_methods = self.expand_query_filter_methods();
         let relation_methods = self.expand_relation_methods();
+        let include = self.expand_include_method();
 
         quote! {
             #vis struct #query_struct_ident {
@@ -69,11 +70,7 @@ impl Expand<'_> {
                     self
                 }
 
-                #vis fn include<T: ?Sized>(mut self, path: impl #toasty::Into<#toasty::Path<T>>) -> #query_struct_ident {
-                    self.stmt.include(path.into());
-                    self
-                }
-
+                #include
                 #relation_methods
             }
 
@@ -168,6 +165,23 @@ impl Expand<'_> {
                     ).into_select()
                 )
             }
+        }
+    }
+
+    fn expand_include_method(&self) -> Option<TokenStream> {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
+
+        if self.model.has_associations() {
+            Some(quote! {
+                    #vis fn include<T: ?Sized>(mut self, path: impl #toasty::Into<#toasty::Path<T>>) -> #query_struct_ident {
+                        self.stmt.include(path.into());
+                        self
+                    }
+            })
+        } else {
+            None
         }
     }
 }
