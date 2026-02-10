@@ -567,7 +567,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if let Some(model) = lower.model() {
                     let mut fields = vec![];
 
-                    // TODO: Really gotta either fix SparseRecord or get rid of it... It does not maintain key order.
+                    // Build a SparseRecord return type: a partial model with only changed
+                    // fields present. The PathFieldSet tracks which field indices are
+                    // included, and the database will return a Record in field index order.
+                    // When cast to SparseRecord, this creates a sparse array where
+                    // values[field_index] contains each field's value, with unchanged
+                    // fields represented as gaps.
                     let field_set: stmt::PathFieldSet = stmt.assignments.keys().copied().collect();
 
                     for i in field_set.iter() {
