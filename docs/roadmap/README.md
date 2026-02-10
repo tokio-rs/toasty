@@ -1,103 +1,110 @@
-# Toasty ORM - MVP Roadmap
+# Toasty ORM - Development Roadmap
 
-This roadmap tracks the remaining features and improvements needed to reach MVP status for the Toasty ORM.
+This roadmap outlines potential enhancements and missing features for the Toasty ORM.
 
 ## Overview
 
-Toasty aims to be an easy-to-use ORM for Rust that supports both SQL and NoSQL databases. To reach MVP status, we need to implement core features that web developers expect from a modern ORM.
+Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases. This roadmap documents potential future work and feature gaps.
 
-> **📖 User Documentation:** See the [`guide/`](../guide/) directory for complete API documentation and usage examples.
+> **User Documentation:** See the [`guide/`](../guide/) directory for complete API documentation and usage examples.
 
-## Status Key
-
-- 🔴 Not Started
-- 🟡 In Progress
-- 🟢 Complete
-- 🔵 Needs Review
-
-## Core Feature Areas
+## Feature Areas
 
 ### Query Capabilities
-- [**Query Ordering, Limits & Pagination**](./order_limit_pagination.md) 🟡 | [📖 Guide](../guide/pagination.md)
-  - Order by single/multiple columns
-  - Cursor-based pagination with bidirectional navigation
-  - Page<T> return type with navigation cursors
-  - Cursor serialization for web APIs
 
-### Data Types & Validation
-- **Extended Data Types** 🔴
-  - JSON/JSONB support
-  - Array types
-  - Enum support
-  - UUID support
-  - Date/Time types with timezone
+**[Query Ordering, Limits & Pagination](./order_limit_pagination.md)** | [User Guide](../guide/pagination.md)
+- Multi-column ordering convenience method (`.then_by()`)
+- Direct `.limit()` method for non-paginated queries
+- `.last()` convenience method
+
+**[Query Constraints & Filtering](./query-constraints.md)**
+- OR, NOT, IS NULL (core AST exists, needs user API)
+- String operations: contains, starts with, ends with, LIKE (partial AST support)
+- NOT IN
+- Case-insensitive matching
+- BETWEEN / range queries
+- Relation filtering (filter by associated model fields)
+- Field-to-field comparison
+- Arithmetic operations in queries (add, subtract, multiply, divide, modulo)
+- Aggregate queries and GROUP BY / HAVING
+
+### Data Types
+
+**Extended Data Types**
+- [Embedded struct & enum support](../design/enums-and-embedded-structs.md) (partial implementation)
+- Serde-serialized types (JSON/JSONB columns for arbitrary Rust types)
+- Embedded collections (arrays, maps, sets, etc.)
 
 ### Relationships & Loading
-- **Advanced Relationships** 🔴
-  - Many-to-many relationships
-  - Self-referential relationships
-  - Polymorphic associations
-  - Eager loading (N+1 prevention)
-  - Lazy loading configuration
+
+**Relationships**
+- Many-to-many relationships
+- Polymorphic associations
+- Nested preloading (multi-level `.include()` support)
 
 ### Query Building
-- **Advanced Queries** 🔴
-  - Complex WHERE conditions (OR, NOT)
-  - Subqueries
-  - Raw SQL escape hatch
-  - Query builder pattern
-  - Aggregations (COUNT, SUM, AVG, etc.)
-  - GROUP BY and HAVING
+
+**Query Features**
+- Subquery improvements
+- Better conditional/dynamic query building ergonomics
+
+**Raw SQL Support**
+- Execute arbitrary SQL statements directly
+- Parameterized queries with type-safe bindings
+- Raw SQL fragments within typed queries (escape hatch for complex expressions)
+
+### Transactions
+
+**Atomic Batch Operations**
+- Cross-database atomic batch API
+- Supported across SQL and NoSQL databases
+- Type-safe operation batching
+- All-or-nothing semantics
+
+**SQL Transaction API**
+- Manual transaction control for SQL databases
+- BEGIN/COMMIT/ROLLBACK support
+- Savepoints and nested transactions
+- Isolation level configuration
 
 ### Schema Management
-- **Migrations** 🔴
-  - Schema migration system
-  - Migration generation
-  - Rollback support
-  - Schema versioning
+
+**Migrations**
+- Schema migration system
+- Migration generation
+- Rollback support
+- Schema versioning
+- CLI tools for schema management
 
 ### Performance
-- **Optimization Features** 🔴
-  - Connection pooling configuration
-  - Query caching
-  - Batch operations
-  - Bulk inserts/updates
-  - Transaction management
+
+**Optimization Features**
+- Bulk inserts/updates
+- Query caching
+- Connection pooling improvements
 
 ### Developer Experience
-- **Tooling & Debugging** 🔴
-  - Query logging
-  - Performance monitoring
-  - Better error messages
-  - CLI tools for schema management
-  - Documentation generation
 
-### Data Integrity
-- **Validations & Callbacks** 🔴
-  - Field validations
-  - Model validations
-  - Soft deletes
-  - Optimistic locking
+**Ergonomic Macros**
+- `toasty::query!()` - Succinct query syntax that translates to builder DSL
+  ```rust
+  // Instead of: User::all().filter(...).order_by(...).collect(&db).await
+  toasty::query!(User, filter: ..., order_by: ...).collect(&db).await
+  ```
+- `toasty::create!()` - Concise record creation syntax
+  ```rust
+  // Instead of: User::create().name("Alice").age(30).exec(&db).await
+  toasty::create!(User, name: "Alice", age: 30).exec(&db).await
+  ```
+- `toasty::update!()` - Simplified update syntax
+  ```rust
+  // Instead of: user.update().name("Bob").age(31).exec(&db).await
+  toasty::update!(user, name: "Bob", age: 31).exec(&db).await
+  ```
 
-## Next Steps
+**Tooling & Debugging**
+- Query logging
 
-We are currently focusing on:
-1. **Query Ordering, Limits & Pagination** - Essential for any data listing functionality
+## Notes
 
-## Documentation Structure
-
-This roadmap works alongside the user documentation:
-
-- **Roadmap docs** (this directory): Technical implementation details, current state analysis, and development priorities
-- **User guide** ([`guide/`](../guide/)): API documentation and usage examples for the target API (including unimplemented features)
-
-Each roadmap document includes:
-- Current state analysis
-- Missing functionality
-- Implementation roadmap
-- Technical design decisions
-
-Each guide document shows:
-- Complete API examples (including future APIs marked as "work in progress")
-- Usage patterns and best practices
-- Integration examples
+The roadmap documents describe potential enhancements and missing features. For information about what's currently implemented, refer to the user guide or test the API directly.

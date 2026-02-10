@@ -24,6 +24,17 @@ impl Simplify<'_> {
             }
         }
 
+        // Handle projections through records (embedded fields lower to records of columns)
+        // After lowering, embedded field references become records where each field is a column.
+        // Example: project([street_col, city_col, zip_col], [1]) → city_col
+        if let stmt::Expr::Record(record) = &*expr.base {
+            if let [index] = expr.projection.as_slice() {
+                if *index < record.fields.len() {
+                    return Some(record.fields[*index].clone());
+                }
+            }
+        }
+
         None
     }
 }

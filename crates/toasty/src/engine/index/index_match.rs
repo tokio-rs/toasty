@@ -168,7 +168,11 @@ impl<'stmt> IndexMatch<'stmt> {
                     false
                 }
             }
-            _ => todo!("expr={:#?}", expr),
+            _ => {
+                // Unsupported expression type for index matching - return false
+                // to indicate this expression cannot be matched against an index
+                false
+            }
         }
     }
 

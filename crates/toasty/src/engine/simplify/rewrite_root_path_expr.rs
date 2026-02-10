@@ -8,7 +8,11 @@ impl Simplify<'_> {
     ///
     /// The caller must ensure it is an `eq` operation
     pub(super) fn rewrite_root_path_expr(&mut self, model: &Model, val: stmt::Expr) -> stmt::Expr {
-        if let [field] = &model.primary_key.fields[..] {
+        let primary_key = model
+            .primary_key()
+            .expect("root path expr rewrite requires root model with primary key");
+
+        if let [field] = &primary_key.fields[..] {
             stmt::Expr::eq(stmt::Expr::ref_self_field(field), val)
         } else {
             todo!("composite primary keys")
@@ -20,7 +24,7 @@ impl Simplify<'_> {
 mod tests {
     use super::*;
     use crate as toasty;
-    use crate::Model as _;
+    use crate::model::Register;
     use toasty_core::{
         driver::Capability,
         schema::{app, Builder},

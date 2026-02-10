@@ -13,10 +13,9 @@ impl<T: Model> BelongsTo<T> {
     pub fn load(input: Value) -> crate::Result<Self> {
         Ok(match input {
             Value::Null => Self::default(),
-            Value::Record(record) => Self {
-                value: Some(Box::new(T::load(record)?)),
+            value => Self {
+                value: Some(Box::new(T::load(value)?)),
             },
-            _ => todo!("expected `Value::Record`; actual={input:#?}"),
         })
     }
 

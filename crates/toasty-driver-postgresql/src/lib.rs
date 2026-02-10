@@ -29,24 +29,27 @@ impl PostgreSQL {
     /// Create a new PostgreSQL driver from a connection URL
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str)?;
+        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "postgresql" {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `postgresql` scheme; url={}",
                 url
-            ));
+            )));
         }
 
-        let host = url
-            .host_str()
-            .ok_or_else(|| anyhow::anyhow!("missing host in connection URL; url={}", url))?;
+        let host = url.host_str().ok_or_else(|| {
+            toasty_core::Error::invalid_connection_url(format!(
+                "missing host in connection URL; url={}",
+                url
+            ))
+        })?;
 
         if url.path().is_empty() {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "no database specified - missing path in connection URL; url={}",
                 url
-            ));
+            )));
         }
 
         let mut config = Config::new();
@@ -76,6 +79,10 @@ impl PostgreSQL {
 
 #[async_trait]
 impl Driver for PostgreSQL {
+    fn capability(&self) -> &'static Capability {
+        &Capability::POSTGRESQL
+    }
+
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         Ok(Box::new(
             Connection::connect(self.config.clone(), tokio_postgres::NoTls).await?,
@@ -106,7 +113,10 @@ impl Connection {
         T: MakeTlsConnect<Socket> + 'static,
         T::Stream: Send,
     {
-        let (client, connection) = config.connect(tls).await?;
+        let (client, connection) = config
+            .connect(tls)
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
@@ -121,7 +131,7 @@ impl Connection {
     pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
 
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
         let sql = serializer.serialize(
             &sql::Statement::create_table(table, &Capability::POSTGRESQL),
             &mut params,
@@ -132,7 +142,10 @@ impl Connection {
             "creating a table shouldn't involve any parameters"
         );
 
-        self.client.execute(&sql, &[]).await?;
+        self.client
+            .execute(&sql, &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         // NOTE: `params` is guaranteed to be empty based on the assertion above. If
         // that changes, `params.clear()` should be called here.
@@ -148,7 +161,10 @@ impl Connection {
                 "creating an index shouldn't involve any parameters"
             );
 
-            self.client.execute(&sql, &[]).await?;
+            self.client
+                .execute(&sql, &[])
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?;
         }
 
         Ok(())
@@ -162,7 +178,7 @@ impl Connection {
         if_exists: bool,
     ) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
         let sql = if if_exists {
             serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
@@ -175,7 +191,10 @@ impl Connection {
             "dropping a table shouldn't involve any parameters"
         );
 
-        self.client.execute(&sql, &[]).await?;
+        self.client
+            .execute(&sql, &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }
@@ -191,10 +210,6 @@ impl From<Client> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn capability(&self) -> &'static Capability {
-        &Capability::POSTGRESQL
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::Insert(op) => (op.stmt.into(), None),
@@ -210,15 +225,16 @@ impl toasty_core::driver::Connection for Connection {
 
         let width = sql.returning_len();
 
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
         let sql_as_str = sql::Serializer::postgresql(schema).serialize(&sql, &mut params);
 
-        let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
         let param_types = params
             .iter()
-            .map(|param| param.infer_ty().to_postgres_type())
+            .map(|typed_value| typed_value.infer_ty().to_postgres_type())
             .collect::<Vec<_>>();
-        let params = params
+
+        let values: Vec<_> = params.into_iter().map(|tv| Value::from(tv.value)).collect();
+        let params = values
             .iter()
             .map(|param| param as &(dyn ToSql + Sync))
             .collect::<Vec<_>>();
@@ -226,14 +242,23 @@ impl toasty_core::driver::Connection for Connection {
         let statement = self
             .statement_cache
             .prepare_typed(&mut self.client, &sql_as_str, &param_types)
-            .await?;
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         if width.is_none() {
-            let count = self.client.execute(&statement, &params).await?;
+            let count = self
+                .client
+                .execute(&statement, &params)
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?;
             return Ok(Response::count(count));
         }
 
-        let rows = self.client.query(&statement, &params).await?;
+        let rows = self
+            .client
+            .query(&statement, &params)
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         if width.is_none() {
             let [row] = &rows[..] else { todo!() };
@@ -243,7 +268,9 @@ impl toasty_core::driver::Connection for Connection {
             if total == condition_matched {
                 Ok(Response::count(total as _))
             } else {
-                anyhow::bail!("update condition did not match");
+                Err(toasty_core::Error::condition_failed(
+                    "update condition did not match",
+                ))
             }
         } else {
             let ret_tys = ret_tys.as_ref().unwrap().clone();

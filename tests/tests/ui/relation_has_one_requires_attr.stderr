@@ -1,4 +1,22 @@
 error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Primitive` is not satisfied
+ --> tests/ui/relation_has_one_requires_attr.rs:3:10
+  |
+3 | #[derive(toasty::Model)]
+  |          ^^^^^^^^^^^^^ the trait `toasty::stmt::Primitive` is not implemented for `toasty::HasOne<Option<Profile>>`
+  |
+  = help: the following other types implement trait `toasty::stmt::Primitive`:
+            Arc<T>
+            Box<T>
+            Cow<'_, T>
+            Option<T>
+            Rc<T>
+            bigdecimal::BigDecimal
+            bool
+            i16
+          and $N others
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Primitive` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:9:14
   |
 9 |     profile: toasty::HasOne<Option<Profile>>,

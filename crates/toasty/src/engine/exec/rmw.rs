@@ -54,23 +54,27 @@ impl Exec<'_> {
             .await?;
 
         let Rows::Stream(rows) = res.rows else {
-            anyhow::bail!("expected rows");
+            return Err(toasty_core::Error::invalid_result(
+                "expected Stream, got Count",
+            ));
         };
 
         let rows = rows.collect().await?;
         assert_eq!(rows.len(), 1);
 
         let stmt::Value::Record(record) = &rows[0] else {
-            anyhow::bail!("expected record");
+            return Err(toasty_core::Error::invalid_result("expected Record value"));
         };
         assert_eq!(record.len(), 2);
 
         let stmt::Value::I64(count) = record[0] else {
-            anyhow::bail!("expected i64");
+            return Err(toasty_core::Error::invalid_result("expected I64 value"));
         };
 
         if record[0] != record[1] {
-            anyhow::bail!("update condition did not match");
+            return Err(toasty_core::Error::condition_failed(
+                "update condition did not match",
+            ));
         }
 
         let res = self
@@ -87,7 +91,9 @@ impl Exec<'_> {
             .await?;
 
         let Rows::Count(actual) = res.rows else {
-            anyhow::bail!("expected count");
+            return Err(toasty_core::Error::invalid_result(
+                "expected Count, got Stream",
+            ));
         };
 
         assert_eq!(actual, count as u64);

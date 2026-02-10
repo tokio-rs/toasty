@@ -9,6 +9,9 @@ pub use auto::{AutoStrategy, UuidVersion};
 mod constraint;
 pub use constraint::{Constraint, ConstraintLength};
 
+mod embedded;
+pub use embedded::Embedded;
+
 mod field;
 pub use field::{Field, FieldId, FieldName, FieldPrimitive, FieldTy};
 
@@ -19,7 +22,7 @@ mod index;
 pub use index::{Index, IndexField, IndexId};
 
 mod model;
-pub use model::{Model, ModelId};
+pub use model::{Model, ModelId, ModelKind, ModelRoot};
 
 mod pk;
 pub use pk::PrimaryKey;

@@ -1,7 +1,9 @@
 mod primitive;
 pub use primitive::FieldPrimitive;
 
-use super::{AutoStrategy, BelongsTo, Constraint, HasMany, HasOne, Model, ModelId, Schema};
+use super::{
+    AutoStrategy, BelongsTo, Constraint, Embedded, HasMany, HasOne, Model, ModelId, Schema,
+};
 use crate::{driver, stmt, Result};
 use std::fmt;
 
@@ -50,6 +52,7 @@ impl FieldName {
 #[derive(Clone)]
 pub enum FieldTy {
     Primitive(FieldPrimitive),
+    Embedded(Embedded),
     BelongsTo(BelongsTo),
     HasMany(HasMany),
     HasOne(HasOne),
@@ -118,6 +121,7 @@ impl Field {
     pub fn expr_ty(&self) -> &stmt::Type {
         match &self.ty {
             FieldTy::Primitive(primitive) => &primitive.ty,
+            FieldTy::Embedded(embedded) => &embedded.expr_ty,
             FieldTy::BelongsTo(belongs_to) => &belongs_to.expr_ty,
             FieldTy::HasMany(has_many) => &has_many.expr_ty,
             FieldTy::HasOne(has_one) => &has_one.expr_ty,
@@ -127,6 +131,7 @@ impl Field {
     pub fn pair(&self) -> Option<FieldId> {
         match &self.ty {
             FieldTy::Primitive(_) => None,
+            FieldTy::Embedded(_) => None,
             FieldTy::BelongsTo(belongs_to) => belongs_to.pair,
             FieldTy::HasMany(has_many) => Some(has_many.pair),
             FieldTy::HasOne(has_one) => Some(has_one.pair),
@@ -169,6 +174,33 @@ impl FieldTy {
         match self {
             Self::Primitive(simple) => simple,
             _ => panic!("expected simple field, but was {self:?}"),
+        }
+    }
+
+    pub fn is_embedded(&self) -> bool {
+        matches!(self, Self::Embedded(..))
+    }
+
+    pub fn as_embedded(&self) -> Option<&Embedded> {
+        match self {
+            Self::Embedded(embedded) => Some(embedded),
+            _ => None,
+        }
+    }
+
+    #[track_caller]
+    pub fn expect_embedded(&self) -> &Embedded {
+        match self {
+            Self::Embedded(embedded) => embedded,
+            _ => panic!("expected embedded field, but was {self:?}"),
+        }
+    }
+
+    #[track_caller]
+    pub fn expect_embedded_mut(&mut self) -> &mut Embedded {
+        match self {
+            Self::Embedded(embedded) => embedded,
+            _ => panic!("expected embedded field, but was {self:?}"),
         }
     }
 
@@ -269,6 +301,7 @@ impl fmt::Debug for FieldTy {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Primitive(ty) => ty.fmt(fmt),
+            Self::Embedded(ty) => ty.fmt(fmt),
             Self::BelongsTo(ty) => ty.fmt(fmt),
             Self::HasMany(ty) => ty.fmt(fmt),
             Self::HasOne(ty) => ty.fmt(fmt),

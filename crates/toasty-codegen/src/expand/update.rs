@@ -9,9 +9,9 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_struct_ident = &self.model.query_struct_ident;
-        let update_struct_ident = &self.model.update_struct_ident;
-        let update_query_struct_ident = &self.model.update_query_struct_ident;
+        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
+        let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
+        let update_query_struct_ident = &self.model.kind.expect_root().update_query_struct_ident;
         let update_methods = self.expand_update_methods();
         let update_query_methods = self.expand_update_query_methods();
         let reload_model = self.expand_reload_model_expr();

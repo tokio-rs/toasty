@@ -138,15 +138,22 @@ impl ToSql for &stmt::Insert {
             panic!("MySQL does not support the RETURNING clause with INSERT statements; returning={returning:#?}");
         }
 
-        // Set flag to indicate we're in INSERT context (VALUES shouldn't use ROW())
-        let prev_in_insert = f.in_insert;
-        f.in_insert = true;
+        // Set insert context to provide column type information for VALUES
+        let insert_ctx = match &self.target {
+            stmt::InsertTarget::Table(table) => Some(crate::serializer::InsertContext {
+                table_id: table.table,
+                columns: table.columns.clone(),
+            }),
+            _ => None,
+        };
+        let prev_insert_context = f.insert_context.take();
+        f.insert_context = insert_ctx;
 
         fmt!(
             &cx, f, "INSERT INTO " self.target " " self.source returning
         );
 
-        f.in_insert = prev_in_insert;
+        f.insert_context = prev_insert_context;
     }
 }
 
@@ -429,12 +436,34 @@ impl ToSql for &stmt::Update {
 
 impl ToSql for (&db::Table, &stmt::Assignments) {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
-        let frags = self.1.iter().map(|(index, assignment)| {
-            let column_name = Ident(&self.0.columns[index].name);
-            (column_name, " = ", &assignment.expr)
-        });
+        let assignments: Vec<_> = self.1.iter().collect();
 
-        fmt!(cx, f, Delimited(frags, ", "));
+        // TODO: ideally this could be used with TypeHintedField, but that is
+        // actually pretty brittle as it is tied to an insert context instead of
+        // being more generic. Being more generic would be ideal, but we really
+        // should extract a more generic "scope walker" kind of thing from the
+        // lowering logic.
+        for (i, (index, assignment)) in assignments.iter().enumerate() {
+            if i > 0 {
+                f.dst.push_str(", ");
+            }
+
+            let column = &self.0.columns[*index];
+            let column_name = Ident(&column.name);
+
+            // Serialize column name and equals sign
+            column_name.to_sql(cx, f);
+            f.dst.push_str(" = ");
+
+            // For value expressions, provide type hint from the column
+            if let stmt::Expr::Value(value) = &assignment.expr {
+                let type_hint = Some(&column.ty);
+                let placeholder = f.params.push(value, type_hint);
+                placeholder.to_sql(cx, f);
+            } else {
+                assignment.expr.to_sql(cx, f);
+            }
+        }
     }
 }
 
@@ -459,7 +488,7 @@ impl ToSql for &stmt::Values {
     fn to_sql<P: Params>(self, cx: &ExprContext<'_>, f: &mut super::Formatter<'_, P>) {
         // MySQL requires ROW() keyword for table value constructors when used
         // in subqueries, but NOT in INSERT statements
-        if f.serializer.is_mysql() && !f.in_insert {
+        if f.serializer.is_mysql() && f.insert_context.is_none() {
             let rows = Comma(self.rows.iter().map(|row| ("ROW(", row, ")")));
             fmt!(cx, f, "VALUES " rows)
         } else {

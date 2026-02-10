@@ -9,8 +9,8 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_ident = &self.model.query_struct_ident;
-        let create_builder_ident = &self.model.create_struct_ident;
+        let query_ident = &self.model.kind.expect_root().query_struct_ident;
+        let create_builder_ident = &self.model.kind.expect_root().create_struct_ident;
         let filter_methods = self.expand_relation_filter_methods();
 
         quote! {
@@ -213,7 +213,7 @@ impl Expand<'_> {
             let target = &fk_field.target;
 
             quote! {
-                <#ty as #toasty::Relation>::Model::FIELDS.#target().eq(&self.#source_field_ident)
+                <#ty as #toasty::Relation>::Model::fields().#target().eq(&self.#source_field_ident)
             }
         });
 
@@ -326,7 +326,7 @@ impl Expand<'_> {
                 #pair_check
 
                 <#ty as #toasty::Relation>::Many::from_stmt(
-                    #toasty::stmt::Association::many(self.into_select(), Self::FIELDS.#field_ident().into())
+                    #toasty::stmt::Association::many(self.into_select(), Self::fields().#field_ident().into())
                 )
             }
         }
@@ -389,7 +389,7 @@ impl Expand<'_> {
                 #pair_check
 
                 <#ty as #toasty::Relation>::One::from_stmt(
-                    #toasty::stmt::Association::one(self.into_select(), Self::FIELDS.#field_ident().into()).into_select()
+                    #toasty::stmt::Association::one(self.into_select(), Self::fields().#field_ident().into()).into_select()
                 )
             }
         }

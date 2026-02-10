@@ -26,26 +26,31 @@ pub struct MySQL {
 impl MySQL {
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str)?;
+        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "mysql" {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection url does not have a `mysql` scheme; url={}",
                 url
-            ));
+            )));
         }
 
-        url.host_str()
-            .ok_or_else(|| anyhow::anyhow!("missing host in connection URL; url={}", url))?;
+        url.host_str().ok_or_else(|| {
+            toasty_core::Error::invalid_connection_url(format!(
+                "missing host in connection URL; url={}",
+                url
+            ))
+        })?;
 
         if url.path().is_empty() {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "no database specified - missing path in connection URL; url={}",
                 url
-            ));
+            )));
         }
 
-        let opts = mysql_async::Opts::from_url(url.as_ref())?;
+        let opts = mysql_async::Opts::from_url(url.as_ref())
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
 
         let pool = Pool::new(opts);
@@ -61,8 +66,16 @@ impl From<Pool> for MySQL {
 
 #[async_trait]
 impl Driver for MySQL {
+    fn capability(&self) -> &'static Capability {
+        &Capability::MYSQL
+    }
+
     async fn connect(&self) -> Result<Box<dyn toasty_core::driver::Connection>> {
-        let conn = self.pool.get_conn().await?;
+        let conn = self
+            .pool
+            .get_conn()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(Box::new(Connection::new(conn)))
     }
 }
@@ -80,7 +93,7 @@ impl Connection {
     pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
 
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
         let sql = serializer.serialize(
             &sql::Statement::create_table(table, &Capability::MYSQL),
@@ -92,7 +105,10 @@ impl Connection {
             "creating a table shouldn't involve any parameters"
         );
 
-        self.conn.exec_drop(&sql, ()).await?;
+        self.conn
+            .exec_drop(&sql, ())
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         for index in &table.indices {
             if index.primary_key {
@@ -106,7 +122,10 @@ impl Connection {
                 "creating an index shouldn't involve any parameters"
             );
 
-            self.conn.exec_drop(&sql, ()).await?;
+            self.conn
+                .exec_drop(&sql, ())
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?;
         }
 
         Ok(())
@@ -120,7 +139,7 @@ impl Connection {
         if_exists: bool,
     ) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
         let sql = if if_exists {
             serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
@@ -133,7 +152,10 @@ impl Connection {
             "dropping a table shouldn't involve any parameters"
         );
 
-        self.conn.exec_drop(&sql, ()).await?;
+        self.conn
+            .exec_drop(&sql, ())
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }
@@ -146,45 +168,58 @@ impl From<Conn> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn capability(&self) -> &'static Capability {
-        &Capability::MYSQL
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
             Operation::Transaction(Transaction::Start) => {
-                self.conn.query_drop("START TRANSACTION").await?;
+                self.conn
+                    .query_drop("START TRANSACTION")
+                    .await
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
-                self.conn.query_drop("COMMIT").await?;
+                self.conn
+                    .query_drop("COMMIT")
+                    .await
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {
-                self.conn.query_drop("ROLLBACK").await?;
+                self.conn
+                    .query_drop("ROLLBACK")
+                    .await
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             op => todo!("op={:#?}", op),
         };
 
-        let mut params = Vec::new();
+        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
 
         let sql_as_str = sql::Serializer::mysql(schema).serialize(&sql, &mut params);
 
-        let params = params.into_iter().map(Value::from).collect::<Vec<_>>();
+        let params = params
+            .into_iter()
+            .map(|tv| Value::from(tv.value))
+            .collect::<Vec<_>>();
         let args = params
             .iter()
             .map(|param| param.to_value())
             .collect::<Vec<_>>();
 
-        let statement = self.conn.prep(&sql_as_str).await?;
+        let statement = self
+            .conn
+            .prep(&sql_as_str)
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         if ret.is_none() {
             let count = self
                 .conn
                 .exec_iter(&statement, mysql_async::Params::Positional(args))
-                .await?
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?
                 .affected_rows();
 
             // Handle the last_insert_id_hack for MySQL INSERT with RETURNING
@@ -199,8 +234,13 @@ impl toasty_core::driver::Connection for Connection {
                 let first_id: u64 = self
                     .conn
                     .query_first("SELECT LAST_INSERT_ID()")
-                    .await?
-                    .ok_or_else(|| anyhow::anyhow!("LAST_INSERT_ID() returned no rows"))?;
+                    .await
+                    .map_err(toasty_core::Error::driver_operation_failed)?
+                    .ok_or_else(|| {
+                        toasty_core::Error::driver_operation_failed(std::io::Error::other(
+                            "LAST_INSERT_ID() returned no rows",
+                        ))
+                    })?;
 
                 // Generate rows with sequential IDs
                 let results = (0..num_rows).map(move |offset| {
@@ -217,7 +257,11 @@ impl toasty_core::driver::Connection for Connection {
             return Ok(Response::count(count));
         }
 
-        let rows: Vec<mysql_async::Row> = self.conn.exec(&statement, &args).await?;
+        let rows: Vec<mysql_async::Row> = self
+            .conn
+            .exec(&statement, &args)
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         if let Some(returning) = ret {
             let results = rows.into_iter().map(move |mut row| {
@@ -247,7 +291,9 @@ impl toasty_core::driver::Connection for Connection {
             if total == condition_matched {
                 Ok(Response::count(total as _))
             } else {
-                anyhow::bail!("update condition did not match");
+                Err(toasty_core::Error::condition_failed(
+                    "update condition did not match",
+                ))
             }
         }
     }

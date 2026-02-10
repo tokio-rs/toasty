@@ -17,7 +17,7 @@ mod ident;
 use ident::Ident;
 
 mod params;
-pub use params::{Params, Placeholder};
+pub use params::{Params, Placeholder, TypedValue};
 
 // Fragment serializers
 mod column_def;
@@ -30,6 +30,13 @@ mod value;
 use crate::stmt::Statement;
 
 use toasty_core::schema::db::{self, Index, Table};
+
+/// Context information when serializing VALUES in an INSERT statement
+#[derive(Debug, Clone)]
+pub struct InsertContext {
+    pub table_id: db::TableId,
+    pub columns: Vec<db::ColumnId>,
+}
 
 /// Serialize a statement to a SQL string
 #[derive(Debug)]
@@ -59,8 +66,8 @@ struct Formatter<'a, T> {
     /// True when table names should be aliased.
     alias: bool,
 
-    /// True when serializing VALUES in an INSERT statement context
-    in_insert: bool,
+    /// Context when serializing VALUES in an INSERT statement
+    insert_context: Option<InsertContext>,
 }
 
 pub type ExprContext<'a> = toasty_core::stmt::ExprContext<'a, db::Schema>;
@@ -75,7 +82,7 @@ impl<'a> Serializer<'a> {
             params,
             depth: 0,
             alias: false,
-            in_insert: false,
+            insert_context: None,
         };
 
         let cx = ExprContext::new(self.schema);

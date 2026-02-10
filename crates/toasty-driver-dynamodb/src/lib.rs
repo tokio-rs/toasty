@@ -10,9 +10,9 @@ use toasty_core::{
     driver::{operation::Operation, Capability, Driver, Response},
     schema::db::{Column, ColumnId, Schema, Table},
     stmt::{self, ExprContext},
+    Result,
 };
 
-use anyhow::Result;
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::update_item::UpdateItemError,
@@ -39,6 +39,10 @@ impl DynamoDb {
 
 #[async_trait]
 impl Driver for DynamoDb {
+    fn capability(&self) -> &'static Capability {
+        &Capability::DYNAMODB
+    }
+
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         Ok(Box::new(Connection::connect(&self.url).await?))
     }
@@ -56,12 +60,12 @@ impl Connection {
     }
 
     pub async fn connect(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
+        let url = Url::parse(url).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "dynamodb" {
-            return Err(anyhow::anyhow!(
+            return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `dynamodb` scheme; url={url}"
-            ));
+            )));
         }
 
         use aws_config::BehaviorVersion;
@@ -107,10 +111,6 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn capability(&self) -> &'static Capability {
-        &Capability::DYNAMODB
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         self.exec2(schema, op).await
     }
@@ -240,10 +240,36 @@ fn ddb_expression(
                 .collect::<Vec<_>>();
             operands.join(" AND ")
         }
+        stmt::Expr::Or(expr_or) => {
+            let operands = expr_or
+                .operands
+                .iter()
+                .map(|operand| ddb_expression(cx, attrs, primary, operand))
+                .collect::<Vec<_>>();
+            operands.join(" OR ")
+        }
         stmt::Expr::Pattern(stmt::ExprPattern::BeginsWith(begins_with)) => {
             let expr = ddb_expression(cx, attrs, primary, &begins_with.expr);
             let substr = ddb_expression(cx, attrs, primary, &begins_with.pattern);
             format!("begins_with({expr}, {substr})")
+        }
+        stmt::Expr::InList(in_list) => {
+            let expr = ddb_expression(cx, attrs, primary, &in_list.expr);
+
+            // Extract the list items and create individual attribute values
+            let items = match &*in_list.list {
+                stmt::Expr::Value(stmt::Value::List(vals)) => vals
+                    .iter()
+                    .map(|val| attrs.value(val))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                _ => {
+                    // If it's not a literal list, treat it as a single expression
+                    ddb_expression(cx, attrs, primary, &in_list.list)
+                }
+            };
+
+            format!("{expr} IN ({items})")
         }
         _ => todo!("FILTER = {:#?}", expr),
     }

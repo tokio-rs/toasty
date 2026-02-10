@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn is_null_non_nullable_field() {
         use crate as toasty;
-        use crate::Model as _;
+        use crate::model::Register;
 
         #[allow(dead_code)]
         #[derive(toasty::Model)]

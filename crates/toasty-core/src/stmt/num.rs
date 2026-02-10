@@ -1,4 +1,4 @@
-use super::{Type, Value};
+use super::{Expr, Type, Value};
 
 macro_rules! try_from {
     ($v:expr, $ty:ty) => {
@@ -47,6 +47,33 @@ macro_rules! impl_num {
         }
 
         $(
+            impl PartialEq<$ty> for Value {
+                fn eq(&self, other: &$ty) -> bool {
+                    try_from!(*self, $ty).map(|v| v == *other).unwrap_or(false)
+                }
+            }
+
+            impl PartialEq<Value> for $ty {
+                fn eq(&self, other: &Value) -> bool {
+                    other.eq(self)
+                }
+            }
+
+            impl PartialEq<$ty> for Expr {
+                fn eq(&self, other: &$ty) -> bool {
+                    match self {
+                        Expr::Value(value) => value.eq(other),
+                        _ => false,
+                    }
+                }
+            }
+
+            impl PartialEq<Expr> for $ty {
+                fn eq(&self, other: &Expr) -> bool {
+                    other.eq(self)
+                }
+            }
+
             impl From<$ty> for Value {
                 fn from(value: $ty) -> Self {
                     Self::$variant(value)
@@ -64,8 +91,25 @@ macro_rules! impl_num {
 
                 fn try_from(value: Value) -> crate::Result<Self> {
                     value.$to().ok_or_else(|| {
-                        anyhow::anyhow!("cannot convert {:?} to {}", value.infer_ty(), stringify!($ty))
+                        crate::Error::type_conversion(value.clone(), stringify!($ty))
                     })
+                }
+            }
+
+            #[cfg(feature = "assert-struct")]
+            impl assert_struct::Like<$ty> for Value {
+                fn like(&self, pattern: &$ty) -> bool {
+                    try_from!(*self, $ty).map(|v| v == *pattern).unwrap_or(false)
+                }
+            }
+
+            #[cfg(feature = "assert-struct")]
+            impl assert_struct::Like<$ty> for Expr {
+                fn like(&self, pattern: &$ty) -> bool {
+                    match self {
+                        Expr::Value(value) => value.like(pattern),
+                        _ => false,
+                    }
                 }
             }
         )*
@@ -139,17 +183,63 @@ impl From<&isize> for Value {
     }
 }
 
+#[cfg(feature = "assert-struct")]
+impl assert_struct::Like<usize> for Value {
+    fn like(&self, pattern: &usize) -> bool {
+        usize::try_from(self)
+            .map(|v| v == *pattern)
+            .unwrap_or(false)
+    }
+}
+
+#[cfg(feature = "assert-struct")]
+impl assert_struct::Like<usize> for Expr {
+    fn like(&self, pattern: &usize) -> bool {
+        match self {
+            Expr::Value(v) => v.like(pattern),
+            _ => false,
+        }
+    }
+}
+
+#[cfg(feature = "assert-struct")]
+impl assert_struct::Like<isize> for Value {
+    fn like(&self, pattern: &isize) -> bool {
+        isize::try_from(self)
+            .map(|v| v == *pattern)
+            .unwrap_or(false)
+    }
+}
+
+#[cfg(feature = "assert-struct")]
+impl assert_struct::Like<isize> for Expr {
+    fn like(&self, pattern: &isize) -> bool {
+        match self {
+            Expr::Value(v) => v.like(pattern),
+            _ => false,
+        }
+    }
+}
+
 // Pointer-sized integers convert from their fixed-size equivalents
 impl TryFrom<Value> for usize {
     type Error = crate::Error;
 
     fn try_from(value: Value) -> crate::Result<Self> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&Value> for usize {
+    type Error = crate::Error;
+
+    fn try_from(value: &Value) -> crate::Result<Self> {
         let u64_val = value
             .to_u64()
-            .ok_or_else(|| anyhow::anyhow!("cannot convert {:?} to usize", value))?;
+            .ok_or_else(|| crate::Error::type_conversion(value.clone(), "usize"))?;
         u64_val
             .try_into()
-            .map_err(|_| anyhow::anyhow!("value {} is out of range for usize", u64_val))
+            .map_err(|_| crate::Error::type_conversion(Value::U64(u64_val), "usize"))
     }
 }
 
@@ -157,11 +247,19 @@ impl TryFrom<Value> for isize {
     type Error = crate::Error;
 
     fn try_from(value: Value) -> crate::Result<Self> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&Value> for isize {
+    type Error = crate::Error;
+
+    fn try_from(value: &Value) -> crate::Result<Self> {
         let i64_val = value
             .to_i64()
-            .ok_or_else(|| anyhow::anyhow!("cannot convert {:?} to isize", value))?;
+            .ok_or_else(|| crate::Error::type_conversion(value.clone(), "isize"))?;
         i64_val
             .try_into()
-            .map_err(|_| anyhow::anyhow!("value {} is out of range for isize", i64_val))
+            .map_err(|_| crate::Error::type_conversion(Value::I64(i64_val), "isize"))
     }
 }

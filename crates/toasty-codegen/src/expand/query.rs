@@ -9,8 +9,8 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let query_struct_ident = &self.model.query_struct_ident;
-        let update_query_struct_ident = &self.model.update_query_struct_ident;
+        let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
+        let update_query_struct_ident = &self.model.kind.expect_root().update_query_struct_ident;
         let filter_methods = self.expand_query_filter_methods();
         let relation_methods = self.expand_relation_methods();
 
@@ -126,7 +126,7 @@ impl Expand<'_> {
                 use #toasty::IntoSelect;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many_via_one(
-                        self.stmt, #model_ident::FIELDS.#field_ident().into()
+                        self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_select()
                 )
             }
@@ -145,7 +145,7 @@ impl Expand<'_> {
                 use #toasty::IntoSelect;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many(
-                        self.stmt, #model_ident::FIELDS.#field_ident().into()
+                        self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_select()
                 )
             }
@@ -164,7 +164,7 @@ impl Expand<'_> {
                 use #toasty::IntoSelect;
                 <#target as #toasty::Relation>::Query::from_stmt(
                     #toasty::stmt::Association::many_via_one(
-                        self.stmt, #model_ident::FIELDS.#field_ident().into()
+                        self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_select()
                 )
             }

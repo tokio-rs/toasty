@@ -11,8 +11,6 @@ jiff = ["dep:jiff", "toasty-core/jiff", "postgres-types/with-jiff-0_2"]
 [dependencies]
 toasty-core.workspace = true
 toasty-sql.workspace = true
-
-anyhow.workspace = true
 rust_decimal = { workspace = true, optional = true, features = ["db-postgres"] }
 bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }

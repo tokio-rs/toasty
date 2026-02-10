@@ -279,6 +279,62 @@ impl Expr {
         }
     }
 
+    /// Returns `true` if the expression can be evaluated.
+    ///
+    /// An expression can be evaluated if it doesn't contain references to external
+    /// data sources like subqueries or references. Args are allowed since they
+    /// represent function parameters that can be bound at evaluation time.
+    pub fn is_eval(&self) -> bool {
+        match self {
+            // Always evaluable
+            Self::Value(_) | Self::Type(_) => true,
+
+            // Args are OK for evaluation
+            Self::Arg(_) => true,
+
+            // Never evaluable - references external data
+            Self::Default
+            | Self::Reference(_)
+            | Self::Stmt(_)
+            | Self::InSubquery(_)
+            | Self::Exists(_) => false,
+
+            // Evaluable if all children are evaluable
+            Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_eval()),
+            Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_eval()),
+            Self::Cast(expr_cast) => expr_cast.expr.is_eval(),
+            Self::BinaryOp(expr_binary) => expr_binary.lhs.is_eval() && expr_binary.rhs.is_eval(),
+            Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_eval()),
+            Self::Any(expr_any) => expr_any.expr.is_eval(),
+            Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_eval()),
+            Self::Not(expr_not) => expr_not.expr.is_eval(),
+            Self::IsNull(expr_is_null) => expr_is_null.expr.is_eval(),
+            Self::InList(expr_in_list) => {
+                expr_in_list.expr.is_eval() && expr_in_list.list.is_eval()
+            }
+            Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_eval()),
+            Self::ConcatStr(expr_concat_str) => {
+                expr_concat_str.exprs.iter().all(|expr| expr.is_eval())
+            }
+            Self::Project(expr_project) => expr_project.base.is_eval(),
+            Self::Enum(expr_enum) => expr_enum.fields.iter().all(|expr| expr.is_eval()),
+            Self::Pattern(expr_pattern) => match expr_pattern {
+                super::ExprPattern::BeginsWith(e) => e.expr.is_eval() && e.pattern.is_eval(),
+                super::ExprPattern::Like(e) => e.expr.is_eval() && e.pattern.is_eval(),
+            },
+            Self::Map(expr_map) => expr_map.base.is_eval() && expr_map.map.is_eval(),
+            Self::Key(_) => true,
+            Self::Func(expr_func) => match expr_func {
+                super::ExprFunc::Count(func_count) => {
+                    func_count.arg.as_ref().is_none_or(|e| e.is_eval())
+                        && func_count.filter.as_ref().is_none_or(|e| e.is_eval())
+                }
+                super::ExprFunc::LastInsertId(_) => true,
+            },
+            Self::DecodeEnum(expr, ..) => expr.is_eval(),
+        }
+    }
+
     pub fn map_projections(&self, f: impl FnMut(&Projection) -> Projection) -> Self {
         struct MapProjections<T>(T);
 

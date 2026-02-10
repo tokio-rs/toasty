@@ -47,5 +47,16 @@ impl toasty_driver_integration_suite::Setup for DynamoDbSetup {
     }
 }
 
-// Generate all driver tests (DynamoDB doesn't support auto_increment)
-toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new(), auto_increment: false);
+// Generate all driver tests (DynamoDB doesn't support auto_increment, bigdecimal, or decimal)
+toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new(),
+    sql: false,
+    auto_increment: false,
+    bigdecimal_implemented: false,
+    decimal_arbitrary_precision: false,
+    native_decimal: false,
+    native_varchar: false,
+    native_timestamp: false,
+    native_date: false,
+    native_time: false,
+    native_datetime: false,
+);

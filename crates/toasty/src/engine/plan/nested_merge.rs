@@ -13,6 +13,7 @@ use crate::engine::{
 struct NestedMergePlanner<'a> {
     engine: &'a Engine,
     hir: &'a HirStatement,
+    mir: &'a mut mir::Store,
     inputs: IndexSet<mir::NodeId>,
     /// Statements that must execute before the merge but whose output is not needed
     deps: IndexSet<mir::NodeId>,
@@ -83,24 +84,25 @@ impl HirPlanner<'_> {
         let nested_merge_planner = NestedMergePlanner {
             engine: self.engine,
             hir: self.hir,
+            mir: &mut self.mir,
             inputs: IndexSet::new(),
             deps: IndexSet::new(),
             stack: vec![],
         };
 
-        let node_id = nested_merge_planner.plan_nested_merge(&mut self.mir, stmt_id);
+        let node_id = nested_merge_planner.plan_nested_merge(stmt_id);
         Some(node_id)
     }
 }
 
 impl NestedMergePlanner<'_> {
-    fn plan_nested_merge(mut self, mir: &mut mir::Store, root: hir::StmtId) -> mir::NodeId {
+    fn plan_nested_merge(mut self, root: hir::StmtId) -> mir::NodeId {
         self.stack.push(root);
         let root = self.plan_nested_level(root, 0);
         self.stack.pop();
 
         // let deps = self.deps;
-        mir.insert_with_deps(
+        self.mir.insert_with_deps(
             mir::NestedMerge {
                 inputs: self.inputs,
                 root,
@@ -142,24 +144,35 @@ impl NestedMergePlanner<'_> {
     fn plan_nested_level(&mut self, stmt_id: hir::StmtId, depth: usize) -> NestedLevel {
         let stmt_state = &self.hir[stmt_id];
         let stmt = stmt_state.stmt.as_deref().unwrap();
-
-        // For child statements, check if the returning clause is a constant value.
-        // If so, use the output node (which contains the constant) instead of the
-        // exec_statement node, and mark exec_statement as a dependency.
         let returning = stmt.returning_unwrap();
 
-        let (source, _) = self
-            .inputs
-            .insert_full(stmt_state.load_data_statement.get().unwrap());
-
+        let source;
         let mut nested = vec![];
 
         // Map the returning clause to projection expression
         let projection = match returning {
             stmt::Returning::Expr(expr) => {
+                let (s, _) = self
+                    .inputs
+                    .insert_full(stmt_state.load_data_statement.get().unwrap());
+
+                source = s;
                 self.build_projection_from_expr(stmt_id, expr, depth, &mut nested)
             }
-            _ => todo!(),
+            _ => {
+                let node_id = stmt_state.output.get().unwrap();
+
+                let (s, _) = self.inputs.insert_full(node_id);
+                source = s;
+
+                // Flatten list (bit of a hack)
+                let ty = match self.mir[node_id].ty().clone() {
+                    stmt::Type::List(ty) => *ty,
+                    ty => ty,
+                };
+
+                eval::Func::from_stmt(stmt::Expr::arg(0), vec![ty])
+            }
         };
 
         NestedLevel {
@@ -227,39 +240,40 @@ impl NestedMergePlanner<'_> {
                     // If the child statement has a constant returning clause,
                     // then the nested merge can inline the returning directly
                     // instead of having to get the values from the expression.
-                    if let stmt::Returning::Value(returning_expr) = child_returning {
-                        debug_assert!(returning_expr.is_const(), "this block is assuming, at this point, `Returning::Value` is always constant.");
+                    match child_returning {
+                        stmt::Returning::Value(returning_expr) if returning_expr.is_const() => {
+                            match child_stmt {
+                                stmt::Statement::Query(query) => {
+                                    if query.single {
+                                        let stmt::Expr::Value(v) = returning_expr else {
+                                            todo!()
+                                        };
+                                        assert!(!v.is_list());
+                                    }
+                                }
+                                stmt::Statement::Insert(insert) => {
+                                    if insert.source.single {
+                                        let stmt::Expr::Value(v) = returning_expr else {
+                                            todo!()
+                                        };
+                                        assert!(!v.is_list());
+                                    }
+                                }
+                                _ => {}
+                            }
 
-                        match child_stmt {
-                            stmt::Statement::Query(query) => {
-                                if query.single {
-                                    let stmt::Expr::Value(v) = returning_expr else {
-                                        todo!()
-                                    };
-                                    assert!(!v.is_list());
-                                }
-                            }
-                            stmt::Statement::Insert(insert) => {
-                                if insert.source.single {
-                                    let stmt::Expr::Value(v) = returning_expr else {
-                                        todo!()
-                                    };
-                                    assert!(!v.is_list());
-                                }
-                            }
-                            _ => {}
+                            // For consistency, make sure the child statement's execution happens before this one.
+                            self.deps
+                                .insert(child_stmt_state.load_data_statement.get().unwrap());
+                            *expr = returning_expr.clone();
                         }
+                        _ => {
+                            let nested_child = self.plan_nested_child(*stmt_id, depth + 1);
+                            nested.push(nested_child);
 
-                        // For consistency, make sure the child statement's execution happens before this one.
-                        self.deps
-                            .insert(child_stmt_state.load_data_statement.get().unwrap());
-                        *expr = returning_expr.clone();
-                    } else {
-                        let nested_child = self.plan_nested_child(*stmt_id, depth + 1);
-                        nested.push(nested_child);
-
-                        // Taking the
-                        *expr = stmt::Expr::arg(nested.len());
+                            // Taking the
+                            *expr = stmt::Expr::arg(nested.len());
+                        }
                     }
                 }
                 hir::Arg::Ref { .. } => todo!(),

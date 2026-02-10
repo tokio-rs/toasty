@@ -51,18 +51,22 @@ impl LowerStatement<'_, '_> {
         let mut set_fields: BitSet<usize> = BitSet::default();
 
         // First, apply any defaults while also tracking all the fields that are set.
-        for row in &mut values.rows {
-            self.apply_app_level_insertion_defaults(model, row, &mut set_fields);
+        for (index, row) in values.rows.iter_mut().enumerate() {
+            self.lower_insert_with_row(index, |lower| {
+                lower.apply_app_level_insertion_defaults(model, row, &mut set_fields);
+            });
         }
 
         // If there are any has_n associations included in the insertion, the
         // statement returning has to be transformed to accomodate the nested
         // structure.
-        self.convert_returning_for_insert_with_has_n(model, &set_fields, values, returning);
+        self.convert_returning_for_insert(values, returning, source.single);
 
         for (index, row) in values.rows.iter_mut().enumerate() {
-            self.plan_stmt_insert_relations(row, returning, index);
-            self.verify_field_constraints(model, row);
+            self.lower_insert_with_row(index, |lower| {
+                lower.plan_stmt_insert_relations(row, returning, index);
+                lower.verify_field_constraints(model, row);
+            });
         }
     }
 
@@ -140,26 +144,16 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    fn convert_returning_for_insert_with_has_n(
+    fn convert_returning_for_insert(
         &mut self,
-        model: &app::Model,
-        set_fields: &BitSet<usize>,
         values: &stmt::Values,
         returning: &mut Option<stmt::Returning>,
+        single: bool,
     ) {
         // If there is no returning statement, there is nothing to convert
         let Some(stmt::Returning::Expr(projection)) = returning else {
             return;
         };
-
-        // Only perform the conversion if there are any has_n fields included in the
-        if !model
-            .fields
-            .iter()
-            .any(|f| f.ty.is_has_n() && set_fields.contains(f.id.index))
-        {
-            return;
-        }
 
         #[derive(Debug)]
         struct Input(usize);
@@ -198,7 +192,12 @@ impl LowerStatement<'_, '_> {
             converted.push(converted_row);
         }
 
-        *returning = Some(stmt::Returning::Value(stmt::Expr::list_from_vec(converted)));
+        *returning = Some(stmt::Returning::Value(if single {
+            assert!(converted.len() == 1);
+            converted.into_iter().next().unwrap()
+        } else {
+            stmt::Expr::list_from_vec(converted)
+        }));
     }
 
     fn verify_field_constraints(&mut self, model: &app::Model, expr: &mut stmt::Expr) {
@@ -212,12 +211,13 @@ impl LowerStatement<'_, '_> {
             if !field.nullable && field_expr.is_value_null() {
                 // Relations are handled differently
                 if !field.ty.is_relation() && field.auto.is_none() {
-                    self.state.errors.push(anyhow::anyhow!(
-                        "Insert missing non-nullable field; model={}; field={:#?}; expr={:#?}",
-                        model.name.upper_camel_case(),
-                        field,
-                        expr
-                    ));
+                    self.state
+                        .errors
+                        .push(toasty_core::Error::validation_failed(format!(
+                            "insert missing non-nullable field `{}` in model `{}`",
+                            field.name.app_name,
+                            model.name.upper_camel_case()
+                        )));
                 }
             }
 

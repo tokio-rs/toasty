@@ -1,5 +1,5 @@
 use super::{Expr, IntoExpr, IntoSelect};
-use crate::Model;
+use crate::Register;
 use std::{fmt, marker::PhantomData};
 use toasty_core::stmt::{self, Direction, OrderByExpr};
 
@@ -18,7 +18,7 @@ impl<T: ?Sized> Path<T> {
 
     pub fn root() -> Self
     where
-        T: Model,
+        T: Register,
     {
         Self {
             untyped: stmt::Path {
@@ -29,7 +29,7 @@ impl<T: ?Sized> Path<T> {
         }
     }
 
-    pub fn from_field_index<M: Model>(index: usize) -> Self {
+    pub fn from_field_index<M: Register>(index: usize) -> Self {
         Self {
             untyped: stmt::Path::from_index(M::id(), index),
             _p: PhantomData,
