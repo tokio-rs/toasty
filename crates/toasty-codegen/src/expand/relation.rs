@@ -1,4 +1,4 @@
-use super::Expand;
+use super::{util, Expand};
 use crate::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
@@ -12,6 +12,8 @@ impl Expand<'_> {
         let query_ident = &self.model.kind.expect_root().query_struct_ident;
         let create_builder_ident = &self.model.kind.expect_root().create_struct_ident;
         let filter_methods = self.expand_relation_filter_methods();
+        let many_field_association_methods = self.expand_field_association_methods();
+        let one_field_association_methods = self.expand_field_association_methods();
 
         quote! {
             #vis struct Many {
@@ -143,6 +145,8 @@ impl Expand<'_> {
                 #vis const fn from_path(path: #toasty::Path<[#model_ident]>) -> ManyField {
                     ManyField { path }
                 }
+
+                #many_field_association_methods
             }
 
             impl Into<#toasty::Path<[#model_ident]>> for ManyField {
@@ -170,6 +174,8 @@ impl Expand<'_> {
                 {
                     self.path.in_query(rhs)
                 }
+
+                #one_field_association_methods
             }
 
             impl Into<#toasty::Path<#model_ident>> for OneField {
@@ -178,6 +184,58 @@ impl Expand<'_> {
                 }
             }
         }
+    }
+
+    /// Generate association field accessor methods for ManyField and OneField.
+    /// These allow chaining like `User::fields().todos().steps()` for nested includes.
+    fn expand_field_association_methods(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        self.model
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(offset, field)| {
+                let field_ident = &field.name.ident;
+                let field_offset = util::int(offset);
+
+                match &field.ty {
+                    FieldTy::HasMany(rel) => {
+                        let ty = &rel.ty;
+                        Some(quote! {
+                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::ManyField {
+                                <#ty as #toasty::Relation>::ManyField::from_path(
+                                    self.path.chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
+                                )
+                            }
+                        })
+                    }
+                    FieldTy::BelongsTo(rel) => {
+                        let ty = &rel.ty;
+                        Some(quote! {
+                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::OneField {
+                                <#ty as #toasty::Relation>::OneField::from_path(
+                                    self.path.chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
+                                )
+                            }
+                        })
+                    }
+                    FieldTy::HasOne(rel) => {
+                        let ty = &rel.ty;
+                        Some(quote! {
+                            #vis fn #field_ident(self) -> <#ty as #toasty::Relation>::OneField {
+                                <#ty as #toasty::Relation>::OneField::from_path(
+                                    self.path.chain(#toasty::Path::from_field_index::<#model_ident>(#field_offset))
+                                )
+                            }
+                        })
+                    }
+                    FieldTy::Primitive(_) => None,
+                }
+            })
+            .collect()
     }
 
     pub(super) fn expand_model_relation_methods(&self) -> TokenStream {

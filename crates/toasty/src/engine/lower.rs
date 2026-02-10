@@ -869,19 +869,24 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     fn build_include_subquery(&mut self, returning: &mut stmt::Expr, path: &stmt::Path) {
-        let [field_index] = &path.projection[..] else {
-            todo!("Multi-step include paths not yet supported")
+        let projection = &path.projection[..];
+        let (field_index, rest) = match projection {
+            [] => panic!("Empty include path"),
+            [first, rest @ ..] => (first, rest),
         };
 
         let field = &self.model_unwrap().fields[*field_index];
 
-        let mut stmt = match &field.ty {
-            FieldTy::HasMany(rel) => stmt::Query::new_select(
-                rel.target,
-                stmt::Expr::eq(
-                    stmt::Expr::ref_parent_model(),
-                    stmt::Expr::ref_self_field(rel.pair),
+        let (mut stmt, target_model_id) = match &field.ty {
+            FieldTy::HasMany(rel) => (
+                stmt::Query::new_select(
+                    rel.target,
+                    stmt::Expr::eq(
+                        stmt::Expr::ref_parent_model(),
+                        stmt::Expr::ref_self_field(rel.pair),
+                    ),
                 ),
+                rel.target,
             ),
             // To handle single relations, we need a new query modifier that
             // returns a single record and not a list. This matters for the type
@@ -909,7 +914,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 let mut query =
                     stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
                 query.single = true;
-                query
+                (query, rel.target)
             }
             FieldTy::HasOne(rel) => {
                 let mut query = stmt::Query::new_select(
@@ -920,10 +925,21 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     ),
                 );
                 query.single = true;
-                query
+                (query, rel.target)
             }
             _ => todo!(),
         };
+
+        // If there are remaining steps in the path, add them as nested includes
+        // on the subquery. The lowering pipeline will recursively process them
+        // when it encounters the Returning::Model on this subquery.
+        if !rest.is_empty() {
+            let remaining_path = stmt::Path {
+                root: target_model_id,
+                projection: stmt::Projection::from(rest),
+            };
+            stmt.include(remaining_path);
+        }
 
         // Simplify the new stmt to handle relations.
         Simplify::with_context(self.expr_cx).visit_stmt_query_mut(&mut stmt);
