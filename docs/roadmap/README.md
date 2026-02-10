@@ -18,7 +18,6 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - `.last()` convenience method
 
 **[Query Constraints & Filtering](./query-constraints.md)**
-- OR conditions (`.or()` on `Expr<bool>`) - **implemented**
 - NOT, IS NULL (core AST exists, needs user API)
 - String operations: contains, starts with, ends with, LIKE (partial AST support)
 - NOT IN

@@ -12,14 +12,13 @@ A "query constraint" refers to any predicate used in the WHERE clause of a query
 - **Generic `.filter()` method** accepting `Expr<bool>` for arbitrary conditions
 - **`Model::FIELDS.<field>()` paths** combined with comparison methods (`.eq()`, `.gt()`, etc.)
 
-## Core AST Support Status
+## Core AST Support Without User API
 
-These expression types exist in `toasty-core` (`crates/toasty-core/src/stmt/expr.rs`) and have SQL serialization. Most still lack a typed user-facing API on `Path<T>` or `Expr<T>`, with OR being the exception (now fully implemented):
+These expression types exist in `toasty-core` (`crates/toasty-core/src/stmt/expr.rs`) and have SQL serialization, but lack a typed user-facing API on `Path<T>` or `Expr<T>`:
 
 | Expression | Core AST | SQL Serialized | User API | Notes |
 |---|---|---|---|---|
-| OR | `ExprOr` | Yes | `.or()` on `Expr<bool>` | **Implemented** - full user API, simplification, SQL + DynamoDB support |
-| NOT | `ExprNot` | Yes | No `.not()` on `Expr<bool>` | Same situation |
+| NOT | `ExprNot` | Yes | No `.not()` on `Expr<bool>` | Core + SQL work, but no ergonomic user API |
 | IS NULL | `ExprIsNull` | Yes | No `.is_null()` on `Path<T>` | Core + SQL work, no user API |
 | LIKE | `ExprPattern::Like` | Yes | None | SQL serialization exists |
 | Begins With | `ExprPattern::BeginsWith` | Yes | None | Converted to `LIKE 'prefix%'` in SQL |
@@ -33,7 +32,6 @@ The following table compares Toasty's constraint support against 8 mature ORMs, 
 | Feature | Toasty | Prisma | Drizzle | Django | SQLAlchemy | Diesel | SeaORM | Hibernate |
 |---|---|---|---|---|---|---|---|---|---|
 | **Logical Operators** | | | | | | | | |
-| OR | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | NOT | AST only | Yes | Yes | Yes | Yes | Per-op | Yes | Yes |
 | **Null Handling** | | | | | | | | |
 | IS NULL | AST only | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
@@ -70,14 +68,6 @@ The following table compares Toasty's constraint support against 8 mature ORMs, 
 ### Features with Existing Internal Support
 
 These features have core AST and SQL serialization but need user-facing APIs:
-
-**OR Conditions** - **Implemented**
-- User API: `.or()` method on `Expr<bool>` for chaining OR conditions
-- Simplification: Extensive optimizations including flattening, absorption, complement, and automatic OR-to-IN conversion
-- SQL: Full serialization support across all SQL drivers
-- DynamoDB: Filter expression support (requires key condition in at least one operand)
-- Tests: 5 integration tests + comprehensive simplification unit tests
-- Known limitation: DynamoDB queries with OR conditions that don't involve any key columns are not yet supported
 
 **NOT Negation**
 - Core AST: `ExprNot` exists with SQL serialization
@@ -231,7 +221,6 @@ Based on the analysis above, the following groupings maximize user value:
 
 **Group 1: Expose Existing Internals**
 Items with core AST and SQL serialization that only need user-facing methods:
-- ~~`.or()` on `Expr<bool>` (mirrors existing `.and()`)~~ **Done**
 - `.not()` on `Expr<bool>`
 - `.is_null()` / `.is_not_null()` on `Path<Option<T>>`
 - `.not_in_set()` on `Path<T>` (negate existing `InList`)
