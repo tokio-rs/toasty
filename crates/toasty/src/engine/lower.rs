@@ -204,21 +204,21 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         let mut assignments = stmt::Assignments::default();
 
         for index in i.keys() {
-            let field = &self.model_unwrap().fields[index];
+            let field = &self.model_unwrap().fields[*index];
 
             if field.primary_key {
                 todo!("updating PK not supported yet");
             }
 
             // Phase 1: Lower the assignment expression
-            let assignment = &i[index];
+            let assignment = &i[*index];
             assert!(assignment.op.is_set(), "only SET supported");
             let mut lowered_field_value = assignment.expr.clone();
             self.visit_expr_mut(&mut lowered_field_value);
 
             // Phase 2: For each impacted column, lower model_to_table expr and substitute
             let mapping = self.mapping_unwrap();
-            let field_mapping = &mapping.fields[index];
+            let field_mapping = &mapping.fields[*index];
 
             match &field.ty {
                 app::FieldTy::Primitive(_) => {
@@ -568,7 +568,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     let mut fields = vec![];
 
                     // TODO: Really gotta either fix SparseRecord or get rid of it... It does not maintain key order.
-                    let field_set: stmt::PathFieldSet = stmt.assignments.keys().collect();
+                    let field_set: stmt::PathFieldSet = stmt.assignments.keys().copied().collect();
 
                     for i in field_set.iter() {
                         let field = &model.fields[i];

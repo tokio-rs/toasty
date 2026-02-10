@@ -136,8 +136,8 @@ impl Assignments {
         self.assignments.swap_remove(key)
     }
 
-    pub fn keys(&self) -> impl Iterator<Item = usize> + '_ {
-        self.assignments.keys().copied()
+    pub fn keys(&self) -> impl Iterator<Item = &usize> + '_ {
+        self.assignments.keys()
     }
 
     pub fn exprs(&self) -> impl Iterator<Item = &Expr> + '_ {

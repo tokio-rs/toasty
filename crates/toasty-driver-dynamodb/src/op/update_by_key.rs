@@ -24,7 +24,7 @@ impl Connection {
                 if !index.primary_key && index.unique {
                     index.columns.iter().any(|index_column| {
                         let column = index_column.table_column(schema);
-                        op.assignments.keys().any(|index| index == column.id.index)
+                        op.assignments.keys().any(|index| *index == column.id.index)
                     })
                 } else {
                     false
