@@ -578,7 +578,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     // When cast to SparseRecord, this creates a sparse array where
                     // values[field_index] contains each field's value, with unchanged
                     // fields represented as gaps.
-                    let field_set: stmt::PathFieldSet = stmt.assignments
+                    let field_set: stmt::PathFieldSet = stmt
+                        .assignments
                         .keys()
                         .map(|projection| {
                             let [index] = projection.as_slice() else {

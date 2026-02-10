@@ -133,7 +133,10 @@ impl LowerStatement<'_, '_> {
                 continue;
             }
 
-            let Some(assignment) = assignments.take(&i) else {
+            // Note: Must convert usize to Projection for lookup because IndexMap's
+            // Equivalent trait requires matching hashes, and hash(usize) != hash(Projection)
+            let projection = stmt::Projection::from(i);
+            let Some(assignment) = assignments.take(&projection) else {
                 continue;
             };
 
