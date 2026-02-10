@@ -203,7 +203,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut assignments = stmt::Assignments::default();
 
-        for index in i.keys() {
+        for projection in i.keys() {
+            // Extract field index (model-level assignments are single-step)
+            let [index] = projection.as_slice() else {
+                panic!("model assignment must be single-step projection")
+            };
+
             let field = &self.model_unwrap().fields[*index];
 
             if field.primary_key {
@@ -211,7 +216,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             }
 
             // Phase 1: Lower the assignment expression
-            let assignment = &i[*index];
+            let assignment = &i[projection];
             assert!(assignment.op.is_set(), "only SET supported");
             let mut lowered_field_value = assignment.expr.clone();
             self.visit_expr_mut(&mut lowered_field_value);
@@ -573,7 +578,15 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     // When cast to SparseRecord, this creates a sparse array where
                     // values[field_index] contains each field's value, with unchanged
                     // fields represented as gaps.
-                    let field_set: stmt::PathFieldSet = stmt.assignments.keys().copied().collect();
+                    let field_set: stmt::PathFieldSet = stmt.assignments
+                        .keys()
+                        .map(|projection| {
+                            let [index] = projection.as_slice() else {
+                                panic!("model assignment must be single-step")
+                            };
+                            *index
+                        })
+                        .collect();
 
                     for i in field_set.iter() {
                         let field = &model.fields[i];

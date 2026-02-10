@@ -6,6 +6,7 @@ use crate::{
     stmt::{Expr, Value},
 };
 
+use indexmap::Equivalent;
 use std::{fmt, ops};
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -246,5 +247,81 @@ impl Project for &Value {
 impl Project for &&Value {
     fn project(self, projection: &Projection) -> Option<Expr> {
         Some(self.entry(projection).to_expr())
+    }
+}
+
+// Allow using usize directly where Projection is expected (for single-step projections)
+impl Equivalent<Projection> for usize {
+    fn equivalent(&self, key: &Projection) -> bool {
+        matches!(key.as_slice(), [index] if *index == *self)
+    }
+}
+
+// Allow using &Projection where Projection is expected
+impl Equivalent<Projection> for &Projection {
+    fn equivalent(&self, key: &Projection) -> bool {
+        *self == key
+    }
+}
+
+// PartialEq implementations for ergonomic comparisons
+impl PartialEq<usize> for Projection {
+    fn eq(&self, other: &usize) -> bool {
+        matches!(self.as_slice(), [index] if *index == *other)
+    }
+}
+
+impl PartialEq<Projection> for usize {
+    fn eq(&self, other: &Projection) -> bool {
+        other == self
+    }
+}
+
+impl PartialEq<[usize]> for Projection {
+    fn eq(&self, other: &[usize]) -> bool {
+        self.as_slice() == other
+    }
+}
+
+impl PartialEq<Projection> for [usize] {
+    fn eq(&self, other: &Projection) -> bool {
+        other == self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_projection_eq_usize() {
+        let proj_single = Projection::from(5);
+        let proj_multi = Projection::from([1, 2]);
+
+        // Single-step projection == usize (both directions)
+        assert_eq!(proj_single, 5);
+        assert_eq!(5, proj_single);
+        assert_ne!(proj_single, 3);
+        assert_ne!(3, proj_single);
+
+        // Multi-step projection != usize
+        assert_ne!(proj_multi, 1);
+        assert_ne!(1, proj_multi);
+    }
+
+    #[test]
+    fn test_projection_eq_slice() {
+        let proj_single = Projection::from(5);
+        let proj_multi = Projection::from([1, 2, 3]);
+
+        // Projection == [usize] slice (both directions)
+        assert_eq!(proj_single, [5][..]);
+        assert_eq!([5][..], proj_single);
+        assert_eq!(proj_multi, [1, 2, 3][..]);
+        assert_eq!([1, 2, 3][..], proj_multi);
+
+        // Mismatches
+        assert_ne!(proj_single, [1, 2][..]);
+        assert_ne!([1, 2][..], proj_single);
     }
 }
