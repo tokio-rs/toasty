@@ -71,14 +71,14 @@ impl<'a> MigrationStatement<'a> {
                     if needs_recreation {
                         Self::emit_table_recreation(
                             &mut result,
-                            &schema,
+                            schema,
                             previous,
                             next,
                             columns,
                             capability,
                         );
                     } else {
-                        Self::emit_column_changes(&mut result, &schema, columns, capability);
+                        Self::emit_column_changes(&mut result, schema, columns, capability);
                     }
 
                     // Indices diff
@@ -116,7 +116,7 @@ impl<'a> MigrationStatement<'a> {
 
     fn emit_table_recreation(
         result: &mut Vec<Self>,
-        schema: &Cow<'a, Schema>,
+        schema: Cow<'a, Schema>,
         previous: &Table,
         next: &Table,
         columns: &ColumnsDiff<'_>,
@@ -212,7 +212,7 @@ impl<'a> MigrationStatement<'a> {
 
     fn emit_column_changes(
         result: &mut Vec<Self>,
-        schema: &Cow<'a, Schema>,
+        schema: Cow<'a, Schema>,
         columns: &ColumnsDiff<'_>,
         capability: &Capability,
     ) {

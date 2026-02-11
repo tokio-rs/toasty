@@ -1,17 +1,23 @@
 mod column;
-mod diff;
-mod index;
-mod migration;
-mod pk;
-mod schema;
-mod table;
-mod ty;
+pub use column::{Column, ColumnId, ColumnsDiff, ColumnsDiffItem};
 
-pub use column::*;
-pub use diff::*;
-pub use index::*;
-pub use migration::*;
-pub use pk::*;
-pub use schema::*;
-pub use table::*;
-pub use ty::*;
+mod diff;
+pub use diff::{DiffContext, RenameHints};
+
+mod index;
+pub use index::{Index, IndexColumn, IndexId, IndexOp, IndexScope, IndicesDiff, IndicesDiffItem};
+
+mod migration;
+pub use migration::{AppliedMigration, Migration};
+
+mod pk;
+pub use pk::PrimaryKey;
+
+mod schema;
+pub use schema::{Schema, SchemaDiff};
+
+mod table;
+pub use table::{Table, TableId, TablesDiff, TablesDiffItem};
+
+mod ty;
+pub use ty::Type;
