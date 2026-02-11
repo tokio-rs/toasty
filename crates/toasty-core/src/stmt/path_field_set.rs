@@ -1,6 +1,7 @@
 use bit_set::BitSet;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PathFieldSet {
     container: BitSet<u32>,
 }

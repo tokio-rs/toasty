@@ -37,6 +37,7 @@ pub struct ModelRoot {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModelId(pub usize);
 
 impl Model {

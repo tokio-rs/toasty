@@ -7,7 +7,10 @@ pub use response::{Response, Rows};
 pub mod operation;
 pub use operation::Operation;
 
-use crate::{async_trait, schema::db::Schema};
+use crate::{
+    async_trait,
+    schema::db::{AppliedMigration, Migration, Schema, SchemaDiff},
+};
 
 use std::{fmt::Debug, sync::Arc};
 
@@ -27,6 +30,9 @@ pub trait Driver: Debug + Send + Sync + 'static {
     fn max_connections(&self) -> Option<usize> {
         None
     }
+
+    /// Generates a migration from a [`SchemaDiff`].
+    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration;
 }
 
 #[async_trait]
@@ -38,4 +44,12 @@ pub trait Connection: Debug + Send + 'static {
     async fn reset_db(&mut self, _schema: &Schema) -> crate::Result<()> {
         unimplemented!()
     }
+
+    async fn applied_migrations(&mut self) -> crate::Result<Vec<AppliedMigration>>;
+    async fn apply_migration(
+        &mut self,
+        id: u64,
+        name: String,
+        migration: &Migration,
+    ) -> crate::Result<()>;
 }

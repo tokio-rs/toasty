@@ -5,8 +5,11 @@ pub struct Capability {
     /// When true, the database uses a SQL-based query language.
     pub sql: bool,
 
-    /// Column storage types supported by the database
+    /// Column storage types supported by the database.
     pub storage_types: StorageTypes,
+
+    /// Schema mutation capabilities supported by the datbase.
+    pub schema_mutations: SchemaMutations,
 
     /// SQL: supports update statements in CTE queries.
     pub cte_with_update: bool,
@@ -92,6 +95,17 @@ pub struct StorageTypes {
     pub max_unsigned_integer: Option<u64>,
 }
 
+/// The database's capabilities to mutate the schema (tables, columns, indices).
+#[derive(Debug)]
+pub struct SchemaMutations {
+    /// Whether the database can change the type of an existing column.
+    pub alter_column_type: bool,
+
+    /// Whether the database can change name, type and constraints of a column all
+    /// withing a single statement.
+    pub alter_column_properties_atomic: bool,
+}
+
 impl Capability {
     /// Validates the consistency of the capability configuration.
     ///
@@ -148,6 +162,7 @@ impl Capability {
     pub const SQLITE: Self = Self {
         sql: true,
         storage_types: StorageTypes::SQLITE,
+        schema_mutations: SchemaMutations::SQLITE,
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: true,
@@ -172,6 +187,7 @@ impl Capability {
     pub const POSTGRESQL: Self = Self {
         cte_with_update: true,
         storage_types: StorageTypes::POSTGRESQL,
+        schema_mutations: SchemaMutations::POSTGRESQL,
         select_for_update: true,
         auto_increment: true,
         bigdecimal_implemented: false,
@@ -193,6 +209,7 @@ impl Capability {
     pub const MYSQL: Self = Self {
         cte_with_update: false,
         storage_types: StorageTypes::MYSQL,
+        schema_mutations: SchemaMutations::MYSQL,
         select_for_update: true,
         returning_from_mutation: false,
         auto_increment: true,
@@ -214,6 +231,7 @@ impl Capability {
     pub const DYNAMODB: Self = Self {
         sql: false,
         storage_types: StorageTypes::DYNAMODB,
+        schema_mutations: SchemaMutations::DYNAMODB,
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: false,
@@ -352,6 +370,29 @@ impl StorageTypes {
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,
+    };
+}
+
+impl SchemaMutations {
+    pub const SQLITE: Self = Self {
+        alter_column_type: false,
+        alter_column_properties_atomic: false,
+    };
+
+    pub const POSTGRESQL: Self = Self {
+        alter_column_type: true,
+        alter_column_properties_atomic: false,
+    };
+
+    pub const MYSQL: Self = Self {
+        alter_column_type: true,
+        alter_column_properties_atomic: true,
+    };
+
+    // DynamoDB migrations are currently not supported.
+    pub const DYNAMODB: Self = Self {
+        alter_column_type: false,
+        alter_column_properties_atomic: false,
     };
 }
 

@@ -8,7 +8,7 @@ pub(crate) use value::Value;
 use toasty_core::{
     async_trait,
     driver::{operation::Operation, Capability, Driver, Response},
-    schema::db::{Column, ColumnId, Schema, Table},
+    schema::db::{Column, ColumnId, Migration, Schema, SchemaDiff, Table},
     stmt::{self, ExprContext},
     Result,
 };
@@ -45,6 +45,10 @@ impl Driver for DynamoDb {
 
     async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         Ok(Box::new(Connection::connect(&self.url).await?))
+    }
+
+    fn generate_migration(&self, _schema_diff: &SchemaDiff<'_>) -> Migration {
+        unimplemented!("DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK.")
     }
 }
 
@@ -121,6 +125,21 @@ impl toasty_core::driver::Connection for Connection {
         }
 
         Ok(())
+    }
+
+    async fn applied_migrations(
+        &mut self,
+    ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
+        todo!("DynamoDB migrations are not yet implemented")
+    }
+
+    async fn apply_migration(
+        &mut self,
+        _id: u64,
+        _name: String,
+        _migration: &toasty_core::schema::db::Migration,
+    ) -> Result<()> {
+        todo!("DynamoDB migrations are not yet implemented")
     }
 }
 
