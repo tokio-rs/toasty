@@ -1010,3 +1010,83 @@ pub async fn assign_todo_to_user_on_update_query(test: &mut Test) {
     assert_eq!(1, todos.len());
     assert_eq!("hello", todos[0].title);
 }
+
+#[driver_test(id(ID))]
+pub async fn has_many_when_fk_is_composite_with_snippets(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = user_id, local = id)]
+    struct Todo {
+        #[auto]
+        id: uuid::Uuid,
+
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+
+        title: String,
+    }
+
+    let db = test.setup_db(models!(User, Todo)).await;
+
+    // Create users
+    let user1 = User::create().exec(&db).await.unwrap();
+    let user2 = User::create().exec(&db).await.unwrap();
+
+    // Create a Todo associated with the user
+    user1
+        .todos()
+        .create()
+        .title("hello world")
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let todo2 = user2
+        .todos()
+        .create()
+        .title("hello world")
+        .exec(&db)
+        .await
+        .unwrap();
+
+    // Update the Todos with the snippets
+    Todo::update_by_user_id(user1.id)
+        .title("Title 2")
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let todo = Todo::get_by_user_id(&db, user1.id).await.unwrap();
+    assert!(todo.title == "Title 2");
+
+    Todo::update_by_user_id_and_id(user2.id, todo2.id)
+        .title("Title 3")
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let todo = Todo::get_by_user_id_and_id(&db, user2.id, todo2.id)
+        .await
+        .unwrap();
+    assert!(todo.title == "Title 3");
+
+    // Delete the Todos with the snippets
+    Todo::delete_by_user_id(&db, user1.id).await.unwrap();
+    assert_err!(Todo::get_by_user_id(&db, user1.id).await);
+
+    Todo::delete_by_user_id_and_id(&db, user2.id, todo2.id)
+        .await
+        .unwrap();
+    assert_err!(Todo::get_by_user_id_and_id(&db, user2.id, todo2.id).await);
+}
