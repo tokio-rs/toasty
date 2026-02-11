@@ -6,9 +6,14 @@ use crate::{
     stmt::{Expr, Value},
 };
 
-use std::{fmt, ops};
+use indexmap::Equivalent;
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+    ops,
+};
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Projection {
     steps: Steps,
 }
@@ -17,7 +22,7 @@ pub trait Project {
     fn project(self, projection: &Projection) -> Option<Expr>;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Steps {
     /// References the projection base
     Identity,
@@ -27,6 +32,37 @@ enum Steps {
 
     /// Multi field steps
     Multi(Vec<usize>),
+}
+
+// Custom Hash implementation to ensure compatibility with Equivalent trait:
+// - Single-step projections hash like their contained usize: hash(Projection([1])) == hash(1)
+// - Multi-step projections hash like their slice: hash(Projection([1,2])) == hash([1,2])
+// This allows IndexMap lookups with both usize and [usize] to work correctly.
+impl Hash for Projection {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.steps.hash(state);
+    }
+}
+
+impl Hash for Steps {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Steps::Identity => {
+                // Hash a discriminant for identity
+                0u8.hash(state);
+            }
+            Steps::Single([index]) => {
+                // Hash as a single usize (no length prefix, no array wrapping)
+                // This makes hash(Projection([i])) == hash(i)
+                index.hash(state);
+            }
+            Steps::Multi(indices) => {
+                // Hash as a slice: this includes length and elements
+                // This makes hash(Projection([i,j])) == hash([i,j])
+                indices.as_slice().hash(state);
+            }
+        }
+    }
 }
 
 pub struct Iter<'a>(std::slice::Iter<'a, usize>);
@@ -246,5 +282,128 @@ impl Project for &Value {
 impl Project for &&Value {
     fn project(self, projection: &Projection) -> Option<Expr> {
         Some(self.entry(projection).to_expr())
+    }
+}
+
+// Allow using usize directly where Projection is expected (for single-step projections)
+impl Equivalent<Projection> for usize {
+    fn equivalent(&self, key: &Projection) -> bool {
+        matches!(key.as_slice(), [index] if *index == *self)
+    }
+}
+
+// Allow using &Projection where Projection is expected
+impl Equivalent<Projection> for &Projection {
+    fn equivalent(&self, key: &Projection) -> bool {
+        *self == key
+    }
+}
+
+// Allow using [usize] slices where Projection is expected
+impl Equivalent<Projection> for [usize] {
+    fn equivalent(&self, key: &Projection) -> bool {
+        self == key.as_slice()
+    }
+}
+
+// PartialEq implementations for ergonomic comparisons
+impl PartialEq<usize> for Projection {
+    fn eq(&self, other: &usize) -> bool {
+        matches!(self.as_slice(), [index] if *index == *other)
+    }
+}
+
+impl PartialEq<Projection> for usize {
+    fn eq(&self, other: &Projection) -> bool {
+        other == self
+    }
+}
+
+impl PartialEq<[usize]> for Projection {
+    fn eq(&self, other: &[usize]) -> bool {
+        self.as_slice() == other
+    }
+}
+
+impl PartialEq<Projection> for [usize] {
+    fn eq(&self, other: &Projection) -> bool {
+        other == self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_projection_eq_usize() {
+        let proj_single = Projection::from(5);
+        let proj_multi = Projection::from([1, 2]);
+
+        // Single-step projection == usize (both directions)
+        assert_eq!(proj_single, 5);
+        assert_eq!(5, proj_single);
+        assert_ne!(proj_single, 3);
+        assert_ne!(3, proj_single);
+
+        // Multi-step projection != usize
+        assert_ne!(proj_multi, 1);
+        assert_ne!(1, proj_multi);
+    }
+
+    #[test]
+    fn test_projection_eq_slice() {
+        let proj_single = Projection::from(5);
+        let proj_multi = Projection::from([1, 2, 3]);
+
+        // Projection == [usize] slice (both directions)
+        assert_eq!(proj_single, [5][..]);
+        assert_eq!([5][..], proj_single);
+        assert_eq!(proj_multi, [1, 2, 3][..]);
+        assert_eq!([1, 2, 3][..], proj_multi);
+
+        // Mismatches
+        assert_ne!(proj_single, [1, 2][..]);
+        assert_ne!([1, 2][..], proj_single);
+    }
+
+    #[test]
+    fn test_projection_hash_compatibility() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        fn hash<T: Hash + ?Sized>(value: &T) -> u64 {
+            let mut hasher = DefaultHasher::new();
+            value.hash(&mut hasher);
+            hasher.finish()
+        }
+
+        // Single-step projection should hash like the contained usize
+        let proj_single = Projection::from(42);
+        assert_eq!(hash(&proj_single), hash(&42_usize));
+
+        // Multi-step projection should hash like the slice
+        let proj_multi = Projection::from([1, 2, 3]);
+        let slice: &[usize] = &[1, 2, 3];
+        assert_eq!(hash(&proj_multi), hash(slice));
+
+        // Verify this works with IndexMap
+        use indexmap::IndexMap;
+        let mut map = IndexMap::new();
+        map.insert(Projection::from(5), "value");
+
+        // Can look up with usize
+        assert_eq!(map.get(&5_usize), Some(&"value"));
+
+        // Can look up with single-element slice
+        let slice_single: &[usize] = &[5];
+        assert_eq!(map.get(slice_single), Some(&"value"));
+
+        // Multi-step example
+        map.insert(Projection::from([1, 2]), "multi");
+
+        // Can look up with multi-element slice
+        let slice_multi: &[usize] = &[1, 2];
+        assert_eq!(map.get(slice_multi), Some(&"multi"));
     }
 }

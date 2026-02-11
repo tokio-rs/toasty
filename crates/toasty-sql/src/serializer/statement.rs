@@ -592,12 +592,12 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
         // being more generic. Being more generic would be ideal, but we really
         // should extract a more generic "scope walker" kind of thing from the
         // lowering logic.
-        for (i, (index, assignment)) in assignments.iter().enumerate() {
+        for (i, (projection, assignment)) in assignments.iter().enumerate() {
             if i > 0 {
                 f.dst.push_str(", ");
             }
 
-            let column = &self.0.columns[*index];
+            let column = self.0.resolve(projection);
             let column_name = Ident(&column.name);
 
             // Serialize column name and equals sign

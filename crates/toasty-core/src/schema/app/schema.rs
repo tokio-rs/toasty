@@ -1,6 +1,6 @@
 use super::{Field, FieldId, FieldTy, Model, ModelId};
 
-use crate::Result;
+use crate::{stmt, Result};
 use indexmap::IndexMap;
 
 #[derive(Debug, Default)]
@@ -33,6 +33,49 @@ impl Schema {
     /// Get a model by ID
     pub fn model(&self, id: impl Into<ModelId>) -> &Model {
         self.models.get(&id.into()).expect("invalid model ID")
+    }
+
+    /// Resolve a projection to a field, walking through the schema
+    ///
+    /// Starting from the root model, walks through each step of the projection,
+    /// resolving fields and following relations/embedded types as needed.
+    ///
+    /// Returns None if:
+    /// - The projection is empty
+    /// - Any step references an invalid field index
+    /// - A step tries to project through a primitive type
+    pub fn resolve_field<'a>(
+        &'a self,
+        root: &'a Model,
+        projection: &stmt::Projection,
+    ) -> Option<&'a Field> {
+        let [first, rest @ ..] = projection.as_slice() else {
+            return None;
+        };
+
+        // Get the first field from the root model
+        let mut current_field = root.fields.get(*first)?;
+
+        // Walk through remaining steps
+        for step in rest {
+            let target_model = match &current_field.ty {
+                FieldTy::Primitive(..) => {
+                    // Cannot project through primitive fields
+                    return None;
+                }
+                FieldTy::Embedded(embedded) => {
+                    // For embedded fields, resolve to the embedded struct's model
+                    self.model(embedded.target)
+                }
+                FieldTy::BelongsTo(belongs_to) => belongs_to.target(self),
+                FieldTy::HasMany(has_many) => has_many.target(self),
+                FieldTy::HasOne(has_one) => has_one.target(self),
+            };
+
+            current_field = target_model.fields.get(*step)?;
+        }
+
+        Some(current_field)
     }
 }
 
