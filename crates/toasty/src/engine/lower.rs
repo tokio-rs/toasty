@@ -204,12 +204,20 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         let mut assignments = stmt::Assignments::default();
 
         for projection in i.keys() {
-            // Extract field index (model-level assignments are single-step)
-            let [index] = projection.as_slice() else {
-                panic!("model assignment must be single-step projection")
+            let Some(field) = self
+                .schema()
+                .app
+                .resolve_field(self.model_unwrap(), projection)
+            else {
+                let model = self.model_unwrap();
+                self.state
+                    .errors
+                    .push(crate::Error::invalid_statement(format!(
+                        "field `{:?}` does not exist on model `{:?}`",
+                        projection, model.name
+                    )));
+                continue;
             };
-
-            let field = &self.model_unwrap().fields[*index];
 
             if field.primary_key {
                 todo!("updating PK not supported yet");
@@ -223,7 +231,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
             // Phase 2: For each impacted column, lower model_to_table expr and substitute
             let mapping = self.mapping_unwrap();
-            let field_mapping = &mapping.fields[*index];
+            let field_mapping = &mapping.fields[field.id.index];
 
             match &field.ty {
                 app::FieldTy::Primitive(_) => {
