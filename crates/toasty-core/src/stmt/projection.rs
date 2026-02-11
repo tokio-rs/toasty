@@ -7,7 +7,11 @@ use crate::{
 };
 
 use indexmap::Equivalent;
-use std::{fmt, hash::{Hash, Hasher}, ops};
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+    ops,
+};
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Projection {
