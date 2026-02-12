@@ -15,7 +15,18 @@ impl Simplify<'_> {
         if let [field] = &primary_key.fields[..] {
             stmt::Expr::eq(stmt::Expr::ref_self_field(field), val)
         } else {
-            todo!("composite primary keys")
+            let comparisons: Vec<_> = primary_key
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(i, field)| {
+                    stmt::Expr::eq(
+                        stmt::Expr::ref_self_field(field),
+                        stmt::Expr::project(val.clone(), [i]),
+                    )
+                })
+                .collect();
+            stmt::Expr::and_from_vec(comparisons)
         }
     }
 }
@@ -28,7 +39,7 @@ mod tests {
     use toasty_core::{
         driver::Capability,
         schema::{app, Builder},
-        stmt::{Expr, ExprBinaryOp, Value},
+        stmt::{Expr, ExprAnd, ExprBinaryOp, ExprProject, Value},
     };
 
     #[derive(toasty::Model)]
@@ -37,11 +48,29 @@ mod tests {
         id: i64,
     }
 
+    #[derive(toasty::Model)]
+    struct Composite {
+        #[key]
+        one: String,
+
+        #[key]
+        two: String,
+    }
+
     /// Creates a schema with a single `User` model containing an `id` primary
     /// key field.
     fn test_schema() -> toasty_core::Schema {
         let app_schema =
             app::Schema::from_macro(&[User::schema()]).expect("schema should build from macro");
+
+        Builder::new()
+            .build(app_schema, &Capability::SQLITE)
+            .expect("schema should build")
+    }
+
+    fn composite_schema() -> toasty_core::Schema {
+        let app_schema = app::Schema::from_macro(&[Composite::schema()])
+            .expect("schema should build from macro");
 
         Builder::new()
             .build(app_schema, &Capability::SQLITE)
@@ -67,5 +96,47 @@ mod tests {
             Expr::Reference(stmt::ExprReference::Field { index: 0, .. })
         ));
         assert!(matches!(*rhs, Expr::Value(Value::I64(42))));
+    }
+
+    #[test]
+    fn composite_pk_becomes_and_of_eq_exprs() {
+        let schema = composite_schema();
+        let model = schema.app.model(Composite::id());
+        let mut simplify = Simplify::new(&schema);
+
+        // For composite keys, `rewrite_root_path_expr(model, record("a", "b"))` should
+        // produce `eq(ref(field0), project(val, 0)) AND eq(ref(field1), project(val, 1))`
+        let val = Expr::record([
+            Expr::Value(Value::from("a")),
+            Expr::Value(Value::from("b")),
+        ]);
+        let result = simplify.rewrite_root_path_expr(model, val);
+
+        let Expr::And(ExprAnd { operands }) = result else {
+            panic!("expected And expression, got {result:#?}");
+        };
+        assert_eq!(operands.len(), 2);
+
+        // First operand: eq(ref(field0), project(val, 0))
+        let Expr::BinaryOp(ExprBinaryOp { op, lhs, rhs }) = &operands[0] else {
+            panic!("expected BinaryOp");
+        };
+        assert!(op.is_eq());
+        assert!(matches!(
+            lhs.as_ref(),
+            Expr::Reference(stmt::ExprReference::Field { index: 0, .. })
+        ));
+        assert!(matches!(rhs.as_ref(), Expr::Project(ExprProject { .. })));
+
+        // Second operand: eq(ref(field1), project(val, 1))
+        let Expr::BinaryOp(ExprBinaryOp { op, lhs, rhs }) = &operands[1] else {
+            panic!("expected BinaryOp");
+        };
+        assert!(op.is_eq());
+        assert!(matches!(
+            lhs.as_ref(),
+            Expr::Reference(stmt::ExprReference::Field { index: 1, .. })
+        ));
+        assert!(matches!(rhs.as_ref(), Expr::Project(ExprProject { .. })));
     }
 }

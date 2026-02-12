@@ -27,32 +27,41 @@ impl Simplify<'_> {
                 .primary_key()
                 .expect("IN list on model requires root model with primary key");
 
-            let [pk_field_id] = &primary_key.fields[..] else {
-                todo!()
-            };
-            let pk = self.field(*pk_field_id);
+            if let [pk_field_id] = &primary_key.fields[..] {
+                let pk = self.field(*pk_field_id);
 
-            // Check RHS format
-            match &mut *expr.list {
-                stmt::Expr::List(expr_list) => {
-                    for expr in &mut expr_list.items {
-                        match expr {
-                            stmt::Expr::Value(value) => {
-                                assert!(value.is_a(&pk.ty.expect_primitive().ty));
+                // Check RHS format
+                match &mut *expr.list {
+                    stmt::Expr::List(expr_list) => {
+                        for expr in &mut expr_list.items {
+                            match expr {
+                                stmt::Expr::Value(value) => {
+                                    assert!(value.is_a(&pk.ty.expect_primitive().ty));
+                                }
+                                _ => todo!("{expr:#?}"),
                             }
-                            _ => todo!("{expr:#?}"),
                         }
                     }
-                }
-                stmt::Expr::Value(stmt::Value::List(values)) => {
-                    for value in values {
-                        assert!(value.is_a(&pk.ty.expect_primitive().ty));
+                    stmt::Expr::Value(stmt::Value::List(values)) => {
+                        for value in values {
+                            assert!(value.is_a(&pk.ty.expect_primitive().ty));
+                        }
                     }
+                    _ => todo!("expr={expr:#?}"),
                 }
-                _ => todo!("expr={expr:#?}"),
-            }
 
-            *expr.expr = stmt::Expr::ref_self_field(pk.id());
+                *expr.expr = stmt::Expr::ref_self_field(pk.id());
+            } else {
+                // Composite primary key: replace Key with a record of field
+                // references. RHS items are expected to be records matching
+                // the composite key structure.
+                let pk_refs: Vec<_> = primary_key
+                    .fields
+                    .iter()
+                    .map(|field| stmt::Expr::ref_self_field(field))
+                    .collect();
+                *expr.expr = stmt::Expr::record_from_vec(pk_refs);
+            }
         }
     }
 
@@ -88,7 +97,9 @@ impl Simplify<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::simplify::test::test_schema;
+    use crate as toasty;
+    use crate::engine::simplify::test::{test_schema, test_schema_with};
+    use crate::model::Register;
 
     /// Helper to construct an "in list" expression.
     fn in_list(lhs: Expr, list: Expr) -> stmt::ExprInList {
@@ -283,5 +294,78 @@ mod tests {
 
         assert!(result.is_some());
         assert!(result.unwrap().is_value_null());
+    }
+
+    // Composite key tests
+
+    #[derive(toasty::Model)]
+    struct Composite {
+        #[key]
+        one: String,
+
+        #[key]
+        two: String,
+    }
+
+    fn composite_schema() -> toasty_core::Schema {
+        test_schema_with(&[Composite::schema()])
+    }
+
+    #[test]
+    fn composite_key_in_list_rewrites_to_record_of_refs() {
+        let schema = composite_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `key(Composite) IN [("a", "1"), ("b", "2")]`
+        // should rewrite Key to `(ref(field0), ref(field1))`
+        let list = expr_list(vec![
+            Expr::record([
+                Expr::Value(Value::from("a")),
+                Expr::Value(Value::from("1")),
+            ]),
+            Expr::record([
+                Expr::Value(Value::from("b")),
+                Expr::Value(Value::from("2")),
+            ]),
+        ]);
+        let mut expr = in_list(Expr::key(Composite::id()), list);
+        let result = simplify.simplify_expr_in_list(&mut expr);
+
+        // Two items, so no single-item rewrite; result is None and the LHS
+        // should have been rewritten in place.
+        assert!(result.is_none());
+
+        // The LHS should now be a Record of field references
+        assert!(
+            matches!(&*expr.expr, Expr::Record(r) if r.len() == 2),
+            "expected Record with 2 fields, got {:#?}",
+            expr.expr,
+        );
+    }
+
+    #[test]
+    fn composite_key_in_single_item_becomes_eq() {
+        let schema = composite_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `key(Composite) IN [("a", "1")]` → `eq((ref(f0), ref(f1)), ("a", "1"))`
+        let list = expr_list(vec![Expr::record([
+            Expr::Value(Value::from("a")),
+            Expr::Value(Value::from("1")),
+        ])]);
+        let mut expr = in_list(Expr::key(Composite::id()), list);
+        let result = simplify.simplify_expr_in_list(&mut expr);
+
+        // Single item should be rewritten to an equality
+        let Some(Expr::BinaryOp(stmt::ExprBinaryOp { op, lhs, .. })) = result else {
+            panic!("expected BinaryOp, got {result:#?}");
+        };
+        assert!(op.is_eq());
+
+        // LHS is the record of field refs
+        assert!(
+            matches!(lhs.as_ref(), Expr::Record(r) if r.len() == 2),
+            "expected Record with 2 fields, got {lhs:#?}",
+        );
     }
 }
