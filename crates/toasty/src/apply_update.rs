@@ -1,5 +1,5 @@
-use toasty_core::stmt::ValueStream;
 use crate::Result;
+use toasty_core::stmt::ValueStream;
 
 /// Trait for types that can handle the result of an update operation.
 ///

@@ -10,13 +10,13 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let (query_struct_ident, create_struct_ident, update_struct_ident) =
-            match &self.model.kind {
-                ModelKind::Root(root) => (
-                    &root.query_struct_ident,
-                    &root.create_struct_ident,
-                    &root.update_struct_ident,
-                ),
+        let (query_struct_ident, create_struct_ident, update_struct_ident) = match &self.model.kind
+        {
+            ModelKind::Root(root) => (
+                &root.query_struct_ident,
+                &root.create_struct_ident,
+                &root.update_struct_ident,
+            ),
             ModelKind::Embedded(_) => {
                 // Embedded models don't generate CRUD methods, just return early
                 return TokenStream::new();
