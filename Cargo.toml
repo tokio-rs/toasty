@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/toasty",
+    "crates/toasty-cli",
     "crates/toasty-codegen",
     "crates/toasty-core",
     "crates/toasty-macros",
@@ -23,6 +24,7 @@ members = [
     # Examples
     "examples/composite-key",
     "examples/hello-toasty",
+    "examples/todo-with-cli",
     "examples/user-has-one-profile",
 
     # Tests
@@ -35,6 +37,7 @@ members = [
 [workspace.dependencies]
 # Toasty crates
 toasty = { path = "crates/toasty" }
+toasty-cli = { path = "crates/toasty-cli" }
 toasty-codegen = { path = "crates/toasty-codegen" }
 toasty-core = { path = "crates/toasty-core" }
 toasty-macros = { path = "crates/toasty-macros" }
@@ -62,7 +65,9 @@ bit-set = "0.8.0"
 by_address = "1.2.1"
 cfg-if = "1.0.0"
 clap = { version = "4.5.20", features = ["derive"] }
+console = "0.16"
 deadpool = { version = "0.12.3", features = ["rt_tokio_1"] }
+dialoguer = "0.12"
 heck = "0.5.0"
 indexmap = "2.6.0"
 index_vec = "0.1.4"
@@ -85,6 +90,8 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.132"
 syn = { version = "2.0.86", features = ["full", "extra-traits", "visit-mut"] }
+toml = "0.9.11"
+toml_edit = "0.24.0"
 tempfile = "3.8"
 tokio = { version = "1.18", features = ["full"] }
 tokio-postgres = "0.7.13"

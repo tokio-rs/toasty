@@ -48,6 +48,15 @@ pub(crate) enum FieldTy {
     HasOne(HasOne),
 }
 
+impl FieldTy {
+    pub(crate) fn is_relation(&self) -> bool {
+        matches!(
+            self,
+            Self::BelongsTo(..) | Self::HasMany(..) | Self::HasOne(..)
+        )
+    }
+}
+
 impl Field {
     pub(super) fn from_ast(
         field: &syn::Field,

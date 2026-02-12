@@ -24,7 +24,9 @@ impl Connection {
                 if !index.primary_key && index.unique {
                     index.columns.iter().any(|index_column| {
                         let column = index_column.table_column(schema);
-                        op.assignments.keys().any(|index| index == column.id.index)
+                        op.assignments
+                            .keys()
+                            .any(|projection| *projection == column.id.index)
                     })
                 } else {
                     false
@@ -45,7 +47,7 @@ impl Connection {
         let mut update_expression_remove = String::new();
         let mut ret = vec![];
 
-        for (index, assignment) in op.assignments.iter() {
+        for (projection, assignment) in op.assignments.iter() {
             let value = match &assignment.expr {
                 stmt::Expr::Value(value) => value,
                 _ => todo!("op = {:#?}", op),
@@ -53,7 +55,7 @@ impl Connection {
 
             ret.push(value.clone());
 
-            let column = expr_attrs.column(&table.columns[index]).to_string();
+            let column = expr_attrs.column(table.resolve(projection)).to_string();
 
             if value.is_null() {
                 if !update_expression_remove.is_empty() {
@@ -234,8 +236,8 @@ impl Connection {
                 for index_column in &index.columns {
                     let column = index_column.table_column(schema);
 
-                    for (index, assignment) in op.assignments.iter() {
-                        if column.id.index == index {
+                    for (projection, assignment) in op.assignments.iter() {
+                        if *projection == column.id.index {
                             if let Some(prev) = curr_unique_values.remove(&column.name) {
                                 let stmt::Expr::Value(value) = &assignment.expr else {
                                     todo!()
@@ -324,7 +326,7 @@ impl Connection {
                             let (_, assignment) = op
                                 .assignments
                                 .iter()
-                                .find(|(index, _)| column_id.index == *index)
+                                .find(|(projection, _)| **projection == column_id.index)
                                 .unwrap();
 
                             let stmt::Expr::Value(value) = &assignment.expr else {

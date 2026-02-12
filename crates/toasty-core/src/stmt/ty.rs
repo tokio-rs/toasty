@@ -66,6 +66,7 @@ use crate::{
 /// - [`stmt::Value`] - Values typed by this system
 /// - [`stmt::Expr`] - Expressions typed by this system
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Type {
     /// Boolean value
     Bool,
