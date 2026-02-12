@@ -53,6 +53,14 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Parameterized queries with type-safe bindings
 - Raw SQL fragments within typed queries (escape hatch for complex expressions)
 
+### Data Modification
+
+**Mutation Result Information**
+- Return affected row counts from update operations (how many records were updated)
+- Return affected row counts from delete operations (how many records were deleted)
+- Better result types that provide operation metadata
+- Distinguish between "no rows matched" vs "rows matched but no changes needed"
+
 ### Transactions
 
 **Atomic Batch Operations**
