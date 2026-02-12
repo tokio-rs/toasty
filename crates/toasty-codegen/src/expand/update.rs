@@ -27,20 +27,21 @@ impl Expand<'_> {
 
                 #vis async fn exec(self, db: &#toasty::Db) -> #toasty::Result<()> {
                     let stream = db.exec(self.stmt.into()).await?;
-                    self.target.apply_result(stream).await?;
+                    let values = stream.collect().await?;
+                    self.target.apply_result(values)?;
                     Ok(())
                 }
             }
 
             // Implement ApplyUpdate for &mut Model to enable reloading
             impl #toasty::ApplyUpdate for &mut #model_ident {
-                async fn apply_result(self, mut stream: #toasty::ValueStream) -> #toasty::Result<()> {
+                fn apply_result(self, mut values: ::std::vec::Vec<#toasty::Value>) -> #toasty::Result<()> {
                     use #toasty::stmt::Primitive;
 
-                    // Read one value from the stream
-                    let value = stream.next()
-                        .await
-                        .ok_or_else(|| #toasty::Error::record_not_found("update returned no results"))??;
+                    // Read the first value from the results
+                    let value = values.into_iter()
+                        .next()
+                        .ok_or_else(|| #toasty::Error::record_not_found("update returned no results"))?;
 
                     // Reload model fields from the returned value
                     for (field, value) in value.into_sparse_record().into_iter() {
