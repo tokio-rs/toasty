@@ -40,9 +40,6 @@ pub(crate) struct ModelRoot {
 
     /// Update builder struct identifier
     pub(crate) update_struct_ident: syn::Ident,
-
-    /// Update by query builder struct identifier
-    pub(crate) update_query_struct_ident: syn::Ident,
 }
 
 #[derive(Debug)]
@@ -194,7 +191,6 @@ impl Model {
                 query_struct_ident: struct_ident("Query", ast),
                 create_struct_ident: struct_ident("Create", ast),
                 update_struct_ident: struct_ident("Update", ast),
-                update_query_struct_ident: struct_ident("UpdateQuery", ast),
             })
         };
 

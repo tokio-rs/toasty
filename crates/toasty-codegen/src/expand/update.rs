@@ -11,29 +11,40 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
-        let update_query_struct_ident = &self.model.kind.expect_root().update_query_struct_ident;
-        let update_methods = self.expand_update_methods();
-        let update_query_methods = self.expand_update_query_methods();
+        let builder_methods = self.expand_builder_methods();
         let reload_model = self.expand_reload_model_expr();
 
         quote! {
-            #vis struct #update_struct_ident<'a> {
-                model: &'a mut #model_ident,
-                query: #update_query_struct_ident,
-            }
-
-            #vis struct #update_query_struct_ident {
+            // Unified update builder generic over the target type
+            #vis struct #update_struct_ident<T = #toasty::Query> {
                 stmt: #toasty::stmt::Update<#model_ident>,
+                target: T,
             }
 
-            impl #update_struct_ident<'_> {
-                #update_methods
+            // Generic builder methods work for any target type
+            impl<T: #toasty::ApplyUpdate> #update_struct_ident<T> {
+                #builder_methods
 
                 #vis async fn exec(self, db: &#toasty::Db) -> #toasty::Result<()> {
-                    let mut stmt = self.query.stmt;
-                    let mut result = db.exec_one(stmt.into()).await?;
+                    let stream = db.exec(self.stmt.into()).await?;
+                    let values = stream.collect().await?;
+                    self.target.apply_result(values)?;
+                    Ok(())
+                }
+            }
 
-                    for (field, value) in result.into_sparse_record().into_iter() {
+            // Implement ApplyUpdate for &mut Model to enable reloading
+            impl #toasty::ApplyUpdate for &mut #model_ident {
+                fn apply_result(self, mut values: ::std::vec::Vec<#toasty::Value>) -> #toasty::Result<()> {
+                    use #toasty::stmt::Primitive;
+
+                    // Read the first value from the results
+                    let value = values.into_iter()
+                        .next()
+                        .ok_or_else(|| #toasty::Error::record_not_found("update returned no results"))?;
+
+                    // Reload model fields from the returned value
+                    for (field, value) in value.into_sparse_record().into_iter() {
                         match field {
                             #reload_model
                             _ => todo!("handle unknown field id in reload after update"),
@@ -44,25 +55,22 @@ impl Expand<'_> {
                 }
             }
 
-            impl #update_query_struct_ident {
-                #update_query_methods
-
-                #vis async fn exec(self, db: &#toasty::Db) -> #toasty::Result<()> {
-                    let stmt = self.stmt;
-                    let mut cursor = db.exec(stmt.into()).await?;
-                    Ok(())
+            // Convert from query to update builder
+            impl From<#query_struct_ident> for #update_struct_ident {
+                fn from(value: #query_struct_ident) -> #update_struct_ident {
+                    #update_struct_ident {
+                        stmt: #toasty::stmt::Update::new(value.stmt),
+                        target: #toasty::Query,
+                    }
                 }
             }
 
-            impl From<#query_struct_ident> for #update_query_struct_ident {
-                fn from(value: #query_struct_ident) -> #update_query_struct_ident {
-                    #update_query_struct_ident { stmt: #toasty::stmt::Update::new(value.stmt) }
-                }
-            }
-
-            impl From<#toasty::stmt::Select<#model_ident>> for #update_query_struct_ident {
-                fn from(src: #toasty::stmt::Select<#model_ident>) -> #update_query_struct_ident {
-                    #update_query_struct_ident { stmt: #toasty::stmt::Update::new(src) }
+            impl From<#toasty::stmt::Select<#model_ident>> for #update_struct_ident {
+                fn from(src: #toasty::stmt::Select<#model_ident>) -> #update_struct_ident {
+                    #update_struct_ident {
+                        stmt: #toasty::stmt::Update::new(src),
+                        target: #toasty::Query,
+                    }
                 }
             }
         }
@@ -77,91 +85,18 @@ impl Expand<'_> {
 
             match &field.ty {
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => self.model.#field_ident = <#ty as #toasty::stmt::Primitive>::load(value)?,)
+                    quote!(#i => self.#field_ident = <#ty as #toasty::stmt::Primitive>::load(value)?,)
                 }
                 _ => {
                     // TODO: Actually implement this
-                    quote!(#i => self.model.#field_ident.unload(),)
+                    quote!(#i => self.#field_ident.unload(),)
                 }
             }
 
         }).collect()
     }
 
-    fn expand_update_methods(&self) -> TokenStream {
-        let toasty = &self.toasty;
-        let vis = &self.model.vis;
-
-        self.model.fields.iter().map(|field| {
-            let field_ident = &field.name.ident;
-            let set_field_ident = &field.set_ident;
-
-            match &field.ty {
-                FieldTy::BelongsTo(rel) => {
-                    let ty = &rel.ty;
-
-                    quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
-                            self.query.#set_field_ident(#field_ident);
-                            self
-                        }
-
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
-                            self.query.#set_field_ident(#field_ident);
-                            self
-                        }
-                    }
-                }
-                FieldTy::HasMany(rel) => {
-                    let ty = &rel.ty;
-                    let singular = &rel.singular.ident;
-                    let insert_ident = &rel.insert_ident;
-
-                    quote! {
-                        #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
-                            self.query.#insert_ident(#singular);
-                            self
-                        }
-
-                        #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
-                            self.query.#insert_ident(#singular);
-                            self
-                        }
-                    }
-                }
-                FieldTy::HasOne(rel) => {
-                    let ty = &rel.ty;
-
-                    quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
-                            self.query.#set_field_ident(#field_ident);
-                            self
-                        }
-
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
-                            self.query.#set_field_ident(#field_ident);
-                            self
-                        }
-                    }
-                }
-                FieldTy::Primitive(ty) => {
-                    quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
-                            self.query.#set_field_ident(#field_ident);
-                            self
-                        }
-
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
-                            self.query.#set_field_ident(#field_ident);
-                            self
-                        }
-                    }
-                }
-            }
-        }).collect()
-    }
-
-    fn expand_update_query_methods(&self) -> TokenStream {
+    fn expand_builder_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
 

@@ -1,3 +1,6 @@
+mod apply_update;
+pub use apply_update::{ApplyUpdate, Query};
+
 mod batch;
 pub use batch::CreateMany;
 
@@ -30,6 +33,7 @@ pub use toasty_core::{Error, Result};
 #[doc(hidden)]
 pub mod codegen_support {
     pub use crate::{
+        apply_update::{ApplyUpdate, Query},
         batch::CreateMany,
         cursor::{Cursor, FromCursor},
         model::generate_unique_id,
