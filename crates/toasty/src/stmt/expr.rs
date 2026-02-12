@@ -67,6 +67,10 @@ impl Expr<bool> {
         Self::from_untyped(stmt::Expr::or(self.untyped, rhs.into_expr().untyped))
     }
 
+    pub fn not(self) -> Self {
+        Self::from_untyped(stmt::Expr::not(self.untyped))
+    }
+
     pub fn in_list<L, R, T>(lhs: L, rhs: R) -> Self
     where
         L: IntoExpr<T>,

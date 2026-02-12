@@ -801,3 +801,236 @@ pub async fn query_arbitrary_constraint(test: &mut Test) {
         [&0, &2, &4, &6, &8, &10]
     );
 }
+
+#[driver_test(id(ID))]
+pub async fn query_not_basic(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[allow(dead_code)]
+        age: i64,
+    }
+
+    let db = test.setup_db(models!(User)).await;
+
+    // Create some users
+    for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
+        User::create().name(name).age(age).exec(&db).await.unwrap();
+    }
+
+    // Clear the log after setup
+    test.log().clear();
+
+    // Query with NOT condition: NOT (name = "Alice")
+    let result = User::filter(User::fields().name().eq("Alice").not())
+        .collect::<Vec<_>>(&db)
+        .await;
+
+    if test.capability().sql {
+        let users = result.unwrap();
+        assert_eq!(3, users.len());
+        let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["Bob", "Charlie", "Diana"]);
+    } else {
+        // DynamoDB requires key conditions for queries - NOT filters without
+        // key conditions should return an error
+        assert!(
+            result.is_err(),
+            "Expected error for NOT query without key condition on non-SQL database"
+        );
+    }
+}
+
+#[driver_test(id(ID))]
+pub async fn query_not_and_combined(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[allow(dead_code)]
+        age: i64,
+
+        #[allow(dead_code)]
+        active: bool,
+    }
+
+    let db = test.setup_db(models!(User)).await;
+
+    // Create some users
+    for (name, age, active) in [
+        ("Alice", 25, true),
+        ("Bob", 30, false),
+        ("Charlie", 35, true),
+        ("Diana", 40, false),
+        ("Eve", 25, false),
+    ] {
+        User::create()
+            .name(name)
+            .age(age)
+            .active(active)
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Query with NOT combined with AND: active = true AND NOT (age = 25)
+    // Should return only Charlie (active=true, age=35)
+    let result = User::filter(
+        User::fields()
+            .active()
+            .eq(true)
+            .and(User::fields().age().eq(25).not()),
+    )
+    .collect::<Vec<_>>(&db)
+    .await;
+
+    if test.capability().sql {
+        let users = result.unwrap();
+        assert_eq!(1, users.len());
+        assert_eq!("Charlie", users[0].name);
+    } else {
+        assert!(
+            result.is_err(),
+            "Expected error for NOT query without key condition on non-SQL database"
+        );
+    }
+}
+
+#[driver_test(id(ID))]
+pub async fn query_not_or_combined(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[allow(dead_code)]
+        age: i64,
+    }
+
+    let db = test.setup_db(models!(User)).await;
+
+    // Create some users
+    for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
+        User::create().name(name).age(age).exec(&db).await.unwrap();
+    }
+
+    // Query with NOT combined with OR: NOT (name = "Alice" OR name = "Bob")
+    // Should return Charlie and Diana
+    let result = User::filter(
+        User::fields()
+            .name()
+            .eq("Alice")
+            .or(User::fields().name().eq("Bob"))
+            .not(),
+    )
+    .collect::<Vec<_>>(&db)
+    .await;
+
+    if test.capability().sql {
+        let users = result.unwrap();
+        assert_eq!(2, users.len());
+        let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["Charlie", "Diana"]);
+    } else {
+        assert!(
+            result.is_err(),
+            "Expected error for NOT query without key condition on non-SQL database"
+        );
+    }
+}
+
+#[driver_test(id(ID))]
+pub async fn query_not_with_index(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = team, local = name)]
+    struct Player {
+        team: String,
+
+        name: String,
+
+        #[allow(dead_code)]
+        position: String,
+
+        #[allow(dead_code)]
+        number: i64,
+    }
+
+    let db = test.setup_db(models!(Player)).await;
+
+    // Create some players
+    for (team, name, position, number) in [
+        ("Timbers", "Diego Valeri", "Midfielder", 8),
+        ("Timbers", "Darlington Nagbe", "Midfielder", 6),
+        ("Timbers", "Diego Chara", "Midfielder", 21),
+        ("Timbers", "Fanendo Adi", "Forward", 9),
+        ("Timbers", "Adam Kwarasey", "Goalkeeper", 1),
+        ("Sounders", "Clint Dempsey", "Forward", 2),
+        ("Sounders", "Obafemi Martins", "Forward", 9),
+        ("Sounders", "Osvaldo Alonso", "Midfielder", 6),
+    ] {
+        Player::create()
+            .team(team)
+            .name(name)
+            .position(position)
+            .number(number)
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Query with partition key AND NOT condition on non-indexed field
+    // team = "Timbers" AND NOT (position = "Midfielder")
+    // Should return Fanendo Adi (Forward) and Adam Kwarasey (Goalkeeper)
+    let players = Player::filter(
+        Player::fields()
+            .team()
+            .eq("Timbers")
+            .and(Player::fields().position().eq("Midfielder").not()),
+    )
+    .all(&db)
+    .await
+    .unwrap()
+    .collect::<Vec<_>>()
+    .await
+    .unwrap();
+
+    assert_eq!(2, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Adam Kwarasey", "Fanendo Adi"]);
+
+    // Query with partition key AND NOT with comparison
+    // team = "Timbers" AND NOT (number > 8)
+    // Should return players with number <= 8: Diego Valeri (8), Darlington Nagbe (6), Adam Kwarasey (1)
+    let players = Player::filter(
+        Player::fields()
+            .team()
+            .eq("Timbers")
+            .and(Player::fields().number().gt(8).not()),
+    )
+    .all(&db)
+    .await
+    .unwrap()
+    .collect::<Vec<_>>()
+    .await
+    .unwrap();
+
+    assert_eq!(3, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Adam Kwarasey", "Darlington Nagbe", "Diego Valeri"]);
+}
