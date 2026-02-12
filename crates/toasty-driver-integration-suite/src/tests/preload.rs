@@ -524,6 +524,7 @@ pub async fn preload_on_empty_query(test: &mut Test) {
 #[driver_test(id(ID))]
 pub async fn nested_has_many_preload(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
     struct User {
         #[key]
         #[auto]
@@ -536,6 +537,7 @@ pub async fn nested_has_many_preload(test: &mut Test) {
     }
 
     #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
     struct Todo {
         #[key]
         #[auto]
@@ -544,7 +546,6 @@ pub async fn nested_has_many_preload(test: &mut Test) {
         title: String,
 
         #[index]
-        #[allow(dead_code)]
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
@@ -555,6 +556,7 @@ pub async fn nested_has_many_preload(test: &mut Test) {
     }
 
     #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
     struct Step {
         #[key]
         #[auto]
@@ -563,7 +565,6 @@ pub async fn nested_has_many_preload(test: &mut Test) {
         description: String,
 
         #[index]
-        #[allow(dead_code)]
         todo_id: ID,
 
         #[belongs_to(key = todo_id, references = id)]
