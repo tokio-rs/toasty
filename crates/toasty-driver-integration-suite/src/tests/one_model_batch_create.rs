@@ -3,7 +3,7 @@
 use crate::prelude::*;
 
 #[driver_test(id(ID))]
-pub async fn batch_create_empty(test: &mut Test) {
+pub async fn batch_create_empty(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
@@ -16,12 +16,13 @@ pub async fn batch_create_empty(test: &mut Test) {
 
     let db = test.setup_db(models!(Todo)).await;
 
-    let res = Todo::create_many().exec(&db).await.unwrap();
+    let res = Todo::create_many().exec(&db).await?;
     assert!(res.is_empty());
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn batch_create_one(test: &mut Test) {
+pub async fn batch_create_one(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
@@ -36,20 +37,20 @@ pub async fn batch_create_one(test: &mut Test) {
     let res = Todo::create_many()
         .item(Todo::create().title("hello"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(1, res.len());
 
     assert_eq!(res[0].title, "hello");
 
-    let reloaded: Vec<_> = Todo::filter_by_id(res[0].id).collect(&db).await.unwrap();
+    let reloaded: Vec<_> = Todo::filter_by_id(res[0].id).collect(&db).await?;
     assert_eq!(1, reloaded.len());
     assert_eq!(reloaded[0].id, res[0].id);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn batch_create_many(test: &mut Test) {
+pub async fn batch_create_many(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Todo {
         #[key]
@@ -65,8 +66,7 @@ pub async fn batch_create_many(test: &mut Test) {
         .item(Todo::create().title("todo 1"))
         .item(Todo::create().title("todo 2"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(2, res.len());
 
@@ -74,16 +74,17 @@ pub async fn batch_create_many(test: &mut Test) {
     assert_eq!(res[1].title, "todo 2");
 
     for todo in &res {
-        let reloaded: Vec<_> = Todo::filter_by_id(todo.id).collect(&db).await.unwrap();
+        let reloaded: Vec<_> = Todo::filter_by_id(todo.id).collect(&db).await?;
         assert_eq!(1, reloaded.len());
         assert_eq!(reloaded[0].id, todo.id);
     }
+    Ok(())
 }
 
 // TODO: is a batch supposed to be atomic? Probably not.
 #[driver_test(id(ID))]
 #[should_panic]
-pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) {
+pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -99,21 +100,20 @@ pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) {
         .item(User::create().email("user1@example.com").name("User 1"))
         .item(User::create().email("user2@example.com"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert!(res.is_empty());
 
     let users: Vec<_> = User::filter_by_email("me@carllerche.com")
         .collect(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert!(users.is_empty());
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn batch_create_model_with_unique_field_index_all_unique(test: &mut Test) {
+pub async fn batch_create_model_with_unique_field_index_all_unique(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -130,8 +130,7 @@ pub async fn batch_create_model_with_unique_field_index_all_unique(test: &mut Te
         .item(User::create().email("user1@example.com"))
         .item(User::create().email("user2@example.com"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(2, res.len());
 
@@ -142,19 +141,20 @@ pub async fn batch_create_model_with_unique_field_index_all_unique(test: &mut Te
 
     // We can fetch the user by ID and email
     for user in &res {
-        let found = User::get_by_id(&db, user.id).await.unwrap();
+        let found = User::get_by_id(&db, user.id).await?;
         assert_eq!(found.id, user.id);
         assert_eq!(found.email, user.email);
 
-        let found = User::get_by_email(&db, &user.email).await.unwrap();
+        let found = User::get_by_email(&db, &user.email).await?;
         assert_eq!(found.id, user.id);
         assert_eq!(found.email, user.email);
     }
+    Ok(())
 }
 
 #[driver_test(id(ID))]
 #[should_panic]
-pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test) {
+pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -172,6 +172,6 @@ pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test
         .item(User::create().email("user@example.com"))
         .item(User::create().email("user@example.com"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
+    Ok(())
 }

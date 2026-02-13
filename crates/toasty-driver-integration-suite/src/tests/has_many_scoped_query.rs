@@ -4,7 +4,7 @@ use crate::prelude::*;
 use std::collections::HashSet;
 
 #[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
-pub async fn scoped_query_eq(test: &mut Test) {
+pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -36,8 +36,8 @@ pub async fn scoped_query_eq(test: &mut Test) {
     let db = test.setup_db(models!(User, Todo)).await;
 
     // Create some users
-    let u1 = User::create().exec(&db).await.unwrap();
-    let u2 = User::create().exec(&db).await.unwrap();
+    let u1 = User::create().exec(&db).await?;
+    let u2 = User::create().exec(&db).await?;
 
     let mut u1_todo_ids = vec![];
 
@@ -57,8 +57,7 @@ pub async fn scoped_query_eq(test: &mut Test) {
             .title(title)
             .order(order as i64)
             .exec(&db)
-            .await
-            .unwrap();
+            .await?;
         u1_todo_ids.push(todo.id);
     }
 
@@ -69,16 +68,14 @@ pub async fn scoped_query_eq(test: &mut Test) {
         .title("attend world cup")
         .order(0)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Query todos scoped by user 1
     let todos = u1
         .todos()
         .query(Todo::fields().order().eq(0))
         .collect::<Vec<_>>(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(1, todos.len());
     assert_eq!(todos[0].id, u1_todo_ids[0]);
@@ -90,11 +87,9 @@ pub async fn scoped_query_eq(test: &mut Test) {
         .todos()
         .query(Todo::fields().order().eq(0))
         .all(&db)
-        .await
-        .unwrap()
+        .await?
         .collect::<Vec<_>>()
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(1, todos.len());
     assert_eq!(todos[0].id, u2_todo.id);
@@ -106,8 +101,7 @@ pub async fn scoped_query_eq(test: &mut Test) {
         .title("another order 0 TODO")
         .order(0)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     let mut actual = HashSet::new();
 
@@ -116,11 +110,10 @@ pub async fn scoped_query_eq(test: &mut Test) {
         .todos()
         .query(Todo::fields().order().eq(0))
         .all(&db)
-        .await
-        .unwrap();
+        .await?;
 
     while let Some(todo) = todos.next().await {
-        assert!(actual.insert(todo.unwrap().id));
+        assert!(actual.insert(todo?.id));
     }
 
     let expect: HashSet<_> = [u1_todo_ids[0], order_0_todo.id].into_iter().collect();
@@ -132,17 +125,16 @@ pub async fn scoped_query_eq(test: &mut Test) {
         .todos()
         .query(Todo::fields().order().eq(1))
         .all(&db)
-        .await
-        .unwrap()
+        .await?
         .collect::<Vec<_>>()
-        .await
-        .unwrap();
+        .await?;
 
     assert!(todos.is_empty());
+    Ok(())
 }
 
 #[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
-pub async fn scoped_query_gt(test: &mut Test) {
+pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -173,7 +165,7 @@ pub async fn scoped_query_gt(test: &mut Test) {
 
     let db = test.setup_db(models!(User, Todo)).await;
 
-    let user = User::create().exec(&db).await.unwrap();
+    let user = User::create().exec(&db).await?;
 
     let todos = Todo::create_many()
         .item(Todo::create().user(&user).title("First").order(0))
@@ -182,8 +174,7 @@ pub async fn scoped_query_gt(test: &mut Test) {
         .item(Todo::create().user(&user).title("Fourth").order(3))
         .item(Todo::create().user(&user).title("Fifth").order(4))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(5, todos.len());
 
@@ -192,8 +183,7 @@ pub async fn scoped_query_gt(test: &mut Test) {
         .todos()
         .query(Todo::fields().order().ne(2))
         .collect(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq_unordered!(
         todos.iter().map(|todo| &todo.title[..]),
@@ -209,8 +199,7 @@ pub async fn scoped_query_gt(test: &mut Test) {
         .todos()
         .query(Todo::fields().order().gt(2))
         .collect(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq_unordered!(
         todos.iter().map(|todo| &todo.title[..]),
@@ -222,8 +211,7 @@ pub async fn scoped_query_gt(test: &mut Test) {
         .todos()
         .query(Todo::fields().order().ge(2))
         .collect(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq_unordered!(
         todos.iter().map(|todo| &todo.title[..]),
@@ -235,8 +223,7 @@ pub async fn scoped_query_gt(test: &mut Test) {
         .todos()
         .query(Todo::fields().order().lt(2))
         .collect(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq_unordered!(
         todos.iter().map(|todo| &todo.title[..]),
@@ -248,11 +235,11 @@ pub async fn scoped_query_gt(test: &mut Test) {
         .todos()
         .query(Todo::fields().order().le(2))
         .collect(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq_unordered!(
         todos.iter().map(|todo| &todo.title[..]),
         ["First", "Second", "Third"]
     );
+    Ok(())
 }
