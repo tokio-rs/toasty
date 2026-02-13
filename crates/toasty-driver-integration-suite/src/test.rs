@@ -114,7 +114,7 @@ impl From<()> for TestResult {
 
 impl<O, E> From<Result<O, E>> for TestResult
 where
-    E: Error + 'static,
+    E: Into<Box<dyn Error>>,
 {
     fn from(value: Result<O, E>) -> Self {
         let error = match value {
