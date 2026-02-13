@@ -10,7 +10,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
-        let update_query_struct_ident = &self.model.kind.expect_root().update_query_struct_ident;
+        let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
         let filter_methods = self.expand_query_filter_methods();
         let relation_methods = self.expand_relation_methods();
         let include = self.expand_include_method();
@@ -39,8 +39,8 @@ impl Expand<'_> {
                     db.get(self.stmt).await
                 }
 
-                #vis fn update(self) -> #update_query_struct_ident {
-                    #update_query_struct_ident::from(self)
+                #vis fn update(self) -> #update_struct_ident {
+                    #update_struct_ident::from(self)
                 }
 
                 #vis async fn delete(self, db: &#toasty::Db) -> #toasty::Result<()> {

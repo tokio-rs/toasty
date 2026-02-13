@@ -10,17 +10,12 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let (
-            query_struct_ident,
-            create_struct_ident,
-            update_struct_ident,
-            update_query_struct_ident,
-        ) = match &self.model.kind {
+        let (query_struct_ident, create_struct_ident, update_struct_ident) = match &self.model.kind
+        {
             ModelKind::Root(root) => (
                 &root.query_struct_ident,
                 &root.create_struct_ident,
                 &root.update_struct_ident,
-                &root.update_query_struct_ident,
             ),
             ModelKind::Embedded(_) => {
                 // Embedded models don't generate CRUD methods, just return early
@@ -52,12 +47,11 @@ impl Expand<'_> {
                     #toasty::CreateMany::default()
                 }
 
-                #vis fn update(&mut self) -> #update_struct_ident {
+                #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
                     use #toasty::IntoSelect;
-                    let query = #update_query_struct_ident::from(self.into_select());
                     #update_struct_ident {
-                        model: self,
-                        query,
+                        stmt: #toasty::stmt::Update::new(self.into_select()),
+                        target: self,
                     }
                 }
 
@@ -89,8 +83,8 @@ impl Expand<'_> {
             impl #toasty::Model for #model_ident {
                 type Query = #query_struct_ident;
                 type Create = #create_struct_ident;
-                type Update<'a> = #update_struct_ident<'a>;
-                type UpdateQuery = #update_query_struct_ident;
+                type Update<'a> = #update_struct_ident<&'a mut Self>;
+                type UpdateQuery = #update_struct_ident;
 
                 fn load(value: #toasty::Value) -> #toasty::Result<Self> {
                     #load_body

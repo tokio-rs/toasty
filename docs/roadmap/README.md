@@ -10,6 +10,16 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 ## Feature Areas
 
+### Composite Keys
+
+**[Composite Key Support](./composite-keys.md)** (partial implementation)
+- Composite foreign key optimization in query simplification
+- Composite PK handling in expression rewriting and IN-list operations
+- HasMany/BelongsTo relationships with composite foreign keys referencing composite primary keys
+- Junction table / many-to-many patterns with composite keys
+- DynamoDB driver: batch delete/update with composite keys, composite unique indexes
+- Comprehensive test coverage for all composite key combinations
+
 ### Query Capabilities
 
 **[Query Ordering, Limits & Pagination](./order_limit_pagination.md)** | [User Guide](../guide/pagination.md)
@@ -52,6 +62,14 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Execute arbitrary SQL statements directly
 - Parameterized queries with type-safe bindings
 - Raw SQL fragments within typed queries (escape hatch for complex expressions)
+
+### Data Modification
+
+**Mutation Result Information**
+- Return affected row counts from update operations (how many records were updated)
+- Return affected row counts from delete operations (how many records were deleted)
+- Better result types that provide operation metadata
+- Distinguish between "no rows matched" vs "rows matched but no changes needed"
 
 ### Transactions
 
