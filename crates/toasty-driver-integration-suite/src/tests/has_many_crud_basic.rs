@@ -1011,7 +1011,7 @@ pub async fn assign_todo_to_user_on_update_query(test: &mut Test) {
     assert_eq!("hello", todos[0].title);
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn has_many_when_fk_is_composite_with_snippets(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {
