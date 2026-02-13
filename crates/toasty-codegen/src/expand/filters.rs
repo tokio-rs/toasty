@@ -72,7 +72,7 @@ impl Expand<'_> {
         let filter_method_ident = &filter.filter_method_ident;
         let args: Vec<_> = self.expand_filter_args(filter).collect();
         let arg_idents: Vec<_> = self.expand_filter_arg_idents(filter).collect();
-        let update_query_struct_ident = &self.model.kind.expect_root().update_query_struct_ident;
+        let update_query_struct_ident = &self.model.kind.expect_root().update_struct_ident;
 
         let self_arg;
         let base;
