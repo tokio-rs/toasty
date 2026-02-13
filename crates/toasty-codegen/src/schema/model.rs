@@ -46,6 +46,9 @@ pub(crate) struct ModelRoot {
 pub(crate) struct ModelEmbedded {
     /// The field struct identifier
     pub(crate) field_struct_ident: syn::Ident,
+
+    /// Update builder struct identifier
+    pub(crate) update_struct_ident: syn::Ident,
 }
 
 #[derive(Debug)]
@@ -171,6 +174,7 @@ impl Model {
         let kind = if is_embedded {
             ModelKind::Embedded(ModelEmbedded {
                 field_struct_ident: struct_ident("Fields", ast),
+                update_struct_ident: struct_ident("Update", ast),
             })
         } else {
             let pk_fields = pk_index_fields

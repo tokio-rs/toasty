@@ -5,6 +5,113 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 impl Expand<'_> {
+    /// Generate update builder for embedded structs
+    pub(super) fn expand_embedded_update_builder(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let update_struct_ident = &self.model.kind.expect_embedded().update_struct_ident;
+        let builder_methods = self.expand_embedded_update_methods();
+
+        quote! {
+            #vis struct #update_struct_ident<'a, M> {
+                stmt: &'a mut #toasty::stmt::Update<M>,
+                projection: #toasty::stmt::Projection,
+            }
+
+            impl<'a, M: #toasty::Model> #update_struct_ident<'a, M> {
+                #builder_methods
+            }
+        }
+    }
+
+    fn expand_embedded_update_methods(&self) -> TokenStream {
+        self.model.fields.iter().enumerate().map(|(offset, field)| {
+            let index = util::int(offset);
+            let projection = quote! {{
+                let mut projection = self.projection.clone();
+                projection.push(#index);
+                projection
+            }};
+            self.expand_update_field_method(field, projection)
+        }).collect()
+    }
+
+    /// Unified method to expand update methods for a single field.
+    /// Takes a projection expression that computes the field's projection path.
+    fn expand_update_field_method(&self, field: &crate::schema::Field, projection: TokenStream) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let field_ident = &field.name.ident;
+        let set_field_ident = &field.set_ident;
+
+        match &field.ty {
+            FieldTy::BelongsTo(rel) => {
+                let ty = &rel.ty;
+
+                quote! {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
+                        self.#set_field_ident(#field_ident);
+                        self
+                    }
+
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
+                        let projection = #projection;
+                        self.stmt.set(projection, #field_ident.into_expr());
+                        self
+                    }
+                }
+            }
+            FieldTy::HasMany(rel) => {
+                let ty = &rel.ty;
+                let singular = &rel.singular.ident;
+                let insert_ident = &rel.insert_ident;
+
+                quote! {
+                    #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
+                        self.#insert_ident(#singular);
+                        self
+                    }
+
+                    #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
+                        let projection = #projection;
+                        self.stmt.insert(projection, #singular.into_expr());
+                        self
+                    }
+                }
+            }
+            FieldTy::HasOne(rel) => {
+                let ty = &rel.ty;
+
+                quote! {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
+                        self.#set_field_ident(#field_ident);
+                        self
+                    }
+
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
+                        let projection = #projection;
+                        self.stmt.set(projection, #field_ident.into_expr());
+                        self
+                    }
+                }
+            }
+            FieldTy::Primitive(ty) => {
+                quote! {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
+                        self.#set_field_ident(#field_ident);
+                        self
+                    }
+
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
+                        let projection = #projection;
+                        self.stmt.set(projection, #field_ident.into_expr());
+                        self
+                    }
+                }
+            }
+        }
+    }
+
     pub(super) fn expand_update_builder(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
@@ -97,76 +204,10 @@ impl Expand<'_> {
     }
 
     fn expand_builder_methods(&self) -> TokenStream {
-        let toasty = &self.toasty;
-        let vis = &self.model.vis;
-
         self.model.fields.iter().enumerate().map(|(offset, field)| {
             let index = util::int(offset);
-            let field_ident = &field.name.ident;
-            let set_field_ident = &field.set_ident;
-
-            match &field.ty {
-                FieldTy::BelongsTo(rel) => {
-                    let ty = &rel.ty;
-
-                    quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
-                            self.#set_field_ident(#field_ident);
-                            self
-                        }
-
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
-                            self.stmt.set(#index, #field_ident.into_expr());
-                            self
-                        }
-                    }
-                }
-                FieldTy::HasMany(rel) => {
-                    let ty = &rel.ty;
-                    let singular = &rel.singular.ident;
-                    let insert_ident = &rel.insert_ident;
-
-                    quote! {
-                        #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
-                            self.#insert_ident(#singular);
-                            self
-                        }
-
-                        #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
-                            self.stmt.insert(#index, #singular.into_expr());
-                            self
-                        }
-                    }
-                }
-                FieldTy::HasOne(rel) => {
-                    let ty = &rel.ty;
-
-                    quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
-                            self.#set_field_ident(#field_ident);
-                            self
-                        }
-
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
-                            self.stmt.set(#index, #field_ident.into_expr());
-                            self
-                        }
-                    }
-                }
-                FieldTy::Primitive(ty) => {
-                    quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> Self {
-                            self.#set_field_ident(#field_ident);
-                            self
-                        }
-
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
-                            self.stmt.set(#index, #field_ident.into_expr());
-                            self
-                        }
-                    }
-                }
-            }
+            let projection = quote!(#index);
+            self.expand_update_field_method(field, projection)
         }).collect()
     }
 }

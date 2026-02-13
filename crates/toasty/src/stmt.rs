@@ -43,7 +43,7 @@ pub use to_statement::ToStatement;
 mod update;
 pub use update::Update;
 
-pub use toasty_core::stmt::{OrderBy, Value};
+pub use toasty_core::stmt::{OrderBy, Projection, Value};
 
 use crate::Model;
 

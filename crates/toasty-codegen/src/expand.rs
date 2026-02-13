@@ -74,9 +74,12 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let load_body = expand.expand_load_body();
     let embedded_field_struct = expand.expand_field_struct();
     let embedded_model_impls = expand.expand_embedded_model_impls();
+    let embedded_update_builder = expand.expand_embedded_update_builder();
 
     wrap_in_const(quote! {
         #embedded_field_struct
+
+        #embedded_update_builder
 
         #embedded_model_impls
 
