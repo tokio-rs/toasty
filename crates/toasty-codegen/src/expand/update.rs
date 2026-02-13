@@ -10,41 +10,61 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let update_struct_ident = &self.model.kind.expect_embedded().update_struct_ident;
-        let builder_methods = self.expand_embedded_update_methods();
+        let builder_methods = self.expand_update_field_methods(true);
 
         quote! {
-            #vis struct #update_struct_ident<'a, M> {
-                stmt: &'a mut #toasty::stmt::Update<M>,
+            #vis struct #update_struct_ident<'a> {
+                stmt: &'a mut #toasty::core::stmt::Update,
                 projection: #toasty::stmt::Projection,
             }
 
-            impl<'a, M: #toasty::Model> #update_struct_ident<'a, M> {
+            impl<'a> #update_struct_ident<'a> {
                 #builder_methods
             }
         }
     }
 
-    fn expand_embedded_update_methods(&self) -> TokenStream {
-        self.model.fields.iter().enumerate().map(|(offset, field)| {
-            let index = util::int(offset);
-            let projection = quote! {{
-                let mut projection = self.projection.clone();
-                projection.push(#index);
-                projection
-            }};
-            self.expand_update_field_method(field, projection)
-        }).collect()
-    }
 
-    /// Unified method to expand update methods for a single field.
-    /// Takes a projection expression that computes the field's projection path.
-    fn expand_update_field_method(&self, field: &crate::schema::Field, projection: TokenStream) -> TokenStream {
+
+    /// Expand all update methods for all fields.
+    /// Generates both the field setter methods and the .with_field() method for each field.
+    /// For embedded builders: uses self.projection.clone().push(index) and self.stmt.assignments
+    /// For root builders: uses Projection::from_index(index) and self.stmt
+    fn expand_update_field_methods(&self, is_embedded: bool) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let field_ident = &field.name.ident;
-        let set_field_ident = &field.set_ident;
 
-        match &field.ty {
+        let stmt_method = if is_embedded {
+            quote!(self.stmt.assignments)
+        } else {
+            quote!(self.stmt)
+        };
+
+        let stmt_for_builder = if is_embedded {
+            quote!(self.stmt)
+        } else {
+            quote!(self.stmt.as_untyped_mut())
+        };
+
+        self.model.fields.iter().enumerate().map(|(field_index, field)| {
+            let field_ident = &field.name.ident;
+            let set_field_ident = &field.set_ident;
+            let with_field_ident = syn::Ident::new(&format!("with_{}", field_ident), field_ident.span());
+
+            let index = util::int(field_index);
+            let projection = if is_embedded {
+                quote! {{
+                    let mut projection = self.projection.clone();
+                    projection.push(#index);
+                    projection
+                }}
+            } else {
+                quote! {
+                    #toasty::stmt::Projection::from_index(#index)
+                }
+            };
+
+            match &field.ty {
             FieldTy::BelongsTo(rel) => {
                 let ty = &rel.ty;
 
@@ -56,7 +76,7 @@ impl Expand<'_> {
 
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
-                        self.stmt.set(projection, #field_ident.into_expr());
+                        #stmt_method.set(projection, #field_ident.into_expr());
                         self
                     }
                 }
@@ -74,7 +94,7 @@ impl Expand<'_> {
 
                     #vis fn #insert_ident(&mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
-                        self.stmt.insert(projection, #singular.into_expr());
+                        #stmt_method.insert(projection, #singular.into_expr());
                         self
                     }
                 }
@@ -90,7 +110,7 @@ impl Expand<'_> {
 
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
                         let projection = #projection;
-                        self.stmt.set(projection, #field_ident.into_expr());
+                        #stmt_method.set(projection, #field_ident.into_expr());
                         self
                     }
                 }
@@ -104,12 +124,23 @@ impl Expand<'_> {
 
                     #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::IntoExpr<#ty>) -> &mut Self {
                         let projection = #projection;
-                        self.stmt.set(projection, #field_ident.into_expr());
+                        #stmt_method.set(projection, #field_ident.into_expr());
+                        self
+                    }
+
+                    #vis fn #with_field_ident(
+                        &mut self,
+                        f: impl FnOnce(&mut <#ty as #toasty::stmt::Primitive>::UpdateBuilder<'_>)
+                    ) -> &mut Self {
+                        let projection = #projection;
+                        let mut builder = <#ty as #toasty::stmt::Primitive>::make_update_builder(#stmt_for_builder, projection);
+                        f(&mut builder);
                         self
                     }
                 }
             }
-        }
+            }
+        }).collect()
     }
 
     pub(super) fn expand_update_builder(&self) -> TokenStream {
@@ -118,7 +149,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
-        let builder_methods = self.expand_builder_methods();
+        let builder_methods = self.expand_update_field_methods(false);
         let reload_model = self.expand_reload_model_expr();
 
         quote! {
@@ -200,14 +231,6 @@ impl Expand<'_> {
                 }
             }
 
-        }).collect()
-    }
-
-    fn expand_builder_methods(&self) -> TokenStream {
-        self.model.fields.iter().enumerate().map(|(offset, field)| {
-            let index = util::int(offset);
-            let projection = quote!(#index);
-            self.expand_update_field_method(field, projection)
         }).collect()
     }
 }

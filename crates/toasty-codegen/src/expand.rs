@@ -60,7 +60,9 @@ pub(super) fn root_model(model: &Model) -> TokenStream {
 pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let toasty = quote!(_toasty::codegen_support);
     let model_ident = &model.ident;
-    let field_struct_ident = &model.kind.expect_embedded().field_struct_ident;
+    let embedded = model.kind.expect_embedded();
+    let field_struct_ident = &embedded.field_struct_ident;
+    let update_struct_ident = &embedded.update_struct_ident;
 
     let expand = Expand {
         model,
@@ -96,6 +98,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
         impl #toasty::stmt::Primitive for #model_ident {
             type FieldAccessor = #field_struct_ident;
+            type UpdateBuilder<'a> = #update_struct_ident<'a>;
 
             const NULLABLE: bool = false;
 
@@ -109,6 +112,13 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
             fn make_field_accessor(path: #toasty::Path<Self>) -> Self::FieldAccessor {
                 #field_struct_ident { path }
+            }
+
+            fn make_update_builder<'a>(
+                stmt: &'a mut #toasty::core::stmt::Update,
+                projection: #toasty::core::stmt::Projection,
+            ) -> Self::UpdateBuilder<'a> {
+                #update_struct_ident { stmt, projection }
             }
 
             fn field_ty(_storage_ty: Option<#toasty::schema::db::Type>) -> #toasty::schema::app::FieldTy {

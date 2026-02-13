@@ -33,6 +33,10 @@ impl<M: Model> Update<M> {
         }
     }
 
+    pub fn as_untyped_mut(&mut self) -> &mut stmt::Update {
+        &mut self.untyped
+    }
+
     pub fn set(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.set(field, expr);
     }

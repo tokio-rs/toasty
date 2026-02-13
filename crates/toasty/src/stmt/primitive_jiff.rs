@@ -8,6 +8,7 @@ macro_rules! impl_jiff_primitive {
     ($ty:ty, $name:ident, $lit:literal) => {
         impl Primitive for $ty {
             type FieldAccessor = Path<Self>;
+            type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
             fn ty() -> Type {
                 Type::$name

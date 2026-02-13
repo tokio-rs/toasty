@@ -328,7 +328,7 @@ impl Expand<'_> {
             quote! {
                 {
                     let expr: #toasty::stmt::Expr<#ty> = #toasty::IntoExpr::into_expr(#into_expr);
-                    let untyped: #toasty::core_stmt::Expr = expr.into();
+                    let untyped: #toasty::core::stmt::Expr = expr.into();
                     untyped
                 }
             }
@@ -336,7 +336,7 @@ impl Expand<'_> {
 
         quote! {
             #toasty::stmt::Expr::from_untyped(
-                #toasty::core_stmt::Expr::record([
+                #toasty::core::stmt::Expr::record([
                     #( #field_exprs ),*
                 ])
             )
