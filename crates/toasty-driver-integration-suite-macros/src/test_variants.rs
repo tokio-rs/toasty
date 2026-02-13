@@ -183,9 +183,7 @@ pub fn expand(input: TokenStream) -> TokenStream {
                         ::std::sync::Arc::new(#driver_expr)
                     );
 
-                    test.run(async move |t| {
-                        #fn_path(t).await;
-                    });
+                    test.run(async move |t| #fn_path(t).await);
                 }
             })
         })
