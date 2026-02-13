@@ -95,7 +95,7 @@ impl Test {
         }
 
         if let Some(error) = result.error {
-            panic!("Driver test returned error: {error}");
+            panic!("Driver test returned an error: {error}");
         }
 
         self.runtime = Some(runtime);
@@ -117,10 +117,8 @@ where
     E: Into<Box<dyn Error>>,
 {
     fn from(value: Result<O, E>) -> Self {
-        let error = match value {
-            Ok(_) => None,
-            Err(e) => Some(e.into()),
-        };
-        TestResult { error }
+        TestResult {
+            error: value.err().map(Into::into),
+        }
     }
 }

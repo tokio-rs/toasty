@@ -47,7 +47,6 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> TokenStream {
             &driver_test.requires,
             false, // Don't use expansion name as function name
         );
-
         quote! {
             #variant
         }
