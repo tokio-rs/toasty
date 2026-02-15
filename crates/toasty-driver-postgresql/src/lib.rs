@@ -382,7 +382,7 @@ impl toasty_core::driver::Connection for Connection {
         // Execute each migration statement
         for statement in migration.statements() {
             if let Err(e) = transaction
-                .execute(statement, &[])
+                .batch_execute(statement)
                 .await
                 .map_err(toasty_core::Error::driver_operation_failed)
             {
