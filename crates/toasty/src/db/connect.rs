@@ -56,9 +56,9 @@ impl Connect {
             }
 
             #[cfg(feature = "postgresql")]
-            "postgresql" => Box::new(toasty_driver_postgresql::PostgreSQL::new(url)?),
+            "postgresql" | "postgres" => Box::new(toasty_driver_postgresql::PostgreSQL::new(url)?),
             #[cfg(not(feature = "postgresql"))]
-            "postgresql" => {
+            "postgresql" | "postgres" => {
                 return Err(toasty_core::Error::unsupported_feature(
                     "`postgresql` feature not enabled",
                 ))
