@@ -1034,3 +1034,82 @@ pub async fn query_not_with_index(test: &mut Test) {
     names.sort();
     assert_eq!(names, ["Adam Kwarasey", "Darlington Nagbe", "Diego Valeri"]);
 }
+
+#[driver_test(id(ID))]
+pub async fn query_not_operator_syntax(test: &mut Test) {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = team, local = name)]
+    struct Player {
+        team: String,
+
+        name: String,
+
+        #[allow(dead_code)]
+        position: String,
+
+        #[allow(dead_code)]
+        number: i64,
+    }
+
+    let db = test.setup_db(models!(Player)).await;
+
+    for (team, name, position, number) in [
+        ("Timbers", "Diego Valeri", "Midfielder", 8),
+        ("Timbers", "Darlington Nagbe", "Midfielder", 6),
+        ("Timbers", "Diego Chara", "Midfielder", 21),
+        ("Timbers", "Fanendo Adi", "Forward", 9),
+        ("Timbers", "Adam Kwarasey", "Goalkeeper", 1),
+    ] {
+        Player::create()
+            .team(team)
+            .name(name)
+            .position(position)
+            .number(number)
+            .exec(&db)
+            .await
+            .unwrap();
+    }
+
+    // Use the ! operator instead of .not()
+    // team = "Timbers" AND !(position = "Midfielder")
+    let players = Player::filter(
+        Player::fields()
+            .team()
+            .eq("Timbers")
+            .and(!Player::fields().position().eq("Midfielder")),
+    )
+    .all(&db)
+    .await
+    .unwrap()
+    .collect::<Vec<_>>()
+    .await
+    .unwrap();
+
+    assert_eq!(2, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Adam Kwarasey", "Fanendo Adi"]);
+
+    // ! on a compound expression: !(number > 8 OR position = "Goalkeeper")
+    let players = Player::filter(
+        Player::fields().team().eq("Timbers").and(
+            !(Player::fields()
+                .number()
+                .gt(8)
+                .or(Player::fields().position().eq("Goalkeeper"))),
+        ),
+    )
+    .all(&db)
+    .await
+    .unwrap()
+    .collect::<Vec<_>>()
+    .await
+    .unwrap();
+
+    // Excludes Diego Chara (21), Fanendo Adi (9), Adam Kwarasey (Goalkeeper)
+    // Keeps Diego Valeri (8, Midfielder), Darlington Nagbe (6, Midfielder)
+    assert_eq!(2, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Darlington Nagbe", "Diego Valeri"]);
+}
