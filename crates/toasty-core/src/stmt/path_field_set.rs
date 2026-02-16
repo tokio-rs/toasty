@@ -1,4 +1,5 @@
 use bit_set::BitSet;
+use std::ops::{BitAnd, BitOr, BitOrAssign};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -60,6 +61,34 @@ impl PathFieldSet {
 
     pub fn len(&self) -> usize {
         self.container.len()
+    }
+
+    pub fn insert(&mut self, val: usize) {
+        self.container.insert(val);
+    }
+}
+
+impl BitOr for PathFieldSet {
+    type Output = Self;
+
+    fn bitor(mut self, rhs: Self) -> Self {
+        self.container.union_with(&rhs.container);
+        self
+    }
+}
+
+impl BitOrAssign for PathFieldSet {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.container.union_with(&rhs.container);
+    }
+}
+
+impl BitAnd for PathFieldSet {
+    type Output = Self;
+
+    fn bitand(mut self, rhs: Self) -> Self {
+        self.container.intersect_with(&rhs.container);
+        self
     }
 }
 

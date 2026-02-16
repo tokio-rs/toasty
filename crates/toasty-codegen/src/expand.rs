@@ -74,6 +74,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let into_expr_body_val = expand.expand_embedded_into_expr_body(false);
     let into_expr_body_ref = expand.expand_embedded_into_expr_body(true);
     let load_body = expand.expand_load_body();
+    let reload_body = expand.expand_embedded_reload_body();
     let embedded_field_struct = expand.expand_field_struct();
     let embedded_model_impls = expand.expand_embedded_model_impls();
     let embedded_update_builder = expand.expand_embedded_update_builder();
@@ -108,6 +109,10 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
             fn load(value: #toasty::Value) -> #toasty::Result<Self> {
                 #load_body
+            }
+
+            fn reload(&mut self, value: #toasty::Value) -> #toasty::Result<()> {
+                #reload_body
             }
 
             fn make_field_accessor(path: #toasty::Path<Self>) -> Self::FieldAccessor {

@@ -129,9 +129,9 @@ impl Expand<'_> {
                     }
 
                     #vis fn #with_field_ident(
-                        &mut self,
+                        mut self,
                         f: impl FnOnce(&mut <#ty as #toasty::stmt::Primitive>::UpdateBuilder<'_>)
-                    ) -> &mut Self {
+                    ) -> Self {
                         let projection = #projection;
                         let mut builder = <#ty as #toasty::stmt::Primitive>::make_update_builder(#stmt_for_builder, projection);
                         f(&mut builder);
@@ -150,7 +150,6 @@ impl Expand<'_> {
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
         let builder_methods = self.expand_update_field_methods(false);
-        let reload_model = self.expand_reload_model_expr();
 
         quote! {
             // Unified update builder generic over the target type
@@ -174,22 +173,10 @@ impl Expand<'_> {
             // Implement ApplyUpdate for &mut Model to enable reloading
             impl #toasty::ApplyUpdate for &mut #model_ident {
                 fn apply_result(self, mut values: ::std::vec::Vec<#toasty::Value>) -> #toasty::Result<()> {
-                    use #toasty::stmt::Primitive;
-
-                    // Read the first value from the results
                     let value = values.into_iter()
                         .next()
                         .ok_or_else(|| #toasty::Error::record_not_found("update returned no results"))?;
-
-                    // Reload model fields from the returned value
-                    for (field, value) in value.into_sparse_record().into_iter() {
-                        match field {
-                            #reload_model
-                            _ => todo!("handle unknown field id in reload after update"),
-                        }
-                    }
-
-                    Ok(())
+                    self.reload(value)
                 }
             }
 
@@ -214,7 +201,8 @@ impl Expand<'_> {
         }
     }
 
-    fn expand_reload_model_expr(&self) -> TokenStream {
+    /// Generate match arms for reloading each model field from a sparse record value.
+    fn expand_reload_match_arms(&self) -> TokenStream {
         let toasty = &self.toasty;
 
         self.model.fields.iter().enumerate().map(|(offset, field)| {
@@ -223,7 +211,7 @@ impl Expand<'_> {
 
             match &field.ty {
                 FieldTy::Primitive(ty) => {
-                    quote!(#i => self.#field_ident = <#ty as #toasty::stmt::Primitive>::load(value)?,)
+                    quote!(#i => <#ty as #toasty::stmt::Primitive>::reload(&mut self.#field_ident, value)?,)
                 }
                 _ => {
                     // TODO: Actually implement this
@@ -232,5 +220,25 @@ impl Expand<'_> {
             }
 
         }).collect()
+    }
+
+    /// Generate the body of the `reload` method for a root model.
+    pub(super) fn expand_reload_method(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let reload_arms = self.expand_reload_match_arms();
+
+        quote! {
+            #vis fn reload(&mut self, value: #toasty::Value) -> #toasty::Result<()> {
+                use #toasty::stmt::Primitive;
+                for (field, value) in value.into_sparse_record().into_iter() {
+                    match field {
+                        #reload_arms
+                        _ => todo!("handle unknown field id in reload after update"),
+                    }
+                }
+                Ok(())
+            }
+        }
     }
 }

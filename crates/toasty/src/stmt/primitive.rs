@@ -29,6 +29,16 @@ pub trait Primitive: Sized {
 
     fn load(value: stmt::Value) -> Result<Self>;
 
+    /// Reload the value in-place from a value returned by the database.
+    ///
+    /// The value may be a `SparseRecord` for partial embedded updates, in which
+    /// case only the specified fields should be updated. Embedded types must
+    /// override this method to handle partial updates correctly.
+    fn reload(&mut self, value: stmt::Value) -> Result<()> {
+        *self = Self::load(value)?;
+        Ok(())
+    }
+
     /// Build a field accessor from a path.
     /// For primitives, returns the path as-is.
     /// For embedded types, wraps the path in a Fields struct.

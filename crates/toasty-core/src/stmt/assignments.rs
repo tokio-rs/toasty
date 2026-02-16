@@ -169,11 +169,19 @@ impl Assignments {
 
 impl IntoIterator for Assignments {
     type Item = (Projection, Assignment);
-
-    type IntoIter = std::vec::IntoIter<(Projection, Assignment)>;
+    type IntoIter = indexmap::map::IntoIter<Projection, Assignment>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.assignments.into_iter().collect::<Vec<_>>().into_iter()
+        self.assignments.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Assignments {
+    type Item = (&'a Projection, &'a Assignment);
+    type IntoIter = indexmap::map::Iter<'a, Projection, Assignment>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.assignments.iter()
     }
 }
 
