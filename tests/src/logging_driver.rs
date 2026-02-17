@@ -98,8 +98,8 @@ impl Connection for LoggingConnection {
         Ok(response)
     }
 
-    async fn legacy_reset_db(&mut self, schema: &Schema) -> Result<()> {
-        self.inner.legacy_reset_db(schema).await
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        self.inner.push_schema(schema).await
     }
 
     async fn applied_migrations(&mut self) -> Result<Vec<AppliedMigration>> {

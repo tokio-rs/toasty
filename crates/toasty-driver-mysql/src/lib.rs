@@ -180,34 +180,6 @@ impl Connection {
 
         Ok(())
     }
-
-    /// Drops a table.
-    pub async fn drop_table(
-        &mut self,
-        schema: &Schema,
-        table: &Table,
-        if_exists: bool,
-    ) -> Result<()> {
-        let serializer = sql::Serializer::mysql(schema);
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-
-        let sql = if if_exists {
-            serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
-        } else {
-            serializer.serialize(&sql::Statement::drop_table(table), &mut params)
-        };
-
-        assert!(
-            params.is_empty(),
-            "dropping a table shouldn't involve any parameters"
-        );
-
-        self.conn
-            .exec_drop(&sql, ())
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
-        Ok(())
-    }
 }
 
 impl From<Conn> for Connection {
@@ -348,12 +320,10 @@ impl toasty_core::driver::Connection for Connection {
         }
     }
 
-    async fn legacy_reset_db(&mut self, schema: &Schema) -> Result<()> {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
-            self.drop_table(schema, table, true).await?;
             self.create_table(schema, table).await?;
         }
-
         Ok(())
     }
 

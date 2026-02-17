@@ -43,12 +43,14 @@ pub trait Connection: Debug + Send + 'static {
     /// Execute a database operation
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response>;
 
-    /// TODO: this will probably go away
-    async fn legacy_reset_db(&mut self, _schema: &Schema) -> crate::Result<()> {
-        unimplemented!()
-    }
+    /// Creates tables and indices defined in the schema on the database.
+    /// TODO: This will probably use database introspection in the future.
+    async fn push_schema(&mut self, _schema: &Schema) -> crate::Result<()>;
 
+    /// Returns a list of currently applied database migrations.
     async fn applied_migrations(&mut self) -> crate::Result<Vec<AppliedMigration>>;
+
+    /// Applies a migration to the database.
     async fn apply_migration(
         &mut self,
         id: u64,

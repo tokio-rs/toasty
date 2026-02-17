@@ -110,13 +110,13 @@ impl Db {
         cursor.next().await.unwrap()
     }
 
-    /// TODO: remove
-    pub async fn legacy_reset_db(&self) -> Result<()> {
+    /// Creates tables and indices defined in the schema on the database.
+    pub async fn push_schema(&self) -> Result<()> {
         self.engine
             .pool
             .get()
             .await?
-            .legacy_reset_db(&self.engine.schema.db)
+            .push_schema(&self.engine.schema.db)
             .await
     }
 
