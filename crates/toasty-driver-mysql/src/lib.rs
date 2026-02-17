@@ -5,12 +5,12 @@ pub(crate) use value::Value;
 
 use mysql_async::{
     prelude::{Queryable, ToValue},
-    Conn, Pool,
+    Conn, Pool, TxOpts,
 };
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
-    driver::{operation::Transaction, Capability, Driver, Operation, Response},
+    driver::{Capability, Driver, Operation, Response},
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt::{self, ValueRecord},
     Result,
@@ -187,136 +187,128 @@ impl From<Conn> for Connection {
     }
 }
 
+async fn exec_op(
+    conn: &mut (impl Queryable + Send),
+    schema: &Arc<Schema>,
+    op: Operation,
+) -> Result<Response> {
+    let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
+        Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
+        op => todo!("op={:#?}", op),
+    };
+
+    let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
+
+    let sql_as_str = sql::Serializer::mysql(schema).serialize(&sql, &mut params);
+
+    let params = params
+        .into_iter()
+        .map(|tv| Value::from(tv.value))
+        .collect::<Vec<_>>();
+    let args = params
+        .iter()
+        .map(|param| param.to_value())
+        .collect::<Vec<_>>();
+
+    let statement = conn
+        .prep(&sql_as_str)
+        .await
+        .map_err(toasty_core::Error::driver_operation_failed)?;
+
+    if ret.is_none() {
+        let count = conn
+            .exec_iter(&statement, mysql_async::Params::Positional(args))
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?
+            .affected_rows();
+
+        // Handle the last_insert_id_hack for MySQL INSERT with RETURNING
+        if let Some(num_rows) = last_insert_id_hack {
+            // Assert the previous statement was an INSERT
+            assert!(
+                matches!(sql, sql::Statement::Insert(_)),
+                "last_insert_id_hack should only be used with INSERT statements"
+            );
+
+            // Execute SELECT LAST_INSERT_ID() on the same connection
+            let first_id: u64 = conn
+                .query_first("SELECT LAST_INSERT_ID()")
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?
+                .ok_or_else(|| {
+                    toasty_core::Error::driver_operation_failed(std::io::Error::other(
+                        "LAST_INSERT_ID() returned no rows",
+                    ))
+                })?;
+
+            // Generate rows with sequential IDs
+            let results = (0..num_rows).map(move |offset| {
+                let id = first_id + offset;
+                // Return a record with a single field containing the ID
+                Ok(ValueRecord::from_vec(vec![stmt::Value::U64(id)]))
+            });
+
+            return Ok(Response::value_stream(stmt::ValueStream::from_iter(
+                results,
+            )));
+        }
+
+        return Ok(Response::count(count));
+    }
+
+    let rows: Vec<mysql_async::Row> = conn
+        .exec(&statement, &args)
+        .await
+        .map_err(toasty_core::Error::driver_operation_failed)?;
+
+    if let Some(returning) = ret {
+        let results = rows.into_iter().map(move |mut row| {
+            assert_eq!(
+                row.len(),
+                returning.len(),
+                "row={row:#?}; returning={returning:#?}"
+            );
+
+            let mut results = Vec::new();
+            for i in 0..row.len() {
+                let column = &row.columns()[i];
+                results.push(Value::from_sql(i, &mut row, column, &returning[i]).into_inner());
+            }
+
+            Ok(ValueRecord::from_vec(results))
+        });
+
+        Ok(Response::value_stream(stmt::ValueStream::from_iter(
+            results,
+        )))
+    } else {
+        let [row] = &rows[..] else { todo!() };
+        let total = row.get::<i64, usize>(0).unwrap();
+        let condition_matched = row.get::<i64, usize>(1).unwrap();
+
+        if total == condition_matched {
+            Ok(Response::count(total as _))
+        } else {
+            Err(toasty_core::Error::condition_failed(
+                "update condition did not match",
+            ))
+        }
+    }
+}
+
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
-            Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
-            Operation::Transaction(Transaction::Start) => {
-                self.conn
-                    .query_drop("START TRANSACTION")
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Commit) => {
-                self.conn
-                    .query_drop("COMMIT")
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Rollback) => {
-                self.conn
-                    .query_drop("ROLLBACK")
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            op => todo!("op={:#?}", op),
-        };
+        exec_op(&mut self.conn, schema, op).await
+    }
 
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-
-        let sql_as_str = sql::Serializer::mysql(schema).serialize(&sql, &mut params);
-
-        let params = params
-            .into_iter()
-            .map(|tv| Value::from(tv.value))
-            .collect::<Vec<_>>();
-        let args = params
-            .iter()
-            .map(|param| param.to_value())
-            .collect::<Vec<_>>();
-
-        let statement = self
+    async fn transaction(&mut self) -> Result<Box<dyn toasty_core::driver::Transaction<'_> + '_>> {
+        let txn = self
             .conn
-            .prep(&sql_as_str)
+            .start_transaction(TxOpts::default())
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
-
-        if ret.is_none() {
-            let count = self
-                .conn
-                .exec_iter(&statement, mysql_async::Params::Positional(args))
-                .await
-                .map_err(toasty_core::Error::driver_operation_failed)?
-                .affected_rows();
-
-            // Handle the last_insert_id_hack for MySQL INSERT with RETURNING
-            if let Some(num_rows) = last_insert_id_hack {
-                // Assert the previous statement was an INSERT
-                assert!(
-                    matches!(sql, sql::Statement::Insert(_)),
-                    "last_insert_id_hack should only be used with INSERT statements"
-                );
-
-                // Execute SELECT LAST_INSERT_ID() on the same connection
-                let first_id: u64 = self
-                    .conn
-                    .query_first("SELECT LAST_INSERT_ID()")
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?
-                    .ok_or_else(|| {
-                        toasty_core::Error::driver_operation_failed(std::io::Error::other(
-                            "LAST_INSERT_ID() returned no rows",
-                        ))
-                    })?;
-
-                // Generate rows with sequential IDs
-                let results = (0..num_rows).map(move |offset| {
-                    let id = first_id + offset;
-                    // Return a record with a single field containing the ID
-                    Ok(ValueRecord::from_vec(vec![stmt::Value::U64(id)]))
-                });
-
-                return Ok(Response::value_stream(stmt::ValueStream::from_iter(
-                    results,
-                )));
-            }
-
-            return Ok(Response::count(count));
-        }
-
-        let rows: Vec<mysql_async::Row> = self
-            .conn
-            .exec(&statement, &args)
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
-
-        if let Some(returning) = ret {
-            let results = rows.into_iter().map(move |mut row| {
-                assert_eq!(
-                    row.len(),
-                    returning.len(),
-                    "row={row:#?}; returning={returning:#?}"
-                );
-
-                let mut results = Vec::new();
-                for i in 0..row.len() {
-                    let column = &row.columns()[i];
-                    results.push(Value::from_sql(i, &mut row, column, &returning[i]).into_inner());
-                }
-
-                Ok(ValueRecord::from_vec(results))
-            });
-
-            Ok(Response::value_stream(stmt::ValueStream::from_iter(
-                results,
-            )))
-        } else {
-            let [row] = &rows[..] else { todo!() };
-            let total = row.get::<i64, usize>(0).unwrap();
-            let condition_matched = row.get::<i64, usize>(1).unwrap();
-
-            if total == condition_matched {
-                Ok(Response::count(total as _))
-            } else {
-                Err(toasty_core::Error::condition_failed(
-                    "update condition did not match",
-                ))
-            }
-        }
+        Ok(Box::new(Transaction { inner: txn }))
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
@@ -418,5 +410,36 @@ impl toasty_core::driver::Connection for Connection {
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
+    }
+}
+
+pub struct Transaction<'a> {
+    inner: mysql_async::Transaction<'a>,
+}
+
+impl std::fmt::Debug for Transaction<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Transaction").finish_non_exhaustive()
+    }
+}
+
+#[async_trait]
+impl<'a> toasty_core::driver::Transaction<'a> for Transaction<'a> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+        exec_op(&mut self.inner, schema, op).await
+    }
+
+    async fn commit(self) -> Result<()> {
+        self.inner
+            .commit()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)
+    }
+
+    async fn rollback(self) -> Result<()> {
+        self.inner
+            .rollback()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)
     }
 }
