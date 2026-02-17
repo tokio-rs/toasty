@@ -1,4 +1,7 @@
-use std::{borrow::Cow, sync::{Arc, Mutex}};
+use std::{
+    borrow::Cow,
+    sync::{Arc, Mutex},
+};
 use toasty::driver::Driver;
 use toasty_core::{
     async_trait,

@@ -16,7 +16,10 @@ impl ApplyCommand {
         println!();
         println!("  {}", style("Apply Migrations").cyan().bold().underlined());
         println!();
-        println!("  {}", style(format!("Connected to {}", db.driver().url())).dim());
+        println!(
+            "  {}",
+            style(format!("Connected to {}", db.driver().url())).dim()
+        );
         println!();
 
         apply_migrations(db, config).await

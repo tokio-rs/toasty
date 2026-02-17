@@ -1,7 +1,7 @@
 use crate::Result;
 
-pub use toasty_core::driver::{operation::Operation, Capability, Connection, Response};
 use std::borrow::Cow;
+pub use toasty_core::driver::{operation::Operation, Capability, Connection, Response};
 use toasty_core::{
     async_trait,
     driver::Driver,

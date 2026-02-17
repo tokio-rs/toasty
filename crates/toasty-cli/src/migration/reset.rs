@@ -19,7 +19,10 @@ impl ResetCommand {
         println!();
         println!("  {}", style("Reset Database").cyan().bold().underlined());
         println!();
-        println!("  {}", style(format!("Connected to {}", db.driver().url())).dim());
+        println!(
+            "  {}",
+            style(format!("Connected to {}", db.driver().url())).dim()
+        );
         println!();
 
         let theme = {

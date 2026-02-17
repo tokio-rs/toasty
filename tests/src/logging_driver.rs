@@ -1,4 +1,7 @@
-use std::{borrow::Cow, sync::{Arc, Mutex}};
+use std::{
+    borrow::Cow,
+    sync::{Arc, Mutex},
+};
 use toasty::{
     driver::Driver,
     schema::db::{AppliedMigration, Migration, SchemaDiff},
