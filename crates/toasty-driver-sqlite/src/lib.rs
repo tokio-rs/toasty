@@ -92,6 +92,23 @@ impl Driver for Sqlite {
 
         Migration::new_sql_with_breakpoints(&sql_strings)
     }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        match self {
+            Sqlite::File(path) => {
+                // Delete the file and recreate it
+                if path.exists() {
+                    std::fs::remove_file(path)
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
+            }
+            Sqlite::InMemory => {
+                // Nothing to do — each connect() creates a fresh in-memory database
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug)]

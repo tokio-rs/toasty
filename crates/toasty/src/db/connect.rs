@@ -97,4 +97,8 @@ impl Driver for Connect {
     fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
         self.driver.generate_migration(schema_diff)
     }
+
+    async fn reset_db(&self) -> Result<()> {
+        self.driver.reset_db().await
+    }
 }

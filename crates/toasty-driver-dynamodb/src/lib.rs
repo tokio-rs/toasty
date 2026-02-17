@@ -50,6 +50,42 @@ impl Driver for DynamoDb {
     fn generate_migration(&self, _schema_diff: &SchemaDiff<'_>) -> Migration {
         unimplemented!("DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK.")
     }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        let conn = Connection::connect(&self.url).await?;
+
+        // List and delete all tables (paginated)
+        let mut exclusive_start_table_name = None;
+        loop {
+            let mut req = conn.client.list_tables();
+            if let Some(start) = &exclusive_start_table_name {
+                req = req.exclusive_start_table_name(start);
+            }
+
+            let resp = req
+                .send()
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+
+            if let Some(table_names) = &resp.table_names {
+                for table_name in table_names {
+                    conn.client
+                        .delete_table()
+                        .table_name(table_name)
+                        .send()
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
+            }
+
+            exclusive_start_table_name = resp.last_evaluated_table_name;
+            if exclusive_start_table_name.is_none() {
+                break;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug)]

@@ -46,6 +46,10 @@ impl Driver for LoggingDriver {
     fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
         self.inner.generate_migration(schema_diff)
     }
+
+    async fn reset_db(&self) -> Result<()> {
+        self.inner.reset_db().await
+    }
 }
 
 #[derive(Debug)]

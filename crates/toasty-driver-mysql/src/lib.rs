@@ -98,6 +98,36 @@ impl Driver for MySQL {
 
         Migration::new_sql_with_breakpoints(&sql_strings)
     }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        let mut conn = self
+            .pool
+            .get_conn()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        let dbname = conn
+            .opts()
+            .db_name()
+            .ok_or_else(|| {
+                toasty_core::Error::invalid_connection_url("no database name configured")
+            })?
+            .to_string();
+
+        conn.query_drop(format!("DROP DATABASE IF EXISTS `{}`", dbname))
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        conn.query_drop(format!("CREATE DATABASE `{}`", dbname))
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        conn.query_drop(format!("USE `{}`", dbname))
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
