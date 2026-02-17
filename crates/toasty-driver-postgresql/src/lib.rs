@@ -108,6 +108,67 @@ impl Driver for PostgreSQL {
 
         Migration::new_sql(sql_strings.join("\n"))
     }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        let dbname = self
+            .config
+            .get_dbname()
+            .ok_or_else(|| {
+                toasty_core::Error::invalid_connection_url("no database name configured")
+            })?
+            .to_string();
+
+        // We cannot drop a database we are currently connected to, so we need a temp database.
+        let temp_dbname = "__toasty_reset_temp";
+
+        let connect = |dbname: &str| {
+            let mut config = self.config.clone();
+            config.dbname(dbname);
+            Connection::connect(config, tokio_postgres::NoTls)
+        };
+
+        // Step 1: Connect to the target DB and create a temp DB
+        let conn = connect(&dbname).await?;
+        conn.client
+            .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", temp_dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        conn.client
+            .execute(&format!("CREATE DATABASE \"{}\"", temp_dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        drop(conn);
+
+        // Step 2: Connect to the temp DB, drop and recreate the target
+        let conn = connect(temp_dbname).await?;
+        conn.client
+            .execute(
+                "SELECT pg_terminate_backend(pid) \
+                 FROM pg_stat_activity \
+                 WHERE datname = $1 AND pid <> pg_backend_pid()",
+                &[&dbname],
+            )
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        conn.client
+            .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        conn.client
+            .execute(&format!("CREATE DATABASE \"{}\"", dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        drop(conn);
+
+        // Step 3: Connect back to the target and clean up the temp DB
+        let conn = connect(&dbname).await?;
+        conn.client
+            .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", temp_dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug)]

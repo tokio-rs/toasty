@@ -33,6 +33,9 @@ pub trait Driver: Debug + Send + Sync + 'static {
 
     /// Generates a migration from a [`SchemaDiff`].
     fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration;
+
+    /// Drops the entire database and recreates an empty one without applying migrations.
+    async fn reset_db(&self) -> crate::Result<()>;
 }
 
 #[async_trait]
