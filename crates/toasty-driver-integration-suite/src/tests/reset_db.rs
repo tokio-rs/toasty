@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test]
+#[driver_test(serial)]
 pub async fn reset_db_and_recreate(t: &mut Test) {
     #[derive(Debug, toasty::Model)]
     struct User {

@@ -138,7 +138,6 @@ impl Driver for PostgreSQL {
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
         drop(conn);
-        panic!("temp db created :>");
 
         // Step 2: Connect to the temp DB, drop and recreate the target
         let conn = connect(temp_dbname).await?;
