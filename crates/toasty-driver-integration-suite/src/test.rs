@@ -52,7 +52,7 @@ impl Test {
 
         // Build the database with the logging driver
         let db = builder.build(logging_driver).await?;
-        db.reset_db().await?;
+        db.legacy_reset_db().await?;
 
         for table in &db.schema().db.tables {
             self.tables.push(table.name.clone());

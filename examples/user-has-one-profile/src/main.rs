@@ -38,7 +38,7 @@ async fn main() -> toasty::Result<()> {
         .await?;
 
     // For now, reset!s
-    db.reset_db().await?;
+    db.legacy_reset_db().await?;
 
     // Create a user without a profile
     let user = User::create().name("John Doe").exec(&db).await?;

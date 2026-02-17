@@ -111,13 +111,18 @@ impl Db {
     }
 
     /// TODO: remove
-    pub async fn reset_db(&self) -> Result<()> {
+    pub async fn legacy_reset_db(&self) -> Result<()> {
         self.engine
             .pool
             .get()
             .await?
             .legacy_reset_db(&self.engine.schema.db)
             .await
+    }
+
+    /// Drops the entire database and recreates an empty one without applying migrations.
+    pub async fn reset_db(&self) -> Result<()> {
+        self.driver().reset_db().await
     }
 
     pub fn driver(&self) -> &dyn Driver {
