@@ -318,7 +318,7 @@ impl toasty_core::driver::Connection for Connection {
         }
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
+    async fn legacy_reset_db(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.drop_table(schema, table, true).await?;
             self.create_table(schema, table).await?;

@@ -41,7 +41,7 @@ pub trait Connection: Debug + Send + 'static {
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response>;
 
     /// TODO: this will probably go away
-    async fn reset_db(&mut self, _schema: &Schema) -> crate::Result<()> {
+    async fn legacy_reset_db(&mut self, _schema: &Schema) -> crate::Result<()> {
         unimplemented!()
     }
 

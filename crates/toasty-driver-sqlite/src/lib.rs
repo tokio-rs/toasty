@@ -220,7 +220,7 @@ impl toasty_core::driver::Connection for Connection {
         Ok(Response::value_stream(stmt::ValueStream::from_vec(ret)))
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
+    async fn legacy_reset_db(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.create_table(schema, table)?;
         }

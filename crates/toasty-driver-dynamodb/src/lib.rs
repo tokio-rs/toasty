@@ -119,7 +119,7 @@ impl toasty_core::driver::Connection for Connection {
         self.exec2(schema, op).await
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
+    async fn legacy_reset_db(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.create_table(schema, table, true).await?;
         }

@@ -116,7 +116,7 @@ impl Db {
             .pool
             .get()
             .await?
-            .reset_db(&self.engine.schema.db)
+            .legacy_reset_db(&self.engine.schema.db)
             .await
     }
 
