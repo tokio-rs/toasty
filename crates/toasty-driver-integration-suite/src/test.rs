@@ -1,9 +1,14 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use toasty::Db;
 use tokio::runtime::Runtime;
 
 use crate::{ExecLog, Isolate, LoggingDriver, Setup};
+
+/// Global lock for coordinating serial vs parallel tests.
+/// Normal tests acquire a read lock (allowing parallelism).
+/// Serial tests acquire a write lock (exclusive access).
+static TEST_LOCK: RwLock<()> = RwLock::new(());
 
 /// Wraps the Tokio runtime and ensures cleanup happens.
 ///
@@ -22,6 +27,9 @@ pub struct Test {
 
     /// List of all tables created during the test. These will need to be removed later.
     tables: Vec<String>,
+
+    /// Whether this test requires exclusive (serial) execution
+    serial: bool,
 }
 
 impl Test {
@@ -37,6 +45,7 @@ impl Test {
             runtime: Some(runtime),
             exec_log: ExecLog::new(Arc::new(Mutex::new(Vec::new()))),
             tables: vec![],
+            serial: false,
         }
     }
 
@@ -52,7 +61,7 @@ impl Test {
 
         // Build the database with the logging driver
         let db = builder.build(logging_driver).await?;
-        db.reset_db().await?;
+        db.push_schema().await?;
 
         for table in &db.schema().db.tables {
             self.tables.push(table.name.clone());
@@ -76,8 +85,21 @@ impl Test {
         &mut self.exec_log
     }
 
+    /// Set whether this test requires exclusive (serial) execution
+    pub fn set_serial(&mut self, serial: bool) {
+        self.serial = serial;
+    }
+
     /// Run an async test function using the internal runtime
     pub fn run(&mut self, f: impl AsyncFn(&mut Test)) {
+        // Acquire the appropriate lock: write lock for serial tests (exclusive),
+        // read lock for normal tests (parallel).
+        let _guard: Box<dyn std::any::Any> = if self.serial {
+            Box::new(TEST_LOCK.write().unwrap_or_else(|e| e.into_inner()))
+        } else {
+            Box::new(TEST_LOCK.read().unwrap_or_else(|e| e.into_inner()))
+        };
+
         // Temporarily take the runtime to avoid borrow checker issues
         let runtime = self.runtime.take().expect("runtime already consumed");
         let f: std::pin::Pin<Box<dyn std::future::Future<Output = ()>>> = Box::pin(f(self));

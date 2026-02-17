@@ -1,5 +1,6 @@
 use crate::Result;
 
+use std::borrow::Cow;
 pub use toasty_core::driver::{operation::Operation, Capability, Connection, Response};
 use toasty_core::{
     async_trait,
@@ -86,6 +87,10 @@ impl Connect {
 
 #[async_trait]
 impl Driver for Connect {
+    fn url(&self) -> Cow<'_, str> {
+        self.driver.url()
+    }
+
     fn capability(&self) -> &'static Capability {
         self.driver.capability()
     }
@@ -96,5 +101,9 @@ impl Driver for Connect {
 
     fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
         self.driver.generate_migration(schema_diff)
+    }
+
+    async fn reset_db(&self) -> Result<()> {
+        self.driver.reset_db().await
     }
 }

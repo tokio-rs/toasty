@@ -3,6 +3,7 @@ pub(crate) use value::Value;
 
 use rusqlite::Connection as RusqliteConnection;
 use std::{
+    borrow::Cow,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -57,6 +58,13 @@ impl Sqlite {
 
 #[async_trait]
 impl Driver for Sqlite {
+    fn url(&self) -> Cow<'_, str> {
+        match self {
+            Sqlite::InMemory => Cow::Borrowed("sqlite::memory:"),
+            Sqlite::File(path) => Cow::Owned(format!("sqlite:{}", path.display())),
+        }
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::SQLITE
     }
@@ -91,6 +99,23 @@ impl Driver for Sqlite {
             .collect();
 
         Migration::new_sql_with_breakpoints(&sql_strings)
+    }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        match self {
+            Sqlite::File(path) => {
+                // Delete the file and recreate it
+                if path.exists() {
+                    std::fs::remove_file(path)
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
+            }
+            Sqlite::InMemory => {
+                // Nothing to do — each connect() creates a fresh in-memory database
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -220,7 +245,7 @@ impl toasty_core::driver::Connection for Connection {
         Ok(Response::value_stream(stmt::ValueStream::from_vec(ret)))
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.create_table(schema, table)?;
         }

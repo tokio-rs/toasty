@@ -23,7 +23,7 @@ use aws_sdk_dynamodb::{
     },
     Client,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 use url::Url;
 
 #[derive(Debug)]
@@ -39,6 +39,10 @@ impl DynamoDb {
 
 #[async_trait]
 impl Driver for DynamoDb {
+    fn url(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.url)
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::DYNAMODB
     }
@@ -49,6 +53,42 @@ impl Driver for DynamoDb {
 
     fn generate_migration(&self, _schema_diff: &SchemaDiff<'_>) -> Migration {
         unimplemented!("DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK.")
+    }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        let conn = Connection::connect(&self.url).await?;
+
+        // List and delete all tables (paginated)
+        let mut exclusive_start_table_name = None;
+        loop {
+            let mut req = conn.client.list_tables();
+            if let Some(start) = &exclusive_start_table_name {
+                req = req.exclusive_start_table_name(start);
+            }
+
+            let resp = req
+                .send()
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+
+            if let Some(table_names) = &resp.table_names {
+                for table_name in table_names {
+                    conn.client
+                        .delete_table()
+                        .table_name(table_name)
+                        .send()
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
+            }
+
+            exclusive_start_table_name = resp.last_evaluated_table_name;
+            if exclusive_start_table_name.is_none() {
+                break;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -119,11 +159,10 @@ impl toasty_core::driver::Connection for Connection {
         self.exec2(schema, op).await
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.create_table(schema, table, true).await?;
         }
-
         Ok(())
     }
 

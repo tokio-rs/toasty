@@ -5,7 +5,7 @@ mod value;
 pub(crate) use value::Value;
 
 use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
     driver::{Capability, Driver, Operation, Response},
@@ -22,6 +22,7 @@ use crate::{r#type::TypeExt, statement_cache::StatementCache};
 
 #[derive(Debug)]
 pub struct PostgreSQL {
+    url: String,
     config: Config,
 }
 
@@ -68,17 +69,19 @@ impl PostgreSQL {
             config.password(password);
         }
 
-        Ok(Self { config })
-    }
-
-    /// Create a new PostgreSQL driver with a tokio-postgres Config
-    pub fn from_config(config: Config) -> Self {
-        Self { config }
+        Ok(Self {
+            url: url_str,
+            config,
+        })
     }
 }
 
 #[async_trait]
 impl Driver for PostgreSQL {
+    fn url(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.url)
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::POSTGRESQL
     }
@@ -107,6 +110,67 @@ impl Driver for PostgreSQL {
             .collect();
 
         Migration::new_sql(sql_strings.join("\n"))
+    }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        let dbname = self
+            .config
+            .get_dbname()
+            .ok_or_else(|| {
+                toasty_core::Error::invalid_connection_url("no database name configured")
+            })?
+            .to_string();
+
+        // We cannot drop a database we are currently connected to, so we need a temp database.
+        let temp_dbname = "__toasty_reset_temp";
+
+        let connect = |dbname: &str| {
+            let mut config = self.config.clone();
+            config.dbname(dbname);
+            Connection::connect(config, tokio_postgres::NoTls)
+        };
+
+        // Step 1: Connect to the target DB and create a temp DB
+        let conn = connect(&dbname).await?;
+        conn.client
+            .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", temp_dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        conn.client
+            .execute(&format!("CREATE DATABASE \"{}\"", temp_dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        drop(conn);
+
+        // Step 2: Connect to the temp DB, drop and recreate the target
+        let conn = connect(temp_dbname).await?;
+        conn.client
+            .execute(
+                "SELECT pg_terminate_backend(pid) \
+                 FROM pg_stat_activity \
+                 WHERE datname = $1 AND pid <> pg_backend_pid()",
+                &[&dbname],
+            )
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        conn.client
+            .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        conn.client
+            .execute(&format!("CREATE DATABASE \"{}\"", dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        drop(conn);
+
+        // Step 3: Connect back to the target and clean up the temp DB
+        let conn = connect(&dbname).await?;
+        conn.client
+            .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", temp_dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        Ok(())
     }
 }
 
@@ -187,34 +251,6 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)?;
         }
 
-        Ok(())
-    }
-
-    /// Drops a table.
-    pub async fn drop_table(
-        &mut self,
-        schema: &Schema,
-        table: &Table,
-        if_exists: bool,
-    ) -> Result<()> {
-        let serializer = sql::Serializer::postgresql(schema);
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-
-        let sql = if if_exists {
-            serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
-        } else {
-            serializer.serialize(&sql::Statement::drop_table(table), &mut params)
-        };
-
-        assert!(
-            params.is_empty(),
-            "dropping a table shouldn't involve any parameters"
-        );
-
-        self.client
-            .execute(&sql, &[])
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }
@@ -309,12 +345,10 @@ impl toasty_core::driver::Connection for Connection {
         }
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
-            self.drop_table(schema, table, true).await?;
             self.create_table(schema, table).await?;
         }
-
         Ok(())
     }
 
