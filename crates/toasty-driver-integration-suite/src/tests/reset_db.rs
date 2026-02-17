@@ -22,7 +22,9 @@ pub async fn reset_db_and_recreate(t: &mut Test) {
 
     // Reset the database
     db.reset_db().await.unwrap();
-    db.push_schema().await.unwrap();
+
+    // Re-setup (tables were dropped along with the database)
+    let db = t.setup_db(models!(User)).await;
 
     // Verify the data is gone — lookups by known keys should return nothing
     assert_err!(User::get_by_id(&db, &1).await);
