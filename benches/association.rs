@@ -88,7 +88,7 @@ async fn setup_database_and_data(
 
     let logging_driver = LoggingDriver::new(setup.driver());
     let db = builder.build(logging_driver).await.unwrap();
-    db.reset_db().await.unwrap();
+    db.push_schema().await.unwrap();
 
     setup_test_data(&db, users, posts, comments).await;
 
