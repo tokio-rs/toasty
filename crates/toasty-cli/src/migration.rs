@@ -3,6 +3,7 @@ mod config;
 mod drop;
 mod generate;
 mod history_file;
+mod reset;
 mod snapshot;
 mod snapshot_file;
 
@@ -11,6 +12,7 @@ pub use config::*;
 pub use drop::*;
 pub use generate::*;
 pub use history_file::*;
+pub use reset::*;
 pub use snapshot::*;
 pub use snapshot_file::*;
 
@@ -38,6 +40,9 @@ enum MigrationSubcommand {
 
     /// Drop a migration from the history
     Drop(DropCommand),
+
+    /// Reset the database (drop all tables) and optionally re-apply migrations
+    Reset(ResetCommand),
 }
 
 impl MigrationCommand {
@@ -53,6 +58,7 @@ impl MigrationSubcommand {
             Self::Generate(cmd) => cmd.run(db, config),
             Self::Snapshot(cmd) => cmd.run(db, config),
             Self::Drop(cmd) => cmd.run(db, config),
+            Self::Reset(cmd) => cmd.run(db, config).await,
         }
     }
 }

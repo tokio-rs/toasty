@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::{borrow::Cow, sync::{Arc, Mutex}};
 use toasty::{
     driver::Driver,
     schema::db::{AppliedMigration, Migration, SchemaDiff},
@@ -35,6 +35,10 @@ impl LoggingDriver {
 
 #[async_trait]
 impl Driver for LoggingDriver {
+    fn url(&self) -> Cow<'_, str> {
+        self.inner.url()
+    }
+
     fn capability(&self) -> &'static Capability {
         self.inner.capability()
     }

@@ -5,7 +5,7 @@ mod value;
 pub(crate) use value::Value;
 
 use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
     driver::{Capability, Driver, Operation, Response},
@@ -22,6 +22,7 @@ use crate::{r#type::TypeExt, statement_cache::StatementCache};
 
 #[derive(Debug)]
 pub struct PostgreSQL {
+    url: String,
     config: Config,
 }
 
@@ -68,17 +69,19 @@ impl PostgreSQL {
             config.password(password);
         }
 
-        Ok(Self { config })
-    }
-
-    /// Create a new PostgreSQL driver with a tokio-postgres Config
-    pub fn from_config(config: Config) -> Self {
-        Self { config }
+        Ok(Self {
+            url: url_str,
+            config,
+        })
     }
 }
 
 #[async_trait]
 impl Driver for PostgreSQL {
+    fn url(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.url)
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::POSTGRESQL
     }

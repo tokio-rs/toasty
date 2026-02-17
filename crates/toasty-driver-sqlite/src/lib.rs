@@ -3,6 +3,7 @@ pub(crate) use value::Value;
 
 use rusqlite::Connection as RusqliteConnection;
 use std::{
+    borrow::Cow,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -57,6 +58,13 @@ impl Sqlite {
 
 #[async_trait]
 impl Driver for Sqlite {
+    fn url(&self) -> Cow<'_, str> {
+        match self {
+            Sqlite::InMemory => Cow::Borrowed("sqlite::memory:"),
+            Sqlite::File(path) => Cow::Owned(format!("sqlite:{}", path.display())),
+        }
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::SQLITE
     }

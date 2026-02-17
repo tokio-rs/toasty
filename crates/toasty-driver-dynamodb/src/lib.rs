@@ -23,7 +23,7 @@ use aws_sdk_dynamodb::{
     },
     Client,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 use url::Url;
 
 #[derive(Debug)]
@@ -39,6 +39,10 @@ impl DynamoDb {
 
 #[async_trait]
 impl Driver for DynamoDb {
+    fn url(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.url)
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::DYNAMODB
     }

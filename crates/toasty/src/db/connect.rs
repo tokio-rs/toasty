@@ -1,6 +1,7 @@
 use crate::Result;
 
 pub use toasty_core::driver::{operation::Operation, Capability, Connection, Response};
+use std::borrow::Cow;
 use toasty_core::{
     async_trait,
     driver::Driver,
@@ -86,6 +87,10 @@ impl Connect {
 
 #[async_trait]
 impl Driver for Connect {
+    fn url(&self) -> Cow<'_, str> {
+        self.driver.url()
+    }
+
     fn capability(&self) -> &'static Capability {
         self.driver.capability()
     }

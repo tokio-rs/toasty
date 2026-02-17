@@ -12,10 +12,13 @@ use crate::{
     schema::db::{AppliedMigration, Migration, Schema, SchemaDiff},
 };
 
-use std::{fmt::Debug, sync::Arc};
+use std::{borrow::Cow, fmt::Debug, sync::Arc};
 
 #[async_trait]
 pub trait Driver: Debug + Send + Sync + 'static {
+    /// Returns the URL this driver is connecting to.
+    fn url(&self) -> Cow<'_, str>;
+
     /// Describes the driver's capability, which informs the query planner.
     fn capability(&self) -> &'static Capability;
 

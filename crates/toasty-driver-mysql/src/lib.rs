@@ -7,7 +7,7 @@ use mysql_async::{
     prelude::{Queryable, ToValue},
     Conn, Pool,
 };
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
     driver::{operation::Transaction, Capability, Driver, Operation, Response},
@@ -20,6 +20,7 @@ use url::Url;
 
 #[derive(Debug)]
 pub struct MySQL {
+    url: String,
     pool: Pool,
 }
 
@@ -54,18 +55,16 @@ impl MySQL {
         let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
 
         let pool = Pool::new(opts);
-        Ok(Self { pool })
-    }
-}
-
-impl From<Pool> for MySQL {
-    fn from(pool: Pool) -> Self {
-        Self { pool }
+        Ok(Self { url: url_str, pool })
     }
 }
 
 #[async_trait]
 impl Driver for MySQL {
+    fn url(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.url)
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::MYSQL
     }
