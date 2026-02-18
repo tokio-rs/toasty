@@ -18,7 +18,7 @@ These expression types exist in `toasty-core` (`crates/toasty-core/src/stmt/expr
 
 | Expression | Core AST | SQL Serialized | User API | Notes |
 |---|---|---|---|---|
-| NOT | `ExprNot` | Yes | No `.not()` on `Expr<bool>` | Core + SQL work, but no ergonomic user API |
+| NOT | `ExprNot` | Yes | `.not()` on `Expr<bool>` | Fully implemented |
 | IS NULL | `ExprIsNull` | Yes | No `.is_null()` on `Path<T>` | Core + SQL work, no user API |
 | LIKE | `ExprPattern::Like` | Yes | None | SQL serialization exists |
 | Begins With | `ExprPattern::BeginsWith` | Yes | None | Converted to `LIKE 'prefix%'` in SQL |
@@ -32,7 +32,7 @@ The following table compares Toasty's constraint support against 8 mature ORMs, 
 | Feature | Toasty | Prisma | Drizzle | Django | SQLAlchemy | Diesel | SeaORM | Hibernate |
 |---|---|---|---|---|---|---|---|---|---|
 | **Logical Operators** | | | | | | | | |
-| NOT | AST only | Yes | Yes | Yes | Yes | Per-op | Yes | Yes |
+| NOT | Yes | Yes | Yes | Yes | Yes | Per-op | Yes | Yes |
 | **Null Handling** | | | | | | | | |
 | IS NULL | AST only | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | IS NOT NULL | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
@@ -68,12 +68,6 @@ The following table compares Toasty's constraint support against 8 mature ORMs, 
 ### Features with Existing Internal Support
 
 These features have core AST and SQL serialization but need user-facing APIs:
-
-**NOT Negation**
-- Core AST: `ExprNot` exists with SQL serialization
-- Needed: `.not()` method on `Expr<bool>`
-- File: `crates/toasty/src/stmt/expr.rs`
-- Use case: Excluding results (e.g., "status is NOT deleted", negating complex conditions)
 
 **IS NULL / IS NOT NULL**
 - Core AST: `ExprIsNull` exists with SQL serialization
@@ -221,7 +215,6 @@ Based on the analysis above, the following groupings maximize user value:
 
 **Group 1: Expose Existing Internals**
 Items with core AST and SQL serialization that only need user-facing methods:
-- `.not()` on `Expr<bool>`
 - `.is_null()` / `.is_not_null()` on `Path<Option<T>>`
 - `.not_in_set()` on `Path<T>` (negate existing `InList`)
 

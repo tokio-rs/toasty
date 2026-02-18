@@ -1,5 +1,6 @@
 use super::{Insert, IntoExpr};
 use std::marker::PhantomData;
+use std::ops::Not;
 use toasty_core::stmt;
 
 #[derive(Debug)]
@@ -67,6 +68,11 @@ impl Expr<bool> {
         Self::from_untyped(stmt::Expr::or(self.untyped, rhs.into_expr().untyped))
     }
 
+    #[allow(clippy::should_implement_trait)]
+    pub fn not(self) -> Self {
+        !self
+    }
+
     pub fn in_list<L, R, T>(lhs: L, rhs: R) -> Self
     where
         L: IntoExpr<T>,
@@ -76,6 +82,14 @@ impl Expr<bool> {
             lhs.into_expr().untyped,
             rhs.into_expr().untyped,
         ))
+    }
+}
+
+impl Not for Expr<bool> {
+    type Output = Self;
+
+    fn not(self) -> Self {
+        Self::from_untyped(stmt::Expr::not(self.untyped))
     }
 }
 
