@@ -647,9 +647,12 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
         .unwrap();
 
     // Verify initial state
-    assert_eq!(user.address.street, "123 Main St");
-    assert_eq!(user.address.city, "Boston");
-    assert_eq!(user.address.zip, "02101");
+    assert_struct!(user.address, _ {
+        street: "123 Main St",
+        city: "Boston",
+        zip: "02101",
+        ..
+    });
 
     // Partial update: only change city, leave street and zip unchanged
     user.update()
@@ -661,15 +664,21 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
         .unwrap();
 
     // Verify only city was updated
-    assert_eq!(user.address.street, "123 Main St");
-    assert_eq!(user.address.city, "Seattle");
-    assert_eq!(user.address.zip, "02101");
+    assert_struct!(user.address, _ {
+        street: "123 Main St",
+        city: "Seattle",
+        zip: "02101",
+        ..
+    });
 
     // Verify the update persisted to database
     let found = User::get_by_id(&db, &user.id).await.unwrap();
-    assert_eq!(found.address.street, "123 Main St");
-    assert_eq!(found.address.city, "Seattle");
-    assert_eq!(found.address.zip, "02101");
+    assert_struct!(found.address, _ {
+        street: "123 Main St",
+        city: "Seattle",
+        zip: "02101",
+        ..
+    });
 
     // Multiple field update in one call
     user.update()
@@ -682,15 +691,21 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
         .unwrap();
 
     // Verify both fields were updated, street unchanged
-    assert_eq!(user.address.street, "123 Main St");
-    assert_eq!(user.address.city, "Portland");
-    assert_eq!(user.address.zip, "97201");
+    assert_struct!(user.address, _ {
+        street: "123 Main St",
+        city: "Portland",
+        zip: "97201",
+        ..
+    });
 
     // Verify the update persisted
     let found = User::get_by_id(&db, &user.id).await.unwrap();
-    assert_eq!(found.address.street, "123 Main St");
-    assert_eq!(found.address.city, "Portland");
-    assert_eq!(found.address.zip, "97201");
+    assert_struct!(found.address, _ {
+        street: "123 Main St",
+        city: "Portland",
+        zip: "97201",
+        ..
+    });
 
     // Multiple calls to with_address should accumulate
     user.update()
@@ -705,9 +720,12 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
         .unwrap();
 
     // Verify all updates applied
-    assert_eq!(user.address.street, "456 Oak Ave");
-    assert_eq!(user.address.city, "Portland");
-    assert_eq!(user.address.zip, "97202");
+    assert_struct!(user.address, _ {
+        street: "456 Oak Ave",
+        city: "Portland",
+        zip: "97202",
+        ..
+    });
 }
 
 /// Tests deeply nested embedded types (3+ levels) to verify schema building
@@ -1020,4 +1038,124 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
         user_mapping.model_to_table[4],
         == stmt::Expr::project(stmt::Expr::ref_self_field(user.fields[1].id), [1, 1, 1])
     );
+}
+
+/// Tests CRUD operations with 2-level nested embedded structs.
+/// Validates that creating, reading, updating (instance and query-based),
+/// and deleting records with nested embedded structs works end-to-end.
+#[driver_test(id(ID))]
+pub async fn crud_nested_embedded(t: &mut Test) {
+    #[derive(Debug, toasty::Embed)]
+    struct Address {
+        street: String,
+        city: String,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Office {
+        name: String,
+        address: Address,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Company {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        headquarters: Office,
+    }
+
+    let db = t.setup_db(models!(Company, Office, Address)).await;
+
+    // Create: nested embedded structs are flattened into a single row
+    let mut company = Company::create()
+        .name("Acme")
+        .headquarters(Office {
+            name: "Main Office".to_string(),
+            address: Address {
+                street: "123 Main St".to_string(),
+                city: "Springfield".to_string(),
+            },
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    assert_struct!(company.headquarters, _ {
+        name: "Main Office",
+        address: _ {
+            street: "123 Main St",
+            city: "Springfield",
+            ..
+        },
+        ..
+    });
+
+    // Read: nested embedded struct is reconstructed from flattened columns
+    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    assert_struct!(found.headquarters, _ {
+        name: "Main Office",
+        address: _ {
+            street: "123 Main St",
+            city: "Springfield",
+            ..
+        },
+        ..
+    });
+
+    // Update (instance): replace the entire nested embedded struct
+    company
+        .update()
+        .headquarters(Office {
+            name: "West Coast HQ".to_string(),
+            address: Address {
+                street: "456 Oak Ave".to_string(),
+                city: "Seattle".to_string(),
+            },
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    assert_struct!(found.headquarters, _ {
+        name: "West Coast HQ",
+        address: _ {
+            street: "456 Oak Ave",
+            city: "Seattle",
+            ..
+        },
+        ..
+    });
+
+    // Update (query-based): replace nested struct via filter
+    Company::filter_by_id(company.id)
+        .update()
+        .headquarters(Office {
+            name: "East Coast HQ".to_string(),
+            address: Address {
+                street: "789 Pine Rd".to_string(),
+                city: "Boston".to_string(),
+            },
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    assert_struct!(found.headquarters, _ {
+        name: "East Coast HQ",
+        address: _ {
+            street: "789 Pine Rd",
+            city: "Boston",
+            ..
+        },
+        ..
+    });
+
+    // Delete: cleanup
+    let id = company.id;
+    company.delete(&db).await.unwrap();
+    assert_err!(Company::get_by_id(&db, &id).await);
 }
