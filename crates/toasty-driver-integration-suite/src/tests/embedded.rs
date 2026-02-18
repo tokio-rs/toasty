@@ -844,68 +844,158 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
     //   }
     // }
 
-    assert_eq!(user_mapping.fields.len(), 2, "User should have 2 fields: id and address");
+    assert_eq!(
+        user_mapping.fields.len(),
+        2,
+        "User should have 2 fields: id and address"
+    );
 
     // Check address field (index 1)
-    let address_field = user_mapping.fields[1].as_embedded()
+    let address_field = user_mapping.fields[1]
+        .as_embedded()
         .expect("User.address should be Field::Embedded");
 
-    assert_eq!(address_field.fields.len(), 2, "Address should have 2 fields: street and city");
+    assert_eq!(
+        address_field.fields.len(),
+        2,
+        "Address should have 2 fields: street and city"
+    );
 
     // Check address.street (index 0)
-    let street_field = address_field.fields[0].as_primitive()
+    let street_field = address_field.fields[0]
+        .as_primitive()
         .expect("Address.street should be Field::Primitive");
-    assert_eq!(street_field.column, user_table.columns[1].id, "street should map to address_street column");
+    assert_eq!(
+        street_field.column, user_table.columns[1].id,
+        "street should map to address_street column"
+    );
 
     // Check address.city (index 1)
-    let city_field = address_field.fields[1].as_embedded()
+    let city_field = address_field.fields[1]
+        .as_embedded()
         .expect("Address.city should be Field::Embedded");
 
-    assert_eq!(city_field.fields.len(), 2, "City should have 2 fields: name and location");
+    assert_eq!(
+        city_field.fields.len(),
+        2,
+        "City should have 2 fields: name and location"
+    );
 
     // Check address.city.name (index 0)
-    let city_name_field = city_field.fields[0].as_primitive()
+    let city_name_field = city_field.fields[0]
+        .as_primitive()
         .expect("City.name should be Field::Primitive");
-    assert_eq!(city_name_field.column, user_table.columns[2].id, "city.name should map to address_city_name column");
+    assert_eq!(
+        city_name_field.column, user_table.columns[2].id,
+        "city.name should map to address_city_name column"
+    );
 
     // Check address.city.location (index 1)
-    let location_field = city_field.fields[1].as_embedded()
+    let location_field = city_field.fields[1]
+        .as_embedded()
         .expect("City.location should be Field::Embedded");
 
-    assert_eq!(location_field.fields.len(), 2, "Location should have 2 fields: lat and lon");
+    assert_eq!(
+        location_field.fields.len(),
+        2,
+        "Location should have 2 fields: lat and lon"
+    );
 
     // Check address.city.location.lat (index 0)
-    let lat_field = location_field.fields[0].as_primitive()
+    let lat_field = location_field.fields[0]
+        .as_primitive()
         .expect("Location.lat should be Field::Primitive");
-    assert_eq!(lat_field.column, user_table.columns[3].id, "location.lat should map to address_city_location_lat column");
+    assert_eq!(
+        lat_field.column, user_table.columns[3].id,
+        "location.lat should map to address_city_location_lat column"
+    );
 
     // Check address.city.location.lon (index 1)
-    let lon_field = location_field.fields[1].as_primitive()
+    let lon_field = location_field.fields[1]
+        .as_primitive()
         .expect("Location.lon should be Field::Primitive");
-    assert_eq!(lon_field.column, user_table.columns[4].id, "location.lon should map to address_city_location_lon column");
+    assert_eq!(
+        lon_field.column, user_table.columns[4].id,
+        "location.lon should map to address_city_location_lon column"
+    );
 
     // Check that the columns map is correctly populated at each level
     // Address level should contain all 4 columns (street, city_name, city_location_lat, city_location_lon)
-    assert_eq!(address_field.columns.len(), 4, "Address.columns should have 4 entries");
-    assert!(address_field.columns.contains_key(&user_table.columns[1].id), "Address.columns should contain address_street");
-    assert!(address_field.columns.contains_key(&user_table.columns[2].id), "Address.columns should contain address_city_name");
-    assert!(address_field.columns.contains_key(&user_table.columns[3].id), "Address.columns should contain address_city_location_lat");
-    assert!(address_field.columns.contains_key(&user_table.columns[4].id), "Address.columns should contain address_city_location_lon");
+    assert_eq!(
+        address_field.columns.len(),
+        4,
+        "Address.columns should have 4 entries"
+    );
+    assert!(
+        address_field
+            .columns
+            .contains_key(&user_table.columns[1].id),
+        "Address.columns should contain address_street"
+    );
+    assert!(
+        address_field
+            .columns
+            .contains_key(&user_table.columns[2].id),
+        "Address.columns should contain address_city_name"
+    );
+    assert!(
+        address_field
+            .columns
+            .contains_key(&user_table.columns[3].id),
+        "Address.columns should contain address_city_location_lat"
+    );
+    assert!(
+        address_field
+            .columns
+            .contains_key(&user_table.columns[4].id),
+        "Address.columns should contain address_city_location_lon"
+    );
 
     // City level should contain 3 columns (name, location_lat, location_lon)
-    assert_eq!(city_field.columns.len(), 3, "City.columns should have 3 entries");
-    assert!(city_field.columns.contains_key(&user_table.columns[2].id), "City.columns should contain address_city_name");
-    assert!(city_field.columns.contains_key(&user_table.columns[3].id), "City.columns should contain address_city_location_lat");
-    assert!(city_field.columns.contains_key(&user_table.columns[4].id), "City.columns should contain address_city_location_lon");
+    assert_eq!(
+        city_field.columns.len(),
+        3,
+        "City.columns should have 3 entries"
+    );
+    assert!(
+        city_field.columns.contains_key(&user_table.columns[2].id),
+        "City.columns should contain address_city_name"
+    );
+    assert!(
+        city_field.columns.contains_key(&user_table.columns[3].id),
+        "City.columns should contain address_city_location_lat"
+    );
+    assert!(
+        city_field.columns.contains_key(&user_table.columns[4].id),
+        "City.columns should contain address_city_location_lon"
+    );
 
     // Location level should contain 2 columns (lat, lon)
-    assert_eq!(location_field.columns.len(), 2, "Location.columns should have 2 entries");
-    assert!(location_field.columns.contains_key(&user_table.columns[3].id), "Location.columns should contain address_city_location_lat");
-    assert!(location_field.columns.contains_key(&user_table.columns[4].id), "Location.columns should contain address_city_location_lon");
+    assert_eq!(
+        location_field.columns.len(),
+        2,
+        "Location.columns should have 2 entries"
+    );
+    assert!(
+        location_field
+            .columns
+            .contains_key(&user_table.columns[3].id),
+        "Location.columns should contain address_city_location_lat"
+    );
+    assert!(
+        location_field
+            .columns
+            .contains_key(&user_table.columns[4].id),
+        "Location.columns should contain address_city_location_lon"
+    );
 
     // Verify model_to_table has correct nested projection expressions
     // Should have 5 expressions: id, address.street, address.city.name, address.city.location.lat, address.city.location.lon
-    assert_eq!(user_mapping.model_to_table.len(), 5, "model_to_table should have 5 expressions");
+    assert_eq!(
+        user_mapping.model_to_table.len(),
+        5,
+        "model_to_table should have 5 expressions"
+    );
 
     // Expression for address.street should be: project(ref(address_field), [0])
     assert_struct!(

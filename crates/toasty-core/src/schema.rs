@@ -15,7 +15,7 @@ mod verify;
 
 use crate::Result;
 use app::ModelId;
-use db::{ColumnId, Table, TableId};
+use db::{Table, TableId};
 use std::sync::Arc;
 
 #[derive(Debug)]

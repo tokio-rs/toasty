@@ -24,8 +24,6 @@ impl Expand<'_> {
         }
     }
 
-
-
     /// Expand all update methods for all fields.
     /// Generates both the field setter methods and the .with_field() method for each field.
     /// For embedded builders: uses self.projection.clone().push(index) and self.stmt.assignments

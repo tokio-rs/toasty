@@ -1209,46 +1209,23 @@ impl stmt::Input for AssignmentInput<'_> {
         expr_reference: &stmt::ExprReference,
         expr_projection: &stmt::Projection,
     ) -> Option<stmt::Expr> {
-        // Check if this reference matches our assignment
-        if let stmt::ExprReference::Field { nesting: 0, index } = expr_reference {
-            // Build the full projection being referenced in the expression
-            // e.g., field_ref(2) with projection [1] becomes [2, 1]
-            let assignment_steps = self.assignment_projection.as_slice();
+        let stmt::ExprReference::Field { nesting: 0, index } = expr_reference else {
+            return None;
+        };
 
-            // Check if the field index matches the first step of our assignment
-            if *index == assignment_steps[0] {
-                // Check if the expression projection matches the remaining steps
-                let expr_steps = expr_projection.as_slice();
-                let remaining_steps = &assignment_steps[1..];
+        let assignment_steps = self.assignment_projection.as_slice();
 
-                if expr_steps == remaining_steps {
-                    // Direct match - return the value as-is
-                    return Some(self.value.clone());
-                } else if expr_projection.is_identity() && assignment_steps.len() == 1 {
-                    // Also match if expression has no projection and we're assigning to root field
-                    return Some(self.value.clone());
-                } else {
-                    // Handle projection into the value (for full struct assignments)
-                    return match self.value {
-                        stmt::Expr::Value(value) => {
-                            // Use Value's entry method which handles projections
-                            Some(value.entry(expr_projection).to_expr())
-                        }
-                        stmt::Expr::Record(record) => {
-                            // For Expr::Record, manually project
-                            let indices = expr_projection.as_slice();
-                            if indices.len() == 1 {
-                                record.fields.get(indices[0]).cloned()
-                            } else {
-                                None
-                            }
-                        }
-                        _ => None,
-                    };
-                }
-            }
+        if *index != assignment_steps[0] {
+            return None;
         }
-        None
+
+        let remaining_steps = &assignment_steps[1..];
+
+        if expr_projection.as_slice() == remaining_steps {
+            Some(self.value.clone())
+        } else {
+            self.value.entry(expr_projection).map(|e| e.to_expr())
+        }
     }
 }
 
