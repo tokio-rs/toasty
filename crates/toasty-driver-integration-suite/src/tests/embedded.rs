@@ -718,8 +718,17 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
         .await
         .unwrap();
 
-    // Verify all updates applied
+    // Verify all updates applied in memory
     assert_struct!(user.address, _ {
+        street: "456 Oak Ave",
+        city: "Portland",
+        zip: "97202",
+        ..
+    });
+
+    // Verify both accumulated assignments persisted to the database
+    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    assert_struct!(found.address, _ {
         street: "456 Oak Ave",
         city: "Portland",
         zip: "97202",
