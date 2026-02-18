@@ -1158,3 +1158,115 @@ pub async fn crud_nested_embedded(t: &mut Test) {
     company.delete(&db).await.unwrap();
     assert_err!(Company::get_by_id(&db, &id).await);
 }
+
+/// Tests partial updates of deeply nested embedded fields using chained closures.
+/// Validates that `with_outer(|o| o.with_inner(|i| i.field(v)))` updates only
+/// the targeted leaf field, leaving all other fields unchanged in the database.
+#[driver_test(id(ID))]
+pub async fn partial_update_nested_embedded(t: &mut Test) {
+    #[derive(Debug, toasty::Embed)]
+    struct Address {
+        street: String,
+        city: String,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Office {
+        name: String,
+        address: Address,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Company {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        headquarters: Office,
+    }
+
+    let db = t.setup_db(models!(Company, Office, Address)).await;
+
+    let mut company = Company::create()
+        .name("Acme")
+        .headquarters(Office {
+            name: "Main Office".to_string(),
+            address: Address {
+                street: "123 Main St".to_string(),
+                city: "Boston".to_string(),
+            },
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    // Nested partial update: change only the city inside headquarters.address.
+    // street and headquarters.name must remain unchanged.
+    company
+        .update()
+        .with_headquarters(|h| {
+            h.with_address(|a| {
+                a.city("Seattle");
+            });
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    assert_struct!(found.headquarters, _ {
+        name: "Main Office",
+        address: _ {
+            street: "123 Main St",
+            city: "Seattle",
+            ..
+        },
+        ..
+    });
+
+    // Partial update at the outer level: change only headquarters.name.
+    // address fields must remain unchanged.
+    company
+        .update()
+        .with_headquarters(|h| {
+            h.name("West Coast HQ");
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    assert_struct!(found.headquarters, _ {
+        name: "West Coast HQ",
+        address: _ {
+            street: "123 Main St",
+            city: "Seattle",
+            ..
+        },
+        ..
+    });
+
+    // Combined update: change headquarters.name and headquarters.address.city
+    // in a single with_headquarters call. street must remain unchanged.
+    company
+        .update()
+        .with_headquarters(|h| {
+            h.name("East Coast HQ").with_address(|a| {
+                a.city("Boston");
+            });
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    assert_struct!(found.headquarters, _ {
+        name: "East Coast HQ",
+        address: _ {
+            street: "123 Main St",
+            city: "Boston",
+            ..
+        },
+        ..
+    });
+}
