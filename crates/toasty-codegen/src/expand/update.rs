@@ -212,7 +212,8 @@ impl Expand<'_> {
                     quote!(#i => <#ty as #toasty::stmt::Primitive>::reload(&mut self.#field_ident, value)?,)
                 }
                 _ => {
-                    // TODO: Actually implement this
+                    // Relation fields (BelongsTo, HasMany, HasOne) are unloaded on update.
+                    // Embedded fields are handled above via the Primitive arm.
                     quote!(#i => self.#field_ident.unload(),)
                 }
             }
