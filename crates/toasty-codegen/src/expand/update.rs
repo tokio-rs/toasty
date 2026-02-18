@@ -128,11 +128,11 @@ impl Expand<'_> {
 
                     #vis fn #with_field_ident(
                         mut self,
-                        f: impl FnOnce(&mut <#ty as #toasty::stmt::Primitive>::UpdateBuilder<'_>)
+                        f: impl FnOnce(<#ty as #toasty::stmt::Primitive>::UpdateBuilder<'_>)
                     ) -> Self {
                         let projection = #projection;
-                        let mut builder = <#ty as #toasty::stmt::Primitive>::make_update_builder(#stmt_for_builder, projection);
-                        f(&mut builder);
+                        let builder = <#ty as #toasty::stmt::Primitive>::make_update_builder(#stmt_for_builder, projection);
+                        f(builder);
                         self
                     }
                 }

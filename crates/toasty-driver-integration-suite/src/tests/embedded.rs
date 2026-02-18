@@ -657,7 +657,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
     // Partial update: only change city, leave street and zip unchanged
     user.update()
         .with_address(|a| {
-            a.set_city("Seattle");
+            a.city("Seattle");
         })
         .exec(&db)
         .await
@@ -683,8 +683,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
     // Multiple field update in one call
     user.update()
         .with_address(|a| {
-            a.set_city("Portland");
-            a.set_zip("97201");
+            a.city("Portland").zip("97201");
         })
         .exec(&db)
         .await
@@ -710,10 +709,10 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
     // Multiple calls to with_address should accumulate
     user.update()
         .with_address(|a| {
-            a.set_street("456 Oak Ave");
+            a.street("456 Oak Ave");
         })
         .with_address(|a| {
-            a.set_zip("97202");
+            a.zip("97202");
         })
         .exec(&db)
         .await
