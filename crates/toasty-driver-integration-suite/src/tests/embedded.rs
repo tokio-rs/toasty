@@ -159,7 +159,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
 /// Tests basic CRUD operations with embedded fields across all ID types.
 /// Validates create, read, update (both instance and query-based), and delete.
 #[driver_test(id(ID))]
-pub async fn create_and_query_embedded(t: &mut Test) {
+pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Address {
         street: String,
@@ -184,11 +184,10 @@ pub async fn create_and_query_embedded(t: &mut Test) {
             city: "Springfield".to_string(),
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Read: embedded struct is reconstructed from flattened columns
-    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    let found = User::get_by_id(&db, &user.id).await?;
     assert_eq!(found.address.street, "123 Main St");
     assert_eq!(found.address.city, "Springfield");
 
@@ -199,10 +198,9 @@ pub async fn create_and_query_embedded(t: &mut Test) {
             city: "Shelbyville".to_string(),
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    let found = User::get_by_id(&db, &user.id).await?;
     assert_eq!(found.address.street, "456 Oak Ave");
 
     // Update (query-based): tests query builder with embedded fields
@@ -213,16 +211,16 @@ pub async fn create_and_query_embedded(t: &mut Test) {
             city: "Capital City".to_string(),
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    let found = User::get_by_id(&db, &user.id).await?;
     assert_eq!(found.address.street, "789 Pine Rd");
 
     // Delete: cleanup
     let id = user.id;
-    user.delete(&db).await.unwrap();
+    user.delete(&db).await?;
     assert_err!(User::get_by_id(&db, &id).await);
+    Ok(())
 }
 
 /// Tests code generation for embedded struct field accessors:
@@ -272,7 +270,7 @@ pub async fn embedded_struct_fields_codegen(test: &mut Test) {
 /// - Multiple partition keys work correctly
 /// - Results are properly filtered and returned
 #[driver_test]
-pub async fn query_embedded_struct_fields(t: &mut Test) {
+pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Address {
         street: String,
@@ -314,8 +312,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) {
                 zip: zip.to_string(),
             })
             .exec(&db)
-            .await
-            .unwrap();
+            .await?;
     }
 
     // Verification: all 7 users were created (DynamoDB requires partition key in queries)
@@ -323,8 +320,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) {
     for country in ["USA", "CAN"] {
         let mut users = User::filter(User::fields().country().eq(country))
             .collect::<Vec<_>>(&db)
-            .await
-            .unwrap();
+            .await?;
         all_users.append(&mut users);
     }
     assert_eq!(all_users.len(), 7);
@@ -338,8 +334,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) {
             .and(User::fields().address().city().eq("Seattle")),
     )
     .collect::<Vec<_>>(&db)
-    .await
-    .unwrap();
+    .await?;
 
     assert_eq!(seattle_users.len(), 2);
     let mut names: Vec<_> = seattle_users.iter().map(|u| u.name.as_str()).collect();
@@ -354,8 +349,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) {
             .and(User::fields().address().city().eq("Vancouver")),
     )
     .collect::<Vec<_>>(&db)
-    .await
-    .unwrap();
+    .await?;
 
     assert_eq!(vancouver_users.len(), 2);
 
@@ -367,21 +361,21 @@ pub async fn query_embedded_struct_fields(t: &mut Test) {
             .and(User::fields().address().zip().eq("98101")),
     )
     .collect::<Vec<_>>(&db)
-    .await
-    .unwrap();
+    .await?;
 
     assert_eq!(user_98101.len(), 1);
     assert_eq!(user_98101[0].name, "Alice");
+    Ok(())
 }
 
 /// Tests comparison operators (gt, lt, ge, le, ne) on embedded struct fields.
 /// SQL-only: DynamoDB doesn't support range queries on non-key attributes.
 /// Validates that all comparison operators work correctly with embedded fields.
 #[driver_test]
-pub async fn query_embedded_fields_comparison_ops(t: &mut Test) {
+pub async fn query_embedded_fields_comparison_ops(t: &mut Test) -> Result<()> {
     // Skip on non-SQL databases (DynamoDB doesn't support range queries on non-key attributes)
     if !t.capability().sql {
-        return;
+        return Ok(());
     }
     #[derive(Debug, toasty::Embed)]
     struct Stats {
@@ -412,47 +406,43 @@ pub async fn query_embedded_fields_comparison_ops(t: &mut Test) {
             .name(name)
             .stats(Stats { score, rank })
             .exec(&db)
-            .await
-            .unwrap();
+            .await?;
     }
 
     // Test gt: score > 80 should return Alice (100) and Bob (85)
     let high_scorers = Player::filter(Player::fields().stats().score().gt(80))
         .collect::<Vec<_>>(&db)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(high_scorers.len(), 2);
 
     // Test le: score <= 55 should return Diana (55) and Eve (40)
     let low_scorers = Player::filter(Player::fields().stats().score().le(55))
         .collect::<Vec<_>>(&db)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(low_scorers.len(), 2);
 
     // Test ne: score != 70 excludes only Charlie
     let not_charlie = Player::filter(Player::fields().stats().score().ne(70))
         .collect::<Vec<_>>(&db)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(not_charlie.len(), 4);
 
     // Test ge: score >= 70 should return Alice, Bob, Charlie
     let mid_to_high = Player::filter(Player::fields().stats().score().ge(70))
         .collect::<Vec<_>>(&db)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(mid_to_high.len(), 3);
+    Ok(())
 }
 
 /// Tests querying by multiple embedded fields in a single query (AND conditions).
 /// SQL-only: DynamoDB requires partition key in queries.
 /// Validates that complex filters with multiple embedded fields work correctly.
 #[driver_test]
-pub async fn query_embedded_multiple_fields(t: &mut Test) {
+pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
     // Skip on non-SQL databases (DynamoDB requires partition key in queries)
     if !t.capability().sql {
-        return;
+        return Ok(());
     }
     #[derive(Debug, toasty::Embed)]
     struct Coordinates {
@@ -484,8 +474,7 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) {
             .name(name)
             .coords(Coordinates { x, y, z })
             .exec(&db)
-            .await
-            .unwrap();
+            .await?;
     }
 
     // Test 2-field AND: x=10 AND y=20 matches Point A (10,20,0) and Point C (10,20,5)
@@ -497,8 +486,7 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) {
             .and(Location::fields().coords().y().eq(20)),
     )
     .collect::<Vec<_>>(&db)
-    .await
-    .unwrap();
+    .await?;
 
     assert_eq!(matching.len(), 2);
     let mut names: Vec<_> = matching.iter().map(|l| l.name.as_str()).collect();
@@ -516,21 +504,21 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) {
             .and(Location::fields().coords().z().eq(0)),
     )
     .collect::<Vec<_>>(&db)
-    .await
-    .unwrap();
+    .await?;
 
     assert_eq!(exact_match.len(), 1);
     assert_eq!(exact_match[0].name, "Point A");
+    Ok(())
 }
 
 /// Tests UPDATE operations filtered by embedded struct fields.
 /// SQL-only: DynamoDB requires partition key in queries/updates.
 /// Validates that updates can target rows based on embedded field values.
 #[driver_test]
-pub async fn update_with_embedded_field_filter(t: &mut Test) {
+pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
     // Skip on non-SQL databases (DynamoDB requires partition key in queries/updates)
     if !t.capability().sql {
-        return;
+        return Ok(());
     }
     #[derive(Debug, toasty::Embed)]
     struct Metadata {
@@ -563,8 +551,7 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) {
                 status: status.to_string(),
             })
             .exec(&db)
-            .await
-            .unwrap();
+            .await?;
     }
 
     // Update documents where status="draft" AND version=1 (should only match Doc A)
@@ -582,27 +569,24 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) {
         status: "draft".to_string(),
     })
     .exec(&db)
-    .await
-    .unwrap();
+    .await?;
 
     // Doc A should be updated (was v1 draft, now v2 draft)
     let doc_a = Document::filter(Document::fields().title().eq("Doc A"))
         .collect::<Vec<_>>(&db)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(doc_a[0].meta.version, 2);
 
     // Doc B should be unchanged (was v2 draft, still v2 draft)
     let doc_b = Document::filter(Document::fields().title().eq("Doc B"))
         .collect::<Vec<_>>(&db)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(doc_b[0].meta.version, 2);
 
     // Doc C should be unchanged (was v1 published, still v1 published - wrong status)
     let doc_c = Document::filter(Document::fields().title().eq("Doc C"))
         .collect::<Vec<_>>(&db)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(doc_c[0].meta.version, 1);
+    Ok(())
 }

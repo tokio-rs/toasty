@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 #[driver_test]
-pub async fn batch_get_by_key(test: &mut Test) {
+pub async fn batch_get_by_key(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -20,8 +20,7 @@ pub async fn batch_get_by_key(test: &mut Test) {
             .one(format!("foo-{i}"))
             .two(format!("bar-{i}"))
             .exec(&db)
-            .await
-            .unwrap();
+            .await?;
 
         keys.push((foo.one.clone(), foo.two.clone()));
     }
@@ -32,8 +31,7 @@ pub async fn batch_get_by_key(test: &mut Test) {
         (&keys[2].0, &keys[2].1),
     ])
     .collect(&db)
-    .await
-    .unwrap();
+    .await?;
 
     assert_eq!(3, foos.len());
 
@@ -41,4 +39,5 @@ pub async fn batch_get_by_key(test: &mut Test) {
     for foo in foos {
         assert!(keys.iter().any(|key| foo.one == key.0 && foo.two == key.1));
     }
+    Ok(())
 }

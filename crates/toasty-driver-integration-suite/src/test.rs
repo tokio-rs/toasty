@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, RwLock};
+use std::{
+    error::Error,
+    sync::{Arc, Mutex, RwLock},
+};
 
 use toasty::Db;
 use tokio::runtime::Runtime;
@@ -91,7 +94,10 @@ impl Test {
     }
 
     /// Run an async test function using the internal runtime
-    pub fn run(&mut self, f: impl AsyncFn(&mut Test)) {
+    pub fn run<R>(&mut self, f: impl AsyncFn(&mut Test) -> R)
+    where
+        R: Into<TestResult>,
+    {
         // Acquire the appropriate lock: write lock for serial tests (exclusive),
         // read lock for normal tests (parallel).
         let _guard: Box<dyn std::any::Any> = if self.serial {
@@ -102,14 +108,39 @@ impl Test {
 
         // Temporarily take the runtime to avoid borrow checker issues
         let runtime = self.runtime.take().expect("runtime already consumed");
-        let f: std::pin::Pin<Box<dyn std::future::Future<Output = ()>>> = Box::pin(f(self));
-        runtime.block_on(f);
+        let f: std::pin::Pin<Box<dyn std::future::Future<Output = R>>> = Box::pin(f(self));
+        let result = runtime.block_on(f).into();
 
         // now, wut
         for table in &self.tables {
             runtime.block_on(self.setup.delete_table(table));
         }
 
+        if let Some(error) = result.error {
+            panic!("Driver test returned an error: {error}");
+        }
+
         self.runtime = Some(runtime);
+    }
+}
+
+pub struct TestResult {
+    error: Option<Box<dyn Error>>,
+}
+
+impl From<()> for TestResult {
+    fn from(_: ()) -> Self {
+        TestResult { error: None }
+    }
+}
+
+impl<O, E> From<Result<O, E>> for TestResult
+where
+    E: Into<Box<dyn Error>>,
+{
+    fn from(value: Result<O, E>) -> Self {
+        TestResult {
+            error: value.err().map(Into::into),
+        }
     }
 }

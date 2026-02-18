@@ -191,10 +191,7 @@ pub fn expand(input: TokenStream) -> TokenStream {
                     );
 
                     #serial_call
-
-                    test.run(async move |t| {
-                        #fn_path(t).await;
-                    });
+                    test.run(async move |t| { #fn_path(t).await });
                 }
             })
         })

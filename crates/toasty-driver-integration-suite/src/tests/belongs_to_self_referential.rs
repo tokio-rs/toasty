@@ -2,7 +2,7 @@ use crate::prelude::*;
 use std::collections::HashMap;
 
 #[driver_test(id(ID))]
-pub async fn crud_person_self_referential(t: &mut Test) {
+pub async fn crud_person_self_referential(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Person {
         #[key]
@@ -23,7 +23,7 @@ pub async fn crud_person_self_referential(t: &mut Test) {
 
     let db = t.setup_db(models!(Person)).await;
 
-    let p1 = Person::create().name("person 1").exec(&db).await.unwrap();
+    let p1 = Person::create().name("person 1").exec(&db).await?;
 
     assert_none!(p1.parent_id);
 
@@ -32,8 +32,7 @@ pub async fn crud_person_self_referential(t: &mut Test) {
         .name("person 2")
         .parent(&p1)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(p2.parent_id, Some(p1.id));
 
@@ -42,8 +41,7 @@ pub async fn crud_person_self_referential(t: &mut Test) {
         .name("person 3")
         .parent_id(p1.id)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(p3.parent_id, Some(p1.id));
 
@@ -65,15 +63,15 @@ pub async fn crud_person_self_referential(t: &mut Test) {
     };
 
     // Load children from parent
-    let children: Vec<_> = p1.children().collect(&db).await.unwrap();
+    let children: Vec<_> = p1.children().collect(&db).await?;
     assert(&children);
 
     // Try preloading this time
     let p1 = Person::filter_by_id(p1.id)
         .include(Person::fields().children())
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert(p1.children.get());
+    Ok(())
 }

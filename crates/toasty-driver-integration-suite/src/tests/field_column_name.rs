@@ -6,7 +6,7 @@ use toasty_core::{
 };
 
 #[driver_test(id(ID))]
-pub async fn specify_custom_column_name(test: &mut Test) {
+pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct User {
         #[key]
@@ -19,7 +19,7 @@ pub async fn specify_custom_column_name(test: &mut Test) {
 
     let db = test.setup_db(models!(User)).await;
 
-    let u = User::create().name("foo").exec(&db).await.unwrap();
+    let u = User::create().name("foo").exec(&db).await?;
     assert_eq!(u.name, "foo");
 
     // Verify that the INSERT operation used the correct column name "my_name"
@@ -46,10 +46,11 @@ pub async fn specify_custom_column_name(test: &mut Test) {
         }),
         ..
     }));
+    Ok(())
 }
 
 #[driver_test(id(ID), requires(native_varchar))]
-pub async fn specify_custom_column_name_with_type(test: &mut Test) {
+pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct User {
         #[key]
@@ -62,7 +63,7 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) {
 
     let db = test.setup_db(models!(User)).await;
 
-    let u = User::create().name("foo").exec(&db).await.unwrap();
+    let u = User::create().name("foo").exec(&db).await?;
     assert_eq!(u.name, "foo");
 
     // Verify that the INSERT operation used the correct column name "my_name"
@@ -100,4 +101,5 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) {
     // Creating a user with a name larger than 5 characters should fail.
     let res = User::create().name("foo bar").exec(&db).await;
     assert!(res.is_err());
+    Ok(())
 }
