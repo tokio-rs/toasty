@@ -20,6 +20,9 @@ pub(crate) struct Field {
 
     /// Identifier for setter method on update builder
     pub(crate) set_ident: syn::Ident,
+
+    /// Identifier for the `with_field` builder method on update builder
+    pub(crate) with_ident: syn::Ident,
 }
 
 #[derive(Debug)]
@@ -70,6 +73,7 @@ impl Field {
 
         let name = Name::from_ident(ident);
         let set_ident = syn::Ident::new(&format!("set_{}", name.ident), ident.span());
+        let with_ident = syn::Ident::new(&format!("with_{}", name.ident), ident.span());
 
         let mut errs = ErrorSet::new();
         let mut attrs = FieldAttr {
@@ -195,6 +199,7 @@ impl Field {
             name,
             ty,
             set_ident,
+            with_ident,
         })
     }
 }

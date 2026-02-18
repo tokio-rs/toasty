@@ -47,7 +47,7 @@ impl Expand<'_> {
         self.model.fields.iter().enumerate().map(|(field_index, field)| {
             let field_ident = &field.name.ident;
             let set_field_ident = &field.set_ident;
-            let with_field_ident = syn::Ident::new(&format!("with_{}", field_ident), field_ident.span());
+            let with_field_ident = &field.with_ident;
 
             let index = util::int(field_index);
             let projection = if is_embedded {
