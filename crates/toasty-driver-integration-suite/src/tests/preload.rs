@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 #[driver_test(id(ID))]
-pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) {
+pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -34,15 +34,13 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) {
         .todo(Todo::create())
         .todo(Todo::create())
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Find the user, include TODOs
     let user = User::filter_by_id(user.id)
         .include(User::fields().todos())
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // This will panic
     assert_eq!(3, user.todos.get().len());
@@ -52,15 +50,15 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) {
     let todo = Todo::filter_by_id(id)
         .include(Todo::fields().user())
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(user.id, todo.user.get().id);
     assert_eq!(user.id, todo.user_id);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn multiple_includes_same_model(test: &mut Test) {
+pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -114,58 +112,43 @@ pub async fn multiple_includes_same_model(test: &mut Test) {
     let db = test.setup_db(models!(User, Post, Comment)).await;
 
     // Create a user
-    let user = User::create().name("Test User").exec(&db).await.unwrap();
+    let user = User::create().name("Test User").exec(&db).await?;
 
     // Create posts associated with the user
-    Post::create()
-        .title("Post 1")
-        .user(&user)
-        .exec(&db)
-        .await
-        .unwrap();
+    Post::create().title("Post 1").user(&user).exec(&db).await?;
 
-    Post::create()
-        .title("Post 2")
-        .user(&user)
-        .exec(&db)
-        .await
-        .unwrap();
+    Post::create().title("Post 2").user(&user).exec(&db).await?;
 
     // Create comments associated with the user
     Comment::create()
         .text("Comment 1")
         .user(&user)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     Comment::create()
         .text("Comment 2")
         .user(&user)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     Comment::create()
         .text("Comment 3")
         .user(&user)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Test individual includes work (baseline)
     let user_with_posts = User::filter_by_id(user.id)
         .include(User::fields().posts())
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(2, user_with_posts.posts.get().len());
 
     let user_with_comments = User::filter_by_id(user.id)
         .include(User::fields().comments())
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(3, user_with_comments.comments.get().len());
 
     // Test multiple includes in one query
@@ -173,15 +156,15 @@ pub async fn multiple_includes_same_model(test: &mut Test) {
         .include(User::fields().posts()) // First include
         .include(User::fields().comments()) // Second include
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(2, loaded_user.posts.get().len());
     assert_eq!(3, loaded_user.comments.get().len());
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) {
+pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -216,15 +199,13 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) {
         .name("John Doe")
         .profile(Profile::create().bio("A person"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Find the user, include profile
     let user = User::filter_by_id(user.id)
         .include(User::fields().profile())
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Verify the profile is preloaded
     let profile = user.profile.get().as_ref().unwrap();
@@ -237,15 +218,15 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) {
     let profile = Profile::filter_by_id(profile_id)
         .include(Profile::fields().user())
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(user.id, profile.user.get().as_ref().unwrap().id);
     assert_eq!("John Doe", profile.user.get().as_ref().unwrap().name);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn multiple_includes_with_has_one(test: &mut Test) {
+pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
@@ -302,15 +283,13 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
         .profile(Profile::create().bio("Software engineer"))
         .settings(Settings::create().theme("dark"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Test individual includes work (baseline)
     let user_with_profile = User::filter_by_id(user.id)
         .include(User::fields().profile())
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
     assert!(user_with_profile.profile.get().is_some());
     assert_eq!(
         "Software engineer",
@@ -320,8 +299,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
     let user_with_settings = User::filter_by_id(user.id)
         .include(User::fields().settings())
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
     assert!(user_with_settings.settings.get().is_some());
     assert_eq!(
         "dark",
@@ -333,8 +311,7 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
         .include(User::fields().profile()) // First include
         .include(User::fields().settings()) // Second include
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert!(loaded_user.profile.get().is_some());
     assert_eq!(
@@ -343,10 +320,11 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) {
     );
     assert!(loaded_user.settings.get().is_some());
     assert_eq!("dark", loaded_user.settings.get().as_ref().unwrap().theme);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn combined_has_many_and_has_one_preload(test: &mut Test) {
+pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
@@ -405,16 +383,14 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) {
         .todo(Todo::create().title("Task 2"))
         .todo(Todo::create().title("Task 3"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Test combined has_one and has_many preload in a single query
     let loaded_user = User::filter_by_id(user.id)
         .include(User::fields().profile()) // has_one include
         .include(User::fields().todos()) // has_many include
         .get(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Verify has_one association is preloaded
     assert!(loaded_user.profile.get().is_some());
@@ -431,12 +407,13 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) {
     assert!(todo_titles.contains(&"Task 1"));
     assert!(todo_titles.contains(&"Task 2"));
     assert!(todo_titles.contains(&"Task 3"));
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn preload_on_empty_table(test: &mut Test) {
+pub async fn preload_on_empty_table(test: &mut Test) -> Result<()> {
     if !test.capability().sql {
-        return;
+        return Ok(());
     }
 
     #[derive(Debug, toasty::Model)]
@@ -471,14 +448,14 @@ pub async fn preload_on_empty_table(test: &mut Test) {
     let users: Vec<User> = User::all()
         .include(User::fields().todos())
         .collect(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(0, users.len());
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn preload_on_empty_query(test: &mut Test) {
+pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -515,8 +492,8 @@ pub async fn preload_on_empty_query(test: &mut Test) {
     let users: Vec<User> = User::filter_by_name("foo")
         .include(User::fields().todos())
         .collect(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(0, users.len());
+    Ok(())
 }
