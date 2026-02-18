@@ -1270,3 +1270,75 @@ pub async fn partial_update_nested_embedded(t: &mut Test) {
         ..
     });
 }
+
+/// Tests partial updates of embedded fields using the query/filter-based path.
+/// `User::filter_by_id(id).update().with_address(...)` follows a different code path
+/// than the instance-based `user.update().with_address(...)`, so both need coverage.
+#[driver_test(id(ID))]
+pub async fn query_based_partial_update_embedded(t: &mut Test) {
+    #[derive(Debug, toasty::Embed)]
+    struct Address {
+        street: String,
+        city: String,
+        zip: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        address: Address,
+    }
+
+    let db = t.setup_db(models!(User, Address)).await;
+
+    let user = User::create()
+        .name("Alice")
+        .address(Address {
+            street: "123 Main St".to_string(),
+            city: "Boston".to_string(),
+            zip: "02101".to_string(),
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    // Single field: filter-based partial update targeting only city.
+    // street and zip must remain unchanged.
+    User::filter_by_id(user.id)
+        .update()
+        .with_address(|a| {
+            a.city("Seattle");
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    assert_struct!(found.address, _ {
+        street: "123 Main St",
+        city: "Seattle",
+        zip: "02101",
+        ..
+    });
+
+    // Multiple fields: update city and zip together, leave street unchanged.
+    User::filter_by_id(user.id)
+        .update()
+        .with_address(|a| {
+            a.city("Portland").zip("97201");
+        })
+        .exec(&db)
+        .await
+        .unwrap();
+
+    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    assert_struct!(found.address, _ {
+        street: "123 Main St",
+        city: "Portland",
+        zip: "97201",
+        ..
+    });
+}
