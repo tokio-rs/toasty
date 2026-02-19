@@ -2,7 +2,7 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn filter_option_is_none(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -33,22 +33,17 @@ pub async fn filter_option_is_none(test: &mut Test) -> Result<()> {
         .await?;
 
     // Filter for users with no bio (IS NULL)
-    let result = User::filter(User::fields().bio().is_none())
+    let users = User::filter(User::fields().bio().is_none())
         .collect::<Vec<_>>(&db)
-        .await;
+        .await?;
 
-    if test.capability().sql {
-        let users = result?;
-        assert_eq!(1, users.len());
-        assert_eq!("Bob", users[0].name);
-    } else {
-        // DynamoDB doesn't support arbitrary filters without key conditions
-        assert!(result.is_err());
-    }
+    assert_eq!(1, users.len());
+    assert_eq!("Bob", users[0].name);
+
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn filter_option_is_some(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -79,23 +74,19 @@ pub async fn filter_option_is_some(test: &mut Test) -> Result<()> {
         .await?;
 
     // Filter for users with a bio (IS NOT NULL)
-    let result = User::filter(User::fields().bio().is_some())
+    let users = User::filter(User::fields().bio().is_some())
         .collect::<Vec<_>>(&db)
-        .await;
+        .await?;
 
-    if test.capability().sql {
-        let users = result?;
-        assert_eq!(2, users.len());
-        let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
-        names.sort();
-        assert_eq!(names, ["Alice", "Charlie"]);
-    } else {
-        assert!(result.is_err());
-    }
+    assert_eq!(2, users.len());
+    let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Alice", "Charlie"]);
+
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn filter_option_combined_with_other_filters(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -132,44 +123,35 @@ pub async fn filter_option_combined_with_other_filters(test: &mut Test) -> Resul
     User::create().name("Diana").age(25).exec(&db).await?;
 
     // Combine is_some with an equality filter: has bio AND age > 30
-    let result = User::filter(
+    let users = User::filter(
         User::fields()
             .bio()
             .is_some()
             .and(User::fields().age().gt(30)),
     )
     .collect::<Vec<_>>(&db)
-    .await;
+    .await?;
 
-    if test.capability().sql {
-        let users = result?;
-        assert_eq!(1, users.len());
-        assert_eq!("Charlie", users[0].name);
-    } else {
-        assert!(result.is_err());
-    }
+    assert_eq!(1, users.len());
+    assert_eq!("Charlie", users[0].name);
 
     // Combine is_none with an equality filter: no bio AND age = 25
-    let result = User::filter(
+    let users = User::filter(
         User::fields()
             .bio()
             .is_none()
             .and(User::fields().age().eq(25)),
     )
     .collect::<Vec<_>>(&db)
-    .await;
+    .await?;
 
-    if test.capability().sql {
-        let users = result?;
-        assert_eq!(1, users.len());
-        assert_eq!("Diana", users[0].name);
-    } else {
-        assert!(result.is_err());
-    }
+    assert_eq!(1, users.len());
+    assert_eq!("Diana", users[0].name);
+
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn filter_option_multiple_nullable_fields(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Article {
@@ -212,40 +194,129 @@ pub async fn filter_option_multiple_nullable_fields(test: &mut Test) -> Result<(
     Article::create().title("D").exec(&db).await?;
 
     // Filter: subtitle is_some AND summary is_none
-    let result = Article::filter(
+    let articles = Article::filter(
         Article::fields()
             .subtitle()
             .is_some()
             .and(Article::fields().summary().is_none()),
     )
     .collect::<Vec<_>>(&db)
-    .await;
+    .await?;
 
-    if test.capability().sql {
-        let articles = result?;
-        assert_eq!(1, articles.len());
-        assert_eq!("B", articles[0].title);
-    } else {
-        assert!(result.is_err());
-    }
+    assert_eq!(1, articles.len());
+    assert_eq!("B", articles[0].title);
 
     // Filter: both are none
-    let result = Article::filter(
+    let articles = Article::filter(
         Article::fields()
             .subtitle()
             .is_none()
             .and(Article::fields().summary().is_none()),
     )
     .collect::<Vec<_>>(&db)
-    .await;
+    .await?;
 
-    if test.capability().sql {
-        let articles = result?;
-        assert_eq!(1, articles.len());
-        assert_eq!("D", articles[0].title);
-    } else {
-        assert!(result.is_err());
+    assert_eq!(1, articles.len());
+    assert_eq!("D", articles[0].title);
+
+    Ok(())
+}
+
+#[driver_test]
+pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = category, local = name)]
+    struct Product {
+        category: String,
+
+        name: String,
+
+        description: Option<String>,
     }
+
+    let db = test.setup_db(models!(Product)).await;
+
+    // Create products in the "Electronics" category
+    Product::create()
+        .category("Electronics")
+        .name("Laptop")
+        .description("A powerful laptop")
+        .exec(&db)
+        .await?;
+
+    Product::create()
+        .category("Electronics")
+        .name("Mouse")
+        .exec(&db)
+        .await?;
+
+    Product::create()
+        .category("Electronics")
+        .name("Keyboard")
+        .description("Mechanical keyboard")
+        .exec(&db)
+        .await?;
+
+    // Create products in the "Books" category
+    Product::create()
+        .category("Books")
+        .name("Rust Programming")
+        .description("Learn Rust")
+        .exec(&db)
+        .await?;
+
+    Product::create()
+        .category("Books")
+        .name("Cooking 101")
+        .exec(&db)
+        .await?;
+
+    // Filter by partition key AND description is_none
+    let products = Product::filter(
+        Product::fields()
+            .category()
+            .eq("Electronics")
+            .and(Product::fields().description().is_none()),
+    )
+    .all(&db)
+    .await?
+    .collect::<Vec<_>>()
+    .await?;
+
+    assert_eq!(1, products.len());
+    assert_eq!("Mouse", products[0].name);
+
+    // Filter by partition key AND description is_some
+    let products = Product::filter(
+        Product::fields()
+            .category()
+            .eq("Electronics")
+            .and(Product::fields().description().is_some()),
+    )
+    .all(&db)
+    .await?
+    .collect::<Vec<_>>()
+    .await?;
+
+    assert_eq!(2, products.len());
+    let mut names: Vec<_> = products.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Keyboard", "Laptop"]);
+
+    // Filter by a different partition key AND description is_none
+    let products = Product::filter(
+        Product::fields()
+            .category()
+            .eq("Books")
+            .and(Product::fields().description().is_none()),
+    )
+    .all(&db)
+    .await?
+    .collect::<Vec<_>>()
+    .await?;
+
+    assert_eq!(1, products.len());
+    assert_eq!("Cooking 101", products[0].name);
 
     Ok(())
 }
