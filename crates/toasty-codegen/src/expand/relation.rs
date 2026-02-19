@@ -255,10 +255,11 @@ impl Expand<'_> {
             }
 
             #[doc(hidden)]
-            #vis fn #verify_pair_belongs_to_exists(&self) {
+            #vis fn #verify_pair_belongs_to_exists(&self) -> &#ty {
                 #(
                     #suppress_unused_field_warnings
                 )*
+                &self.#field_ident
             }
         }
     }
@@ -315,8 +316,7 @@ impl Expand<'_> {
                 }
 
                 let instance = load::<<#ty as #toasty::Relation>::Model>();
-                verify::<_, <#ty as #toasty::Relation>::Model>(&instance.#pair_ident);
-                instance.#verify_pair_belongs_to_exists_for_field();
+                verify::<_, <#ty as #toasty::Relation>::Model>(instance.#verify_pair_belongs_to_exists_for_field());
             }
         };
 
@@ -345,6 +345,11 @@ impl Expand<'_> {
         let ty = &rel.ty;
         let model_ident = &self.model.ident;
         let pair_ident = syn::Ident::new(&self.model.name.ident.to_string(), rel.span);
+
+        let verify_pair_belongs_to_exists_for_field = syn::Ident::new(
+            &format!("verify_pair_belongs_to_exists_for_{pair_ident}"),
+            field_ident.span(),
+        );
 
         let verify_a = util::ident("A");
         let verify_t = util::ident("T");
@@ -378,11 +383,11 @@ impl Expand<'_> {
                 impl<#verify_a> Verify<#verify_a> for #toasty::BelongsTo<Option<#model_ident>> {
                 }
 
-                fn verify<#verify_t: Verify<#verify_a>, #verify_a>(_: #verify_t) {
+                fn verify<#verify_t: Verify<#verify_a>, #verify_a>(_: &#verify_t) {
                 }
 
                 let instance = load::<<#ty as #toasty::Relation>::Model>();
-                verify::<_, <#ty as #toasty::Relation>::Model>(instance.#pair_ident);
+                verify::<_, <#ty as #toasty::Relation>::Model>(instance.#verify_pair_belongs_to_exists_for_field());
             }
         };
 
