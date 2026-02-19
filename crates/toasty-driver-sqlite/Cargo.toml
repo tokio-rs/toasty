@@ -11,6 +11,3 @@ rusqlite.workspace = true
 url.workspace = true
 uuid.workspace = true
 
-# TODO: get rid of
-serde.workspace = true
-serde_json.workspace = true
