@@ -36,7 +36,11 @@ impl Expand<'_> {
             fn schema() -> #toasty::schema::app::Model {
                 use #toasty::{
                     schema::{
-                        app::*,
+                        app::{
+                            self, AutoStrategy, Field, FieldId, FieldName, FieldTy,
+                            ForeignKey, ForeignKeyField, Index, IndexField, IndexId,
+                            ModelId, PrimaryKey, UuidVersion,
+                        },
                         db::{self, IndexOp, IndexScope},
                         Name
                     },
@@ -115,7 +119,7 @@ impl Expand<'_> {
                     });
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(FieldTy::BelongsTo(BelongsTo {
+                    field_ty = quote!(FieldTy::BelongsTo(app::BelongsTo {
                         target:  <#ty as #toasty::Relation>::Model::id(),
                         expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::id()),
                         // The pair is populated at runtime.
@@ -130,7 +134,7 @@ impl Expand<'_> {
                     let singular_name = expand_name(&rel.singular);
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(FieldTy::HasMany(HasMany {
+                    field_ty = quote!(FieldTy::HasMany(app::HasMany {
                         target: <#ty as #toasty::Relation>::Model::id(),
                         expr_ty: Type::List(Box::new(Type::Model(<#ty as #toasty::Relation>::Model::id()))),
                         singular: #singular_name,
@@ -145,7 +149,7 @@ impl Expand<'_> {
                     let ty = &rel.ty;
 
                     nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(FieldTy::HasOne(HasOne {
+                    field_ty = quote!(FieldTy::HasOne(app::HasOne {
                         target: <#ty as #toasty::Relation>::Model::id(),
                         expr_ty: Type::Model(<#ty as #toasty::Relation>::Model::id()),
                         // The pair is populated at runtime.
