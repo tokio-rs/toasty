@@ -232,7 +232,7 @@ impl Expand<'_> {
         let filter = if rel.foreign_key.len() == 1 {
             quote!( #( #operands )* )
         } else {
-            quote!( stmt::Expr::and_all([ #(#operands),* ]) )
+            quote!( #toasty::stmt::Expr::and_all([ #(#operands),* ]) )
         };
 
         let verify_pair_belongs_to_exists = syn::Ident::new(
