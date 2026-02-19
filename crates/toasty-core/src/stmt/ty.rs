@@ -1,4 +1,4 @@
-use super::{Id, PathFieldSet, TypeEnum, Value};
+use super::{PathFieldSet, TypeEnum, Value};
 use crate::{
     schema::app::{FieldId, ModelId},
     stmt, Result,
@@ -101,9 +101,6 @@ pub enum Type {
     /// 128-bit universally unique identifier (UUID)
     Uuid,
 
-    /// An opaque type that uniquely identifies an instance of a model.
-    Id(ModelId),
-
     /// An instance of a model key
     Key(ModelId),
 
@@ -189,10 +186,6 @@ impl Type {
 
     pub fn is_bool(&self) -> bool {
         matches!(self, Self::Bool)
-    }
-
-    pub fn is_id(&self) -> bool {
-        matches!(self, Self::Id(_))
     }
 
     pub fn is_model(&self) -> bool {
@@ -295,9 +288,6 @@ impl Type {
         Ok(match (value, self) {
             // Identity
             (value @ Value::String(_), Self::String) => value,
-            // String <-> Id
-            (Value::Id(value), _) => value.cast(self)?,
-            (Value::String(value), Self::Id(ty)) => Value::Id(Id::from_string(*ty, value)),
             // String <-> Uuid
             (Value::Uuid(value), Self::String) => Value::String(value.to_string()),
             (Value::String(value), Self::Uuid) => {
@@ -405,7 +395,6 @@ impl Type {
             (Type::DateTime, Type::DateTime) => true,
 
             // Model-related types must match model IDs
-            (Type::Id(a), Type::Id(b)) => a == b,
             (Type::Key(a), Type::Key(b)) => a == b,
             (Type::Model(a), Type::Model(b)) => a == b,
             (Type::ForeignKey(a), Type::ForeignKey(b)) => a == b,

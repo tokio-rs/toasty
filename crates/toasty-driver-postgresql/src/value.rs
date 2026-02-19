@@ -192,7 +192,6 @@ impl ToSql for Value {
                 }
                 (*value as i64).to_sql(ty, out)
             }
-            (stmt::Value::Id(value), _) => value.to_string().to_sql(ty, out),
             (stmt::Value::Null, _) => Ok(IsNull::Yes),
             (stmt::Value::String(value), _) => value.to_sql(ty, out),
             (stmt::Value::Bytes(value), &Type::BYTEA) => value.to_sql(ty, out),

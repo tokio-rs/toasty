@@ -17,6 +17,7 @@ toasty.workspace = true
 toasty-cli.workspace = true
 tokio.workspace = true
 anyhow = "1.0.100"
+uuid.workspace = true
 
 [[bin]]
 name = "todo-app"

@@ -7,9 +7,6 @@ pub use delete::Delete;
 mod expr;
 pub use expr::Expr;
 
-mod id;
-pub use id::Id;
-
 mod insert;
 pub use insert::Insert;
 

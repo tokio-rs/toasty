@@ -1,7 +1,7 @@
 error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Primitive` is not satisfied
- --> tests/ui/relation_has_one_requires_attr.rs:3:10
+ --> tests/ui/relation_has_one_requires_attr.rs:1:10
   |
-3 | #[derive(toasty::Model)]
+1 | #[derive(toasty::Model)]
   |          ^^^^^^^^^^^^^ the trait `toasty::stmt::Primitive` is not implemented for `toasty::HasOne<Option<Profile>>`
   |
   = help: the following other types implement trait `toasty::stmt::Primitive`:
@@ -17,9 +17,9 @@ error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Pr
   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::stmt::Primitive` is not satisfied
- --> tests/ui/relation_has_one_requires_attr.rs:9:14
+ --> tests/ui/relation_has_one_requires_attr.rs:7:14
   |
-9 |     profile: toasty::HasOne<Option<Profile>>,
+7 |     profile: toasty::HasOne<Option<Profile>>,
   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `toasty::stmt::Primitive` is not implemented for `toasty::HasOne<Option<Profile>>`
   |
   = help: the following other types implement trait `toasty::stmt::Primitive`:

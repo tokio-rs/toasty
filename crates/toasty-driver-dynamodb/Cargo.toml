@@ -8,6 +8,7 @@ publish = false
 toasty-core.workspace = true
 aws-config.workspace = true
 aws-sdk-dynamodb.workspace = true
-
+serde.workspace = true
+serde_json.workspace = true
 url.workspace = true
 uuid.workspace = true

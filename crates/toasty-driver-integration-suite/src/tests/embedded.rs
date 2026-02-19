@@ -51,7 +51,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
     #[derive(toasty::Model)]
     struct User {
         #[key]
-        id: toasty::stmt::Id<Self>,
+        id: String,
         #[allow(dead_code)]
         address: Address,
     }
@@ -246,7 +246,7 @@ pub async fn embedded_struct_fields_codegen(test: &mut Test) {
     struct User {
         #[key]
         #[auto]
-        id: toasty::stmt::Id<Self>,
+        id: uuid::Uuid,
         name: String,
         address: Address,
     }
@@ -751,7 +751,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
     #[derive(toasty::Model)]
     struct User {
         #[key]
-        id: toasty::stmt::Id<Self>,
+        id: String,
         #[allow(dead_code)]
         address: Address,
     }

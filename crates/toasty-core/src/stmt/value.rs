@@ -1,4 +1,4 @@
-use super::{sparse_record::SparseRecord, Entry, EntryPath, Id, Type, ValueEnum, ValueRecord};
+use super::{sparse_record::SparseRecord, Entry, EntryPath, Type, ValueEnum, ValueRecord};
 use std::cmp::Ordering;
 use std::hash::Hash;
 
@@ -33,9 +33,6 @@ pub enum Value {
 
     /// Unsigned 64-bit integer
     U64(u64),
-
-    /// A unique model identifier
-    Id(Id),
 
     /// A typed record
     SparseRecord(SparseRecord),
@@ -188,10 +185,6 @@ impl Value {
             Self::U16(_) => ty.is_u16(),
             Self::U32(_) => ty.is_u32(),
             Self::U64(_) => ty.is_u64(),
-            Self::Id(value) => match ty {
-                Type::Id(ty) => value.model_id() == *ty,
-                _ => false,
-            },
             Self::List(value) => match ty {
                 Type::List(ty) => {
                     if value.is_empty() {
@@ -243,7 +236,6 @@ impl Value {
             Value::I16(_) => Type::I16,
             Value::I32(_) => Type::I32,
             Value::I64(_) => Type::I64,
-            Value::Id(v) => Type::Id(v.model_id()),
             Value::SparseRecord(v) => Type::SparseRecord(v.fields.clone()),
             Value::Null => Type::Null,
             Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
