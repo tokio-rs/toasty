@@ -599,7 +599,7 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
 /// This validates that we can update individual fields within an embedded struct
 /// without replacing the entire struct.
 #[driver_test(id(ID))]
-pub async fn partial_update_embedded_fields(t: &mut Test) {
+pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Address {
         street: String,
@@ -627,8 +627,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
             zip: "02101".to_string(),
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Verify initial state
     assert_struct!(user.address, _ {
@@ -644,8 +643,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
             a.city("Seattle");
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Verify only city was updated
     assert_struct!(user.address, _ {
@@ -656,7 +654,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
     });
 
     // Verify the update persisted to database
-    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    let found = User::get_by_id(&db, &user.id).await?;
     assert_struct!(found.address, _ {
         street: "123 Main St",
         city: "Seattle",
@@ -670,8 +668,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
             a.city("Portland").zip("97201");
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Verify both fields were updated, street unchanged
     assert_struct!(user.address, _ {
@@ -682,7 +679,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
     });
 
     // Verify the update persisted
-    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    let found = User::get_by_id(&db, &user.id).await?;
     assert_struct!(found.address, _ {
         street: "123 Main St",
         city: "Portland",
@@ -699,8 +696,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
             a.zip("97202");
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Verify all updates applied in memory
     assert_struct!(user.address, _ {
@@ -711,13 +707,14 @@ pub async fn partial_update_embedded_fields(t: &mut Test) {
     });
 
     // Verify both accumulated assignments persisted to the database
-    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    let found = User::get_by_id(&db, &user.id).await?;
     assert_struct!(found.address, _ {
         street: "456 Oak Ave",
         city: "Portland",
         zip: "97202",
         ..
     });
+    Ok(())
 }
 
 /// Tests deeply nested embedded types (3+ levels) to verify schema building
@@ -1036,7 +1033,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
 /// Validates that creating, reading, updating (instance and query-based),
 /// and deleting records with nested embedded structs works end-to-end.
 #[driver_test(id(ID))]
-pub async fn crud_nested_embedded(t: &mut Test) {
+pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Address {
         street: String,
@@ -1071,8 +1068,7 @@ pub async fn crud_nested_embedded(t: &mut Test) {
             },
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     assert_struct!(company.headquarters, _ {
         name: "Main Office",
@@ -1085,7 +1081,7 @@ pub async fn crud_nested_embedded(t: &mut Test) {
     });
 
     // Read: nested embedded struct is reconstructed from flattened columns
-    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    let found = Company::get_by_id(&db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "Main Office",
         address: _ {
@@ -1107,10 +1103,9 @@ pub async fn crud_nested_embedded(t: &mut Test) {
             },
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    let found = Company::get_by_id(&db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "West Coast HQ",
         address: _ {
@@ -1132,10 +1127,9 @@ pub async fn crud_nested_embedded(t: &mut Test) {
             },
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    let found = Company::get_by_id(&db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "East Coast HQ",
         address: _ {
@@ -1148,15 +1142,16 @@ pub async fn crud_nested_embedded(t: &mut Test) {
 
     // Delete: cleanup
     let id = company.id;
-    company.delete(&db).await.unwrap();
+    company.delete(&db).await?;
     assert_err!(Company::get_by_id(&db, &id).await);
+    Ok(())
 }
 
 /// Tests partial updates of deeply nested embedded fields using chained closures.
 /// Validates that `with_outer(|o| o.with_inner(|i| i.field(v)))` updates only
 /// the targeted leaf field, leaving all other fields unchanged in the database.
 #[driver_test(id(ID))]
-pub async fn partial_update_nested_embedded(t: &mut Test) {
+pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Address {
         street: String,
@@ -1190,8 +1185,7 @@ pub async fn partial_update_nested_embedded(t: &mut Test) {
             },
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Nested partial update: change only the city inside headquarters.address.
     // street and headquarters.name must remain unchanged.
@@ -1203,10 +1197,9 @@ pub async fn partial_update_nested_embedded(t: &mut Test) {
             });
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    let found = Company::get_by_id(&db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "Main Office",
         address: _ {
@@ -1225,10 +1218,9 @@ pub async fn partial_update_nested_embedded(t: &mut Test) {
             h.name("West Coast HQ");
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    let found = Company::get_by_id(&db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "West Coast HQ",
         address: _ {
@@ -1249,10 +1241,9 @@ pub async fn partial_update_nested_embedded(t: &mut Test) {
             });
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let found = Company::get_by_id(&db, &company.id).await.unwrap();
+    let found = Company::get_by_id(&db, &company.id).await?;
     assert_struct!(found.headquarters, _ {
         name: "East Coast HQ",
         address: _ {
@@ -1262,13 +1253,14 @@ pub async fn partial_update_nested_embedded(t: &mut Test) {
         },
         ..
     });
+    Ok(())
 }
 
 /// Tests partial updates of embedded fields using the query/filter-based path.
 /// `User::filter_by_id(id).update().with_address(...)` follows a different code path
 /// than the instance-based `user.update().with_address(...)`, so both need coverage.
 #[driver_test(id(ID))]
-pub async fn query_based_partial_update_embedded(t: &mut Test) {
+pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Address {
         street: String,
@@ -1295,8 +1287,7 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) {
             zip: "02101".to_string(),
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Single field: filter-based partial update targeting only city.
     // street and zip must remain unchanged.
@@ -1306,10 +1297,9 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) {
             a.city("Seattle");
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    let found = User::get_by_id(&db, &user.id).await?;
     assert_struct!(found.address, _ {
         street: "123 Main St",
         city: "Seattle",
@@ -1324,14 +1314,14 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) {
             a.city("Portland").zip("97201");
         })
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let found = User::get_by_id(&db, &user.id).await.unwrap();
+    let found = User::get_by_id(&db, &user.id).await?;
     assert_struct!(found.address, _ {
         street: "123 Main St",
         city: "Portland",
         zip: "97201",
         ..
     });
+    Ok(())
 }
