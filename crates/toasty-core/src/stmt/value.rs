@@ -113,22 +113,6 @@ impl Value {
         ValueRecord::from_vec(fields).into()
     }
 
-    pub fn list_from_vec(items: Vec<Self>) -> Self {
-        Self::List(items)
-    }
-
-    pub fn is_list(&self) -> bool {
-        matches!(self, Self::List(_))
-    }
-
-    #[track_caller]
-    pub fn unwrap_list(self) -> Vec<Value> {
-        match self {
-            Value::List(list) => list,
-            _ => panic!("expected Value::List; actual={self:#?}"),
-        }
-    }
-
     /// Create a `ValueCow` representing the given boolean value
     pub const fn from_bool(src: bool) -> Self {
         Self::Bool(src)
@@ -402,12 +386,6 @@ where
             Some(value) => Self::from(value),
             None => Self::Null,
         }
-    }
-}
-
-impl From<Vec<Value>> for Value {
-    fn from(value: Vec<Value>) -> Self {
-        Value::List(value)
     }
 }
 
