@@ -1,4 +1,4 @@
-use super::Expand;
+use super::{util, Expand};
 use crate::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
@@ -11,6 +11,9 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_ident = &self.model.kind.expect_root().query_struct_ident;
         let create_builder_ident = &self.model.kind.expect_root().create_struct_ident;
+        let collect_ty = util::ident("A");
+        let eq_ty = util::ident("T");
+        let in_query_ty = util::ident("Q");
         let filter_methods = self.expand_relation_filter_methods();
 
         quote! {
@@ -47,9 +50,9 @@ impl Expand<'_> {
                     db.all(self.stmt.into_select()).await
                 }
 
-                #vis async fn collect<A>(self, db: &#toasty::Db) -> #toasty::Result<A>
+                #vis async fn collect<#collect_ty>(self, db: &#toasty::Db) -> #toasty::Result<#collect_ty>
                 where
-                    A: #toasty::FromCursor<#model_ident>
+                    #collect_ty: #toasty::FromCursor<#model_ident>
                 {
                     self.all(db).await?.collect().await
                 }
@@ -156,17 +159,17 @@ impl Expand<'_> {
                     OneField { path }
                 }
 
-                #vis fn eq<T>(self, rhs: T) -> #toasty::stmt::Expr<bool>
+                #vis fn eq<#eq_ty>(self, rhs: #eq_ty) -> #toasty::stmt::Expr<bool>
                 where
-                    T: #toasty::IntoExpr<#model_ident>,
+                    #eq_ty: #toasty::IntoExpr<#model_ident>,
                 {
                     use #toasty::IntoExpr;
                     self.path.eq(rhs.into_expr())
                 }
 
-                #vis fn in_query<Q>(self, rhs: Q) -> #toasty::stmt::Expr<bool>
+                #vis fn in_query<#in_query_ty>(self, rhs: #in_query_ty) -> #toasty::stmt::Expr<bool>
                 where
-                    Q: #toasty::IntoSelect<Model = #model_ident>,
+                    #in_query_ty: #toasty::IntoSelect<Model = #model_ident>,
                 {
                     self.path.in_query(rhs)
                 }
