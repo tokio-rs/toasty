@@ -1,7 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::hint::black_box;
 use tests::{models, LoggingDriver, Setup};
-use toasty::stmt::Id;
 
 type SetupFactory = Box<dyn Fn() -> Box<dyn Setup>>;
 
@@ -10,7 +9,7 @@ type SetupFactory = Box<dyn Fn() -> Box<dyn Setup>>;
 struct User {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
     name: String,
     #[has_many]
     posts: toasty::HasMany<Post>,
@@ -23,10 +22,10 @@ struct User {
 struct Post {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
     title: String,
     #[index]
-    user_id: Id<User>,
+    user_id: uuid::Uuid,
     #[belongs_to(key = user_id, references = id)]
     user: toasty::BelongsTo<User>,
 }
@@ -36,10 +35,10 @@ struct Post {
 struct Comment {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
     text: String,
     #[index]
-    user_id: Id<User>,
+    user_id: uuid::Uuid,
     #[belongs_to(key = user_id, references = id)]
     user: toasty::BelongsTo<User>,
 }

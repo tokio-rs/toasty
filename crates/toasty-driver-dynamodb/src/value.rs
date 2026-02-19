@@ -1,8 +1,5 @@
 use aws_sdk_dynamodb::types::AttributeValue;
-use toasty_core::{
-    schema::app,
-    stmt::{self, Value as CoreValue},
-};
+use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
 pub struct Value(CoreValue);
@@ -37,9 +34,6 @@ impl Value {
             (Type::U64, AV::N(val)) => stmt::Value::from(val.parse::<u64>().unwrap()),
             (Type::Bytes, AV::B(val)) => stmt::Value::Bytes(val.clone().into_inner()),
             (Type::Uuid, AV::S(val)) => stmt::Value::from(val.parse::<uuid::Uuid>().unwrap()),
-            (Type::Id(model), AV::S(val)) => {
-                stmt::Value::from(stmt::Id::from_string(*model, val.clone()))
-            }
             (Type::Enum(..), AV::S(val)) => {
                 let (variant, rest) = val.split_once("#").unwrap();
                 let variant: usize = variant.parse().unwrap();
@@ -48,9 +42,6 @@ impl Value {
                     V::Bool(v) => stmt::Value::Bool(v),
                     V::Null => stmt::Value::Null,
                     V::String(v) => stmt::Value::String(v),
-                    V::Id(model, v) => {
-                        stmt::Value::Id(stmt::Id::from_string(app::ModelId(model), v))
-                    }
                     V::I8(v) => stmt::Value::I8(v),
                     V::I16(v) => stmt::Value::I16(v),
                     V::I32(v) => stmt::Value::I32(v),
@@ -98,7 +89,6 @@ impl Value {
             stmt::Value::U64(val) => AV::N(val.to_string()),
             stmt::Value::Bytes(val) => AV::B(val.clone().into()),
             stmt::Value::Uuid(val) => AV::S(val.to_string()),
-            stmt::Value::Id(val) => AV::S(val.to_string()),
             stmt::Value::Enum(val) => {
                 let v = match &val.fields[..] {
                     [] => V::Null,
@@ -112,7 +102,6 @@ impl Value {
                     [stmt::Value::U16(v)] => V::U16(*v),
                     [stmt::Value::U32(v)] => V::U32(*v),
                     [stmt::Value::U64(v)] => V::U64(*v),
-                    [stmt::Value::Id(id)] => V::Id(id.model_id().0, id.to_string()),
                     _ => todo!("val={:#?}", val.fields),
                 };
                 AV::S(format!(
@@ -146,5 +135,4 @@ enum V {
     U16(u16),
     U32(u32),
     U64(u64),
-    Id(usize, String),
 }

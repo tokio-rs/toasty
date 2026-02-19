@@ -14,3 +14,4 @@ sqlite = ["toasty/sqlite"]
 [dependencies]
 toasty.workspace = true
 tokio.workspace = true
+uuid.workspace = true

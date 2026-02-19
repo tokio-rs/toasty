@@ -1,8 +1,8 @@
 use std::{rc::Rc, sync::Arc};
 
 use crate::{
-    stmt::{Id, Path},
-    Model, Result,
+    stmt::Path,
+    Result,
 };
 
 use std::borrow::Cow;
@@ -183,30 +183,6 @@ impl Primitive for String {
     fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
         path
     }
-}
-
-impl<T: Model> Primitive for Id<T> {
-    type FieldAccessor = Path<Self>;
-    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
-
-    fn ty() -> stmt::Type {
-        stmt::Type::Id(T::id())
-    }
-
-    fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::Id(v) => Ok(Self::from_untyped(v)),
-            _ => Err(toasty_core::Error::type_conversion(value, "Id")),
-        }
-    }
-
-    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
-        path
-    }
-}
-
-impl<T: Model> Auto for Id<T> {
-    const STRATEGY: AutoStrategy = AutoStrategy::Id;
 }
 
 impl<T: Primitive> Primitive for Option<T> {

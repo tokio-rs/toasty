@@ -116,10 +116,6 @@ impl LowerStatement<'_, '_> {
                         _ => panic!("#[auto] not allowed on non-primitive fields"),
                     };
                     match auto {
-                        app::AutoStrategy::Id => {
-                            let id = uuid::Uuid::new_v4().to_string();
-                            field_expr.insert(stmt::Id::from_string(model.id, id).into());
-                        }
                         app::AutoStrategy::Uuid(version) => {
                             let id = match version {
                                 app::UuidVersion::V4 => uuid::Uuid::new_v4(),

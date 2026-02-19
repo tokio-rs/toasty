@@ -20,7 +20,6 @@ impl TypeExt for stmt::Type {
             stmt::Type::U16 => Type::INT4,
             stmt::Type::U32 => Type::INT8,
             stmt::Type::U64 => Type::INT8,
-            stmt::Type::Id(_) => Type::TEXT,
             stmt::Type::String => Type::TEXT,
             stmt::Type::Uuid => Type::UUID,
             stmt::Type::Bytes => Type::BYTEA,

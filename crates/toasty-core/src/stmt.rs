@@ -126,9 +126,6 @@ pub use func_count::FuncCount;
 mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
 
-mod id;
-pub use id::Id;
-
 mod insert;
 pub use insert::Insert;
 

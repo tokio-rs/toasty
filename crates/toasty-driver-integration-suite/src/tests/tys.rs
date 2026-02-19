@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 use std::{rc::Rc, sync::Arc};
-use toasty::{schema::db, stmt::Id};
+use toasty::schema::db;
 use toasty_core::{
     driver::Operation,
     stmt::{ExprSet, InsertTarget, Statement},
@@ -15,7 +15,7 @@ macro_rules! num_ty_test_body {
         struct Foo {
             #[key]
             #[auto]
-            id: Id<Self>,
+            id: uuid::Uuid,
             val: $ty,
         }
 
@@ -239,7 +239,7 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: uuid::Uuid,
         val: String,
     }
 
@@ -349,7 +349,7 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: uuid::Uuid,
         val: uuid::Uuid,
     }
 
@@ -430,7 +430,7 @@ pub async fn ty_smart_ptrs(test: &mut Test) -> Result<()> {
     struct Foo {
         #[key]
         #[auto]
-        id: Id<Self>,
+        id: uuid::Uuid,
         arced: Arc<i32>,
         rced: Rc<i32>,
         boxed: Box<i32>,

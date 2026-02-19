@@ -37,7 +37,6 @@ impl ToSql for &stmt::Value {
         use stmt::Value::*;
 
         match self {
-            Id(_) => todo!(),
             Record(value) => {
                 // Use TypeHintedValue wrapper to provide type hints from INSERT context
                 let fields =
