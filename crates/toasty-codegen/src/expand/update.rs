@@ -11,18 +11,19 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
         let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
+        let target_ty = util::ident("T");
         let builder_methods = self.expand_builder_methods();
         let reload_model = self.expand_reload_model_expr();
 
         quote! {
             // Unified update builder generic over the target type
-            #vis struct #update_struct_ident<T = #toasty::Query> {
+            #vis struct #update_struct_ident<#target_ty = #toasty::Query> {
                 stmt: #toasty::stmt::Update<#model_ident>,
-                target: T,
+                target: #target_ty,
             }
 
             // Generic builder methods work for any target type
-            impl<T: #toasty::ApplyUpdate> #update_struct_ident<T> {
+            impl<#target_ty: #toasty::ApplyUpdate> #update_struct_ident<#target_ty> {
                 #builder_methods
 
                 #vis async fn exec(self, db: &#toasty::Db) -> #toasty::Result<()> {
