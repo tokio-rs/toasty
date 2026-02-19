@@ -150,8 +150,6 @@ impl Type {
                 // TODO: not really correct, but we are getting rid of ID types
                 // most likely.
                 stmt::Type::Id(_) => Ok(db.default_string_type.clone()),
-                // Enum types are stored as strings in the database
-                stmt::Type::Enum(_) => Ok(db.default_string_type.clone()),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",
                     ty

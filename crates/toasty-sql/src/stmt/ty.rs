@@ -30,7 +30,6 @@ impl ColumnType {
                     Self::Text
                 }
             }
-            stmt::Type::Enum(_) => Self::Text,
             _ => todo!("ty={:#?}", ty),
         }
     }
