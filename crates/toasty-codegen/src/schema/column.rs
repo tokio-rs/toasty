@@ -178,11 +178,16 @@ impl syn::parse::Parse for ColumnType {
 
 impl ColumnType {
     /// Expand to a fully qualified `#toasty::schema::db::Type::...` token stream.
-    pub(crate) fn expand_with(&self, toasty: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    pub(crate) fn expand_with(
+        &self,
+        toasty: &proc_macro2::TokenStream,
+    ) -> proc_macro2::TokenStream {
         match self {
             Self::Boolean => quote! { #toasty::schema::db::Type::Boolean },
             Self::Integer(size) => quote! { #toasty::schema::db::Type::Integer(#size) },
-            Self::UnsignedInteger(size) => quote! { #toasty::schema::db::Type::UnsignedInteger(#size) },
+            Self::UnsignedInteger(size) => {
+                quote! { #toasty::schema::db::Type::UnsignedInteger(#size) }
+            }
             Self::Text => quote! { #toasty::schema::db::Type::Text },
             Self::VarChar(size) => quote! { #toasty::schema::db::Type::VarChar(#size) },
             Self::Numeric(None) => quote! { #toasty::schema::db::Type::Numeric(None) },
@@ -191,7 +196,9 @@ impl ColumnType {
             }
             Self::Binary(size) => quote! { #toasty::schema::db::Type::Binary(#size) },
             Self::Blob => quote! { #toasty::schema::db::Type::Blob },
-            Self::Timestamp(precision) => quote! { #toasty::schema::db::Type::Timestamp(#precision) },
+            Self::Timestamp(precision) => {
+                quote! { #toasty::schema::db::Type::Timestamp(#precision) }
+            }
             Self::Date => quote! { #toasty::schema::db::Type::Date },
             Self::Time(precision) => quote! { #toasty::schema::db::Type::Time(#precision) },
             Self::DateTime(precision) => quote! { #toasty::schema::db::Type::DateTime(#precision) },
