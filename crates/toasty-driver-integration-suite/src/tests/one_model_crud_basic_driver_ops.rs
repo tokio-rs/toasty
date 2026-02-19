@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement, Type, Value},
+    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement, Type},
 };
 
 #[driver_test(id(ID))]
@@ -63,7 +63,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         let rows = resp.rows.collect_as_value().await?;
 
         // Check response
-        assert_struct!(rows, == [(1,)]);
+        assert_struct!(rows, == [(1u64,)]);
     } else if driver_test_cfg!(id_u64) {
         assert_struct!(op, Operation::QuerySql(_ {
             ret: None,
@@ -74,7 +74,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         let rows = resp.rows.collect_as_value().await?;
 
         // Check response
-        assert_struct!(rows, Value::List([Value::Record(_ { fields: [== 1u64], .. })]));
+        assert_struct!(rows, == [(1u64,)]);
     } else {
         assert_struct!(op, Operation::QuerySql(_ {
             ret: None,
