@@ -122,12 +122,12 @@ impl Expand<'_> {
                 let field_name = field.name.ident.to_string();
                 let field_offset = util::int(offset);
 
-                quote!( #field_name => FieldId { model: Self::id(), index: #field_offset }, )
+                quote!( #field_name => #toasty::FieldId { model: Self::id(), index: #field_offset }, )
             });
 
         quote! {
             fn field_name_to_id(name: &str) -> #toasty::FieldId {
-                use #toasty::{FieldId, Model, Register};
+                use #toasty::{Model, Register};
 
                 match name {
                     #( #fields )*
