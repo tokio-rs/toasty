@@ -63,8 +63,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         let rows = resp.rows.collect_as_value().await?;
 
         // Check response
-        // assert_struct!(rows, Value::List([Value::Record(_ { fields: [== 1u64], .. })]));
-        assert_struct!(rows, Value::List([Value::Record(_ { fields: [== 1u64], .. })]));
+        assert_struct!(rows, == [(1,)]);
     } else if driver_test_cfg!(id_u64) {
         assert_struct!(op, Operation::QuerySql(_ {
             ret: None,
