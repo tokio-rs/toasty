@@ -378,8 +378,8 @@ impl BuildMapping<'_> {
     /// The differences in column naming and expression building are extracted as
     /// simple conditionals based on these context variables.
     ///
-    /// `next_bit` is a monotonically increasing counter that assigns each leaf
-    /// primitive field a unique bit index within the root model's leaf bit space.
+    /// `next_bit` is a monotonically increasing counter that assigns each
+    /// primitive field a unique bit index in the model's field mask space.
     fn map_fields_recursive(
         &mut self,
         fields: &[app::Field],
@@ -422,7 +422,7 @@ impl BuildMapping<'_> {
                         self.lowering_columns.push(column_id);
                         self.model_to_table.push(lowering);
 
-                        // Assign the next leaf bit to this primitive field.
+                        // Assign this primitive its unique bit in the field mask space.
                         let bit = *next_bit;
                         *next_bit += 1;
 
@@ -440,7 +440,7 @@ impl BuildMapping<'_> {
                         mapping::Field::Primitive(mapping::FieldPrimitive {
                             column: column_id,
                             lowering: lowering_index,
-                            leaf_bits: stmt::PathFieldSet::from_iter([bit]),
+                            field_mask: stmt::PathFieldSet::from_iter([bit]),
                             sub_projection,
                         })
                     }
@@ -461,9 +461,8 @@ impl BuildMapping<'_> {
                             proj
                         };
 
-                        // Recurse with nested context, sharing the bit counter so that
-                        // embedded sub-fields get bits that are globally unique within
-                        // the root model's leaf bit space.
+                        // Recurse with a shared bit counter so all nested primitives
+                        // get globally unique bits within the model's field mask space.
                         let embedded_model = self.app.model(embedded.target);
                         let nested_fields = self.map_fields_recursive(
                             &embedded_model.fields,
@@ -479,16 +478,16 @@ impl BuildMapping<'_> {
                             .flat_map(|field| field.columns())
                             .collect();
 
-                        // The embedded field's leaf bits are the union of all its
-                        // sub-fields' leaf bits.
-                        let leaf_bits = nested_fields
+                        // The embedded field's mask is the union of all nested
+                        // primitive masks, giving full coverage of the embedded struct.
+                        let field_mask = nested_fields
                             .iter()
-                            .fold(stmt::PathFieldSet::new(), |acc, f| acc | f.leaf_bits());
+                            .fold(stmt::PathFieldSet::new(), |acc, f| acc | f.field_mask());
 
                         mapping::Field::Embedded(mapping::FieldEmbedded {
                             fields: nested_fields,
                             columns,
-                            leaf_bits,
+                            field_mask,
                             sub_projection: nested_projection,
                         })
                     }
@@ -498,7 +497,7 @@ impl BuildMapping<'_> {
                         let bit = *next_bit;
                         *next_bit += 1;
                         mapping::Field::Relation(mapping::FieldRelation {
-                            leaf_bits: stmt::PathFieldSet::from_iter([bit]),
+                            field_mask: stmt::PathFieldSet::from_iter([bit]),
                         })
                     }
                 }

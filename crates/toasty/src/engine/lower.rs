@@ -536,12 +536,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if let Some(model) = lower.model() {
                     let mapping = lower.mapping_unwrap();
 
-                    // Step 1 — compute a bitfield of all leaf primitives that
-                    // are being changed.
+                    // Step 1 — build a mask of all primitives being changed by
+                    // OR-ing each assigned field's coverage mask together.
                     let mut changed_bits = stmt::PathFieldSet::new();
                     for projection in stmt.assignments.keys() {
                         if let Some(mf) = mapping.resolve_field_mapping(projection) {
-                            changed_bits |= mf.leaf_bits();
+                            changed_bits |= mf.field_mask();
                         }
                     }
 
@@ -1234,9 +1234,10 @@ impl stmt::Input for AssignmentInput<'_> {
 /// Iterates `mapping_fields` using `changed_bits` to determine what to include:
 ///
 /// - Relation fields → null placeholder (populated during relation planning)
-/// - Field where ALL its leaf bits are set → `project(ref_self_field, sub_projection)`
-///   (constantized later; project is omitted when `sub_projection` is identity)
-/// - Field where SOME bits are set → recurse and build a nested `SparseRecord`
+/// - Field whose `field_mask` is fully covered by `changed_bits` → emit
+///   `project(ref_self_field, sub_projection)` (constantized later; project
+///   omitted when `sub_projection` is identity)
+/// - Field only partially covered → recurse to build a nested `SparseRecord`
 ///
 /// `root_field_id` controls how the self-field reference is constructed:
 /// - `None` at the top level: derived per-iteration as `{ model_id, i }`, since
@@ -1253,7 +1254,7 @@ fn build_update_returning(
     let mut field_set = stmt::PathFieldSet::new();
 
     for (i, mf) in mapping_fields.iter().enumerate() {
-        let intersection = changed_bits.clone() & mf.leaf_bits();
+        let intersection = changed_bits.clone() & mf.field_mask();
 
         if intersection.is_empty() {
             continue;
@@ -1271,9 +1272,10 @@ fn build_update_returning(
                 index: i,
             });
 
-            if intersection == mf.leaf_bits() {
-                // All bits for this field are set: emit a projected field reference.
-                // The lowering + constantize pipeline will substitute the assignment value.
+            if intersection == mf.field_mask() {
+                // Full coverage: all primitives in this field are being updated.
+                // Emit a projected field reference; the lowering + constantize
+                // pipeline will substitute the assignment value.
                 let base = stmt::Expr::ref_self_field(root_field_id);
                 let expr = if mf.sub_projection().is_identity() {
                     base

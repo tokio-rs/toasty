@@ -23,14 +23,26 @@ pub enum Field {
 }
 
 impl Field {
-    /// Returns the leaf bits for this field in the root model's leaf bit space.
-    /// Primitive fields return a singleton set; embedded fields return the union
-    /// of all recursive sub-field bits; relation fields return their assigned bit.
-    pub fn leaf_bits(&self) -> PathFieldSet {
+    /// Returns the update coverage mask for this field.
+    ///
+    /// Each primitive (leaf) field in the model is assigned a unique bit.
+    /// The mask for a given mapping field is the set of those bits that
+    /// correspond to the primitives it covers:
+    ///
+    /// - `Primitive` → singleton set containing only its own bit
+    /// - `Embedded`  → union of all nested primitive bits (recursively)
+    /// - `Relation`  → singleton set (assigned a bit for uniform tracking)
+    ///
+    /// Masks are used during update lowering to determine whether a partial
+    /// update fully covers an embedded field or only touches some of its
+    /// sub-fields. Intersecting `changed_mask` with a field's `field_mask`
+    /// yields the subset of that field's primitives being updated; equality
+    /// with the full `field_mask` means full coverage.
+    pub fn field_mask(&self) -> PathFieldSet {
         match self {
-            Field::Primitive(p) => p.leaf_bits.clone(),
-            Field::Embedded(e) => e.leaf_bits.clone(),
-            Field::Relation(r) => r.leaf_bits.clone(),
+            Field::Primitive(p) => p.field_mask.clone(),
+            Field::Embedded(e) => e.field_mask.clone(),
+            Field::Relation(r) => r.field_mask.clone(),
         }
     }
 
@@ -100,9 +112,13 @@ pub struct FieldPrimitive {
     /// column value during `INSERT` and `UPDATE` operations.
     pub lowering: usize,
 
-    /// The bit assigned to this leaf primitive within the root model's leaf bit
-    /// space. Used for efficient changed-field tracking during update lowering.
-    pub leaf_bits: PathFieldSet,
+    /// Update coverage mask for this primitive field.
+    ///
+    /// A singleton bitset containing the unique bit assigned to this primitive
+    /// within the model's field mask space. During update lowering, accumulated
+    /// `changed_mask` bits are intersected with each field's `field_mask` to
+    /// determine which fields are affected by a partial update.
+    pub field_mask: PathFieldSet,
 
     /// The projection from the root model field (the top-level embedded field
     /// containing this primitive) down to this primitive within the embedded
@@ -136,9 +152,14 @@ pub struct FieldEmbedded {
     /// updates and primitive field updates.
     pub columns: IndexMap<ColumnId, usize>,
 
-    /// Union of all leaf bits for all primitive fields within this embedded
-    /// struct (recursively), in the root model's leaf bit space.
-    pub leaf_bits: PathFieldSet,
+    /// Update coverage mask for this embedded field.
+    ///
+    /// The union of the `field_mask` bits of every primitive nested within this
+    /// embedded struct (recursively). During update lowering, intersecting
+    /// `changed_mask` with this mask reveals whether the update has full coverage
+    /// of the embedded field (intersection equals `field_mask`) or only partial
+    /// coverage (recurse into sub-fields to build a `SparseRecord`).
+    pub field_mask: PathFieldSet,
 
     /// The projection from the root model field down to this embedded field
     /// within the type hierarchy. Identity for root-level embedded fields.
@@ -152,11 +173,16 @@ pub struct FieldEmbedded {
 /// Maps a relation field (`BelongsTo`, `HasMany`, `HasOne`).
 ///
 /// Relations don't map to columns in this table — they are resolved through
-/// joins or foreign keys in other tables. A unique leaf bit is assigned so
-/// that relation assignments are detected uniformly through the same bitfield
-/// intersection logic used for primitive and embedded fields.
+/// joins or foreign keys in other tables. A unique bit is assigned in the
+/// model's field mask space so that relation assignments are detected uniformly
+/// through the same mask intersection logic used for primitive and embedded fields.
 #[derive(Debug, Clone)]
 pub struct FieldRelation {
-    /// The bit assigned to this relation within the root model's leaf bit space.
-    pub leaf_bits: PathFieldSet,
+    /// Update coverage mask for this relation field.
+    ///
+    /// A singleton bitset giving the relation a unique bit in the model's field
+    /// mask space. This lets relation assignments be detected uniformly through
+    /// the same mask intersection logic used for primitive and embedded fields,
+    /// even though relations have no column storage in this table.
+    pub field_mask: PathFieldSet,
 }
