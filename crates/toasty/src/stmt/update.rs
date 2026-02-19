@@ -33,15 +33,19 @@ impl<M: Model> Update<M> {
         }
     }
 
-    pub fn set(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+    pub fn as_untyped_mut(&mut self) -> &mut stmt::Update {
+        &mut self.untyped
+    }
+
+    pub fn set(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.set(field, expr);
     }
 
-    pub fn insert(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+    pub fn insert(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.insert(field, expr);
     }
 
-    pub fn remove(&mut self, field: usize, expr: impl Into<stmt::Expr>) {
+    pub fn remove(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.remove(field, expr);
     }
 

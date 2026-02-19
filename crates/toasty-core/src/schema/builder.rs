@@ -2,7 +2,7 @@ mod table;
 
 use super::{app, db, mapping, Result};
 use crate::schema::mapping::TableToModel;
-use crate::schema::{ColumnId, Mapping, Schema, Table, TableId};
+use crate::schema::{Mapping, Schema, Table, TableId};
 use crate::{driver, stmt};
 use indexmap::IndexMap;
 use std::sync::Arc;
@@ -75,30 +75,14 @@ impl Builder {
 
             let table = builder.build_table_stub_for_model(model);
 
-            // Create a mapping stub for the model
+            // Create a mapping shell for the model (fields will be built during mapping phase)
             builder.mapping.models.insert(
                 model.id,
                 mapping::Model {
                     id: model.id,
                     table,
                     columns: vec![],
-                    // Create a mapping stub for each field
-                    fields: model
-                        .fields
-                        .iter()
-                        .map(|field| match &field.ty {
-                            app::FieldTy::Primitive(_) => {
-                                mapping::Field::Primitive(mapping::FieldPrimitive {
-                                    column: ColumnId::placeholder(),
-                                    lowering: 0,
-                                })
-                            }
-                            app::FieldTy::Embedded(_) => {
-                                mapping::Field::Embedded(mapping::FieldEmbedded { fields: vec![] })
-                            }
-                            _ => mapping::Field::Relation,
-                        })
-                        .collect(),
+                    fields: vec![], // Will be populated during mapping phase
                     model_to_table: stmt::ExprRecord::default(),
                     model_pk_to_table: stmt::Expr::null(),
                     table_to_model: TableToModel::default(),

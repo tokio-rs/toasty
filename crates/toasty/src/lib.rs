@@ -43,13 +43,14 @@ pub mod codegen_support {
         Db, Embed, Error, Model, Register, Result, Statement,
     };
     pub use std::{convert::Into, default::Default, option::Option};
+    pub use toasty_core as core;
     pub use toasty_core::{
         driver,
         schema::{
             self,
             app::{FieldId, ModelId},
         },
-        stmt::{self as core_stmt, Type, Value, ValueRecord, ValueStream},
+        stmt::{Type, Value, ValueRecord, ValueStream},
     };
 }
 
