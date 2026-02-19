@@ -48,7 +48,7 @@ impl DbTest {
 
         // Build the database with the logging driver
         let db = builder.build(logging_driver).await?;
-        db.reset_db().await?;
+        db.push_schema().await?;
 
         Ok(db)
     }

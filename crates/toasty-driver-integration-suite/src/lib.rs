@@ -17,7 +17,7 @@ mod setup;
 pub use setup::Setup;
 
 mod test;
-pub use test::Test;
+pub use test::{Test, TestResult};
 
 pub mod stmt;
 
@@ -34,7 +34,8 @@ toasty_driver_integration_suite_macros::generate_test_registry!("src/tests");
 
 mod prelude {
     pub(crate) use crate::{columns, stmt::Any, table_id, Test};
-    pub(crate) use toasty::Register;
+    pub(crate) use toasty::{Register, Result};
+    pub(crate) type BoxError = Box<dyn std::error::Error + 'static>;
 
     pub(crate) use assert_struct::assert_struct;
     pub(crate) use std_util::{

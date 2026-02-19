@@ -45,7 +45,7 @@ async fn main() -> toasty::Result<()> {
         .await?;
 
     // For now, reset!s
-    db.reset_db().await?;
+    db.push_schema().await?;
 
     println!("==> let u1 = User::create()");
     let u1 = User::create()

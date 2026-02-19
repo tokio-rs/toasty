@@ -39,7 +39,7 @@ macro_rules! num_ty_test_body {
 
         // Test 1: All test values round-trip
         for &val in &test_values {
-            let created = Foo::create().val(val).exec(&db).await.unwrap();
+            let created = Foo::create().val(val).exec(&db).await?;
 
             // Verify the INSERT operation stored the correct value
             let (op, _resp) = test.log().pop();
@@ -59,7 +59,7 @@ macro_rules! num_ty_test_body {
                 ..
             }));
 
-            let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+            let read = Foo::get_by_id(&db, &created.id).await?;
             assert_eq!(read.val, val, "Round-trip failed for: {}", val);
 
             // Clear the read operation
@@ -69,13 +69,13 @@ macro_rules! num_ty_test_body {
         // Test 2: Multiple records with different values
         let mut created_records = Vec::new();
         for &val in &test_values {
-            let created = Foo::create().val(val).exec(&db).await.unwrap();
+            let created = Foo::create().val(val).exec(&db).await?;
             created_records.push((created.id, val));
             test.log().clear();
         }
 
         for (id, expected_val) in created_records {
-            let read = Foo::get_by_id(&db, &id).await.unwrap();
+            let read = Foo::get_by_id(&db, &id).await?;
             assert_eq!(
                 read.val, expected_val,
                 "Multiple records test failed for: {}",
@@ -86,11 +86,11 @@ macro_rules! num_ty_test_body {
 
         // Test 3: Update chain
         if !test_values.is_empty() {
-            let mut record = Foo::create().val(test_values[0]).exec(&db).await.unwrap();
+            let mut record = Foo::create().val(test_values[0]).exec(&db).await?;
             test.log().clear();
 
             for &val in &test_values {
-                record.update().val(val).exec(&db).await.unwrap();
+                record.update().val(val).exec(&db).await?;
 
                 // Verify the UPDATE operation sent the correct value
                 let (op, _resp) = test.log().pop();
@@ -109,41 +109,42 @@ macro_rules! num_ty_test_body {
                     }));
                 }
 
-                let read = Foo::get_by_id(&db, &record.id).await.unwrap();
+                let read = Foo::get_by_id(&db, &record.id).await?;
                 assert_eq!(read.val, val, "Update chain failed for: {}", val);
                 record.val = val;
 
                 test.log().clear();
             }
         }
+        Ok(())
     }};
 }
 
 #[driver_test]
-pub async fn ty_i8(test: &mut Test) {
-    num_ty_test_body!(test, i8, &[i8::MIN, -100, -1, 0, 1, 63, 100, i8::MAX]);
+pub async fn ty_i8(test: &mut Test) -> Result<()> {
+    num_ty_test_body!(test, i8, &[i8::MIN, -100, -1, 0, 1, 63, 100, i8::MAX])
 }
 
 #[driver_test]
-pub async fn ty_i16(test: &mut Test) {
+pub async fn ty_i16(test: &mut Test) -> Result<()> {
     num_ty_test_body!(
         test,
         i16,
         &[i16::MIN, -10000, -1, 0, 1, 10000, 16383, i16::MAX]
-    );
+    )
 }
 
 #[driver_test]
-pub async fn ty_i32(test: &mut Test) {
+pub async fn ty_i32(test: &mut Test) -> Result<()> {
     num_ty_test_body!(
         test,
         i32,
         &[i32::MIN, -1000000, -1, 0, 1, 1000000, 1073741823, i32::MAX]
-    );
+    )
 }
 
 #[driver_test]
-pub async fn ty_i64(test: &mut Test) {
+pub async fn ty_i64(test: &mut Test) -> Result<()> {
     num_ty_test_body!(
         test,
         i64,
@@ -157,11 +158,11 @@ pub async fn ty_i64(test: &mut Test) {
             4611686018427387903,
             i64::MAX
         ]
-    );
+    )
 }
 
 #[driver_test]
-pub async fn ty_isize(test: &mut Test) {
+pub async fn ty_isize(test: &mut Test) -> Result<()> {
     num_ty_test_body!(
         test,
         isize,
@@ -175,30 +176,30 @@ pub async fn ty_isize(test: &mut Test) {
             4611686018427387903,
             isize::MAX
         ]
-    );
+    )
 }
 
 #[driver_test]
-pub async fn ty_u8(test: &mut Test) {
-    num_ty_test_body!(test, u8, &[u8::MIN, 0, 1, 100, 127, 200, u8::MAX]);
+pub async fn ty_u8(test: &mut Test) -> Result<()> {
+    num_ty_test_body!(test, u8, &[u8::MIN, 0, 1, 100, 127, 200, u8::MAX])
 }
 
 #[driver_test]
-pub async fn ty_u16(test: &mut Test) {
-    num_ty_test_body!(test, u16, &[u16::MIN, 0, 1, 10000, 32767, 50000, u16::MAX]);
+pub async fn ty_u16(test: &mut Test) -> Result<()> {
+    num_ty_test_body!(test, u16, &[u16::MIN, 0, 1, 10000, 32767, 50000, u16::MAX])
 }
 
 #[driver_test]
-pub async fn ty_u32(test: &mut Test) {
+pub async fn ty_u32(test: &mut Test) -> Result<()> {
     num_ty_test_body!(
         test,
         u32,
         &[u32::MIN, 0, 1, 1000000, 2147483647, 2000000000, u32::MAX]
-    );
+    )
 }
 
 #[driver_test]
-pub async fn ty_u64(test: &mut Test) {
+pub async fn ty_u64(test: &mut Test) -> Result<()> {
     num_ty_test_body!(
         test,
         u64,
@@ -211,11 +212,11 @@ pub async fn ty_u64(test: &mut Test) {
             10000000000000000000,
             u64::MAX
         ]
-    );
+    )
 }
 
 #[driver_test]
-pub async fn ty_usize(test: &mut Test) {
+pub async fn ty_usize(test: &mut Test) -> Result<()> {
     num_ty_test_body!(
         test,
         usize,
@@ -228,11 +229,11 @@ pub async fn ty_usize(test: &mut Test) {
             10000000000000000000,
             usize::MAX
         ]
-    );
+    )
 }
 
 #[driver_test]
-pub async fn ty_str(test: &mut Test) {
+pub async fn ty_str(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Foo {
@@ -271,7 +272,7 @@ pub async fn ty_str(test: &mut Test) {
 
     // Test 1: All test values round-trip
     for val in &test_values {
-        let created = Foo::create().val((*val).clone()).exec(&db).await.unwrap();
+        let created = Foo::create().val((*val).clone()).exec(&db).await?;
 
         // Verify the INSERT operation stored the string value
         let (op, _resp) = test.log().pop();
@@ -291,18 +292,18 @@ pub async fn ty_str(test: &mut Test) {
             ..
         }));
 
-        let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+        let read = Foo::get_by_id(&db, &created.id).await?;
         assert_eq!(read.val, *val);
 
         test.log().clear();
     }
 
     // Test 2: Update chain
-    let mut record = Foo::create().val(&test_values[0]).exec(&db).await.unwrap();
+    let mut record = Foo::create().val(&test_values[0]).exec(&db).await?;
     test.log().clear();
 
     for val in &test_values {
-        record.update().val(val).exec(&db).await.unwrap();
+        record.update().val(val).exec(&db).await?;
 
         // Verify the UPDATE operation sent the string value
         let (op, _resp) = test.log().pop();
@@ -321,11 +322,12 @@ pub async fn ty_str(test: &mut Test) {
             }));
         }
 
-        let read = Foo::get_by_id(&db, &record.id).await.unwrap();
+        let read = Foo::get_by_id(&db, &record.id).await?;
         assert_eq!(read.val, *val);
 
         test.log().clear();
     }
+    Ok(())
 }
 
 // Helper function to generate a test string with specific characteristics
@@ -342,7 +344,7 @@ fn gen_string(length: usize, pattern: &str) -> String {
 }
 
 #[driver_test]
-pub async fn ty_uuid(test: &mut Test) {
+pub async fn ty_uuid(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -358,7 +360,7 @@ pub async fn ty_uuid(test: &mut Test) {
 
     for _ in 0..16 {
         let val = uuid::Uuid::new_v4();
-        let created = Foo::create().val(val).exec(&db).await.unwrap();
+        let created = Foo::create().val(val).exec(&db).await?;
 
         // Verify the INSERT operation - UUID should be stored in its native format
         let (op, _resp) = test.log().pop();
@@ -414,15 +416,16 @@ pub async fn ty_uuid(test: &mut Test) {
             ty => todo!("ty={ty:#?}"),
         }
 
-        let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+        let read = Foo::get_by_id(&db, &created.id).await?;
         assert_eq!(read.val, val);
 
         test.log().clear();
     }
+    Ok(())
 }
 
 #[driver_test]
-pub async fn ty_smart_ptrs(test: &mut Test) {
+pub async fn ty_smart_ptrs(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -443,8 +446,7 @@ pub async fn ty_smart_ptrs(test: &mut Test) {
         .rced(2i32)
         .boxed(3i32)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Verify the INSERT operation stored the unwrapped values
     let (op, _resp) = test.log().pop();
@@ -464,11 +466,12 @@ pub async fn ty_smart_ptrs(test: &mut Test) {
         ..
     }));
 
-    let read = Foo::get_by_id(&db, &created.id).await.unwrap();
+    let read = Foo::get_by_id(&db, &created.id).await?;
     assert_eq!(created.id, read.id);
     assert_eq!(created.arced, read.arced);
     assert_eq!(created.rced, read.rced);
     assert_eq!(created.boxed, read.boxed);
 
     test.log().clear();
+    Ok(())
 }

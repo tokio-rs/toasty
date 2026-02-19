@@ -7,7 +7,7 @@ use toasty_core::{
 };
 
 #[driver_test(id(ID))]
-pub async fn basic_crud(test: &mut Test) {
+pub async fn basic_crud(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -30,12 +30,7 @@ pub async fn basic_crud(test: &mut Test) {
     let is_sql = test.capability().sql;
 
     // ========== CREATE ==========
-    let user = User::create()
-        .name("Alice")
-        .age(30)
-        .exec(&db)
-        .await
-        .unwrap();
+    let user = User::create().name("Alice").age(30).exec(&db).await?;
 
     // Check the CREATE operation
     let (op, resp) = test.log().pop();
@@ -65,7 +60,7 @@ pub async fn basic_crud(test: &mut Test) {
             ..
         }));
 
-        let rows = resp.rows.collect_as_value().await.unwrap();
+        let rows = resp.rows.collect_as_value().await?;
 
         // Check response
         assert_struct!(rows, Value::List([Value::Record([1])]));
@@ -76,7 +71,7 @@ pub async fn basic_crud(test: &mut Test) {
             ..
         }));
 
-        let rows = resp.rows.collect_as_value().await.unwrap();
+        let rows = resp.rows.collect_as_value().await?;
 
         // Check response
         assert_struct!(rows, Value::List([Value::Record([1])]));
@@ -96,7 +91,7 @@ pub async fn basic_crud(test: &mut Test) {
     let user_id = user.id;
 
     // ========== READ ==========
-    let fetched = User::get_by_id(&db, &user_id).await.unwrap();
+    let fetched = User::get_by_id(&db, &user_id).await?;
     assert_eq!(fetched.name, "Alice");
     assert_eq!(fetched.age, 30);
 
@@ -144,8 +139,7 @@ pub async fn basic_crud(test: &mut Test) {
         .update()
         .age(31)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Check the UPDATE operation
     let (op, resp) = test.log().pop();
@@ -187,7 +181,7 @@ pub async fn basic_crud(test: &mut Test) {
     });
 
     // ========== DELETE ==========
-    User::filter_by_id(user_id).delete(&db).await.unwrap();
+    User::filter_by_id(user_id).delete(&db).await?;
 
     // Check the DELETE operation
     let (op, resp) = test.log().pop();
@@ -230,4 +224,5 @@ pub async fn basic_crud(test: &mut Test) {
 
     // ========== VERIFY LOG IS EMPTY ==========
     assert!(test.log().is_empty(), "Log should be empty");
+    Ok(())
 }

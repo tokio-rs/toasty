@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 #[driver_test(id(ID))]
-pub async fn crud_no_fields(t: &mut Test) {
+pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     const MORE: i32 = 10;
 
     #[derive(Debug, toasty::Model)]
@@ -13,16 +13,14 @@ pub async fn crud_no_fields(t: &mut Test) {
 
     let db = t.setup_db(models!(Foo)).await;
 
-    let created = Foo::create().exec(&db).await.unwrap();
+    let created = Foo::create().exec(&db).await?;
 
     // Find Foo
     let read = Foo::filter_by_id(created.id)
         .all(&db)
-        .await
-        .unwrap()
+        .await?
         .collect::<Vec<_>>()
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(1, read.len());
     assert_eq!(created.id, read[0].id);
@@ -32,7 +30,7 @@ pub async fn crud_no_fields(t: &mut Test) {
     let mut ids = vec![];
 
     for _ in 0..MORE {
-        let item = Foo::create().exec(&db).await.unwrap();
+        let item = Foo::create().exec(&db).await?;
         assert_ne!(item.id, created.id);
         ids.push(item.id);
     }
@@ -42,11 +40,9 @@ pub async fn crud_no_fields(t: &mut Test) {
     for id in &ids {
         let read = Foo::filter_by_id(id)
             .all(&db)
-            .await
-            .unwrap()
+            .await?
             .collect::<Vec<_>>()
-            .await
-            .unwrap();
+            .await?;
 
         assert_eq!(1, read.len());
         assert_eq!(*id, read[0].id);
@@ -61,11 +57,11 @@ pub async fn crud_no_fields(t: &mut Test) {
 
         if i.is_even() {
             // Delete by object
-            let val = Foo::get_by_id(&db, &id).await.unwrap();
-            val.delete(&db).await.unwrap();
+            let val = Foo::get_by_id(&db, &id).await?;
+            val.delete(&db).await?;
         } else {
             // Delete by ID
-            Foo::filter_by_id(id).delete(&db).await.unwrap();
+            Foo::filter_by_id(id).delete(&db).await?;
         }
 
         // Assert deleted
@@ -73,10 +69,11 @@ pub async fn crud_no_fields(t: &mut Test) {
 
         // Assert other foos remain
         for id in &ids {
-            let item = Foo::get_by_id(&db, id).await.unwrap();
+            let item = Foo::get_by_id(&db, id).await?;
             assert_eq!(*id, item.id);
         }
     }
+    Ok(())
 }
 
 #[driver_test(id(ID))]

@@ -7,7 +7,7 @@ use mysql_async::{
     prelude::{Queryable, ToValue},
     Conn, Pool,
 };
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
     driver::{operation::Transaction, Capability, Driver, Operation, Response},
@@ -20,6 +20,7 @@ use url::Url;
 
 #[derive(Debug)]
 pub struct MySQL {
+    url: String,
     pool: Pool,
 }
 
@@ -54,18 +55,16 @@ impl MySQL {
         let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
 
         let pool = Pool::new(opts);
-        Ok(Self { pool })
-    }
-}
-
-impl From<Pool> for MySQL {
-    fn from(pool: Pool) -> Self {
-        Self { pool }
+        Ok(Self { url: url_str, pool })
     }
 }
 
 #[async_trait]
 impl Driver for MySQL {
+    fn url(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.url)
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::MYSQL
     }
@@ -97,6 +96,36 @@ impl Driver for MySQL {
             .collect();
 
         Migration::new_sql_with_breakpoints(&sql_strings)
+    }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        let mut conn = self
+            .pool
+            .get_conn()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        let dbname = conn
+            .opts()
+            .db_name()
+            .ok_or_else(|| {
+                toasty_core::Error::invalid_connection_url("no database name configured")
+            })?
+            .to_string();
+
+        conn.query_drop(format!("DROP DATABASE IF EXISTS `{}`", dbname))
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        conn.query_drop(format!("CREATE DATABASE `{}`", dbname))
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        conn.query_drop(format!("USE `{}`", dbname))
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        Ok(())
     }
 }
 
@@ -148,34 +177,6 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)?;
         }
 
-        Ok(())
-    }
-
-    /// Drops a table.
-    pub async fn drop_table(
-        &mut self,
-        schema: &Schema,
-        table: &Table,
-        if_exists: bool,
-    ) -> Result<()> {
-        let serializer = sql::Serializer::mysql(schema);
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-
-        let sql = if if_exists {
-            serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
-        } else {
-            serializer.serialize(&sql::Statement::drop_table(table), &mut params)
-        };
-
-        assert!(
-            params.is_empty(),
-            "dropping a table shouldn't involve any parameters"
-        );
-
-        self.conn
-            .exec_drop(&sql, ())
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }
@@ -318,12 +319,10 @@ impl toasty_core::driver::Connection for Connection {
         }
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
-            self.drop_table(schema, table, true).await?;
             self.create_table(schema, table).await?;
         }
-
         Ok(())
     }
 

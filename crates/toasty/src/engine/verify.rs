@@ -119,6 +119,7 @@ impl VerifyExpr<'_> {
             | BinaryOp(_)
             | InList(_)
             | InSubquery(_)
+            | Not(_)
             | Or(_)
             | Value(stmt::Value::Bool(_)) => {}
             expr => panic!("Not a bool? {expr:#?}"),
@@ -133,6 +134,11 @@ impl stmt::Visit for VerifyExpr<'_> {
         for expr in &i.operands {
             self.assert_bool_expr(expr);
         }
+    }
+
+    fn visit_expr_not(&mut self, i: &stmt::ExprNot) {
+        stmt::visit::visit_expr_not(self, i);
+        self.assert_bool_expr(&i.expr);
     }
 
     fn visit_expr_or(&mut self, i: &stmt::ExprOr) {
