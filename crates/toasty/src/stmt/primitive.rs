@@ -1,9 +1,6 @@
 use std::{rc::Rc, sync::Arc};
 
-use crate::{
-    stmt::Path,
-    Result,
-};
+use crate::{stmt::Path, Result};
 
 use std::borrow::Cow;
 use toasty_core::{
