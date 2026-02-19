@@ -518,7 +518,7 @@ pub async fn update_multiple_fields(test: &mut Test) {
 }
 
 #[driver_test(id(ID))]
-pub async fn update_and_delete_snippets(test: &mut Test) {
+pub async fn update_and_delete_snippets(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -531,17 +531,18 @@ pub async fn update_and_delete_snippets(test: &mut Test) {
 
     let db = test.setup_db(models!(User)).await;
 
-    let user = User::create().name("John Doe").exec(&db).await.unwrap();
+    let user = User::create().name("John Doe").exec(&db).await?;
 
     User::update_by_id(user.id)
         .name("John Doe2")
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let new_user = User::get_by_id(&db, user.id).await.unwrap();
+    let new_user = User::get_by_id(&db, user.id).await?;
     assert!(new_user.name == "John Doe2");
 
-    User::delete_by_id(&db, user.id).await.unwrap();
+    User::delete_by_id(&db, user.id).await?;
+
     assert_err!(User::get_by_id(&db, user.id).await);
+    Ok(())
 }
