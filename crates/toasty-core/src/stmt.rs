@@ -216,7 +216,7 @@ mod ty;
 pub use ty::Type;
 
 mod ty_enum;
-pub use ty_enum::{EnumVariant, TypeEnum};
+pub use ty_enum::TypeEnum;
 
 #[cfg(feature = "jiff")]
 mod ty_jiff;

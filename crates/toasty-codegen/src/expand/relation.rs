@@ -279,7 +279,10 @@ impl Expand<'_> {
             field_ident.span(),
         );
 
-        let my_msg = format!("HasMany requires the {{A}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
+        let verify_a = util::ident("A");
+        let verify_t = util::ident("T");
+
+        let my_msg = format!("HasMany requires the {{{verify_a}}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
         let my_label =
             "Has many associations require the target to include a back-reference".to_string();
 
@@ -287,8 +290,8 @@ impl Expand<'_> {
             // Reference the field to generate a compiler error if it is missing.
             #[allow(unreachable_code)]
             if false {
-                fn load<T: #toasty::Model>() -> T {
-                    T::load(todo!()).unwrap()
+                fn load<#verify_t: #toasty::Model>() -> #verify_t {
+                    #verify_t::load(todo!()).unwrap()
                 }
 
                 #[diagnostic::on_unimplemented(
@@ -297,18 +300,18 @@ impl Expand<'_> {
                     note = "Note 1",
                     // note = "Note 2"
                 )]
-                trait Verify<A> {
+                trait Verify<#verify_a> {
                 }
 
                 #[diagnostic::do_not_recommend]
-                impl<A> Verify<A> for #toasty::BelongsTo<#model_ident> {
+                impl<#verify_a> Verify<#verify_a> for #toasty::BelongsTo<#model_ident> {
                 }
 
                 #[diagnostic::do_not_recommend]
-                impl<A> Verify<A> for #toasty::BelongsTo<Option<#model_ident>> {
+                impl<#verify_a> Verify<#verify_a> for #toasty::BelongsTo<Option<#model_ident>> {
                 }
 
-                fn verify<T: Verify<A>, A>(_: &T) {
+                fn verify<#verify_t: Verify<#verify_a>, #verify_a>(_: &#verify_t) {
                 }
 
                 let instance = load::<<#ty as #toasty::Relation>::Model>();
@@ -343,7 +346,10 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let pair_ident = syn::Ident::new(&self.model.name.ident.to_string(), rel.span);
 
-        let my_msg = format!("HasOne requires the {{A}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
+        let verify_a = util::ident("A");
+        let verify_t = util::ident("T");
+
+        let my_msg = format!("HasOne requires the {{{verify_a}}}::{pair_ident} field to be of type `BelongsTo<Self>`, but it was `{{Self}}` instead");
         let my_label =
             "Has one associations require the target to include a back-reference".to_string();
 
@@ -351,8 +357,8 @@ impl Expand<'_> {
             // Reference the field to generate a compiler error if it is missing.
             #[allow(unreachable_code)]
             if false {
-                fn load<T: #toasty::Model>() -> T {
-                    T::load(todo!()).unwrap()
+                fn load<#verify_t: #toasty::Model>() -> #verify_t {
+                    #verify_t::load(todo!()).unwrap()
                 }
 
                 #[diagnostic::on_unimplemented(
@@ -361,18 +367,18 @@ impl Expand<'_> {
                     note = "Note 1",
                     // note = "Note 2"
                 )]
-                trait Verify<A> {
+                trait Verify<#verify_a> {
                 }
 
                 #[diagnostic::do_not_recommend]
-                impl<A> Verify<A> for #toasty::BelongsTo<#model_ident> {
+                impl<#verify_a> Verify<#verify_a> for #toasty::BelongsTo<#model_ident> {
                 }
 
                 #[diagnostic::do_not_recommend]
-                impl<A> Verify<A> for #toasty::BelongsTo<Option<#model_ident>> {
+                impl<#verify_a> Verify<#verify_a> for #toasty::BelongsTo<Option<#model_ident>> {
                 }
 
-                fn verify<T: Verify<A>, A>(_: T) {
+                fn verify<#verify_t: Verify<#verify_a>, #verify_a>(_: #verify_t) {
                 }
 
                 let instance = load::<<#ty as #toasty::Relation>::Model>();
