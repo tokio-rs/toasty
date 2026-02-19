@@ -93,6 +93,16 @@ impl Not for Expr<bool> {
     }
 }
 
+impl<T> Expr<Option<T>> {
+    pub fn is_none(self) -> Expr<bool> {
+        Expr::from_untyped(stmt::Expr::is_null(self.untyped))
+    }
+
+    pub fn is_some(self) -> Expr<bool> {
+        Expr::from_untyped(stmt::Expr::is_not_null(self.untyped))
+    }
+}
+
 impl<T: ?Sized> Clone for Expr<T> {
     fn clone(&self) -> Self {
         Self {

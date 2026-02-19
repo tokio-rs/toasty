@@ -119,6 +119,7 @@ impl VerifyExpr<'_> {
             | BinaryOp(_)
             | InList(_)
             | InSubquery(_)
+            | IsNull(_)
             | Not(_)
             | Or(_)
             | Value(stmt::Value::Bool(_)) => {}
