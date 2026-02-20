@@ -1,5 +1,10 @@
 use crate::prelude::*;
 
+use toasty_core::{
+    driver::{Operation, Rows},
+    stmt::{Source, Statement, UpdateTarget},
+};
+
 #[driver_test(id(ID))]
 pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     const MORE: i32 = 10;
@@ -89,6 +94,9 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
 
     let db = test.setup_db(models!(Foo)).await;
 
+    let foo_table_id = table_id(&db, "foos");
+    let is_sql = test.capability().sql;
+
     let mut created = Foo::create().val("hello world").exec(&db).await?;
 
     assert_eq!(created.val, "hello world");
@@ -127,10 +135,37 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
         assert_eq!(format!("hello {i}"), read[0].val);
     }
 
-    // Update by val
+    // Update by val (instance method — generates full-key filter).
+    test.log().clear();
     created.update().val("updated!").exec(&db).await?;
     assert_eq!(created.val, "updated!");
 
+    let (op, resp) = test.log().pop();
+    // Column index 1 = val (id=0, val=1).
+    if is_sql {
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Update(_ {
+                target: UpdateTarget::Table(== foo_table_id),
+                assignments: #{ 1: _ { expr: == "updated!", .. }},
+                ..
+            }),
+            ret: None,
+            ..
+        }));
+    } else {
+        assert_struct!(op, Operation::UpdateByKey(_ {
+            table: == foo_table_id,
+            keys.len(): 1,
+            assignments: #{ 1: _ { expr: == "updated!", .. }},
+            filter: None,
+            returning: false,
+            ..
+        }));
+    }
+    assert_struct!(resp, _ { rows: Rows::Count(1), .. });
+    assert!(test.log().is_empty());
+
+    test.log().clear();
     let reload = Foo::get_by_id(&db, &created.id).await?;
     assert_eq!(reload.val, created.val);
 
@@ -143,8 +178,32 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     let reload = Foo::get_by_id(&db, &created.id).await?;
     assert_eq!(reload.val, "updated again!");
 
-    // Delete the record
+    // Delete the record (instance method — generates full-key filter).
+    test.log().clear();
     reload.delete(&db).await?;
+
+    let (op, resp) = test.log().pop();
+    if is_sql {
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Delete(_ {
+                from: Source::Table(_ {
+                    tables: [== foo_table_id, ..],
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
+    } else {
+        assert_struct!(op, Operation::DeleteByKey(_ {
+            table: == foo_table_id,
+            keys.len(): 1,
+            filter: None,
+            ..
+        }));
+    }
+    assert_struct!(resp, _ { rows: Rows::Count(1), .. });
+    assert!(test.log().is_empty());
 
     // It is gone
     assert_err!(Foo::get_by_id(&db, &created.id).await);
