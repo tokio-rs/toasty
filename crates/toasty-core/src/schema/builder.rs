@@ -69,17 +69,17 @@ impl Builder {
         // Skip embedded models as they don't have their own tables.
         for model in app.models() {
             // Skip embedded models - they are flattened into parent tables
-            if model.is_embedded() {
+            let app::Model::Root(model) = model else {
                 continue;
-            }
+            };
 
             let table = builder.build_table_stub_for_model(model);
 
             // Create a mapping shell for the model (fields will be built during mapping phase)
             builder.mapping.models.insert(
-                model.id(),
+                model.id,
                 mapping::Model {
-                    id: model.id(),
+                    id: model.id,
                     table,
                     columns: vec![],
                     fields: vec![], // Will be populated during mapping phase

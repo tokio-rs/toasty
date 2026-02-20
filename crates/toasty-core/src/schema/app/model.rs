@@ -114,6 +114,13 @@ impl Model {
         self.is_root()
     }
 
+    pub fn as_root(&self) -> Option<&ModelRoot> {
+        match self {
+            Model::Root(root) => Some(root),
+            _ => None,
+        }
+    }
+
     /// Returns a reference to the root model data, panicking if this is not a root model.
     pub fn expect_root(&self) -> &ModelRoot {
         match self {

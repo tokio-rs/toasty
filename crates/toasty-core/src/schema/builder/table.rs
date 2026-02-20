@@ -40,15 +40,8 @@ struct BuildMapping<'a> {
 }
 
 impl BuildSchema<'_> {
-    pub(super) fn build_table_stub_for_model(&mut self, model: &Model) -> TableId {
-        let table_name = match model {
-            app::Model::Root(root) => root.table_name.as_ref(),
-            app::Model::EmbeddedStruct(_) => {
-                panic!("build_table_stub_for_model called on embedded model")
-            }
-        };
-
-        if let Some(table_name) = table_name {
+    pub(super) fn build_table_stub_for_model(&mut self, model: &ModelRoot) -> TableId {
+        if let Some(table_name) = model.table_name.as_ref() {
             let table_name = self.prefix_table_name(table_name);
 
             if !self.table_lookup.contains_key(&table_name) {
@@ -58,7 +51,7 @@ impl BuildSchema<'_> {
 
             *self.table_lookup.get(&table_name).unwrap()
         } else {
-            let name = self.table_name_from_model(model.name());
+            let name = self.table_name_from_model(&model.name);
             let id = self.register_table(&name);
 
             self.tables.push(Table::new(id, name));
