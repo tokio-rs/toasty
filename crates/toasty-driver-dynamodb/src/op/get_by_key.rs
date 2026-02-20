@@ -14,6 +14,7 @@ impl Connection {
 
         if op.keys.len() == 1 {
             // TODO: set attributes to get
+            tracing::trace!(key = ?op.keys[0], table_name = %table.name, "getting single item");
             let res = self
                 .client
                 .get_item()
@@ -39,6 +40,7 @@ impl Connection {
             for key in &op.keys {
                 keys.push(ddb_key(table, key));
             }
+            tracing::trace!(key_count = op.keys.len(), table_name = %table.name, "batch getting items");
 
             let res = self
                 .client
