@@ -107,9 +107,6 @@ impl Setup for SetupMySQL {
                 toasty_core::stmt::Value::Bool(b) => {
                     mysql_params.push(mysql_async::Value::Int(if b { 1 } else { 0 }))
                 }
-                toasty_core::stmt::Value::Id(id) => {
-                    mysql_params.push(mysql_async::Value::Bytes(id.to_string().into_bytes()))
-                }
                 _ => todo!("Unsupported filter value type for MySQL: {value:?}"),
             }
         }

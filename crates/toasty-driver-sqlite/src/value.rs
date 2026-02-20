@@ -60,7 +60,6 @@ impl ToSql for Value {
         match &self.0 {
             Value::Bool(true) => Ok(ToSqlOutput::Owned(SqlValue::Integer(1))),
             Value::Bool(false) => Ok(ToSqlOutput::Owned(SqlValue::Integer(0))),
-            Value::Id(v) => Ok(ToSqlOutput::Owned(v.to_string().into())),
             Value::I8(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
             Value::I16(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
             Value::I32(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
@@ -72,36 +71,7 @@ impl ToSql for Value {
             Value::String(v) => Ok(ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes()))),
             Value::Bytes(v) => Ok(ToSqlOutput::Borrowed(ValueRef::Blob(&v[..]))),
             Value::Null => Ok(ToSqlOutput::Owned(SqlValue::Null)),
-            Value::Enum(value_enum) => {
-                let v = match &value_enum.fields[..] {
-                    [] => V::Null,
-                    [stmt::Value::Bool(v)] => V::Bool(*v),
-                    [stmt::Value::String(v)] => V::String(v.to_string()),
-                    [stmt::Value::I64(v)] => V::I64(*v),
-                    [stmt::Value::Id(id)] => V::Id(id.model_id().0, id.to_string()),
-                    _ => todo!("val={:#?}", value_enum.fields),
-                };
-
-                Ok(ToSqlOutput::Owned(
-                    format!(
-                        "{}#{}",
-                        value_enum.variant,
-                        serde_json::to_string(&v).unwrap()
-                    )
-                    .into(),
-                ))
-            }
             _ => todo!("value = {:#?}", self.0),
         }
     }
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-enum V {
-    Bool(bool),
-    Null,
-    String(String),
-    I8(i8),
-    I64(i64),
-    Id(usize, String),
 }

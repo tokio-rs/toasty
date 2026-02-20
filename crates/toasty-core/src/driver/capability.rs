@@ -153,7 +153,6 @@ impl Capability {
     pub fn native_type_for(&self, ty: &stmt::Type) -> stmt::Type {
         match ty {
             stmt::Type::Uuid => self.storage_types.default_uuid_type.bridge_type(ty),
-            stmt::Type::Id(_) => self.storage_types.default_string_type.bridge_type(ty),
             _ => ty.clone(),
         }
     }

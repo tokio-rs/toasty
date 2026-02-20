@@ -2,7 +2,7 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
+    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprExists, ExprFunc,
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
     ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
     Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
@@ -73,10 +73,6 @@ pub trait Visit {
 
     fn visit_expr_default(&mut self) {
         visit_expr_default(self);
-    }
-
-    fn visit_expr_enum(&mut self, i: &ExprEnum) {
-        visit_expr_enum(self, i);
     }
 
     fn visit_expr_exists(&mut self, i: &ExprExists) {
@@ -341,10 +337,6 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_default(&mut **self);
     }
 
-    fn visit_expr_enum(&mut self, i: &ExprEnum) {
-        Visit::visit_expr_enum(&mut **self, i);
-    }
-
     fn visit_expr_exists(&mut self, i: &ExprExists) {
         Visit::visit_expr_exists(&mut **self, i);
     }
@@ -592,7 +584,6 @@ where
         Expr::Cast(expr) => v.visit_expr_cast(expr),
         Expr::Concat(expr) => v.visit_expr_concat(expr),
         Expr::Default => v.visit_expr_default(),
-        Expr::Enum(expr) => v.visit_expr_enum(expr),
         Expr::Exists(expr) => v.visit_expr_exists(expr),
         Expr::Func(expr) => v.visit_expr_func(expr),
         Expr::InList(expr) => v.visit_expr_in_list(expr),
@@ -616,7 +607,6 @@ where
                 v.visit_expr(expr);
             }
         }
-        Expr::DecodeEnum(base, ..) => v.visit_expr(base),
     }
 }
 
@@ -685,13 +675,6 @@ pub fn visit_expr_default<V>(v: &mut V)
 where
     V: Visit + ?Sized,
 {
-}
-
-pub fn visit_expr_enum<V>(v: &mut V, node: &ExprEnum)
-where
-    V: Visit + ?Sized,
-{
-    v.visit_expr_record(&node.fields);
 }
 
 pub fn visit_expr_exists<V>(v: &mut V, node: &ExprExists)

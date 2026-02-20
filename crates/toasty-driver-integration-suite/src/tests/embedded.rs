@@ -51,7 +51,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
     #[derive(toasty::Model)]
     struct User {
         #[key]
-        id: toasty::stmt::Id<Self>,
+        id: String,
         #[allow(dead_code)]
         address: Address,
     }
@@ -115,18 +115,22 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
             mapping::Field::Primitive(FieldPrimitive {
                 column: == user_table.columns[0].id,
                 lowering: 0,
+                ..
             }),
             mapping::Field::Embedded(FieldEmbedded {
                 fields: [
                     mapping::Field::Primitive(FieldPrimitive {
                         column: == user_table.columns[1].id,
                         lowering: 1,
+                        ..
                     }),
                     mapping::Field::Primitive(FieldPrimitive {
                         column: == user_table.columns[2].id,
                         lowering: 2,
+                        ..
                     })
                 ],
+                ..
             }),
         ],
         model_to_table.fields: [
@@ -242,7 +246,7 @@ pub async fn embedded_struct_fields_codegen(test: &mut Test) {
     struct User {
         #[key]
         #[auto]
-        id: toasty::stmt::Id<Self>,
+        id: uuid::Uuid,
         name: String,
         address: Address,
     }
@@ -588,5 +592,736 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
         .collect::<Vec<_>>(&db)
         .await?;
     assert_eq!(doc_c[0].meta.version, 1);
+    Ok(())
+}
+
+/// Tests partial updates of embedded struct fields using with_field() builders.
+/// This validates that we can update individual fields within an embedded struct
+/// without replacing the entire struct.
+#[driver_test(id(ID))]
+pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Address {
+        street: String,
+        city: String,
+        zip: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        address: Address,
+    }
+
+    let db = t.setup_db(models!(User, Address)).await;
+
+    // Create a user with initial address
+    let mut user = User::create()
+        .name("Alice")
+        .address(Address {
+            street: "123 Main St".to_string(),
+            city: "Boston".to_string(),
+            zip: "02101".to_string(),
+        })
+        .exec(&db)
+        .await?;
+
+    // Verify initial state
+    assert_struct!(user.address, _ {
+        street: "123 Main St",
+        city: "Boston",
+        zip: "02101",
+        ..
+    });
+
+    // Partial update: only change city, leave street and zip unchanged
+    user.update()
+        .with_address(|a| {
+            a.city("Seattle");
+        })
+        .exec(&db)
+        .await?;
+
+    // Verify only city was updated
+    assert_struct!(user.address, _ {
+        street: "123 Main St",
+        city: "Seattle",
+        zip: "02101",
+        ..
+    });
+
+    // Verify the update persisted to database
+    let found = User::get_by_id(&db, &user.id).await?;
+    assert_struct!(found.address, _ {
+        street: "123 Main St",
+        city: "Seattle",
+        zip: "02101",
+        ..
+    });
+
+    // Multiple field update in one call
+    user.update()
+        .with_address(|a| {
+            a.city("Portland").zip("97201");
+        })
+        .exec(&db)
+        .await?;
+
+    // Verify both fields were updated, street unchanged
+    assert_struct!(user.address, _ {
+        street: "123 Main St",
+        city: "Portland",
+        zip: "97201",
+        ..
+    });
+
+    // Verify the update persisted
+    let found = User::get_by_id(&db, &user.id).await?;
+    assert_struct!(found.address, _ {
+        street: "123 Main St",
+        city: "Portland",
+        zip: "97201",
+        ..
+    });
+
+    // Multiple calls to with_address should accumulate
+    user.update()
+        .with_address(|a| {
+            a.street("456 Oak Ave");
+        })
+        .with_address(|a| {
+            a.zip("97202");
+        })
+        .exec(&db)
+        .await?;
+
+    // Verify all updates applied in memory
+    assert_struct!(user.address, _ {
+        street: "456 Oak Ave",
+        city: "Portland",
+        zip: "97202",
+        ..
+    });
+
+    // Verify both accumulated assignments persisted to the database
+    let found = User::get_by_id(&db, &user.id).await?;
+    assert_struct!(found.address, _ {
+        street: "456 Oak Ave",
+        city: "Portland",
+        zip: "97202",
+        ..
+    });
+    Ok(())
+}
+
+/// Tests deeply nested embedded types (3+ levels) to verify schema building
+/// handles arbitrary nesting depth correctly.
+/// Validates:
+/// - App schema: all embedded models registered
+/// - DB schema: deeply nested fields flattened with proper prefixes
+/// - Mapping: nested Field::Embedded structure with correct columns maps
+/// - model_to_table: nested projection expressions
+#[driver_test]
+pub async fn deeply_nested_embedded_schema(test: &mut Test) {
+    // 3 levels of nesting: Location -> City -> Address -> User
+    #[derive(toasty::Embed)]
+    struct Location {
+        lat: i64,
+        lon: i64,
+    }
+
+    #[derive(toasty::Embed)]
+    struct City {
+        name: String,
+        location: Location,
+    }
+
+    #[derive(toasty::Embed)]
+    struct Address {
+        street: String,
+        city: City,
+    }
+
+    #[derive(toasty::Model)]
+    struct User {
+        #[key]
+        id: String,
+        #[allow(dead_code)]
+        address: Address,
+    }
+
+    let db = test.setup_db(models!(User, Address, City, Location)).await;
+    let schema = db.schema();
+
+    // All embedded models should exist in app schema
+    assert_struct!(schema.app.models, #{
+        Location::id(): _ {
+            name.upper_camel_case(): "Location",
+            kind: toasty::schema::app::ModelKind::Embedded,
+            fields.len(): 2,
+            ..
+        },
+        City::id(): _ {
+            name.upper_camel_case(): "City",
+            kind: toasty::schema::app::ModelKind::Embedded,
+            fields: [
+                _ { name.app_name: "name", .. },
+                _ {
+                    name.app_name: "location",
+                    ty: FieldTy::Embedded(_ {
+                        target: == Location::id(),
+                        ..
+                    }),
+                    ..
+                }
+            ],
+            ..
+        },
+        Address::id(): _ {
+            name.upper_camel_case(): "Address",
+            kind: toasty::schema::app::ModelKind::Embedded,
+            fields: [
+                _ { name.app_name: "street", .. },
+                _ {
+                    name.app_name: "city",
+                    ty: FieldTy::Embedded(_ {
+                        target: == City::id(),
+                        ..
+                    }),
+                    ..
+                }
+            ],
+            ..
+        },
+        User::id(): _ {
+            name.upper_camel_case(): "User",
+            kind: toasty::schema::app::ModelKind::Root(_),
+            fields: [
+                _ { name.app_name: "id", .. },
+                _ {
+                    name.app_name: "address",
+                    ty: FieldTy::Embedded(_ {
+                        target: == Address::id(),
+                        ..
+                    }),
+                    ..
+                }
+            ],
+            ..
+        },
+    });
+
+    // Database table should flatten all nested fields with proper prefixes
+    // Expected columns:
+    // - id
+    // - address_street
+    // - address_city_name
+    // - address_city_location_lat
+    // - address_city_location_lon
+    assert_struct!(schema.db.tables, [
+        _ {
+            name: =~ r"users$",
+            columns: [
+                _ { name: "id", .. },
+                _ { name: "address_street", .. },
+                _ { name: "address_city_name", .. },
+                _ { name: "address_city_location_lat", .. },
+                _ { name: "address_city_location_lon", .. },
+            ],
+            ..
+        }
+    ]);
+
+    let user = &schema.app.models[&User::id()];
+    let user_table = schema.table_for(user);
+    let user_mapping = &schema.mapping.models[&User::id()];
+
+    // Mapping should have nested Field::Embedded structure
+    // User.fields[1] (address) -> FieldEmbedded {
+    //   fields[0] (street) -> FieldPrimitive { column: address_street }
+    //   fields[1] (city) -> FieldEmbedded {
+    //     fields[0] (name) -> FieldPrimitive { column: address_city_name }
+    //     fields[1] (location) -> FieldEmbedded {
+    //       fields[0] (lat) -> FieldPrimitive { column: address_city_location_lat }
+    //       fields[1] (lon) -> FieldPrimitive { column: address_city_location_lon }
+    //     }
+    //   }
+    // }
+
+    assert_eq!(
+        user_mapping.fields.len(),
+        2,
+        "User should have 2 fields: id and address"
+    );
+
+    // Check address field (index 1)
+    let address_field = user_mapping.fields[1]
+        .as_embedded()
+        .expect("User.address should be Field::Embedded");
+
+    assert_eq!(
+        address_field.fields.len(),
+        2,
+        "Address should have 2 fields: street and city"
+    );
+
+    // Check address.street (index 0)
+    let street_field = address_field.fields[0]
+        .as_primitive()
+        .expect("Address.street should be Field::Primitive");
+    assert_eq!(
+        street_field.column, user_table.columns[1].id,
+        "street should map to address_street column"
+    );
+
+    // Check address.city (index 1)
+    let city_field = address_field.fields[1]
+        .as_embedded()
+        .expect("Address.city should be Field::Embedded");
+
+    assert_eq!(
+        city_field.fields.len(),
+        2,
+        "City should have 2 fields: name and location"
+    );
+
+    // Check address.city.name (index 0)
+    let city_name_field = city_field.fields[0]
+        .as_primitive()
+        .expect("City.name should be Field::Primitive");
+    assert_eq!(
+        city_name_field.column, user_table.columns[2].id,
+        "city.name should map to address_city_name column"
+    );
+
+    // Check address.city.location (index 1)
+    let location_field = city_field.fields[1]
+        .as_embedded()
+        .expect("City.location should be Field::Embedded");
+
+    assert_eq!(
+        location_field.fields.len(),
+        2,
+        "Location should have 2 fields: lat and lon"
+    );
+
+    // Check address.city.location.lat (index 0)
+    let lat_field = location_field.fields[0]
+        .as_primitive()
+        .expect("Location.lat should be Field::Primitive");
+    assert_eq!(
+        lat_field.column, user_table.columns[3].id,
+        "location.lat should map to address_city_location_lat column"
+    );
+
+    // Check address.city.location.lon (index 1)
+    let lon_field = location_field.fields[1]
+        .as_primitive()
+        .expect("Location.lon should be Field::Primitive");
+    assert_eq!(
+        lon_field.column, user_table.columns[4].id,
+        "location.lon should map to address_city_location_lon column"
+    );
+
+    // Check that the columns map is correctly populated at each level
+    // Address level should contain all 4 columns (street, city_name, city_location_lat, city_location_lon)
+    assert_eq!(
+        address_field.columns.len(),
+        4,
+        "Address.columns should have 4 entries"
+    );
+    assert!(
+        address_field
+            .columns
+            .contains_key(&user_table.columns[1].id),
+        "Address.columns should contain address_street"
+    );
+    assert!(
+        address_field
+            .columns
+            .contains_key(&user_table.columns[2].id),
+        "Address.columns should contain address_city_name"
+    );
+    assert!(
+        address_field
+            .columns
+            .contains_key(&user_table.columns[3].id),
+        "Address.columns should contain address_city_location_lat"
+    );
+    assert!(
+        address_field
+            .columns
+            .contains_key(&user_table.columns[4].id),
+        "Address.columns should contain address_city_location_lon"
+    );
+
+    // City level should contain 3 columns (name, location_lat, location_lon)
+    assert_eq!(
+        city_field.columns.len(),
+        3,
+        "City.columns should have 3 entries"
+    );
+    assert!(
+        city_field.columns.contains_key(&user_table.columns[2].id),
+        "City.columns should contain address_city_name"
+    );
+    assert!(
+        city_field.columns.contains_key(&user_table.columns[3].id),
+        "City.columns should contain address_city_location_lat"
+    );
+    assert!(
+        city_field.columns.contains_key(&user_table.columns[4].id),
+        "City.columns should contain address_city_location_lon"
+    );
+
+    // Location level should contain 2 columns (lat, lon)
+    assert_eq!(
+        location_field.columns.len(),
+        2,
+        "Location.columns should have 2 entries"
+    );
+    assert!(
+        location_field
+            .columns
+            .contains_key(&user_table.columns[3].id),
+        "Location.columns should contain address_city_location_lat"
+    );
+    assert!(
+        location_field
+            .columns
+            .contains_key(&user_table.columns[4].id),
+        "Location.columns should contain address_city_location_lon"
+    );
+
+    // Verify model_to_table has correct nested projection expressions
+    // Should have 5 expressions: id, address.street, address.city.name, address.city.location.lat, address.city.location.lon
+    assert_eq!(
+        user_mapping.model_to_table.len(),
+        5,
+        "model_to_table should have 5 expressions"
+    );
+
+    // Expression for address.street should be: project(ref(address_field), [0])
+    assert_struct!(
+        user_mapping.model_to_table[1],
+        == stmt::Expr::project(stmt::Expr::ref_self_field(user.fields[1].id), [0])
+    );
+
+    // Expression for address.city.name should be: project(ref(address_field), [1, 0])
+    assert_struct!(
+        user_mapping.model_to_table[2],
+        == stmt::Expr::project(stmt::Expr::ref_self_field(user.fields[1].id), [1, 0])
+    );
+
+    // Expression for address.city.location.lat should be: project(ref(address_field), [1, 1, 0])
+    assert_struct!(
+        user_mapping.model_to_table[3],
+        == stmt::Expr::project(stmt::Expr::ref_self_field(user.fields[1].id), [1, 1, 0])
+    );
+
+    // Expression for address.city.location.lon should be: project(ref(address_field), [1, 1, 1])
+    assert_struct!(
+        user_mapping.model_to_table[4],
+        == stmt::Expr::project(stmt::Expr::ref_self_field(user.fields[1].id), [1, 1, 1])
+    );
+}
+
+/// Tests CRUD operations with 2-level nested embedded structs.
+/// Validates that creating, reading, updating (instance and query-based),
+/// and deleting records with nested embedded structs works end-to-end.
+#[driver_test(id(ID))]
+pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Address {
+        street: String,
+        city: String,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Office {
+        name: String,
+        address: Address,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Company {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        headquarters: Office,
+    }
+
+    let db = t.setup_db(models!(Company, Office, Address)).await;
+
+    // Create: nested embedded structs are flattened into a single row
+    let mut company = Company::create()
+        .name("Acme")
+        .headquarters(Office {
+            name: "Main Office".to_string(),
+            address: Address {
+                street: "123 Main St".to_string(),
+                city: "Springfield".to_string(),
+            },
+        })
+        .exec(&db)
+        .await?;
+
+    assert_struct!(company.headquarters, _ {
+        name: "Main Office",
+        address: _ {
+            street: "123 Main St",
+            city: "Springfield",
+            ..
+        },
+        ..
+    });
+
+    // Read: nested embedded struct is reconstructed from flattened columns
+    let found = Company::get_by_id(&db, &company.id).await?;
+    assert_struct!(found.headquarters, _ {
+        name: "Main Office",
+        address: _ {
+            street: "123 Main St",
+            city: "Springfield",
+            ..
+        },
+        ..
+    });
+
+    // Update (instance): replace the entire nested embedded struct
+    company
+        .update()
+        .headquarters(Office {
+            name: "West Coast HQ".to_string(),
+            address: Address {
+                street: "456 Oak Ave".to_string(),
+                city: "Seattle".to_string(),
+            },
+        })
+        .exec(&db)
+        .await?;
+
+    let found = Company::get_by_id(&db, &company.id).await?;
+    assert_struct!(found.headquarters, _ {
+        name: "West Coast HQ",
+        address: _ {
+            street: "456 Oak Ave",
+            city: "Seattle",
+            ..
+        },
+        ..
+    });
+
+    // Update (query-based): replace nested struct via filter
+    Company::filter_by_id(company.id)
+        .update()
+        .headquarters(Office {
+            name: "East Coast HQ".to_string(),
+            address: Address {
+                street: "789 Pine Rd".to_string(),
+                city: "Boston".to_string(),
+            },
+        })
+        .exec(&db)
+        .await?;
+
+    let found = Company::get_by_id(&db, &company.id).await?;
+    assert_struct!(found.headquarters, _ {
+        name: "East Coast HQ",
+        address: _ {
+            street: "789 Pine Rd",
+            city: "Boston",
+            ..
+        },
+        ..
+    });
+
+    // Delete: cleanup
+    let id = company.id;
+    company.delete(&db).await?;
+    assert_err!(Company::get_by_id(&db, &id).await);
+    Ok(())
+}
+
+/// Tests partial updates of deeply nested embedded fields using chained closures.
+/// Validates that `with_outer(|o| o.with_inner(|i| i.field(v)))` updates only
+/// the targeted leaf field, leaving all other fields unchanged in the database.
+#[driver_test(id(ID))]
+pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Address {
+        street: String,
+        city: String,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Office {
+        name: String,
+        address: Address,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Company {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        headquarters: Office,
+    }
+
+    let db = t.setup_db(models!(Company, Office, Address)).await;
+
+    let mut company = Company::create()
+        .name("Acme")
+        .headquarters(Office {
+            name: "Main Office".to_string(),
+            address: Address {
+                street: "123 Main St".to_string(),
+                city: "Boston".to_string(),
+            },
+        })
+        .exec(&db)
+        .await?;
+
+    // Nested partial update: change only the city inside headquarters.address.
+    // street and headquarters.name must remain unchanged.
+    company
+        .update()
+        .with_headquarters(|h| {
+            h.with_address(|a| {
+                a.city("Seattle");
+            });
+        })
+        .exec(&db)
+        .await?;
+
+    let found = Company::get_by_id(&db, &company.id).await?;
+    assert_struct!(found.headquarters, _ {
+        name: "Main Office",
+        address: _ {
+            street: "123 Main St",
+            city: "Seattle",
+            ..
+        },
+        ..
+    });
+
+    // Partial update at the outer level: change only headquarters.name.
+    // address fields must remain unchanged.
+    company
+        .update()
+        .with_headquarters(|h| {
+            h.name("West Coast HQ");
+        })
+        .exec(&db)
+        .await?;
+
+    let found = Company::get_by_id(&db, &company.id).await?;
+    assert_struct!(found.headquarters, _ {
+        name: "West Coast HQ",
+        address: _ {
+            street: "123 Main St",
+            city: "Seattle",
+            ..
+        },
+        ..
+    });
+
+    // Combined update: change headquarters.name and headquarters.address.city
+    // in a single with_headquarters call. street must remain unchanged.
+    company
+        .update()
+        .with_headquarters(|h| {
+            h.name("East Coast HQ").with_address(|a| {
+                a.city("Boston");
+            });
+        })
+        .exec(&db)
+        .await?;
+
+    let found = Company::get_by_id(&db, &company.id).await?;
+    assert_struct!(found.headquarters, _ {
+        name: "East Coast HQ",
+        address: _ {
+            street: "123 Main St",
+            city: "Boston",
+            ..
+        },
+        ..
+    });
+    Ok(())
+}
+
+/// Tests partial updates of embedded fields using the query/filter-based path.
+/// `User::filter_by_id(id).update().with_address(...)` follows a different code path
+/// than the instance-based `user.update().with_address(...)`, so both need coverage.
+#[driver_test(id(ID))]
+pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Address {
+        street: String,
+        city: String,
+        zip: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        address: Address,
+    }
+
+    let db = t.setup_db(models!(User, Address)).await;
+
+    let user = User::create()
+        .name("Alice")
+        .address(Address {
+            street: "123 Main St".to_string(),
+            city: "Boston".to_string(),
+            zip: "02101".to_string(),
+        })
+        .exec(&db)
+        .await?;
+
+    // Single field: filter-based partial update targeting only city.
+    // street and zip must remain unchanged.
+    User::filter_by_id(user.id)
+        .update()
+        .with_address(|a| {
+            a.city("Seattle");
+        })
+        .exec(&db)
+        .await?;
+
+    let found = User::get_by_id(&db, &user.id).await?;
+    assert_struct!(found.address, _ {
+        street: "123 Main St",
+        city: "Seattle",
+        zip: "02101",
+        ..
+    });
+
+    // Multiple fields: update city and zip together, leave street unchanged.
+    User::filter_by_id(user.id)
+        .update()
+        .with_address(|a| {
+            a.city("Portland").zip("97201");
+        })
+        .exec(&db)
+        .await?;
+
+    let found = User::get_by_id(&db, &user.id).await?;
+    assert_struct!(found.address, _ {
+        street: "123 Main St",
+        city: "Portland",
+        zip: "97201",
+        ..
+    });
     Ok(())
 }

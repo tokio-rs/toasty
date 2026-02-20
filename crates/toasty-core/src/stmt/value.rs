@@ -1,4 +1,4 @@
-use super::{sparse_record::SparseRecord, Entry, EntryPath, Id, Type, ValueEnum, ValueRecord};
+use super::{sparse_record::SparseRecord, Entry, EntryPath, Type, ValueRecord};
 use std::cmp::Ordering;
 use std::hash::Hash;
 
@@ -6,9 +6,6 @@ use std::hash::Hash;
 pub enum Value {
     /// Boolean value
     Bool(bool),
-
-    /// Value of an enumerated type
-    Enum(ValueEnum),
 
     /// Signed 8-bit integer
     I8(i8),
@@ -33,9 +30,6 @@ pub enum Value {
 
     /// Unsigned 64-bit integer
     U64(u64),
-
-    /// A unique model identifier
-    Id(Id),
 
     /// A typed record
     SparseRecord(SparseRecord),
@@ -113,22 +107,6 @@ impl Value {
         ValueRecord::from_vec(fields).into()
     }
 
-    pub fn list_from_vec(items: Vec<Self>) -> Self {
-        Self::List(items)
-    }
-
-    pub fn is_list(&self) -> bool {
-        matches!(self, Self::List(_))
-    }
-
-    #[track_caller]
-    pub fn unwrap_list(self) -> Vec<Value> {
-        match self {
-            Value::List(list) => list,
-            _ => panic!("expected Value::List; actual={self:#?}"),
-        }
-    }
-
     /// Create a `ValueCow` representing the given boolean value
     pub const fn from_bool(src: bool) -> Self {
         Self::Bool(src)
@@ -188,10 +166,6 @@ impl Value {
             Self::U16(_) => ty.is_u16(),
             Self::U32(_) => ty.is_u32(),
             Self::U64(_) => ty.is_u64(),
-            Self::Id(value) => match ty {
-                Type::Id(ty) => value.model_id() == *ty,
-                _ => false,
-            },
             Self::List(value) => match ty {
                 Type::List(ty) => {
                     if value.is_empty() {
@@ -231,7 +205,6 @@ impl Value {
             Value::Time(_) => *ty == Type::Time,
             #[cfg(feature = "jiff")]
             Value::DateTime(_) => *ty == Type::DateTime,
-            _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
     }
 
@@ -243,14 +216,12 @@ impl Value {
             Value::I16(_) => Type::I16,
             Value::I32(_) => Type::I32,
             Value::I64(_) => Type::I64,
-            Value::Id(v) => Type::Id(v.model_id()),
             Value::SparseRecord(v) => Type::SparseRecord(v.fields.clone()),
             Value::Null => Type::Null,
             Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
             Value::String(_) => Type::String,
             Value::List(items) if items.is_empty() => Type::list(Type::Null),
             Value::List(items) => Type::list(items[0].infer_ty()),
-            Value::Enum(_) => todo!(),
             Value::U8(_) => Type::U8,
             Value::U16(_) => Type::U16,
             Value::U32(_) => Type::U32,
@@ -402,12 +373,6 @@ where
             Some(value) => Self::from(value),
             None => Self::Null,
         }
-    }
-}
-
-impl From<Vec<Value>> for Value {
-    fn from(value: Vec<Value>) -> Self {
-        Value::List(value)
     }
 }
 

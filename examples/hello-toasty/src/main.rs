@@ -1,10 +1,8 @@
-use toasty::stmt::Id;
-
 #[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 
     name: String,
 
@@ -21,10 +19,10 @@ struct User {
 struct Todo {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 
     #[index]
-    user_id: Id<User>,
+    user_id: uuid::Uuid,
 
     #[belongs_to(key = user_id, references = id)]
     user: toasty::BelongsTo<User>,

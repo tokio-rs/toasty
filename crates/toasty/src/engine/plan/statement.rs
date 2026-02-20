@@ -997,14 +997,45 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 todo!()
             };
 
-            self.insert_mir_with_deps(mir::QueryPk {
-                input,
-                table: index_plan.table_id(),
-                columns: self.load_data.columns.clone(),
-                pk_filter: index_plan.index_filter.take(),
-                row_filter: index_plan.result_filter.take(),
-                ty: ty.clone(),
-            })
+            if stmt.is_query() {
+                // For queries, stream all matching records with the requested columns.
+                self.insert_mir_with_deps(mir::QueryPk {
+                    input,
+                    table: index_plan.table_id(),
+                    columns: self.load_data.columns.clone(),
+                    pk_filter: index_plan.index_filter.take(),
+                    row_filter: index_plan.result_filter.take(),
+                    ty: ty.clone(),
+                })
+            } else {
+                // For mutations (UPDATE/DELETE) with a partial primary-key filter,
+                // first collect the full primary keys of all matching records via
+                // QueryPk, then apply the mutation to each key. The index key columns
+                // were pre-populated into load_data.columns in plan_data_loading_nosql.
+                let index_key_ty = self.index_key_ty(index_plan);
+
+                let mut columns = self.load_data.columns.clone();
+                assert!(columns.is_empty());
+
+                for index_col in &index_plan.index.columns {
+                    columns.insert(stmt::ExprReference::Column(stmt::ExprColumn {
+                        nesting: 0,
+                        table: 0,
+                        column: index_col.column.index,
+                    }));
+                }
+
+                let query_pk_node = self.insert_mir_with_deps(mir::QueryPk {
+                    input,
+                    table: index_plan.table_id(),
+                    columns,
+                    pk_filter: index_plan.index_filter.take(),
+                    row_filter: index_plan.result_filter.take(),
+                    ty: index_key_ty,
+                });
+
+                self.build_key_operation(&stmt, index_plan, query_pk_node, ty)
+            }
         }
     }
 

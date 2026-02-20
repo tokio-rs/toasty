@@ -329,6 +329,14 @@ fn ddb_expression(
 
             format!("{expr} IN ({items})")
         }
+        stmt::Expr::IsNull(expr_is_null) => {
+            let inner = ddb_expression(cx, attrs, primary, &expr_is_null.expr);
+            format!("attribute_not_exists({inner})")
+        }
+        stmt::Expr::Not(expr_not) => {
+            let inner = ddb_expression(cx, attrs, primary, &expr_not.expr);
+            format!("(NOT {inner})")
+        }
         _ => todo!("FILTER = {:#?}", expr),
     }
 }

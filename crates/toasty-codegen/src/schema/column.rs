@@ -176,26 +176,33 @@ impl syn::parse::Parse for ColumnType {
     }
 }
 
-impl quote::ToTokens for ColumnType {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+impl ColumnType {
+    /// Expand to a fully qualified `#toasty::schema::db::Type::...` token stream.
+    pub(crate) fn expand_with(
+        &self,
+        toasty: &proc_macro2::TokenStream,
+    ) -> proc_macro2::TokenStream {
         match self {
-            Self::Boolean => quote! { db::Type::Boolean },
-            Self::Integer(size) => quote! { db::Type::Integer(#size) },
-            Self::UnsignedInteger(size) => quote! { db::Type::UnsignedInteger(#size) },
-            Self::Text => quote! { db::Type::Text },
-            Self::VarChar(size) => quote! { db::Type::VarChar(#size) },
-            Self::Numeric(None) => quote! { db::Type::Numeric(None) },
-            Self::Numeric(Some((precision, scale))) => {
-                quote! { db::Type::Numeric(Some((#precision, #scale))) }
+            Self::Boolean => quote! { #toasty::schema::db::Type::Boolean },
+            Self::Integer(size) => quote! { #toasty::schema::db::Type::Integer(#size) },
+            Self::UnsignedInteger(size) => {
+                quote! { #toasty::schema::db::Type::UnsignedInteger(#size) }
             }
-            Self::Binary(size) => quote! { db::Type::Binary(#size) },
-            Self::Blob => quote! { db::Type::Blob },
-            Self::Timestamp(precision) => quote! { db::Type::Timestamp(#precision) },
-            Self::Date => quote! { db::Type::Date },
-            Self::Time(precision) => quote! { db::Type::Time(#precision) },
-            Self::DateTime(precision) => quote! { db::Type::DateTime(#precision) },
-            Self::Custom(custom) => quote! { db::Type::Custom(#custom) },
+            Self::Text => quote! { #toasty::schema::db::Type::Text },
+            Self::VarChar(size) => quote! { #toasty::schema::db::Type::VarChar(#size) },
+            Self::Numeric(None) => quote! { #toasty::schema::db::Type::Numeric(None) },
+            Self::Numeric(Some((precision, scale))) => {
+                quote! { #toasty::schema::db::Type::Numeric(Some((#precision, #scale))) }
+            }
+            Self::Binary(size) => quote! { #toasty::schema::db::Type::Binary(#size) },
+            Self::Blob => quote! { #toasty::schema::db::Type::Blob },
+            Self::Timestamp(precision) => {
+                quote! { #toasty::schema::db::Type::Timestamp(#precision) }
+            }
+            Self::Date => quote! { #toasty::schema::db::Type::Date },
+            Self::Time(precision) => quote! { #toasty::schema::db::Type::Time(#precision) },
+            Self::DateTime(precision) => quote! { #toasty::schema::db::Type::DateTime(#precision) },
+            Self::Custom(custom) => quote! { #toasty::schema::db::Type::Custom(#custom) },
         }
-        .to_tokens(tokens);
     }
 }

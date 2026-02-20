@@ -39,17 +39,18 @@ pub mod codegen_support {
         model::generate_unique_id,
         relation::Relation,
         relation::{BelongsTo, HasMany, HasOne},
-        stmt::{self, Id, IntoExpr, IntoInsert, IntoSelect, Path},
+        stmt::{self, IntoExpr, IntoInsert, IntoSelect, Path},
         Db, Embed, Error, Model, Register, Result, Statement,
     };
     pub use std::{convert::Into, default::Default, option::Option};
+    pub use toasty_core as core;
     pub use toasty_core::{
         driver,
         schema::{
             self,
             app::{FieldId, ModelId},
         },
-        stmt::{self as core_stmt, Type, Value, ValueRecord, ValueStream},
+        stmt::{Type, Value, ValueRecord, ValueStream},
     };
 }
 

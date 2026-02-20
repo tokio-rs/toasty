@@ -19,6 +19,8 @@ pub mod one_model_batch_create;
 pub mod one_model_composite_key;
 pub mod one_model_crud;
 pub mod one_model_crud_basic_driver_ops;
+pub mod one_model_option_filter;
+pub mod one_model_partitioned_crud;
 pub mod one_model_query;
 pub mod one_model_sort_limit;
 pub mod preload;

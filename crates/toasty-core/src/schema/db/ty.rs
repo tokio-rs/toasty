@@ -145,13 +145,6 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
-                // Gotta support some app-level types as well for now.
-                //
-                // TODO: not really correct, but we are getting rid of ID types
-                // most likely.
-                stmt::Type::Id(_) => Ok(db.default_string_type.clone()),
-                // Enum types are stored as strings in the database
-                stmt::Type::Enum(_) => Ok(db.default_string_type.clone()),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",
                     ty

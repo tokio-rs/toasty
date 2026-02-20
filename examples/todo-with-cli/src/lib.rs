@@ -1,10 +1,8 @@
-use toasty::stmt::Id;
-
 #[derive(Debug, toasty::Model)]
 pub struct User {
     #[key]
     #[auto]
-    pub id: Id<Self>,
+    pub id: uuid::Uuid,
 
     pub name: String,
 
@@ -19,10 +17,10 @@ pub struct User {
 pub struct Todo {
     #[key]
     #[auto]
-    pub id: Id<Self>,
+    pub id: uuid::Uuid,
 
     #[index]
-    pub user_id: Id<User>,
+    pub user_id: uuid::Uuid,
 
     #[belongs_to(key = user_id, references = id)]
     pub user: toasty::BelongsTo<User>,

@@ -1,4 +1,4 @@
-use super::{Id, PathFieldSet, TypeEnum, Value};
+use super::{PathFieldSet, Value};
 use crate::{
     schema::app::{FieldId, ModelId},
     stmt, Result,
@@ -101,9 +101,6 @@ pub enum Type {
     /// 128-bit universally unique identifier (UUID)
     Uuid,
 
-    /// An opaque type that uniquely identifies an instance of a model.
-    Id(ModelId),
-
     /// An instance of a model key
     Key(ModelId),
 
@@ -118,9 +115,6 @@ pub enum Type {
 
     /// A fixed-length tuple where each item can have a different type.
     Record(Vec<Type>),
-
-    /// An enumeration of multiple types
-    Enum(TypeEnum),
 
     // An array of bytes that is more efficient than List(u8)
     Bytes,
@@ -189,10 +183,6 @@ impl Type {
 
     pub fn is_bool(&self) -> bool {
         matches!(self, Self::Bool)
-    }
-
-    pub fn is_id(&self) -> bool {
-        matches!(self, Self::Id(_))
     }
 
     pub fn is_model(&self) -> bool {
@@ -295,9 +285,6 @@ impl Type {
         Ok(match (value, self) {
             // Identity
             (value @ Value::String(_), Self::String) => value,
-            // String <-> Id
-            (Value::Id(value), _) => value.cast(self)?,
-            (Value::String(value), Self::Id(ty)) => Value::Id(Id::from_string(*ty, value)),
             // String <-> Uuid
             (Value::Uuid(value), Self::String) => Value::String(value.to_string()),
             (Value::String(value), Self::Uuid) => {
@@ -405,7 +392,6 @@ impl Type {
             (Type::DateTime, Type::DateTime) => true,
 
             // Model-related types must match model IDs
-            (Type::Id(a), Type::Id(b)) => a == b,
             (Type::Key(a), Type::Key(b)) => a == b,
             (Type::Model(a), Type::Model(b)) => a == b,
             (Type::ForeignKey(a), Type::ForeignKey(b)) => a == b,
@@ -417,9 +403,6 @@ impl Type {
             (Type::Record(a), Type::Record(b)) => {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| a.is_equivalent(b))
             }
-
-            // Enum types must be structurally equivalent
-            (Type::Enum(a), Type::Enum(b)) => a == b,
 
             // Sparse records must have the same field set
             (Type::SparseRecord(a), Type::SparseRecord(b)) => a == b,

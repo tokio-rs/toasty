@@ -223,14 +223,6 @@ impl Verify<'_> {
                     field_ty
                 );
             }
-            AutoStrategy::Id => {
-                assert!(
-                    field_ty.is_id(),
-                    "field `{}` has Auto::Id but type is not Id: {:?}",
-                    field.name.app_name,
-                    field_ty
-                );
-            }
         }
     }
 }

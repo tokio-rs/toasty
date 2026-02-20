@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement, Type, Value},
+    stmt::{BinaryOp, Expr, ExprColumn, ExprSet, Source, Statement, Type},
 };
 
 #[driver_test(id(ID))]
@@ -38,7 +38,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
     assert_struct!(op, Operation::QuerySql(_ {
         stmt: Statement::Insert(_ {
             target: toasty_core::stmt::InsertTarget::Table(_ {
-                table: user_table_id,
+                table: == user_table_id,
                 columns.len(): 3,
                 columns: == columns(&db, "users", &["id", "name", "age"]),
                 ..
@@ -63,7 +63,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         let rows = resp.rows.collect_as_value().await?;
 
         // Check response
-        assert_struct!(rows, Value::List([Value::Record([1])]));
+        assert_struct!(rows, == [(1u64,)]);
     } else if driver_test_cfg!(id_u64) {
         assert_struct!(op, Operation::QuerySql(_ {
             ret: None,
@@ -74,7 +74,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         let rows = resp.rows.collect_as_value().await?;
 
         // Check response
-        assert_struct!(rows, Value::List([Value::Record([1])]));
+        assert_struct!(rows, == [(1u64,)]);
     } else {
         assert_struct!(op, Operation::QuerySql(_ {
             ret: None,
@@ -103,14 +103,14 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
             stmt: Statement::Query(_ {
                 body: ExprSet::Select(_ {
                     source: Source::Table(_ {
-                        tables: [user_table_id, ..],
+                        tables: [== user_table_id, ..],
                         ..
                     }),
                     filter.expr: Some(Expr::BinaryOp(_ {
                         lhs.as_expr_column_unwrap(): ExprColumn {
                             nesting: 0,
                             table: 0,
-                            column: user_id_column.index,
+                            column: == user_id_column.index,
                         },
                         op: BinaryOp::Eq,
                         rhs: _,
@@ -125,7 +125,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         }));
     } else {
         assert_struct!(op, Operation::GetByKey(_ {
-            table: user_table_id,
+            table: == user_table_id,
             keys: _,
             select.len(): 3,
             ..
@@ -147,13 +147,13 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
     if is_sql {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Update(_ {
-                target: toasty_core::stmt::UpdateTarget::Table(user_table_id),
-                assignments: #{ 2: _ { expr: 31, .. }},
+                target: toasty_core::stmt::UpdateTarget::Table(== user_table_id),
+                assignments: #{ 2: _ { expr: == 31, .. }},
                 filter.expr: Some(Expr::BinaryOp(_ {
                     lhs.as_expr_column_unwrap(): ExprColumn {
                         nesting: 0,
                         table: 0,
-                        column: user_id_column.index,
+                        column: == user_id_column.index,
                     },
                     op: BinaryOp::Eq,
                     rhs: _,
@@ -166,10 +166,10 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         }));
     } else {
         assert_struct!(op, Operation::UpdateByKey(_ {
-            table: user_table_id,
+            table: == user_table_id,
             filter: None,
             keys: _,
-            assignments: #{ 2: _ { expr: 31, .. }},
+            assignments: #{ 2: _ { expr: == 31, .. }},
             returning: false,
             ..
         }));
@@ -190,14 +190,14 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql(_ {
             stmt: Statement::Delete(_ {
                 from: Source::Table(_ {
-                    tables: [user_table_id, ..],
+                    tables: [== user_table_id, ..],
                     ..
                 }),
                 filter.expr: Some(Expr::BinaryOp(_ {
                     lhs.as_expr_column_unwrap(): ExprColumn {
                         nesting: 0,
                         table: 0,
-                        column: user_id_column.index,
+                        column: == user_id_column.index,
                     },
                     op: BinaryOp::Eq,
                     rhs: _,
@@ -209,7 +209,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         }));
     } else {
         assert_struct!(op, Operation::DeleteByKey(_ {
-            table: user_table_id,
+            table: == user_table_id,
             filter: None,
             keys: _,
             ..

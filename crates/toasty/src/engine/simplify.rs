@@ -14,7 +14,6 @@ mod expr_or;
 mod expr_project;
 mod expr_record;
 mod stmt_query;
-mod value;
 
 // Simplifications
 // TODO: unify names
