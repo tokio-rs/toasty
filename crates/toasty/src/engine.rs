@@ -13,10 +13,10 @@ use simplify::Simplify;
 mod ty;
 mod verify;
 
-use crate::{db::Pool, Result};
+use crate::{db::ConnectionType, Result};
 use std::sync::Arc;
 use toasty_core::{
-    driver::{Capability, Driver},
+    driver::Capability,
     stmt::{self, Statement, ValueStream},
     Schema,
 };
@@ -33,24 +33,25 @@ use toasty_core::{
 /// 2. **Lowering.** Convert to HIR with dependency tracking.
 /// 3. **Planning.** Build MIR operation graph.
 /// 4. **Execution.** Run actions against the database driver.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct Engine {
     /// The schema being managed by this database instance.
     pub(crate) schema: Arc<Schema>,
 
     /// Handle to the connection pool.
-    pub(crate) pool: Arc<Pool>,
+    pub(crate) connection: ConnectionType,
 }
 
 impl Engine {
     /// Creates a new [`Engine`] with the given schema and driver.
-    pub(crate) fn new(schema: Arc<Schema>, pool: Arc<Pool>) -> Engine {
-        Engine { schema, pool }
+    pub(crate) fn new(schema: Arc<Schema>, connection: ConnectionType) -> Engine {
+        Engine { schema, connection }
     }
 
     /// Returns the driver's capabilities.
     pub(crate) fn capability(&self) -> &Capability {
-        self.pool.capability()
+        todo!();
+        // self.pool.capability()
     }
 
     /// Executes a statement and returns the result as a value stream.
@@ -91,8 +92,9 @@ impl Engine {
         stmt::ExprContext::new_with_target(&self.schema, target)
     }
 
-    /// Returns the database driver this engine is using.
-    pub(crate) fn driver(&self) -> &dyn Driver {
-        self.pool.driver()
-    }
+    // /// Returns the database driver this engine is using.
+    // pub(crate) fn driver(&self) -> &dyn Driver {
+    //     todo!();
+    //     // self.pool.driver()
+    // }
 }

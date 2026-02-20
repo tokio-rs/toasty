@@ -1,14 +1,15 @@
 mod builder;
 mod connect;
+mod connection;
 mod pool;
+mod transaction;
+
+use std::sync::Arc;
 
 pub use builder::Builder;
 pub use connect::*;
+pub(crate) use connection::{ConnectionType, SingleConnection};
 pub use pool::*;
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
 
 use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
 
@@ -17,15 +18,7 @@ use toasty_core::{driver::Driver, stmt::ValueStream, Schema};
 #[derive(Debug)]
 pub struct Db {
     pub(crate) engine: Engine,
-
-    /// Handle to send statements to be executed
-    pub(crate) in_tx: mpsc::UnboundedSender<(
-        toasty_core::stmt::Statement,
-        oneshot::Sender<Result<ValueStream>>,
-    )>,
-
-    /// Handle to task driving the query engine
-    pub(crate) join_handle: JoinHandle<()>,
+    pub(crate) driver: Arc<dyn Driver>,
 }
 
 impl Db {
@@ -67,13 +60,7 @@ impl Db {
 
     /// Execute a statement
     pub async fn exec<M: Model>(&self, statement: Statement<M>) -> Result<ValueStream> {
-        let (tx, rx) = oneshot::channel();
-
-        // Send the statement to the execution engine
-        self.in_tx.send((statement.untyped, tx)).unwrap();
-
-        // Return the typed result
-        rx.await.unwrap()
+        self.engine.exec(statement.untyped).await
     }
 
     /// Execute a statement, assume only one record is returned
@@ -113,9 +100,7 @@ impl Db {
     /// Creates tables and indices defined in the schema on the database.
     pub async fn push_schema(&self) -> Result<()> {
         self.engine
-            .pool
-            .get()
-            .await?
+            .connection
             .push_schema(&self.engine.schema.db)
             .await
     }
@@ -126,7 +111,7 @@ impl Db {
     }
 
     pub fn driver(&self) -> &dyn Driver {
-        self.engine.driver()
+        self.driver.as_ref()
     }
 
     pub fn schema(&self) -> &Schema {
@@ -135,12 +120,5 @@ impl Db {
 
     pub fn capability(&self) -> &Capability {
         self.engine.capability()
-    }
-}
-
-impl Drop for Db {
-    fn drop(&mut self) {
-        // TODO: make this less aggressive
-        self.join_handle.abort();
     }
 }
