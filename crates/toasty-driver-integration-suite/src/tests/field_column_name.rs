@@ -34,8 +34,8 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
     assert_struct!(op, Operation::QuerySql(_ {
         stmt: Statement::Insert(_ {
             target: InsertTarget::Table(_ {
-                table: user_table_id,
-                columns: expected_columns,
+                table: == user_table_id,
+                columns: == expected_columns,
                 ..
             }),
             source.body: ExprSet::Values(_ {
@@ -78,8 +78,8 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()>
     assert_struct!(op, Operation::QuerySql(_ {
         stmt: Statement::Insert(_ {
             target: InsertTarget::Table(_ {
-                table: user_table_id,
-                columns: expected_columns,
+                table: == user_table_id,
+                columns: == expected_columns,
                 ..
             }),
             ..

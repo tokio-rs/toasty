@@ -244,6 +244,8 @@ pub use value_record::ValueRecord;
 pub mod visit_mut;
 pub use visit_mut::VisitMut;
 
+mod value_list;
+
 mod value_stream;
 pub use value_stream::ValueStream;
 

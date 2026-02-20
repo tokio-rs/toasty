@@ -55,7 +55,7 @@ toasty-driver-integration-suite = { path = "crates/toasty-driver-integration-sui
 toasty-driver-integration-suite-macros = { path = "crates/toasty-driver-integration-suite-macros" }
 
 # Other crates
-assert-struct = "0.2.0"
+assert-struct = "0.3.1"
 async-recursion = "1.1.1"
 async-stream = "0.3.6"
 async-trait = "0.1.83"
