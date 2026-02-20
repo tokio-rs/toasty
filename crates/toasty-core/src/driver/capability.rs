@@ -69,6 +69,9 @@ pub struct StorageTypes {
     /// The default storage type for a UUID.
     pub default_uuid_type: db::Type,
 
+    /// The default storage type for Bytes (Vec<u8>).
+    pub default_bytes_type: db::Type,
+
     /// The default storage type for a Decimal (fixed-precision decimal).
     pub default_decimal_type: db::Type,
 
@@ -270,6 +273,8 @@ impl StorageTypes {
         // difficult to read than Text but likely has better performance characteristics.
         default_uuid_type: db::Type::Blob,
 
+        default_bytes_type: db::Type::Blob,
+
         // SQLite does not have a native decimal type. Store as TEXT.
         default_decimal_type: db::Type::Text,
         default_bigdecimal_type: db::Type::Text,
@@ -295,6 +300,8 @@ impl StorageTypes {
         varchar: Some(10_485_760),
 
         default_uuid_type: db::Type::Uuid,
+
+        default_bytes_type: db::Type::Blob,
 
         // PostgreSQL has native NUMERIC type for fixed and arbitrary-precision decimals.
         default_decimal_type: db::Type::Numeric(None),
@@ -330,6 +337,8 @@ impl StorageTypes {
         // use VarChar for now.
         default_uuid_type: db::Type::VarChar(36),
 
+        default_bytes_type: db::Type::Blob,
+
         // MySQL does not have an arbitrary-precision decimal type. The DECIMAL type
         // requires a fixed precision and scale to be specified upfront. Store as TEXT.
         default_decimal_type: db::Type::Text,
@@ -355,6 +364,8 @@ impl StorageTypes {
         varchar: None,
 
         default_uuid_type: db::Type::Text,
+
+        default_bytes_type: db::Type::Blob,
 
         // DynamoDB does not have a native decimal type. Store as TEXT.
         default_decimal_type: db::Type::Text,
