@@ -937,7 +937,7 @@ pub async fn assign_todo_to_user_on_update_query(test: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID))]
 pub async fn has_many_when_fk_is_composite_with_snippets(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
