@@ -24,7 +24,7 @@ impl<M: Model> Insert<M> {
                         .expect_root()
                         .fields
                         .iter()
-                        .map(|field: &toasty_core::schema::app::Field| match field.auto() {
+                        .map(|field| match field.auto() {
                             Some(_) => stmt::Expr::Default,
                             None => stmt::Expr::Value(stmt::Value::Null),
                         })
