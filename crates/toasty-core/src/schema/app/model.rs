@@ -218,6 +218,12 @@ impl From<&Model> for ModelId {
     }
 }
 
+impl From<&ModelRoot> for ModelId {
+    fn from(value: &ModelRoot) -> Self {
+        value.id
+    }
+}
+
 impl fmt::Debug for ModelId {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(fmt, "ModelId({})", self.0)

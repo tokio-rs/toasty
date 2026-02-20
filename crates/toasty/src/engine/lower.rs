@@ -9,7 +9,7 @@ use index_vec::IndexVec;
 use toasty_core::{
     driver::Capability,
     schema::{
-        app::{self, FieldTy, Model},
+        app::{self, FieldTy, ModelRoot},
         db::{Column, ColumnId},
         mapping,
     },
@@ -547,7 +547,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                     // Step 2 — build the returning expression.
                     *returning = stmt::Returning::Expr(build_update_returning(
-                        model.id(),
+                        model.id,
                         None,
                         &mapping.fields,
                         &changed_bits,
@@ -718,7 +718,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             return;
         };
 
-        let table = self.schema().table_for(model);
+        let table = self.schema().table_for(model.id);
         let mapping = self.mapping_unwrap();
 
         // TODO: we really shouldn't have to simplify here, but until
@@ -824,7 +824,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             todo!("Multi-step include paths not yet supported")
         };
 
-        let field = &self.model_unwrap().expect_root().fields[*field_index];
+        let field = &self.model_unwrap().fields[*field_index];
 
         let mut stmt = match &field.ty {
             FieldTy::HasMany(rel) => stmt::Query::new_select(
@@ -1000,12 +1000,12 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         self.schema().app.field(id.into())
     }
 
-    fn model(&self) -> Option<&'a Model> {
+    fn model(&self) -> Option<&'a ModelRoot> {
         self.expr_cx.target().as_model()
     }
 
     #[track_caller]
-    fn model_unwrap(&self) -> &'a Model {
+    fn model_unwrap(&self) -> &'a ModelRoot {
         self.expr_cx.target().as_model_unwrap()
     }
 

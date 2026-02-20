@@ -153,7 +153,7 @@ impl Simplify<'_> {
 
                 // At this point, we must be in a model context, otherwise key
                 // expressions don't make sense.
-                let Some(root) = self.cx.target_as_model_root() else {
+                let Some(root) = self.cx.target_as_model() else {
                     todo!();
                 };
 
@@ -472,7 +472,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `id = id` → `true` (non-nullable field)
         let mut lhs = Expr::Reference(ExprReference::Field {
@@ -494,7 +494,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `id != id` → `false` (non-nullable field)
         let mut lhs = Expr::Reference(ExprReference::Field {
@@ -516,7 +516,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `name = name` is not simplified (nullable field)
         let mut lhs = Expr::Reference(ExprReference::Field {
@@ -538,7 +538,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `id = name` is not simplified (different fields)
         let mut lhs = Expr::Reference(ExprReference::Field {

@@ -43,7 +43,7 @@ trait RelationSource: std::fmt::Debug {
 
 #[derive(Debug)]
 struct InsertRelationSource<'a> {
-    model: &'a app::Model,
+    model: &'a app::ModelRoot,
     row: &'a mut stmt::Expr,
     /// The index in stmt::Returning that represents the row
     index: usize,
@@ -52,7 +52,7 @@ struct InsertRelationSource<'a> {
 
 #[derive(Debug)]
 struct UpdateRelationSource<'a> {
-    model: &'a app::Model,
+    model: &'a app::ModelRoot,
     filter: &'a stmt::Filter,
     assignments: &'a mut stmt::Assignments,
     returning: &'a mut Option<stmt::Returning>,
@@ -67,7 +67,7 @@ impl LowerStatement<'_, '_> {
         };
 
         // Handle any cascading deletes
-        for field in model.expect_root().fields.iter() {
+        for field in model.fields.iter() {
             self.plan_mut_relation_field(
                 field,
                 Mutation::DisassociateAll { delete: true },
@@ -84,7 +84,7 @@ impl LowerStatement<'_, '_> {
     ) {
         let model = self.expr_cx.target().as_model_unwrap();
 
-        for (i, field) in model.expect_root().fields.iter().enumerate() {
+        for (i, field) in model.fields.iter().enumerate() {
             if field.is_relation() {
                 let expr = row.entry_mut(i).take();
 
@@ -92,7 +92,7 @@ impl LowerStatement<'_, '_> {
                     if !field.nullable && field.ty.is_has_one() {
                         panic!(
                             "Insert missing non-nullable field; model={}; name={:#?}; ty={:#?}; expr={:#?}",
-                            model.name().upper_camel_case(),
+                            model.name.upper_camel_case(),
                             field.name,
                             field.ty,
                             expr
@@ -128,7 +128,7 @@ impl LowerStatement<'_, '_> {
     ) {
         let model = self.expr_cx.target().as_model_unwrap();
 
-        for (i, field) in model.expect_root().fields.iter().enumerate() {
+        for (i, field) in model.fields.iter().enumerate() {
             if !field.is_relation() {
                 continue;
             }
@@ -635,7 +635,7 @@ impl RelationSource for UpdateRelationSource<'_> {
     fn selection(&self, _nesting: usize) -> stmt::Query {
         // In this context, the nesting does not matter. The filter entirely
         // references the returned query.
-        stmt::Query::new_select(self.model, self.filter.clone())
+        stmt::Query::new_select(self.model.id, self.filter.clone())
     }
 
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
@@ -675,12 +675,7 @@ impl RelationSource for InsertRelationSource<'_> {
     fn selection(&self, nesting: usize) -> stmt::Query {
         let mut args = vec![];
 
-        // Relations only work with root models (which have primary keys)
-        let root = self
-            .model
-            .expect_root();
-
-        for pk_field in root.primary_key_fields() {
+        for pk_field in self.model.primary_key_fields() {
             let entry = self.row.entry(pk_field.id.index).unwrap();
 
             if entry.is_value() {
@@ -692,11 +687,11 @@ impl RelationSource for InsertRelationSource<'_> {
             }
         }
 
-        root.find_by_id(&args[..])
+        self.model.find_by_id(&args[..])
     }
 
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
-        assert_eq!(self.model.id(), field.model);
+        assert_eq!(self.model.id, field.model);
         self.row.as_record_mut()[field.index] = expr;
     }
 
