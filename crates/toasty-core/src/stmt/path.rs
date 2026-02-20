@@ -43,11 +43,6 @@ impl Path {
         self.projection.len()
     }
 
-    pub fn resolve_field<'a>(&self, schema: &'a app::Schema) -> &'a Field {
-        let expr_self = schema.model(self.root);
-        self.projection.resolve_field(schema, expr_self)
-    }
-
     pub fn chain(&mut self, other: &Self) {
         for field in &other.projection[..] {
             self.projection.push(*field);

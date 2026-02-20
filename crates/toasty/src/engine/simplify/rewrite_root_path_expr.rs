@@ -7,7 +7,11 @@ impl Simplify<'_> {
     /// primary key.
     ///
     /// The caller must ensure it is an `eq` operation
-    pub(super) fn rewrite_root_path_expr(&mut self, root: &ModelRoot, val: stmt::Expr) -> stmt::Expr {
+    pub(super) fn rewrite_root_path_expr(
+        &mut self,
+        root: &ModelRoot,
+        val: stmt::Expr,
+    ) -> stmt::Expr {
         if let [field] = &root.primary_key.fields[..] {
             stmt::Expr::eq(stmt::Expr::ref_self_field(field), val)
         } else {

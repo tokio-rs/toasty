@@ -46,7 +46,9 @@ impl Simplify<'_> {
         // For now, we only support paths with a single step
         assert!(association.path.len() == 1, "TODO");
 
-        let field = association.path.resolve_field(&self.schema().app);
+        let Some(field) = self.schema().app.resolve_field_path(&association.path) else {
+            todo!()
+        };
 
         match &field.ty {
             app::FieldTy::BelongsTo(rel) => {

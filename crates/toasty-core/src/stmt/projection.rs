@@ -110,10 +110,6 @@ impl Projection {
         }
     }
 
-    pub fn resolve_field<'a>(&self, schema: &'a app::Schema, expr_self: &'a Model) -> &'a Field {
-        self.steps.resolve_field(schema, expr_self)
-    }
-
     pub fn resolves_to(&self, other: impl Into<Self>) -> bool {
         let other = other.into();
         *self == other
@@ -212,32 +208,6 @@ impl Steps {
             Self::Single(step) => &step[..],
             Self::Multi(steps) => &steps[..],
         }
-    }
-
-    fn resolve_field<'a>(&self, schema: &'a app::Schema, expr_self: &'a Model) -> &'a Field {
-        use crate::schema::app::FieldTy::*;
-
-        let [first, rest @ ..] = self.as_slice() else {
-            panic!("need at most one path step")
-        };
-        let mut projected = &expr_self.expect_root().fields[*first];
-
-        for step in rest {
-            let target = match &projected.ty {
-                Primitive(..) => panic!("failed to resolve path"),
-                Embedded(_) => {
-                    // TODO: Handle path projection through embedded fields
-                    todo!("embedded field path projection")
-                }
-                BelongsTo(belongs_to) => belongs_to.target(schema),
-                HasMany(has_many) => has_many.target(schema),
-                HasOne(_) => todo!(),
-            };
-
-            projected = &target.expect_root().fields[*step];
-        }
-
-        projected
     }
 }
 

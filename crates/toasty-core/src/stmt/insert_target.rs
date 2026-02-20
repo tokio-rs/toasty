@@ -58,9 +58,12 @@ impl InsertTarget {
         match self {
             InsertTarget::Scope(query) => match &query.body {
                 ExprSet::Select(select) => match &select.source {
-                    Source::Model(source_model) => {
-                        schema.app.model(source_model.model).expect_root().fields.len()
-                    }
+                    Source::Model(source_model) => schema
+                        .app
+                        .model(source_model.model)
+                        .expect_root()
+                        .fields
+                        .len(),
                     _ => todo!("insert_target={self:#?}"),
                 },
                 _ => todo!("insert_target={self:#?}"),

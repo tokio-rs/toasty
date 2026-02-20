@@ -65,22 +65,27 @@ impl Schema {
                     // Cannot project through primitive fields
                     return None;
                 }
-                FieldTy::Embedded(embedded) => {
-                    self.model(embedded.target).expect_embedded_struct().fields.get(*step)?
-                }
+                FieldTy::Embedded(embedded) => self
+                    .model(embedded.target)
+                    .expect_embedded_struct()
+                    .fields
+                    .get(*step)?,
                 FieldTy::BelongsTo(belongs_to) => {
                     belongs_to.target(self).expect_root().fields.get(*step)?
                 }
                 FieldTy::HasMany(has_many) => {
                     has_many.target(self).expect_root().fields.get(*step)?
                 }
-                FieldTy::HasOne(has_one) => {
-                    has_one.target(self).expect_root().fields.get(*step)?
-                }
+                FieldTy::HasOne(has_one) => has_one.target(self).expect_root().fields.get(*step)?,
             };
         }
 
         Some(current_field)
+    }
+
+    pub fn resolve_field_path<'a>(&'a self, path: &stmt::Path) -> Option<&'a Field> {
+        let model = self.model(path.root);
+        self.resolve_field(model, &path.projection)
     }
 }
 
@@ -191,7 +196,8 @@ impl Builder {
                         let target = self.models.get_index_of(&belongs_to.target).unwrap();
 
                         for target_index in 0..self.models[target].expect_root().fields.len() {
-                            pair = match &self.models[target].expect_root().fields[target_index].ty {
+                            pair = match &self.models[target].expect_root().fields[target_index].ty
+                            {
                                 FieldTy::HasMany(has_many) if has_many.pair == field_id => {
                                     assert!(pair.is_none());
                                     Some(self.models[target].expect_root().fields[target_index].id)
