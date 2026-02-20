@@ -6,55 +6,63 @@ pub(crate) use index_plan::IndexPlan;
 
 use crate::{engine::Engine, Result};
 use std::collections::HashMap;
-use toasty_core::{driver::Capability, schema::db::Table, stmt};
+use toasty_core::{driver::Capability, schema::db::Table, Schema, stmt};
 
 impl Engine {
     pub(crate) fn plan_index_path<'a>(&'a self, stmt: &stmt::Statement) -> Result<IndexPlan<'a>> {
-        let cx = self.expr_cx();
-        let cx = cx.scope(stmt);
-        // Get a handle to the expression target so it can be passed into the planner
-        let target = cx.target();
-        let stmt::ExprTarget::Table(table) = target else {
-            todo!("target={target:#?}")
-        };
-
-        // Get the statement filter
-        let filter = stmt.filter_expr_unwrap();
-
-        let mut index_planner = IndexPlanner {
-            cx,
-            table,
-            filter,
-            index_matches: vec![],
-            index_paths: vec![],
-        };
-
-        let index_path = index_planner.plan_index_path()?;
-
-        let mut cx = PartitionCtx {
-            capability: self.capability(),
-            apply_result_filter_on_results: false,
-        };
-
-        let index_match = &index_planner.index_matches[index_path.index_match];
-        let (index_filter, result_filter) = index_match.partition_filter(&mut cx, filter);
-
-        Ok(IndexPlan {
-            // Reload the index to make lifetimes happy.
-            index: self.schema.db.index(index_match.index.id),
-            index_filter,
-            result_filter: if result_filter.is_true() {
-                None
-            } else {
-                Some(result_filter)
-            },
-            post_filter: if cx.apply_result_filter_on_results {
-                Some(filter.clone())
-            } else {
-                None
-            },
-        })
+        plan_index_path(&self.schema, self.capability(), stmt)
     }
+}
+
+pub(crate) fn plan_index_path<'a, 'stmt>(
+    schema: &'a Schema,
+    capability: &'a Capability,
+    stmt: &'stmt stmt::Statement,
+) -> Result<IndexPlan<'a>> {
+    let cx = stmt::ExprContext::new(schema);
+    let cx = cx.scope(stmt);
+    // Get a handle to the expression target so it can be passed into the planner
+    let target = cx.target();
+    let stmt::ExprTarget::Table(table) = target else {
+        todo!("target={target:#?}")
+    };
+
+    // Get the statement filter
+    let filter = stmt.filter_expr_unwrap();
+
+    let mut index_planner = IndexPlanner {
+        cx,
+        table,
+        filter,
+        index_matches: vec![],
+        index_paths: vec![],
+    };
+
+    let index_path = index_planner.plan_index_path()?;
+
+    let mut partition_cx = PartitionCtx {
+        capability,
+        apply_result_filter_on_results: false,
+    };
+
+    let index_match = &index_planner.index_matches[index_path.index_match];
+    let (index_filter, result_filter) = index_match.partition_filter(&mut partition_cx, filter);
+
+    Ok(IndexPlan {
+        // Reload the index to make lifetimes happy.
+        index: schema.db.index(index_match.index.id),
+        index_filter,
+        result_filter: if result_filter.is_true() {
+            None
+        } else {
+            Some(result_filter)
+        },
+        post_filter: if partition_cx.apply_result_filter_on_results {
+            Some(filter.clone())
+        } else {
+            None
+        },
+    })
 }
 
 struct IndexPlanner<'stmt> {
@@ -148,3 +156,6 @@ impl IndexPlanner<'_> {
         self.index_paths = index_paths;
     }
 }
+
+#[cfg(test)]
+mod tests;
