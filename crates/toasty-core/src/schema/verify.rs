@@ -90,7 +90,10 @@ impl Verify<'_> {
 
     fn verify_model_indices_are_scoped_correctly(&self) {
         for model in self.schema.app.models() {
-            for index in &model.indices {
+            let ModelKind::Root(root) = &model.kind else {
+                continue;
+            };
+            for index in &root.indices {
                 let mut seen_local = false;
 
                 for field in &index.fields {

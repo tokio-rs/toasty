@@ -120,6 +120,7 @@ impl BuildTableFromModels<'_> {
     }
 
     fn map_model_fields(&mut self, model: &Model) {
+        let root = model.kind.expect_root();
         let schema_prefix = if self.prefix_table_names {
             Some(model.name.snake_case())
         } else {
@@ -137,13 +138,13 @@ impl BuildTableFromModels<'_> {
             model_pk_to_table: vec![],
             table_to_model: vec![],
         }
-        .build_mapping(model.kind.expect_root());
+        .build_mapping(root);
 
-        self.populate_model_indices(model);
+        self.populate_model_indices(model.id, root);
     }
 
-    fn populate_model_indices(&mut self, model: &Model) {
-        for model_index in &model.indices {
+    fn populate_model_indices(&mut self, model_id: app::ModelId, root: &ModelRoot) {
+        for model_index in &root.indices {
             let mut index = db::Index {
                 id: IndexId {
                     table: self.table.id,
@@ -157,12 +158,12 @@ impl BuildTableFromModels<'_> {
             };
 
             for index_field in &model_index.fields {
-                let column = self.mapping.model(model.id).fields[index_field.field.index]
+                let column = self.mapping.model(model_id).fields[index_field.field.index]
                     .as_primitive()
                     .unwrap()
                     .column;
 
-                match &model.kind.expect_root().fields[index_field.field.index].ty {
+                match &root.fields[index_field.field.index].ty {
                     app::FieldTy::Primitive(_) => index.columns.push(db::IndexColumn {
                         column,
                         op: index_field.op,

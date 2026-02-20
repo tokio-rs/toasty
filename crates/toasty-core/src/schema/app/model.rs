@@ -12,8 +12,6 @@ pub struct Model {
 
     /// Distinguishes root models (with tables and primary keys) from embedded models
     pub kind: ModelKind,
-
-    pub indices: Vec<Index>,
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +32,9 @@ pub struct ModelRoot {
 
     /// If the schema specifies a table to map the model to, this is set.
     pub table_name: Option<String>,
+
+    /// Indices defined on this model.
+    pub indices: Vec<Index>,
 }
 
 #[derive(Debug, Clone)]

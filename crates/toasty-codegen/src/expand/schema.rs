@@ -22,6 +22,7 @@ impl Expand<'_> {
                             fields: #fields,
                             primary_key: #primary_key,
                             table_name: #table_name,
+                            indices: #indices,
                         }
                     )
                 }
@@ -45,7 +46,6 @@ impl Expand<'_> {
                     id,
                     name: #name,
                     kind: #kind,
-                    indices: #indices,
                 }
             }
         }
