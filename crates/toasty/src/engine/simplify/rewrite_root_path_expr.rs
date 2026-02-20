@@ -47,7 +47,7 @@ mod tests {
     #[test]
     fn single_pk_field_becomes_eq_expr() {
         let schema = test_schema();
-        let root = schema.app.model(User::id()).kind.expect_root();
+        let root = schema.app.model(User::id()).expect_root();
         let mut simplify = Simplify::new(&schema);
 
         // `rewrite_root_path_expr(root, 42) → eq(ref(pk), 42)`

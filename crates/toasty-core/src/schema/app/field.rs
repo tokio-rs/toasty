@@ -101,7 +101,7 @@ impl Field {
     /// Returns a fully qualified name for the field.
     pub fn full_name(&self, schema: &Schema) -> String {
         let model = schema.model(self.id.model);
-        format!("{}::{}", model.name.upper_camel_case(), self.name.app_name)
+        format!("{}::{}", model.name().upper_camel_case(), self.name.app_name)
     }
 
     /// If the field is a relation, return the relation's target ModelId.

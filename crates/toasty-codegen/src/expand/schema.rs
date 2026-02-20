@@ -13,12 +13,14 @@ impl Expand<'_> {
         let indices = self.expand_model_indices();
         let table_name = self.expand_table_name();
 
-        let kind = match &self.model.kind {
+        let model = match &self.model.kind {
             ModelKind::Root(_) => {
                 let primary_key = self.expand_primary_key();
                 quote! {
-                    #toasty::schema::app::ModelKind::Root(
+                    #toasty::schema::app::Model::Root(
                         #toasty::schema::app::ModelRoot {
+                            id,
+                            name: #name,
                             fields: #fields,
                             primary_key: #primary_key,
                             table_name: #table_name,
@@ -29,8 +31,10 @@ impl Expand<'_> {
             }
             ModelKind::EmbeddedStruct(_) => {
                 quote! {
-                    #toasty::schema::app::ModelKind::EmbeddedStruct(
+                    #toasty::schema::app::Model::EmbeddedStruct(
                         #toasty::schema::app::EmbeddedStruct {
+                            id,
+                            name: #name,
                             fields: #fields,
                         }
                     )
@@ -42,11 +46,7 @@ impl Expand<'_> {
             fn schema() -> #toasty::schema::app::Model {
                 let id = #model_ident::id();
 
-                #toasty::schema::app::Model {
-                    id,
-                    name: #name,
-                    kind: #kind,
-                }
+                #model
             }
         }
     }

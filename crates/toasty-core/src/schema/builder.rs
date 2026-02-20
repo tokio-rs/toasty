@@ -77,9 +77,9 @@ impl Builder {
 
             // Create a mapping shell for the model (fields will be built during mapping phase)
             builder.mapping.models.insert(
-                model.id,
+                model.id(),
                 mapping::Model {
-                    id: model.id,
+                    id: model.id(),
                     table,
                     columns: vec![],
                     fields: vec![], // Will be populated during mapping phase
@@ -115,9 +115,9 @@ impl Default for Builder {
 
 impl BuildSchema<'_> {
     fn build_model_constraints(&self, model: &mut app::Model) -> Result<()> {
-        let fields = match &mut model.kind {
-            app::ModelKind::Root(root) => &mut root.fields[..],
-            app::ModelKind::EmbeddedStruct(embedded) => &mut embedded.fields[..],
+        let fields = match model {
+            app::Model::Root(root) => &mut root.fields[..],
+            app::Model::EmbeddedStruct(embedded) => &mut embedded.fields[..],
         };
         for field in fields.iter_mut() {
             if let app::FieldTy::Primitive(primitive) = &mut field.ty {

@@ -41,9 +41,9 @@ struct BuildMapping<'a> {
 
 impl BuildSchema<'_> {
     pub(super) fn build_table_stub_for_model(&mut self, model: &Model) -> TableId {
-        let table_name = match &model.kind {
-            app::ModelKind::Root(root) => root.table_name.as_ref(),
-            app::ModelKind::EmbeddedStruct(_) => {
+        let table_name = match model {
+            app::Model::Root(root) => root.table_name.as_ref(),
+            app::Model::EmbeddedStruct(_) => {
                 panic!("build_table_stub_for_model called on embedded model")
             }
         };
@@ -58,7 +58,7 @@ impl BuildSchema<'_> {
 
             *self.table_lookup.get(&table_name).unwrap()
         } else {
-            let name = self.table_name_from_model(&model.name);
+            let name = self.table_name_from_model(model.name());
             let id = self.register_table(&name);
 
             self.tables.push(Table::new(id, name));
@@ -71,7 +71,7 @@ impl BuildSchema<'_> {
             let models = app
                 .models()
                 .filter(|model| model.is_root())
-                .filter(|model| self.mapping.model(model.id).table == table.id)
+                .filter(|model| self.mapping.model(model.id()).table == table.id)
                 .collect::<Vec<_>>();
 
             assert!(
@@ -120,9 +120,9 @@ impl BuildTableFromModels<'_> {
     }
 
     fn map_model_fields(&mut self, model: &Model) {
-        let root = model.kind.expect_root();
+        let root = model.expect_root();
         let schema_prefix = if self.prefix_table_names {
-            Some(model.name.snake_case())
+            Some(model.name().snake_case())
         } else {
             None
         };
@@ -140,7 +140,7 @@ impl BuildTableFromModels<'_> {
         }
         .build_mapping(root);
 
-        self.populate_model_indices(model.id, root);
+        self.populate_model_indices(model.id(), root);
     }
 
     fn populate_model_indices(&mut self, model_id: app::ModelId, root: &ModelRoot) {
@@ -222,9 +222,9 @@ impl BuildTableFromModels<'_> {
         schema_prefix: Option<&str>,
         embed_prefix: Option<&str>,
     ) {
-        let fields = match &model.kind {
-            app::ModelKind::Root(root) => &root.fields[..],
-            app::ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+        let fields = match model {
+            app::Model::Root(root) => &root.fields[..],
+            app::Model::EmbeddedStruct(embedded) => &embedded.fields[..],
         };
         for field in fields {
             match &field.ty {
@@ -466,7 +466,7 @@ impl BuildMapping<'_> {
                         // get globally unique bits within the model's field mask space.
                         let embedded_model = self.app.model(embedded.target);
                         let nested_fields = self.map_fields_recursive(
-                            &embedded_model.kind.expect_embedded_struct().fields,
+                            &embedded_model.expect_embedded_struct().fields,
                             Some(&nested_prefix),
                             nested_source,
                             nested_projection.clone(),

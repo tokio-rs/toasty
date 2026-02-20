@@ -21,11 +21,10 @@ impl<M: Model> Insert<M> {
                 target: stmt::InsertTarget::Model(M::id()),
                 source: stmt::Query::new_single(vec![stmt::ExprRecord::from_vec(
                     M::schema()
-                        .kind
                         .expect_root()
                         .fields
                         .iter()
-                        .map(|field| match field.auto() {
+                        .map(|field: &toasty_core::schema::app::Field| match field.auto() {
                             Some(_) => stmt::Expr::Default,
                             None => stmt::Expr::Value(stmt::Value::Null),
                         })

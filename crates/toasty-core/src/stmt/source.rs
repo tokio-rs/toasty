@@ -83,7 +83,7 @@ impl Source {
 
 impl From<&Model> for Source {
     fn from(value: &Model) -> Self {
-        Self::from(value.id)
+        Self::from(value.id())
     }
 }
 

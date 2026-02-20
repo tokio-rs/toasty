@@ -1,7 +1,7 @@
 mod relations_are_indexed;
 
 use super::{
-    app::{FieldId, ModelId, ModelKind},
+    app::{FieldId, ModelId},
     db::{ColumnId, IndexId},
     Result, Schema,
 };
@@ -24,9 +24,9 @@ impl Verify<'_> {
         debug_assert!(self.verify_ids_populated());
 
         for model in self.schema.app.models() {
-            let fields = match &model.kind {
-                ModelKind::Root(root) => &root.fields[..],
-                ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+            let fields = match model {
+                super::app::Model::Root(root) => &root.fields[..],
+                super::app::Model::EmbeddedStruct(embedded) => &embedded.fields[..],
             };
             for field in fields {
                 self.verify_relations_are_indexed(field);
@@ -48,11 +48,11 @@ impl Verify<'_> {
 
     fn verify_ids_populated(&self) -> bool {
         for model in self.schema.app.models() {
-            assert_ne!(model.id, ModelId::placeholder());
+            assert_ne!(model.id(), ModelId::placeholder());
 
-            let fields = match &model.kind {
-                ModelKind::Root(root) => &root.fields[..],
-                ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+            let fields = match model {
+                super::app::Model::Root(root) => &root.fields[..],
+                super::app::Model::EmbeddedStruct(embedded) => &embedded.fields[..],
             };
             for field in fields {
                 if let Some(has_many) = field.ty.as_has_many() {
@@ -90,7 +90,7 @@ impl Verify<'_> {
 
     fn verify_model_indices_are_scoped_correctly(&self) {
         for model in self.schema.app.models() {
-            let ModelKind::Root(root) = &model.kind else {
+            let super::app::Model::Root(root) = model else {
                 continue;
             };
             for index in &root.indices {

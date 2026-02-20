@@ -19,19 +19,16 @@ pub async fn basic_embedded_struct(test: &mut Test) {
     let db = test.setup_db(models!(Address)).await;
     let schema = db.schema();
 
-    // Embedded models exist in app schema with ModelKind::EmbeddedStruct
+    // Embedded models exist in app schema as Model::EmbeddedStruct
     assert_struct!(schema.app.models, #{
-        Address::id(): _ {
+        Address::id(): toasty::schema::app::Model::EmbeddedStruct(_ {
             name.upper_camel_case(): "Address",
-            kind: toasty::schema::app::ModelKind::EmbeddedStruct(_ {
-                fields: [
-                    _ { name.app_name: "street", .. },
-                    _ { name.app_name: "city", .. }
-                ],
-                ..
-            }),
+            fields: [
+                _ { name.app_name: "street", .. },
+                _ { name.app_name: "city", .. }
+            ],
             ..
-        },
+        }),
     });
 
     // Embedded models don't create database tables (fields are flattened into parent)
@@ -63,35 +60,29 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
 
     // Both embedded and root models exist in app schema
     assert_struct!(schema.app.models, #{
-        Address::id(): _ {
+        Address::id(): toasty::schema::app::Model::EmbeddedStruct(_ {
             name.upper_camel_case(): "Address",
-            kind: toasty::schema::app::ModelKind::EmbeddedStruct(_ {
-                fields: [
-                    _ { name.app_name: "street", .. },
-                    _ { name.app_name: "city", .. }
-                ],
-                ..
-            }),
+            fields: [
+                _ { name.app_name: "street", .. },
+                _ { name.app_name: "city", .. }
+            ],
             ..
-        },
-        User::id(): _ {
+        }),
+        User::id(): toasty::schema::app::Model::Root(_ {
             name.upper_camel_case(): "User",
-            kind: toasty::schema::app::ModelKind::Root(_ {
-                fields: [
-                    _ { name.app_name: "id", .. },
-                    _ {
-                        name.app_name: "address",
-                        ty: FieldTy::Embedded(_ {
-                            target: == Address::id(),
-                            ..
-                        }),
+            fields: [
+                _ { name.app_name: "id", .. },
+                _ {
+                    name.app_name: "address",
+                    ty: FieldTy::Embedded(_ {
+                        target: == Address::id(),
                         ..
-                    }
-                ],
-                ..
-            }),
+                    }),
+                    ..
+                }
+            ],
             ..
-        },
+        }),
     });
 
     // Database table has flattened columns with prefix (address_street, address_city)
@@ -141,8 +132,8 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
         ],
         model_to_table.fields: [
             _,
-            == stmt::Expr::project(stmt::Expr::ref_self_field(user.kind.expect_root().fields[1].id), [0]),
-            == stmt::Expr::project(stmt::Expr::ref_self_field(user.kind.expect_root().fields[1].id), [1])
+            == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [0]),
+            == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1])
         ],
         ..
     });
@@ -764,68 +755,56 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
 
     // All embedded models should exist in app schema
     assert_struct!(schema.app.models, #{
-        Location::id(): _ {
+        Location::id(): toasty::schema::app::Model::EmbeddedStruct(_ {
             name.upper_camel_case(): "Location",
-            kind: toasty::schema::app::ModelKind::EmbeddedStruct(_ {
-                fields.len(): 2,
-                ..
-            }),
+            fields.len(): 2,
             ..
-        },
-        City::id(): _ {
+        }),
+        City::id(): toasty::schema::app::Model::EmbeddedStruct(_ {
             name.upper_camel_case(): "City",
-            kind: toasty::schema::app::ModelKind::EmbeddedStruct(_ {
-                fields: [
-                    _ { name.app_name: "name", .. },
-                    _ {
-                        name.app_name: "location",
-                        ty: FieldTy::Embedded(_ {
-                            target: == Location::id(),
-                            ..
-                        }),
+            fields: [
+                _ { name.app_name: "name", .. },
+                _ {
+                    name.app_name: "location",
+                    ty: FieldTy::Embedded(_ {
+                        target: == Location::id(),
                         ..
-                    }
-                ],
-                ..
-            }),
+                    }),
+                    ..
+                }
+            ],
             ..
-        },
-        Address::id(): _ {
+        }),
+        Address::id(): toasty::schema::app::Model::EmbeddedStruct(_ {
             name.upper_camel_case(): "Address",
-            kind: toasty::schema::app::ModelKind::EmbeddedStruct(_ {
-                fields: [
-                    _ { name.app_name: "street", .. },
-                    _ {
-                        name.app_name: "city",
-                        ty: FieldTy::Embedded(_ {
-                            target: == City::id(),
-                            ..
-                        }),
+            fields: [
+                _ { name.app_name: "street", .. },
+                _ {
+                    name.app_name: "city",
+                    ty: FieldTy::Embedded(_ {
+                        target: == City::id(),
                         ..
-                    }
-                ],
-                ..
-            }),
+                    }),
+                    ..
+                }
+            ],
             ..
-        },
-        User::id(): _ {
+        }),
+        User::id(): toasty::schema::app::Model::Root(_ {
             name.upper_camel_case(): "User",
-            kind: toasty::schema::app::ModelKind::Root(_ {
-                fields: [
-                    _ { name.app_name: "id", .. },
-                    _ {
-                        name.app_name: "address",
-                        ty: FieldTy::Embedded(_ {
-                            target: == Address::id(),
-                            ..
-                        }),
+            fields: [
+                _ { name.app_name: "id", .. },
+                _ {
+                    name.app_name: "address",
+                    ty: FieldTy::Embedded(_ {
+                        target: == Address::id(),
                         ..
-                    }
-                ],
-                ..
-            }),
+                    }),
+                    ..
+                }
+            ],
             ..
-        },
+        }),
     });
 
     // Database table should flatten all nested fields with proper prefixes
@@ -1021,25 +1000,25 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
     // Expression for address.street should be: project(ref(address_field), [0])
     assert_struct!(
         user_mapping.model_to_table[1],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.kind.expect_root().fields[1].id), [0])
+        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [0])
     );
 
     // Expression for address.city.name should be: project(ref(address_field), [1, 0])
     assert_struct!(
         user_mapping.model_to_table[2],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.kind.expect_root().fields[1].id), [1, 0])
+        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1, 0])
     );
 
     // Expression for address.city.location.lat should be: project(ref(address_field), [1, 1, 0])
     assert_struct!(
         user_mapping.model_to_table[3],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.kind.expect_root().fields[1].id), [1, 1, 0])
+        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1, 1, 0])
     );
 
     // Expression for address.city.location.lon should be: project(ref(address_field), [1, 1, 1])
     assert_struct!(
         user_mapping.model_to_table[4],
-        == stmt::Expr::project(stmt::Expr::ref_self_field(user.kind.expect_root().fields[1].id), [1, 1, 1])
+        == stmt::Expr::project(stmt::Expr::ref_self_field(user.expect_root().fields[1].id), [1, 1, 1])
     );
 }
 

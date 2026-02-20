@@ -547,7 +547,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                     // Step 2 — build the returning expression.
                     *returning = stmt::Returning::Expr(build_update_returning(
-                        model.id,
+                        model.id(),
                         None,
                         &mapping.fields,
                         &changed_bits,
@@ -824,7 +824,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             todo!("Multi-step include paths not yet supported")
         };
 
-        let field = &self.model_unwrap().kind.expect_root().fields[*field_index];
+        let field = &self.model_unwrap().expect_root().fields[*field_index];
 
         let mut stmt = match &field.ty {
             FieldTy::HasMany(rel) => stmt::Query::new_select(

@@ -67,7 +67,7 @@ impl LowerStatement<'_, '_> {
         };
 
         // Handle any cascading deletes
-        for field in model.kind.expect_root().fields.iter() {
+        for field in model.expect_root().fields.iter() {
             self.plan_mut_relation_field(
                 field,
                 Mutation::DisassociateAll { delete: true },
@@ -84,7 +84,7 @@ impl LowerStatement<'_, '_> {
     ) {
         let model = self.expr_cx.target().as_model_unwrap();
 
-        for (i, field) in model.kind.expect_root().fields.iter().enumerate() {
+        for (i, field) in model.expect_root().fields.iter().enumerate() {
             if field.is_relation() {
                 let expr = row.entry_mut(i).take();
 
@@ -92,7 +92,7 @@ impl LowerStatement<'_, '_> {
                     if !field.nullable && field.ty.is_has_one() {
                         panic!(
                             "Insert missing non-nullable field; model={}; name={:#?}; ty={:#?}; expr={:#?}",
-                            model.name.upper_camel_case(),
+                            model.name().upper_camel_case(),
                             field.name,
                             field.ty,
                             expr
@@ -128,7 +128,7 @@ impl LowerStatement<'_, '_> {
     ) {
         let model = self.expr_cx.target().as_model_unwrap();
 
-        for (i, field) in model.kind.expect_root().fields.iter().enumerate() {
+        for (i, field) in model.expect_root().fields.iter().enumerate() {
             if !field.is_relation() {
                 continue;
             }
@@ -697,7 +697,7 @@ impl RelationSource for InsertRelationSource<'_> {
     }
 
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
-        assert_eq!(self.model.id, field.model);
+        assert_eq!(self.model.id(), field.model);
         self.row.as_record_mut()[field.index] = expr;
     }
 

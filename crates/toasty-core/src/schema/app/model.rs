@@ -3,19 +3,7 @@ use crate::{driver, stmt, Result};
 use std::fmt;
 
 #[derive(Debug, Clone)]
-pub struct Model {
-    /// Uniquely identifies the model within the schema
-    pub id: ModelId,
-
-    /// Name of the model
-    pub name: Name,
-
-    /// Distinguishes root models (with tables and primary keys) from embedded models
-    pub kind: ModelKind,
-}
-
-#[derive(Debug, Clone)]
-pub enum ModelKind {
+pub enum Model {
     /// Root model that maps to a database table and can be queried directly
     Root(ModelRoot),
     /// Embedded struct model that is flattened into its parent model's table
@@ -24,6 +12,12 @@ pub enum ModelKind {
 
 #[derive(Debug, Clone)]
 pub struct ModelRoot {
+    /// Uniquely identifies the model within the schema
+    pub id: ModelId,
+
+    /// Name of the model
+    pub name: Name,
+
     /// Fields contained by the model
     pub fields: Vec<Field>,
 
@@ -39,6 +33,12 @@ pub struct ModelRoot {
 
 #[derive(Debug, Clone)]
 pub struct EmbeddedStruct {
+    /// Uniquely identifies the model within the schema
+    pub id: ModelId,
+
+    /// Name of the model
+    pub name: Name,
+
     /// Fields contained by the embedded struct
     pub fields: Vec<Field>,
 }
@@ -48,14 +48,28 @@ pub struct EmbeddedStruct {
 pub struct ModelId(pub usize);
 
 impl Model {
+    pub fn id(&self) -> ModelId {
+        match self {
+            Model::Root(root) => root.id,
+            Model::EmbeddedStruct(embedded) => embedded.id,
+        }
+    }
+
+    pub fn name(&self) -> &Name {
+        match self {
+            Model::Root(root) => &root.name,
+            Model::EmbeddedStruct(embedded) => &embedded.name,
+        }
+    }
+
     /// Returns true if this is a root model (has a table and primary key)
     pub fn is_root(&self) -> bool {
-        matches!(self.kind, ModelKind::Root(_))
+        matches!(self, Model::Root(_))
     }
 
     /// Returns true if this is an embedded model (flattened into parent)
     pub fn is_embedded(&self) -> bool {
-        matches!(self.kind, ModelKind::EmbeddedStruct(_))
+        matches!(self, Model::EmbeddedStruct(_))
     }
 
     /// Returns true if this model can be the target of a relation
@@ -63,10 +77,34 @@ impl Model {
         self.is_root()
     }
 
+    /// Returns a reference to the root model data, panicking if this is not a root model.
+    pub fn expect_root(&self) -> &ModelRoot {
+        match self {
+            Model::Root(root) => root,
+            Model::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
+        }
+    }
+
+    /// Returns a mutable reference to the root model data, panicking if this is not a root model.
+    pub fn expect_root_mut(&mut self) -> &mut ModelRoot {
+        match self {
+            Model::Root(root) => root,
+            Model::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
+        }
+    }
+
+    /// Returns a reference to the embedded struct data, panicking if this is not an embedded struct.
+    pub fn expect_embedded_struct(&self) -> &EmbeddedStruct {
+        match self {
+            Model::EmbeddedStruct(embedded) => embedded,
+            Model::Root(_) => panic!("expected embedded struct, found root model"),
+        }
+    }
+
     pub fn primitives_mut(&mut self) -> impl Iterator<Item = &mut FieldPrimitive> + '_ {
-        let fields = match &mut self.kind {
-            ModelKind::Root(root) => &mut root.fields[..],
-            ModelKind::EmbeddedStruct(embedded) => &mut embedded.fields[..],
+        let fields = match self {
+            Model::Root(root) => &mut root.fields[..],
+            Model::EmbeddedStruct(embedded) => &mut embedded.fields[..],
         };
         fields.iter_mut().flat_map(|field| match &mut field.ty {
             FieldTy::Primitive(primitive) => Some(primitive),
@@ -76,32 +114,32 @@ impl Model {
 
     pub fn field(&self, field: impl Into<FieldId>) -> &Field {
         let field_id = field.into();
-        assert_eq!(self.id, field_id.model);
-        let fields = match &self.kind {
-            ModelKind::Root(root) => &root.fields[..],
-            ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+        assert_eq!(self.id(), field_id.model);
+        let fields = match self {
+            Model::Root(root) => &root.fields[..],
+            Model::EmbeddedStruct(embedded) => &embedded.fields[..],
         };
         &fields[field_id.index]
     }
 
     pub fn field_by_name(&self, name: &str) -> Option<&Field> {
-        let fields = match &self.kind {
-            ModelKind::Root(root) => &root.fields[..],
-            ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+        let fields = match self {
+            Model::Root(root) => &root.fields[..],
+            Model::EmbeddedStruct(embedded) => &embedded.fields[..],
         };
         fields.iter().find(|field| field.name.app_name == name)
     }
 
     pub fn field_by_name_mut(&mut self, name: &str) -> Option<&mut Field> {
-        let fields = match &mut self.kind {
-            ModelKind::Root(root) => &mut root.fields[..],
-            ModelKind::EmbeddedStruct(embedded) => &mut embedded.fields[..],
+        let fields = match self {
+            Model::Root(root) => &mut root.fields[..],
+            Model::EmbeddedStruct(embedded) => &mut embedded.fields[..],
         };
         fields.iter_mut().find(|field| field.name.app_name == name)
     }
 
     pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {
-        let root = self.kind.expect_root();
+        let root = self.expect_root();
 
         let filter = match &root.primary_key.fields[..] {
             [pk_field] => stmt::Expr::eq(
@@ -126,58 +164,31 @@ impl Model {
             ),
         };
 
-        stmt::Query::new_select(self.id, filter)
+        stmt::Query::new_select(self.id(), filter)
     }
 
     /// Iterate over the fields used for the model's primary key.
     /// Returns None if this is an embedded model.
-    /// TODO: extract type?
     pub fn primary_key_fields(&self) -> Option<impl ExactSizeIterator<Item = &'_ Field>> {
-        match &self.kind {
-            ModelKind::Root(root) => {
+        match self {
+            Model::Root(root) => {
                 let pk = &root.primary_key;
                 Some(pk.fields.iter().map(|pk_field| &root.fields[pk_field.index]))
             }
-            ModelKind::EmbeddedStruct(_) => None,
+            Model::EmbeddedStruct(_) => None,
         }
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
-        let fields = match &self.kind {
-            ModelKind::Root(root) => &root.fields[..],
-            ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+        let fields = match self {
+            Model::Root(root) => &root.fields[..],
+            Model::EmbeddedStruct(embedded) => &embedded.fields[..],
         };
         for field in fields {
             field.verify(db)?;
         }
 
         Ok(())
-    }
-}
-
-impl ModelKind {
-    /// Returns a reference to the root model data, panicking if this is not a root model.
-    pub fn expect_root(&self) -> &ModelRoot {
-        match self {
-            ModelKind::Root(root) => root,
-            ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
-        }
-    }
-
-    /// Returns a mutable reference to the root model data, panicking if this is not a root model.
-    pub fn expect_root_mut(&mut self) -> &mut ModelRoot {
-        match self {
-            ModelKind::Root(root) => root,
-            ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
-        }
-    }
-
-    /// Returns a reference to the embedded struct data, panicking if this is not an embedded struct.
-    pub fn expect_embedded_struct(&self) -> &EmbeddedStruct {
-        match self {
-            ModelKind::EmbeddedStruct(embedded) => embedded,
-            ModelKind::Root(_) => panic!("expected embedded struct, found root model"),
-        }
     }
 }
 
@@ -207,7 +218,7 @@ impl From<&mut Self> for ModelId {
 
 impl From<&Model> for ModelId {
     fn from(value: &Model) -> Self {
-        value.id
+        value.id()
     }
 }
 

@@ -227,7 +227,7 @@ impl<'a> Simplify<'a> {
     }
 
     fn model_root(&self, model_id: impl Into<ModelId>) -> &ModelRoot {
-        self.model(model_id).kind.expect_root()
+        self.model(model_id).expect_root()
     }
 
     fn field(&self, field_id: impl Into<FieldId>) -> &Field {
