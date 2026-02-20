@@ -1,6 +1,7 @@
-use std::ops::Deref;
+use std::{ops::Deref, time::Duration};
 
 use toasty_core::driver::operation::Transaction as TransactionOp;
+use tokio::time::timeout;
 
 use crate::{db::ConnectionType, engine::Engine, Db};
 
@@ -62,15 +63,7 @@ impl Db {
 
                 Transaction::Root(db)
             }
-            ConnectionType::Transaction(mutex) => {
-                mutex
-                    .lock()
-                    .await
-                    .exec(&self.engine.schema.db, TransactionOp::Start.into())
-                    .await?;
-
-                Transaction::Nested(&self)
-            }
+            ConnectionType::Transaction(_) => Transaction::Nested(&self),
         };
 
         tx.start().await?;
@@ -81,9 +74,23 @@ impl Db {
         &self,
         fut: impl AsyncFnOnce(&Db) -> crate::Result<O>,
     ) -> crate::Result<O> {
+        self.transaction_with_timeout(Duration::from_secs(5), fut)
+            .await
+    }
+
+    pub async fn transaction_with_timeout<O>(
+        &self,
+        duration: Duration,
+        fut: impl AsyncFnOnce(&Db) -> crate::Result<O>,
+    ) -> crate::Result<O> {
         let tx = self.begin().await?;
 
-        match fut(&tx).await {
+        let Ok(res) = timeout(duration, fut(&tx)).await else {
+            tx.rollback().await?;
+            return Err(crate::Error::transaction_timed_out(duration));
+        };
+
+        match res {
             Ok(res) => {
                 tx.commit().await?;
                 Ok(res)
