@@ -300,7 +300,7 @@ impl<'stmt> IndexMatch<'stmt> {
         use stmt::Expr::*;
 
         match expr {
-            Pattern(stmt::ExprPattern::BeginsWith(_)) | InList(_) | IsNull(_) => {
+            Pattern(stmt::ExprPattern::BeginsWith(_)) | InList(_) | IsNull(_) | Not(_) => {
                 if self
                     .columns
                     .iter()
