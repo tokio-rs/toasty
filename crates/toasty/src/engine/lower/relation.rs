@@ -676,12 +676,11 @@ impl RelationSource for InsertRelationSource<'_> {
         let mut args = vec![];
 
         // Relations only work with root models (which have primary keys)
-        let pk_fields = self
+        let root = self
             .model
-            .primary_key_fields()
-            .expect("relation source must be a root model with primary key");
+            .expect_root();
 
-        for pk_field in pk_fields {
+        for pk_field in root.primary_key_fields() {
             let entry = self.row.entry(pk_field.id.index).unwrap();
 
             if entry.is_value() {
@@ -693,7 +692,7 @@ impl RelationSource for InsertRelationSource<'_> {
             }
         }
 
-        self.model.find_by_id(&args[..])
+        root.find_by_id(&args[..])
     }
 
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {

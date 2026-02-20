@@ -31,6 +31,43 @@ pub struct ModelRoot {
     pub indices: Vec<Index>,
 }
 
+impl ModelRoot {
+    pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {
+        let filter = match &self.primary_key.fields[..] {
+            [pk_field] => stmt::Expr::eq(
+                stmt::Expr::ref_self_field(pk_field),
+                input
+                    .resolve_arg(&0.into(), &stmt::Projection::identity())
+                    .unwrap(),
+            ),
+            pk_fields => stmt::Expr::and_from_vec(
+                pk_fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, pk_field)| {
+                        stmt::Expr::eq(
+                            stmt::Expr::ref_self_field(pk_field),
+                            input
+                                .resolve_arg(&i.into(), &stmt::Projection::identity())
+                                .unwrap(),
+                        )
+                    })
+                    .collect(),
+            ),
+        };
+
+        stmt::Query::new_select(self.id, filter)
+    }
+
+    /// Iterate over the fields used for the model's primary key.
+    pub fn primary_key_fields(&self) -> impl ExactSizeIterator<Item = &'_ Field> {
+        self.primary_key
+            .fields
+            .iter()
+            .map(|pk_field| &self.fields[pk_field.index])
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct EmbeddedStruct {
     /// Uniquely identifies the model within the schema
@@ -136,47 +173,6 @@ impl Model {
             Model::EmbeddedStruct(embedded) => &mut embedded.fields[..],
         };
         fields.iter_mut().find(|field| field.name.app_name == name)
-    }
-
-    pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {
-        let root = self.expect_root();
-
-        let filter = match &root.primary_key.fields[..] {
-            [pk_field] => stmt::Expr::eq(
-                stmt::Expr::ref_self_field(pk_field),
-                input
-                    .resolve_arg(&0.into(), &stmt::Projection::identity())
-                    .unwrap(),
-            ),
-            pk_fields => stmt::Expr::and_from_vec(
-                pk_fields
-                    .iter()
-                    .enumerate()
-                    .map(|(i, pk_field)| {
-                        stmt::Expr::eq(
-                            stmt::Expr::ref_self_field(pk_field),
-                            input
-                                .resolve_arg(&i.into(), &stmt::Projection::identity())
-                                .unwrap(),
-                        )
-                    })
-                    .collect(),
-            ),
-        };
-
-        stmt::Query::new_select(self.id(), filter)
-    }
-
-    /// Iterate over the fields used for the model's primary key.
-    /// Returns None if this is an embedded model.
-    pub fn primary_key_fields(&self) -> Option<impl ExactSizeIterator<Item = &'_ Field>> {
-        match self {
-            Model::Root(root) => {
-                let pk = &root.primary_key;
-                Some(pk.fields.iter().map(|pk_field| &root.fields[pk_field.index]))
-            }
-            Model::EmbeddedStruct(_) => None,
-        }
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
