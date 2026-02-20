@@ -10,9 +10,6 @@ pub struct Model {
     /// Name of the model
     pub name: Name,
 
-    /// Fields contained by the model
-    pub fields: Vec<Field>,
-
     /// Distinguishes root models (with tables and primary keys) from embedded models
     pub kind: ModelKind,
 
@@ -23,17 +20,26 @@ pub struct Model {
 pub enum ModelKind {
     /// Root model that maps to a database table and can be queried directly
     Root(ModelRoot),
-    /// Embedded model that is flattened into its parent model's table
-    Embedded,
+    /// Embedded struct model that is flattened into its parent model's table
+    EmbeddedStruct(EmbeddedStruct),
 }
 
 #[derive(Debug, Clone)]
 pub struct ModelRoot {
+    /// Fields contained by the model
+    pub fields: Vec<Field>,
+
     /// The primary key for this model. Root models must have a primary key.
     pub primary_key: PrimaryKey,
 
     /// If the schema specifies a table to map the model to, this is set.
     pub table_name: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EmbeddedStruct {
+    /// Fields contained by the embedded struct
+    pub fields: Vec<Field>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
@@ -48,14 +54,14 @@ impl Model {
 
     /// Returns true if this is an embedded model (flattened into parent)
     pub fn is_embedded(&self) -> bool {
-        matches!(self.kind, ModelKind::Embedded)
+        matches!(self.kind, ModelKind::EmbeddedStruct(_))
     }
 
     /// Returns the primary key if this is a root model, None if embedded
     pub fn primary_key(&self) -> Option<&PrimaryKey> {
         match &self.kind {
             ModelKind::Root(root) => Some(&root.primary_key),
-            ModelKind::Embedded => None,
+            ModelKind::EmbeddedStruct(_) => None,
         }
     }
 
@@ -65,7 +71,8 @@ impl Model {
     }
 
     pub fn primitives_mut(&mut self) -> impl Iterator<Item = &mut FieldPrimitive> + '_ {
-        self.fields
+        self.kind
+            .fields_mut()
             .iter_mut()
             .flat_map(|field| match &mut field.ty {
                 FieldTy::Primitive(primitive) => Some(primitive),
@@ -76,15 +83,19 @@ impl Model {
     pub fn field(&self, field: impl Into<FieldId>) -> &Field {
         let field_id = field.into();
         assert_eq!(self.id, field_id.model);
-        &self.fields[field_id.index]
+        &self.kind.fields()[field_id.index]
     }
 
     pub fn field_by_name(&self, name: &str) -> Option<&Field> {
-        self.fields.iter().find(|field| field.name.app_name == name)
+        self.kind
+            .fields()
+            .iter()
+            .find(|field| field.name.app_name == name)
     }
 
     pub fn field_by_name_mut(&mut self, name: &str) -> Option<&mut Field> {
-        self.fields
+        self.kind
+            .fields_mut()
             .iter_mut()
             .find(|field| field.name.app_name == name)
     }
@@ -124,19 +135,63 @@ impl Model {
     /// Returns None if this is an embedded model.
     /// TODO: extract type?
     pub fn primary_key_fields(&self) -> Option<impl ExactSizeIterator<Item = &'_ Field>> {
-        self.primary_key().map(|pk| {
-            pk.fields
-                .iter()
-                .map(|pk_field| &self.fields[pk_field.index])
-        })
+        match &self.kind {
+            ModelKind::Root(root) => {
+                let pk = &root.primary_key;
+                Some(pk.fields.iter().map(|pk_field| &root.fields[pk_field.index]))
+            }
+            ModelKind::EmbeddedStruct(_) => None,
+        }
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
-        for field in &self.fields {
+        for field in self.kind.fields() {
             field.verify(db)?;
         }
 
         Ok(())
+    }
+}
+
+impl ModelKind {
+    /// Returns a reference to the root model data, panicking if this is not a root model.
+    pub fn expect_root(&self) -> &ModelRoot {
+        match self {
+            ModelKind::Root(root) => root,
+            ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
+        }
+    }
+
+    /// Returns a mutable reference to the root model data, panicking if this is not a root model.
+    pub fn expect_root_mut(&mut self) -> &mut ModelRoot {
+        match self {
+            ModelKind::Root(root) => root,
+            ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
+        }
+    }
+
+    /// Returns a reference to the embedded struct data, panicking if this is not an embedded struct.
+    pub fn expect_embedded_struct(&self) -> &EmbeddedStruct {
+        match self {
+            ModelKind::EmbeddedStruct(embedded) => embedded,
+            ModelKind::Root(_) => panic!("expected embedded struct, found root model"),
+        }
+    }
+
+    /// Returns the fields for any model kind.
+    pub fn fields(&self) -> &[Field] {
+        match self {
+            ModelKind::Root(root) => &root.fields,
+            ModelKind::EmbeddedStruct(embedded) => &embedded.fields,
+        }
+    }
+
+    /// Returns a mutable slice of fields for any model kind.
+    pub fn fields_mut(&mut self) -> &mut [Field] {
+        match self {
+            ModelKind::Root(root) => &mut root.fields,
+            ModelKind::EmbeddedStruct(embedded) => &mut embedded.fields,
+        }
     }
 }
 

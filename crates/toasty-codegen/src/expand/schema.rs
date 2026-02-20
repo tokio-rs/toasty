@@ -19,15 +19,20 @@ impl Expand<'_> {
                 quote! {
                     #toasty::schema::app::ModelKind::Root(
                         #toasty::schema::app::ModelRoot {
+                            fields: #fields,
                             primary_key: #primary_key,
                             table_name: #table_name,
                         }
                     )
                 }
             }
-            ModelKind::Embedded(_) => {
+            ModelKind::EmbeddedStruct(_) => {
                 quote! {
-                    #toasty::schema::app::ModelKind::Embedded
+                    #toasty::schema::app::ModelKind::EmbeddedStruct(
+                        #toasty::schema::app::EmbeddedStruct {
+                            fields: #fields,
+                        }
+                    )
                 }
             }
         };
@@ -39,7 +44,6 @@ impl Expand<'_> {
                 #toasty::schema::app::Model {
                     id,
                     name: #name,
-                    fields: #fields,
                     kind: #kind,
                     indices: #indices,
                 }
@@ -190,7 +194,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let primary_key = match &self.model.kind {
             ModelKind::Root(root) => &root.primary_key,
-            ModelKind::Embedded(_) => panic!("expand_primary_key called on embedded model"),
+            ModelKind::EmbeddedStruct(_) => panic!("expand_primary_key called on embedded model"),
         };
 
         let fields = primary_key

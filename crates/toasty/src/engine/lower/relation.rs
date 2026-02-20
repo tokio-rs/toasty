@@ -67,7 +67,7 @@ impl LowerStatement<'_, '_> {
         };
 
         // Handle any cascading deletes
-        for field in model.fields.iter() {
+        for field in model.kind.expect_root().fields.iter() {
             self.plan_mut_relation_field(
                 field,
                 Mutation::DisassociateAll { delete: true },
@@ -84,7 +84,7 @@ impl LowerStatement<'_, '_> {
     ) {
         let model = self.expr_cx.target().as_model_unwrap();
 
-        for (i, field) in model.fields.iter().enumerate() {
+        for (i, field) in model.kind.expect_root().fields.iter().enumerate() {
             if field.is_relation() {
                 let expr = row.entry_mut(i).take();
 
@@ -128,7 +128,7 @@ impl LowerStatement<'_, '_> {
     ) {
         let model = self.expr_cx.target().as_model_unwrap();
 
-        for (i, field) in model.fields.iter().enumerate() {
+        for (i, field) in model.kind.expect_root().fields.iter().enumerate() {
             if !field.is_relation() {
                 continue;
             }

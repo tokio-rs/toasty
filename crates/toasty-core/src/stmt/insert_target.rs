@@ -59,13 +59,13 @@ impl InsertTarget {
             InsertTarget::Scope(query) => match &query.body {
                 ExprSet::Select(select) => match &select.source {
                     Source::Model(source_model) => {
-                        schema.app.model(source_model.model).fields.len()
+                        schema.app.model(source_model.model).kind.fields().len()
                     }
                     _ => todo!("insert_target={self:#?}"),
                 },
                 _ => todo!("insert_target={self:#?}"),
             },
-            InsertTarget::Model(model_id) => schema.app.model(model_id).fields.len(),
+            InsertTarget::Model(model_id) => schema.app.model(model_id).kind.fields().len(),
             InsertTarget::Table(insert_table) => insert_table.columns.len(),
         }
     }

@@ -276,7 +276,8 @@ mod tests {
             let user_id = schema
                 .app
                 .model(user_model)
-                .fields
+                .kind
+                .fields()
                 .iter()
                 .find(|f| f.name.app_name == "id")
                 .unwrap()
@@ -285,7 +286,8 @@ mod tests {
             let post_user = schema
                 .app
                 .model(post_model)
-                .fields
+                .kind
+                .fields()
                 .iter()
                 .find(|f| f.name.app_name == "user")
                 .unwrap()

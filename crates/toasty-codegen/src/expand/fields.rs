@@ -106,7 +106,7 @@ impl Expand<'_> {
 
         match &self.model.kind {
             ModelKind::Root(root) => &root.field_struct_ident,
-            ModelKind::Embedded(embedded) => &embedded.field_struct_ident,
+            ModelKind::EmbeddedStruct(embedded) => &embedded.field_struct_ident,
         }
     }
 

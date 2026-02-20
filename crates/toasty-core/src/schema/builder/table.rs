@@ -43,7 +43,7 @@ impl BuildSchema<'_> {
     pub(super) fn build_table_stub_for_model(&mut self, model: &Model) -> TableId {
         let table_name = match &model.kind {
             app::ModelKind::Root(root) => root.table_name.as_ref(),
-            app::ModelKind::Embedded => {
+            app::ModelKind::EmbeddedStruct(_) => {
                 panic!("build_table_stub_for_model called on embedded model")
             }
         };
@@ -162,7 +162,7 @@ impl BuildTableFromModels<'_> {
                     .unwrap()
                     .column;
 
-                match &model.fields[index_field.field.index].ty {
+                match &model.kind.expect_root().fields[index_field.field.index].ty {
                     app::FieldTy::Primitive(_) => index.columns.push(db::IndexColumn {
                         column,
                         op: index_field.op,
@@ -221,7 +221,7 @@ impl BuildTableFromModels<'_> {
         schema_prefix: Option<&str>,
         embed_prefix: Option<&str>,
     ) {
-        for field in &model.fields {
+        for field in model.kind.fields() {
             match &field.ty {
                 app::FieldTy::Primitive(primitive) => {
                     let column_name = format_column_name(field, schema_prefix, embed_prefix);
@@ -267,7 +267,7 @@ impl BuildMapping<'_> {
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
 
         // Iterate fields again (including PK fields) and build the table -> model map.
-        for (field_index, field) in model.fields.iter().enumerate() {
+        for (field_index, field) in model.kind.fields().iter().enumerate() {
             match &field.ty {
                 app::FieldTy::Primitive(primitive) => {
                     let column_id = fields[field_index].as_primitive().unwrap().column;
@@ -361,7 +361,7 @@ impl BuildMapping<'_> {
     fn build_field_mappings(&mut self, model: &Model) -> Vec<mapping::Field> {
         let mut next_bit = 0;
         self.map_fields_recursive(
-            &model.fields,
+            model.kind.fields(),
             None,
             None,
             stmt::Projection::identity(),
@@ -465,7 +465,7 @@ impl BuildMapping<'_> {
                         // get globally unique bits within the model's field mask space.
                         let embedded_model = self.app.model(embedded.target);
                         let nested_fields = self.map_fields_recursive(
-                            &embedded_model.fields,
+                            embedded_model.kind.fields(),
                             Some(&nested_prefix),
                             nested_source,
                             nested_projection.clone(),

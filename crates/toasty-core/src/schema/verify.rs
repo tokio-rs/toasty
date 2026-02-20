@@ -24,7 +24,7 @@ impl Verify<'_> {
         debug_assert!(self.verify_ids_populated());
 
         for model in self.schema.app.models() {
-            for field in &model.fields {
+            for field in model.kind.fields() {
                 self.verify_relations_are_indexed(field);
                 self.verify_auto_field_type(field);
             }
@@ -46,7 +46,7 @@ impl Verify<'_> {
         for model in self.schema.app.models() {
             assert_ne!(model.id, ModelId::placeholder());
 
-            for field in &model.fields {
+            for field in model.kind.fields() {
                 if let Some(has_many) = field.ty.as_has_many() {
                     assert_ne!(has_many.pair, FieldId::placeholder());
                 }

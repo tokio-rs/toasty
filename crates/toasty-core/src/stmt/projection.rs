@@ -220,7 +220,7 @@ impl Steps {
         let [first, rest @ ..] = self.as_slice() else {
             panic!("need at most one path step")
         };
-        let mut projected = &expr_self.fields[*first];
+        let mut projected = &expr_self.kind.fields()[*first];
 
         for step in rest {
             let target = match &projected.ty {
@@ -234,7 +234,7 @@ impl Steps {
                 HasOne(_) => todo!(),
             };
 
-            projected = &target.fields[*step];
+            projected = &target.kind.fields()[*step];
         }
 
         projected

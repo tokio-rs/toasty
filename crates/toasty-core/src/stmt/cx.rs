@@ -217,7 +217,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             ExprTarget::Free => todo!("cannot resolve column in free context"),
             ExprTarget::Model(model) => match expr_reference {
                 ExprReference::Model { .. } => ResolvedRef::Model(model),
-                ExprReference::Field { index, .. } => ResolvedRef::Field(&model.fields[*index]),
+                ExprReference::Field { index, .. } => ResolvedRef::Field(&model.kind.fields()[*index]),
                 ExprReference::Column(expr_column) => {
                     assert_eq!(expr_column.table, 0, "TODO: is this true?");
 

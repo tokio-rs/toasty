@@ -21,6 +21,8 @@ impl<M: Model> Insert<M> {
                 target: stmt::InsertTarget::Model(M::id()),
                 source: stmt::Query::new_single(vec![stmt::ExprRecord::from_vec(
                     M::schema()
+                        .kind
+                        .expect_root()
                         .fields
                         .iter()
                         .map(|field| match field.auto() {

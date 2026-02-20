@@ -80,12 +80,12 @@ impl LowerStatement<'_, '_> {
         // First, we pad the record to account for all fields
         if let stmt::Expr::Record(expr_record) = expr {
             // TODO: get rid of this
-            assert_eq!(expr_record.len(), model.fields.len());
+            assert_eq!(expr_record.len(), model.kind.expect_root().fields.len());
         }
 
         // Next, we have to find all belongs-to fields and normalize them to FK
         // values
-        for field in &model.fields {
+        for field in &model.kind.expect_root().fields {
             if let app::FieldTy::BelongsTo(rel) = &field.ty {
                 let [fk_field] = &rel.foreign_key.fields[..] else {
                     todo!()
@@ -104,7 +104,7 @@ impl LowerStatement<'_, '_> {
 
         // We have to handle auto fields first because they are often the
         // identifier which may be referenced to handle associations.
-        for field in &model.fields {
+        for field in &model.kind.expect_root().fields {
             let mut field_expr = expr.entry_mut(field.id.index);
 
             if field_expr.is_default() {
@@ -197,7 +197,7 @@ impl LowerStatement<'_, '_> {
     }
 
     fn verify_field_constraints(&mut self, model: &app::Model, expr: &mut stmt::Expr) {
-        for field in &model.fields {
+        for field in &model.kind.expect_root().fields {
             if field.nullable && field.constraints.is_empty() {
                 continue;
             }
