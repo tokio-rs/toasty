@@ -1,4 +1,4 @@
-use super::{sparse_record::SparseRecord, Entry, EntryPath, Type, ValueEnum, ValueRecord};
+use super::{sparse_record::SparseRecord, Entry, EntryPath, Type, ValueRecord};
 use std::cmp::Ordering;
 use std::hash::Hash;
 
@@ -6,9 +6,6 @@ use std::hash::Hash;
 pub enum Value {
     /// Boolean value
     Bool(bool),
-
-    /// Value of an enumerated type
-    Enum(ValueEnum),
 
     /// Signed 8-bit integer
     I8(i8),
@@ -208,7 +205,6 @@ impl Value {
             Value::Time(_) => *ty == Type::Time,
             #[cfg(feature = "jiff")]
             Value::DateTime(_) => *ty == Type::DateTime,
-            _ => todo!("value={self:#?}, ty={ty:#?}"),
         }
     }
 
@@ -226,7 +222,6 @@ impl Value {
             Value::String(_) => Type::String,
             Value::List(items) if items.is_empty() => Type::list(Type::Null),
             Value::List(items) => Type::list(items[0].infer_ty()),
-            Value::Enum(_) => todo!(),
             Value::U8(_) => Type::U8,
             Value::U16(_) => Type::U16,
             Value::U32(_) => Type::U32,
