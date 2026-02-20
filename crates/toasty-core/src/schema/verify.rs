@@ -1,7 +1,7 @@
 mod relations_are_indexed;
 
 use super::{
-    app::{FieldId, ModelId},
+    app::{FieldId, ModelId, ModelKind},
     db::{ColumnId, IndexId},
     Result, Schema,
 };
@@ -24,7 +24,11 @@ impl Verify<'_> {
         debug_assert!(self.verify_ids_populated());
 
         for model in self.schema.app.models() {
-            for field in model.kind.fields() {
+            let fields = match &model.kind {
+                ModelKind::Root(root) => &root.fields[..],
+                ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+            };
+            for field in fields {
                 self.verify_relations_are_indexed(field);
                 self.verify_auto_field_type(field);
             }
@@ -46,7 +50,11 @@ impl Verify<'_> {
         for model in self.schema.app.models() {
             assert_ne!(model.id, ModelId::placeholder());
 
-            for field in model.kind.fields() {
+            let fields = match &model.kind {
+                ModelKind::Root(root) => &root.fields[..],
+                ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+            };
+            for field in fields {
                 if let Some(has_many) = field.ty.as_has_many() {
                     assert_ne!(has_many.pair, FieldId::placeholder());
                 }

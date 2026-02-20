@@ -1,4 +1,4 @@
-use super::{Field, FieldId, FieldTy, Model, ModelId};
+use super::{Field, FieldId, FieldTy, Model, ModelId, ModelKind};
 
 use crate::{stmt, Result};
 use indexmap::IndexMap;
@@ -20,11 +20,12 @@ impl Schema {
 
     /// Get a field by ID
     pub fn field(&self, id: FieldId) -> &Field {
-        self.model(id.model)
-            .kind
-            .fields()
-            .get(id.index)
-            .expect("invalid field ID")
+        let model = self.model(id.model);
+        let fields = match &model.kind {
+            ModelKind::Root(root) => &root.fields[..],
+            ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+        };
+        fields.get(id.index).expect("invalid field ID")
     }
 
     pub fn models(&self) -> impl Iterator<Item = &Model> {
@@ -55,25 +56,28 @@ impl Schema {
         };
 
         // Get the first field from the root model
-        let mut current_field = root.kind.fields().get(*first)?;
+        let mut current_field = root.kind.expect_root().fields.get(*first)?;
 
         // Walk through remaining steps
         for step in rest {
-            let target_model = match &current_field.ty {
+            current_field = match &current_field.ty {
                 FieldTy::Primitive(..) => {
                     // Cannot project through primitive fields
                     return None;
                 }
                 FieldTy::Embedded(embedded) => {
-                    // For embedded fields, resolve to the embedded struct's model
-                    self.model(embedded.target)
+                    self.model(embedded.target).kind.expect_embedded_struct().fields.get(*step)?
                 }
-                FieldTy::BelongsTo(belongs_to) => belongs_to.target(self),
-                FieldTy::HasMany(has_many) => has_many.target(self),
-                FieldTy::HasOne(has_one) => has_one.target(self),
+                FieldTy::BelongsTo(belongs_to) => {
+                    belongs_to.target(self).kind.expect_root().fields.get(*step)?
+                }
+                FieldTy::HasMany(has_many) => {
+                    has_many.target(self).kind.expect_root().fields.get(*step)?
+                }
+                FieldTy::HasOne(has_one) => {
+                    has_one.target(self).kind.expect_root().fields.get(*step)?
+                }
             };
-
-            current_field = target_model.kind.fields().get(*step)?;
         }
 
         Some(current_field)
@@ -116,14 +120,17 @@ impl Builder {
         // linking them may result in converting HasOne relations to BelongTo.
         // We need this conversion to happen before any of the other processing.
         for curr in 0..self.models.len() {
-            for index in 0..self.models[curr].kind.fields().len() {
+            if self.models[curr].is_embedded() {
+                continue;
+            }
+            for index in 0..self.models[curr].kind.expect_root().fields.len() {
                 let model = &self.models[curr];
                 let src = model.id;
-                let field = &model.kind.fields()[index];
+                let field = &model.kind.expect_root().fields[index];
 
                 if let FieldTy::HasMany(has_many) = &field.ty {
                     let pair = self.find_has_many_pair(src, has_many.target);
-                    self.models[curr].kind.fields_mut()[index]
+                    self.models[curr].kind.expect_root_mut().fields[index]
                         .ty
                         .expect_has_many_mut()
                         .pair = pair;
@@ -133,10 +140,13 @@ impl Builder {
 
         // Link HasOne relations and compute BelongsTo foreign keys
         for curr in 0..self.models.len() {
-            for index in 0..self.models[curr].kind.fields().len() {
+            if self.models[curr].is_embedded() {
+                continue;
+            }
+            for index in 0..self.models[curr].kind.expect_root().fields.len() {
                 let model = &self.models[curr];
                 let src = model.id;
-                let field = &model.kind.fields()[index];
+                let field = &model.kind.expect_root().fields[index];
 
                 match &field.ty {
                     FieldTy::HasOne(has_one) => {
@@ -147,13 +157,15 @@ impl Builder {
                                 panic!(
                                     "no relation pair for {}::{}",
                                     model.name.upper_camel_case(),
-                                    model.kind.fields()[index].name.app_name
+                                    model.kind.expect_root().fields[index].name.app_name
                                 );
                             }
                         };
 
-                        self.models[curr].kind.fields_mut()[index].ty.expect_has_one_mut().pair =
-                            pair;
+                        self.models[curr].kind.expect_root_mut().fields[index]
+                            .ty
+                            .expect_has_one_mut()
+                            .pair = pair;
                     }
                     FieldTy::BelongsTo(belongs_to) => {
                         assert!(!belongs_to.foreign_key.is_placeholder());
@@ -166,24 +178,27 @@ impl Builder {
 
         // Finally, link BelongsTo relations with their pairs
         for curr in 0..self.models.len() {
-            for index in 0..self.models[curr].kind.fields().len() {
+            if self.models[curr].is_embedded() {
+                continue;
+            }
+            for index in 0..self.models[curr].kind.expect_root().fields.len() {
                 let model = &self.models[curr];
-                let field_id = model.kind.fields()[index].id;
+                let field_id = model.kind.expect_root().fields[index].id;
 
-                let pair = match &self.models[curr].kind.fields()[index].ty {
+                let pair = match &self.models[curr].kind.expect_root().fields[index].ty {
                     FieldTy::BelongsTo(belongs_to) => {
                         let mut pair = None;
                         let target = self.models.get_index_of(&belongs_to.target).unwrap();
 
-                        for target_index in 0..self.models[target].kind.fields().len() {
-                            pair = match &self.models[target].kind.fields()[target_index].ty {
+                        for target_index in 0..self.models[target].kind.expect_root().fields.len() {
+                            pair = match &self.models[target].kind.expect_root().fields[target_index].ty {
                                 FieldTy::HasMany(has_many) if has_many.pair == field_id => {
                                     assert!(pair.is_none());
-                                    Some(self.models[target].kind.fields()[target_index].id)
+                                    Some(self.models[target].kind.expect_root().fields[target_index].id)
                                 }
                                 FieldTy::HasOne(has_one) if has_one.pair == field_id => {
                                     assert!(pair.is_none());
-                                    Some(self.models[target].kind.fields()[target_index].id)
+                                    Some(self.models[target].kind.expect_root().fields[target_index].id)
                                 }
                                 _ => continue,
                             }
@@ -198,7 +213,7 @@ impl Builder {
                     _ => continue,
                 };
 
-                self.models[curr].kind.fields_mut()[index]
+                self.models[curr].kind.expect_root_mut().fields[index]
                     .ty
                     .expect_belongs_to_mut()
                     .pair = pair;
@@ -217,7 +232,8 @@ impl Builder {
         // Find all BelongsTo relations that reference the model
         let belongs_to: Vec<_> = target
             .kind
-            .fields()
+            .expect_root()
+            .fields
             .iter()
             .filter(|field| match &field.ty {
                 FieldTy::BelongsTo(rel) => rel.target == src,

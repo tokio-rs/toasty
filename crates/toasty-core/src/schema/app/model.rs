@@ -71,33 +71,40 @@ impl Model {
     }
 
     pub fn primitives_mut(&mut self) -> impl Iterator<Item = &mut FieldPrimitive> + '_ {
-        self.kind
-            .fields_mut()
-            .iter_mut()
-            .flat_map(|field| match &mut field.ty {
-                FieldTy::Primitive(primitive) => Some(primitive),
-                _ => None,
-            })
+        let fields = match &mut self.kind {
+            ModelKind::Root(root) => &mut root.fields[..],
+            ModelKind::EmbeddedStruct(embedded) => &mut embedded.fields[..],
+        };
+        fields.iter_mut().flat_map(|field| match &mut field.ty {
+            FieldTy::Primitive(primitive) => Some(primitive),
+            _ => None,
+        })
     }
 
     pub fn field(&self, field: impl Into<FieldId>) -> &Field {
         let field_id = field.into();
         assert_eq!(self.id, field_id.model);
-        &self.kind.fields()[field_id.index]
+        let fields = match &self.kind {
+            ModelKind::Root(root) => &root.fields[..],
+            ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+        };
+        &fields[field_id.index]
     }
 
     pub fn field_by_name(&self, name: &str) -> Option<&Field> {
-        self.kind
-            .fields()
-            .iter()
-            .find(|field| field.name.app_name == name)
+        let fields = match &self.kind {
+            ModelKind::Root(root) => &root.fields[..],
+            ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+        };
+        fields.iter().find(|field| field.name.app_name == name)
     }
 
     pub fn field_by_name_mut(&mut self, name: &str) -> Option<&mut Field> {
-        self.kind
-            .fields_mut()
-            .iter_mut()
-            .find(|field| field.name.app_name == name)
+        let fields = match &mut self.kind {
+            ModelKind::Root(root) => &mut root.fields[..],
+            ModelKind::EmbeddedStruct(embedded) => &mut embedded.fields[..],
+        };
+        fields.iter_mut().find(|field| field.name.app_name == name)
     }
 
     pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {
@@ -145,7 +152,11 @@ impl Model {
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
-        for field in self.kind.fields() {
+        let fields = match &self.kind {
+            ModelKind::Root(root) => &root.fields[..],
+            ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+        };
+        for field in fields {
             field.verify(db)?;
         }
 
@@ -175,22 +186,6 @@ impl ModelKind {
         match self {
             ModelKind::EmbeddedStruct(embedded) => embedded,
             ModelKind::Root(_) => panic!("expected embedded struct, found root model"),
-        }
-    }
-
-    /// Returns the fields for any model kind.
-    pub fn fields(&self) -> &[Field] {
-        match self {
-            ModelKind::Root(root) => &root.fields,
-            ModelKind::EmbeddedStruct(embedded) => &embedded.fields,
-        }
-    }
-
-    /// Returns a mutable slice of fields for any model kind.
-    pub fn fields_mut(&mut self) -> &mut [Field] {
-        match self {
-            ModelKind::Root(root) => &mut root.fields,
-            ModelKind::EmbeddedStruct(embedded) => &mut embedded.fields,
         }
     }
 }

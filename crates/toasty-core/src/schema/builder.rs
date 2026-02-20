@@ -115,7 +115,11 @@ impl Default for Builder {
 
 impl BuildSchema<'_> {
     fn build_model_constraints(&self, model: &mut app::Model) -> Result<()> {
-        for field in model.kind.fields_mut().iter_mut() {
+        let fields = match &mut model.kind {
+            app::ModelKind::Root(root) => &mut root.fields[..],
+            app::ModelKind::EmbeddedStruct(embedded) => &mut embedded.fields[..],
+        };
+        for field in fields.iter_mut() {
             if let app::FieldTy::Primitive(primitive) = &mut field.ty {
                 let storage_ty = db::Type::from_app(
                     &primitive.ty,

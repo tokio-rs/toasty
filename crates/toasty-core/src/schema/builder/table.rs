@@ -221,7 +221,11 @@ impl BuildTableFromModels<'_> {
         schema_prefix: Option<&str>,
         embed_prefix: Option<&str>,
     ) {
-        for field in model.kind.fields() {
+        let fields = match &model.kind {
+            app::ModelKind::Root(root) => &root.fields[..],
+            app::ModelKind::EmbeddedStruct(embedded) => &embedded.fields[..],
+        };
+        for field in fields {
             match &field.ty {
                 app::FieldTy::Primitive(primitive) => {
                     let column_name = format_column_name(field, schema_prefix, embed_prefix);
@@ -267,7 +271,7 @@ impl BuildMapping<'_> {
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
 
         // Iterate fields again (including PK fields) and build the table -> model map.
-        for (field_index, field) in model.kind.fields().iter().enumerate() {
+        for (field_index, field) in model.kind.expect_root().fields.iter().enumerate() {
             match &field.ty {
                 app::FieldTy::Primitive(primitive) => {
                     let column_id = fields[field_index].as_primitive().unwrap().column;
@@ -361,7 +365,7 @@ impl BuildMapping<'_> {
     fn build_field_mappings(&mut self, model: &Model) -> Vec<mapping::Field> {
         let mut next_bit = 0;
         self.map_fields_recursive(
-            model.kind.fields(),
+            &model.kind.expect_root().fields,
             None,
             None,
             stmt::Projection::identity(),
@@ -465,7 +469,7 @@ impl BuildMapping<'_> {
                         // get globally unique bits within the model's field mask space.
                         let embedded_model = self.app.model(embedded.target);
                         let nested_fields = self.map_fields_recursive(
-                            embedded_model.kind.fields(),
+                            &embedded_model.kind.expect_embedded_struct().fields,
                             Some(&nested_prefix),
                             nested_source,
                             nested_projection.clone(),
