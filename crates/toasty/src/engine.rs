@@ -16,7 +16,7 @@ mod verify;
 use crate::{db::ConnectionType, Result};
 use std::sync::Arc;
 use toasty_core::{
-    driver::{Capability, Driver},
+    driver::Capability,
     stmt::{self, Statement, ValueStream},
     Schema,
 };
