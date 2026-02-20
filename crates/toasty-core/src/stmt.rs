@@ -57,9 +57,6 @@ pub use expr_concat::ExprConcat;
 mod expr_concat_str;
 pub use expr_concat_str::ExprConcatStr;
 
-mod expr_enum;
-pub use expr_enum::ExprEnum;
-
 mod expr_exists;
 pub use expr_exists::ExprExists;
 
@@ -215,9 +212,6 @@ pub use table_with_joins::TableWithJoins;
 mod ty;
 pub use ty::Type;
 
-mod ty_enum;
-pub use ty_enum::TypeEnum;
-
 #[cfg(feature = "jiff")]
 mod ty_jiff;
 
@@ -231,9 +225,6 @@ mod value_cmp;
 
 mod values;
 pub use values::Values;
-
-mod value_enum;
-pub use value_enum::ValueEnum;
 
 #[cfg(feature = "jiff")]
 mod value_jiff;

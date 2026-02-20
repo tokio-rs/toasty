@@ -1,4 +1,4 @@
-use super::{PathFieldSet, TypeEnum, Value};
+use super::{PathFieldSet, Value};
 use crate::{
     schema::app::{FieldId, ModelId},
     stmt, Result,
@@ -115,9 +115,6 @@ pub enum Type {
 
     /// A fixed-length tuple where each item can have a different type.
     Record(Vec<Type>),
-
-    /// An enumeration of multiple types
-    Enum(TypeEnum),
 
     // An array of bytes that is more efficient than List(u8)
     Bytes,
@@ -406,9 +403,6 @@ impl Type {
             (Type::Record(a), Type::Record(b)) => {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| a.is_equivalent(b))
             }
-
-            // Enum types must be structurally equivalent
-            (Type::Enum(a), Type::Enum(b)) => a == b,
 
             // Sparse records must have the same field set
             (Type::SparseRecord(a), Type::SparseRecord(b)) => a == b,

@@ -204,24 +204,6 @@ impl Expr {
                 expr.eval_ref(scope, input)
             }
             Expr::Value(value) => Ok(value.clone()),
-            Expr::DecodeEnum(expr, ty, variant) => {
-                let Value::String(base) = expr.eval_ref(scope, input)? else {
-                    todo!()
-                };
-                let (decoded_variant, rest) = base.split_once("#").unwrap();
-                let decoded_variant: usize = decoded_variant.parse().map_err(|_| {
-                    crate::Error::type_conversion(
-                        Value::String(decoded_variant.to_string()),
-                        "usize",
-                    )
-                })?;
-
-                if decoded_variant != *variant {
-                    todo!("error; decoded={decoded_variant:#?}; expr={expr:#?}; ty={ty:#?}; variant={variant:#?}");
-                }
-
-                ty.cast(rest.into())
-            }
             _ => todo!("expr={self:#?}"),
         }
     }

@@ -436,8 +436,6 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     .collect(),
             ),
             Expr::Value(value) => value.infer_ty(),
-            // -- hax
-            Expr::DecodeEnum(_, ty, _) => ty.clone(),
             _ => todo!("{expr:#?}"),
         }
     }

@@ -2,7 +2,7 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprEnum, ExprExists, ExprFunc,
+    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprExists, ExprFunc,
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
     ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
     Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
@@ -73,10 +73,6 @@ pub trait VisitMut {
 
     fn visit_expr_default_mut(&mut self) {
         visit_expr_default_mut(self);
-    }
-
-    fn visit_expr_enum_mut(&mut self, i: &mut ExprEnum) {
-        visit_expr_enum_mut(self, i);
     }
 
     fn visit_expr_exists_mut(&mut self, i: &mut ExprExists) {
@@ -341,10 +337,6 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_default_mut(&mut **self);
     }
 
-    fn visit_expr_enum_mut(&mut self, i: &mut ExprEnum) {
-        VisitMut::visit_expr_enum_mut(&mut **self, i);
-    }
-
     fn visit_expr_exists_mut(&mut self, i: &mut ExprExists) {
         VisitMut::visit_expr_exists_mut(&mut **self, i);
     }
@@ -592,7 +584,6 @@ where
         Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
         Expr::Concat(expr) => v.visit_expr_concat_mut(expr),
         Expr::Default => v.visit_expr_default_mut(),
-        Expr::Enum(expr) => v.visit_expr_enum_mut(expr),
         Expr::Exists(expr) => v.visit_expr_exists_mut(expr),
         Expr::Func(expr) => v.visit_expr_func_mut(expr),
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
@@ -616,7 +607,6 @@ where
                 v.visit_expr_mut(expr);
             }
         }
-        Expr::DecodeEnum(base, ..) => v.visit_expr_mut(base),
     }
 }
 
@@ -685,13 +675,6 @@ pub fn visit_expr_default_mut<V>(v: &mut V)
 where
     V: VisitMut + ?Sized,
 {
-}
-
-pub fn visit_expr_enum_mut<V>(v: &mut V, node: &mut ExprEnum)
-where
-    V: VisitMut + ?Sized,
-{
-    v.visit_expr_record_mut(&mut node.fields);
 }
 
 pub fn visit_expr_exists_mut<V>(v: &mut V, node: &mut ExprExists)

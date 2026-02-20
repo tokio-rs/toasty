@@ -2,10 +2,9 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprEnum, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr, ExprPattern,
-    ExprProject, ExprRecord, ExprStmt, ExprTy, Node, Projection, Substitute, Type, Value, Visit,
-    VisitMut,
+    ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprFunc, ExprInList, ExprInSubquery,
+    ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr, ExprPattern, ExprProject, ExprRecord,
+    ExprStmt, ExprTy, Node, Projection, Substitute, Value, Visit, VisitMut,
 };
 use std::fmt;
 
@@ -37,9 +36,6 @@ pub enum Expr {
     /// Suggests that the database should use its default value. Useful for
     /// auto-increment fields and other columns with default values.
     Default,
-
-    /// Return an enum value
-    Enum(ExprEnum),
 
     /// An exists expression `[ NOT ] EXISTS(SELECT ...)`, used in expressions like
     /// `WHERE [ NOT ] EXISTS (SELECT ...)`.
@@ -94,9 +90,6 @@ pub enum Expr {
 
     /// Evaluates to a constant value reference
     Value(Value),
-
-    // TODO: get rid of this?
-    DecodeEnum(Box<Expr>, Type, usize),
 }
 
 impl Expr {
@@ -218,14 +211,12 @@ impl Expr {
                 expr_concat_str.exprs.iter().all(|expr| expr.is_stable())
             }
             Self::Project(expr_project) => expr_project.base.is_stable(),
-            Self::Enum(expr_enum) => expr_enum.fields.iter().all(|expr| expr.is_stable()),
             Self::Pattern(expr_pattern) => match expr_pattern {
                 super::ExprPattern::BeginsWith(e) => e.expr.is_stable() && e.pattern.is_stable(),
                 super::ExprPattern::Like(e) => e.expr.is_stable() && e.pattern.is_stable(),
             },
             Self::Map(expr_map) => expr_map.base.is_stable() && expr_map.map.is_stable(),
             Self::Key(_) => true,
-            Self::DecodeEnum(expr, ..) => expr.is_stable(),
 
             // References and statements - stable (they reference existing data)
             Self::Reference(_) | Self::Arg(_) => true,
@@ -317,7 +308,6 @@ impl Expr {
                 expr_concat_str.exprs.iter().all(|expr| expr.is_eval())
             }
             Self::Project(expr_project) => expr_project.base.is_eval(),
-            Self::Enum(expr_enum) => expr_enum.fields.iter().all(|expr| expr.is_eval()),
             Self::Pattern(expr_pattern) => match expr_pattern {
                 super::ExprPattern::BeginsWith(e) => e.expr.is_eval() && e.pattern.is_eval(),
                 super::ExprPattern::Like(e) => e.expr.is_eval() && e.pattern.is_eval(),
@@ -331,7 +321,6 @@ impl Expr {
                 }
                 super::ExprFunc::LastInsertId(_) => true,
             },
-            Self::DecodeEnum(expr, ..) => expr.is_eval(),
         }
     }
 
@@ -471,7 +460,6 @@ impl fmt::Debug for Expr {
             Self::Concat(e) => e.fmt(f),
             Self::ConcatStr(e) => e.fmt(f),
             Self::Default => write!(f, "Default"),
-            Self::Enum(e) => e.fmt(f),
             Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
             Self::InList(e) => e.fmt(f),
@@ -489,12 +477,6 @@ impl fmt::Debug for Expr {
             Self::Stmt(e) => e.fmt(f),
             Self::Type(e) => e.fmt(f),
             Self::Value(e) => e.fmt(f),
-            Self::DecodeEnum(expr, ty, variant) => f
-                .debug_tuple("DecodeEnum")
-                .field(expr)
-                .field(ty)
-                .field(variant)
-                .finish(),
         }
     }
 }

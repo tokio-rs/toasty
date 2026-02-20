@@ -627,19 +627,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     _ => todo!(),
                 })
             }
-            (stmt::Expr::DecodeEnum(base, _, variant), other)
-            | (other, stmt::Expr::DecodeEnum(base, _, variant)) => {
-                assert!(op.is_eq());
-
-                Some(stmt::Expr::eq(
-                    (**base).clone(),
-                    stmt::Expr::concat_str((
-                        variant.to_string(),
-                        "#",
-                        stmt::Expr::cast(other.clone(), stmt::Type::String),
-                    )),
-                ))
-            }
             (stmt::Expr::Cast(expr_cast), other) => {
                 let target_ty = self.capability().native_type_for(&expr_cast.ty);
                 self.cast_expr(lhs, &target_ty);
