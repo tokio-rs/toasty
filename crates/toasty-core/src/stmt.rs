@@ -57,7 +57,6 @@ pub use expr_concat::ExprConcat;
 mod expr_concat_str;
 pub use expr_concat_str::ExprConcatStr;
 
-
 mod expr_exists;
 pub use expr_exists::ExprExists;
 
@@ -213,7 +212,6 @@ pub use table_with_joins::TableWithJoins;
 mod ty;
 pub use ty::Type;
 
-
 #[cfg(feature = "jiff")]
 mod ty_jiff;
 
@@ -227,7 +225,6 @@ mod value_cmp;
 
 mod values;
 pub use values::Values;
-
 
 #[cfg(feature = "jiff")]
 mod value_jiff;

@@ -2,10 +2,9 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr, ExprPattern,
-    ExprProject, ExprRecord, ExprStmt, ExprTy, Node, Projection, Substitute, Value, Visit,
-    VisitMut,
+    ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprFunc, ExprInList, ExprInSubquery,
+    ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr, ExprPattern, ExprProject, ExprRecord,
+    ExprStmt, ExprTy, Node, Projection, Substitute, Value, Visit, VisitMut,
 };
 use std::fmt;
 
@@ -91,7 +90,6 @@ pub enum Expr {
 
     /// Evaluates to a constant value reference
     Value(Value),
-
 }
 
 impl Expr {

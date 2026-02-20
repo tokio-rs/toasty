@@ -75,7 +75,6 @@ pub trait VisitMut {
         visit_expr_default_mut(self);
     }
 
-
     fn visit_expr_exists_mut(&mut self, i: &mut ExprExists) {
         visit_expr_exists_mut(self, i);
     }
