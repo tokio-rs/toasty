@@ -215,14 +215,14 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
 
         match target {
             ExprTarget::Free => todo!("cannot resolve column in free context"),
-            ExprTarget::Model(root) => match expr_reference {
-                ExprReference::Model { .. } => ResolvedRef::Model(root),
-                ExprReference::Field { index, .. } => ResolvedRef::Field(&root.fields[*index]),
+            ExprTarget::Model(model) => match expr_reference {
+                ExprReference::Model { .. } => ResolvedRef::Model(model),
+                ExprReference::Field { index, .. } => ResolvedRef::Field(&model.fields[*index]),
                 ExprReference::Column(expr_column) => {
                     assert_eq!(expr_column.table, 0, "TODO: is this true?");
 
-                    let Some(table) = self.schema.table_for_model(root) else {
-                        panic!("Failed to find database table for model '{:?}' - model may not be mapped to a table", root.name)
+                    let Some(table) = self.schema.table_for_model(model) else {
+                        panic!("Failed to find database table for model '{:?}' - model may not be mapped to a table", model.name)
                     };
                     ResolvedRef::Column(&table.columns[expr_column.column])
                 }
@@ -442,7 +442,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
 
     pub fn infer_expr_reference_ty(&self, expr_reference: &ExprReference) -> Type {
         match self.resolve_expr_reference(expr_reference) {
-            ResolvedRef::Model(root) => Type::Model(root.id),
+            ResolvedRef::Model(model) => Type::Model(model.id),
             ResolvedRef::Column(column) => column.ty.clone(),
             ResolvedRef::Field(field) => field.expr_ty().clone(),
             ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
@@ -465,9 +465,9 @@ impl<'a> ExprContext<'a, Schema> {
             ExprTarget::Free => {
                 panic!("Cannot create ExprColumn in free context - no table target available")
             }
-            ExprTarget::Model(root) => {
-                let Some(table) = self.schema.table_for_model(root) else {
-                    panic!("Failed to find database table for model '{:?}' - model may not be mapped to a table", root.name)
+            ExprTarget::Model(model) => {
+                let Some(table) = self.schema.table_for_model(model) else {
+                    panic!("Failed to find database table for model '{:?}' - model may not be mapped to a table", model.name)
                 };
 
                 assert_eq!(table.id, column_id.table);
@@ -520,15 +520,7 @@ impl<'a> ResolvedRef<'a> {
     #[track_caller]
     pub fn expect_model(self) -> &'a ModelRoot {
         match self {
-            ResolvedRef::Model(root) => root,
-            _ => panic!("Expected ResolvedRef::Model, found {:?}", self),
-        }
-    }
-
-    #[track_caller]
-    pub fn expect_model_root(self) -> &'a ModelRoot {
-        match self {
-            ResolvedRef::Model(root) => root,
+            ResolvedRef::Model(model) => model,
             _ => panic!("Expected ResolvedRef::Model, found {:?}", self),
         }
     }
@@ -579,7 +571,7 @@ impl Resolve for () {
 impl<'a> ExprTarget<'a> {
     pub fn as_model(self) -> Option<&'a ModelRoot> {
         match self {
-            ExprTarget::Model(root) => Some(root),
+            ExprTarget::Model(model) => Some(model),
             _ => None,
         }
     }
@@ -587,14 +579,14 @@ impl<'a> ExprTarget<'a> {
     #[track_caller]
     pub fn as_model_unwrap(self) -> &'a ModelRoot {
         match self.as_model() {
-            Some(root) => root,
+            Some(model) => model,
             _ => panic!("expected ExprTarget::Model; was {self:#?}"),
         }
     }
 
     pub fn model_id(self) -> Option<ModelId> {
         Some(match self {
-            ExprTarget::Model(root) => root.id,
+            ExprTarget::Model(model) => model.id,
             _ => return None,
         })
     }

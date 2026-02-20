@@ -11,12 +11,12 @@ impl Simplify<'_> {
         if let stmt::Expr::Reference(expr_reference) = operand {
             match &*expr_reference {
                 stmt::ExprReference::Model { nesting } => {
-                    let root = self
+                    let model = self
                         .cx
                         .resolve_expr_reference(expr_reference)
-                        .expect_model_root();
+                        .expect_model();
 
-                    let [pk_field] = &root.primary_key.fields[..] else {
+                    let [pk_field] = &model.primary_key.fields[..] else {
                         todo!("handle composite keys");
                     };
 
