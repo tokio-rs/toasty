@@ -1,7 +1,7 @@
 use super::{Association, SourceTable, SourceTableId, TableFactor, TableRef, TableWithJoins};
 use crate::{
     schema::{
-        app::{Model, ModelId},
+        app::{Model, ModelId, ModelRoot},
         db::TableId,
     },
     stmt::ExprArg,
@@ -81,9 +81,9 @@ impl Source {
     }
 }
 
-impl From<&Model> for Source {
-    fn from(value: &Model) -> Self {
-        Self::from(value.id())
+impl From<&ModelRoot> for Source {
+    fn from(value: &ModelRoot) -> Self {
+        Self::from(value.id)
     }
 }
 

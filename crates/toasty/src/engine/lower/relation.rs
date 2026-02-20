@@ -635,7 +635,7 @@ impl RelationSource for UpdateRelationSource<'_> {
     fn selection(&self, _nesting: usize) -> stmt::Query {
         // In this context, the nesting does not matter. The filter entirely
         // references the returned query.
-        stmt::Query::new_select(self.model.id, self.filter.clone())
+        stmt::Query::new_select(self.model, self.filter.clone())
     }
 
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {

@@ -718,7 +718,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             return;
         };
 
-        let table = self.schema().table_for(model.id);
+        let table = self.schema().table_for(model);
         let mapping = self.mapping_unwrap();
 
         // TODO: we really shouldn't have to simplify here, but until

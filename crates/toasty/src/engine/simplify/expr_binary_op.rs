@@ -153,11 +153,11 @@ impl Simplify<'_> {
 
                 // At this point, we must be in a model context, otherwise key
                 // expressions don't make sense.
-                let Some(root) = self.cx.target_as_model() else {
+                let Some(model) = self.cx.target_as_model() else {
                     todo!();
                 };
 
-                Some(self.rewrite_root_path_expr(root, other.take()))
+                Some(self.rewrite_root_path_expr(model, other.take()))
             }
             // Canonicalization, `literal <op> col` → `col <op_commuted> literal`
             (Expr::Value(_), rhs) if !rhs.is_value() => {

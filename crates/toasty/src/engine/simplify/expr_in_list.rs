@@ -21,9 +21,9 @@ impl Simplify<'_> {
 
     fn rewrite_expr_in_list_when_model(&self, expr: &mut stmt::ExprInList) {
         if let stmt::Expr::Key(expr_key) = &mut *expr.expr {
-            let root = self.model_root(expr_key.model);
+            let model = self.model_root(expr_key.model);
 
-            let [pk_field_id] = &root.primary_key.fields[..] else {
+            let [pk_field_id] = &model.primary_key.fields[..] else {
                 todo!()
             };
             let pk = self.field(*pk_field_id);

@@ -9,10 +9,10 @@ impl Simplify<'_> {
     /// The caller must ensure it is an `eq` operation
     pub(super) fn rewrite_root_path_expr(
         &mut self,
-        root: &ModelRoot,
+        model: &ModelRoot,
         val: stmt::Expr,
     ) -> stmt::Expr {
-        if let [field] = &root.primary_key.fields[..] {
+        if let [field] = &model.primary_key.fields[..] {
             stmt::Expr::eq(stmt::Expr::ref_self_field(field), val)
         } else {
             todo!("composite primary keys")
@@ -51,12 +51,12 @@ mod tests {
     #[test]
     fn single_pk_field_becomes_eq_expr() {
         let schema = test_schema();
-        let root = schema.app.model(User::id()).expect_root();
+        let model = schema.app.model(User::id()).expect_root();
         let mut simplify = Simplify::new(&schema);
 
-        // `rewrite_root_path_expr(root, 42) → eq(ref(pk), 42)`
+        // `rewrite_root_path_expr(model, 42) → eq(ref(pk), 42)`
         let val = Expr::Value(Value::from(42i64));
-        let result = simplify.rewrite_root_path_expr(root, val);
+        let result = simplify.rewrite_root_path_expr(model, val);
 
         let Expr::BinaryOp(ExprBinaryOp { op, lhs, rhs }) = result else {
             panic!("expected result to be an `Expr::BinaryOp`");
