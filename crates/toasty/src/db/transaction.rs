@@ -64,7 +64,7 @@ impl Db {
 
                 Transaction::Root(db)
             }
-            ConnectionType::Transaction(_) => Transaction::Nested(&self),
+            ConnectionType::Transaction(_) => Transaction::Nested(self),
         };
 
         tx.start().await?;

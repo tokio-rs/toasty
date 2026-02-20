@@ -17,10 +17,6 @@ impl std::error::Error for TransactionTimedOut {}
 
 impl core::fmt::Display for TransactionTimedOut {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Transaction timed out after {} seconds",
-            self.duration.as_secs()
-        )
+        write!(f, "Transaction timed out after {:?}", self.duration)
     }
 }
