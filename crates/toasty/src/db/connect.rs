@@ -1,6 +1,6 @@
 use crate::Result;
 
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 pub use toasty_core::driver::{operation::Operation, Capability, Connection, Response};
 use toasty_core::{
     async_trait,
@@ -12,7 +12,7 @@ use url::Url;
 
 /// A connection to a database, wrapping the specific driver implementation.
 pub struct Connect {
-    driver: Box<dyn Driver>,
+    pub(crate) driver: Arc<dyn Driver>,
 }
 
 impl std::fmt::Debug for Connect {
@@ -37,9 +37,9 @@ impl Connect {
 
         let url = Url::parse(url).map_err(toasty_core::Error::driver_operation_failed)?;
 
-        let driver: Box<dyn Driver> = match url.scheme() {
+        let driver: Arc<dyn Driver> = match url.scheme() {
             #[cfg(feature = "dynamodb")]
-            "dynamodb" => Box::new(toasty_driver_dynamodb::DynamoDb::new(url.to_string())),
+            "dynamodb" => Arc::new(toasty_driver_dynamodb::DynamoDb::new(url.to_string())),
             #[cfg(not(feature = "dynamodb"))]
             "dynamodb" => {
                 return Err(toasty_core::Error::unsupported_feature(
@@ -48,7 +48,7 @@ impl Connect {
             }
 
             #[cfg(feature = "mysql")]
-            "mysql" => Box::new(toasty_driver_mysql::MySQL::new(url.to_string())?),
+            "mysql" => Arc::new(toasty_driver_mysql::MySQL::new(url.to_string())?),
             #[cfg(not(feature = "mysql"))]
             "mysql" => {
                 return Err(toasty_core::Error::unsupported_feature(
@@ -57,7 +57,7 @@ impl Connect {
             }
 
             #[cfg(feature = "postgresql")]
-            "postgresql" | "postgres" => Box::new(toasty_driver_postgresql::PostgreSQL::new(url)?),
+            "postgresql" | "postgres" => Arc::new(toasty_driver_postgresql::PostgreSQL::new(url)?),
             #[cfg(not(feature = "postgresql"))]
             "postgresql" | "postgres" => {
                 return Err(toasty_core::Error::unsupported_feature(
@@ -66,7 +66,7 @@ impl Connect {
             }
 
             #[cfg(feature = "sqlite")]
-            "sqlite" => Box::new(toasty_driver_sqlite::Sqlite::new(url)?),
+            "sqlite" => Arc::new(toasty_driver_sqlite::Sqlite::new(url)?),
             #[cfg(not(feature = "sqlite"))]
             "sqlite" => {
                 return Err(toasty_core::Error::unsupported_feature(

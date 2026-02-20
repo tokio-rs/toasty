@@ -76,6 +76,21 @@ async fn main() -> toasty::Result<()> {
         .await
         .is_err());
 
+    let deleted_user = db
+        .transaction(async |db| {
+            let user = User::filter_by_id(user.id)
+                .include(User::fields().moto())
+                .get(db)
+                .await?;
+
+            if !user.todos.get().is_empty() {
+                User::filter_by_id(u1.id).delete(db).await?;
+            }
+
+            Ok(user)
+        })
+        .await?;
+
     user.update().name("Foo bar").exec(&db).await?;
     assert_eq!(user.name, "Foo bar");
     assert_eq!(User::get_by_id(&db, &user.id).await?.name, user.name);

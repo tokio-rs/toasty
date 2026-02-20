@@ -46,7 +46,7 @@ pub(crate) use update_by_key::UpdateByKey;
 mod var;
 pub(crate) use var::{VarDecls, VarId, VarStore};
 
-use crate::{db::PoolConnection, engine::Engine, Result};
+use crate::{db::SingleConnection, engine::Engine, Result};
 use toasty_core::{
     driver::Rows,
     stmt::{self, ValueStream},
@@ -54,7 +54,7 @@ use toasty_core::{
 
 struct Exec<'a> {
     engine: &'a Engine,
-    connection: PoolConnection,
+    connection: SingleConnection<'a>,
     vars: VarStore,
 }
 
@@ -62,7 +62,7 @@ impl Engine {
     pub(crate) async fn exec_plan(&self, plan: ExecPlan) -> Result<ValueStream> {
         let mut exec = Exec {
             engine: self,
-            connection: self.pool.get().await?,
+            connection: self.connection.get().await?,
             vars: plan.vars,
         };
 
