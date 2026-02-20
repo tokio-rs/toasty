@@ -16,7 +16,7 @@ mod verify;
 use crate::{db::ConnectionType, Result};
 use std::sync::Arc;
 use toasty_core::{
-    driver::Capability,
+    driver::{Capability, Driver},
     stmt::{self, Statement, ValueStream},
     Schema,
 };
@@ -40,18 +40,27 @@ pub(crate) struct Engine {
 
     /// Handle to the connection pool.
     pub(crate) connection: ConnectionType,
+
+    pub(crate) capabilities: &'static Capability,
 }
 
 impl Engine {
     /// Creates a new [`Engine`] with the given schema and driver.
-    pub(crate) fn new(schema: Arc<Schema>, connection: ConnectionType) -> Engine {
-        Engine { schema, connection }
+    pub(crate) fn new(
+        schema: Arc<Schema>,
+        connection: ConnectionType,
+        capabilities: &'static Capability,
+    ) -> Engine {
+        Engine {
+            schema,
+            connection,
+            capabilities,
+        }
     }
 
     /// Returns the driver's capabilities.
     pub(crate) fn capability(&self) -> &Capability {
-        todo!();
-        // self.pool.capability()
+        self.capabilities
     }
 
     /// Executes a statement and returns the result as a value stream.
@@ -91,10 +100,4 @@ impl Engine {
     fn expr_cx_for<'a>(&'a self, target: impl stmt::IntoExprTarget<'a>) -> stmt::ExprContext<'a> {
         stmt::ExprContext::new_with_target(&self.schema, target)
     }
-
-    // /// Returns the database driver this engine is using.
-    // pub(crate) fn driver(&self) -> &dyn Driver {
-    //     todo!();
-    //     // self.pool.driver()
-    // }
 }
