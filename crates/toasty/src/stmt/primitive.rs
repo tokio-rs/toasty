@@ -182,6 +182,23 @@ impl Primitive for String {
     }
 }
 
+impl Primitive for Vec<u8> {
+    type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = ();
+
+    fn ty() -> stmt::Type {
+        stmt::Type::Bytes
+    }
+
+    fn load(value: stmt::Value) -> Result<Self> {
+        value.try_into()
+    }
+
+    fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
+        path
+    }
+}
+
 impl<T: Primitive> Primitive for Option<T> {
     type FieldAccessor = Path<Self>;
     type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
