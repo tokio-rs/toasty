@@ -58,6 +58,7 @@ impl Db {
                     engine: Engine::new(
                         self.engine.schema.clone(),
                         ConnectionType::Transaction(pool.get().await?.into()),
+                        self.engine.capabilities,
                     ),
                 };
 

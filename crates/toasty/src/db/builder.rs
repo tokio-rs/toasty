@@ -44,6 +44,7 @@ impl Builder {
     }
 
     pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
+        let capabilities = driver.capability();
         let driver = Arc::new(driver);
         let pool = Pool::new(driver.clone())?;
 
@@ -54,7 +55,7 @@ impl Builder {
             .core
             .build(self.build_app_schema()?, pool.capability())?;
 
-        let engine = Engine::new(Arc::new(schema), ConnectionType::Pool(pool));
+        let engine = Engine::new(Arc::new(schema), ConnectionType::Pool(pool), capabilities);
 
         Ok(Db { engine, driver })
     }
