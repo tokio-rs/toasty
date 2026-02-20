@@ -1,5 +1,5 @@
 use super::Simplify;
-use toasty_core::{schema::app::Model, stmt};
+use toasty_core::{schema::app::ModelRoot, stmt};
 
 impl Simplify<'_> {
     /// Rewrites expressions where one half is a path referencing `self`. In
@@ -7,12 +7,8 @@ impl Simplify<'_> {
     /// primary key.
     ///
     /// The caller must ensure it is an `eq` operation
-    pub(super) fn rewrite_root_path_expr(&mut self, model: &Model, val: stmt::Expr) -> stmt::Expr {
-        let primary_key = model
-            .primary_key()
-            .expect("root path expr rewrite requires root model with primary key");
-
-        if let [field] = &primary_key.fields[..] {
+    pub(super) fn rewrite_root_path_expr(&mut self, root: &ModelRoot, val: stmt::Expr) -> stmt::Expr {
+        if let [field] = &root.primary_key.fields[..] {
             stmt::Expr::eq(stmt::Expr::ref_self_field(field), val)
         } else {
             todo!("composite primary keys")
@@ -51,12 +47,12 @@ mod tests {
     #[test]
     fn single_pk_field_becomes_eq_expr() {
         let schema = test_schema();
-        let model = schema.app.model(User::id());
+        let root = schema.app.model(User::id()).kind.expect_root();
         let mut simplify = Simplify::new(&schema);
 
-        // `rewrite_root_path_expr(model, 42) → eq(ref(pk), 42)`
+        // `rewrite_root_path_expr(root, 42) → eq(ref(pk), 42)`
         let val = Expr::Value(Value::from(42i64));
-        let result = simplify.rewrite_root_path_expr(model, val);
+        let result = simplify.rewrite_root_path_expr(root, val);
 
         let Expr::BinaryOp(ExprBinaryOp { op, lhs, rhs }) = result else {
             panic!("expected result to be an `Expr::BinaryOp`");

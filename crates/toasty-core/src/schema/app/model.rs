@@ -57,14 +57,6 @@ impl Model {
         matches!(self.kind, ModelKind::EmbeddedStruct(_))
     }
 
-    /// Returns the primary key if this is a root model, None if embedded
-    pub fn primary_key(&self) -> Option<&PrimaryKey> {
-        match &self.kind {
-            ModelKind::Root(root) => Some(&root.primary_key),
-            ModelKind::EmbeddedStruct(_) => None,
-        }
-    }
-
     /// Returns true if this model can be the target of a relation
     pub fn can_be_relation_target(&self) -> bool {
         self.is_root()
@@ -108,11 +100,9 @@ impl Model {
     }
 
     pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {
-        let primary_key = self
-            .primary_key()
-            .expect("find_by_id requires a root model with primary key");
+        let root = self.kind.expect_root();
 
-        let filter = match &primary_key.fields[..] {
+        let filter = match &root.primary_key.fields[..] {
             [pk_field] => stmt::Expr::eq(
                 stmt::Expr::ref_self_field(pk_field),
                 input

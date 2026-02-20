@@ -11,16 +11,12 @@ impl Simplify<'_> {
         if let stmt::Expr::Reference(expr_reference) = operand {
             match &*expr_reference {
                 stmt::ExprReference::Model { nesting } => {
-                    let model = self
+                    let root = self
                         .cx
                         .resolve_expr_reference(expr_reference)
-                        .expect_model();
+                        .expect_model_root();
 
-                    let primary_key = model.primary_key().expect(
-                        "binary op on model reference requires root model with primary key",
-                    );
-
-                    let [pk_field] = &primary_key.fields[..] else {
+                    let [pk_field] = &root.primary_key.fields[..] else {
                         todo!("handle composite keys");
                     };
 
@@ -157,11 +153,11 @@ impl Simplify<'_> {
 
                 // At this point, we must be in a model context, otherwise key
                 // expressions don't make sense.
-                let Some(model) = self.cx.target_as_model() else {
+                let Some(root) = self.cx.target_as_model_root() else {
                     todo!();
                 };
 
-                Some(self.rewrite_root_path_expr(model, other.take()))
+                Some(self.rewrite_root_path_expr(root, other.take()))
             }
             // Canonicalization, `literal <op> col` → `col <op_commuted> literal`
             (Expr::Value(_), rhs) if !rhs.is_value() => {

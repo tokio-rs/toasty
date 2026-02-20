@@ -129,33 +129,17 @@ mod tests {
             let post_model = Post::id();
 
             // Find field IDs by name from the generated schema
-            let user_id = schema
-                .app
-                .model(user_model)
-                .kind
-                .fields()
-                .iter()
-                .find(|f| f.name.app_name == "id")
-                .unwrap()
-                .id;
-
+            let user_id = schema.app.model(user_model).field_by_name("id").unwrap().id;
             let user_posts = schema
                 .app
                 .model(user_model)
-                .kind
-                .fields()
-                .iter()
-                .find(|f| f.name.app_name == "posts")
+                .field_by_name("posts")
                 .unwrap()
                 .id;
-
             let post_author = schema
                 .app
                 .model(post_model)
-                .kind
-                .fields()
-                .iter()
-                .find(|f| f.name.app_name == "author")
+                .field_by_name("author")
                 .unwrap()
                 .id;
 

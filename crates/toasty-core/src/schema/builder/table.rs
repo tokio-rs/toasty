@@ -2,7 +2,7 @@ use super::BuildSchema;
 use crate::{
     driver,
     schema::{
-        app::{self, FieldId, Model},
+        app::{self, FieldId, Model, ModelRoot},
         db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping, TableToModel},
         Name,
@@ -137,7 +137,7 @@ impl BuildTableFromModels<'_> {
             model_pk_to_table: vec![],
             table_to_model: vec![],
         }
-        .build_mapping(model);
+        .build_mapping(model.kind.expect_root());
 
         self.populate_model_indices(model);
     }
@@ -263,7 +263,7 @@ impl BuildTableFromModels<'_> {
 }
 
 impl BuildMapping<'_> {
-    fn build_mapping(mut self, model: &Model) {
+    fn build_mapping(mut self, model: &ModelRoot) {
         // Build all field mappings in a single unified pass
         let fields = self.build_field_mappings(model);
 
@@ -271,7 +271,7 @@ impl BuildMapping<'_> {
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
 
         // Iterate fields again (including PK fields) and build the table -> model map.
-        for (field_index, field) in model.kind.expect_root().fields.iter().enumerate() {
+        for (field_index, field) in model.fields.iter().enumerate() {
             match &field.ty {
                 app::FieldTy::Primitive(primitive) => {
                     let column_id = fields[field_index].as_primitive().unwrap().column;
@@ -320,11 +320,7 @@ impl BuildMapping<'_> {
                     )
                 };
 
-                let primary_key = model
-                    .primary_key()
-                    .expect("primary key required for model_pk_to_table");
-
-                for (i, field_id) in primary_key.fields.iter().enumerate() {
+                for (i, field_id) in model.primary_key.fields.iter().enumerate() {
                     if field_id.index == *step {
                         let mut p = projection.clone();
                         p[0] = i;
@@ -337,7 +333,7 @@ impl BuildMapping<'_> {
                     "boom; projection={:?}; mapping={:#?}; PK={:#?}",
                     projection,
                     self.model_to_table,
-                    primary_key
+                    model.primary_key
                 );
             });
 
@@ -362,10 +358,10 @@ impl BuildMapping<'_> {
     ///
     /// This is a thin wrapper that calls the unified recursive function with
     /// root-level context (empty prefix, identity projection).
-    fn build_field_mappings(&mut self, model: &Model) -> Vec<mapping::Field> {
+    fn build_field_mappings(&mut self, model: &ModelRoot) -> Vec<mapping::Field> {
         let mut next_bit = 0;
         self.map_fields_recursive(
-            &model.kind.expect_root().fields,
+            &model.fields,
             None,
             None,
             stmt::Projection::identity(),

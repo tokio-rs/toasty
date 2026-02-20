@@ -1,6 +1,6 @@
 use crate::{
     schema::{
-        app::{Field, Model, ModelId},
+        app::{Field, Model, ModelId, ModelRoot},
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
@@ -459,6 +459,11 @@ impl<'a> ExprContext<'a, Schema> {
         Some(self.schema.app.model(model_id))
     }
 
+    pub fn target_as_model_root(&self) -> Option<&'a ModelRoot> {
+        let model_id = self.target.model_id()?;
+        Some(self.schema.app.model(model_id).kind.expect_root())
+    }
+
     pub fn expr_ref_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
         let column_id = column_id.into();
 
@@ -522,6 +527,14 @@ impl<'a> ResolvedRef<'a> {
     pub fn expect_model(self) -> &'a Model {
         match self {
             ResolvedRef::Model(model) => model,
+            _ => panic!("Expected ResolvedRef::Model, found {:?}", self),
+        }
+    }
+
+    #[track_caller]
+    pub fn expect_model_root(self) -> &'a ModelRoot {
+        match self {
+            ResolvedRef::Model(model) => model.kind.expect_root(),
             _ => panic!("Expected ResolvedRef::Model, found {:?}", self),
         }
     }
