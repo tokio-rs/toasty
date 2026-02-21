@@ -87,7 +87,7 @@ mod tests {
         let schema = test_schema_with(&[User::schema()]);
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let simplify = simplify.scope(model);
+        let simplify = simplify.scope(model.expect_root());
 
         // `is_null(field)` → `false` (non-nullable field)
         let mut field = ExprIsNull {

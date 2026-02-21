@@ -2,7 +2,7 @@ use super::BuildSchema;
 use crate::{
     driver,
     schema::{
-        app::{self, FieldId, Model},
+        app::{self, FieldId, Model, ModelRoot},
         db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping, TableToModel},
         Name,
@@ -40,15 +40,8 @@ struct BuildMapping<'a> {
 }
 
 impl BuildSchema<'_> {
-    pub(super) fn build_table_stub_for_model(&mut self, model: &Model) -> TableId {
-        let table_name = match &model.kind {
-            app::ModelKind::Root(root) => root.table_name.as_ref(),
-            app::ModelKind::Embedded => {
-                panic!("build_table_stub_for_model called on embedded model")
-            }
-        };
-
-        if let Some(table_name) = table_name {
+    pub(super) fn build_table_stub_for_model(&mut self, model: &ModelRoot) -> TableId {
+        if let Some(table_name) = model.table_name.as_ref() {
             let table_name = self.prefix_table_name(table_name);
 
             if !self.table_lookup.contains_key(&table_name) {
@@ -71,7 +64,7 @@ impl BuildSchema<'_> {
             let models = app
                 .models()
                 .filter(|model| model.is_root())
-                .filter(|model| self.mapping.model(model.id).table == table.id)
+                .filter(|model| self.mapping.model(model.id()).table == table.id)
                 .collect::<Vec<_>>();
 
             assert!(
@@ -120,8 +113,9 @@ impl BuildTableFromModels<'_> {
     }
 
     fn map_model_fields(&mut self, model: &Model) {
+        let root = model.expect_root();
         let schema_prefix = if self.prefix_table_names {
-            Some(model.name.snake_case())
+            Some(model.name().snake_case())
         } else {
             None
         };
@@ -137,13 +131,13 @@ impl BuildTableFromModels<'_> {
             model_pk_to_table: vec![],
             table_to_model: vec![],
         }
-        .build_mapping(model);
+        .build_mapping(root);
 
-        self.populate_model_indices(model);
+        self.populate_model_indices(model.id(), root);
     }
 
-    fn populate_model_indices(&mut self, model: &Model) {
-        for model_index in &model.indices {
+    fn populate_model_indices(&mut self, model_id: app::ModelId, root: &ModelRoot) {
+        for model_index in &root.indices {
             let mut index = db::Index {
                 id: IndexId {
                     table: self.table.id,
@@ -157,12 +151,12 @@ impl BuildTableFromModels<'_> {
             };
 
             for index_field in &model_index.fields {
-                let column = self.mapping.model(model.id).fields[index_field.field.index]
+                let column = self.mapping.model(model_id).fields[index_field.field.index]
                     .as_primitive()
                     .unwrap()
                     .column;
 
-                match &model.fields[index_field.field.index].ty {
+                match &root.fields[index_field.field.index].ty {
                     app::FieldTy::Primitive(_) => index.columns.push(db::IndexColumn {
                         column,
                         op: index_field.op,
@@ -221,7 +215,11 @@ impl BuildTableFromModels<'_> {
         schema_prefix: Option<&str>,
         embed_prefix: Option<&str>,
     ) {
-        for field in &model.fields {
+        let fields = match model {
+            app::Model::Root(root) => &root.fields[..],
+            app::Model::EmbeddedStruct(embedded) => &embedded.fields[..],
+        };
+        for field in fields {
             match &field.ty {
                 app::FieldTy::Primitive(primitive) => {
                     let column_name = format_column_name(field, schema_prefix, embed_prefix);
@@ -259,7 +257,7 @@ impl BuildTableFromModels<'_> {
 }
 
 impl BuildMapping<'_> {
-    fn build_mapping(mut self, model: &Model) {
+    fn build_mapping(mut self, model: &ModelRoot) {
         // Build all field mappings in a single unified pass
         let fields = self.build_field_mappings(model);
 
@@ -316,11 +314,7 @@ impl BuildMapping<'_> {
                     )
                 };
 
-                let primary_key = model
-                    .primary_key()
-                    .expect("primary key required for model_pk_to_table");
-
-                for (i, field_id) in primary_key.fields.iter().enumerate() {
+                for (i, field_id) in model.primary_key.fields.iter().enumerate() {
                     if field_id.index == *step {
                         let mut p = projection.clone();
                         p[0] = i;
@@ -333,7 +327,7 @@ impl BuildMapping<'_> {
                     "boom; projection={:?}; mapping={:#?}; PK={:#?}",
                     projection,
                     self.model_to_table,
-                    primary_key
+                    model.primary_key
                 );
             });
 
@@ -358,7 +352,7 @@ impl BuildMapping<'_> {
     ///
     /// This is a thin wrapper that calls the unified recursive function with
     /// root-level context (empty prefix, identity projection).
-    fn build_field_mappings(&mut self, model: &Model) -> Vec<mapping::Field> {
+    fn build_field_mappings(&mut self, model: &ModelRoot) -> Vec<mapping::Field> {
         let mut next_bit = 0;
         self.map_fields_recursive(
             &model.fields,
@@ -465,7 +459,7 @@ impl BuildMapping<'_> {
                         // get globally unique bits within the model's field mask space.
                         let embedded_model = self.app.model(embedded.target);
                         let nested_fields = self.map_fields_recursive(
-                            &embedded_model.fields,
+                            &embedded_model.expect_embedded_struct().fields,
                             Some(&nested_prefix),
                             nested_source,
                             nested_projection.clone(),

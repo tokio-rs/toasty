@@ -9,7 +9,7 @@ use index_vec::IndexVec;
 use toasty_core::{
     driver::Capability,
     schema::{
-        app::{self, FieldTy, Model},
+        app::{self, FieldTy, ModelRoot},
         db::{Column, ColumnId},
         mapping,
     },
@@ -1000,12 +1000,12 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         self.schema().app.field(id.into())
     }
 
-    fn model(&self) -> Option<&'a Model> {
+    fn model(&self) -> Option<&'a ModelRoot> {
         self.expr_cx.target().as_model()
     }
 
     #[track_caller]
-    fn model_unwrap(&self) -> &'a Model {
+    fn model_unwrap(&self) -> &'a ModelRoot {
         self.expr_cx.target().as_model_unwrap()
     }
 

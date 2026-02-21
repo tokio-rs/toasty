@@ -152,7 +152,14 @@ impl stmt::Visit for VerifyExpr<'_> {
 
     fn visit_projection(&mut self, i: &stmt::Projection) {
         // The path should resolve. Verifying type is done at a higher level
-        let _ = i.resolve_field(&self.schema.app, self.schema.app.model(self.model));
+        if self
+            .schema
+            .app
+            .resolve_field(self.schema.app.model(self.model), i)
+            .is_none()
+        {
+            todo!()
+        }
     }
 
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {

@@ -69,9 +69,9 @@ impl Builder {
         // Skip embedded models as they don't have their own tables.
         for model in app.models() {
             // Skip embedded models - they are flattened into parent tables
-            if model.is_embedded() {
+            let app::Model::Root(model) = model else {
                 continue;
-            }
+            };
 
             let table = builder.build_table_stub_for_model(model);
 
@@ -115,7 +115,11 @@ impl Default for Builder {
 
 impl BuildSchema<'_> {
     fn build_model_constraints(&self, model: &mut app::Model) -> Result<()> {
-        for field in model.fields.iter_mut() {
+        let fields = match model {
+            app::Model::Root(root) => &mut root.fields[..],
+            app::Model::EmbeddedStruct(embedded) => &mut embedded.fields[..],
+        };
+        for field in fields.iter_mut() {
             if let app::FieldTy::Primitive(primitive) = &mut field.ty {
                 let storage_ty = db::Type::from_app(
                     &primitive.ty,
