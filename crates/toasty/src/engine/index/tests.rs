@@ -206,6 +206,128 @@ fn and_with_any_map_distributes_into_any_map_for_dynamodb() -> Result<()> {
     Ok(())
 }
 
+// ── key_values extraction ─────────────────────────────────────────────────────
+
+#[test]
+fn pk_equality_sets_key_values() -> Result<()> {
+    let cx = sqlite_test_cx();
+
+    // col[0] = 1  — single PK column, literal equality
+    let filter = stmt::Expr::eq(
+        stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+        stmt::Expr::Value(stmt::Value::from(1i64)),
+    );
+
+    let plan = cx.plan_basic_query_with_filter(filter)?;
+
+    let expected = stmt::Value::List(vec![stmt::Value::Record(stmt::ValueRecord::from_vec(vec![
+        stmt::Value::from(1i64),
+    ]))]);
+    assert_eq!(plan.key_values, Some(expected));
+    Ok(())
+}
+
+#[test]
+fn pk_or_sets_key_values() -> Result<()> {
+    let cx = sqlite_test_cx();
+
+    // col[0] = 1 OR col[0] = 2  — two literal PK values
+    let filter = stmt::Expr::Or(stmt::ExprOr {
+        operands: vec![
+            stmt::Expr::eq(
+                stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                stmt::Expr::Value(stmt::Value::from(1i64)),
+            ),
+            stmt::Expr::eq(
+                stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                stmt::Expr::Value(stmt::Value::from(2i64)),
+            ),
+        ],
+    });
+
+    let plan = cx.plan_basic_query_with_filter(filter)?;
+
+    let record = |v: i64| {
+        stmt::Value::Record(stmt::ValueRecord::from_vec(vec![stmt::Value::from(v)]))
+    };
+    let expected = stmt::Value::List(vec![record(1), record(2)]);
+    assert_eq!(plan.key_values, Some(expected));
+    Ok(())
+}
+
+#[test]
+fn pk_range_does_not_set_key_values() -> Result<()> {
+    // Schema: Todo { user_id (pk partition), status (pk sort) }
+    // Partition key has equality (required to match the index), but the sort key
+    // has a range predicate — no exact key record can be formed, so key_values = None.
+    let cx = ddb_test_cx_composite();
+
+    let filter = stmt::Expr::And(stmt::ExprAnd {
+        operands: vec![
+            stmt::Expr::eq(
+                stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                stmt::Expr::Value(stmt::Value::String("u1".to_string())),
+            ),
+            stmt::Expr::BinaryOp(stmt::ExprBinaryOp {
+                lhs: Box::new(stmt::Expr::Reference(stmt::ExprReference::column(0, 1))),
+                op: stmt::BinaryOp::Ge,
+                rhs: Box::new(stmt::Expr::Value(stmt::Value::String("s1".to_string()))),
+            }),
+        ],
+    });
+
+    let plan = cx.plan_basic_query_with_filter(filter)?;
+
+    assert_eq!(plan.key_values, None);
+    Ok(())
+}
+
+#[test]
+fn composite_pk_full_equality_sets_key_values() -> Result<()> {
+    // Schema: Todo { user_id (pk partition), status (pk sort) }
+    // Both key columns have literal equality → key_values is populated.
+    let cx = ddb_test_cx_composite();
+
+    let filter = stmt::Expr::And(stmt::ExprAnd {
+        operands: vec![
+            stmt::Expr::eq(
+                stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                stmt::Expr::Value(stmt::Value::String("u1".to_string())),
+            ),
+            stmt::Expr::eq(
+                stmt::Expr::Reference(stmt::ExprReference::column(0, 1)),
+                stmt::Expr::Value(stmt::Value::String("s1".to_string())),
+            ),
+        ],
+    });
+
+    let plan = cx.plan_basic_query_with_filter(filter)?;
+
+    let expected = stmt::Value::List(vec![stmt::Value::Record(stmt::ValueRecord::from_vec(vec![
+        stmt::Value::String("u1".to_string()),
+        stmt::Value::String("s1".to_string()),
+    ]))]);
+    assert_eq!(plan.key_values, Some(expected));
+    Ok(())
+}
+
+#[test]
+fn composite_pk_partition_key_only_does_not_set_key_values() -> Result<()> {
+    // Schema: Todo { user_id (pk partition), status (pk sort) }
+    // Only the partition key is specified — cannot form a full key record.
+    let cx = ddb_test_cx_composite();
+
+    let filter = stmt::Expr::eq(
+        stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+        stmt::Expr::Value(stmt::Value::String("u1".to_string())),
+    );
+
+    let plan = cx.plan_basic_query_with_filter(filter)?;
+
+    assert_eq!(plan.key_values, None);
+    Ok(())
+}
+
 #[test]
 fn any_map_with_arg_base_passes_through_for_dynamodb() {
     // ANY(MAP(arg[0], col[0][0] = arg[0])) — the batch-load canonical form produced by

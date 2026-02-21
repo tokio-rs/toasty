@@ -16,6 +16,12 @@ pub(crate) struct IndexPlan<'a> {
 
     /// True if we have to apply the result filter our self
     pub(crate) post_filter: Option<stmt::Expr>,
+
+    /// Literal key values for direct `GetByKey` routing: a `Value::List` of
+    /// `Value::Record` entries (one per lookup), populated when every index key
+    /// column has a literal equality predicate. When `Some`, the planner can
+    /// route to `GetByKey` (e.g. DynamoDB `BatchGetItem`) instead of a query.
+    pub(crate) key_values: Option<stmt::Value>,
 }
 
 impl IndexPlan<'_> {

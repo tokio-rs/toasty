@@ -8,7 +8,7 @@ pub(crate) use index_plan::IndexPlan;
 
 use crate::{engine::Engine, Result};
 use std::collections::HashMap;
-use toasty_core::{driver::Capability, schema::db::Table, Schema, stmt};
+use toasty_core::{driver::Capability, schema::db::{Index, Table}, Schema, stmt};
 
 impl Engine {
     pub(crate) fn plan_index_path<'a>(&'a self, stmt: &stmt::Statement) -> Result<IndexPlan<'a>> {
@@ -50,6 +50,11 @@ pub(crate) fn plan_index_path<'a, 'stmt>(
     let index_match = &index_planner.index_matches[index_path.index_match];
     let (index_filter, result_filter) = index_match.partition_filter(&mut partition_cx, filter);
 
+    // Extract literal key values before OR rewrite, while index_filter is still
+    // in Expr::Or form. After rewrite it becomes ANY(MAP(...)) and the Or arm
+    // in try_extract_key_values would no longer fire.
+    let key_values = try_extract_key_values(&index_planner.cx, index_match.index, &index_filter);
+
     // For backends that do not support OR in key conditions (e.g. DynamoDB), rewrite
     // any OR in the index filter to canonical ANY(MAP(...)) fan-out form.
     let index_filter = if !capability.index_or_predicate {
@@ -72,6 +77,7 @@ pub(crate) fn plan_index_path<'a, 'stmt>(
         } else {
             None
         },
+        key_values,
     })
 }
 
@@ -164,6 +170,76 @@ impl IndexPlanner<'_> {
         }
 
         self.index_paths = index_paths;
+    }
+}
+
+/// Try to extract a `Value::List([Value::Record([...]), ...])` from `index_filter`
+/// for direct `GetByKey` routing.
+///
+/// Returns `Some` only when every index key column has a literal equality predicate.
+/// Range predicates, non-literal RHS, and `ANY(MAP(...))` all return `None`.
+///
+/// Must be called on the `index_filter` produced by `partition_filter` — before the
+/// OR-rewrite step converts `Expr::Or` into `ANY(MAP(...))`.
+fn try_extract_key_values(
+    cx: &stmt::ExprContext<'_>,
+    index: &Index,
+    index_filter: &stmt::Expr,
+) -> Option<stmt::Value> {
+    match index_filter {
+        stmt::Expr::Or(or) => {
+            let mut records = vec![];
+            for branch in &or.operands {
+                records.push(extract_key_record(cx, index, branch)?);
+            }
+            Some(stmt::Value::List(records))
+        }
+        single => {
+            let record = extract_key_record(cx, index, single)?;
+            Some(stmt::Value::List(vec![record]))
+        }
+    }
+}
+
+/// Extract a single `Value::Record` from one equality branch of the index filter.
+///
+/// - `col = literal` (single-column index) → `Value::Record([literal])`
+/// - `col1 = v1 AND col2 = v2 ...` (all key columns, all equality) → `Value::Record([v1, v2, ...])`
+/// - Anything else → `None`
+fn extract_key_record(
+    cx: &stmt::ExprContext<'_>,
+    index: &Index,
+    expr: &stmt::Expr,
+) -> Option<stmt::Value> {
+    match expr {
+        stmt::Expr::BinaryOp(b) if b.op.is_eq() && index.columns.len() == 1 => {
+            let stmt::Expr::Value(v) = &*b.rhs else { return None };
+            Some(stmt::Value::Record(stmt::ValueRecord::from_vec(vec![v.clone()])))
+        }
+        stmt::Expr::And(and) if and.operands.len() == index.columns.len() => {
+            let mut fields = vec![stmt::Value::Null; index.columns.len()];
+
+            for operand in &and.operands {
+                let stmt::Expr::BinaryOp(b) = operand else { return None };
+                if !b.op.is_eq() { return None; }
+                let stmt::Expr::Reference(expr_ref) = &*b.lhs else { return None };
+                let column = cx.resolve_expr_reference(expr_ref).expect_column();
+                let (idx, _) = index
+                    .columns
+                    .iter()
+                    .enumerate()
+                    .find(|(_, c)| c.column == column.id)?;
+                let stmt::Expr::Value(v) = &*b.rhs else { return None };
+                fields[idx] = v.clone();
+            }
+
+            if fields.iter().any(|v| matches!(v, stmt::Value::Null)) {
+                return None;
+            }
+
+            Some(stmt::Value::Record(stmt::ValueRecord::from_vec(fields)))
+        }
+        _ => None,
     }
 }
 
