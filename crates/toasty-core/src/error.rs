@@ -11,6 +11,7 @@ mod invalid_schema;
 mod invalid_statement;
 mod invalid_type_conversion;
 mod record_not_found;
+mod transaction_timed_out;
 mod unsupported_feature;
 mod validation;
 
@@ -28,6 +29,7 @@ use invalid_statement::InvalidStatement;
 use invalid_type_conversion::InvalidTypeConversion;
 use record_not_found::RecordNotFound;
 use std::sync::Arc;
+use transaction_timed_out::TransactionTimedOut;
 use unsupported_feature::UnsupportedFeature;
 use validation::ValidationFailed;
 
@@ -66,6 +68,7 @@ enum ErrorKind {
     UnsupportedFeature(UnsupportedFeature),
     ValidationFailed(ValidationFailed),
     ConditionFailed(ConditionFailed),
+    TransactionTimedOut(TransactionTimedOut),
 }
 
 impl Error {
@@ -157,6 +160,7 @@ impl core::fmt::Display for ErrorKind {
             UnsupportedFeature(err) => core::fmt::Display::fmt(err, f),
             ValidationFailed(err) => core::fmt::Display::fmt(err, f),
             ConditionFailed(err) => core::fmt::Display::fmt(err, f),
+            TransactionTimedOut(err) => core::fmt::Display::fmt(err, f),
         }
     }
 }

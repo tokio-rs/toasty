@@ -1,6 +1,9 @@
 //! Connection pooling for database connections.
 
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 pub use deadpool::managed::Timeouts;
 use toasty_core::driver::{Capability, Driver};
@@ -37,7 +40,7 @@ impl Default for PoolConfig {
 }
 
 /// A connection pool that manages database connections.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Pool {
     inner: deadpool::managed::Pool<Manager>,
     capability: &'static Capability,
@@ -45,14 +48,12 @@ pub struct Pool {
 
 impl Pool {
     /// Creates a new connection pool from the given driver.
-    pub fn new(driver: impl Driver) -> crate::Result<Self> {
+    pub fn new(driver: Arc<dyn Driver>) -> crate::Result<Self> {
         let capability = driver.capability();
         let max_connections = driver.max_connections();
 
-        let mut builder = deadpool::managed::Pool::builder(Manager {
-            driver: Box::new(driver),
-        })
-        .runtime(deadpool::Runtime::Tokio1);
+        let mut builder =
+            deadpool::managed::Pool::builder(Manager { driver }).runtime(deadpool::Runtime::Tokio1);
 
         if let Some(max_connections) = max_connections {
             builder = builder.max_size(max_connections);
@@ -67,7 +68,7 @@ impl Pool {
 
     /// Creates a new connection pool from a connection URL.
     pub fn connect(url: &str) -> crate::Result<Self> {
-        Self::new(Connect::new(url)?)
+        Self::new(Connect::new(url)?.driver.clone())
     }
 
     /// Retrieves a connection from the pool.
@@ -93,7 +94,7 @@ impl Pool {
 
 #[derive(Debug)]
 struct Manager {
-    driver: Box<dyn Driver>,
+    driver: Arc<dyn Driver>,
 }
 
 impl deadpool::managed::Manager for Manager {
@@ -116,6 +117,7 @@ impl deadpool::managed::Manager for Manager {
 /// A connection retrieved from a pool.
 ///
 /// When dropped, the connection is returned to the pool for reuse.
+#[derive(Debug)]
 pub struct PoolConnection {
     inner: deadpool::managed::Object<Manager>,
 }
