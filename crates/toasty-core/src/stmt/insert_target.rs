@@ -1,9 +1,5 @@
 use super::{Expr, InsertTable, Query};
-use crate::{
-    schema::app::ModelId,
-    stmt::{ExprSet, Source},
-    Schema,
-};
+use crate::schema::app::ModelId;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InsertTarget {

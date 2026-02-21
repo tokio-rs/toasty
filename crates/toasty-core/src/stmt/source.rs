@@ -1,7 +1,7 @@
 use super::{Association, SourceTable, SourceTableId, TableFactor, TableRef, TableWithJoins};
 use crate::{
     schema::{
-        app::{Model, ModelId, ModelRoot},
+        app::{ModelId, ModelRoot},
         db::TableId,
     },
     stmt::ExprArg,

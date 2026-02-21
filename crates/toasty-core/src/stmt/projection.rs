@@ -1,6 +1,6 @@
 use crate::{
     schema::{
-        app::{self, Field, FieldId, Model},
+        app::{Field, FieldId},
         db::ColumnId,
     },
     stmt::{Expr, Value},
