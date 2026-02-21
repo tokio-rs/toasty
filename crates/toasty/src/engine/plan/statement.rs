@@ -1067,12 +1067,25 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         stmt: &stmt::Statement,
         index_plan: &index::IndexPlan,
     ) -> Option<eval::Func> {
-        // If the query can be reduced to fetching rows using a set of
-        // primary-key keys, then `pk_keys` will be set to `Some(<keys>)`.
         if !index_plan.index.primary_key {
             return None;
         }
 
+        // Use key_values when they were extracted during index planning. This covers literal
+        // equality predicates including OR cases, and works even when the index_filter has been
+        // rewritten to ANY(MAP(...)) form (e.g. for DynamoDB where try_build_key_filter would
+        // return None because it does not recognize that form).
+        if let Some(key_values) = &index_plan.key_values {
+            let ty =
+                stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
+            return Some(eval::Func::from_stmt_typed(
+                stmt::Expr::Value(key_values.clone()),
+                vec![],
+                ty,
+            ));
+        }
+
+        // Fall back to expression analysis for other patterns (e.g. IN with an arg base).
         let pk_keys_project_args = self
             .load_data
             .inputs
@@ -1080,8 +1093,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .map(|node_id| self.planner.mir[node_id].ty().clone())
             .collect();
 
-        // If using the primary key to find rows, try to convert the
-        // filter expression to a set of primary-key keys.
         let cx = self.planner.engine.expr_cx_for(stmt);
         self.planner.engine.try_build_key_filter(
             cx,
