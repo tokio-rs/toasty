@@ -4,21 +4,21 @@ use super::{ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, Pri
 pub(crate) enum ModelKind {
     /// Root model with table, primary key, and query builders
     Root(ModelRoot),
-    /// Embedded model that is flattened into parent
-    Embedded(ModelEmbedded),
+    /// Embedded struct model that is flattened into parent
+    EmbeddedStruct(ModelEmbeddedStruct),
 }
 
 impl ModelKind {
     pub(crate) fn expect_root(&self) -> &ModelRoot {
         match self {
             ModelKind::Root(root) => root,
-            ModelKind::Embedded(_) => panic!("expected root model, found embedded"),
+            ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded"),
         }
     }
 
-    pub(crate) fn expect_embedded(&self) -> &ModelEmbedded {
+    pub(crate) fn expect_embedded(&self) -> &ModelEmbeddedStruct {
         match self {
-            ModelKind::Embedded(embedded) => embedded,
+            ModelKind::EmbeddedStruct(embedded) => embedded,
             ModelKind::Root(_) => panic!("expected embedded model, found root"),
         }
     }
@@ -43,7 +43,7 @@ pub(crate) struct ModelRoot {
 }
 
 #[derive(Debug)]
-pub(crate) struct ModelEmbedded {
+pub(crate) struct ModelEmbeddedStruct {
     /// The field struct identifier
     pub(crate) field_struct_ident: syn::Ident,
 
@@ -172,7 +172,7 @@ impl Model {
 
         // Build ModelKind based on whether this is embedded or root
         let kind = if is_embedded {
-            ModelKind::Embedded(ModelEmbedded {
+            ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
                 field_struct_ident: struct_ident("Fields", ast),
                 update_struct_ident: struct_ident("Update", ast),
             })
@@ -240,7 +240,7 @@ impl Model {
                     .iter()
                     .map(|index| &self.fields[*index]),
             ),
-            ModelKind::Embedded(_) => None,
+            ModelKind::EmbeddedStruct(_) => None,
         }
     }
 

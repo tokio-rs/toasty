@@ -43,7 +43,7 @@ trait RelationSource: std::fmt::Debug {
 
 #[derive(Debug)]
 struct InsertRelationSource<'a> {
-    model: &'a app::Model,
+    model: &'a app::ModelRoot,
     row: &'a mut stmt::Expr,
     /// The index in stmt::Returning that represents the row
     index: usize,
@@ -52,7 +52,7 @@ struct InsertRelationSource<'a> {
 
 #[derive(Debug)]
 struct UpdateRelationSource<'a> {
-    model: &'a app::Model,
+    model: &'a app::ModelRoot,
     filter: &'a stmt::Filter,
     assignments: &'a mut stmt::Assignments,
     returning: &'a mut Option<stmt::Returning>,
@@ -675,13 +675,7 @@ impl RelationSource for InsertRelationSource<'_> {
     fn selection(&self, nesting: usize) -> stmt::Query {
         let mut args = vec![];
 
-        // Relations only work with root models (which have primary keys)
-        let pk_fields = self
-            .model
-            .primary_key_fields()
-            .expect("relation source must be a root model with primary key");
-
-        for pk_field in pk_fields {
+        for pk_field in self.model.primary_key_fields() {
             let entry = self.row.entry(pk_field.id.index).unwrap();
 
             if entry.is_value() {

@@ -25,22 +25,20 @@ fn make_id_field(model_id: ModelId) -> Field {
 fn make_root_model(id: ModelId, name: &str, extra_fields: Vec<Field>) -> Model {
     let mut fields = vec![make_id_field(id)];
     fields.extend(extra_fields);
-    Model {
+    Model::Root(ModelRoot {
         id,
         name: Name::new(name),
         fields,
-        kind: ModelKind::Root(ModelRoot {
-            primary_key: PrimaryKey {
-                fields: vec![id.field(0)],
-                index: IndexId {
-                    model: id,
-                    index: 0,
-                },
+        primary_key: PrimaryKey {
+            fields: vec![id.field(0)],
+            index: IndexId {
+                model: id,
+                index: 0,
             },
-            table_name: None,
-        }),
+        },
+        table_name: None,
         indices: vec![],
-    }
+    })
 }
 
 fn make_relation_field(model_id: ModelId, index: usize, name: &str, ty: FieldTy) -> Field {

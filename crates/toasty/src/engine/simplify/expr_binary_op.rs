@@ -16,11 +16,7 @@ impl Simplify<'_> {
                         .resolve_expr_reference(expr_reference)
                         .expect_model();
 
-                    let primary_key = model.primary_key().expect(
-                        "binary op on model reference requires root model with primary key",
-                    );
-
-                    let [pk_field] = &primary_key.fields[..] else {
+                    let [pk_field] = &model.primary_key.fields[..] else {
                         todo!("handle composite keys");
                     };
 
@@ -476,7 +472,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `id = id` → `true` (non-nullable field)
         let mut lhs = Expr::Reference(ExprReference::Field {
@@ -498,7 +494,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `id != id` → `false` (non-nullable field)
         let mut lhs = Expr::Reference(ExprReference::Field {
@@ -520,7 +516,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `name = name` is not simplified (nullable field)
         let mut lhs = Expr::Reference(ExprReference::Field {
@@ -542,7 +538,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `id = name` is not simplified (different fields)
         let mut lhs = Expr::Reference(ExprReference::Field {

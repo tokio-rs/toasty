@@ -1,5 +1,5 @@
 use super::{Expr, Projection};
-use crate::schema::app::{self, Field, FieldId, ModelId};
+use crate::schema::app::{FieldId, ModelId};
 
 /// Describes a traversal through fields.
 ///
@@ -41,11 +41,6 @@ impl Path {
 
     pub fn len(&self) -> usize {
         self.projection.len()
-    }
-
-    pub fn resolve_field<'a>(&self, schema: &'a app::Schema) -> &'a Field {
-        let expr_self = schema.model(self.root);
-        self.projection.resolve_field(schema, expr_self)
     }
 
     pub fn chain(&mut self, other: &Self) {

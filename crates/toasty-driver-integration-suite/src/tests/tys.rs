@@ -344,6 +344,91 @@ fn gen_string(length: usize, pattern: &str) -> String {
 }
 
 #[driver_test]
+pub async fn ty_bytes(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        val: Vec<u8>,
+    }
+
+    let db = test.setup_db(models!(Foo)).await;
+
+    let test_values: Vec<Vec<u8>> = vec![
+        vec![],
+        vec![0],
+        vec![1, 2, 3],
+        vec![0xFF; 100],
+        (0..=255).collect(),
+        vec![0; 1000],
+    ];
+
+    // Clear setup operations
+    test.log().clear();
+
+    // Test 1: All test values round-trip
+    for val in &test_values {
+        let created = Foo::create().val(val.clone()).exec(&db).await?;
+
+        // Verify the INSERT operation stored the bytes value
+        let (op, _resp) = test.log().pop();
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Insert(_ {
+                target: InsertTarget::Table(_ {
+                    table: == table_id(&db, "foos"),
+                    columns: == columns(&db, "foos", &["id", "val"]),
+                    ..
+                }),
+                source.body: ExprSet::Values(_ {
+                    rows: [=~ (Any, val.as_slice())],
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
+
+        let read = Foo::get_by_id(&db, &created.id).await?;
+        assert_eq!(read.val, *val);
+
+        test.log().clear();
+    }
+
+    // Test 2: Update chain
+    let mut record = Foo::create().val(test_values[0].clone()).exec(&db).await?;
+    test.log().clear();
+
+    for val in &test_values {
+        record.update().val(val.clone()).exec(&db).await?;
+
+        // Verify the UPDATE operation sent the bytes value
+        let (op, _resp) = test.log().pop();
+        if test.capability().sql {
+            assert_struct!(op, Operation::QuerySql(_ {
+                stmt: Statement::Update(_ {
+                    assignments: #{ 1: _ { expr: _, .. }},
+                    ..
+                }),
+                ..
+            }));
+        } else {
+            assert_struct!(op, Operation::UpdateByKey(_ {
+                assignments: #{ 1: _ { expr: _, .. }},
+                ..
+            }));
+        }
+
+        let read = Foo::get_by_id(&db, &record.id).await?;
+        assert_eq!(read.val, *val);
+
+        test.log().clear();
+    }
+    Ok(())
+}
+
+#[driver_test]
 pub async fn ty_uuid(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Foo {

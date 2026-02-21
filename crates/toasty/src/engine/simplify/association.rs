@@ -46,7 +46,9 @@ impl Simplify<'_> {
         // For now, we only support paths with a single step
         assert!(association.path.len() == 1, "TODO");
 
-        let field = association.path.resolve_field(&self.schema().app);
+        let Some(field) = self.schema().app.resolve_field_path(&association.path) else {
+            todo!()
+        };
 
         match &field.ty {
             app::FieldTy::BelongsTo(rel) => {
@@ -129,30 +131,17 @@ mod tests {
             let post_model = Post::id();
 
             // Find field IDs by name from the generated schema
-            let user_id = schema
-                .app
-                .model(user_model)
-                .fields
-                .iter()
-                .find(|f| f.name.app_name == "id")
-                .unwrap()
-                .id;
-
+            let user_id = schema.app.model(user_model).field_by_name("id").unwrap().id;
             let user_posts = schema
                 .app
                 .model(user_model)
-                .fields
-                .iter()
-                .find(|f| f.name.app_name == "posts")
+                .field_by_name("posts")
                 .unwrap()
                 .id;
-
             let post_author = schema
                 .app
                 .model(post_model)
-                .fields
-                .iter()
-                .find(|f| f.name.app_name == "author")
+                .field_by_name("author")
                 .unwrap()
                 .id;
 

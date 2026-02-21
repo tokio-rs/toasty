@@ -14,6 +14,7 @@ impl TypeExt for stmt::Type {
             stmt::Type::I8 | stmt::Type::I16 | stmt::Type::I32 | stmt::Type::I64 => {
                 ScalarAttributeType::N
             }
+            stmt::Type::Bytes => ScalarAttributeType::B,
             _ => todo!("to_ddb_type; ty={:#?}", self),
         }
     }

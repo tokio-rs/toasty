@@ -23,7 +23,7 @@ mod rewrite_root_path_expr;
 
 use toasty_core::{
     schema::{
-        app::{Field, FieldId, Model, ModelId},
+        app::{Field, FieldId, Model, ModelId, ModelRoot},
         *,
     },
     stmt::{self, Expr, IntoExprTarget, Node, VisitMut},
@@ -224,6 +224,10 @@ impl<'a> Simplify<'a> {
 
     fn model(&self, model_id: impl Into<ModelId>) -> &Model {
         self.cx.schema().app.model(model_id.into())
+    }
+
+    fn model_root(&self, model_id: impl Into<ModelId>) -> &ModelRoot {
+        self.model(model_id).expect_root()
     }
 
     fn field(&self, field_id: impl Into<FieldId>) -> &Field {
