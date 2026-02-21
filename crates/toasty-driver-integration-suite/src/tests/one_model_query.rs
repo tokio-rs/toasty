@@ -556,6 +556,120 @@ pub async fn query_or_with_index(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID))]
+pub async fn query_or_on_partition_key(test: &mut Test) -> Result<()> {
+    // OR directly on the partition key of a composite primary key.
+    //
+    // SQL: plain OR in WHERE clause.
+    // DynamoDB: fan-out into two QueryPk calls, one per partition key value,
+    //           because KeyConditionExpression does not support OR.
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = team, local = name)]
+    struct Player {
+        team: String,
+
+        name: String,
+
+        #[allow(dead_code)]
+        position: String,
+    }
+
+    let db = test.setup_db(models!(Player)).await;
+
+    for (team, name, position) in [
+        ("Timbers", "Diego Valeri", "Midfielder"),
+        ("Timbers", "Fanendo Adi", "Forward"),
+        ("Sounders", "Clint Dempsey", "Forward"),
+        ("Sounders", "Osvaldo Alonso", "Midfielder"),
+        ("Galaxy", "Robbie Keane", "Forward"),
+    ] {
+        Player::create()
+            .team(team)
+            .name(name)
+            .position(position)
+            .exec(&db)
+            .await?;
+    }
+
+    // team = "Timbers" OR team = "Sounders"
+    let players = Player::filter(
+        Player::fields()
+            .team()
+            .eq("Timbers")
+            .or(Player::fields().team().eq("Sounders")),
+    )
+    .all(&db)
+    .await?
+    .collect::<Vec<_>>()
+    .await?;
+
+    assert_eq!(4, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(
+        names,
+        ["Clint Dempsey", "Diego Valeri", "Fanendo Adi", "Osvaldo Alonso"]
+    );
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn query_or_on_composite_pk(test: &mut Test) -> Result<()> {
+    // OR where each branch fully specifies all composite primary key columns.
+    //
+    // SQL: plain OR in WHERE clause.
+    // DynamoDB: routes to GetByKey (BatchGetItem) because all key columns
+    //           have exact equality predicates, so key_values is populated.
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = team, local = name)]
+    struct Player {
+        team: String,
+
+        name: String,
+
+        #[allow(dead_code)]
+        position: String,
+    }
+
+    let db = test.setup_db(models!(Player)).await;
+
+    for (team, name, position) in [
+        ("Timbers", "Diego Valeri", "Midfielder"),
+        ("Timbers", "Fanendo Adi", "Forward"),
+        ("Sounders", "Clint Dempsey", "Forward"),
+        ("Sounders", "Osvaldo Alonso", "Midfielder"),
+    ] {
+        Player::create()
+            .team(team)
+            .name(name)
+            .position(position)
+            .exec(&db)
+            .await?;
+    }
+
+    // (team = "Timbers" AND name = "Diego Valeri") OR (team = "Sounders" AND name = "Clint Dempsey")
+    let players = Player::filter(
+        Player::fields()
+            .team()
+            .eq("Timbers")
+            .and(Player::fields().name().eq("Diego Valeri"))
+            .or(Player::fields()
+                .team()
+                .eq("Sounders")
+                .and(Player::fields().name().eq("Clint Dempsey"))),
+    )
+    .all(&db)
+    .await?
+    .collect::<Vec<_>>()
+    .await?;
+
+    assert_eq!(2, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Clint Dempsey", "Diego Valeri"]);
+    Ok(())
+}
+
+#[driver_test(id(ID))]
 pub async fn query_or_with_comparisons(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = team, local = name)]
