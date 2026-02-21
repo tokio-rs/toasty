@@ -4,12 +4,29 @@ use toasty_core::stmt;
 /// not support OR in key conditions (e.g. DynamoDB).
 ///
 /// Steps:
-///   1. Flatten the expression to Disjunctive Normal Form (DNF) — a flat list of OR
+///   1. If the expression is already an `InList(col, [v1, v2, ...])`, expand it
+///      directly to `ANY(MAP([v1, v2, ...], col = arg(0)))` — equivalent but in
+///      the canonical fan-out form.
+///   2. Flatten the expression to Disjunctive Normal Form (DNF) — a flat list of OR
 ///      branches, each branch being a single predicate or AND of predicates.
-///   2. Group branches by their structural shape (predicate with literal values
+///   3. Group branches by their structural shape (predicate with literal values
 ///      replaced by `arg(i)`).
-///   3. Unify each same-shape group into `ANY(MAP(Value::List([v1, v2, ...]), shape))`.
+///   4. Unify each same-shape group into `ANY(MAP(Value::List([v1, v2, ...]), shape))`.
 pub(super) fn index_filter_to_any_map(expr: stmt::Expr) -> stmt::Expr {
+    // `col IN [v1, v2, ...]` is equivalent to `v1 = col OR v2 = col OR ...`.
+    // Expand it directly to the canonical fan-out form so the DNF step doesn't
+    // need to handle InList as a leaf.
+    if let stmt::Expr::InList(ref in_list) = expr {
+        if matches!(*in_list.list, stmt::Expr::Value(stmt::Value::List(_))) {
+            let shape = stmt::Expr::from(stmt::ExprBinaryOp {
+                lhs: in_list.expr.clone(),
+                op: stmt::BinaryOp::Eq,
+                rhs: Box::new(stmt::Expr::arg(0)),
+            });
+            return stmt::Expr::any(stmt::Expr::map(*in_list.list.clone(), shape));
+        }
+    }
+
     let branches = flatten_to_dnf(expr);
     unify_dnf_branches(branches)
 }
