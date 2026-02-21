@@ -29,59 +29,7 @@ fn flatten_to_dnf(expr: stmt::Expr) -> Vec<stmt::Expr> {
     while let Some(expr) = queue.pop() {
         match expr {
             stmt::Expr::Or(or) => queue.extend(or.operands.into_iter().rev()),
-            stmt::Expr::And(and) => {
-                // First: distribute AND over any Or operand.
-                let or_pos = and.operands.iter().position(|op| matches!(op, stmt::Expr::Or(_)));
-                if let Some(or_pos) = or_pos {
-                    let mut operands = and.operands;
-                    let stmt::Expr::Or(or) = operands.remove(or_pos) else {
-                        unreachable!()
-                    };
-                    for branch in or.operands.into_iter().rev() {
-                        let mut new_operands = operands.clone();
-                        new_operands.insert(or_pos, branch);
-                        queue.push(stmt::ExprAnd { operands: new_operands }.into());
-                    }
-                    continue;
-                }
-
-                // Second: distribute AND into Any(Map(...)).
-                // AND(p, ANY(MAP(base, pred))) → ANY(MAP(base, AND(pred, p)))
-                // This is valid because the non-Any operands do not reference
-                // the map's arg variable.
-                let any_pos = and.operands.iter().position(|op| matches!(op, stmt::Expr::Any(_)));
-                if let Some(any_pos) = any_pos {
-                    let mut operands = and.operands;
-                    let stmt::Expr::Any(any) = operands.remove(any_pos) else {
-                        unreachable!()
-                    };
-                    let stmt::Expr::Map(map) = *any.expr else {
-                        todo!("Any with non-Map expr in AND distribution");
-                    };
-                    // Keep the original map predicate first, then the
-                    // distributed And operands.
-                    let mut inner_operands = vec![*map.map];
-                    inner_operands.extend(operands);
-                    let inner = match inner_operands.len() {
-                        0 => unreachable!(),
-                        1 => inner_operands.into_iter().next().unwrap(),
-                        _ => stmt::ExprAnd { operands: inner_operands }.into(),
-                    };
-                    queue.push(
-                        stmt::ExprAny {
-                            expr: Box::new(stmt::Expr::Map(stmt::ExprMap {
-                                base: map.base,
-                                map: Box::new(inner),
-                            })),
-                        }
-                        .into(),
-                    );
-                    continue;
-                }
-
-                // No Or or Any operands: this And is a final conjunction.
-                branches.push(stmt::Expr::And(and));
-            }
+            stmt::Expr::And(and) => process_and(and, &mut queue, &mut branches),
             leaf => branches.push(leaf),
         }
     }
@@ -95,37 +43,77 @@ fn flatten_to_dnf(expr: stmt::Expr) -> Vec<stmt::Expr> {
     branches
 }
 
-/// Asserts that no `Any(Map(...))` in `expr` contains an `Or` anywhere in its
-/// predicate sub-tree. This catches bugs where OR distribution was incomplete.
-fn assert_no_or_in_any(expr: &stmt::Expr) {
-    match expr {
-        stmt::Expr::Any(any) => {
-            assert!(
-                !contains_or(&any.expr),
-                "Any(Map(...)) contains an Or expression after DNF distribution; \
-                 this is a bug in flatten_to_dnf: {:#?}",
-                any.expr
-            );
-        }
-        stmt::Expr::And(and) => and.operands.iter().for_each(assert_no_or_in_any),
-        // Other expression forms cannot contain Any in an index filter context.
-        _ => {}
+/// Process one `And` expression from the DNF work queue.
+///
+/// Priority:
+///   1. If any operand is `Or`, distribute AND over it and re-queue each branch.
+///   2. If any operand is `Any(Map(...))`, distribute the remaining operands
+///      into the map predicate and re-queue the resulting `Any`.
+///   3. No `Or` or `Any` operands: emit as a final DNF conjunction.
+fn process_and(
+    and: stmt::ExprAnd,
+    queue: &mut Vec<stmt::Expr>,
+    branches: &mut Vec<stmt::Expr>,
+) {
+    if let Some(pos) = and.operands.iter().position(|op| matches!(op, stmt::Expr::Or(_))) {
+        return distribute_over_or(and, pos, queue);
+    }
+
+    if let Some(pos) = and.operands.iter().position(|op| matches!(op, stmt::Expr::Any(_))) {
+        return distribute_into_any(and, pos, queue);
+    }
+
+    branches.push(stmt::Expr::And(and));
+}
+
+/// Distribute AND over an `Or` operand at `pos`, re-queuing one `And` per branch.
+///
+/// `(p AND (a OR b) AND q)` → `(p AND a AND q)` and `(p AND b AND q)` on the queue.
+fn distribute_over_or(and: stmt::ExprAnd, pos: usize, queue: &mut Vec<stmt::Expr>) {
+    let mut operands = and.operands;
+    let stmt::Expr::Or(or) = operands.remove(pos) else {
+        unreachable!()
+    };
+
+    for branch in or.operands.into_iter().rev() {
+        let mut new_operands = operands.clone();
+        new_operands.insert(pos, branch);
+        queue.push(stmt::ExprAnd { operands: new_operands }.into());
     }
 }
 
-/// Returns true if `expr` contains an `Expr::Or` anywhere in its sub-tree.
-fn contains_or(expr: &stmt::Expr) -> bool {
-    match expr {
-        stmt::Expr::Or(_) => true,
-        stmt::Expr::And(and) => and.operands.iter().any(contains_or),
-        stmt::Expr::Any(a) => contains_or(&a.expr),
-        stmt::Expr::Map(m) => contains_or(&m.base) || contains_or(&m.map),
-        stmt::Expr::BinaryOp(b) => contains_or(&b.lhs) || contains_or(&b.rhs),
-        stmt::Expr::Not(n) => contains_or(&n.expr),
-        stmt::Expr::IsNull(n) => contains_or(&n.expr),
-        // Leaf nodes (Arg, Reference, Value, Default, Type, etc.) contain no sub-expressions.
-        _ => false,
-    }
+/// Distribute the non-`Any` operands of `and` into an `Any(Map(...))` at `pos`.
+///
+/// `AND(p, ANY(MAP(base, pred)))` → `ANY(MAP(base, AND(pred, p)))`.
+///
+/// This is valid because the non-Any operands do not reference the map's arg variable.
+fn distribute_into_any(and: stmt::ExprAnd, pos: usize, queue: &mut Vec<stmt::Expr>) {
+    let mut operands = and.operands;
+    let stmt::Expr::Any(any) = operands.remove(pos) else {
+        unreachable!()
+    };
+    let stmt::Expr::Map(map) = *any.expr else {
+        todo!("Any with non-Map expr in AND distribution");
+    };
+
+    // Keep the original map predicate first, then the distributed And operands.
+    let mut inner_operands = vec![*map.map];
+    inner_operands.extend(operands);
+    let inner: stmt::Expr = if inner_operands.len() == 1 {
+        inner_operands.into_iter().next().unwrap()
+    } else {
+        stmt::ExprAnd { operands: inner_operands }.into()
+    };
+
+    queue.push(
+        stmt::ExprAny {
+            expr: Box::new(stmt::Expr::Map(stmt::ExprMap {
+                base: map.base,
+                map: Box::new(inner),
+            })),
+        }
+        .into(),
+    );
 }
 
 /// Group DNF branches by shape; unify each group into `ANY(MAP(...))`.
@@ -188,5 +176,37 @@ fn extract_shape(branch: stmt::Expr) -> (stmt::Expr, stmt::Value) {
             todo!("composite-key AND branch in OR index filter fan-out");
         }
         _ => todo!("unsupported branch type in OR index filter: {branch:#?}"),
+    }
+}
+
+/// Asserts that no `Any(Map(...))` in `expr` contains an `Or` anywhere in its
+/// predicate sub-tree. This catches bugs where OR distribution was incomplete.
+fn assert_no_or_in_any(expr: &stmt::Expr) {
+    match expr {
+        stmt::Expr::Any(any) => {
+            assert!(
+                !contains_or(&any.expr),
+                "Any(Map(...)) contains an Or expression after DNF distribution; \
+                 this is a bug in flatten_to_dnf: {:#?}",
+                any.expr
+            );
+        }
+        stmt::Expr::And(and) => and.operands.iter().for_each(assert_no_or_in_any),
+        _ => {}
+    }
+}
+
+/// Returns true if `expr` contains an `Expr::Or` anywhere in its sub-tree.
+fn contains_or(expr: &stmt::Expr) -> bool {
+    match expr {
+        stmt::Expr::Or(_) => true,
+        stmt::Expr::And(and) => and.operands.iter().any(contains_or),
+        stmt::Expr::Any(a) => contains_or(&a.expr),
+        stmt::Expr::Map(m) => contains_or(&m.base) || contains_or(&m.map),
+        stmt::Expr::BinaryOp(b) => contains_or(&b.lhs) || contains_or(&b.rhs),
+        stmt::Expr::Not(n) => contains_or(&n.expr),
+        stmt::Expr::IsNull(n) => contains_or(&n.expr),
+        // Leaf nodes (Arg, Reference, Value, Default, Type, etc.) contain no sub-expressions.
+        _ => false,
     }
 }
