@@ -8,7 +8,11 @@ pub(crate) use index_plan::IndexPlan;
 
 use crate::{engine::Engine, Result};
 use std::collections::HashMap;
-use toasty_core::{driver::Capability, schema::db::{Index, Table}, Schema, stmt};
+use toasty_core::{
+    driver::Capability,
+    schema::db::{Index, Table},
+    stmt, Schema,
+};
 
 impl Engine {
     pub(crate) fn plan_index_path<'a>(&'a self, stmt: &stmt::Statement) -> Result<IndexPlan<'a>> {
@@ -213,23 +217,35 @@ fn extract_key_record(
 ) -> Option<stmt::Value> {
     match expr {
         stmt::Expr::BinaryOp(b) if b.op.is_eq() && index.columns.len() == 1 => {
-            let stmt::Expr::Value(v) = &*b.rhs else { return None };
-            Some(stmt::Value::Record(stmt::ValueRecord::from_vec(vec![v.clone()])))
+            let stmt::Expr::Value(v) = &*b.rhs else {
+                return None;
+            };
+            Some(stmt::Value::Record(stmt::ValueRecord::from_vec(vec![
+                v.clone()
+            ])))
         }
         stmt::Expr::And(and) if and.operands.len() == index.columns.len() => {
             let mut fields = vec![stmt::Value::Null; index.columns.len()];
 
             for operand in &and.operands {
-                let stmt::Expr::BinaryOp(b) = operand else { return None };
-                if !b.op.is_eq() { return None; }
-                let stmt::Expr::Reference(expr_ref) = &*b.lhs else { return None };
+                let stmt::Expr::BinaryOp(b) = operand else {
+                    return None;
+                };
+                if !b.op.is_eq() {
+                    return None;
+                }
+                let stmt::Expr::Reference(expr_ref) = &*b.lhs else {
+                    return None;
+                };
                 let column = cx.resolve_expr_reference(expr_ref).expect_column();
                 let (idx, _) = index
                     .columns
                     .iter()
                     .enumerate()
                     .find(|(_, c)| c.column == column.id)?;
-                let stmt::Expr::Value(v) = &*b.rhs else { return None };
+                let stmt::Expr::Value(v) = &*b.rhs else {
+                    return None;
+                };
                 fields[idx] = v.clone();
             }
 

@@ -50,16 +50,20 @@ fn flatten_to_dnf(expr: stmt::Expr) -> Vec<stmt::Expr> {
 ///   2. If any operand is `Any(Map(...))`, distribute the remaining operands
 ///      into the map predicate and re-queue the resulting `Any`.
 ///   3. No `Or` or `Any` operands: emit as a final DNF conjunction.
-fn process_and(
-    and: stmt::ExprAnd,
-    queue: &mut Vec<stmt::Expr>,
-    branches: &mut Vec<stmt::Expr>,
-) {
-    if let Some(pos) = and.operands.iter().position(|op| matches!(op, stmt::Expr::Or(_))) {
+fn process_and(and: stmt::ExprAnd, queue: &mut Vec<stmt::Expr>, branches: &mut Vec<stmt::Expr>) {
+    if let Some(pos) = and
+        .operands
+        .iter()
+        .position(|op| matches!(op, stmt::Expr::Or(_)))
+    {
         return distribute_over_or(and, pos, queue);
     }
 
-    if let Some(pos) = and.operands.iter().position(|op| matches!(op, stmt::Expr::Any(_))) {
+    if let Some(pos) = and
+        .operands
+        .iter()
+        .position(|op| matches!(op, stmt::Expr::Any(_)))
+    {
         return distribute_into_any(and, pos, queue);
     }
 
@@ -78,7 +82,12 @@ fn distribute_over_or(and: stmt::ExprAnd, pos: usize, queue: &mut Vec<stmt::Expr
     for branch in or.operands.into_iter().rev() {
         let mut new_operands = operands.clone();
         new_operands.insert(pos, branch);
-        queue.push(stmt::ExprAnd { operands: new_operands }.into());
+        queue.push(
+            stmt::ExprAnd {
+                operands: new_operands,
+            }
+            .into(),
+        );
     }
 }
 
@@ -102,7 +111,10 @@ fn distribute_into_any(and: stmt::ExprAnd, pos: usize, queue: &mut Vec<stmt::Exp
     let inner: stmt::Expr = if inner_operands.len() == 1 {
         inner_operands.into_iter().next().unwrap()
     } else {
-        stmt::ExprAnd { operands: inner_operands }.into()
+        stmt::ExprAnd {
+            operands: inner_operands,
+        }
+        .into()
     };
 
     queue.push(

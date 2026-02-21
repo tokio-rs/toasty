@@ -220,9 +220,9 @@ fn pk_equality_sets_key_values() -> Result<()> {
 
     let plan = cx.plan_basic_query_with_filter(filter)?;
 
-    let expected = stmt::Value::List(vec![stmt::Value::Record(stmt::ValueRecord::from_vec(vec![
-        stmt::Value::from(1i64),
-    ]))]);
+    let expected = stmt::Value::List(vec![stmt::Value::Record(stmt::ValueRecord::from_vec(
+        vec![stmt::Value::from(1i64)],
+    ))]);
     assert_eq!(plan.key_values, Some(expected));
     Ok(())
 }
@@ -247,9 +247,8 @@ fn pk_or_sets_key_values() -> Result<()> {
 
     let plan = cx.plan_basic_query_with_filter(filter)?;
 
-    let record = |v: i64| {
-        stmt::Value::Record(stmt::ValueRecord::from_vec(vec![stmt::Value::from(v)]))
-    };
+    let record =
+        |v: i64| stmt::Value::Record(stmt::ValueRecord::from_vec(vec![stmt::Value::from(v)]));
     let expected = stmt::Value::List(vec![record(1), record(2)]);
     assert_eq!(plan.key_values, Some(expected));
     Ok(())
@@ -303,10 +302,12 @@ fn composite_pk_full_equality_sets_key_values() -> Result<()> {
 
     let plan = cx.plan_basic_query_with_filter(filter)?;
 
-    let expected = stmt::Value::List(vec![stmt::Value::Record(stmt::ValueRecord::from_vec(vec![
-        stmt::Value::String("u1".to_string()),
-        stmt::Value::String("s1".to_string()),
-    ]))]);
+    let expected = stmt::Value::List(vec![stmt::Value::Record(stmt::ValueRecord::from_vec(
+        vec![
+            stmt::Value::String("u1".to_string()),
+            stmt::Value::String("s1".to_string()),
+        ],
+    ))]);
     assert_eq!(plan.key_values, Some(expected));
     Ok(())
 }
@@ -342,7 +343,10 @@ fn any_map_with_arg_base_passes_through_for_dynamodb() {
     ));
 
     let result = or_rewrite::index_filter_to_any_map(filter.clone());
-    assert_eq!(result, filter, "batch-load ANY(MAP(arg, pred)) should pass through unchanged");
+    assert_eq!(
+        result, filter,
+        "batch-load ANY(MAP(arg, pred)) should pass through unchanged"
+    );
 }
 
 #[test]
@@ -385,7 +389,10 @@ fn composite_pk_or_becomes_any_map_for_dynamodb() -> Result<()> {
         ]))
     };
     let expected = stmt::Expr::any(stmt::Expr::map(
-        stmt::Expr::Value(stmt::Value::List(vec![record("u1", "s1"), record("u2", "s2")])),
+        stmt::Expr::Value(stmt::Value::List(vec![
+            record("u1", "s1"),
+            record("u2", "s2"),
+        ])),
         stmt::Expr::And(stmt::ExprAnd {
             operands: vec![
                 stmt::Expr::eq(
@@ -429,7 +436,10 @@ fn ddb_test_cx_composite() -> TestCx {
     let schema = Builder::new()
         .build(app_schema, &Capability::DYNAMODB)
         .expect("schema should build");
-    TestCx { schema, capability: &Capability::DYNAMODB }
+    TestCx {
+        schema,
+        capability: &Capability::DYNAMODB,
+    }
 }
 
 fn test_cx_with_capability(capability: &'static Capability) -> TestCx {
