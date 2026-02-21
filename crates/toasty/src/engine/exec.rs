@@ -87,9 +87,7 @@ impl Engine {
 /// If `expr` is `ANY(MAP(Value::List([...]), pred))`, returns the list items and predicate
 /// template. Returns `None` for any other form, including the batch-load `ANY(MAP(arg[i], pred))`
 /// where the base has not yet been substituted.
-fn try_extract_any_map_list<'a>(
-    expr: &'a stmt::Expr,
-) -> Option<(&'a [stmt::Value], &'a stmt::Expr)> {
+fn try_extract_any_map_list(expr: &stmt::Expr) -> Option<(&[stmt::Value], &stmt::Expr)> {
     let stmt::Expr::Any(any) = expr else {
         return None;
     };

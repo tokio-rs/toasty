@@ -20,10 +20,10 @@ impl Engine {
     }
 }
 
-pub(crate) fn plan_index_path<'a, 'stmt>(
+pub(crate) fn plan_index_path<'a>(
     schema: &'a Schema,
     capability: &'a Capability,
-    stmt: &'stmt stmt::Statement,
+    stmt: &stmt::Statement,
 ) -> Result<IndexPlan<'a>> {
     let cx = stmt::ExprContext::new(schema);
     let cx = cx.scope(stmt);
@@ -196,7 +196,7 @@ fn try_extract_key_values(
 ) -> Option<stmt::Expr> {
     match index_filter {
         stmt::Expr::InList(in_list) => match &*in_list.list {
-            stmt::Expr::Arg(arg) => Some(stmt::Expr::Arg(arg.clone())),
+            stmt::Expr::Arg(arg) => Some(stmt::Expr::Arg(*arg)),
             stmt::Expr::Value(stmt::Value::List(items)) => {
                 let records = items
                     .iter()
