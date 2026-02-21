@@ -15,7 +15,7 @@ use toasty_core::{
     Result,
 };
 use toasty_sql::{self as sql, TypedValue};
-use tokio_postgres::{Client, Config};
+use tokio_postgres::{Client, Config, GenericClient};
 use url::Url;
 
 use crate::{r#type::TypeExt, statement_cache::StatementCache};
@@ -264,85 +264,91 @@ impl From<Client> for Connection {
     }
 }
 
+async fn exec_op(
+    client: &(impl GenericClient + Sync),
+    statement_cache: &mut StatementCache,
+    schema: &Arc<Schema>,
+    op: Operation,
+) -> Result<Response> {
+    let (sql, ret_tys): (sql::Statement, _) = match op {
+        Operation::Insert(op) => (op.stmt.into(), None),
+        Operation::QuerySql(query) => {
+            assert!(
+                query.last_insert_id_hack.is_none(),
+                "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
+            );
+            (query.stmt.into(), query.ret)
+        }
+        op => todo!("op={:#?}", op),
+    };
+
+    let width = sql.returning_len();
+
+    let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
+    let sql_as_str = sql::Serializer::postgresql(schema).serialize(&sql, &mut params);
+
+    let param_types = params
+        .iter()
+        .map(|typed_value| typed_value.infer_ty().to_postgres_type())
+        .collect::<Vec<_>>();
+
+    let values: Vec<_> = params.into_iter().map(|tv| Value::from(tv.value)).collect();
+    let params = values
+        .iter()
+        .map(|param| param as &(dyn ToSql + Sync))
+        .collect::<Vec<_>>();
+
+    let statement = statement_cache
+        .prepare_typed(client, &sql_as_str, &param_types)
+        .await
+        .map_err(toasty_core::Error::driver_operation_failed)?;
+
+    if width.is_none() {
+        let count = client
+            .execute(&statement, &params)
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        return Ok(Response::count(count));
+    }
+
+    let rows = client
+        .query(&statement, &params)
+        .await
+        .map_err(toasty_core::Error::driver_operation_failed)?;
+
+    if width.is_none() {
+        let [row] = &rows[..] else { todo!() };
+        let total = row.get::<usize, i64>(0);
+        let condition_matched = row.get::<usize, i64>(1);
+
+        if total == condition_matched {
+            Ok(Response::count(total as _))
+        } else {
+            Err(toasty_core::Error::condition_failed(
+                "update condition did not match",
+            ))
+        }
+    } else {
+        let ret_tys = ret_tys.as_ref().unwrap().clone();
+        let results = rows.into_iter().map(move |row| {
+            let mut results = Vec::new();
+            for (i, column) in row.columns().iter().enumerate() {
+                results.push(Value::from_sql(i, &row, column, &ret_tys[i]).into_inner());
+            }
+
+            Ok(ValueRecord::from_vec(results))
+        });
+
+        Ok(Response::value_stream(stmt::ValueStream::from_iter(
+            results,
+        )))
+    }
+}
+
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        let (sql, ret_tys): (sql::Statement, _) = match op {
-            Operation::Insert(op) => (op.stmt.into(), None),
-            Operation::QuerySql(query) => {
-                assert!(
-                    query.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
-                );
-                (query.stmt.into(), query.ret)
-            }
-            op => todo!("op={:#?}", op),
-        };
-
-        let width = sql.returning_len();
-
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-        let sql_as_str = sql::Serializer::postgresql(schema).serialize(&sql, &mut params);
-
-        let param_types = params
-            .iter()
-            .map(|typed_value| typed_value.infer_ty().to_postgres_type())
-            .collect::<Vec<_>>();
-
-        let values: Vec<_> = params.into_iter().map(|tv| Value::from(tv.value)).collect();
-        let params = values
-            .iter()
-            .map(|param| param as &(dyn ToSql + Sync))
-            .collect::<Vec<_>>();
-
-        let statement = self
-            .statement_cache
-            .prepare_typed(&mut self.client, &sql_as_str, &param_types)
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
-
-        if width.is_none() {
-            let count = self
-                .client
-                .execute(&statement, &params)
-                .await
-                .map_err(toasty_core::Error::driver_operation_failed)?;
-            return Ok(Response::count(count));
-        }
-
-        let rows = self
-            .client
-            .query(&statement, &params)
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
-
-        if width.is_none() {
-            let [row] = &rows[..] else { todo!() };
-            let total = row.get::<usize, i64>(0);
-            let condition_matched = row.get::<usize, i64>(1);
-
-            if total == condition_matched {
-                Ok(Response::count(total as _))
-            } else {
-                Err(toasty_core::Error::condition_failed(
-                    "update condition did not match",
-                ))
-            }
-        } else {
-            let ret_tys = ret_tys.as_ref().unwrap().clone();
-            let results = rows.into_iter().map(move |row| {
-                let mut results = Vec::new();
-                for (i, column) in row.columns().iter().enumerate() {
-                    results.push(Value::from_sql(i, &row, column, &ret_tys[i]).into_inner());
-                }
-
-                Ok(ValueRecord::from_vec(results))
-            });
-
-            Ok(Response::value_stream(stmt::ValueStream::from_iter(
-                results,
-            )))
-        }
+        exec_op(&self.client, &mut self.statement_cache, schema, op).await
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
@@ -450,5 +456,49 @@ impl toasty_core::driver::Connection for Connection {
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
+    }
+
+    async fn transaction(&mut self) -> Result<Box<dyn toasty_core::driver::Transaction<'_> + '_>> {
+        let txn = self
+            .client
+            .transaction()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        Ok(Box::new(Transaction {
+            inner: txn,
+            statement_cache: &mut self.statement_cache,
+        }))
+    }
+}
+
+pub struct Transaction<'a> {
+    inner: tokio_postgres::Transaction<'a>,
+    statement_cache: &'a mut StatementCache,
+}
+
+impl std::fmt::Debug for Transaction<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Transaction").finish_non_exhaustive()
+    }
+}
+
+#[async_trait]
+impl<'a> toasty_core::driver::Transaction<'a> for Transaction<'a> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+        exec_op(&self.inner, self.statement_cache, schema, op).await
+    }
+
+    async fn commit(self) -> Result<()> {
+        self.inner
+            .commit()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)
+    }
+
+    async fn rollback(self) -> Result<()> {
+        self.inner
+            .rollback()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)
     }
 }

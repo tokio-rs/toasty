@@ -10,7 +10,7 @@ use std::{
 use toasty_core::{
     async_trait,
     driver::{
-        operation::{Operation, Transaction},
+        operation::Operation,
         Capability, Driver, Response,
     },
     schema::db::{Migration, Schema, SchemaDiff, Table},
@@ -139,110 +139,109 @@ impl Connection {
     }
 }
 
+fn exec_op(
+    connection: &RusqliteConnection,
+    schema: &Arc<Schema>,
+    op: Operation,
+) -> Result<Response> {
+    let (sql, ret_tys): (sql::Statement, _) = match op {
+        Operation::QuerySql(op) => {
+            assert!(
+                op.last_insert_id_hack.is_none(),
+                "last_insert_id_hack is MySQL-specific and should not be set for SQLite"
+            );
+            (op.stmt.into(), op.ret)
+        }
+        op => todo!("op={:#?}", op),
+    };
+
+    let mut params: Vec<toasty_sql::TypedValue> = vec![];
+    let sql_str = sql::Serializer::sqlite(schema).serialize(&sql, &mut params);
+
+    let mut stmt = connection.prepare_cached(&sql_str).unwrap();
+
+    let width = match &sql {
+        sql::Statement::Query(stmt) => match &stmt.body {
+            stmt::ExprSet::Select(stmt) => {
+                Some(stmt.returning.as_expr_unwrap().as_record_unwrap().len())
+            }
+            _ => todo!(),
+        },
+        sql::Statement::Insert(stmt) => stmt
+            .returning
+            .as_ref()
+            .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
+        sql::Statement::Delete(stmt) => stmt
+            .returning
+            .as_ref()
+            .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
+        sql::Statement::Update(stmt) => {
+            assert!(stmt.condition.is_none(), "stmt={stmt:#?}");
+            stmt.returning
+                .as_ref()
+                .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len())
+        }
+        _ => None,
+    };
+
+    let params = params
+        .into_iter()
+        .map(|tv| Value::from(tv.value))
+        .collect::<Vec<_>>();
+
+    if width.is_none() {
+        let count = stmt
+            .execute(rusqlite::params_from_iter(params.iter()))
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        return Ok(Response::count(count as _));
+    }
+
+    let mut rows = stmt
+        .query(rusqlite::params_from_iter(params.iter()))
+        .unwrap();
+
+    let mut ret = vec![];
+
+    let ret_tys = &ret_tys.as_ref().unwrap();
+
+    loop {
+        match rows.next() {
+            Ok(Some(row)) => {
+                let mut items = vec![];
+
+                let width = width.unwrap();
+
+                for index in 0..width {
+                    items.push(Value::from_sql(row, index, &ret_tys[index]).into_inner());
+                }
+
+                ret.push(stmt::ValueRecord::from_vec(items).into());
+            }
+            Ok(None) => break,
+            Err(err) => {
+                return Err(toasty_core::Error::driver_operation_failed(err));
+            }
+        }
+    }
+
+    Ok(Response::value_stream(stmt::ValueStream::from_vec(ret)))
+}
+
 #[toasty_core::async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        let (sql, ret_tys): (sql::Statement, _) = match op {
-            Operation::QuerySql(op) => {
-                assert!(
-                    op.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for SQLite"
-                );
-                (op.stmt.into(), op.ret)
-            }
-            // Operation::Insert(op) => op.stmt.into(),
-            Operation::Transaction(Transaction::Start) => {
-                self.connection
-                    .execute("BEGIN", [])
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Commit) => {
-                self.connection
-                    .execute("COMMIT", [])
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Rollback) => {
-                self.connection
-                    .execute("ROLLBACK", [])
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            _ => todo!("op={:#?}", op),
-        };
+        exec_op(&self.connection, schema, op)
+    }
 
-        let mut params: Vec<toasty_sql::TypedValue> = vec![];
-        let sql_str = sql::Serializer::sqlite(schema).serialize(&sql, &mut params);
-
-        let mut stmt = self.connection.prepare_cached(&sql_str).unwrap();
-
-        let width = match &sql {
-            sql::Statement::Query(stmt) => match &stmt.body {
-                stmt::ExprSet::Select(stmt) => {
-                    Some(stmt.returning.as_expr_unwrap().as_record_unwrap().len())
-                }
-                _ => todo!(),
-            },
-            sql::Statement::Insert(stmt) => stmt
-                .returning
-                .as_ref()
-                .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
-            sql::Statement::Delete(stmt) => stmt
-                .returning
-                .as_ref()
-                .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len()),
-            sql::Statement::Update(stmt) => {
-                assert!(stmt.condition.is_none(), "stmt={stmt:#?}");
-                stmt.returning
-                    .as_ref()
-                    .map(|returning| returning.as_expr_unwrap().as_record_unwrap().len())
-            }
-            _ => None,
-        };
-
-        let params = params
-            .into_iter()
-            .map(|tv| Value::from(tv.value))
-            .collect::<Vec<_>>();
-
-        if width.is_none() {
-            let count = stmt
-                .execute(rusqlite::params_from_iter(params.iter()))
-                .map_err(toasty_core::Error::driver_operation_failed)?;
-
-            return Ok(Response::count(count as _));
-        }
-
-        let mut rows = stmt
-            .query(rusqlite::params_from_iter(params.iter()))
-            .unwrap();
-
-        let mut ret = vec![];
-
-        let ret_tys = &ret_tys.as_ref().unwrap();
-
-        loop {
-            match rows.next() {
-                Ok(Some(row)) => {
-                    let mut items = vec![];
-
-                    let width = width.unwrap();
-
-                    for index in 0..width {
-                        items.push(Value::from_sql(row, index, &ret_tys[index]).into_inner());
-                    }
-
-                    ret.push(stmt::ValueRecord::from_vec(items).into());
-                }
-                Ok(None) => break,
-                Err(err) => {
-                    return Err(toasty_core::Error::driver_operation_failed(err));
-                }
-            }
-        }
-
-        Ok(Response::value_stream(stmt::ValueStream::from_vec(ret)))
+    async fn transaction(&mut self) -> Result<Box<dyn toasty_core::driver::Transaction<'_> + '_>> {
+        self.connection
+            .execute("BEGIN", [])
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        Ok(Box::new(Transaction {
+            connection: &mut self.connection,
+            finished: false,
+        }))
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
@@ -368,6 +367,48 @@ impl Connection {
                 .execute(&stmt, [])
                 .map_err(toasty_core::Error::driver_operation_failed)?;
         }
+        Ok(())
+    }
+}
+
+pub struct Transaction<'a> {
+    connection: &'a mut RusqliteConnection,
+    finished: bool,
+}
+
+impl std::fmt::Debug for Transaction<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Transaction").finish_non_exhaustive()
+    }
+}
+
+impl Drop for Transaction<'_> {
+    fn drop(&mut self) {
+        if !self.finished {
+            let _ = self.connection.execute("ROLLBACK", []);
+        }
+    }
+}
+
+#[toasty_core::async_trait]
+impl<'a> toasty_core::driver::Transaction<'a> for Transaction<'a> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+        exec_op(self.connection, schema, op)
+    }
+
+    async fn commit(mut self) -> Result<()> {
+        self.finished = true;
+        self.connection
+            .execute("COMMIT", [])
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        Ok(())
+    }
+
+    async fn rollback(mut self) -> Result<()> {
+        self.finished = true;
+        self.connection
+            .execute("ROLLBACK", [])
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }

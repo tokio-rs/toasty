@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use lru::LruCache;
 use postgres::{Error, Statement};
 use postgres_types::Type;
-use tokio_postgres::Client;
+use tokio_postgres::GenericClient;
 
 #[derive(Debug, Clone)]
 pub struct StatementCache {
@@ -31,14 +31,14 @@ impl StatementCache {
 
     pub async fn prepare_typed(
         &mut self,
-        client: &mut Client,
+        client: &(impl GenericClient + Sync),
         query: &str,
         types: &[Type],
     ) -> Result<Statement, Error> {
         if let Some(statement) = self.get(query, types) {
             Ok(statement)
         } else {
-            let stmt = client.prepare_typed(query, types).await?;
+            let stmt: Statement = client.prepare_typed(query, types).await?;
             self.insert(query, types, stmt.clone());
             Ok(stmt)
         }

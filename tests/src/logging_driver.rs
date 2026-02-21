@@ -105,6 +105,12 @@ impl Connection for LoggingConnection {
         Ok(response)
     }
 
+    async fn transaction(
+        &mut self,
+    ) -> Result<Box<dyn toasty::driver::Transaction<'_> + '_>> {
+        self.inner.transaction().await
+    }
+
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         self.inner.push_schema(schema).await
     }

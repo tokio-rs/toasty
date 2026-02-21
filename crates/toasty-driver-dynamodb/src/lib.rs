@@ -159,6 +159,10 @@ impl toasty_core::driver::Connection for Connection {
         self.exec2(schema, op).await
     }
 
+    async fn transaction(&mut self) -> Result<Box<dyn toasty_core::driver::Transaction<'_> + '_>> {
+        unimplemented!("DynamoDB does not support interactive transactions")
+    }
+
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
             self.create_table(schema, table, true).await?;

@@ -46,6 +46,9 @@ pub trait Connection: Debug + Send + 'static {
     /// Execute a database operation
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response>;
 
+    /// Starts a new interactive transaction.
+    async fn transaction(&mut self) -> crate::Result<Box<dyn Transaction<'_> + '_>>;
+
     /// Creates tables and indices defined in the schema on the database.
     /// TODO: This will probably use database introspection in the future.
     async fn push_schema(&mut self, _schema: &Schema) -> crate::Result<()>;
@@ -60,4 +63,17 @@ pub trait Connection: Debug + Send + 'static {
         name: String,
         migration: &Migration,
     ) -> crate::Result<()>;
+}
+
+#[async_trait]
+pub trait Transaction<'a>: Debug + Send + 'a {
+    /// Execute a database operation
+    async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response>;
+
+    /// Commits the transaction.
+    async fn commit(self) -> crate::Result<()>;
+
+    /// Rolls back the transaction. This is the default behavior when the [`Transaction`] handle is
+    /// dropped.
+    async fn rollback(self) -> crate::Result<()>;
 }
