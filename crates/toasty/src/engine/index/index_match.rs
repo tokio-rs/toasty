@@ -405,13 +405,7 @@ impl<'stmt> IndexMatch<'stmt> {
                 }
 
                 if !index_filter_operands.is_empty() {
-                    (
-                        stmt::ExprOr {
-                            operands: index_filter_operands,
-                        }
-                        .into(),
-                        true.into(),
-                    )
+                    (stmt::ExprOr { operands: index_filter_operands }.into(), true.into())
                 } else {
                     (
                         true.into(),
@@ -456,3 +450,4 @@ impl<'stmt> IndexMatch<'stmt> {
         }
     }
 }
+

@@ -1,6 +1,8 @@
 mod index_match;
 use index_match::{IndexColumnMatch, IndexMatch};
 
+mod or_rewrite;
+
 mod index_plan;
 pub(crate) use index_plan::IndexPlan;
 
@@ -47,6 +49,14 @@ pub(crate) fn plan_index_path<'a, 'stmt>(
 
     let index_match = &index_planner.index_matches[index_path.index_match];
     let (index_filter, result_filter) = index_match.partition_filter(&mut partition_cx, filter);
+
+    // For backends that do not support OR in key conditions (e.g. DynamoDB), rewrite
+    // any OR in the index filter to canonical ANY(MAP(...)) fan-out form.
+    let index_filter = if !capability.index_or_predicate {
+        or_rewrite::index_filter_to_any_map(index_filter)
+    } else {
+        index_filter
+    };
 
     Ok(IndexPlan {
         // Reload the index to make lifetimes happy.
