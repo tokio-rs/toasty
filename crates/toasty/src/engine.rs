@@ -5,7 +5,6 @@ mod hir;
 use hir::HirStatement;
 
 mod index;
-mod kv;
 mod lower;
 mod mir;
 mod plan;

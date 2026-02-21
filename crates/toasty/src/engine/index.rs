@@ -67,9 +67,12 @@ pub(crate) fn plan_index_path<'a, 'stmt>(
         index_filter
     };
 
+    let index = schema.db.index(index_match.index.id);
+    let has_pk_keys = index.primary_key && key_values.is_some();
+
     Ok(IndexPlan {
         // Reload the index to make lifetimes happy.
-        index: schema.db.index(index_match.index.id),
+        index,
         index_filter,
         result_filter: if result_filter.is_true() {
             None
@@ -82,6 +85,7 @@ pub(crate) fn plan_index_path<'a, 'stmt>(
             None
         },
         key_values,
+        has_pk_keys,
     })
 }
 
@@ -177,11 +181,11 @@ impl IndexPlanner<'_> {
     }
 }
 
-/// Try to extract a `Value::List([Value::Record([...]), ...])` from `index_filter`
-/// for direct `GetByKey` routing.
+/// Try to extract a key expression from `index_filter` for direct `GetByKey` routing.
 ///
-/// Returns `Some` only when every index key column has a literal equality predicate.
-/// Range predicates, non-literal RHS, and `ANY(MAP(...))` all return `None`.
+/// Returns `Some(Expr::Value(Value::List([Value::Record([...]), ...])))` when all key
+/// columns have literal equality or IN predicates. Returns `Some(Expr::Arg(i))` for
+/// `pk IN (arg[i])` batch-load form. Range predicates and `ANY(MAP(...))` return `None`.
 ///
 /// Must be called on the `index_filter` produced by `partition_filter` — before the
 /// OR-rewrite step converts `Expr::Or` into `ANY(MAP(...))`.
@@ -189,18 +193,34 @@ fn try_extract_key_values(
     cx: &stmt::ExprContext<'_>,
     index: &Index,
     index_filter: &stmt::Expr,
-) -> Option<stmt::Value> {
+) -> Option<stmt::Expr> {
     match index_filter {
+        stmt::Expr::InList(in_list) => match &*in_list.list {
+            stmt::Expr::Arg(arg) => Some(stmt::Expr::Arg(arg.clone())),
+            stmt::Expr::Value(stmt::Value::List(items)) => {
+                let records = items
+                    .iter()
+                    .map(|item| match item {
+                        record @ stmt::Value::Record(_) => record.clone(),
+                        value => stmt::Value::Record(stmt::ValueRecord::from_vec(vec![
+                            value.clone()
+                        ])),
+                    })
+                    .collect();
+                Some(stmt::Expr::Value(stmt::Value::List(records)))
+            }
+            _ => None,
+        },
         stmt::Expr::Or(or) => {
             let mut records = vec![];
             for branch in &or.operands {
                 records.push(extract_key_record(cx, index, branch)?);
             }
-            Some(stmt::Value::List(records))
+            Some(stmt::Expr::Value(stmt::Value::List(records)))
         }
         single => {
             let record = extract_key_record(cx, index, single)?;
-            Some(stmt::Value::List(vec![record]))
+            Some(stmt::Expr::Value(stmt::Value::List(vec![record])))
         }
     }
 }

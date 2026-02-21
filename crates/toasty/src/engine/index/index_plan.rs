@@ -17,11 +17,20 @@ pub(crate) struct IndexPlan<'a> {
     /// True if we have to apply the result filter our self
     pub(crate) post_filter: Option<stmt::Expr>,
 
-    /// Literal key values for direct `GetByKey` routing: a `Value::List` of
-    /// `Value::Record` entries (one per lookup), populated when every index key
-    /// column has a literal equality predicate. When `Some`, the planner can
-    /// route to `GetByKey` (e.g. DynamoDB `BatchGetItem`) instead of a query.
-    pub(crate) key_values: Option<stmt::Value>,
+    /// Key expression for direct `GetByKey` routing. Populated when every index
+    /// key column has an exact predicate (equality or IN). Two forms:
+    ///
+    /// - `Expr::Value(Value::List([Value::Record([...]), ...]))` — all key values
+    ///   are literals known at plan time; the planner emits a constant `GetByKey`.
+    /// - `Expr::Arg(0)` — key values come from a runtime input (e.g. `pk IN
+    ///   (arg[0])` batch-load); the planner wires the input node directly.
+    ///
+    /// When `Some`, the planner routes to `GetByKey` instead of `QueryPk`.
+    pub(crate) key_values: Option<stmt::Expr>,
+
+    /// True when this plan targets the primary key and `key_values` was populated.
+    /// Captured before `key_values` can be consumed via `.take()`.
+    pub(crate) has_pk_keys: bool,
 }
 
 impl IndexPlan<'_> {

@@ -223,7 +223,7 @@ fn pk_equality_sets_key_values() -> Result<()> {
     let expected = stmt::Value::List(vec![stmt::Value::Record(stmt::ValueRecord::from_vec(
         vec![stmt::Value::from(1i64)],
     ))]);
-    assert_eq!(plan.key_values, Some(expected));
+    assert_eq!(plan.key_values, Some(stmt::Expr::Value(expected)));
     Ok(())
 }
 
@@ -250,7 +250,7 @@ fn pk_or_sets_key_values() -> Result<()> {
     let record =
         |v: i64| stmt::Value::Record(stmt::ValueRecord::from_vec(vec![stmt::Value::from(v)]));
     let expected = stmt::Value::List(vec![record(1), record(2)]);
-    assert_eq!(plan.key_values, Some(expected));
+    assert_eq!(plan.key_values, Some(stmt::Expr::Value(expected)));
     Ok(())
 }
 
@@ -308,7 +308,7 @@ fn composite_pk_full_equality_sets_key_values() -> Result<()> {
             stmt::Value::String("s1".to_string()),
         ],
     ))]);
-    assert_eq!(plan.key_values, Some(expected));
+    assert_eq!(plan.key_values, Some(stmt::Expr::Value(expected)));
     Ok(())
 }
 
