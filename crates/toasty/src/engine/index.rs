@@ -205,9 +205,11 @@ fn try_extract_key_values(
                         // Only wrap scalar values as single-field Records for single-column
                         // indexes. For composite indexes the scalar covers only the partition
                         // key, so we cannot form a full key record.
-                        value if index.columns.len() == 1 => Some(
-                            stmt::Value::Record(stmt::ValueRecord::from_vec(vec![value.clone()])),
-                        ),
+                        value if index.columns.len() == 1 => {
+                            Some(stmt::Value::Record(stmt::ValueRecord::from_vec(vec![
+                                value.clone(),
+                            ])))
+                        }
                         _ => None,
                     })
                     .collect::<Option<Vec<_>>>()?;

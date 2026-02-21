@@ -607,7 +607,12 @@ pub async fn query_or_on_partition_key(test: &mut Test) -> Result<()> {
     names.sort();
     assert_eq!(
         names,
-        ["Clint Dempsey", "Diego Valeri", "Fanendo Adi", "Osvaldo Alonso"]
+        [
+            "Clint Dempsey",
+            "Diego Valeri",
+            "Fanendo Adi",
+            "Osvaldo Alonso"
+        ]
     );
     Ok(())
 }

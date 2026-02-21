@@ -207,19 +207,23 @@ fn extract_shape(branch: stmt::Expr) -> (stmt::Expr, stmt::Value) {
 
             for (i, operand) in and.operands.into_iter().enumerate() {
                 let stmt::Expr::BinaryOp(b) = operand else {
-                    todo!("non-BinaryOp operand in composite AND branch: {:#?}", operand);
+                    todo!(
+                        "non-BinaryOp operand in composite AND branch: {:#?}",
+                        operand
+                    );
                 };
                 let stmt::Expr::Value(v) = *b.rhs else {
-                    todo!("non-literal value in composite AND branch rhs: {:#?}", b.rhs);
+                    todo!(
+                        "non-literal value in composite AND branch rhs: {:#?}",
+                        b.rhs
+                    );
                 };
                 values.push(v);
-                shape_operands.push(
-                    stmt::Expr::from(stmt::ExprBinaryOp {
-                        lhs: b.lhs,
-                        op: b.op,
-                        rhs: Box::new(stmt::Expr::arg(i)),
-                    }),
-                );
+                shape_operands.push(stmt::Expr::from(stmt::ExprBinaryOp {
+                    lhs: b.lhs,
+                    op: b.op,
+                    rhs: Box::new(stmt::Expr::arg(i)),
+                }));
             }
 
             let shape = stmt::Expr::from(stmt::ExprAnd {
