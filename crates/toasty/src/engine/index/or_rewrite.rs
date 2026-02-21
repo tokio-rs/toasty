@@ -184,8 +184,32 @@ fn extract_shape(branch: stmt::Expr) -> (stmt::Expr, stmt::Value) {
         }
         // Composite key: (col1 = t1 AND col2 >= s1) OR (col1 = t2 AND col2 >= s2)
         // → ANY(MAP([(t1,s1),(t2,s2)], col1=arg(0) AND col2>=arg(1)))
-        stmt::Expr::And(_) => {
-            todo!("composite-key AND branch in OR index filter fan-out");
+        stmt::Expr::And(and) => {
+            let mut values = vec![];
+            let mut shape_operands = vec![];
+
+            for (i, operand) in and.operands.into_iter().enumerate() {
+                let stmt::Expr::BinaryOp(b) = operand else {
+                    todo!("non-BinaryOp operand in composite AND branch: {:#?}", operand);
+                };
+                let stmt::Expr::Value(v) = *b.rhs else {
+                    todo!("non-literal value in composite AND branch rhs: {:#?}", b.rhs);
+                };
+                values.push(v);
+                shape_operands.push(
+                    stmt::Expr::from(stmt::ExprBinaryOp {
+                        lhs: b.lhs,
+                        op: b.op,
+                        rhs: Box::new(stmt::Expr::arg(i)),
+                    }),
+                );
+            }
+
+            let shape = stmt::Expr::from(stmt::ExprAnd {
+                operands: shape_operands,
+            });
+            let record = stmt::Value::Record(stmt::ValueRecord::from_vec(values));
+            (shape, record)
         }
         _ => todo!("unsupported branch type in OR index filter: {branch:#?}"),
     }

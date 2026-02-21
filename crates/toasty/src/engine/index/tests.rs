@@ -350,7 +350,46 @@ fn any_map_with_arg_base_passes_through_for_dynamodb() {
 }
 
 #[test]
-#[ignore = "extract_shape for composite-key AND branches is not yet implemented"]
+fn composite_pk_or_sets_key_values() -> Result<()> {
+    // Schema: Todo { user_id (pk partition), status (pk sort) }
+    //
+    // Filter: (user_id = "u1" AND status = "s1") OR (user_id = "u2" AND status = "s2")
+    //
+    // Both branches fully specify all key columns with equality → key_values is populated.
+    let cx = ddb_test_cx_composite();
+
+    let branch = |uid: &str, status: &str| {
+        stmt::Expr::And(stmt::ExprAnd {
+            operands: vec![
+                stmt::Expr::eq(
+                    stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                    stmt::Expr::Value(stmt::Value::String(uid.to_string())),
+                ),
+                stmt::Expr::eq(
+                    stmt::Expr::Reference(stmt::ExprReference::column(0, 1)),
+                    stmt::Expr::Value(stmt::Value::String(status.to_string())),
+                ),
+            ],
+        })
+    };
+    let filter = stmt::Expr::Or(stmt::ExprOr {
+        operands: vec![branch("u1", "s1"), branch("u2", "s2")],
+    });
+
+    let plan = cx.plan_basic_query_with_filter(filter)?;
+
+    let record = |uid: &str, status: &str| {
+        stmt::Value::Record(stmt::ValueRecord::from_vec(vec![
+            stmt::Value::String(uid.to_string()),
+            stmt::Value::String(status.to_string()),
+        ]))
+    };
+    let expected = stmt::Value::List(vec![record("u1", "s1"), record("u2", "s2")]);
+    assert_eq!(plan.key_values, Some(stmt::Expr::Value(expected)));
+    Ok(())
+}
+
+#[test]
 fn composite_pk_or_becomes_any_map_for_dynamodb() -> Result<()> {
     // Schema: Todo { user_id (pk partition), status (pk sort) }
     //
