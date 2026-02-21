@@ -206,6 +206,88 @@ fn and_with_any_map_distributes_into_any_map_for_dynamodb() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn any_map_with_arg_base_passes_through_for_dynamodb() {
+    // ANY(MAP(arg[0], col[0][0] = arg[0])) — the batch-load canonical form produced by
+    // rewrite_stmt_query_for_batch_load_nosql. It is already in the target form so
+    // index_filter_to_any_map must return it unchanged.
+    let filter = stmt::Expr::any(stmt::Expr::map(
+        stmt::Expr::arg(0),
+        stmt::Expr::eq(
+            stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+            stmt::Expr::arg(0),
+        ),
+    ));
+
+    let result = or_rewrite::index_filter_to_any_map(filter.clone());
+    assert_eq!(result, filter, "batch-load ANY(MAP(arg, pred)) should pass through unchanged");
+}
+
+#[test]
+#[ignore = "extract_shape for composite-key AND branches is not yet implemented"]
+fn composite_pk_or_becomes_any_map_for_dynamodb() -> Result<()> {
+    // Schema: Todo { user_id (pk partition), status (pk sort) }
+    //
+    // Filter: (user_id = "u1" AND status = "s1") OR (user_id = "u2" AND status = "s2")
+    //
+    // Expected: ANY(MAP(
+    //     [(u1,s1), (u2,s2)],
+    //     user_id = arg(0) AND status = arg(1)
+    // ))
+    let cx = ddb_test_cx_composite();
+
+    let branch = |uid: &str, status: &str| {
+        stmt::Expr::And(stmt::ExprAnd {
+            operands: vec![
+                stmt::Expr::eq(
+                    stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                    stmt::Expr::Value(stmt::Value::String(uid.to_string())),
+                ),
+                stmt::Expr::eq(
+                    stmt::Expr::Reference(stmt::ExprReference::column(0, 1)),
+                    stmt::Expr::Value(stmt::Value::String(status.to_string())),
+                ),
+            ],
+        })
+    };
+    let filter = stmt::Expr::Or(stmt::ExprOr {
+        operands: vec![branch("u1", "s1"), branch("u2", "s2")],
+    });
+
+    let plan = cx.plan_basic_query_with_filter(filter)?;
+
+    let record = |uid: &str, status: &str| {
+        stmt::Value::Record(stmt::ValueRecord::from_vec(vec![
+            stmt::Value::String(uid.to_string()),
+            stmt::Value::String(status.to_string()),
+        ]))
+    };
+    let expected = stmt::Expr::any(stmt::Expr::map(
+        stmt::Expr::Value(stmt::Value::List(vec![record("u1", "s1"), record("u2", "s2")])),
+        stmt::Expr::And(stmt::ExprAnd {
+            operands: vec![
+                stmt::Expr::eq(
+                    stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                    stmt::Expr::arg(0),
+                ),
+                stmt::Expr::eq(
+                    stmt::Expr::Reference(stmt::ExprReference::column(0, 1)),
+                    stmt::Expr::arg(1),
+                ),
+            ],
+        }),
+    ));
+
+    assert!(plan.index.primary_key);
+    assert_eq!(
+        plan.index_filter, expected,
+        "composite OR should be rewritten to ANY(MAP([records], col0=arg(0) AND col1=arg(1)))"
+    );
+    assert!(plan.result_filter.is_none());
+    assert!(plan.post_filter.is_none());
+    Ok(())
+}
+
 struct TestCx {
     schema: toasty_core::Schema,
     capability: &'static Capability,
