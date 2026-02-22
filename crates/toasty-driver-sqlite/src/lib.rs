@@ -11,7 +11,7 @@ use toasty_core::{
     async_trait,
     driver::{
         operation::{Operation, Transaction},
-        Capability, Driver, Response,
+        Capability, Driver, Response, TransactionManager,
     },
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt, Result,
@@ -122,19 +122,26 @@ impl Driver for Sqlite {
 #[derive(Debug)]
 pub struct Connection {
     connection: RusqliteConnection,
+    txm: TransactionManager,
 }
 
 impl Connection {
     pub fn in_memory() -> Self {
         let connection = RusqliteConnection::open_in_memory().unwrap();
 
-        Self { connection }
+        Self {
+            connection,
+            txm: TransactionManager::sqlite(),
+        }
     }
 
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let connection =
             RusqliteConnection::open(path).map_err(toasty_core::Error::driver_operation_failed)?;
-        let sqlite = Self { connection };
+        let sqlite = Self {
+            connection,
+            txm: TransactionManager::sqlite(),
+        };
         Ok(sqlite)
     }
 }
@@ -152,20 +159,23 @@ impl toasty_core::driver::Connection for Connection {
             }
             // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(Transaction::Start) => {
+                let sql = self.txm.start();
                 self.connection
-                    .execute("BEGIN", [])
+                    .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
+                let sql = self.txm.commit();
                 self.connection
-                    .execute("COMMIT", [])
+                    .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {
+                let sql = self.txm.rollback();
                 self.connection
-                    .execute("ROLLBACK", [])
+                    .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }

@@ -8,7 +8,7 @@ use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
-    driver::{Capability, Driver, Operation, Response},
+    driver::{operation::Transaction, Capability, Driver, Operation, Response, TransactionManager},
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt,
     stmt::ValueRecord,
@@ -178,6 +178,7 @@ impl Driver for PostgreSQL {
 pub struct Connection {
     client: Client,
     statement_cache: StatementCache,
+    txm: TransactionManager,
 }
 
 impl Connection {
@@ -186,6 +187,7 @@ impl Connection {
         Self {
             client,
             statement_cache: StatementCache::new(100),
+            txm: TransactionManager::postgresql(),
         }
     }
 
@@ -257,16 +259,40 @@ impl Connection {
 
 impl From<Client> for Connection {
     fn from(client: Client) -> Self {
-        Self {
-            client,
-            statement_cache: StatementCache::new(100),
-        }
+        Self::new(client)
     }
 }
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
+        if let Operation::Transaction(tx_op) = &op {
+            match tx_op {
+                Transaction::Start => {
+                    let sql = self.txm.start();
+                    self.client
+                        .batch_execute(&sql)
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
+                Transaction::Commit => {
+                    let sql = self.txm.commit();
+                    self.client
+                        .batch_execute(&sql)
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
+                Transaction::Rollback => {
+                    let sql = self.txm.rollback();
+                    self.client
+                        .batch_execute(&sql)
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
+            }
+            return Ok(Response::count(0));
+        }
+
         let (sql, ret_tys): (sql::Statement, _) = match op {
             Operation::Insert(op) => (op.stmt.into(), None),
             Operation::QuerySql(query) => {

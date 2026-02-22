@@ -50,6 +50,10 @@ impl Driver for LoggingDriver {
         }))
     }
 
+    fn max_connections(&self) -> Option<usize> {
+        self.inner.max_connections()
+    }
+
     fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
         self.inner.generate_migration(schema_diff)
     }

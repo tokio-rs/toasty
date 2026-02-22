@@ -7,6 +7,9 @@ pub use response::{Response, Rows};
 pub mod operation;
 pub use operation::Operation;
 
+mod transaction_manager;
+pub use transaction_manager::TransactionManager;
+
 use crate::{
     async_trait,
     schema::db::{AppliedMigration, Migration, Schema, SchemaDiff},

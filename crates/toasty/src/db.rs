@@ -10,6 +10,7 @@ pub use builder::Builder;
 pub use connect::*;
 pub(crate) use connection::{ConnectionType, SingleConnection};
 pub use pool::*;
+pub use transaction::TransactionBuilder;
 
 use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
 

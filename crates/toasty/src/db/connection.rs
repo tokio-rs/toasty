@@ -11,7 +11,7 @@ use crate::db::{Pool, PoolConnection};
 #[derive(Debug)]
 pub(crate) enum ConnectionType {
     Pool(Pool),
-    Transaction(Mutex<PoolConnection>),
+    Transaction(Arc<Mutex<PoolConnection>>),
 }
 
 pub(crate) enum SingleConnection<'a> {

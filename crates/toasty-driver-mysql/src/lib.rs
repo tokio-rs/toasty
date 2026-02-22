@@ -10,7 +10,7 @@ use mysql_async::{
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
-    driver::{operation::Transaction, Capability, Driver, Operation, Response},
+    driver::{operation::Transaction, Capability, Driver, Operation, Response, TransactionManager},
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt::{self, ValueRecord},
     Result,
@@ -132,11 +132,15 @@ impl Driver for MySQL {
 #[derive(Debug)]
 pub struct Connection {
     conn: Conn,
+    txm: TransactionManager,
 }
 
 impl Connection {
     pub fn new(conn: Conn) -> Self {
-        Self { conn }
+        Self {
+            conn,
+            txm: TransactionManager::mysql(),
+        }
     }
 
     pub async fn create_table(&mut self, schema: &Schema, table: &Table) -> Result<()> {
@@ -183,7 +187,7 @@ impl Connection {
 
 impl From<Conn> for Connection {
     fn from(conn: Conn) -> Self {
-        Self { conn }
+        Self::new(conn)
     }
 }
 
@@ -193,22 +197,25 @@ impl toasty_core::driver::Connection for Connection {
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
             Operation::Transaction(Transaction::Start) => {
+                let sql = self.txm.start();
                 self.conn
-                    .query_drop("START TRANSACTION")
+                    .query_drop(sql.as_ref())
                     .await
                     .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Commit) => {
+                let sql = self.txm.commit();
                 self.conn
-                    .query_drop("COMMIT")
+                    .query_drop(sql.as_ref())
                     .await
                     .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {
+                let sql = self.txm.rollback();
                 self.conn
-                    .query_drop("ROLLBACK")
+                    .query_drop(sql.as_ref())
                     .await
                     .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
