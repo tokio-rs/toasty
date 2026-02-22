@@ -117,6 +117,12 @@ pub use expr_ty::ExprTy;
 mod filter;
 pub use filter::Filter;
 
+mod hash_index;
+pub use hash_index::HashIndex;
+
+mod sorted_index;
+pub use sorted_index::SortedIndex;
+
 mod func_count;
 pub use func_count::FuncCount;
 
