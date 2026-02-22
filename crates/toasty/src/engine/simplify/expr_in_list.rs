@@ -1,4 +1,5 @@
 use super::Simplify;
+use std::collections::HashSet;
 use toasty_core::stmt::{self, Expr, Value};
 
 impl Simplify<'_> {
@@ -15,8 +16,19 @@ impl Simplify<'_> {
 
         self.rewrite_expr_in_list_when_model(expr);
 
+        // Deduplicate literal value lists: `x in (1, 1, 2)` → `x in (1, 2)`
+        self.dedup_expr_in_list_values(expr);
+
         // Rewrite single-item lists into equalities
         self.rewrite_expr_in_list_with_single_item(expr)
+    }
+
+    /// Remove duplicate values from a `Value::List` in-place, preserving order.
+    fn dedup_expr_in_list_values(&self, expr: &mut stmt::ExprInList) {
+        if let Expr::Value(Value::List(values)) = &mut *expr.list {
+            let mut seen = HashSet::new();
+            values.retain(|v| seen.insert(v.clone()));
+        }
     }
 
     fn rewrite_expr_in_list_when_model(&self, expr: &mut stmt::ExprInList) {
@@ -283,5 +295,128 @@ mod tests {
 
         assert!(result.is_some());
         assert!(result.unwrap().is_value_null());
+    }
+
+    // Deduplication tests
+
+    #[test]
+    fn dedup_all_identical_values() {
+        let schema = test_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `x in (1, 1, 1)` → `x = 1`
+        let mut expr = in_list(
+            Expr::arg(0),
+            value_list(vec![
+                Value::from(1i64),
+                Value::from(1i64),
+                Value::from(1i64),
+            ]),
+        );
+        let result = simplify.simplify_expr_in_list(&mut expr);
+
+        // Dedup leaves one item, which is then rewritten to equality
+        assert!(matches!(result, Some(Expr::BinaryOp(_))));
+    }
+
+    #[test]
+    fn dedup_leading_duplicate() {
+        let schema = test_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `x in (1, 1, 2)` → `x in (1, 2)`
+        let mut expr = in_list(
+            Expr::arg(0),
+            value_list(vec![
+                Value::from(1i64),
+                Value::from(1i64),
+                Value::from(2i64),
+            ]),
+        );
+        let result = simplify.simplify_expr_in_list(&mut expr);
+
+        assert!(result.is_none());
+        let Expr::Value(Value::List(values)) = &*expr.list else {
+            panic!("expected Value::List");
+        };
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0], Value::from(1i64));
+        assert_eq!(values[1], Value::from(2i64));
+    }
+
+    #[test]
+    fn dedup_trailing_duplicate() {
+        let schema = test_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `x in (1, 2, 2)` → `x in (1, 2)`
+        let mut expr = in_list(
+            Expr::arg(0),
+            value_list(vec![
+                Value::from(1i64),
+                Value::from(2i64),
+                Value::from(2i64),
+            ]),
+        );
+        let result = simplify.simplify_expr_in_list(&mut expr);
+
+        assert!(result.is_none());
+        let Expr::Value(Value::List(values)) = &*expr.list else {
+            panic!("expected Value::List");
+        };
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0], Value::from(1i64));
+        assert_eq!(values[1], Value::from(2i64));
+    }
+
+    #[test]
+    fn dedup_preserves_order() {
+        let schema = test_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `x in (3, 1, 2, 1, 3)` → `x in (3, 1, 2)` — first occurrence wins
+        let mut expr = in_list(
+            Expr::arg(0),
+            value_list(vec![
+                Value::from(3i64),
+                Value::from(1i64),
+                Value::from(2i64),
+                Value::from(1i64),
+                Value::from(3i64),
+            ]),
+        );
+        let result = simplify.simplify_expr_in_list(&mut expr);
+
+        assert!(result.is_none());
+        let Expr::Value(Value::List(values)) = &*expr.list else {
+            panic!("expected Value::List");
+        };
+        assert_eq!(values.len(), 3);
+        assert_eq!(values[0], Value::from(3i64));
+        assert_eq!(values[1], Value::from(1i64));
+        assert_eq!(values[2], Value::from(2i64));
+    }
+
+    #[test]
+    fn dedup_no_duplicates_unchanged() {
+        let schema = test_schema();
+        let simplify = Simplify::new(&schema);
+
+        // `x in (1, 2, 3)` — no duplicates, list unchanged
+        let mut expr = in_list(
+            Expr::arg(0),
+            value_list(vec![
+                Value::from(1i64),
+                Value::from(2i64),
+                Value::from(3i64),
+            ]),
+        );
+        let result = simplify.simplify_expr_in_list(&mut expr);
+
+        assert!(result.is_none());
+        let Expr::Value(Value::List(values)) = &*expr.list else {
+            panic!("expected Value::List");
+        };
+        assert_eq!(values.len(), 3);
     }
 }

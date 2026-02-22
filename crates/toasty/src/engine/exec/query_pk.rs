@@ -75,6 +75,14 @@ impl Exec<'_> {
                 all_rows.extend(res.rows.into_value_stream().collect().await?);
             }
 
+            debug_assert!(
+                {
+                    let mut seen = std::collections::HashSet::new();
+                    all_rows.iter().all(|row| seen.insert(row))
+                },
+                "fan-out produced duplicate rows in QueryPk"
+            );
+
             self.vars.store(
                 action.output.var,
                 action.output.num_uses,
