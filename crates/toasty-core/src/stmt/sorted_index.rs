@@ -75,26 +75,22 @@ impl<'a> SortedIndex<'a> {
     ) -> impl Iterator<Item = &'a Value> + '_ {
         let start = match lower {
             Bound::Unbounded => 0,
-            Bound::Included(lo) => {
-                self.entries
-                    .partition_point(|(k, _)| total_cmp(k, lo) == Ordering::Less)
-            }
-            Bound::Excluded(lo) => {
-                self.entries
-                    .partition_point(|(k, _)| total_cmp(k, lo) != Ordering::Greater)
-            }
+            Bound::Included(lo) => self
+                .entries
+                .partition_point(|(k, _)| total_cmp(k, lo) == Ordering::Less),
+            Bound::Excluded(lo) => self
+                .entries
+                .partition_point(|(k, _)| total_cmp(k, lo) != Ordering::Greater),
         };
 
         let end = match upper {
             Bound::Unbounded => self.entries.len(),
-            Bound::Included(hi) => {
-                self.entries
-                    .partition_point(|(k, _)| total_cmp(k, hi) != Ordering::Greater)
-            }
-            Bound::Excluded(hi) => {
-                self.entries
-                    .partition_point(|(k, _)| total_cmp(k, hi) == Ordering::Less)
-            }
+            Bound::Included(hi) => self
+                .entries
+                .partition_point(|(k, _)| total_cmp(k, hi) != Ordering::Greater),
+            Bound::Excluded(hi) => self
+                .entries
+                .partition_point(|(k, _)| total_cmp(k, hi) == Ordering::Less),
         };
 
         let range = if start <= end { start..end } else { 0..0 };
@@ -180,9 +176,7 @@ fn value_total_cmp(a: &Value, b: &Value) -> Ordering {
         (Value::Decimal(a), Value::Decimal(b)) => a.cmp(b),
 
         #[cfg(feature = "bigdecimal")]
-        (Value::BigDecimal(a), Value::BigDecimal(b)) => {
-            a.partial_cmp(b).unwrap_or(Ordering::Equal)
-        }
+        (Value::BigDecimal(a), Value::BigDecimal(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
 
         #[cfg(feature = "jiff")]
         (Value::Timestamp(a), Value::Timestamp(b)) => a.cmp(b),
@@ -197,9 +191,7 @@ fn value_total_cmp(a: &Value, b: &Value) -> Ordering {
         (Value::DateTime(a), Value::DateTime(b)) => a.cmp(b),
 
         #[cfg(feature = "jiff")]
-        (Value::Zoned(a), Value::Zoned(b)) => {
-            a.partial_cmp(b).unwrap_or(Ordering::Equal)
-        }
+        (Value::Zoned(a), Value::Zoned(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
 
         // Cross-type: order by a fixed variant index.
         _ => variant_index(a).cmp(&variant_index(b)),

@@ -376,7 +376,6 @@ impl Exec<'_> {
 
         level.projection.eval(&eval_input)
     }
-
 }
 
 /// Extract a `&[Value]` key from a parent key value.

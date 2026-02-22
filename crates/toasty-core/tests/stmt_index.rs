@@ -275,9 +275,7 @@ fn sorted_index_composite_key_range() {
     let index = SortedIndex::new(leaked, &[proj(0), proj(1)]);
 
     // find_ge((1, 20)) → (1,20), (2,10), (2,20)
-    let result: Vec<_> = index
-        .find_ge(&[Value::I64(1), Value::I64(20)])
-        .collect();
+    let result: Vec<_> = index.find_ge(&[Value::I64(1), Value::I64(20)]).collect();
     assert_eq!(result.len(), 3);
     assert!(result.contains(&&values[1]));
     assert!(result.contains(&&values[2]));

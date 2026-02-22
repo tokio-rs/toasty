@@ -127,39 +127,36 @@ impl NestedMergePlanner<'_> {
 
         let ret = match stmt_state.stmt.as_deref().unwrap() {
             stmt::Statement::Query(query) => {
-                let filter_expr =
-                    self.build_filter_for_nested_child(stmt_id, selection, depth);
+                let filter_expr = self.build_filter_for_nested_child(stmt_id, selection, depth);
 
                 let filter_arg_tys = self.build_filter_arg_tys();
-                let qualification =
-                    match try_eq_lookup(&filter_expr, &filter_arg_tys, depth) {
-                        Some((child_projections, lookup_key)) if query.single => {
-                            // has_one / belongs_to: unique key → HashIndex (O(1) lookup).
-                            let index = self.hash_indexes.len();
-                            self.hash_indexes.push(MergeIndex {
-                                source: level.source,
-                                child_projections,
-                            });
-                            MergeQualification::HashLookup { index, lookup_key }
-                        }
-                        Some((child_projections, lookup_key)) => {
-                            // has_many: duplicate keys → SortedIndex (O(log M + k) lookup).
-                            let index = self.sort_indexes.len();
-                            self.sort_indexes.push(MergeIndex {
-                                source: level.source,
-                                child_projections,
-                            });
-                            MergeQualification::SortLookup { index, lookup_key }
-                        }
-                        // Filter does not reduce to a pure equality conjunction, so we
-                        // cannot drive an index lookup. Fall back to a linear scan.
-                        // See `try_eq_lookup` for discussion of how this could be
-                        // improved to use an index with a residual post-filter.
-                        None => MergeQualification::Scan(eval::Func::from_stmt(
-                            filter_expr,
-                            filter_arg_tys,
-                        )),
-                    };
+                let qualification = match try_eq_lookup(&filter_expr, &filter_arg_tys, depth) {
+                    Some((child_projections, lookup_key)) if query.single => {
+                        // has_one / belongs_to: unique key → HashIndex (O(1) lookup).
+                        let index = self.hash_indexes.len();
+                        self.hash_indexes.push(MergeIndex {
+                            source: level.source,
+                            child_projections,
+                        });
+                        MergeQualification::HashLookup { index, lookup_key }
+                    }
+                    Some((child_projections, lookup_key)) => {
+                        // has_many: duplicate keys → SortedIndex (O(log M + k) lookup).
+                        let index = self.sort_indexes.len();
+                        self.sort_indexes.push(MergeIndex {
+                            source: level.source,
+                            child_projections,
+                        });
+                        MergeQualification::SortLookup { index, lookup_key }
+                    }
+                    // Filter does not reduce to a pure equality conjunction, so we
+                    // cannot drive an index lookup. Fall back to a linear scan.
+                    // See `try_eq_lookup` for discussion of how this could be
+                    // improved to use an index with a residual post-filter.
+                    None => {
+                        MergeQualification::Scan(eval::Func::from_stmt(filter_expr, filter_arg_tys))
+                    }
+                };
 
                 NestedChild {
                     level,
