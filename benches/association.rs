@@ -139,8 +139,8 @@ fn association_benchmarks(c: &mut Criterion) {
                     b.iter(|| {
                         rt.block_on(async {
                             let users: Vec<User> = User::all()
-                                .include(User::FIELDS.posts())
-                                .include(User::FIELDS.comments())
+                                .include(User::fields().posts())
+                                .include(User::fields().comments())
                                 .collect(&db)
                                 .await
                                 .unwrap();
