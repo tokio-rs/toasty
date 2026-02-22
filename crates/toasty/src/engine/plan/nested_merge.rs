@@ -151,6 +151,10 @@ impl NestedMergePlanner<'_> {
                             });
                             MergeQualification::SortLookup { index, lookup_key }
                         }
+                        // Filter does not reduce to a pure equality conjunction, so we
+                        // cannot drive an index lookup. Fall back to a linear scan.
+                        // See `try_eq_lookup` for discussion of how this could be
+                        // improved to use an index with a residual post-filter.
                         None => MergeQualification::Scan(eval::Func::from_stmt(
                             filter_expr,
                             filter_arg_tys,
@@ -381,7 +385,7 @@ impl NestedMergePlanner<'_> {
     }
 }
 
-/// Try to extract a `HashLookup` qualification from a transformed filter expression.
+/// Try to extract index lookup key fields from a transformed filter expression.
 ///
 /// Recognizes patterns of the form:
 /// - Single equality: `arg_project(depth, [cf]) == arg_project(pos < depth, [pf])`
@@ -392,8 +396,18 @@ impl NestedMergePlanner<'_> {
 /// - `lookup_key` is an `eval::Func` that evaluates against the ancestor `RowStack`
 ///   and returns the lookup key (scalar for single-field, `Value::Record` for composite)
 ///
-/// Returns `None` if the expression does not match any recognised hash-lookup pattern,
-/// in which case the caller falls back to a `Scan` qualification.
+/// # Limitations
+///
+/// This function only succeeds when the *entire* filter is a pure equality conjunction.
+/// Any more complex filter (e.g. `a = b AND c > d`, or an `OR`) causes it to return
+/// `None` and the caller falls back to a full `Scan`, even if part of the filter could
+/// drive an index lookup with the remainder applied as a post-filter.
+///
+/// A more complete approach — similar to `IndexMatch` in the index planner — would
+/// extract whichever equality terms can key an index, build the lookup from those,
+/// and re-evaluate the full original predicate against each candidate row returned by
+/// the index. That would turn O(N×M) into O(log M + k) even for compound filters.
+/// For now we keep this conservative: only use an index when the whole filter matches.
 fn try_eq_lookup(
     expr: &stmt::Expr,
     arg_tys: &[stmt::Type],
