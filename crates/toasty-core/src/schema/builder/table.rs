@@ -218,6 +218,7 @@ impl BuildTableFromModels<'_> {
         let fields = match model {
             app::Model::Root(root) => &root.fields[..],
             app::Model::EmbeddedStruct(embedded) => &embedded.fields[..],
+            app::Model::EmbeddedEnum(_) => &[],
         };
         for field in fields {
             match &field.ty {

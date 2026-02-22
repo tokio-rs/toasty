@@ -118,6 +118,7 @@ impl BuildSchema<'_> {
         let fields = match model {
             app::Model::Root(root) => &mut root.fields[..],
             app::Model::EmbeddedStruct(embedded) => &mut embedded.fields[..],
+            app::Model::EmbeddedEnum(_) => return Ok(()),
         };
         for field in fields.iter_mut() {
             if let app::FieldTy::Primitive(primitive) = &mut field.ty {
