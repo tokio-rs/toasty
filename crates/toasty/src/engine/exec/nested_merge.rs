@@ -303,68 +303,54 @@ impl Exec<'_> {
             };
             let mut nested_rows_projected = vec![];
 
-            match &nested_child.qualification {
-                MergeQualification::HashLookup { index, lookup_key } => {
-                    // O(1) lookup using the pre-built unique hash index.
-                    let key_val = lookup_key.eval(row_stack)?;
-                    let key = key_as_slice(&key_val);
+            // Process a single matching child row: recurse and collect the result.
+            let mut process = |nested_row: &stmt::Value| -> Result<()> {
+                let nested_stack = RowStack {
+                    parent: Some(row_stack),
+                    row: nested_row,
+                    position: row_stack.position + 1,
+                };
+                nested_rows_projected.push(self.merge_nested_row(
+                    &nested_stack,
+                    &nested_child.level,
+                    inputs,
+                    indices,
+                )?);
+                Ok(())
+            };
 
-                    if let Some(nested_row) = indices.hash[*index].find(key) {
-                        let nested_stack = RowStack {
-                            parent: Some(row_stack),
-                            row: nested_row,
-                            position: row_stack.position + 1,
-                        };
-                        nested_rows_projected.push(self.merge_nested_row(
-                            &nested_stack,
-                            &nested_child.level,
-                            inputs,
-                            indices,
-                        )?);
+            match &nested_child.qualification {
+                MergeQualification::All => {
+                    for row in nested_input {
+                        process(row)?;
+                    }
+                }
+                MergeQualification::HashLookup { index, lookup_key } => {
+                    let key_val = lookup_key.eval(row_stack)?;
+                    if let Some(row) = indices.hash[*index].find(key_as_slice(&key_val)) {
+                        process(row)?;
                     }
                 }
                 MergeQualification::SortLookup { index, lookup_key } => {
-                    // O(log M + k) lookup using the pre-built sorted index.
                     let key_val = lookup_key.eval(row_stack)?;
                     let key = key_as_slice(&key_val);
-
-                    for nested_row in indices.sort[*index]
-                        .find_range(std::ops::Bound::Included(key), std::ops::Bound::Included(key))
-                    {
-                        let nested_stack = RowStack {
-                            parent: Some(row_stack),
-                            row: nested_row,
-                            position: row_stack.position + 1,
-                        };
-                        nested_rows_projected.push(self.merge_nested_row(
-                            &nested_stack,
-                            &nested_child.level,
-                            inputs,
-                            indices,
-                        )?);
+                    for row in indices.sort[*index].find_range(
+                        std::ops::Bound::Included(key),
+                        std::ops::Bound::Included(key),
+                    ) {
+                        process(row)?;
                     }
                 }
-                qual => {
-                    // Linear scan with qualification predicate.
-                    for nested_row in nested_input {
-                        let nested_stack = RowStack {
+                MergeQualification::Scan(func) => {
+                    for row in nested_input {
+                        let stack = RowStack {
                             parent: Some(row_stack),
-                            row: nested_row,
+                            row,
                             position: row_stack.position + 1,
                         };
-
-                        // Filter the input
-                        if !self.eval_merge_qualification(qual, &nested_stack)? {
-                            continue;
+                        if func.eval_bool(&stack)? {
+                            process(row)?;
                         }
-
-                        // Recurse nested merge and track the result
-                        nested_rows_projected.push(self.merge_nested_row(
-                            &nested_stack,
-                            &nested_child.level,
-                            inputs,
-                            indices,
-                        )?);
                     }
                 }
             }
@@ -391,19 +377,6 @@ impl Exec<'_> {
         level.projection.eval(&eval_input)
     }
 
-    fn eval_merge_qualification(
-        &self,
-        qual: &MergeQualification,
-        row: &RowStack<'_>,
-    ) -> Result<bool> {
-        match qual {
-            MergeQualification::All => Ok(true),
-            MergeQualification::Scan(func) => func.eval_bool(row),
-            MergeQualification::HashLookup { .. } | MergeQualification::SortLookup { .. } => {
-                unreachable!("index lookups are handled in merge_nested_row, not here")
-            }
-        }
-    }
 }
 
 /// Extract a `&[Value]` key from a parent key value.
