@@ -1,9 +1,10 @@
 use super::Operation;
+use crate::driver::transaction::IsolationLevel;
 
 #[derive(Debug, Clone)]
 pub enum Transaction {
     /// Start a transaction
-    Start,
+    Start { isolation: Option<IsolationLevel> },
 
     /// Commit a transaction
     Commit,

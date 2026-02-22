@@ -1,4 +1,6 @@
 mod statement_cache;
+mod transaction_manager;
+use transaction_manager::TransactionManager;
 mod r#type;
 mod value;
 
@@ -8,7 +10,7 @@ use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
-    driver::{operation::Transaction, Capability, Driver, Operation, Response, TransactionManager},
+    driver::{operation::Transaction, Capability, Driver, Operation, Response},
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt,
     stmt::ValueRecord,
@@ -187,7 +189,7 @@ impl Connection {
         Self {
             client,
             statement_cache: StatementCache::new(100),
-            txm: TransactionManager::postgresql(),
+            txm: TransactionManager::new(),
         }
     }
 
@@ -266,10 +268,10 @@ impl From<Client> for Connection {
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
-        if let Operation::Transaction(tx_op) = &op {
+        if let Operation::Transaction(ref tx_op) = op {
             match tx_op {
-                Transaction::Start => {
-                    let sql = self.txm.start();
+                Transaction::Start { isolation } => {
+                    let sql = self.txm.start(*isolation);
                     self.client
                         .batch_execute(&sql)
                         .await
@@ -277,10 +279,21 @@ impl toasty_core::driver::Connection for Connection {
                 }
                 Transaction::Commit => {
                     let sql = self.txm.commit();
-                    self.client
-                        .batch_execute(&sql)
-                        .await
-                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                    self.client.batch_execute(&sql).await.map_err(|e| {
+                        if let Some(db_err) = e.as_db_error() {
+                            match db_err.code().code() {
+                                "40001" => toasty_core::Error::serialization_failure(
+                                    db_err.message().to_string(),
+                                ),
+                                "25006" => toasty_core::Error::read_only_transaction(
+                                    db_err.message().to_string(),
+                                ),
+                                _ => toasty_core::Error::driver_operation_failed(e),
+                            }
+                        } else {
+                            toasty_core::Error::driver_operation_failed(e)
+                        }
+                    })?;
                 }
                 Transaction::Rollback => {
                     let sql = self.txm.rollback();

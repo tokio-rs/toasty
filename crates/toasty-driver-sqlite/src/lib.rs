@@ -1,3 +1,6 @@
+mod transaction_manager;
+use transaction_manager::TransactionManager;
+
 mod value;
 pub(crate) use value::Value;
 
@@ -11,7 +14,7 @@ use toasty_core::{
     async_trait,
     driver::{
         operation::{Operation, Transaction},
-        Capability, Driver, Response, TransactionManager,
+        Capability, Driver, Response,
     },
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt, Result,
@@ -131,7 +134,7 @@ impl Connection {
 
         Self {
             connection,
-            txm: TransactionManager::sqlite(),
+            txm: TransactionManager::new(),
         }
     }
 
@@ -140,7 +143,7 @@ impl Connection {
             RusqliteConnection::open(path).map_err(toasty_core::Error::driver_operation_failed)?;
         let sqlite = Self {
             connection,
-            txm: TransactionManager::sqlite(),
+            txm: TransactionManager::new(),
         };
         Ok(sqlite)
     }
@@ -158,8 +161,8 @@ impl toasty_core::driver::Connection for Connection {
                 (op.stmt.into(), op.ret)
             }
             // Operation::Insert(op) => op.stmt.into(),
-            Operation::Transaction(Transaction::Start) => {
-                let sql = self.txm.start();
+            Operation::Transaction(Transaction::Start { isolation }) => {
+                let sql = self.txm.start(isolation)?;
                 self.connection
                     .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;

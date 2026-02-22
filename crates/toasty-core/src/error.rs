@@ -10,7 +10,9 @@ mod invalid_result;
 mod invalid_schema;
 mod invalid_statement;
 mod invalid_type_conversion;
+mod read_only_transaction;
 mod record_not_found;
+mod serialization_failure;
 mod transaction_timed_out;
 mod unsupported_feature;
 mod validation;
@@ -27,7 +29,9 @@ use invalid_result::InvalidResult;
 use invalid_schema::InvalidSchema;
 use invalid_statement::InvalidStatement;
 use invalid_type_conversion::InvalidTypeConversion;
+use read_only_transaction::ReadOnlyTransaction;
 use record_not_found::RecordNotFound;
+use serialization_failure::SerializationFailure;
 use std::sync::Arc;
 use transaction_timed_out::TransactionTimedOut;
 use unsupported_feature::UnsupportedFeature;
@@ -61,7 +65,9 @@ enum ErrorKind {
     InvalidDriverConfiguration(InvalidDriverConfiguration),
     InvalidTypeConversion(InvalidTypeConversion),
     InvalidRecordCount(InvalidRecordCount),
+    ReadOnlyTransaction(ReadOnlyTransaction),
     RecordNotFound(RecordNotFound),
+    SerializationFailure(SerializationFailure),
     InvalidResult(InvalidResult),
     InvalidSchema(InvalidSchema),
     InvalidStatement(InvalidStatement),
@@ -153,7 +159,9 @@ impl core::fmt::Display for ErrorKind {
             InvalidDriverConfiguration(err) => core::fmt::Display::fmt(err, f),
             InvalidTypeConversion(err) => core::fmt::Display::fmt(err, f),
             InvalidRecordCount(err) => core::fmt::Display::fmt(err, f),
+            ReadOnlyTransaction(err) => core::fmt::Display::fmt(err, f),
             RecordNotFound(err) => core::fmt::Display::fmt(err, f),
+            SerializationFailure(err) => core::fmt::Display::fmt(err, f),
             InvalidResult(err) => core::fmt::Display::fmt(err, f),
             InvalidSchema(err) => core::fmt::Display::fmt(err, f),
             InvalidStatement(err) => core::fmt::Display::fmt(err, f),

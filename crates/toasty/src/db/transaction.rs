@@ -1,6 +1,6 @@
 use std::{ops::Deref, sync::Arc, time::Duration};
 
-use toasty_core::driver::operation::Transaction as TransactionOp;
+use toasty_core::driver::{operation::Transaction as TransactionOp, transaction::IsolationLevel};
 use tokio::sync::Mutex;
 
 use crate::{db::ConnectionType, engine::Engine, Db};
@@ -78,11 +78,16 @@ impl Drop for Transaction {
 pub struct TransactionBuilder<'a> {
     db: &'a Db,
     timeout: Option<Duration>,
+    isolation_level: Option<IsolationLevel>,
 }
 
 impl<'a> TransactionBuilder<'a> {
     pub(crate) fn new(db: &'a Db) -> Self {
-        Self { db, timeout: None }
+        Self {
+            db,
+            timeout: None,
+            isolation_level: None,
+        }
     }
 
     pub fn timeout(mut self, d: Duration) -> Self {
@@ -90,11 +95,39 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Allows dirty reads. Not supported by all drivers.
+    pub fn read_uncommitted(mut self) -> Self {
+        self.isolation_level = Some(IsolationLevel::ReadUncommitted);
+        self
+    }
+
+    /// Prevents dirty reads; non-repeatable reads and phantom reads are still possible.
+    pub fn read_committed(mut self) -> Self {
+        self.isolation_level = Some(IsolationLevel::ReadCommitted);
+        self
+    }
+
+    /// Prevents dirty and non-repeatable reads; phantom reads are still possible.
+    pub fn repeatable_read(mut self) -> Self {
+        self.isolation_level = Some(IsolationLevel::RepeatableRead);
+        self
+    }
+
+    /// Full isolation. May produce serialization failures that require retry.
+    pub fn serializable(mut self) -> Self {
+        self.isolation_level = Some(IsolationLevel::Serializable);
+        self
+    }
+
     pub async fn exec<O, E>(self, f: impl AsyncFnOnce(&Db) -> Result<O, E>) -> Result<O, E>
     where
         E: From<crate::Error>,
     {
-        let mut tx = self.db.begin_inner().await.map_err(E::from)?;
+        let mut tx = self
+            .db
+            .begin_inner(self.isolation_level)
+            .await
+            .map_err(E::from)?;
 
         // The timeout covers only the user's callback, not BEGIN/COMMIT/ROLLBACK.
         let result = match self.timeout {
@@ -106,10 +139,14 @@ impl<'a> TransactionBuilder<'a> {
         };
 
         match result {
-            Ok(v) => {
-                tx.commit_inner().await.map_err(E::from)?;
-                Ok(v)
-            }
+            Ok(v) => match tx.commit_inner().await {
+                Ok(()) => Ok(v),
+                Err(e) if e.is_serialization_failure() || e.is_read_only_transaction() => {
+                    let _ = tx.rollback_inner().await;
+                    Err(E::from(e))
+                }
+                Err(e) => Err(E::from(e)),
+            },
             Err(e) => {
                 let _ = tx.rollback_inner().await;
                 Err(e)
@@ -135,7 +172,10 @@ impl Db {
         TransactionBuilder::new(self)
     }
 
-    pub(crate) async fn begin_inner(&self) -> crate::Result<Transaction> {
+    pub(crate) async fn begin_inner(
+        &self,
+        isolation: Option<IsolationLevel>,
+    ) -> crate::Result<Transaction> {
         match &self.engine.connection {
             ConnectionType::Pool(pool) => {
                 let conn = pool.get().await?;
@@ -151,7 +191,7 @@ impl Db {
                     db: Some(db),
                     done: false,
                 };
-                tx.exec_op(TransactionOp::Start).await?;
+                tx.exec_op(TransactionOp::Start { isolation }).await?;
                 Ok(tx)
             }
             ConnectionType::Transaction(arc) => {
@@ -170,7 +210,9 @@ impl Db {
                     db: Some(db),
                     done: false,
                 };
-                tx.exec_op(TransactionOp::Start).await?;
+                // Isolation level only applies to the outermost transaction;
+                // nested transactions use SAVEPOINTs, which ignore isolation.
+                tx.exec_op(TransactionOp::Start { isolation: None }).await?;
                 Ok(tx)
             }
         }

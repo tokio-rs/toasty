@@ -2,6 +2,40 @@ use crate::prelude::*;
 use std::time::Duration;
 
 #[driver_test(id(ID))]
+pub async fn isolation_level_serializable(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        val: String,
+    }
+
+    let db = t.setup_db(models!(Foo)).await;
+
+    let result: Result<()> = db
+        .transaction_builder()
+        .serializable()
+        .exec(async |tx| {
+            Foo::create().val("hello").exec(tx).await?;
+            Ok::<(), toasty::Error>(())
+        })
+        .await;
+
+    if !t.capability().sql {
+        assert!(result.unwrap_err().is_unsupported_feature());
+        return Ok(());
+    }
+
+    result?;
+    let foos: Vec<Foo> = Foo::all().collect(&db).await?;
+    assert_eq!(foos.len(), 1);
+    assert_eq!(foos[0].val, "hello");
+    Ok(())
+}
+
+#[driver_test(id(ID))]
 pub async fn basic_commit(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Foo {

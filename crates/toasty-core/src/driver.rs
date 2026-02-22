@@ -1,14 +1,13 @@
 mod capability;
 pub use capability::{Capability, StorageTypes};
 
+pub mod transaction;
+
 mod response;
 pub use response::{Response, Rows};
 
 pub mod operation;
 pub use operation::Operation;
-
-mod transaction_manager;
-pub use transaction_manager::TransactionManager;
 
 use crate::{
     async_trait,

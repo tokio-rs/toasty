@@ -1,5 +1,8 @@
 #![allow(clippy::needless_range_loop)]
 
+mod transaction_manager;
+use transaction_manager::TransactionManager;
+
 mod value;
 pub(crate) use value::Value;
 
@@ -10,7 +13,7 @@ use mysql_async::{
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
-    driver::{operation::Transaction, Capability, Driver, Operation, Response, TransactionManager},
+    driver::{operation::Transaction, Capability, Driver, Operation, Response},
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt::{self, ValueRecord},
     Result,
@@ -139,7 +142,7 @@ impl Connection {
     pub fn new(conn: Conn) -> Self {
         Self {
             conn,
-            txm: TransactionManager::mysql(),
+            txm: TransactionManager::new(),
         }
     }
 
@@ -196,10 +199,16 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
-            Operation::Transaction(Transaction::Start) => {
-                let sql = self.txm.start();
+            Operation::Transaction(Transaction::Start { isolation }) => {
+                let (pre, begin) = self.txm.start(isolation);
+                if let Some(pre) = pre {
+                    self.conn
+                        .query_drop(&pre)
+                        .await
+                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                }
                 self.conn
-                    .query_drop(sql.as_ref())
+                    .query_drop(begin.as_ref())
                     .await
                     .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));
@@ -209,7 +218,16 @@ impl toasty_core::driver::Connection for Connection {
                 self.conn
                     .query_drop(sql.as_ref())
                     .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
+                    .map_err(|e| match e {
+                        mysql_async::Error::Server(se) => match se.code {
+                            1213 => toasty_core::Error::serialization_failure(se.message),
+                            1792 => toasty_core::Error::read_only_transaction(se.message),
+                            _ => toasty_core::Error::driver_operation_failed(
+                                mysql_async::Error::Server(se),
+                            ),
+                        },
+                        other => toasty_core::Error::driver_operation_failed(other),
+                    })?;
                 return Ok(Response::count(0));
             }
             Operation::Transaction(Transaction::Rollback) => {

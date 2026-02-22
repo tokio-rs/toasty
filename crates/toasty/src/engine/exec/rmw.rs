@@ -34,7 +34,10 @@ impl Exec<'_> {
 
         let res = self
             .connection
-            .exec(&self.engine.schema.db, Transaction::Start.into())
+            .exec(
+                &self.engine.schema.db,
+                Transaction::Start { isolation: None }.into(),
+            )
             .await?;
         assert!(matches!(res.rows, Rows::Count(0)));
 
