@@ -94,6 +94,23 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Schema versioning
 - CLI tools for schema management
 
+### Toasty Runtime Improvements
+
+**Concurrent Task Execution**
+- Replace the current ad-hoc background task with a proper in-flight task manager
+- Execute independent parts of an execution plan concurrently
+- Track and coordinate multiple in-flight tasks within a single query execution
+
+**Cancellation & Cleanup**
+- Detect when the caller drops the future representing query completion
+- Perform clean cancellation on drop (rollback any incomplete transactions)
+- Ensure no resource leaks or orphaned database state on cancellation
+
+**Internal Instrumentation & Metrics**
+- Instrument time spent in each execution phase (planning, simplification, execution, serialization)
+- Track CPU time consumed by query planning to detect expensive plans
+- Provide internal metrics for diagnosing performance bottlenecks
+
 ### Performance
 
 **Optimization Features**
