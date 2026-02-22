@@ -3,21 +3,17 @@ use super::{Entry, Projection, Value};
 use std::cmp::Ordering;
 use std::ops::Bound;
 
-/// A unique sorted index over a borrowed slice of [`Value`]s.
+/// A sorted index over a borrowed slice of [`Value`]s.
 ///
 /// Keys are extracted from each value using a set of [`Projection`]s. The index is
 /// sorted using a private total ordering on [`Value`] that extends the existing
 /// `PartialOrd` (which has SQL semantics and returns `None` for `Null` comparisons)
 /// with a deterministic order for all cases.
 ///
-/// Supports equality and range queries.
+/// Supports equality and range queries. Duplicate keys are allowed; queries
+/// that would return multiple values (e.g. `find_range`) yield all of them.
 ///
 /// Construction is O(n log n). All queries are O(log n + k) where k is the result count.
-///
-/// # Uniqueness
-///
-/// The index assumes each extracted key is unique across the source slice. A
-/// `debug_assert!` fires on duplicate keys at build time.
 ///
 /// # Cloning
 ///
@@ -40,12 +36,6 @@ impl<'a> SortedIndex<'a> {
             .collect();
 
         entries.sort_by(|(a, _), (b, _)| total_cmp(a, b));
-
-        // Assert uniqueness after sorting: adjacent equal keys are duplicates.
-        debug_assert!(
-            entries.windows(2).all(|w| total_cmp(&w[0].0, &w[1].0) != Ordering::Equal),
-            "SortedIndex: duplicate key detected"
-        );
 
         Self { entries }
     }
