@@ -20,7 +20,9 @@ mod get_by_key;
 pub(crate) use get_by_key::GetByKey;
 
 mod nested_merge;
-pub(crate) use nested_merge::{MergeQualification, NestedChild, NestedLevel, NestedMerge};
+pub(crate) use nested_merge::{
+    MergeIndex, MergeQualification, NestedChild, NestedLevel, NestedMerge,
+};
 
 mod output;
 pub(crate) use output::Output;

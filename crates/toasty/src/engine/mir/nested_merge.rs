@@ -18,6 +18,12 @@ pub(crate) struct NestedMerge {
 
     /// Configuration for how to perform the merge at each nesting level.
     pub(crate) root: exec::NestedLevel,
+
+    /// Flat list of hash indexes to build before the merge, computed at plan time.
+    pub(crate) hash_indexes: Vec<exec::MergeIndex>,
+
+    /// Flat list of sorted indexes to build before the merge, computed at plan time.
+    pub(crate) sort_indexes: Vec<exec::MergeIndex>,
 }
 
 impl NestedMerge {
@@ -44,6 +50,8 @@ impl NestedMerge {
                 num_uses: node.num_uses.get(),
             },
             root: self.root.clone(),
+            hash_indexes: self.hash_indexes.clone(),
+            sort_indexes: self.sort_indexes.clone(),
         }
     }
 }
