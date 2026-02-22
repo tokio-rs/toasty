@@ -1,6 +1,6 @@
 use crate::{
     schema::{
-        app::{Field, Model, ModelId},
+        app::{Field, Model, ModelId, ModelRoot},
         db::{self, Column, ColumnId, Table, TableId},
     },
     stmt::{
@@ -54,7 +54,7 @@ pub enum ResolvedRef<'a> {
     Field(&'a Field),
 
     /// A resolved reference to a model
-    Model(&'a Model),
+    Model(&'a ModelRoot),
 
     /// A resolved reference to a Common Table Expression (CTE) column.
     ///
@@ -84,7 +84,7 @@ pub enum ExprTarget<'a> {
     Free,
 
     /// Expression references a single model
-    Model(&'a Model),
+    Model(&'a ModelRoot),
 
     /// Expression references a single table
     ///
@@ -96,7 +96,7 @@ pub enum ExprTarget<'a> {
 }
 
 pub trait Resolve {
-    fn table_for_model(&self, model: &Model) -> Option<&Table>;
+    fn table_for_model(&self, model: &ModelRoot) -> Option<&Table>;
 
     /// Returns a reference to the application Model with the specified ID.
     ///
@@ -436,8 +436,6 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     .collect(),
             ),
             Expr::Value(value) => value.infer_ty(),
-            // -- hax
-            Expr::DecodeEnum(_, ty, _) => ty.clone(),
             _ => todo!("{expr:#?}"),
         }
     }
@@ -456,9 +454,8 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
 }
 
 impl<'a> ExprContext<'a, Schema> {
-    pub fn target_as_model(&self) -> Option<&'a Model> {
-        let model_id = self.target.model_id()?;
-        Some(self.schema.app.model(model_id))
+    pub fn target_as_model(&self) -> Option<&'a ModelRoot> {
+        self.target.as_model()
     }
 
     pub fn expr_ref_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
@@ -521,7 +518,7 @@ impl<'a> ResolvedRef<'a> {
     }
 
     #[track_caller]
-    pub fn expect_model(self) -> &'a Model {
+    pub fn expect_model(self) -> &'a ModelRoot {
         match self {
             ResolvedRef::Model(model) => model,
             _ => panic!("Expected ResolvedRef::Model, found {:?}", self),
@@ -538,8 +535,8 @@ impl Resolve for Schema {
         Some(self.db.table(id))
     }
 
-    fn table_for_model(&self, model: &Model) -> Option<&Table> {
-        Some(self.table_for(model))
+    fn table_for_model(&self, model: &ModelRoot) -> Option<&Table> {
+        Some(self.table_for(model.id))
     }
 }
 
@@ -552,7 +549,7 @@ impl Resolve for db::Schema {
         Some(db::Schema::table(self, id))
     }
 
-    fn table_for_model(&self, _model: &Model) -> Option<&Table> {
+    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
         None
     }
 }
@@ -566,13 +563,13 @@ impl Resolve for () {
         None
     }
 
-    fn table_for_model(&self, _model: &Model) -> Option<&Table> {
+    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
         None
     }
 }
 
 impl<'a> ExprTarget<'a> {
-    pub fn as_model(self) -> Option<&'a Model> {
+    pub fn as_model(self) -> Option<&'a ModelRoot> {
         match self {
             ExprTarget::Model(model) => Some(model),
             _ => None,
@@ -580,7 +577,7 @@ impl<'a> ExprTarget<'a> {
     }
 
     #[track_caller]
-    pub fn as_model_unwrap(self) -> &'a Model {
+    pub fn as_model_unwrap(self) -> &'a ModelRoot {
         match self.as_model() {
             Some(model) => model,
             _ => panic!("expected ExprTarget::Model; was {self:#?}"),
@@ -631,7 +628,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for ExprTarget<'a> {
     }
 }
 
-impl<'a, T> IntoExprTarget<'a, T> for &'a Model {
+impl<'a, T> IntoExprTarget<'a, T> for &'a ModelRoot {
     fn into_expr_target(self, _schema: &'a T) -> ExprTarget<'a> {
         ExprTarget::Model(self)
     }
@@ -693,7 +690,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a InsertTarget {
                 let Some(model) = schema.model(*model) else {
                     todo!()
                 };
-                ExprTarget::Model(model)
+                ExprTarget::Model(model.expect_root())
             }
             InsertTarget::Table(insert_table) => {
                 let table = schema.table(insert_table.table).unwrap();
@@ -711,7 +708,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a UpdateTarget {
                 let Some(model) = schema.model(*model) else {
                     todo!()
                 };
-                ExprTarget::Model(model)
+                ExprTarget::Model(model.expect_root())
             }
             UpdateTarget::Table(table_id) => {
                 let Some(table) = schema.table(*table_id) else {
@@ -730,7 +727,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a Source {
                 let Some(model) = schema.model(source_model.model) else {
                     todo!()
                 };
-                ExprTarget::Model(model)
+                ExprTarget::Model(model.expect_root())
             }
             Source::Table(source_table) => {
                 ExprTarget::Source(source_table).into_expr_target(schema)

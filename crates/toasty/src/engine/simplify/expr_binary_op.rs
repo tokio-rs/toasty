@@ -16,11 +16,7 @@ impl Simplify<'_> {
                         .resolve_expr_reference(expr_reference)
                         .expect_model();
 
-                    let primary_key = model.primary_key().expect(
-                        "binary op on model reference requires root model with primary key",
-                    );
-
-                    let [pk_field] = &primary_key.fields[..] else {
+                    let [pk_field] = &model.primary_key.fields[..] else {
                         todo!("handle composite keys");
                     };
 
@@ -152,16 +148,6 @@ impl Simplify<'_> {
                     Some(Expr::or_from_vec(comparisons))
                 }
             }
-            (Expr::Cast(cast), Expr::Value(val)) if cast.ty.is_id() => {
-                *lhs = cast.expr.take();
-                self.uncast_value_id(val);
-                None
-            }
-            (Expr::Value(val), Expr::Cast(cast)) if cast.ty.is_id() => {
-                *rhs = cast.expr.take();
-                self.uncast_value_id(val);
-                None
-            }
             (stmt::Expr::Key(_), other) | (other, stmt::Expr::Key(_)) => {
                 assert!(op.is_eq());
 
@@ -204,7 +190,7 @@ mod tests {
     use toasty_core::{
         driver::Capability,
         schema::{app, Builder},
-        stmt::{BinaryOp, ExprCast, ExprReference, Id, Type, Value},
+        stmt::{BinaryOp, ExprCast, ExprReference, Type, Value},
     };
 
     #[derive(toasty::Model)]
@@ -223,44 +209,6 @@ mod tests {
         Builder::new()
             .build(app_schema, &Capability::SQLITE)
             .expect("schema should build")
-    }
-
-    #[test]
-    fn cast_id_on_lhs_unwrapped() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `eq(cast(arg(0), Id), Id("abc")) → eq(arg(0), "abc")`
-        let mut lhs = Expr::Cast(ExprCast {
-            expr: Box::new(Expr::arg(0)),
-            ty: Type::Id(User::id()),
-        });
-        let mut rhs = Expr::Value(Value::Id(Id::from_string(User::id(), "abc".to_string())));
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(result.is_none());
-        assert!(matches!(lhs, Expr::Arg(_)));
-        assert!(matches!(rhs, Expr::Value(Value::String(s)) if s == "abc"));
-    }
-
-    #[test]
-    fn cast_id_on_rhs_unwrapped() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `eq(Id("xyz"), cast(arg(0), Id)) → eq("xyz", arg(0))`
-        let mut lhs = Expr::Value(Value::Id(Id::from_string(User::id(), "xyz".to_string())));
-        let mut rhs = Expr::Cast(ExprCast {
-            expr: Box::new(Expr::arg(0)),
-            ty: Type::Id(User::id()),
-        });
-
-        let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
-
-        assert!(result.is_none());
-        assert!(matches!(lhs, Expr::Value(Value::String(s)) if s == "xyz"));
-        assert!(matches!(rhs, Expr::Arg(_)));
     }
 
     #[test]
@@ -524,7 +472,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `id = id` → `true` (non-nullable field)
         let mut lhs = Expr::Reference(ExprReference::Field {
@@ -546,7 +494,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `id != id` → `false` (non-nullable field)
         let mut lhs = Expr::Reference(ExprReference::Field {
@@ -568,7 +516,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `name = name` is not simplified (nullable field)
         let mut lhs = Expr::Reference(ExprReference::Field {
@@ -590,7 +538,7 @@ mod tests {
         let schema = test_schema();
         let model = schema.app.model(User::id());
         let simplify = Simplify::new(&schema);
-        let mut simplify = simplify.scope(model);
+        let mut simplify = simplify.scope(model.expect_root());
 
         // `id = name` is not simplified (different fields)
         let mut lhs = Expr::Reference(ExprReference::Field {

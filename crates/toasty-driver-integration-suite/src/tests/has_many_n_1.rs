@@ -3,7 +3,7 @@
 use crate::prelude::*;
 
 #[driver_test(id(ID))]
-pub async fn hello_world(test: &mut Test) {
+pub async fn hello_world(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -51,8 +51,8 @@ pub async fn hello_world(test: &mut Test) {
 
     let db = test.setup_db(models!(User, Todo, Category)).await;
 
-    let cat1 = Category::create().name("a").exec(&db).await.unwrap();
-    let cat2 = Category::create().name("b").exec(&db).await.unwrap();
+    let cat1 = Category::create().name("a").exec(&db).await?;
+    let cat2 = Category::create().name("b").exec(&db).await?;
 
     // Create a user with a few todos
     let user = User::create()
@@ -60,11 +60,11 @@ pub async fn hello_world(test: &mut Test) {
         .todo(Todo::create().category(&cat2).title("two"))
         .todo(Todo::create().category(&cat2).title("three"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let todos = user.todos().all(&db).await.unwrap();
+    let todos = user.todos().all(&db).await?;
 
-    let todos: Vec<_> = todos.collect().await.unwrap();
+    let todos: Vec<_> = todos.collect().await?;
     assert_eq!(3, todos.len());
+    Ok(())
 }

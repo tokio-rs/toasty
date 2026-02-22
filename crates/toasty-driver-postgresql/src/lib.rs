@@ -5,16 +5,16 @@ mod value;
 pub(crate) use value::Value;
 
 use postgres::{tls::MakeTlsConnect, types::ToSql, Socket};
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
     driver::{Capability, Driver, Operation, Response},
-    schema::db::{Schema, Table},
+    schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt,
     stmt::ValueRecord,
     Result,
 };
-use toasty_sql as sql;
+use toasty_sql::{self as sql, TypedValue};
 use tokio_postgres::{Client, Config};
 use url::Url;
 
@@ -22,6 +22,7 @@ use crate::{r#type::TypeExt, statement_cache::StatementCache};
 
 #[derive(Debug)]
 pub struct PostgreSQL {
+    url: String,
     config: Config,
 }
 
@@ -31,7 +32,7 @@ impl PostgreSQL {
         let url_str = url.into();
         let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
 
-        if url.scheme() != "postgresql" {
+        if !matches!(url.scheme(), "postgresql" | "postgres") {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `postgresql` scheme; url={}",
                 url
@@ -68,17 +69,19 @@ impl PostgreSQL {
             config.password(password);
         }
 
-        Ok(Self { config })
-    }
-
-    /// Create a new PostgreSQL driver with a tokio-postgres Config
-    pub fn from_config(config: Config) -> Self {
-        Self { config }
+        Ok(Self {
+            url: url_str,
+            config,
+        })
     }
 }
 
 #[async_trait]
 impl Driver for PostgreSQL {
+    fn url(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.url)
+    }
+
     fn capability(&self) -> &'static Capability {
         &Capability::POSTGRESQL
     }
@@ -87,6 +90,87 @@ impl Driver for PostgreSQL {
         Ok(Box::new(
             Connection::connect(self.config.clone(), tokio_postgres::NoTls).await?,
         ))
+    }
+
+    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::POSTGRESQL);
+
+        let sql_strings: Vec<String> = statements
+            .iter()
+            .map(|stmt| {
+                let mut params = Vec::<TypedValue>::new();
+                let sql = sql::Serializer::postgresql(stmt.schema())
+                    .serialize(stmt.statement(), &mut params);
+                assert!(
+                    params.is_empty(),
+                    "migration statements should not have parameters"
+                );
+                sql
+            })
+            .collect();
+
+        Migration::new_sql(sql_strings.join("\n"))
+    }
+
+    async fn reset_db(&self) -> toasty_core::Result<()> {
+        let dbname = self
+            .config
+            .get_dbname()
+            .ok_or_else(|| {
+                toasty_core::Error::invalid_connection_url("no database name configured")
+            })?
+            .to_string();
+
+        // We cannot drop a database we are currently connected to, so we need a temp database.
+        let temp_dbname = "__toasty_reset_temp";
+
+        let connect = |dbname: &str| {
+            let mut config = self.config.clone();
+            config.dbname(dbname);
+            Connection::connect(config, tokio_postgres::NoTls)
+        };
+
+        // Step 1: Connect to the target DB and create a temp DB
+        let conn = connect(&dbname).await?;
+        conn.client
+            .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", temp_dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        conn.client
+            .execute(&format!("CREATE DATABASE \"{}\"", temp_dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        drop(conn);
+
+        // Step 2: Connect to the temp DB, drop and recreate the target
+        let conn = connect(temp_dbname).await?;
+        conn.client
+            .execute(
+                "SELECT pg_terminate_backend(pid) \
+                 FROM pg_stat_activity \
+                 WHERE datname = $1 AND pid <> pg_backend_pid()",
+                &[&dbname],
+            )
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        conn.client
+            .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        conn.client
+            .execute(&format!("CREATE DATABASE \"{}\"", dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        drop(conn);
+
+        // Step 3: Connect back to the target and clean up the temp DB
+        let conn = connect(&dbname).await?;
+        conn.client
+            .execute(&format!("DROP DATABASE IF EXISTS \"{}\"", temp_dbname), &[])
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        Ok(())
     }
 }
 
@@ -167,34 +251,6 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)?;
         }
 
-        Ok(())
-    }
-
-    /// Drops a table.
-    pub async fn drop_table(
-        &mut self,
-        schema: &Schema,
-        table: &Table,
-        if_exists: bool,
-    ) -> Result<()> {
-        let serializer = sql::Serializer::postgresql(schema);
-        let mut params: Vec<toasty_sql::TypedValue> = Vec::new();
-
-        let sql = if if_exists {
-            serializer.serialize(&sql::Statement::drop_table_if_exists(table), &mut params)
-        } else {
-            serializer.serialize(&sql::Statement::drop_table(table), &mut params)
-        };
-
-        assert!(
-            params.is_empty(),
-            "dropping a table shouldn't involve any parameters"
-        );
-
-        self.client
-            .execute(&sql, &[])
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }
@@ -289,12 +345,110 @@ impl toasty_core::driver::Connection for Connection {
         }
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         for table in &schema.tables {
-            self.drop_table(schema, table, true).await?;
             self.create_table(schema, table).await?;
         }
+        Ok(())
+    }
 
+    async fn applied_migrations(
+        &mut self,
+    ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
+        // Ensure the migrations table exists
+        self.client
+            .execute(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id BIGINT PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMP NOT NULL
+            )",
+                &[],
+            )
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Query all applied migrations
+        let rows = self
+            .client
+            .query(
+                "SELECT id FROM __toasty_migrations ORDER BY applied_at",
+                &[],
+            )
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        Ok(rows
+            .iter()
+            .map(|row| {
+                let id: i64 = row.get(0);
+                toasty_core::schema::db::AppliedMigration::new(id as u64)
+            })
+            .collect())
+    }
+
+    async fn apply_migration(
+        &mut self,
+        id: u64,
+        name: String,
+        migration: &toasty_core::schema::db::Migration,
+    ) -> Result<()> {
+        // Ensure the migrations table exists
+        self.client
+            .execute(
+                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+                id BIGINT PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMP NOT NULL
+            )",
+                &[],
+            )
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Start transaction
+        let transaction = self
+            .client
+            .transaction()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        // Execute each migration statement
+        for statement in migration.statements() {
+            if let Err(e) = transaction
+                .batch_execute(statement)
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)
+            {
+                transaction
+                    .rollback()
+                    .await
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
+                return Err(e);
+            }
+        }
+
+        // Record the migration
+        if let Err(e) = transaction
+            .execute(
+                "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES ($1, $2, NOW())",
+                &[&(id as i64), &name],
+            )
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)
+        {
+            transaction
+                .rollback()
+                .await
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+            return Err(e);
+        }
+
+        // Commit transaction
+        transaction
+            .commit()
+            .await
+            .map_err(toasty_core::Error::driver_operation_failed)?;
         Ok(())
     }
 }

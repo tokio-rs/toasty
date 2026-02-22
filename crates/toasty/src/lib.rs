@@ -1,3 +1,6 @@
+mod apply_update;
+pub use apply_update::{ApplyUpdate, Query};
+
 mod batch;
 pub use batch::CreateMany;
 
@@ -30,22 +33,24 @@ pub use toasty_core::{Error, Result};
 #[doc(hidden)]
 pub mod codegen_support {
     pub use crate::{
+        apply_update::{ApplyUpdate, Query},
         batch::CreateMany,
         cursor::{Cursor, FromCursor},
         model::generate_unique_id,
         relation::Relation,
         relation::{BelongsTo, HasMany, HasOne},
-        stmt::{self, Id, IntoExpr, IntoInsert, IntoSelect, Path},
+        stmt::{self, IntoExpr, IntoInsert, IntoSelect, Path},
         Db, Embed, Error, Model, Register, Result, Statement,
     };
     pub use std::{convert::Into, default::Default, option::Option};
+    pub use toasty_core as core;
     pub use toasty_core::{
         driver,
         schema::{
             self,
             app::{FieldId, ModelId},
         },
-        stmt::{self as core_stmt, Type, Value, ValueRecord, ValueStream},
+        stmt::{Type, Value, ValueRecord, ValueStream},
     };
 }
 

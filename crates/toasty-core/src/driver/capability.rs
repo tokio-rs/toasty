@@ -5,8 +5,11 @@ pub struct Capability {
     /// When true, the database uses a SQL-based query language.
     pub sql: bool,
 
-    /// Column storage types supported by the database
+    /// Column storage types supported by the database.
     pub storage_types: StorageTypes,
+
+    /// Schema mutation capabilities supported by the datbase.
+    pub schema_mutations: SchemaMutations,
 
     /// SQL: supports update statements in CTE queries.
     pub cte_with_update: bool,
@@ -52,6 +55,10 @@ pub struct Capability {
     /// - MySQL: false (DECIMAL requires fixed precision/scale)
     /// - SQLite/DynamoDB: false (no native decimal support, stored as TEXT)
     pub decimal_arbitrary_precision: bool,
+
+    /// Whether OR is supported in index key conditions (e.g. DynamoDB KeyConditionExpression).
+    /// DynamoDB: false. All other backends: true (SQL backends never use index key conditions).
+    pub index_or_predicate: bool,
 }
 
 #[derive(Debug)]
@@ -65,6 +72,9 @@ pub struct StorageTypes {
 
     /// The default storage type for a UUID.
     pub default_uuid_type: db::Type,
+
+    /// The default storage type for Bytes (Vec<u8>).
+    pub default_bytes_type: db::Type,
 
     /// The default storage type for a Decimal (fixed-precision decimal).
     pub default_decimal_type: db::Type,
@@ -90,6 +100,17 @@ pub struct StorageTypes {
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
     pub max_unsigned_integer: Option<u64>,
+}
+
+/// The database's capabilities to mutate the schema (tables, columns, indices).
+#[derive(Debug)]
+pub struct SchemaMutations {
+    /// Whether the database can change the type of an existing column.
+    pub alter_column_type: bool,
+
+    /// Whether the database can change name, type and constraints of a column all
+    /// withing a single statement.
+    pub alter_column_properties_atomic: bool,
 }
 
 impl Capability {
@@ -139,7 +160,6 @@ impl Capability {
     pub fn native_type_for(&self, ty: &stmt::Type) -> stmt::Type {
         match ty {
             stmt::Type::Uuid => self.storage_types.default_uuid_type.bridge_type(ty),
-            stmt::Type::Id(_) => self.storage_types.default_string_type.bridge_type(ty),
             _ => ty.clone(),
         }
     }
@@ -148,6 +168,7 @@ impl Capability {
     pub const SQLITE: Self = Self {
         sql: true,
         storage_types: StorageTypes::SQLITE,
+        schema_mutations: SchemaMutations::SQLITE,
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: true,
@@ -166,12 +187,15 @@ impl Capability {
         // SQLite does not have native decimal types
         native_decimal: false,
         decimal_arbitrary_precision: false,
+
+        index_or_predicate: true,
     };
 
     /// PostgreSQL capabilities
     pub const POSTGRESQL: Self = Self {
         cte_with_update: true,
         storage_types: StorageTypes::POSTGRESQL,
+        schema_mutations: SchemaMutations::POSTGRESQL,
         select_for_update: true,
         auto_increment: true,
         bigdecimal_implemented: false,
@@ -193,6 +217,7 @@ impl Capability {
     pub const MYSQL: Self = Self {
         cte_with_update: false,
         storage_types: StorageTypes::MYSQL,
+        schema_mutations: SchemaMutations::MYSQL,
         select_for_update: true,
         returning_from_mutation: false,
         auto_increment: true,
@@ -214,6 +239,7 @@ impl Capability {
     pub const DYNAMODB: Self = Self {
         sql: false,
         storage_types: StorageTypes::DYNAMODB,
+        schema_mutations: SchemaMutations::DYNAMODB,
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: false,
@@ -231,6 +257,8 @@ impl Capability {
         // DynamoDB does not have native decimal types
         native_decimal: false,
         decimal_arbitrary_precision: false,
+
+        index_or_predicate: false,
     };
 }
 
@@ -252,6 +280,8 @@ impl StorageTypes {
         // SQLite does not have an inbuilt UUID type. The binary blob type is more
         // difficult to read than Text but likely has better performance characteristics.
         default_uuid_type: db::Type::Blob,
+
+        default_bytes_type: db::Type::Blob,
 
         // SQLite does not have a native decimal type. Store as TEXT.
         default_decimal_type: db::Type::Text,
@@ -278,6 +308,8 @@ impl StorageTypes {
         varchar: Some(10_485_760),
 
         default_uuid_type: db::Type::Uuid,
+
+        default_bytes_type: db::Type::Blob,
 
         // PostgreSQL has native NUMERIC type for fixed and arbitrary-precision decimals.
         default_decimal_type: db::Type::Numeric(None),
@@ -313,6 +345,8 @@ impl StorageTypes {
         // use VarChar for now.
         default_uuid_type: db::Type::VarChar(36),
 
+        default_bytes_type: db::Type::Blob,
+
         // MySQL does not have an arbitrary-precision decimal type. The DECIMAL type
         // requires a fixed precision and scale to be specified upfront. Store as TEXT.
         default_decimal_type: db::Type::Text,
@@ -339,6 +373,8 @@ impl StorageTypes {
 
         default_uuid_type: db::Type::Text,
 
+        default_bytes_type: db::Type::Blob,
+
         // DynamoDB does not have a native decimal type. Store as TEXT.
         default_decimal_type: db::Type::Text,
         default_bigdecimal_type: db::Type::Text,
@@ -352,6 +388,29 @@ impl StorageTypes {
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,
+    };
+}
+
+impl SchemaMutations {
+    pub const SQLITE: Self = Self {
+        alter_column_type: false,
+        alter_column_properties_atomic: false,
+    };
+
+    pub const POSTGRESQL: Self = Self {
+        alter_column_type: true,
+        alter_column_properties_atomic: false,
+    };
+
+    pub const MYSQL: Self = Self {
+        alter_column_type: true,
+        alter_column_properties_atomic: true,
+    };
+
+    // DynamoDB migrations are currently not supported.
+    pub const DYNAMODB: Self = Self {
+        alter_column_type: false,
+        alter_column_properties_atomic: false,
     };
 }
 

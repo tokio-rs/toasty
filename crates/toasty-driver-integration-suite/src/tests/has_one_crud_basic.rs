@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 #[driver_test(id(ID))]
-pub async fn crud_has_one_bi_direction_optional(test: &mut Test) {
+pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -32,26 +32,20 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) {
     let db = test.setup_db(models!(User, Profile)).await;
 
     // Create a user without a profile
-    let user = User::create().name("Jane Doe").exec(&db).await.unwrap();
+    let user = User::create().name("Jane Doe").exec(&db).await?;
 
     // No profile
-    assert_none!(user.profile().get(&db).await.unwrap());
+    assert_none!(user.profile().get(&db).await?);
 
     // Create a profile for the user
-    let profile = user
-        .profile()
-        .create()
-        .bio("a person")
-        .exec(&db)
-        .await
-        .unwrap();
+    let profile = user.profile().create().bio("a person").exec(&db).await?;
 
     // Load the profile
-    let profile_reload = user.profile().get(&db).await.unwrap().unwrap();
+    let profile_reload = user.profile().get(&db).await?.unwrap();
     assert_eq!(profile.id, profile_reload.id);
 
     // Load the user via the profile
-    let user_reload = profile.user().get(&db).await.unwrap().unwrap();
+    let user_reload = profile.user().get(&db).await?.unwrap();
     assert_eq!(user.id, user_reload.id);
 
     // Create a new user with a profile
@@ -59,71 +53,65 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) {
         .name("Tim Apple")
         .profile(Profile::create().bio("an apple a day"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let profile = user.profile().get(&db).await.unwrap().unwrap();
+    let profile = user.profile().get(&db).await?.unwrap();
     assert_eq!(profile.bio, "an apple a day");
 
     // The new profile is associated with the user
-    assert_eq!(user.id, profile.user().get(&db).await.unwrap().unwrap().id);
+    assert_eq!(user.id, profile.user().get(&db).await?.unwrap().id);
 
     // Update a user, creating a new profile.
     user.update()
         .profile(Profile::create().bio("keeps the doctor away"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // The user's profile is updated
-    let profile = user.profile().get(&db).await.unwrap().unwrap();
+    let profile = user.profile().get(&db).await?.unwrap();
     assert_eq!(profile.bio, "keeps the doctor away");
-    assert_eq!(user.id, profile.user().get(&db).await.unwrap().unwrap().id);
+    assert_eq!(user.id, profile.user().get(&db).await?.unwrap().id);
 
     // Unset the profile via an update. This will nullify user on the profile.
-    user.update().profile(None).exec(&db).await.unwrap();
+    user.update().profile(None).exec(&db).await?;
 
     // The profile is none
-    assert!(user.profile().get(&db).await.unwrap().is_none());
+    assert!(user.profile().get(&db).await?.is_none());
 
-    let profile_reloaded = Profile::filter_by_id(profile.id).get(&db).await.unwrap();
+    let profile_reloaded = Profile::filter_by_id(profile.id).get(&db).await?;
     assert_none!(profile_reloaded.user_id);
 
-    user.update()
-        .profile(&profile_reloaded)
-        .exec(&db)
-        .await
-        .unwrap();
+    user.update().profile(&profile_reloaded).exec(&db).await?;
 
-    let profile_reloaded = Profile::get_by_id(&db, &profile.id).await.unwrap();
+    let profile_reloaded = Profile::get_by_id(&db, &profile.id).await?;
     assert_eq!(&user.id, profile_reloaded.user_id.as_ref().unwrap());
 
     // Deleting the profile will nullify the profile field for the user
-    profile_reloaded.delete(&db).await.unwrap();
+    profile_reloaded.delete(&db).await?;
 
-    let mut user_reloaded = User::get_by_id(&db, &user.id).await.unwrap();
-    assert_none!(user_reloaded.profile().get(&db).await.unwrap());
+    let mut user_reloaded = User::get_by_id(&db, &user.id).await?;
+    assert_none!(user_reloaded.profile().get(&db).await?);
 
     // Create a new profile for the user
     user_reloaded
         .update()
         .profile(Profile::create().bio("hello"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let profile_id = user_reloaded.profile().get(&db).await.unwrap().unwrap().id;
+    let profile_id = user_reloaded.profile().get(&db).await?.unwrap().id;
 
     // Delete the user
-    user_reloaded.delete(&db).await.unwrap();
+    user_reloaded.delete(&db).await?;
 
-    let profile_reloaded = Profile::get_by_id(&db, &profile_id).await.unwrap();
+    let profile_reloaded = Profile::get_by_id(&db, &profile_id).await?;
     assert_none!(profile_reloaded.user_id);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
 #[should_panic]
-pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) {
+pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -155,26 +143,26 @@ pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) {
     let user = User::create()
         .profile(Profile::create().bio("an apple a day"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let profile = user.profile().get(&db).await.unwrap();
+    let profile = user.profile().get(&db).await?;
     assert_eq!(profile.bio, "an apple a day");
 
     // The new profile is associated with the user
-    assert_eq!(user.id, profile.user().get(&db).await.unwrap().unwrap().id);
+    assert_eq!(user.id, profile.user().get(&db).await?.unwrap().id);
 
     // Deleting the user leaves the profile in place.
-    user.delete(&db).await.unwrap();
-    let profile_reloaded = Profile::get_by_id(&db, &profile.id).await.unwrap();
+    user.delete(&db).await?;
+    let profile_reloaded = Profile::get_by_id(&db, &profile.id).await?;
     assert_none!(profile_reloaded.user_id);
 
     // Try creating a user **without** a user: error
     assert_err!(User::create().exec(&db).await);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn update_belongs_to_with_required_has_one_pair(test: &mut Test) {
+pub async fn update_belongs_to_with_required_has_one_pair(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -206,30 +194,28 @@ pub async fn update_belongs_to_with_required_has_one_pair(test: &mut Test) {
     let u1 = User::create()
         .profile(Profile::create().bio("an apple a day"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let mut p1 = u1.profile().get(&db).await.unwrap();
+    let mut p1 = u1.profile().get(&db).await?;
     assert_eq!(p1.bio, "an apple a day");
 
     // Associate the profile with a new user by value
     let u2 = User::create()
         .profile(Profile::create().bio("I plant trees"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let p2 = u2.profile().get(&db).await.unwrap();
+    let p2 = u2.profile().get(&db).await?;
     assert_eq!(p2.bio, "I plant trees");
 
     // Associate the original profile w/ the new user by value
-    p1.update().user(&u2).exec(&db).await.unwrap();
+    p1.update().user(&u2).exec(&db).await?;
 
     // assert_eq!(u2.id, p1.user().find(&db).await.unwrap().unwrap().id);
     // u1 is deleted
     assert_err!(User::get_by_id(&db, &u1.id).await);
     // p2 ID is null
-    let p2_reloaded = Profile::get_by_id(&db, &p2.id).await.unwrap();
+    let p2_reloaded = Profile::get_by_id(&db, &p2.id).await?;
     assert_none!(p2_reloaded.user_id);
 
     /*
@@ -278,10 +264,11 @@ pub async fn update_belongs_to_with_required_has_one_pair(test: &mut Test) {
     // u1 is deleted
     assert_err!(db::User::find_by_id(&u1.id).get(&db).await);
     */
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) {
+pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -313,18 +300,18 @@ pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) {
     let user = User::create()
         .profile(Profile::create().bio("an apple a day"))
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let profile = user.profile().get(&db).await.unwrap().unwrap();
+    let profile = user.profile().get(&db).await?.unwrap();
     assert_eq!(profile.bio, "an apple a day");
 
     // The new profile is associated with the user
-    assert_eq!(user.id, profile.user().get(&db).await.unwrap().id);
+    assert_eq!(user.id, profile.user().get(&db).await?.id);
 
     // Deleting the user also deletes the profile
-    user.delete(&db).await.unwrap();
+    user.delete(&db).await?;
     assert_err!(Profile::get_by_id(&db, &profile.id).await);
+    Ok(())
 }
 
 // TODO: implement this for proc macros
@@ -359,7 +346,7 @@ pub async fn has_one_must_specify_be_uniquely_indexed(_test: &mut Test) {
 */
 
 #[driver_test(id(ID))]
-pub async fn set_has_one_by_value_in_update_query(test: &mut Test) {
+pub async fn set_has_one_by_value_in_update_query(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -385,20 +372,20 @@ pub async fn set_has_one_by_value_in_update_query(test: &mut Test) {
 
     let db = test.setup_db(models!(User, Profile)).await;
 
-    let user = User::create().exec(&db).await.unwrap();
-    let profile = Profile::create().exec(&db).await.unwrap();
+    let user = User::create().exec(&db).await?;
+    let profile = Profile::create().exec(&db).await?;
 
     User::filter_by_id(user.id)
         .update()
         .profile(&profile)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    let profile_reload = user.profile().get(&db).await.unwrap().unwrap();
+    let profile_reload = user.profile().get(&db).await?.unwrap();
     assert_eq!(profile_reload.id, profile.id);
 
     assert_eq!(profile_reload.user_id.as_ref().unwrap(), &user.id);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
@@ -406,7 +393,7 @@ pub async fn set_has_one_by_value_in_update_query(test: &mut Test) {
 pub async fn unset_has_one_in_batch_update(_test: &mut Test) {}
 
 #[driver_test(id(ID))]
-pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test) {
+pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -432,12 +419,8 @@ pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test
 
     let db = test.setup_db(models!(User, Profile)).await;
 
-    let user = User::create()
-        .profile(Profile::create())
-        .exec(&db)
-        .await
-        .unwrap();
-    let profile = user.profile().get(&db).await.unwrap().unwrap();
+    let user = User::create().profile(Profile::create()).exec(&db).await?;
+    let profile = user.profile().get(&db).await?.unwrap();
 
     assert_eq!(user.id, profile.user_id);
 
@@ -445,15 +428,17 @@ pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test
         .update()
         .profile(None)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Profile is deleted
     assert_err!(Profile::get_by_id(&db, &profile.id).await);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn unset_has_one_with_required_pair_in_non_pk_query_update(test: &mut Test) {
+pub async fn unset_has_one_with_required_pair_in_non_pk_query_update(
+    test: &mut Test,
+) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -486,24 +471,23 @@ pub async fn unset_has_one_with_required_pair_in_non_pk_query_update(test: &mut 
         .email("foo@example.com")
         .profile(Profile::create())
         .exec(&db)
-        .await
-        .unwrap();
-    let profile = user.profile().get(&db).await.unwrap().unwrap();
+        .await?;
+    let profile = user.profile().get(&db).await?.unwrap();
     assert_eq!(profile.user_id, user.id);
 
     User::filter_by_email(&user.email)
         .update()
         .profile(None)
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
     // Profile is deleted
     assert_err!(Profile::get_by_id(&db, &profile.id).await);
+    Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn associate_has_one_by_val_on_insert(test: &mut Test) {
+pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -532,19 +516,16 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) {
     let db = test.setup_db(models!(User, Profile)).await;
 
     // Create a profile
-    let profile = Profile::create()
-        .bio("hello world")
-        .exec(&db)
-        .await
-        .unwrap();
+    let profile = Profile::create().bio("hello world").exec(&db).await?;
 
     // Create a user and associate the profile with it, by value
-    let u1 = User::create().profile(&profile).exec(&db).await.unwrap();
+    let u1 = User::create().profile(&profile).exec(&db).await?;
 
-    let profile_reloaded = u1.profile().get(&db).await.unwrap();
+    let profile_reloaded = u1.profile().get(&db).await?;
     assert_eq!(profile.id, profile_reloaded.id);
     assert_eq!(Some(&u1.id), profile_reloaded.user_id.as_ref());
     assert_eq!(profile.bio, profile_reloaded.bio);
+    Ok(())
 }
 
 #[driver_test(id(ID))]

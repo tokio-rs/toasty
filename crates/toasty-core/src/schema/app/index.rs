@@ -16,7 +16,7 @@ pub struct Index {
     pub primary_key: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IndexId {
     pub model: ModelId,
     pub index: usize,

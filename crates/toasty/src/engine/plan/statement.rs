@@ -955,9 +955,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // Without SQL capability, we have to plan the execution of the
         // statement based on available indices.
         let mut index_plan = self.planner.engine.plan_index_path(&stmt)?;
-        let pk_keys = self.try_build_pk_keys(&stmt, &index_plan);
-
-        let post_filter = self.prepare_post_filter(&stmt, &mut index_plan, pk_keys.is_some());
+        let post_filter = self.prepare_post_filter(&stmt, &mut index_plan);
 
         // Type of the final record.
         let ty = if self.load_data.columns.is_empty() {
@@ -969,7 +967,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         };
 
         let node_id = if index_plan.index.primary_key {
-            self.plan_primary_key_execution(stmt, &mut index_plan, pk_keys, &ty)
+            self.plan_primary_key_execution(stmt, &mut index_plan, &ty)
         } else {
             self.plan_secondary_index_execution(stmt, &mut index_plan, &ty)
         };
@@ -981,10 +979,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         &mut self,
         stmt: stmt::Statement,
         index_plan: &mut index::IndexPlan,
-        pk_keys: Option<eval::Func>,
         ty: &stmt::Type,
     ) -> mir::NodeId {
-        if let Some(keys) = pk_keys {
+        if let Some(key_expr) = index_plan.key_values.take() {
+            let args = self
+                .load_data
+                .inputs
+                .iter()
+                .map(|node_id| self.planner.mir[node_id].ty().clone())
+                .collect();
+            let key_ty =
+                stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
+            let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
             let get_by_key_input = self.build_get_by_key_input(keys, self.index_key_ty(index_plan));
 
             self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
@@ -997,14 +1003,45 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 todo!()
             };
 
-            self.insert_mir_with_deps(mir::QueryPk {
-                input,
-                table: index_plan.table_id(),
-                columns: self.load_data.columns.clone(),
-                pk_filter: index_plan.index_filter.take(),
-                row_filter: index_plan.result_filter.take(),
-                ty: ty.clone(),
-            })
+            if stmt.is_query() {
+                // For queries, stream all matching records with the requested columns.
+                self.insert_mir_with_deps(mir::QueryPk {
+                    input,
+                    table: index_plan.table_id(),
+                    columns: self.load_data.columns.clone(),
+                    pk_filter: index_plan.index_filter.take(),
+                    row_filter: index_plan.result_filter.take(),
+                    ty: ty.clone(),
+                })
+            } else {
+                // For mutations (UPDATE/DELETE) with a partial primary-key filter,
+                // first collect the full primary keys of all matching records via
+                // QueryPk, then apply the mutation to each key. The index key columns
+                // were pre-populated into load_data.columns in plan_data_loading_nosql.
+                let index_key_ty = self.index_key_ty(index_plan);
+
+                let mut columns = self.load_data.columns.clone();
+                assert!(columns.is_empty());
+
+                for index_col in &index_plan.index.columns {
+                    columns.insert(stmt::ExprReference::Column(stmt::ExprColumn {
+                        nesting: 0,
+                        table: 0,
+                        column: index_col.column.index,
+                    }));
+                }
+
+                let query_pk_node = self.insert_mir_with_deps(mir::QueryPk {
+                    input,
+                    table: index_plan.table_id(),
+                    columns,
+                    pk_filter: index_plan.index_filter.take(),
+                    row_filter: index_plan.result_filter.take(),
+                    ty: index_key_ty,
+                });
+
+                self.build_key_operation(&stmt, index_plan, query_pk_node, ty)
+            }
         }
     }
 
@@ -1031,47 +1068,17 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
     }
 
-    fn try_build_pk_keys(
-        &mut self,
-        stmt: &stmt::Statement,
-        index_plan: &index::IndexPlan,
-    ) -> Option<eval::Func> {
-        // If the query can be reduced to fetching rows using a set of
-        // primary-key keys, then `pk_keys` will be set to `Some(<keys>)`.
-        if !index_plan.index.primary_key {
-            return None;
-        }
-
-        let pk_keys_project_args = self
-            .load_data
-            .inputs
-            .iter()
-            .map(|node_id| self.planner.mir[node_id].ty().clone())
-            .collect();
-
-        // If using the primary key to find rows, try to convert the
-        // filter expression to a set of primary-key keys.
-        let cx = self.planner.engine.expr_cx_for(stmt);
-        self.planner.engine.try_build_key_filter(
-            cx,
-            index_plan.index,
-            &index_plan.index_filter,
-            pk_keys_project_args,
-        )
-    }
-
     fn prepare_post_filter(
         &mut self,
         stmt: &stmt::Statement,
         index_plan: &mut index::IndexPlan,
-        has_pk_keys: bool,
     ) -> Option<stmt::Expr> {
         let mut post_filter = index_plan.post_filter.clone();
 
         // If fetching rows using GetByKey, some databases do not support
         // applying additional filters to the rows before returning results.
         // In this case, the result_filter needs to be applied in-memory.
-        if stmt.is_query() && (has_pk_keys || !index_plan.index.primary_key) {
+        if stmt.is_query() && (index_plan.has_pk_keys || !index_plan.index.primary_key) {
             if let Some(result_filter) = index_plan.result_filter.take() {
                 post_filter = Some(match post_filter {
                     Some(post_filter) => stmt::Expr::and(result_filter, post_filter),

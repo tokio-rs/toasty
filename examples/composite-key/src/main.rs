@@ -1,10 +1,8 @@
-use toasty::stmt::Id;
-
 #[derive(Debug, toasty::Model)]
 struct User {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 
     name: String,
 
@@ -19,7 +17,7 @@ struct User {
 #[key(partition = user_id, local = id)]
 struct Todo {
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 
     title: String,
 
@@ -28,7 +26,7 @@ struct Todo {
     #[belongs_to(key = user_id, references = id)]
     user: toasty::BelongsTo<User>,
 
-    user_id: Id<User>,
+    user_id: uuid::Uuid,
 }
 
 #[tokio::main]
@@ -44,7 +42,7 @@ async fn main() -> toasty::Result<()> {
         .await?;
 
     // For now, reset!s
-    db.reset_db().await?;
+    db.push_schema().await?;
 
     let user = User::create()
         .name("John Doe")

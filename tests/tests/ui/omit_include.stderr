@@ -1,0 +1,13 @@
+error[E0599]: no method named `include` found for struct `UserQuery` in the current scope
+  --> tests/ui/omit_include.rs:10:35
+   |
+ 1 | #[derive(toasty::Model)]
+   |          ------------- method `include` not found for this struct
+...
+10 |     let _ = User::filter_by_id(1).include();
+   |                                   ^^^^^^^ method not found in `UserQuery`
+   |
+help: one of the expressions' fields has a method of the same name
+   |
+10 |     let _ = User::filter_by_id(1).stmt.include();
+   |                                   +++++

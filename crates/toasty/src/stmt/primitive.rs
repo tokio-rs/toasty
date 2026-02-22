@@ -1,9 +1,6 @@
 use std::{rc::Rc, sync::Arc};
 
-use crate::{
-    stmt::{Id, Path},
-    Model, Result,
-};
+use crate::{stmt::Path, Result};
 
 use std::borrow::Cow;
 use toasty_core::{
@@ -20,14 +17,45 @@ pub trait Primitive: Sized {
     /// For embedded types, this is {Type}Fields.
     type FieldAccessor;
 
+    /// The type of the update builder for this field.
+    /// For embedded types, this is {Type}Update<'a>.
+    /// For primitives, this will be {Type}Update<'a> once implemented.
+    type UpdateBuilder<'a>;
+
     fn ty() -> stmt::Type;
 
     fn load(value: stmt::Value) -> Result<Self>;
+
+    /// Reload the value in-place from a value returned by the database.
+    ///
+    /// The value may be a `SparseRecord` for partial embedded updates, in which
+    /// case only the specified fields should be updated. Embedded types must
+    /// override this method to handle partial updates correctly.
+    fn reload(&mut self, value: stmt::Value) -> Result<()> {
+        *self = Self::load(value)?;
+        Ok(())
+    }
 
     /// Build a field accessor from a path.
     /// For primitives, returns the path as-is.
     /// For embedded types, wraps the path in a Fields struct.
     fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor;
+
+    /// Build an update builder from a statement and projection.
+    /// For primitives, this returns `()` (no builder).
+    /// For embedded types, this is overridden to construct the {Type}Update builder.
+    fn make_update_builder<'a>(
+        _stmt: &'a mut stmt::Update,
+        _projection: stmt::Projection,
+    ) -> Self::UpdateBuilder<'a> {
+        // Default implementation assumes UpdateBuilder = ()
+        // Embedded types must override this method
+        unsafe {
+            // For (), this is safe. For other types, this would be UB,
+            // but those types must override this method.
+            std::mem::transmute_copy(&())
+        }
+    }
 
     /// Returns the app-level field type for this primitive.
     /// Default implementation returns a Primitive field type.
@@ -57,6 +85,7 @@ macro_rules! impl_primitive_numeric {
         $(
             impl Primitive for $ty {
                 type FieldAccessor = Path<Self>;
+                type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
                 fn ty() -> stmt::Type {
                     stmt::Type::$stmt_ty
@@ -93,6 +122,7 @@ impl_primitive_numeric! {
 // Pointer-sized integers map to fixed-size types internally
 impl Primitive for isize {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         stmt::Type::I64
@@ -113,6 +143,7 @@ impl Auto for isize {
 
 impl Primitive for usize {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         stmt::Type::U64
@@ -133,6 +164,7 @@ impl Auto for usize {
 
 impl Primitive for String {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         stmt::Type::String
@@ -150,18 +182,16 @@ impl Primitive for String {
     }
 }
 
-impl<T: Model> Primitive for Id<T> {
+impl Primitive for Vec<u8> {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = ();
 
     fn ty() -> stmt::Type {
-        stmt::Type::Id(T::id())
+        stmt::Type::Bytes
     }
 
     fn load(value: stmt::Value) -> Result<Self> {
-        match value {
-            stmt::Value::Id(v) => Ok(Self::from_untyped(v)),
-            _ => Err(toasty_core::Error::type_conversion(value, "Id")),
-        }
+        value.try_into()
     }
 
     fn make_field_accessor(path: Path<Self>) -> Self::FieldAccessor {
@@ -169,12 +199,9 @@ impl<T: Model> Primitive for Id<T> {
     }
 }
 
-impl<T: Model> Auto for Id<T> {
-    const STRATEGY: AutoStrategy = AutoStrategy::Id;
-}
-
 impl<T: Primitive> Primitive for Option<T> {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         T::ty()
@@ -200,6 +227,7 @@ where
     T::Owned: Primitive,
 {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         <T::Owned as Primitive>::ty()
@@ -216,6 +244,7 @@ where
 
 impl Primitive for uuid::Uuid {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         stmt::Type::Uuid
@@ -239,6 +268,7 @@ impl Auto for uuid::Uuid {
 
 impl Primitive for bool {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         stmt::Type::Bool
@@ -258,6 +288,7 @@ impl Primitive for bool {
 
 impl<T: Primitive> Primitive for Arc<T> {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         T::ty()
@@ -274,6 +305,7 @@ impl<T: Primitive> Primitive for Arc<T> {
 
 impl<T: Primitive> Primitive for Rc<T> {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         T::ty()
@@ -290,6 +322,7 @@ impl<T: Primitive> Primitive for Rc<T> {
 
 impl<T: Primitive> Primitive for Box<T> {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         T::ty()
@@ -307,6 +340,7 @@ impl<T: Primitive> Primitive for Box<T> {
 #[cfg(feature = "rust_decimal")]
 impl Primitive for rust_decimal::Decimal {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         stmt::Type::Decimal
@@ -330,6 +364,7 @@ impl Primitive for rust_decimal::Decimal {
 #[cfg(feature = "bigdecimal")]
 impl Primitive for bigdecimal::BigDecimal {
     type FieldAccessor = Path<Self>;
+    type UpdateBuilder<'a> = (); // TODO: Implement primitive update builders
 
     fn ty() -> stmt::Type {
         stmt::Type::BigDecimal

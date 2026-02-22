@@ -109,3 +109,52 @@ impl TableToModel {
         expr
     }
 }
+
+impl Model {
+    /// Resolves a projection to the corresponding field mapping.
+    ///
+    /// Handles both single-step projections (primitive/embedded fields) and multi-step
+    /// projections (nested embedded struct fields). Supports arbitrary nesting depth.
+    ///
+    /// # Examples
+    ///
+    /// - `[2]` → field at index 2 (primitive or embedded)
+    /// - `[2, 1]` → embedded field at index 2, subfield at index 1
+    /// - `[2, 1, 0]` → nested embedded field at index 2, subfield 1, sub-subfield 0
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(&Field)` if the projection is valid. The field can be:
+    /// - `Field::Primitive` for partial updates to a specific primitive
+    /// - `Field::Embedded` for full replacement of an embedded struct
+    ///
+    /// Returns `None` if the projection is invalid or points to a relation field.
+    pub fn resolve_field_mapping(&self, projection: &stmt::Projection) -> Option<&Field> {
+        let [first, rest @ ..] = projection.as_slice() else {
+            return None;
+        };
+
+        // Get the first field from the root
+        let mut current_field = self.fields.get(*first)?;
+
+        // Walk through remaining steps
+        for step in rest {
+            match current_field {
+                Field::Embedded(field_embedded) => {
+                    // Navigate into the embedded field's subfields
+                    current_field = field_embedded.fields.get(*step)?;
+                }
+                Field::Primitive(_) => {
+                    // Cannot project through primitive fields
+                    return None;
+                }
+                _ => {
+                    // Cannot project through relation fields
+                    return None;
+                }
+            }
+        }
+
+        Some(current_field)
+    }
+}

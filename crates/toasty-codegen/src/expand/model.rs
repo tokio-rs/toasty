@@ -1,5 +1,5 @@
-use super::Expand;
-use crate::schema::ModelKind;
+use super::{util, Expand};
+use crate::schema::{FieldTy, ModelKind};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -10,19 +10,14 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let (
-            query_struct_ident,
-            create_struct_ident,
-            update_struct_ident,
-            update_query_struct_ident,
-        ) = match &self.model.kind {
+        let (query_struct_ident, create_struct_ident, update_struct_ident) = match &self.model.kind
+        {
             ModelKind::Root(root) => (
                 &root.query_struct_ident,
                 &root.create_struct_ident,
                 &root.update_struct_ident,
-                &root.update_query_struct_ident,
             ),
-            ModelKind::Embedded(_) => {
+            ModelKind::EmbeddedStruct(_) => {
                 // Embedded models don't generate CRUD methods, just return early
                 return TokenStream::new();
             }
@@ -37,12 +32,14 @@ impl Expand<'_> {
         let into_select_body_value = self.expand_model_into_select_body(false);
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
+        let reload_method = self.expand_reload_method();
 
         quote! {
             impl #model_ident {
                 #model_fields
                 #filter_methods
                 #relation_methods
+                #reload_method
 
                 #vis fn create() -> #create_struct_ident {
                     #create_struct_ident::default()
@@ -52,12 +49,11 @@ impl Expand<'_> {
                     #toasty::CreateMany::default()
                 }
 
-                #vis fn update(&mut self) -> #update_struct_ident {
+                #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
                     use #toasty::IntoSelect;
-                    let query = #update_query_struct_ident::from(self.into_select());
                     #update_struct_ident {
-                        model: self,
-                        query,
+                        stmt: #toasty::stmt::Update::new(self.into_select()),
+                        target: self,
                     }
                 }
 
@@ -89,8 +85,8 @@ impl Expand<'_> {
             impl #toasty::Model for #model_ident {
                 type Query = #query_struct_ident;
                 type Create = #create_struct_ident;
-                type Update<'a> = #update_struct_ident<'a>;
-                type UpdateQuery = #update_query_struct_ident;
+                type Update<'a> = #update_struct_ident<&'a mut Self>;
+                type UpdateQuery = #update_struct_ident;
 
                 fn load(value: #toasty::Value) -> #toasty::Result<Self> {
                     #load_body
@@ -178,6 +174,186 @@ impl Expand<'_> {
             #query_struct_ident::default()
                 .#filter_method_ident( #( #amp self.#arg_idents ),* )
                 .stmt
+        }
+    }
+
+    pub(super) fn expand_model_into_expr_body(&self, by_ref: bool) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let pk_fields: Vec<_> = self
+            .model
+            .primary_key_fields()
+            .expect("into_expr called on model without primary key")
+            .collect();
+
+        if pk_fields.len() == 1 {
+            let expr = pk_fields.iter().map(|field| {
+                let field_ident = &field.name.ident;
+                let ty = match &field.ty {
+                    FieldTy::Primitive(ty) => ty,
+                    _ => todo!(),
+                };
+
+                let into_expr = if by_ref {
+                    quote!((&self.#field_ident))
+                } else {
+                    quote!(self.#field_ident)
+                };
+
+                quote! {
+                    let expr: #toasty::stmt::Expr<#ty> = #toasty::IntoExpr::into_expr(#into_expr);
+                    expr.cast()
+                }
+            });
+
+            quote!( #( #expr )* )
+        } else {
+            let expr = pk_fields
+                .iter()
+                .map(|field| {
+                    let field_ident = &field.name.ident;
+                    let amp = if by_ref { quote!(&) } else { quote!() };
+                    quote!( #amp self.#field_ident)
+                })
+                .collect::<Vec<_>>();
+
+            let ty = pk_fields
+                .iter()
+                .map(|field| match &field.ty {
+                    FieldTy::Primitive(ty) => ty,
+                    _ => todo!(),
+                })
+                .collect::<Vec<_>>();
+
+            quote! {
+                let expr: #toasty::stmt::Expr<( #( #ty ),* )> =
+                    #toasty::IntoExpr::into_expr(( #( #expr ),* ));
+                expr.cast()
+            }
+        }
+    }
+
+    pub(super) fn expand_embedded_into_expr_body(&self, by_ref: bool) -> TokenStream {
+        let toasty = &self.toasty;
+
+        // For embedded types, create a record expression from all fields
+        // Currently only primitive fields are supported in embedded types
+        let field_exprs = self.model.fields.iter().map(|field| {
+            let field_ident = &field.name.ident;
+            let ty = match &field.ty {
+                FieldTy::Primitive(ty) => ty,
+                _ => {
+                    // Relations and nested embedded types are not yet supported
+                    panic!("only primitive fields are supported in embedded types")
+                }
+            };
+
+            let into_expr = if by_ref {
+                quote!((&self.#field_ident))
+            } else {
+                quote!(self.#field_ident)
+            };
+
+            quote! {
+                {
+                    let expr: #toasty::stmt::Expr<#ty> = #toasty::IntoExpr::into_expr(#into_expr);
+                    let untyped: #toasty::core::stmt::Expr = expr.into();
+                    untyped
+                }
+            }
+        });
+
+        quote! {
+            #toasty::stmt::Expr::from_untyped(
+                #toasty::core::stmt::Expr::record([
+                    #( #field_exprs ),*
+                ])
+            )
+        }
+    }
+
+    /// Generates the body for loading a model or embedded type from a Value.
+    ///
+    /// This method is used by both:
+    /// - Root models (in `Model::load`) - supports all field types
+    /// - Embedded types (in `Primitive::load`) - only primitive fields
+    ///
+    /// The generated code pattern matches on `Value::Record`, extracts fields,
+    /// and constructs the struct.
+    pub(super) fn expand_load_body(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+
+        // Generate field loading expressions
+        let field_loads = self.model.fields.iter().enumerate().map(|(index, field)| {
+            let field_ident = &field.name.ident;
+            let index_tokenized = util::int(index);
+
+            match &field.ty {
+                FieldTy::Primitive(ty) => {
+                    quote!(#field_ident: <#ty as #toasty::stmt::Primitive>::load(record[#index_tokenized].take())?,)
+                }
+                FieldTy::BelongsTo(_) => {
+                    quote!(#field_ident: #toasty::BelongsTo::load(record[#index].take())?,)
+                }
+                FieldTy::HasMany(_) => {
+                    quote!(#field_ident: #toasty::HasMany::load(record[#index].take())?,)
+                }
+                FieldTy::HasOne(_) => {
+                    quote!(#field_ident: #toasty::HasOne::load(record[#index].take())?,)
+                }
+            }
+        });
+
+        quote! {
+            match value {
+                #toasty::Value::Record(mut record) => {
+                    Ok(#model_ident {
+                        #( #field_loads )*
+                    })
+                }
+                value => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
+            }
+        }
+    }
+
+    /// Generate the body of the `reload` method for an embedded model's `Primitive` impl.
+    ///
+    /// Handles `SparseRecord` values (partial updates) by reloading only the specified
+    /// sub-fields, and falls back to full `load` for complete record values.
+    pub(super) fn expand_embedded_reload_body(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let reload_arms = self.model.fields.iter().enumerate().map(|(index, field)| {
+            let field_ident = &field.name.ident;
+            let i = util::int(index);
+
+            match &field.ty {
+                FieldTy::Primitive(ty) => {
+                    quote!(#i => <#ty as #toasty::stmt::Primitive>::reload(&mut self.#field_ident, value)?,)
+                }
+                _ => {
+                    quote!(#i => self.#field_ident.unload(),)
+                }
+            }
+        });
+
+        quote! {
+            match value {
+                #toasty::Value::SparseRecord(sparse) => {
+                    for (field, value) in sparse.into_iter() {
+                        match field {
+                            #( #reload_arms )*
+                            _ => todo!("handle unknown field in embedded reload"),
+                        }
+                    }
+                    Ok(())
+                }
+                value => {
+                    *self = Self::load(value)?;
+                    Ok(())
+                }
+            }
         }
     }
 }

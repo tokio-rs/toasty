@@ -3,7 +3,7 @@ use toasty_core::stmt::{self, visit_mut};
 
 use crate::engine::{
     eval,
-    exec::{MergeQualification, NestedChild, NestedLevel},
+    exec::{MergeIndex, MergeQualification, NestedChild, NestedLevel},
     hir, mir,
     plan::HirPlanner,
     Engine, HirStatement,
@@ -17,6 +17,10 @@ struct NestedMergePlanner<'a> {
     inputs: IndexSet<mir::NodeId>,
     /// Statements that must execute before the merge but whose output is not needed
     deps: IndexSet<mir::NodeId>,
+    /// Flat list of hash indexes to build, populated as HashLookup qualifications are planned.
+    hash_indexes: Vec<MergeIndex>,
+    /// Flat list of sorted indexes to build, populated as SortLookup qualifications are planned.
+    sort_indexes: Vec<MergeIndex>,
     /// Statement stack, used to infer expression types
     stack: Vec<hir::StmtId>,
 }
@@ -87,6 +91,8 @@ impl HirPlanner<'_> {
             mir: &mut self.mir,
             inputs: IndexSet::new(),
             deps: IndexSet::new(),
+            hash_indexes: vec![],
+            sort_indexes: vec![],
             stack: vec![],
         };
 
@@ -101,11 +107,12 @@ impl NestedMergePlanner<'_> {
         let root = self.plan_nested_level(root, 0);
         self.stack.pop();
 
-        // let deps = self.deps;
         self.mir.insert_with_deps(
             mir::NestedMerge {
                 inputs: self.inputs,
                 root,
+                hash_indexes: self.hash_indexes,
+                sort_indexes: self.sort_indexes,
             },
             self.deps,
         )
@@ -120,11 +127,40 @@ impl NestedMergePlanner<'_> {
 
         let ret = match stmt_state.stmt.as_deref().unwrap() {
             stmt::Statement::Query(query) => {
-                let filter = self.build_filter_for_nested_child(stmt_id, selection, depth);
+                let filter_expr = self.build_filter_for_nested_child(stmt_id, selection, depth);
+
+                let filter_arg_tys = self.build_filter_arg_tys();
+                let qualification = match try_eq_lookup(&filter_expr, &filter_arg_tys, depth) {
+                    Some((child_projections, lookup_key)) if query.single => {
+                        // has_one / belongs_to: unique key → HashIndex (O(1) lookup).
+                        let index = self.hash_indexes.len();
+                        self.hash_indexes.push(MergeIndex {
+                            source: level.source,
+                            child_projections,
+                        });
+                        MergeQualification::HashLookup { index, lookup_key }
+                    }
+                    Some((child_projections, lookup_key)) => {
+                        // has_many: duplicate keys → SortedIndex (O(log M + k) lookup).
+                        let index = self.sort_indexes.len();
+                        self.sort_indexes.push(MergeIndex {
+                            source: level.source,
+                            child_projections,
+                        });
+                        MergeQualification::SortLookup { index, lookup_key }
+                    }
+                    // Filter does not reduce to a pure equality conjunction, so we
+                    // cannot drive an index lookup. Fall back to a linear scan.
+                    // See `try_eq_lookup` for discussion of how this could be
+                    // improved to use an index with a residual post-filter.
+                    None => {
+                        MergeQualification::Scan(eval::Func::from_stmt(filter_expr, filter_arg_tys))
+                    }
+                };
 
                 NestedChild {
                     level,
-                    qualification: MergeQualification::Predicate(filter),
+                    qualification,
                     single: query.single,
                 }
             }
@@ -296,7 +332,7 @@ impl NestedMergePlanner<'_> {
         stmt_id: hir::StmtId,
         selection: &IndexSet<stmt::ExprReference>,
         depth: usize,
-    ) -> eval::Func {
+    ) -> stmt::Expr {
         let stmt_state = &self.hir[stmt_id];
         let stmt::Statement::Query(query) = stmt_state.stmt.as_deref().unwrap() else {
             unreachable!()
@@ -342,7 +378,116 @@ impl NestedMergePlanner<'_> {
             _ => {}
         });
 
-        let filter_arg_tys = self.build_filter_arg_tys();
-        eval::Func::from_stmt(filter.into_expr(), filter_arg_tys)
+        filter.into_expr()
+    }
+}
+
+/// Try to extract index lookup key fields from a transformed filter expression.
+///
+/// Recognizes patterns of the form:
+/// - Single equality: `arg_project(depth, [cf]) == arg_project(pos < depth, [pf])`
+/// - Composite AND:   `eq1 AND eq2 AND ...` where each `eqi` has the above form
+///
+/// On success returns `(child_projections, lookup_key)` where:
+/// - `child_projections[i]` is the projection into the child record for key field `i`
+/// - `lookup_key` is an `eval::Func` that evaluates against the ancestor `RowStack`
+///   and returns the lookup key (scalar for single-field, `Value::Record` for composite)
+///
+/// # Limitations
+///
+/// This function only succeeds when the *entire* filter is a pure equality conjunction.
+/// Any more complex filter (e.g. `a = b AND c > d`, or an `OR`) causes it to return
+/// `None` and the caller falls back to a full `Scan`, even if part of the filter could
+/// drive an index lookup with the remainder applied as a post-filter.
+///
+/// A more complete approach — similar to `IndexMatch` in the index planner — would
+/// extract whichever equality terms can key an index, build the lookup from those,
+/// and re-evaluate the full original predicate against each candidate row returned by
+/// the index. That would turn O(N×M) into O(log M + k) even for compound filters.
+/// For now we keep this conservative: only use an index when the whole filter matches.
+fn try_eq_lookup(
+    expr: &stmt::Expr,
+    arg_tys: &[stmt::Type],
+    depth: usize,
+) -> Option<(Vec<stmt::Projection>, eval::Func)> {
+    // Collect equality terms: single BinaryOp(Eq) or AND of BinaryOp(Eq)s.
+    let eq_terms: Vec<(&stmt::Expr, &stmt::Expr)> = match expr {
+        stmt::Expr::BinaryOp(op) if op.op == stmt::BinaryOp::Eq => {
+            vec![(&op.lhs, &op.rhs)]
+        }
+        stmt::Expr::And(and_expr) => {
+            let mut terms = vec![];
+            for operand in and_expr.operands.iter() {
+                match operand {
+                    stmt::Expr::BinaryOp(op) if op.op == stmt::BinaryOp::Eq => {
+                        terms.push((&*op.lhs, &*op.rhs));
+                    }
+                    _ => return None,
+                }
+            }
+            terms
+        }
+        _ => return None,
+    };
+
+    let mut child_projections = vec![];
+    let mut lookup_key_exprs = vec![];
+
+    for (lhs, rhs) in eq_terms {
+        let (child_proj, parent_expr) = extract_child_parent_eq(lhs, rhs, depth)?;
+        child_projections.push(child_proj);
+        lookup_key_exprs.push(parent_expr);
+    }
+
+    if child_projections.is_empty() {
+        return None;
+    }
+
+    // Build the parent key expression. For a single field, use the scalar
+    // directly. For multiple fields, wrap in a record (evaluates to Value::Record).
+    let lookup_key_expr = if lookup_key_exprs.len() == 1 {
+        lookup_key_exprs.remove(0)
+    } else {
+        stmt::Expr::record_from_vec(lookup_key_exprs)
+    };
+
+    // Parent key args are the ancestor stack types only (not including the
+    // current child row at position `depth`).
+    let lookup_key_arg_tys = arg_tys[..depth].to_vec();
+    let lookup_key = eval::Func::from_stmt(lookup_key_expr, lookup_key_arg_tys);
+
+    Some((child_projections, lookup_key))
+}
+
+/// For an equality `lhs == rhs`, determine which side is the child (at `depth`)
+/// and which is the parent (at some position < `depth`).
+///
+/// Both sides must be simple `arg_project(pos, projection)` expressions.
+/// Returns `(child_projection, parent_expr)` or `None` if the pattern doesn't match.
+fn extract_child_parent_eq(
+    lhs: &stmt::Expr,
+    rhs: &stmt::Expr,
+    depth: usize,
+) -> Option<(stmt::Projection, stmt::Expr)> {
+    match (as_simple_arg_project(lhs), as_simple_arg_project(rhs)) {
+        (Some((l_pos, l_proj)), Some((r_pos, _))) if l_pos == depth && r_pos < depth => {
+            Some((l_proj.clone(), rhs.clone()))
+        }
+        (Some((l_pos, _)), Some((r_pos, r_proj))) if r_pos == depth && l_pos < depth => {
+            Some((r_proj.clone(), lhs.clone()))
+        }
+        _ => None,
+    }
+}
+
+/// Match `Project(Arg { position, nesting: 0 }, projection)` and return
+/// `(position, &projection)`. Returns `None` for any other expression shape.
+fn as_simple_arg_project(expr: &stmt::Expr) -> Option<(usize, &stmt::Projection)> {
+    match expr {
+        stmt::Expr::Project(proj) => match proj.base.as_ref() {
+            stmt::Expr::Arg(arg) if arg.nesting == 0 => Some((arg.position, &proj.projection)),
+            _ => None,
+        },
+        _ => None,
     }
 }

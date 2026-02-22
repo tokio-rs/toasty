@@ -5,7 +5,6 @@ mod hir;
 use hir::HirStatement;
 
 mod index;
-mod kv;
 mod lower;
 mod mir;
 mod plan;
@@ -17,7 +16,7 @@ mod verify;
 use crate::{db::Pool, Result};
 use std::sync::Arc;
 use toasty_core::{
-    driver::Capability,
+    driver::{Capability, Driver},
     stmt::{self, Statement, ValueStream},
     Schema,
 };
@@ -90,5 +89,10 @@ impl Engine {
     /// Returns a new [`ExprContext`](stmt::ExprContext) for a specific target.
     fn expr_cx_for<'a>(&'a self, target: impl stmt::IntoExprTarget<'a>) -> stmt::ExprContext<'a> {
         stmt::ExprContext::new_with_target(&self.schema, target)
+    }
+
+    /// Returns the database driver this engine is using.
+    pub(crate) fn driver(&self) -> &dyn Driver {
+        self.pool.driver()
     }
 }

@@ -1,9 +1,12 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    borrow::Cow,
+    sync::{Arc, Mutex},
+};
 use toasty::driver::Driver;
 use toasty_core::{
     async_trait,
     driver::{Capability, Connection, Operation, Response, Rows},
-    schema::db::Schema,
+    schema::db::{AppliedMigration, Migration, Schema, SchemaDiff},
     Result,
 };
 
@@ -32,6 +35,10 @@ impl LoggingDriver {
 
 #[async_trait]
 impl Driver for LoggingDriver {
+    fn url(&self) -> Cow<'_, str> {
+        self.inner.url()
+    }
+
     fn capability(&self) -> &'static Capability {
         self.inner.capability()
     }
@@ -41,6 +48,14 @@ impl Driver for LoggingDriver {
             inner: self.inner.connect().await?,
             ops_log: self.ops_log_handle(),
         }))
+    }
+
+    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+        self.inner.generate_migration(schema_diff)
+    }
+
+    async fn reset_db(&self) -> Result<()> {
+        self.inner.reset_db().await
     }
 }
 
@@ -87,8 +102,21 @@ impl Connection for LoggingConnection {
         Ok(response)
     }
 
-    async fn reset_db(&mut self, schema: &Schema) -> Result<()> {
-        self.inner.reset_db(schema).await
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        self.inner.push_schema(schema).await
+    }
+
+    async fn applied_migrations(&mut self) -> Result<Vec<AppliedMigration>> {
+        self.inner.applied_migrations().await
+    }
+
+    async fn apply_migration(
+        &mut self,
+        id: u64,
+        name: String,
+        migration: &Migration,
+    ) -> Result<()> {
+        self.inner.apply_migration(id, name, migration).await
     }
 }
 

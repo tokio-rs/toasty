@@ -1,4 +1,4 @@
-use super::Expand;
+use super::{util, Expand};
 use crate::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
@@ -10,10 +10,12 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
-        let update_query_struct_ident = &self.model.kind.expect_root().update_query_struct_ident;
+        let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
+        let collect_ty = util::ident("A");
+        let include_ty = util::ident("T");
         let filter_methods = self.expand_query_filter_methods();
         let relation_methods = self.expand_relation_methods();
-        let include = self.expand_include_method();
+        let include = self.expand_include_method(&include_ty);
 
         quote! {
             #vis struct #query_struct_ident {
@@ -39,8 +41,8 @@ impl Expand<'_> {
                     db.get(self.stmt).await
                 }
 
-                #vis fn update(self) -> #update_query_struct_ident {
-                    #update_query_struct_ident::from(self)
+                #vis fn update(self) -> #update_struct_ident {
+                    #update_struct_ident::from(self)
                 }
 
                 #vis async fn delete(self, db: &#toasty::Db) -> #toasty::Result<()> {
@@ -48,9 +50,9 @@ impl Expand<'_> {
                     Ok(())
                 }
 
-                #vis async fn collect<A>(self, db: &#toasty::Db) -> #toasty::Result<A>
+                #vis async fn collect<#collect_ty>(self, db: &#toasty::Db) -> #toasty::Result<#collect_ty>
                 where
-                    A: #toasty::FromCursor<#model_ident>
+                    #collect_ty: #toasty::FromCursor<#model_ident>
                 {
                     self.all(db).await?.collect().await
                 }
@@ -168,14 +170,14 @@ impl Expand<'_> {
         }
     }
 
-    fn expand_include_method(&self) -> Option<TokenStream> {
+    fn expand_include_method(&self, include_ty: &syn::Ident) -> Option<TokenStream> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let query_struct_ident = &self.model.kind.expect_root().query_struct_ident;
 
         if self.model.has_associations() {
             Some(quote! {
-                    #vis fn include<T: ?Sized>(mut self, path: impl #toasty::Into<#toasty::Path<T>>) -> #query_struct_ident {
+                    #vis fn include<#include_ty: ?Sized>(mut self, path: impl #toasty::Into<#toasty::Path<#include_ty>>) -> #query_struct_ident {
                         self.stmt.include(path.into());
                         self
                     }

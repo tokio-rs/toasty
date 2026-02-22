@@ -4,7 +4,7 @@ use crate::prelude::*;
 use std::collections::HashMap;
 
 #[driver_test(id(ID))]
-pub async fn crud_user_todos_categories(test: &mut Test) {
+pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -53,21 +53,19 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
     let db = test.setup_db(models!(User, Todo, Category)).await;
 
     // Create a user
-    let user = User::create().name("Ann Chovey").exec(&db).await.unwrap();
+    let user = User::create().name("Ann Chovey").exec(&db).await?;
 
     // No TODOs
     assert!(user
         .todos()
         .all(&db)
-        .await
-        .unwrap()
+        .await?
         .collect::<Vec<_>>()
-        .await
-        .unwrap()
+        .await?
         .is_empty());
 
     // Create a category
-    let category = Category::create().name("Food").exec(&db).await.unwrap();
+    let category = Category::create().name("Food").exec(&db).await?;
 
     let mut todos = vec![];
 
@@ -78,8 +76,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
             .title("one")
             .category(&category)
             .exec(&db)
-            .await
-            .unwrap(),
+            .await?,
     );
 
     todos.push(
@@ -88,8 +85,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
             .user(&user)
             .category(&category)
             .exec(&db)
-            .await
-            .unwrap(),
+            .await?,
     );
 
     todos.push(
@@ -99,19 +95,17 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
             .title("three")
             .user(&user)
             .exec(&db)
-            .await
-            .unwrap(),
+            .await?,
     );
 
     let expect: HashMap<_, _> = todos.into_iter().map(|todo| (todo.id, todo)).collect();
 
     let lists = [
-        category.todos().collect::<Vec<_>>(&db).await.unwrap(),
-        user.todos().collect::<Vec<_>>(&db).await.unwrap(),
+        category.todos().collect::<Vec<_>>(&db).await?,
+        user.todos().collect::<Vec<_>>(&db).await?,
         Todo::filter_by_user_id(user.id)
             .collect::<Vec<_>>(&db)
-            .await
-            .unwrap(),
+            .await?,
     ];
 
     for list in lists {
@@ -123,14 +117,14 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
         for (id, actual) in actual {
             assert_eq!(expect[&id].title, actual.title);
 
-            let user = actual.user().get(&db).await.unwrap();
+            let user = actual.user().get(&db).await?;
             assert_eq!(user.name, "Ann Chovey");
         }
     }
 
     // Create another user and category
-    let user2 = User::create().name("Not ann").exec(&db).await.unwrap();
-    let category2 = Category::create().name("drink").exec(&db).await.unwrap();
+    let user2 = User::create().name("Not ann").exec(&db).await?;
+    let category2 = Category::create().name("drink").exec(&db).await?;
 
     category
         .todos()
@@ -138,17 +132,19 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
         .user(&user2)
         .title("NOPE")
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
     user.todos()
         .create()
         .category(&category2)
         .title("FAIL")
         .exec(&db)
-        .await
-        .unwrap();
+        .await?;
 
-    async fn check_todo_list(db: &toasty::Db, expect: &HashMap<ID, Todo>, list: Vec<Todo>) {
+    async fn check_todo_list(
+        db: &toasty::Db,
+        expect: &HashMap<ID, Todo>,
+        list: Vec<Todo>,
+    ) -> Result<()> {
         assert_eq!(3, list.len(), "list={list:#?}");
 
         let actual: HashMap<_, _> = list.into_iter().map(|todo| (todo.id, todo)).collect();
@@ -157,9 +153,10 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
 
         for (id, actual) in actual {
             assert_eq!(expect[&id].title, actual.title);
-            let category = actual.category().get(db).await.unwrap();
+            let category = actual.category().get(db).await?;
             assert_eq!(category.name, "Food");
         }
+        Ok(())
     }
 
     check_todo_list(
@@ -169,10 +166,9 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
             .todos()
             .query(Todo::fields().user().eq(&user))
             .collect::<Vec<_>>(&db)
-            .await
-            .unwrap(),
+            .await?,
     )
-    .await;
+    .await?;
 
     check_todo_list(
         &db,
@@ -180,10 +176,9 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
         user.todos()
             .query(Todo::fields().category().eq(&category))
             .collect::<Vec<_>>(&db)
-            .await
-            .unwrap(),
+            .await?,
     )
-    .await;
+    .await?;
 
     check_todo_list(
         &db,
@@ -191,8 +186,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) {
         Todo::filter_by_user_id(user.id)
             .filter(Todo::fields().category().eq(&category))
             .collect::<Vec<_>>(&db)
-            .await
-            .unwrap(),
+            .await?,
     )
-    .await;
+    .await
 }

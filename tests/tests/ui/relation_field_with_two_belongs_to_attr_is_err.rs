@@ -1,20 +1,18 @@
-use toasty::stmt::Id;
-
 #[derive(toasty::Model)]
 struct User {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 }
 
 #[derive(toasty::Model)]
 struct Profile {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: uuid::Uuid,
 
     #[index]
-    user_id: Id<User>,
+    user_id: uuid::Uuid,
 
     #[belongs_to(key = user_id, references = id)]
     #[belongs_to(key = user_id, references = id)]

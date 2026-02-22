@@ -123,7 +123,21 @@ impl<T: ?Sized> Path<T> {
     }
 }
 
-impl<M> Path<M> {}
+impl<T> Path<Option<T>> {
+    pub fn is_none(self) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::is_null(self.untyped.into_stmt()),
+            _p: PhantomData,
+        }
+    }
+
+    pub fn is_some(self) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::is_not_null(self.untyped.into_stmt()),
+            _p: PhantomData,
+        }
+    }
+}
 
 impl<T> Clone for Path<T> {
     fn clone(&self) -> Self {

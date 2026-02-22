@@ -20,7 +20,9 @@ mod get_by_key;
 pub(crate) use get_by_key::GetByKey;
 
 mod nested_merge;
-pub(crate) use nested_merge::{MergeQualification, NestedChild, NestedLevel, NestedMerge};
+pub(crate) use nested_merge::{
+    MergeIndex, MergeQualification, NestedChild, NestedLevel, NestedMerge,
+};
 
 mod output;
 pub(crate) use output::Output;
@@ -82,6 +84,22 @@ impl Engine {
             ValueStream::default()
         })
     }
+}
+
+/// If `expr` is `ANY(MAP(Value::List([...]), pred))`, returns the list items and predicate
+/// template. Returns `None` for any other form, including the batch-load `ANY(MAP(arg[i], pred))`
+/// where the base has not yet been substituted.
+fn try_extract_any_map_list(expr: &stmt::Expr) -> Option<(&[stmt::Value], &stmt::Expr)> {
+    let stmt::Expr::Any(any) = expr else {
+        return None;
+    };
+    let stmt::Expr::Map(map) = &*any.expr else {
+        return None;
+    };
+    let stmt::Expr::Value(stmt::Value::List(items)) = &*map.base else {
+        return None;
+    };
+    Some((items, &map.map))
 }
 
 impl Exec<'_> {

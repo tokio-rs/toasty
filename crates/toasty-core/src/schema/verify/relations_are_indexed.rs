@@ -33,7 +33,7 @@ impl Verify<'_> {
         // Find an index that starts with the relations pair field and either
         // has no more fields or the next field is of local scope. This ensures
         // the ability to query all associated models.
-        'outer: for index in &target.indices {
+        'outer: for index in &target.expect_root().indices {
             assert!(!index.fields.is_empty());
 
             if index.fields.len() < belongs_to.foreign_key.fields.len() {

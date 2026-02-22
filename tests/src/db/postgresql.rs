@@ -100,10 +100,6 @@ impl Setup for SetupPostgreSQL {
                 stmt::Value::String(s) => pg_params.push(s),
                 stmt::Value::I64(i) => pg_params.push(i.to_string()),
                 stmt::Value::U64(u) => pg_params.push((u as i64).to_string()),
-                stmt::Value::Id(id) => {
-                    // Convert Id to string representation
-                    pg_params.push(id.to_string());
-                }
                 _ => todo!("Unsupported filter value type: {value:?}"),
             }
             param_index += 1;
