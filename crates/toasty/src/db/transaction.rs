@@ -50,6 +50,8 @@ impl Deref for Transaction<'_> {
 impl Drop for Transaction<'_> {
     fn drop(&mut self) {
         if !self.done {
+            // This synchronously sends a roleback command to the connection in the background task.
+            // We don't need to await the future.
             std::mem::drop(self.exec_op(TransactionOp::Rollback));
         }
     }

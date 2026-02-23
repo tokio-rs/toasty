@@ -198,7 +198,7 @@ impl Db {
 
     /// Creates tables and indices defined in the schema on the database.
     pub async fn push_schema(&self) -> Result<()> {
-        todo!()
+        self.pool.get().await?.push_schema(&self.schema.db).await
     }
 
     /// Drops the entire database and recreates an empty one without applying migrations.
