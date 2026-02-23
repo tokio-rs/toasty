@@ -40,7 +40,10 @@ impl syn::parse::Parse for Column {
                 result.name = Some(input.parse()?);
             } else if lookahead.peek(kw::variant) {
                 if result.variant.is_some() {
-                    return Err(syn::Error::new(input.span(), "duplicate variant discriminant"));
+                    return Err(syn::Error::new(
+                        input.span(),
+                        "duplicate variant discriminant",
+                    ));
                 }
                 let _variant_token: kw::variant = input.parse()?;
                 let _eq_token: syn::Token![=] = input.parse()?;

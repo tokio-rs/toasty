@@ -240,7 +240,11 @@ impl BuildTableFromModels<'_> {
                         // schema_prefix stays separate and is not folded into the accumulated
                         // embed_prefix — it is only applied at the final format_column_name call.
                         let nested_embed_prefix = format_column_name(field, None, embed_prefix);
-                        self.populate_columns(nested_model, schema_prefix, Some(&nested_embed_prefix));
+                        self.populate_columns(
+                            nested_model,
+                            schema_prefix,
+                            Some(&nested_embed_prefix),
+                        );
                     }
                 }
                 app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {

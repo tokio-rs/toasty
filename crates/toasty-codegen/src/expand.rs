@@ -172,11 +172,15 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         quote! { #discriminant => Ok(#model_ident::#ident), }
     });
 
-    let into_expr_arms: Vec<_> = embedded_enum.variants.iter().map(|variant| {
-        let ident = &variant.ident;
-        let discriminant = variant.discriminant;
-        quote! { #model_ident::#ident => #discriminant, }
-    }).collect();
+    let into_expr_arms: Vec<_> = embedded_enum
+        .variants
+        .iter()
+        .map(|variant| {
+            let ident = &variant.ident;
+            let discriminant = variant.discriminant;
+            quote! { #model_ident::#ident => #discriminant, }
+        })
+        .collect();
 
     wrap_in_const(quote! {
         impl #toasty::Register for #model_ident {
