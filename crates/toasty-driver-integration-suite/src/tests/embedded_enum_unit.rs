@@ -5,6 +5,130 @@ use toasty::schema::{
 
 use crate::prelude::*;
 
+/// Tests basic CRUD operations with an embedded enum field.
+/// Validates create, read, update (both instance and query-based), and delete.
+/// The enum discriminant is stored as an INTEGER column and reconstructed on load.
+#[driver_test(id(ID))]
+pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Status {
+        #[column(variant = 1)]
+        Pending,
+        #[column(variant = 2)]
+        Active,
+        #[column(variant = 3)]
+        Done,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        status: Status,
+    }
+
+    let db = t.setup_db(models!(User, Status)).await;
+
+    // Create: enum variant is stored as its discriminant (1 = Pending)
+    let mut user = User::create()
+        .name("Alice")
+        .status(Status::Pending)
+        .exec(&db)
+        .await?;
+
+    // Read: discriminant is loaded back and converted to the enum variant
+    let found = User::get_by_id(&db, &user.id).await?;
+    assert_eq!(found.status, Status::Pending);
+
+    // Update (instance): replace the enum variant
+    user.update().status(Status::Active).exec(&db).await?;
+
+    let found = User::get_by_id(&db, &user.id).await?;
+    assert_eq!(found.status, Status::Active);
+
+    // Update (query-based): same replacement via filter builder
+    User::filter_by_id(user.id)
+        .update()
+        .status(Status::Done)
+        .exec(&db)
+        .await?;
+
+    let found = User::get_by_id(&db, &user.id).await?;
+    assert_eq!(found.status, Status::Done);
+
+    // Delete: cleanup
+    let id = user.id;
+    user.delete(&db).await?;
+    assert_err!(User::get_by_id(&db, &id).await);
+    Ok(())
+}
+
+/// Tests filtering records by embedded enum variant.
+/// SQL-only: DynamoDB requires a partition key in queries.
+/// Validates that enum fields can be used in WHERE clauses (comparing discriminants).
+#[driver_test]
+pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
+    if !t.capability().sql {
+        return Ok(());
+    }
+
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Status {
+        #[column(variant = 1)]
+        Pending,
+        #[column(variant = 2)]
+        Active,
+        #[column(variant = 3)]
+        Done,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Task {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+        status: Status,
+    }
+
+    let db = t.setup_db(models!(Task, Status)).await;
+
+    // Create tasks with different statuses: 1 pending, 2 active, 1 done
+    for (name, status) in [
+        ("Task A", Status::Pending),
+        ("Task B", Status::Active),
+        ("Task C", Status::Active),
+        ("Task D", Status::Done),
+    ] {
+        Task::create().name(name).status(status).exec(&db).await?;
+    }
+
+    // Filter: only Active tasks (discriminant = 2)
+    let active = Task::filter(Task::fields().status().eq(Status::Active))
+        .collect::<Vec<_>>(&db)
+        .await?;
+    assert_eq!(active.len(), 2);
+
+    // Filter: only Pending tasks (discriminant = 1)
+    let pending = Task::filter(Task::fields().status().eq(Status::Pending))
+        .collect::<Vec<_>>(&db)
+        .await?;
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].name, "Task A");
+
+    // Filter: only Done tasks (discriminant = 3)
+    let done = Task::filter(Task::fields().status().eq(Status::Done))
+        .collect::<Vec<_>>(&db)
+        .await?;
+    assert_eq!(done.len(), 1);
+    assert_eq!(done[0].name, "Task D");
+
+    Ok(())
+}
+
 /// Tests that embedded enums are registered in the app schema but don't create
 /// their own database tables (they're inlined into parent models as a single column).
 #[driver_test]
