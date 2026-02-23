@@ -7,7 +7,6 @@ use toasty_core::{
 
 use crate::db::{Pool, PoolConnection};
 
-#[derive(Debug)]
 pub(crate) enum ConnectionType {
     Pool(Pool),
     Transaction(PoolConnection),
