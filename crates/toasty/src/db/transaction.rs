@@ -71,13 +71,14 @@ impl<'a> TransactionBuilder<'a> {
     pub(crate) fn new(db: &'a Db) -> Self {
         Self {
             db,
-            timeout: None,
+            timeout: Some(Duration::from_secs(5)),
             isolation_level: None,
         }
     }
 
-    pub fn timeout(mut self, d: Duration) -> Self {
-        self.timeout = Some(d);
+    /// Sets the transaction timeout. Defaults to 5 seconds. Pass `None` to disable.
+    pub fn timeout(mut self, duration: impl Into<Option<Duration>>) -> Self {
+        self.timeout = duration.into();
         self
     }
 
@@ -114,7 +115,7 @@ impl<'a> TransactionBuilder<'a> {
         let result = match self.timeout {
             Some(d) => match tokio::time::timeout(d, f(&*tx)).await {
                 Ok(r) => r,
-                Err(_elapsed) => Err(E::from(crate::Error::transaction_timed_out(d))),
+                Err(_) => Err(E::from(crate::Error::transaction_timed_out(d))),
             },
             None => f(&*tx).await,
         };
@@ -142,10 +143,7 @@ impl Db {
     where
         E: From<crate::Error>,
     {
-        self.transaction_builder()
-            .timeout(Duration::from_secs(5))
-            .exec(f)
-            .await
+        self.transaction_builder().exec(f).await
     }
 
     /// Return a builder for configuring a transaction.
