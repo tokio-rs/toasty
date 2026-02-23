@@ -2,12 +2,6 @@
 
 Implements the enum portion of `docs/design/enums-and-embedded-structs.md`.
 
-## Done
-
-- **Phase 0**: Dead code purge — removed `Expr::DecodeEnum`, serde from drivers, `Value::Enum`, `ValueEnum`, `Type::Enum`, `TypeEnum`, `ExprEnum`, `Expr::Enum`.
-- **Model fields restructuring**: Moved `fields: Vec<Field>` from `Model` into `ModelRoot` and `EmbeddedStruct`; field accessor methods updated accordingly.
-- **`EmbeddedEnum` / `EnumVariant` types**: Added `Model::EmbeddedEnum(EmbeddedEnum)` variant; `EmbeddedEnum { id, name, variants: Vec<EnumVariant> }`, `EnumVariant { name: Name, discriminant: i64 }`; updated all match sites and added `Model::fields()`, `Model::expect_embedded_enum()`.
-
 ## Phase 1: Unit-Only Enums
 
 ```rust
@@ -45,12 +39,16 @@ Filter lowering (e.g. `user.status == Status::Active`):
 
 No new `Expr` variants are needed for the discriminant mapping.
 
-### Changes
+### Remaining Changes
 
 **`toasty-core` schema builder (`builder/table.rs`)**
-- `populate_columns`: when `FieldTy::Embedded` target is `EmbeddedEnum`, create a single INTEGER column (no recursion into variant fields)
-- `map_fields_recursive`: same check — build a `Field::Primitive` mapping with direct
-  identity expressions (value IS the column value, no conversion)
+- `populate_columns` (`FieldTy::Embedded` arm, line ~229): detect when embedded target is
+  `EmbeddedEnum` and create a single INTEGER column instead of recursing (currently recursion
+  into `EmbeddedEnum` produces no columns — the `&[]` early-return only guards the recursive
+  call; the column creation itself is missing)
+- `map_fields_recursive` (`FieldTy::Embedded` arm, line ~462): detect when embedded target
+  is `EmbeddedEnum` and build a `mapping::Field::Primitive` with direct identity expressions
+  instead of calling `expect_embedded_struct()` (currently panics on enum)
 
 **`toasty-codegen`**
 - `generate_embed()`: try `ItemEnum` if `ItemStruct` parse fails
