@@ -1,8 +1,12 @@
 use std::{future::Future, ops::Deref, time::Duration};
 
 use toasty_core::driver::{operation::Transaction as TransactionOp, transaction::IsolationLevel};
+use tokio::sync::oneshot;
 
-use crate::{db::ConnectionType, Db};
+use crate::{
+    db::{ConnectionType, EngineMsg},
+    Db,
+};
 
 struct Transaction<'a> {
     done: bool,
@@ -16,7 +20,9 @@ enum TransactionConn<'a> {
 
 impl Transaction<'_> {
     fn exec_op(&self, op: TransactionOp) -> impl Future<Output = crate::Result<()>> {
-        Db::exec_transaction_op(self, op)
+        let (tx, rx) = oneshot::channel();
+        self.in_tx.send(EngineMsg::Transaction(op, tx)).unwrap();
+        async { rx.await.unwrap() }
     }
 
     async fn commit(&mut self) -> crate::Result<()> {
@@ -43,10 +49,9 @@ impl Deref for Transaction<'_> {
 
 impl Drop for Transaction<'_> {
     fn drop(&mut self) {
-        if self.done {
-            return;
+        if !self.done {
+            std::mem::drop(self.exec_op(TransactionOp::Rollback));
         }
-        let _ = self.exec_op(TransactionOp::Rollback);
     }
 }
 

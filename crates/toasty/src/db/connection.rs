@@ -29,13 +29,6 @@ impl ConnectionType {
             ConnectionType::Transaction(conn) => Ok(SingleConnection::Transaction(conn)),
         }
     }
-
-    pub async fn push_schema(&mut self, schema: &Schema) -> crate::Result<()> {
-        match self {
-            ConnectionType::Pool(pool) => pool.get().await?.push_schema(schema).await,
-            ConnectionType::Transaction(conn) => conn.push_schema(schema).await,
-        }
-    }
 }
 
 impl SingleConnection<'_> {

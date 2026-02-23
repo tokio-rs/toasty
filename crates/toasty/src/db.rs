@@ -4,7 +4,7 @@ mod connection;
 mod pool;
 mod transaction;
 
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 pub use builder::Builder;
 pub use connect::*;
@@ -19,17 +19,17 @@ pub use transaction::TransactionBuilder;
 use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
 
 use toasty_core::{
-    driver::{operation::Transaction as TransactionOp, Driver},
+    driver::{operation::Transaction, Driver},
     stmt::{Value, ValueStream},
     Schema,
 };
 
 pub(crate) enum EngineMsg {
     Statement(
-        toasty_core::stmt::Statement,
+        Box<toasty_core::stmt::Statement>,
         oneshot::Sender<Result<ValueStream>>,
     ),
-    Transaction(TransactionOp, oneshot::Sender<Result<()>>),
+    Transaction(Transaction, oneshot::Sender<Result<()>>),
 }
 
 #[derive(Debug)]
@@ -39,7 +39,6 @@ pub struct Db {
 
     pub(crate) schema: Arc<Schema>,
 
-    // pub(crate) engine: Engine,
     /// Handle to send statements to be executed
     pub(crate) in_tx: mpsc::UnboundedSender<EngineMsg>,
 
@@ -51,7 +50,6 @@ impl Db {
     pub(crate) fn new(pool: Pool, schema: Arc<Schema>, mut connection: ConnectionType) -> Self {
         let capabilities = pool.capability();
         let in_transaction = connection.in_transaction();
-        let pool2 = pool.clone();
 
         let mut engine = Engine::new(schema.clone(), capabilities);
 
@@ -59,7 +57,9 @@ impl Db {
 
         let join_handle = tokio::spawn(async move {
             loop {
-                let msg = in_rx.recv().await.unwrap();
+                let Some(msg) = in_rx.recv().await else {
+                    break;
+                };
                 let mut conn = match connection.get().await {
                     Ok(c) => c,
                     Err(e) => {
@@ -75,7 +75,7 @@ impl Db {
                     }
                 };
                 match msg {
-                    EngineMsg::Statement(stmt, tx) => match engine.exec(stmt, conn).await {
+                    EngineMsg::Statement(stmt, tx) => match engine.exec(*stmt, conn).await {
                         Ok(mut value_stream) => {
                             let (row_tx, mut row_rx) =
                                 tokio::sync::mpsc::unbounded_channel::<crate::Result<Value>>();
@@ -106,7 +106,7 @@ impl Db {
 
         Db {
             in_transaction,
-            pool: pool2,
+            pool,
             schema,
             in_tx,
             join_handle,
@@ -150,30 +150,16 @@ impl Db {
     }
 
     /// Execute a statement
-    pub fn exec<M: Model>(
-        &self,
-        statement: Statement<M>,
-    ) -> impl Future<Output = Result<ValueStream>> {
+    pub async fn exec<M: Model>(&self, statement: Statement<M>) -> Result<ValueStream> {
         let (tx, rx) = oneshot::channel();
 
         // Send the statement to the execution engine
         self.in_tx
-            .send(EngineMsg::Statement(statement.untyped, tx))
+            .send(EngineMsg::Statement(Box::new(statement.untyped), tx))
             .unwrap();
 
-        async {
-            // Return the typed result
-            rx.await.unwrap()
-        }
-    }
-
-    pub(crate) fn exec_transaction_op(
-        &self,
-        op: TransactionOp,
-    ) -> impl Future<Output = Result<()>> {
-        let (tx, rx) = oneshot::channel();
-        self.in_tx.send(EngineMsg::Transaction(op, tx)).unwrap();
-        async { rx.await.unwrap() }
+        // Return the typed result
+        rx.await.unwrap()
     }
 
     /// Execute a statement, assume only one record is returned
@@ -212,8 +198,7 @@ impl Db {
 
     /// Creates tables and indices defined in the schema on the database.
     pub async fn push_schema(&self) -> Result<()> {
-        todo!();
-        // self.engine.connection.push_schema(&self.schema.db).await
+        todo!()
     }
 
     /// Drops the entire database and recreates an empty one without applying migrations.
