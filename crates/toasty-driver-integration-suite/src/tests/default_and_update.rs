@@ -159,9 +159,7 @@ pub async fn update_expr_override_on_update(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID))]
-pub async fn default_and_update_combined(test: &mut Test) -> Result<()> {
-    use jiff::Timestamp;
-
+pub async fn default_and_update_on_same_field(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
@@ -170,39 +168,37 @@ pub async fn default_and_update_combined(test: &mut Test) -> Result<()> {
 
         title: String,
 
-        #[default(jiff::Timestamp::now())]
-        created_at: Timestamp,
-
-        #[update(jiff::Timestamp::now())]
-        updated_at: Timestamp,
-
-        #[default(5)]
-        view_count: i64,
+        // On create: defaults to "draft". On update: automatically set to "edited".
+        #[default("draft".to_string())]
+        #[update("edited".to_string())]
+        status: String,
     }
 
     let db = test.setup_db(models!(Foo)).await;
 
-    let before = Timestamp::now();
+    // On create, #[default] takes priority
     let mut foo = Foo::create().title("hello").exec(&db).await?;
-    let after = Timestamp::now();
+    assert_eq!(foo.status, "draft");
 
-    // All defaults should be populated
-    assert!(foo.created_at >= before);
-    assert!(foo.created_at <= after);
-    assert!(foo.updated_at >= before);
-    assert!(foo.updated_at <= after);
-    assert_eq!(foo.view_count, 5);
-
-    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-
-    let before_update = Timestamp::now();
+    // On update, #[update] applies
     foo.update().title("updated").exec(&db).await?;
-    let after_update = Timestamp::now();
+    assert_eq!(foo.status, "edited");
 
-    // created_at should NOT change, updated_at should be refreshed
-    assert!(foo.created_at <= after);
-    assert!(foo.updated_at >= before_update);
-    assert!(foo.updated_at <= after_update);
+    // Explicit override on create
+    let mut foo2 = Foo::create()
+        .title("hello")
+        .status("published".to_string())
+        .exec(&db)
+        .await?;
+    assert_eq!(foo2.status, "published");
+
+    // Explicit override on update
+    foo2.update()
+        .title("updated")
+        .status("archived".to_string())
+        .exec(&db)
+        .await?;
+    assert_eq!(foo2.status, "archived");
 
     Ok(())
 }
