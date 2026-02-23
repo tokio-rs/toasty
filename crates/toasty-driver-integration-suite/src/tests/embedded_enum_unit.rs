@@ -3,11 +3,18 @@ use toasty::schema::{
     mapping::{self, FieldPrimitive},
 };
 
-use crate::prelude::*;
+use crate::{helpers::column, prelude::*};
+
+use toasty_core::{
+    driver::Operation,
+    stmt::{BinaryOp, Expr, ExprSet, Statement},
+};
 
 /// Tests basic CRUD operations with an embedded enum field.
 /// Validates create, read, update (both instance and query-based), and delete.
 /// The enum discriminant is stored as an INTEGER column and reconstructed on load.
+/// On SQL backends, also verifies the driver-level representation: column names and
+/// discriminant values stored as I64 with no record wrapping.
 #[driver_test(id(ID))]
 pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
@@ -32,18 +39,56 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
     let db = t.setup_db(models!(User, Status)).await;
 
     // Create: enum variant is stored as its discriminant (1 = Pending)
+    t.log().clear();
+
     let mut user = User::create()
         .name("Alice")
         .status(Status::Pending)
         .exec(&db)
         .await?;
 
+    // SQL: verify column list and that the discriminant is stored as I64, not a string or record
+    if t.capability().sql {
+        let user_table = table_id(&db, "users");
+        assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+            stmt: Statement::Insert(_ {
+                source.body: ExprSet::Values(_ {
+                    rows: [== (Any, Any, 1i64)],
+                    ..
+                }),
+                target: toasty_core::stmt::InsertTarget::Table(_ {
+                    table: == user_table,
+                    columns: == columns(&db, "users", &["id", "name", "status"]),
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
+    }
+
     // Read: discriminant is loaded back and converted to the enum variant
     let found = User::get_by_id(&db, &user.id).await?;
     assert_eq!(found.status, Status::Pending);
 
     // Update (instance): replace the enum variant
+    t.log().clear();
     user.update().status(Status::Active).exec(&db).await?;
+
+    // SQL: verify the status column receives the new discriminant as I64
+    if t.capability().sql {
+        let user_table = table_id(&db, "users");
+        let (op, _) = t.log().pop();
+        // Column index 2 is "status"; value I64(2) = Active discriminant
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Update(_ {
+                target: toasty_core::stmt::UpdateTarget::Table(== user_table),
+                assignments: #{ 2: _ { expr: == 2i64, .. }},
+                ..
+            }),
+            ..
+        }));
+    }
 
     let found = User::get_by_id(&db, &user.id).await?;
     assert_eq!(found.status, Status::Active);
@@ -67,7 +112,9 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
 
 /// Tests filtering records by embedded enum variant.
 /// SQL-only: DynamoDB requires a partition key in queries.
-/// Validates that enum fields can be used in WHERE clauses (comparing discriminants).
+/// Validates that enum fields can be used in WHERE clauses (comparing discriminants),
+/// and verifies the driver-level representation: the WHERE clause compares the status
+/// column to an I64 discriminant, not a string or other type.
 #[driver_test]
 pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     if !t.capability().sql {
@@ -106,11 +153,32 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
         Task::create().name(name).status(status).exec(&db).await?;
     }
 
+    let status_col = column(&db, "tasks", "status");
+    t.log().clear();
+
     // Filter: only Active tasks (discriminant = 2)
     let active = Task::filter(Task::fields().status().eq(Status::Active))
         .collect::<Vec<_>>(&db)
         .await?;
     assert_eq!(active.len(), 2);
+    {
+        let (op, _) = t.log().pop();
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Query(_ {
+                body: ExprSet::Select(_ {
+                    filter.expr: Some(Expr::BinaryOp(_ {
+                        lhs.as_expr_column_unwrap().column: == status_col.index,
+                        op: BinaryOp::Eq,
+                        *rhs: == 2i64,
+                        ..
+                    })),
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
+    }
 
     // Filter: only Pending tasks (discriminant = 1)
     let pending = Task::filter(Task::fields().status().eq(Status::Pending))
@@ -118,6 +186,24 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
         .await?;
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].name, "Task A");
+    {
+        let (op, _) = t.log().pop();
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Query(_ {
+                body: ExprSet::Select(_ {
+                    filter.expr: Some(Expr::BinaryOp(_ {
+                        lhs.as_expr_column_unwrap().column: == status_col.index,
+                        op: BinaryOp::Eq,
+                        *rhs: == 1i64,
+                        ..
+                    })),
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
+    }
 
     // Filter: only Done tasks (discriminant = 3)
     let done = Task::filter(Task::fields().status().eq(Status::Done))
@@ -125,6 +211,24 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
         .await?;
     assert_eq!(done.len(), 1);
     assert_eq!(done[0].name, "Task D");
+    {
+        let (op, _) = t.log().pop();
+        assert_struct!(op, Operation::QuerySql(_ {
+            stmt: Statement::Query(_ {
+                body: ExprSet::Select(_ {
+                    filter.expr: Some(Expr::BinaryOp(_ {
+                        lhs.as_expr_column_unwrap().column: == status_col.index,
+                        op: BinaryOp::Eq,
+                        *rhs: == 3i64,
+                        ..
+                    })),
+                    ..
+                }),
+                ..
+            }),
+            ..
+        }));
+    }
 
     Ok(())
 }
