@@ -366,8 +366,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         batch_load_index.set(Some(batch_load_table_ref_index));
                     } else if let Some(row) = insert_row {
                         debug_assert!(target_stmt_info.stmt().is_insert());
-                        debug_assert!(batch_load_index.get().is_none());
-                        batch_load_index.set(Some(row));
+                        // If batch_load_index was already set at Arg::Ref creation
+                        // time (because the sub-statement scope inherited the parent
+                        // INSERT's row index), trust that value. It encodes which
+                        // row of the *target* INSERT result to use as the FK source,
+                        // which is different from the current INSERT's own row index.
+                        if batch_load_index.get().is_none() {
+                            batch_load_index.set(Some(row));
+                        }
                     } else {
                         debug_assert!(
                             batch_load_index.get().is_some(),

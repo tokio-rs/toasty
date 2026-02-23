@@ -86,6 +86,16 @@ impl<T: Model> Model for Option<T> {
     type UpdateQuery = T::UpdateQuery;
 
     fn load(value: stmt::Value) -> Result<Self, Error> {
-        Ok(Some(T::load(value)?))
+        match value {
+            stmt::Value::Null => Ok(None),
+            // Option<T> encoding from NestedMerge for nullable has_one:
+            // List([]) = None (association loaded but not found)
+            // List([value]) = Some(value)
+            stmt::Value::List(mut items) if items.len() <= 1 => match items.pop() {
+                None => Ok(None),
+                Some(inner) => Ok(Some(T::load(inner)?)),
+            },
+            value => Ok(Some(T::load(value)?)),
+        }
     }
 }

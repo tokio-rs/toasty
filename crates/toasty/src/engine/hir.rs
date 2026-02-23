@@ -171,6 +171,11 @@ pub(super) enum Arg {
         /// data for this ref. For Insert statements, it is the offset at which
         /// the data should be fetched.
         batch_load_index: Cell<Option<usize>>,
+
+        /// True when the parent model's field for this sub-statement is nullable
+        /// (i.e., `HasOne<Option<T>>`). When true, NestedMerge emits the Option
+        /// encoding: `Record([0])` for None, `Record([1, value])` for Some(value).
+        nullable: bool,
     },
 
     /// A reference to a parent statement's columns.

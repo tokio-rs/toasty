@@ -594,4 +594,731 @@ pub async fn nested_has_many_preload(test: &mut Test) {
         all_step_descriptions,
         vec!["Step 1a", "Step 1b", "Step 2a", "Step 2b", "Step 2c"]
     );
+
+    // Verify per-todo step distribution: one todo has 2 steps, the other has 3
+    let mut step_counts: Vec<usize> = todos.iter().map(|t| t.steps.get().len()).collect();
+    step_counts.sort();
+    assert_eq!(step_counts, vec![2, 3]);
+}
+
+#[driver_test(id(ID))]
+pub async fn nested_preload_on_collection(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+
+        #[has_many]
+        steps: toasty::HasMany<Step>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Step {
+        #[key]
+        #[auto]
+        id: ID,
+
+        description: String,
+
+        #[index]
+        todo_id: ID,
+
+        #[belongs_to(key = todo_id, references = id)]
+        todo: toasty::BelongsTo<Todo>,
+    }
+
+    let db = test.setup_db(models!(User, Todo, Step)).await;
+
+    // Alice: 2 todos, with 2 and 1 steps respectively
+    User::create()
+        .name("Alice")
+        .todo(
+            Todo::create()
+                .title("Todo A1")
+                .step(Step::create().description("Step A1a"))
+                .step(Step::create().description("Step A1b")),
+        )
+        .todo(
+            Todo::create()
+                .title("Todo A2")
+                .step(Step::create().description("Step A2a")),
+        )
+        .exec(&db)
+        .await?;
+
+    // Bob: 1 todo with 3 steps
+    User::create()
+        .name("Bob")
+        .todo(
+            Todo::create()
+                .title("Todo B1")
+                .step(Step::create().description("Step B1a"))
+                .step(Step::create().description("Step B1b"))
+                .step(Step::create().description("Step B1c")),
+        )
+        .exec(&db)
+        .await?;
+
+    // Carol: no todos
+    User::create().name("Carol").exec(&db).await?;
+
+    let mut users: Vec<User> = User::all()
+        .include(User::fields().todos().steps())
+        .collect(&db)
+        .await?;
+
+    assert_eq!(3, users.len());
+
+    users.sort_by_key(|u| u.name.clone());
+
+    let alice = &users[0];
+    assert_eq!("Alice", alice.name);
+    let alice_todos = alice.todos.get();
+    assert_eq!(2, alice_todos.len());
+    let mut alice_step_counts: Vec<usize> =
+        alice_todos.iter().map(|t| t.steps.get().len()).collect();
+    alice_step_counts.sort();
+    assert_eq!(vec![1, 2], alice_step_counts);
+
+    let bob = &users[1];
+    assert_eq!("Bob", bob.name);
+    let bob_todos = bob.todos.get();
+    assert_eq!(1, bob_todos.len());
+    assert_eq!(3, bob_todos[0].steps.get().len());
+
+    let carol = &users[2];
+    assert_eq!("Carol", carol.name);
+    assert_eq!(0, carol.todos.get().len());
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn nested_preload_empty_intermediate(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+
+        #[has_many]
+        steps: toasty::HasMany<Step>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Step {
+        #[key]
+        #[auto]
+        id: ID,
+
+        description: String,
+
+        #[index]
+        todo_id: ID,
+
+        #[belongs_to(key = todo_id, references = id)]
+        todo: toasty::BelongsTo<Todo>,
+    }
+
+    let db = test.setup_db(models!(User, Todo, Step)).await;
+
+    let user = User::create()
+        .name("Alice")
+        .todo(
+            Todo::create()
+                .title("Has steps")
+                .step(Step::create().description("Step 1"))
+                .step(Step::create().description("Step 2")),
+        )
+        .todo(Todo::create().title("No steps"))
+        .exec(&db)
+        .await?;
+
+    let user = User::filter_by_id(user.id)
+        .include(User::fields().todos().steps())
+        .get(&db)
+        .await?;
+
+    let todos = user.todos.get();
+    assert_eq!(2, todos.len());
+
+    let mut todos: Vec<&Todo> = todos.iter().collect();
+    todos.sort_by_key(|t| t.title.as_str());
+
+    // "Has steps" < "No steps"
+    assert_eq!("Has steps", todos[0].title);
+    assert_eq!(2, todos[0].steps.get().len());
+
+    assert_eq!("No steps", todos[1].title);
+    assert_eq!(0, todos[1].steps.get().len());
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn three_level_deep_preload(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+
+        #[has_many]
+        steps: toasty::HasMany<Step>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Step {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        todo_id: ID,
+
+        #[belongs_to(key = todo_id, references = id)]
+        todo: toasty::BelongsTo<Todo>,
+
+        #[has_many]
+        notes: toasty::HasMany<Note>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Note {
+        #[key]
+        #[auto]
+        id: ID,
+
+        text: String,
+
+        #[index]
+        step_id: ID,
+
+        #[belongs_to(key = step_id, references = id)]
+        step: toasty::BelongsTo<Step>,
+    }
+
+    let db = test.setup_db(models!(User, Todo, Step, Note)).await;
+
+    let user = User::create()
+        .name("Alice")
+        .todo(
+            Todo::create()
+                .title("Todo 1")
+                .step(
+                    Step::create()
+                        .title("Step 1a")
+                        .note(Note::create().text("Note 1a-i"))
+                        .note(Note::create().text("Note 1a-ii")),
+                )
+                .step(
+                    Step::create()
+                        .title("Step 1b")
+                        .note(Note::create().text("Note 1b-i")),
+                ),
+        )
+        .exec(&db)
+        .await?;
+
+    let user = User::filter_by_id(user.id)
+        .include(User::fields().todos().steps().notes())
+        .get(&db)
+        .await?;
+
+    let todos = user.todos.get();
+    assert_eq!(1, todos.len());
+
+    let steps = todos[0].steps.get();
+    assert_eq!(2, steps.len());
+
+    let total_notes: usize = steps.iter().map(|s| s.notes.get().len()).sum();
+    assert_eq!(3, total_notes);
+
+    // Per-step note counts
+    let mut note_counts: Vec<usize> = steps.iter().map(|s| s.notes.get().len()).collect();
+    note_counts.sort();
+    assert_eq!(vec![1, 2], note_counts);
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn nested_and_shallow_includes(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_one]
+        profile: toasty::HasOne<Option<Profile>>,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: ID,
+
+        bio: String,
+
+        #[unique]
+        user_id: Option<ID>,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<Option<User>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+
+        #[has_many]
+        steps: toasty::HasMany<Step>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Step {
+        #[key]
+        #[auto]
+        id: ID,
+
+        description: String,
+
+        #[index]
+        todo_id: ID,
+
+        #[belongs_to(key = todo_id, references = id)]
+        todo: toasty::BelongsTo<Todo>,
+    }
+
+    let db = test.setup_db(models!(User, Profile, Todo, Step)).await;
+
+    let user = User::create()
+        .name("Alice")
+        .profile(Profile::create().bio("Developer"))
+        .todo(
+            Todo::create()
+                .title("Todo 1")
+                .step(Step::create().description("Step 1a"))
+                .step(Step::create().description("Step 1b")),
+        )
+        .todo(
+            Todo::create()
+                .title("Todo 2")
+                .step(Step::create().description("Step 2a")),
+        )
+        .exec(&db)
+        .await?;
+
+    let user = User::filter_by_id(user.id)
+        .include(User::fields().todos().steps()) // nested
+        .include(User::fields().profile()) // shallow
+        .get(&db)
+        .await?;
+
+    // Verify shallow include
+    let profile = user.profile.get().as_ref().unwrap();
+    assert_eq!("Developer", profile.bio);
+
+    // Verify nested include
+    let todos = user.todos.get();
+    assert_eq!(2, todos.len());
+    let total_steps: usize = todos.iter().map(|t| t.steps.get().len()).sum();
+    assert_eq!(3, total_steps);
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn two_independent_nested_paths(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+
+        #[has_many]
+        posts: toasty::HasMany<Post>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+
+        #[has_many]
+        steps: toasty::HasMany<Step>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Step {
+        #[key]
+        #[auto]
+        id: ID,
+
+        description: String,
+
+        #[index]
+        todo_id: ID,
+
+        #[belongs_to(key = todo_id, references = id)]
+        todo: toasty::BelongsTo<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+
+        #[has_many]
+        comments: toasty::HasMany<Comment>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Comment {
+        #[key]
+        #[auto]
+        id: ID,
+
+        text: String,
+
+        #[index]
+        post_id: ID,
+
+        #[belongs_to(key = post_id, references = id)]
+        post: toasty::BelongsTo<Post>,
+    }
+
+    let db = test.setup_db(models!(User, Todo, Step, Post, Comment)).await;
+
+    let user = User::create()
+        .name("Alice")
+        .todo(
+            Todo::create()
+                .title("Todo 1")
+                .step(Step::create().description("Step 1a"))
+                .step(Step::create().description("Step 1b")),
+        )
+        .post(
+            Post::create()
+                .title("Post 1")
+                .comment(Comment::create().text("Comment 1"))
+                .comment(Comment::create().text("Comment 2"))
+                .comment(Comment::create().text("Comment 3")),
+        )
+        .exec(&db)
+        .await?;
+
+    let user = User::filter_by_id(user.id)
+        .include(User::fields().todos().steps())
+        .include(User::fields().posts().comments())
+        .get(&db)
+        .await?;
+
+    let todos = user.todos.get();
+    assert_eq!(1, todos.len());
+    assert_eq!(2, todos[0].steps.get().len());
+
+    let posts = user.posts.get();
+    assert_eq!(1, posts.len());
+    assert_eq!(3, posts[0].comments.get().len());
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn nested_has_many_to_has_one(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_many]
+        todos: toasty::HasMany<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        title: String,
+
+        #[index]
+        user_id: ID,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<User>,
+
+        #[has_one]
+        attachment: toasty::HasOne<Option<Attachment>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Attachment {
+        #[key]
+        #[auto]
+        id: ID,
+
+        content: String,
+
+        #[unique]
+        todo_id: Option<ID>,
+
+        #[belongs_to(key = todo_id, references = id)]
+        todo: toasty::BelongsTo<Option<Todo>>,
+    }
+
+    let db = test.setup_db(models!(User, Todo, Attachment)).await;
+
+    let user = User::create()
+        .name("Alice")
+        .todo(
+            Todo::create()
+                .title("With attachment")
+                .attachment(Attachment::create().content("file.pdf")),
+        )
+        .todo(Todo::create().title("Without attachment"))
+        .exec(&db)
+        .await?;
+
+    let user = User::filter_by_id(user.id)
+        .include(User::fields().todos().attachment())
+        .get(&db)
+        .await?;
+
+    let todos = user.todos.get();
+    assert_eq!(2, todos.len());
+
+    let mut todos: Vec<&Todo> = todos.iter().collect();
+    todos.sort_by_key(|t| t.title.as_str());
+
+    // "With attachment" < "Without attachment"
+    assert_eq!("With attachment", todos[0].title);
+    assert_eq!("file.pdf", todos[0].attachment.get().as_ref().unwrap().content);
+
+    assert_eq!("Without attachment", todos[1].title);
+    assert!(todos[1].attachment.get().is_none());
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn nested_has_one_to_has_many(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_one]
+        profile: toasty::HasOne<Option<Profile>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: ID,
+
+        bio: String,
+
+        #[unique]
+        user_id: Option<ID>,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<Option<User>>,
+
+        #[has_many]
+        skills: toasty::HasMany<Skill>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Skill {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[index]
+        profile_id: ID,
+
+        #[belongs_to(key = profile_id, references = id)]
+        profile: toasty::BelongsTo<Profile>,
+    }
+
+    let db = test.setup_db(models!(User, Profile, Skill)).await;
+
+    // User with a profile that has skills
+    let alice = User::create()
+        .name("Alice")
+        .profile(
+            Profile::create()
+                .bio("Developer")
+                .skill(Skill::create().name("Rust"))
+                .skill(Skill::create().name("Go")),
+        )
+        .exec(&db)
+        .await?;
+
+    // User without a profile
+    let bob = User::create().name("Bob").exec(&db).await?;
+
+    // Load user with profile and nested skills
+    let alice = User::filter_by_id(alice.id)
+        .include(User::fields().profile().skills())
+        .get(&db)
+        .await?;
+
+    let profile = alice.profile.get().as_ref().unwrap();
+    assert_eq!("Developer", profile.bio);
+    let skills = profile.skills.get();
+    assert_eq!(2, skills.len());
+    let mut skill_names: Vec<&str> = skills.iter().map(|s| s.name.as_str()).collect();
+    skill_names.sort();
+    assert_eq!(vec!["Go", "Rust"], skill_names);
+
+    // Load user without profile - should not panic
+    let bob = User::filter_by_id(bob.id)
+        .include(User::fields().profile().skills())
+        .get(&db)
+        .await?;
+
+    assert!(bob.profile.get().is_none());
+
+    Ok(())
 }

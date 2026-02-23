@@ -94,6 +94,11 @@ pub(crate) struct NestedChild {
 
     /// True if single value
     pub(crate) single: bool,
+
+    /// True when the parent model's field for this child is nullable (`Option<T>`).
+    /// When true and `single=true`, NestedMerge emits the Option encoding:
+    /// `Record([0])` for None (no match), `Record([1, value])` for Some(value).
+    pub(crate) nullable: bool,
 }
 
 /// How to filter nested records for a parent record
@@ -359,7 +364,15 @@ impl Exec<'_> {
                 assert!(nested_rows_projected.len() <= 1, "TODO: error handling");
 
                 if let Some(row) = nested_rows_projected.into_iter().next() {
-                    row
+                    if nested_child.nullable {
+                        // Some(value) encoding: List([value])
+                        stmt::Value::List(vec![row])
+                    } else {
+                        row
+                    }
+                } else if nested_child.nullable {
+                    // None encoding: List([])
+                    stmt::Value::List(vec![])
                 } else {
                     stmt::Value::Null
                 }

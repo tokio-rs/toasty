@@ -132,8 +132,11 @@ enum LoweringContext<'a> {
     /// Lowering a value row being inserted
     InsertRow(&'a stmt::Expr),
 
-    /// Lowering the returning clause of a statement.
-    Returning,
+    /// Lowering the returning clause of a statement. The optional `usize` is
+    /// the row index within a parent INSERT that the current sub-statement
+    /// corresponds to, propagated so that child scopes can record the correct
+    /// `batch_load_index` when they reference the parent INSERT's result.
+    Returning(Option<usize>),
 
     /// All other lowering cases
     Statement,
@@ -308,8 +311,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         panic!()
                     };
 
-                    let arg =
-                        self.new_sub_statement(source_id, target_id, Box::new((*e.query).into()));
+                    let arg = self.new_sub_statement(
+                        source_id,
+                        target_id,
+                        Box::new((*e.query).into()),
+                        false,
+                    );
 
                     *expr = stmt::ExprInList {
                         expr: e.expr,
@@ -359,6 +366,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     panic!()
                 };
 
+                let nullable = expr_stmt.nullable;
+
                 assert!(self.cx.is_returning(), "cx={:#?}", self.cx);
 
                 // For now, we assume nested sub-statements cannot be executed on the
@@ -370,7 +379,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                 self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
 
-                *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
+                *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt, nullable);
 
                 if self.state.hir[target_id].independent {
                     self.curr_stmt_info().deps.insert(target_id);
@@ -471,7 +480,19 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         lower.visit_stmt_query_mut(&mut stmt.source);
 
         if let Some(returning) = &mut stmt.returning {
-            lower.visit_returning_mut(returning);
+            // For multi-row inserts, visit each returning list item with its
+            // row index so that embedded sub-statement scopes (Expr::Stmt) get
+            // the correct `batch_load_index` when referencing the parent
+            // INSERT result row for their FK.
+            if let stmt::Returning::Value(stmt::Expr::List(list)) = returning {
+                for i in 0..list.items.len() {
+                    lower.lower_insert_with_row(i, |lower| {
+                        lower.lower_returning().visit_expr_mut(&mut list.items[i]);
+                    });
+                }
+            } else {
+                lower.visit_returning_mut(returning);
+            }
             lower.constantize_insert_returning(returning, &stmt.source);
 
             if stmt.source.single {
@@ -801,7 +822,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {
-            LoweringContext::Statement | LoweringContext::Returning => {
+            LoweringContext::Statement | LoweringContext::Returning(_) => {
                 let mapping = self.mapping_at_unwrap(nesting);
                 mapping.table_to_model.lower_expr_reference(nesting, index)
             }
@@ -897,7 +918,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
         returning
             .entry_mut(*field_index)
-            .insert(stmt::Expr::stmt(stmt));
+            .insert(stmt::Expr::Stmt(stmt::ExprStmt {
+                stmt: Box::new(stmt.into()),
+                nullable: field.nullable,
+            }));
     }
 
     /// Returns the ArgId for the new reference
@@ -985,13 +1009,19 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         source_id: hir::StmtId,
         target_id: hir::StmtId,
         stmt: Box<stmt::Statement>,
+        nullable: bool,
     ) -> stmt::Expr {
         self.state.hir[target_id].stmt = Some(stmt);
-        self.new_dependency_arg(source_id, target_id)
+        self.new_dependency_arg(source_id, target_id, nullable)
     }
 
     /// Create a new argument on a dependent statement
-    fn new_dependency_arg(&mut self, source_id: hir::StmtId, target_id: hir::StmtId) -> stmt::Expr {
+    fn new_dependency_arg(
+        &mut self,
+        source_id: hir::StmtId,
+        target_id: hir::StmtId,
+        nullable: bool,
+    ) -> stmt::Expr {
         let source = &mut self.state.hir[source_id];
         let arg = source.args.len();
         source.args.push(hir::Arg::Sub {
@@ -999,6 +1029,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             returning: self.cx.is_returning(),
             input: Cell::new(None),
             batch_load_index: Cell::new(None),
+            nullable,
         });
 
         stmt::Expr::arg(arg)
@@ -1064,10 +1095,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     /// Plan a sub-statement that is able to reference the parent statement
     fn scope_statement(&mut self, f: impl FnOnce(&mut LowerStatement<'_, '_>)) -> hir::StmtId {
         let stmt_id = self.new_statement_info();
-        let row_index = if let LoweringContext::Insert(_, row_index) = &self.cx {
-            *row_index
-        } else {
-            None
+        let row_index = match &self.cx {
+            LoweringContext::Insert(_, row_index) => *row_index,
+            LoweringContext::Returning(row_index) => *row_index,
+            _ => None,
         };
         let scope_id = self.state.scopes.push(Scope { stmt_id, row_index });
         let mut dependencies = None;
@@ -1150,11 +1181,19 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     fn lower_returning(&mut self) -> LowerStatement<'_, 'b> {
+        // Propagate the row index from an enclosing Insert context so that
+        // child sub-statement scopes (created via scope_statement) inherit the
+        // correct parent-INSERT row index as their batch_load_index.
+        let row_index = if let LoweringContext::Insert(_, row_index) = self.cx {
+            row_index
+        } else {
+            None
+        };
         LowerStatement {
             state: self.state,
             expr_cx: self.expr_cx,
             scope_id: self.scope_id,
-            cx: LoweringContext::Returning,
+            cx: LoweringContext::Returning(row_index),
             collect_dependencies: self.collect_dependencies,
         }
     }
@@ -1193,7 +1232,7 @@ impl LoweringContext<'_> {
     }
 
     fn is_returning(&self) -> bool {
-        matches!(self, LoweringContext::Returning)
+        matches!(self, LoweringContext::Returning(_))
     }
 }
 

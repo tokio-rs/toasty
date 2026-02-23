@@ -118,7 +118,7 @@ impl NestedMergePlanner<'_> {
         )
     }
 
-    fn plan_nested_child(&mut self, stmt_id: hir::StmtId, depth: usize) -> NestedChild {
+    fn plan_nested_child(&mut self, stmt_id: hir::StmtId, nullable: bool, depth: usize) -> NestedChild {
         self.stack.push(stmt_id);
 
         let level = self.plan_nested_level(stmt_id, depth);
@@ -162,12 +162,14 @@ impl NestedMergePlanner<'_> {
                     level,
                     qualification,
                     single: query.single,
+                    nullable,
                 }
             }
             stmt::Statement::Insert(insert) => NestedChild {
                 level,
                 qualification: MergeQualification::All,
                 single: insert.source.single,
+                nullable,
             },
             stmt => todo!("stmt={stmt:#?}"),
         };
@@ -230,7 +232,7 @@ impl NestedMergePlanner<'_> {
         let mut projection_arg_tys = vec![self.build_exec_statement_ty_for(*curr)];
 
         for nested in nested_children {
-            projection_arg_tys.push(if nested.single {
+            projection_arg_tys.push(if nested.single && !nested.nullable {
                 nested.level.projection.ret.clone()
             } else {
                 stmt::Type::list(nested.level.projection.ret.clone())
@@ -268,7 +270,8 @@ impl NestedMergePlanner<'_> {
 
         visit_mut::for_each_expr_mut(&mut projection, |expr| match expr {
             stmt::Expr::Arg(expr_arg) => match &stmt_state.args[expr_arg.position] {
-                hir::Arg::Sub { stmt_id, .. } => {
+                hir::Arg::Sub { stmt_id, nullable, .. } => {
+                    let nullable = *nullable;
                     let child_stmt_state = &self.hir[stmt_id];
                     let child_stmt = child_stmt_state.stmt.as_deref().unwrap();
                     let child_returning = child_stmt.returning_unwrap();
@@ -304,7 +307,7 @@ impl NestedMergePlanner<'_> {
                             *expr = returning_expr.clone();
                         }
                         _ => {
-                            let nested_child = self.plan_nested_child(*stmt_id, depth + 1);
+                            let nested_child = self.plan_nested_child(*stmt_id, nullable, depth + 1);
                             nested.push(nested_child);
 
                             // Taking the

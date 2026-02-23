@@ -533,7 +533,7 @@ impl LowerStatement<'_, '_> {
                             stmt => todo!("stmt={stmt:#?}"),
                         });
                         // The result dependency is needed to get the foreign key.
-                        self.new_dependency_arg(self.scope_stmt_id(), target_id)
+                        self.new_dependency_arg(self.scope_stmt_id(), target_id, false)
                     }
                 };
 
@@ -707,6 +707,18 @@ impl RelationSource for InsertRelationSource<'_> {
             }
             Some(stmt::Returning::Value(stmt::Expr::List(rows))) => {
                 let record = &mut rows.items[self.index].as_record_mut();
+
+                assert!(
+                    record.fields[field.index].is_value_null(),
+                    "TODO: probably need to merge instead of overwrite; actual={:#?}",
+                    record.fields[field.index]
+                );
+                record.fields[field.index] = expr;
+            }
+            Some(stmt::Returning::Value(inner)) if !inner.is_list() => {
+                // Single-row insert (single=true): self.index must be 0
+                debug_assert_eq!(self.index, 0);
+                let record = inner.as_record_mut();
 
                 assert!(
                     record.fields[field.index].is_value_null(),
