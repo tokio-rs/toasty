@@ -51,10 +51,12 @@ impl Expand<'_> {
 
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
                     use #toasty::IntoSelect;
-                    #update_struct_ident {
+                    let mut s = #update_struct_ident {
                         stmt: #toasty::stmt::Update::new(self.into_select()),
                         target: self,
-                    }
+                    };
+                    s.apply_update_defaults();
+                    s
                 }
 
                 #vis fn all() -> #query_struct_ident {
