@@ -58,6 +58,28 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Subquery improvements
 - Better conditional/dynamic query building ergonomics
 
+**Database Function Expressions**
+- Allow database-side functions (e.g. `NOW()`, `CURRENT_TIMESTAMP`) as expressions in create and update operations
+- User API: field setters accept `toasty::stmt` helpers like `toasty::stmt::now()` that resolve to `core::stmt::ExprFunc` variants
+  ```rust
+  // Set updated_at to the database's current time instead of a Rust-side value
+  user.update()
+      .updated_at(toasty::stmt::now())
+      .exec(&db)
+      .await?;
+
+  // Also usable in create operations
+  User::create()
+      .name("Alice")
+      .created_at(toasty::stmt::now())
+      .exec(&db)
+      .await?;
+  ```
+- Extend `ExprFunc` enum in `toasty-core` with new function variants (e.g. `Now`)
+- SQL serialization for each function across supported databases (`NOW()` for PostgreSQL/MySQL, `datetime('now')` for SQLite)
+- Codegen: update field setter generation to accept both value types and function expressions
+- Future: support additional scalar functions (e.g. `COALESCE`, `LOWER`, `UPPER`, `LENGTH`)
+
 **Raw SQL Support**
 - Execute arbitrary SQL statements directly
 - Parameterized queries with type-safe bindings
