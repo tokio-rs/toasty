@@ -1,4 +1,4 @@
-use super::{ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey};
+use super::{Column, ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey};
 
 #[derive(Debug)]
 pub(crate) enum ModelKind {
@@ -6,20 +6,32 @@ pub(crate) enum ModelKind {
     Root(ModelRoot),
     /// Embedded struct model that is flattened into parent
     EmbeddedStruct(ModelEmbeddedStruct),
+    /// Embedded enum stored as a single integer discriminant column
+    EmbeddedEnum(ModelEmbeddedEnum),
 }
 
 impl ModelKind {
     pub(crate) fn expect_root(&self) -> &ModelRoot {
         match self {
             ModelKind::Root(root) => root,
-            ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded"),
+            ModelKind::EmbeddedStruct(_) => panic!("expected root model, found embedded struct"),
+            ModelKind::EmbeddedEnum(_) => panic!("expected root model, found embedded enum"),
         }
     }
 
     pub(crate) fn expect_embedded(&self) -> &ModelEmbeddedStruct {
         match self {
             ModelKind::EmbeddedStruct(embedded) => embedded,
-            ModelKind::Root(_) => panic!("expected embedded model, found root"),
+            ModelKind::Root(_) => panic!("expected embedded struct, found root model"),
+            ModelKind::EmbeddedEnum(_) => panic!("expected embedded struct, found embedded enum"),
+        }
+    }
+
+    pub(crate) fn expect_embedded_enum(&self) -> &ModelEmbeddedEnum {
+        match self {
+            ModelKind::EmbeddedEnum(e) => e,
+            ModelKind::Root(_) => panic!("expected embedded enum, found root model"),
+            ModelKind::EmbeddedStruct(_) => panic!("expected embedded enum, found embedded struct"),
         }
     }
 }
@@ -49,6 +61,24 @@ pub(crate) struct ModelEmbeddedStruct {
 
     /// Update builder struct identifier
     pub(crate) update_struct_ident: syn::Ident,
+}
+
+#[derive(Debug)]
+pub(crate) struct ModelEmbeddedEnum {
+    /// The enum's variants with their names and discriminant values
+    pub(crate) variants: Vec<EnumVariantDef>,
+}
+
+#[derive(Debug)]
+pub(crate) struct EnumVariantDef {
+    /// Rust identifier for this variant (e.g., `Pending`)
+    pub(crate) ident: syn::Ident,
+
+    /// Name parts for schema generation
+    pub(crate) name: Name,
+
+    /// Discriminant value stored in the database column
+    pub(crate) discriminant: i64,
 }
 
 #[derive(Debug)]
@@ -240,12 +270,79 @@ impl Model {
                     .iter()
                     .map(|index| &self.fields[*index]),
             ),
-            ModelKind::EmbeddedStruct(_) => None,
+            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => None,
         }
     }
 
     pub(crate) fn has_associations(&self) -> bool {
         self.fields.iter().any(|f| f.ty.is_relation())
+    }
+
+    pub(crate) fn from_enum_ast(ast: &syn::ItemEnum) -> syn::Result<Self> {
+        if !ast.generics.params.is_empty() {
+            return Err(syn::Error::new_spanned(
+                &ast.generics,
+                "enum generics are not supported",
+            ));
+        }
+
+        let mut variants = vec![];
+        let mut errs = ErrorSet::new();
+
+        for variant in &ast.variants {
+            if !matches!(variant.fields, syn::Fields::Unit) {
+                errs.push(syn::Error::new_spanned(
+                    &variant.fields,
+                    "only unit enum variants are supported in embedded enums",
+                ));
+                continue;
+            }
+
+            let mut discriminant = None;
+            for attr in &variant.attrs {
+                if attr.path().is_ident("column") {
+                    match Column::from_ast(attr) {
+                        Ok(col) => {
+                            if let Some(d) = col.variant {
+                                discriminant = Some(d);
+                            }
+                        }
+                        Err(e) => errs.push(e),
+                    }
+                }
+            }
+
+            let discriminant = match discriminant {
+                Some(d) => d,
+                None => {
+                    errs.push(syn::Error::new_spanned(
+                        variant,
+                        "embedded enum variant must have a #[column(variant = N)] attribute",
+                    ));
+                    continue;
+                }
+            };
+
+            variants.push(EnumVariantDef {
+                ident: variant.ident.clone(),
+                name: Name::from_ident(&variant.ident),
+                discriminant,
+            });
+        }
+
+        if let Some(err) = errs.collect() {
+            return Err(err);
+        }
+
+        Ok(Self {
+            vis: ast.vis.clone(),
+            name: Name::from_ident(&ast.ident),
+            ident: ast.ident.clone(),
+            fields: vec![],
+            kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum { variants }),
+            indices: vec![],
+            table: None,
+        })
     }
 }
 
