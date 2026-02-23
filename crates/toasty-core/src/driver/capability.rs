@@ -55,6 +55,10 @@ pub struct Capability {
     /// - MySQL: false (DECIMAL requires fixed precision/scale)
     /// - SQLite/DynamoDB: false (no native decimal support, stored as TEXT)
     pub decimal_arbitrary_precision: bool,
+
+    /// Whether OR is supported in index key conditions (e.g. DynamoDB KeyConditionExpression).
+    /// DynamoDB: false. All other backends: true (SQL backends never use index key conditions).
+    pub index_or_predicate: bool,
 }
 
 #[derive(Debug)]
@@ -183,6 +187,8 @@ impl Capability {
         // SQLite does not have native decimal types
         native_decimal: false,
         decimal_arbitrary_precision: false,
+
+        index_or_predicate: true,
     };
 
     /// PostgreSQL capabilities
@@ -251,6 +257,8 @@ impl Capability {
         // DynamoDB does not have native decimal types
         native_decimal: false,
         decimal_arbitrary_precision: false,
+
+        index_or_predicate: false,
     };
 }
 

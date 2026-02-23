@@ -3,6 +3,7 @@ pub mod belongs_to_one_way;
 pub mod belongs_to_self_referential;
 pub mod bigdecimal;
 pub mod decimal;
+pub mod default_and_update;
 pub mod embedded_enum_unit;
 pub mod embedded_struct;
 pub mod field_auto;

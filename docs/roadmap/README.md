@@ -58,6 +58,28 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Subquery improvements
 - Better conditional/dynamic query building ergonomics
 
+**Database Function Expressions**
+- Allow database-side functions (e.g. `NOW()`, `CURRENT_TIMESTAMP`) as expressions in create and update operations
+- User API: field setters accept `toasty::stmt` helpers like `toasty::stmt::now()` that resolve to `core::stmt::ExprFunc` variants
+  ```rust
+  // Set updated_at to the database's current time instead of a Rust-side value
+  user.update()
+      .updated_at(toasty::stmt::now())
+      .exec(&db)
+      .await?;
+
+  // Also usable in create operations
+  User::create()
+      .name("Alice")
+      .created_at(toasty::stmt::now())
+      .exec(&db)
+      .await?;
+  ```
+- Extend `ExprFunc` enum in `toasty-core` with new function variants (e.g. `Now`)
+- SQL serialization for each function across supported databases (`NOW()` for PostgreSQL/MySQL, `datetime('now')` for SQLite)
+- Codegen: update field setter generation to accept both value types and function expressions
+- Future: support additional scalar functions (e.g. `COALESCE`, `LOWER`, `UPPER`, `LENGTH`)
+
 **Raw SQL Support**
 - Execute arbitrary SQL statements directly
 - Parameterized queries with type-safe bindings
@@ -93,6 +115,23 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 - Rollback support
 - Schema versioning
 - CLI tools for schema management
+
+### Toasty Runtime Improvements
+
+**Concurrent Task Execution**
+- Replace the current ad-hoc background task with a proper in-flight task manager
+- Execute independent parts of an execution plan concurrently
+- Track and coordinate multiple in-flight tasks within a single query execution
+
+**Cancellation & Cleanup**
+- Detect when the caller drops the future representing query completion
+- Perform clean cancellation on drop (rollback any incomplete transactions)
+- Ensure no resource leaks or orphaned database state on cancellation
+
+**Internal Instrumentation & Metrics**
+- Instrument time spent in each execution phase (planning, simplification, execution, serialization)
+- Track CPU time consumed by query planning to detect expensive plans
+- Provide internal metrics for diagnosing performance bottlenecks
 
 ### Performance
 

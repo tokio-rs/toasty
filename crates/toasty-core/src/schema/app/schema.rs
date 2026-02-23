@@ -134,7 +134,9 @@ impl Builder {
                 let field = &model.expect_root().fields[index];
 
                 if let FieldTy::HasMany(has_many) = &field.ty {
-                    let pair = self.find_has_many_pair(src, has_many.target);
+                    let target = has_many.target;
+                    let field_name = field.name.app_name.clone();
+                    let pair = self.find_has_many_pair(src, target, &field_name)?;
                     self.models[curr].expect_root_mut().fields[index]
                         .ty
                         .expect_has_many_mut()
@@ -155,15 +157,16 @@ impl Builder {
 
                 match &field.ty {
                     FieldTy::HasOne(has_one) => {
-                        let pair = match self.find_belongs_to_pair(src, has_one.target) {
+                        let target = has_one.target;
+                        let field_name = field.name.app_name.clone();
+                        let pair = match self.find_belongs_to_pair(src, target, &field_name)? {
                             Some(pair) => pair,
                             None => {
-                                let model = &self.models[curr];
-                                panic!(
-                                    "no relation pair for {}::{}",
-                                    model.name().upper_camel_case(),
-                                    model.expect_root().fields[index].name.app_name
-                                );
+                                return Err(crate::Error::invalid_schema(format!(
+                                    "field `{}::{}` has no matching `BelongsTo` relation on the target model",
+                                    self.models[curr].name().upper_camel_case(),
+                                    field_name,
+                                )));
                             }
                         };
 
@@ -193,7 +196,18 @@ impl Builder {
                 let pair = match &self.models[curr].expect_root().fields[index].ty {
                     FieldTy::BelongsTo(belongs_to) => {
                         let mut pair = None;
-                        let target = self.models.get_index_of(&belongs_to.target).unwrap();
+                        let target = match self.models.get_index_of(&belongs_to.target) {
+                            Some(target) => target,
+                            None => {
+                                let model = &self.models[curr];
+                                return Err(crate::Error::invalid_schema(format!(
+                                    "field `{}::{}` references a model that was not registered \
+                                     with the schema; did you forget to register it with `Db::builder()`?",
+                                    model.name().upper_camel_case(),
+                                    model.expect_root().fields[index].name.app_name,
+                                )));
+                            }
+                        };
 
                         for target_index in 0..self.models[target].expect_root().fields.len() {
                             pair = match &self.models[target].expect_root().fields[target_index].ty
@@ -229,10 +243,24 @@ impl Builder {
         Ok(())
     }
 
-    fn find_belongs_to_pair(&self, src: ModelId, target: ModelId) -> Option<FieldId> {
+    fn find_belongs_to_pair(
+        &self,
+        src: ModelId,
+        target: ModelId,
+        field_name: &str,
+    ) -> crate::Result<Option<FieldId>> {
+        let src_model = &self.models[&src];
+
         let target = match self.models.get(&target) {
             Some(target) => target,
-            None => todo!("lol no"),
+            None => {
+                return Err(crate::Error::invalid_schema(format!(
+                    "field `{}::{}` references a model that was not registered with the schema; \
+                     did you forget to register it with `Db::builder()`?",
+                    src_model.name().upper_camel_case(),
+                    field_name,
+                )));
+            }
         };
 
         // Find all BelongsTo relations that reference the model
@@ -247,21 +275,30 @@ impl Builder {
             .collect();
 
         match &belongs_to[..] {
-            [field] => Some(field.id),
-            [] => None,
-            _ => todo!("more than one belongs_to"),
+            [field] => Ok(Some(field.id)),
+            [] => Ok(None),
+            _ => Err(crate::Error::invalid_schema(format!(
+                "model `{}` has more than one `BelongsTo` relation targeting `{}`",
+                target.name().upper_camel_case(),
+                src_model.name().upper_camel_case(),
+            ))),
         }
     }
 
-    fn find_has_many_pair(&mut self, src: ModelId, target: ModelId) -> FieldId {
-        if let Some(field_id) = self.find_belongs_to_pair(src, target) {
-            return field_id;
+    fn find_has_many_pair(
+        &mut self,
+        src: ModelId,
+        target: ModelId,
+        field_name: &str,
+    ) -> crate::Result<FieldId> {
+        if let Some(field_id) = self.find_belongs_to_pair(src, target, field_name)? {
+            return Ok(field_id);
         }
 
-        todo!(
-            "missing relation attribute; source={:#?}; target={:#?}",
-            src,
-            self.models.get(&target)
-        );
+        Err(crate::Error::invalid_schema(format!(
+            "field `{}::{}` has no matching `BelongsTo` relation on the target model",
+            self.models[&src].name().upper_camel_case(),
+            field_name,
+        )))
     }
 }

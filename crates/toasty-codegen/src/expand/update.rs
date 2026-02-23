@@ -141,6 +141,29 @@ impl Expand<'_> {
         }).collect()
     }
 
+    fn expand_update_default_stmts(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        self.model
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| {
+                let expr = field.attrs.update_expr.as_ref()?;
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
+                };
+                let index_tokenized = util::int(index);
+                Some(quote! {
+                    self.stmt.set(
+                        #toasty::stmt::Projection::from_index(#index_tokenized),
+                        <#ty as #toasty::IntoExpr<#ty>>::into_expr(#expr),
+                    );
+                })
+            })
+            .collect()
+    }
+
     pub(super) fn expand_update_builder(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
@@ -149,12 +172,19 @@ impl Expand<'_> {
         let update_struct_ident = &self.model.kind.expect_root().update_struct_ident;
         let target_ty = util::ident("T");
         let builder_methods = self.expand_update_field_methods(false);
+        let update_default_stmts = self.expand_update_default_stmts();
 
         quote! {
             // Unified update builder generic over the target type
             #vis struct #update_struct_ident<#target_ty = #toasty::Query> {
                 stmt: #toasty::stmt::Update<#model_ident>,
                 target: #target_ty,
+            }
+
+            impl<#target_ty> #update_struct_ident<#target_ty> {
+                fn apply_update_defaults(&mut self) {
+                    #update_default_stmts
+                }
             }
 
             // Generic builder methods work for any target type
@@ -182,19 +212,23 @@ impl Expand<'_> {
             // Convert from query to update builder
             impl From<#query_struct_ident> for #update_struct_ident {
                 fn from(value: #query_struct_ident) -> #update_struct_ident {
-                    #update_struct_ident {
+                    let mut s = #update_struct_ident {
                         stmt: #toasty::stmt::Update::new(value.stmt),
                         target: #toasty::Query,
-                    }
+                    };
+                    s.apply_update_defaults();
+                    s
                 }
             }
 
             impl From<#toasty::stmt::Select<#model_ident>> for #update_struct_ident {
                 fn from(src: #toasty::stmt::Select<#model_ident>) -> #update_struct_ident {
-                    #update_struct_ident {
+                    let mut s = #update_struct_ident {
                         stmt: #toasty::stmt::Update::new(src),
                         target: #toasty::Query,
-                    }
+                    };
+                    s.apply_update_defaults();
+                    s
                 }
             }
         }
