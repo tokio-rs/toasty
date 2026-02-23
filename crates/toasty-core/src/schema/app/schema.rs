@@ -20,8 +20,12 @@ impl Schema {
 
     /// Get a field by ID
     pub fn field(&self, id: FieldId) -> &Field {
-        let model = self.model(id.model);
-        model.fields().get(id.index).expect("invalid field ID")
+        let fields = match self.model(id.model) {
+            Model::Root(root) => &root.fields,
+            Model::EmbeddedStruct(embedded) => &embedded.fields,
+            Model::EmbeddedEnum(_) => panic!("embedded enum has no fields"),
+        };
+        fields.get(id.index).expect("invalid field ID")
     }
 
     pub fn models(&self) -> impl Iterator<Item = &Model> {

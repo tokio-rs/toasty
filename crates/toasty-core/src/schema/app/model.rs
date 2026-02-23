@@ -1,4 +1,4 @@
-use super::{Field, FieldId, FieldPrimitive, FieldTy, Index, Name, PrimaryKey};
+use super::{Field, FieldId, Index, Name, PrimaryKey};
 use crate::{driver, stmt, Result};
 use std::fmt;
 
@@ -68,6 +68,17 @@ impl ModelRoot {
             .iter()
             .map(|pk_field| &self.fields[pk_field.index])
     }
+
+    pub fn field_by_name(&self, name: &str) -> Option<&Field> {
+        self.fields.iter().find(|field| field.name.app_name == name)
+    }
+
+    pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        for field in &self.fields {
+            field.verify(db)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +91,15 @@ pub struct EmbeddedStruct {
 
     /// Fields contained by the embedded struct
     pub fields: Vec<Field>,
+}
+
+impl EmbeddedStruct {
+    pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        for field in &self.fields {
+            field.verify(db)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +123,12 @@ pub struct EnumVariant {
     pub discriminant: i64,
 }
 
+impl EmbeddedEnum {
+    pub(crate) fn verify(&self, _db: &driver::Capability) -> Result<()> {
+        Ok(())
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModelId(pub usize);
@@ -121,14 +147,6 @@ impl Model {
             Model::Root(root) => &root.name,
             Model::EmbeddedStruct(embedded) => &embedded.name,
             Model::EmbeddedEnum(e) => &e.name,
-        }
-    }
-
-    pub fn fields(&self) -> &[Field] {
-        match self {
-            Model::Root(root) => &root.fields,
-            Model::EmbeddedStruct(embedded) => &embedded.fields,
-            Model::EmbeddedEnum(_) => &[],
         }
     }
 
@@ -190,51 +208,12 @@ impl Model {
         }
     }
 
-    pub fn primitives_mut(&mut self) -> impl Iterator<Item = &mut FieldPrimitive> + '_ {
-        let fields = match self {
-            Model::Root(root) => Some(root.fields.as_mut_slice()),
-            Model::EmbeddedStruct(embedded) => Some(embedded.fields.as_mut_slice()),
-            Model::EmbeddedEnum(_) => None,
-        };
-        fields
-            .into_iter()
-            .flatten()
-            .flat_map(|field| match &mut field.ty {
-                FieldTy::Primitive(primitive) => Some(primitive),
-                _ => None,
-            })
-    }
-
-    pub fn field(&self, field: impl Into<FieldId>) -> &Field {
-        let field_id = field.into();
-        assert_eq!(self.id(), field_id.model);
-        let fields = match self {
-            Model::Root(root) => &root.fields[..],
-            Model::EmbeddedStruct(embedded) => &embedded.fields[..],
-            Model::EmbeddedEnum(_) => panic!("embedded enum has no fields"),
-        };
-        &fields[field_id.index]
-    }
-
-    pub fn field_by_name(&self, name: &str) -> Option<&Field> {
-        self.fields().iter().find(|field| field.name.app_name == name)
-    }
-
-    pub fn field_by_name_mut(&mut self, name: &str) -> Option<&mut Field> {
-        let fields = match self {
-            Model::Root(root) => &mut root.fields[..],
-            Model::EmbeddedStruct(embedded) => &mut embedded.fields[..],
-            Model::EmbeddedEnum(_) => return None,
-        };
-        fields.iter_mut().find(|field| field.name.app_name == name)
-    }
-
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
-        for field in self.fields() {
-            field.verify(db)?;
+        match self {
+            Model::Root(root) => root.verify(db),
+            Model::EmbeddedStruct(embedded) => embedded.verify(db),
+            Model::EmbeddedEnum(e) => e.verify(db),
         }
-
-        Ok(())
     }
 }
 
