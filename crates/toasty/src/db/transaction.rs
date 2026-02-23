@@ -1,77 +1,57 @@
-use std::{ops::Deref, sync::Arc, time::Duration};
+use std::{future::Future, ops::Deref, time::Duration};
 
 use toasty_core::driver::{operation::Transaction as TransactionOp, transaction::IsolationLevel};
-use tokio::sync::Mutex;
 
-use crate::{db::ConnectionType, engine::Engine, Db};
+use crate::{db::ConnectionType, Db};
 
-pub(crate) struct Transaction {
-    db: Option<Db>,
+struct Transaction<'a> {
     done: bool,
+    conn: TransactionConn<'a>,
 }
 
-impl Transaction {
-    async fn exec_op(&self, op: TransactionOp) -> crate::Result<()> {
-        let db = self.db.as_ref().unwrap();
-        match &db.engine.connection {
-            ConnectionType::Pool(_) => unreachable!(),
-            ConnectionType::Transaction(arc) => {
-                arc.lock()
-                    .await
-                    .exec(&db.engine.schema.db, op.into())
-                    .await?;
-            }
+enum TransactionConn<'a> {
+    Root(Db),
+    Nested(&'a Db),
+}
+
+impl Transaction<'_> {
+    fn exec_op(&self, op: TransactionOp) -> impl Future<Output = crate::Result<()>> {
+        let fut = self.exec(op);
+
+        async {
+            fut.await?;
+            Ok(())
         }
-        Ok(())
     }
 
-    async fn commit_inner(&mut self) -> crate::Result<()> {
-        // Mark done before the await: if this future is cancelled after the
-        // query is dispatched (e.g. PostgreSQL sends it to a bg task on the
-        // first poll), Drop must not issue a redundant ROLLBACK.
+    async fn commit(&mut self) -> crate::Result<()> {
         self.done = true;
         self.exec_op(TransactionOp::Commit).await
     }
 
-    async fn rollback_inner(&mut self) -> crate::Result<()> {
-        // Same cancellation-safety reasoning as commit_inner.
+    async fn rollback(&mut self) -> crate::Result<()> {
         self.done = true;
         self.exec_op(TransactionOp::Rollback).await
     }
 }
 
-impl Deref for Transaction {
+impl Deref for Transaction<'_> {
     type Target = Db;
 
     fn deref(&self) -> &Db {
-        self.db.as_ref().unwrap()
+        match &self.conn {
+            TransactionConn::Root(db) => db,
+            TransactionConn::Nested(db) => db,
+        }
     }
 }
 
-impl Drop for Transaction {
+impl Drop for Transaction<'_> {
     fn drop(&mut self) {
         if self.done {
             return;
         }
-        if let Some(db) = self.db.take() {
-            // Extract the connection Arc synchronously — no reason to do this
-            // inside the spawned task.
-            if let ConnectionType::Transaction(arc) = &db.engine.connection {
-                let arc = arc.clone();
-                let schema = db.engine.schema.db.clone();
-                if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                    handle.spawn(async move {
-                        let _ = arc
-                            .lock()
-                            .await
-                            .exec(&schema, TransactionOp::Rollback.into())
-                            .await;
-                    });
-                }
-            }
-            // db (and its Arc<Mutex<PoolConnection>>) dropped here.
-            // If no runtime was available the server cleans up on disconnect.
-        }
+        let _ = self.exec_op(TransactionOp::Rollback);
     }
 }
 
@@ -123,11 +103,7 @@ impl<'a> TransactionBuilder<'a> {
     where
         E: From<crate::Error>,
     {
-        let mut tx = self
-            .db
-            .begin_inner(self.isolation_level)
-            .await
-            .map_err(E::from)?;
+        let mut tx = self.db.begin(self.isolation_level).await.map_err(E::from)?;
 
         // The timeout covers only the user's callback, not BEGIN/COMMIT/ROLLBACK.
         let result = match self.timeout {
@@ -139,16 +115,16 @@ impl<'a> TransactionBuilder<'a> {
         };
 
         match result {
-            Ok(v) => match tx.commit_inner().await {
+            Ok(v) => match tx.commit().await {
                 Ok(()) => Ok(v),
                 Err(e) if e.is_serialization_failure() || e.is_read_only_transaction() => {
-                    let _ = tx.rollback_inner().await;
+                    let _ = tx.rollback().await;
                     Err(E::from(e))
                 }
                 Err(e) => Err(E::from(e)),
             },
             Err(e) => {
-                let _ = tx.rollback_inner().await;
+                let _ = tx.rollback().await;
                 Err(e)
             }
         }
@@ -172,49 +148,33 @@ impl Db {
         TransactionBuilder::new(self)
     }
 
-    pub(crate) async fn begin_inner(
-        &self,
+    async fn begin<'a>(
+        &'a self,
         isolation: Option<IsolationLevel>,
-    ) -> crate::Result<Transaction> {
-        match &self.engine.connection {
-            ConnectionType::Pool(pool) => {
-                let conn = pool.get().await?;
-                let db = Db {
-                    driver: self.driver.clone(),
-                    engine: Engine::new(
-                        self.engine.schema.clone(),
-                        ConnectionType::Transaction(Arc::new(Mutex::new(conn))),
-                        self.engine.capabilities,
-                    ),
-                };
-                let tx = Transaction {
-                    db: Some(db),
-                    done: false,
-                };
-                tx.exec_op(TransactionOp::Start { isolation }).await?;
-                Ok(tx)
+    ) -> crate::Result<Transaction<'a>> {
+        // We're wrapping the connection in a Transaction before the actual BEGIN is sent so if the
+        // future is cancelled the wrapper rolls the transaction back.
+        let tx = if self.in_transaction {
+            Transaction {
+                done: false,
+                conn: TransactionConn::Nested(self),
             }
-            ConnectionType::Transaction(arc) => {
-                // Nested: share the same connection (Arc clone). The driver
-                // sees Transaction::Start on an in-progress connection and
-                // creates a SAVEPOINT internally.
-                let db = Db {
-                    driver: self.driver.clone(),
-                    engine: Engine::new(
-                        self.engine.schema.clone(),
-                        ConnectionType::Transaction(arc.clone()),
-                        self.engine.capabilities,
-                    ),
-                };
-                let tx = Transaction {
-                    db: Some(db),
-                    done: false,
-                };
-                // Isolation level only applies to the outermost transaction;
-                // nested transactions use SAVEPOINTs, which ignore isolation.
-                tx.exec_op(TransactionOp::Start { isolation: None }).await?;
-                Ok(tx)
+        } else {
+            let conn = self.pool.get().await?;
+
+            let db = Db::new(
+                self.pool.clone(),
+                self.schema.clone(),
+                ConnectionType::Transaction(conn),
+            );
+
+            Transaction {
+                done: false,
+                conn: TransactionConn::Root(db),
             }
-        }
+        };
+
+        tx.exec_op(TransactionOp::Start { isolation }).await?;
+        Ok(tx)
     }
 }

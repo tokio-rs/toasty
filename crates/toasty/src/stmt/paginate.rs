@@ -118,7 +118,7 @@ impl<M: Model> Paginate<M> {
         };
 
         Ok(crate::Page::new(
-            Cursor::new(db.engine.schema.clone(), items.into())
+            Cursor::new(db.schema.clone(), items.into())
                 .collect()
                 .await?,
             self.query,

@@ -1,15 +1,13 @@
 use crate::{
     db::{Connect, ConnectionType, Pool},
-    engine::Engine,
     Db, Register, Result,
 };
 
+use std::sync::Arc;
 use toasty_core::{
     driver::Driver,
     schema::{self, app},
 };
-
-use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Builder {
@@ -44,7 +42,6 @@ impl Builder {
     }
 
     pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
-        let capabilities = driver.capability();
         let driver = Arc::new(driver);
         let pool = Pool::new(driver.clone())?;
 
@@ -53,10 +50,10 @@ impl Builder {
 
         let schema = self
             .core
-            .build(self.build_app_schema()?, pool.capability())?;
+            .build(self.build_app_schema()?, pool.capability())
+            .map(Arc::new)?;
 
-        let engine = Engine::new(Arc::new(schema), ConnectionType::Pool(pool), capabilities);
-
-        Ok(Db { engine, driver })
+        let schema2 = schema.clone();
+        Ok(Db::new(pool.clone(), schema2, ConnectionType::Pool(pool)))
     }
 }

@@ -4,35 +4,36 @@ use toasty_core::{
     driver::{Operation, Response},
     schema::db::Schema,
 };
-use tokio::sync::{Mutex, MutexGuard};
 
 use crate::db::{Pool, PoolConnection};
 
 #[derive(Debug)]
 pub(crate) enum ConnectionType {
     Pool(Pool),
-    Transaction(Arc<Mutex<PoolConnection>>),
+    Transaction(PoolConnection),
 }
 
 pub(crate) enum SingleConnection<'a> {
     Pooled(PoolConnection),
-    Transaction(MutexGuard<'a, PoolConnection>),
+    Transaction(&'a mut PoolConnection),
 }
 
 impl ConnectionType {
-    pub async fn get(&self) -> crate::Result<SingleConnection<'_>> {
+    pub fn in_transaction(&self) -> bool {
+        matches!(self, ConnectionType::Transaction(_))
+    }
+
+    pub async fn get(&mut self) -> crate::Result<SingleConnection<'_>> {
         match self {
             ConnectionType::Pool(pool) => pool.get().await.map(SingleConnection::Pooled),
-            ConnectionType::Transaction(mutex) => {
-                Ok(SingleConnection::Transaction(mutex.lock().await))
-            }
+            ConnectionType::Transaction(conn) => Ok(SingleConnection::Transaction(conn)),
         }
     }
 
-    pub async fn push_schema(&self, schema: &Schema) -> crate::Result<()> {
+    pub async fn push_schema(&mut self, schema: &Schema) -> crate::Result<()> {
         match self {
             ConnectionType::Pool(pool) => pool.get().await?.push_schema(schema).await,
-            ConnectionType::Transaction(mutex) => mutex.lock().await.push_schema(schema).await,
+            ConnectionType::Transaction(conn) => conn.push_schema(schema).await,
         }
     }
 }

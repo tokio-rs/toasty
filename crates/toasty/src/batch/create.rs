@@ -38,7 +38,7 @@ impl<M: Model> CreateMany<M> {
         merged.untyped.source.single = false;
 
         let records = db.exec(merged.into()).await?;
-        let cursor = Cursor::new(db.engine.schema.clone(), records);
+        let cursor = Cursor::new(db.schema.clone(), records);
         cursor.collect().await
     }
 }

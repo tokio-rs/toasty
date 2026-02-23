@@ -61,10 +61,14 @@ struct Exec<'a> {
 }
 
 impl Engine {
-    pub(crate) async fn exec_plan(&self, plan: ExecPlan) -> Result<ValueStream> {
+    pub(crate) async fn exec_plan(
+        &mut self,
+        plan: ExecPlan,
+        conn: SingleConnection<'_>,
+    ) -> Result<ValueStream> {
         let mut exec = Exec {
             engine: self,
-            connection: self.connection.get().await?,
+            connection: conn,
             vars: plan.vars,
         };
 

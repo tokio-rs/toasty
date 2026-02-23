@@ -13,7 +13,7 @@ use simplify::Simplify;
 mod ty;
 mod verify;
 
-use crate::{db::ConnectionType, Result};
+use crate::{db::SingleConnection, Result};
 use std::sync::Arc;
 use toasty_core::{
     driver::Capability,
@@ -38,22 +38,14 @@ pub(crate) struct Engine {
     /// The schema being managed by this database instance.
     pub(crate) schema: Arc<Schema>,
 
-    /// Handle to the connection pool.
-    pub(crate) connection: ConnectionType,
-
     pub(crate) capabilities: &'static Capability,
 }
 
 impl Engine {
     /// Creates a new [`Engine`] with the given schema and driver.
-    pub(crate) fn new(
-        schema: Arc<Schema>,
-        connection: ConnectionType,
-        capabilities: &'static Capability,
-    ) -> Engine {
+    pub(crate) fn new(schema: Arc<Schema>, capabilities: &'static Capability) -> Engine {
         Engine {
             schema,
-            connection,
             capabilities,
         }
     }
@@ -68,7 +60,11 @@ impl Engine {
     /// This is the main entry point for query execution. The statement passes
     /// through the full compilation pipeline (lowering → planning → execution)
     /// before being sent to the database driver.
-    pub(crate) async fn exec(&self, stmt: Statement) -> Result<ValueStream> {
+    pub(crate) async fn exec(
+        &mut self,
+        stmt: Statement,
+        conn: SingleConnection<'_>,
+    ) -> Result<ValueStream> {
         if cfg!(debug_assertions) {
             self.verify(&stmt);
         }
@@ -88,7 +84,7 @@ impl Engine {
 
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
-        self.exec_plan(plan).await
+        self.exec_plan(plan, conn).await
     }
 
     /// Returns a new [`ExprContext`](stmt::ExprContext) for this engine's schema.
