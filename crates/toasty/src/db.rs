@@ -221,6 +221,9 @@ impl Db {
 
 impl Drop for Db {
     fn drop(&mut self) {
+        // If we're in a transaction, the bg task could still be rolling back a transaction from a
+        // dropped future/Transaction. This task will abort after rolling back and trying to read
+        // from the channel.
         if !self.in_transaction {
             // TODO: make this less aggressive
             self.join_handle.abort();

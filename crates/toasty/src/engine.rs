@@ -33,11 +33,12 @@ use toasty_core::{
 /// 2. **Lowering.** Convert to HIR with dependency tracking.
 /// 3. **Planning.** Build MIR operation graph.
 /// 4. **Execution.** Run actions against the database driver.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Engine {
     /// The schema being managed by this database instance.
     pub(crate) schema: Arc<Schema>,
 
+    /// The capabilities of the connected driver.
     pub(crate) capabilities: &'static Capability,
 }
 

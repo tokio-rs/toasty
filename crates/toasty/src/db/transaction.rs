@@ -26,11 +26,15 @@ impl Transaction<'_> {
     }
 
     async fn commit(&mut self) -> crate::Result<()> {
+        // We're marking the transaction as done before doing the actual operation since the actual
+        // work is being done in a bg task. Even if the Transaction is dropped after the first poll
+        // the operation is finished in the bg task en should not be rolled back on drop.
         self.done = true;
         self.exec_op(TransactionOp::Commit).await
     }
 
     async fn rollback(&mut self) -> crate::Result<()> {
+        // See commit why we're marking this transaction as done early here.
         self.done = true;
         self.exec_op(TransactionOp::Rollback).await
     }
