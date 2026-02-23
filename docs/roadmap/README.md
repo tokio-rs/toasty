@@ -47,6 +47,30 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 
 ### Relationships & Loading
 
+**Partial Model Loading**
+- Allow models to have fields that are not loaded by default (e.g. a large `body` column on an `Article` model)
+- Fields opt-in via a `#[deferred]` attribute and must be wrapped in a `Deferred<T>` type
+- By default, queries skip deferred fields; callers opt-in with `.include(Article::body)` (same API as relation preloading)
+- Accessing a `Deferred<T>` that was not loaded either returns an error or panics with a clear message
+- Works with primitive types, embedded structs, and embedded enums — just a subset of columns in the same table
+  ```rust
+  #[toasty::model]
+  struct Article {
+      #[key]
+      id: Id<Self>,
+      title: String,
+      author: BelongsTo<User>,
+      #[deferred]
+      body: Deferred<String>,   // not loaded unless explicitly included
+  }
+
+  // Load metadata only (no body column fetched)
+  let articles = Article::all().collect(&db).await?;
+
+  // Load with body
+  let articles = Article::all().include(Article::body).collect(&db).await?;
+  ```
+
 **Relationships**
 - Many-to-many relationships
 - Polymorphic associations
