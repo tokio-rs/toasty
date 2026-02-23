@@ -17,7 +17,7 @@ impl Expand<'_> {
                 &root.create_struct_ident,
                 &root.update_struct_ident,
             ),
-            ModelKind::EmbeddedStruct(_) => {
+            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => {
                 // Embedded models don't generate CRUD methods, just return early
                 return TokenStream::new();
             }

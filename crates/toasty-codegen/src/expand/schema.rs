@@ -40,6 +40,9 @@ impl Expand<'_> {
                     )
                 }
             }
+            ModelKind::EmbeddedEnum(_) => {
+                panic!("expand_model_schema called on EmbeddedEnum; use embedded_enum() instead")
+            }
         };
 
         quote! {
@@ -194,7 +197,8 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let primary_key = match &self.model.kind {
             ModelKind::Root(root) => &root.primary_key,
-            ModelKind::EmbeddedStruct(_) => panic!("expand_primary_key called on embedded model"),
+            ModelKind::EmbeddedStruct(_) => panic!("expand_primary_key called on embedded struct"),
+            ModelKind::EmbeddedEnum(_) => panic!("expand_primary_key called on embedded enum"),
         };
 
         let fields = primary_key
@@ -285,7 +289,7 @@ impl Expand<'_> {
     }
 }
 
-fn expand_name(toasty: &TokenStream, name: &Name) -> TokenStream {
+pub(super) fn expand_name(toasty: &TokenStream, name: &Name) -> TokenStream {
     let parts = name.parts.iter().map(|part| {
         let part = part.to_string();
         quote! { #part.to_string() }

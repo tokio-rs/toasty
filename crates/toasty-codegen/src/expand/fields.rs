@@ -107,6 +107,7 @@ impl Expand<'_> {
         match &self.model.kind {
             ModelKind::Root(root) => &root.field_struct_ident,
             ModelKind::EmbeddedStruct(embedded) => &embedded.field_struct_ident,
+            ModelKind::EmbeddedEnum(_) => panic!("embedded enums do not have a field struct"),
         }
     }
 

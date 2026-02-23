@@ -148,6 +148,120 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     })
 }
 
+pub(super) fn embedded_enum(model: &Model) -> TokenStream {
+    let toasty = quote!(_toasty::codegen_support);
+    let model_ident = &model.ident;
+    let embedded_enum = model.kind.expect_embedded_enum();
+
+    let name = schema::expand_name(&toasty, &model.name);
+
+    let variants = embedded_enum.variants.iter().map(|variant| {
+        let variant_name = schema::expand_name(&toasty, &variant.name);
+        let discriminant = variant.discriminant;
+        quote! {
+            #toasty::schema::app::EnumVariant {
+                name: #variant_name,
+                discriminant: #discriminant,
+            }
+        }
+    });
+
+    let load_arms = embedded_enum.variants.iter().map(|variant| {
+        let ident = &variant.ident;
+        let discriminant = variant.discriminant;
+        quote! { #discriminant => Ok(#model_ident::#ident), }
+    });
+
+    let into_expr_arms: Vec<_> = embedded_enum.variants.iter().map(|variant| {
+        let ident = &variant.ident;
+        let discriminant = variant.discriminant;
+        quote! { #model_ident::#ident => #discriminant, }
+    }).collect();
+
+    wrap_in_const(quote! {
+        impl #toasty::Register for #model_ident {
+            fn id() -> #toasty::ModelId {
+                static ID: std::sync::OnceLock<#toasty::ModelId> = std::sync::OnceLock::new();
+                *ID.get_or_init(|| #toasty::generate_unique_id())
+            }
+
+            fn schema() -> #toasty::schema::app::Model {
+                let id = Self::id();
+                #toasty::schema::app::Model::EmbeddedEnum(
+                    #toasty::schema::app::EmbeddedEnum {
+                        id,
+                        name: #name,
+                        variants: vec![ #( #variants ),* ],
+                    }
+                )
+            }
+        }
+
+        impl #toasty::Embed for #model_ident {}
+
+        impl #toasty::stmt::Primitive for #model_ident {
+            type FieldAccessor = #toasty::Path<Self>;
+            type UpdateBuilder<'a> = ();
+
+            fn ty() -> #toasty::Type {
+                #toasty::Type::I64
+            }
+
+            fn load(value: #toasty::Value) -> #toasty::Result<Self> {
+                match value {
+                    #toasty::Value::I64(d) => match d {
+                        #( #load_arms )*
+                        _ => Err(#toasty::Error::type_conversion(
+                            #toasty::Value::I64(d),
+                            stringify!(#model_ident),
+                        )),
+                    },
+                    _ => Err(#toasty::Error::type_conversion(value, stringify!(#model_ident))),
+                }
+            }
+
+            fn make_field_accessor(path: #toasty::Path<Self>) -> Self::FieldAccessor {
+                path
+            }
+
+            fn field_ty(
+                _storage_ty: Option<#toasty::schema::db::Type>,
+            ) -> #toasty::schema::app::FieldTy {
+                #toasty::schema::app::FieldTy::Embedded(
+                    #toasty::schema::app::Embedded {
+                        target: Self::id(),
+                        expr_ty: Self::ty(),
+                    }
+                )
+            }
+        }
+
+        impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
+            fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
+                let discriminant: i64 = match self {
+                    #( #into_expr_arms )*
+                };
+                #toasty::stmt::Expr::from_untyped(
+                    #toasty::core::stmt::Expr::Value(
+                        #toasty::core::stmt::Value::I64(discriminant)
+                    )
+                )
+            }
+
+            fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
+                let discriminant: i64 = match *self {
+                    #( #into_expr_arms )*
+                };
+                #toasty::stmt::Expr::from_untyped(
+                    #toasty::core::stmt::Expr::Value(
+                        #toasty::core::stmt::Value::I64(discriminant)
+                    )
+                )
+            }
+        }
+    })
+}
+
 fn wrap_in_const(code: TokenStream) -> TokenStream {
     quote! {
         const _: () = {
