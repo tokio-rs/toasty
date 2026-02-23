@@ -1,8 +1,9 @@
 use toasty::schema::{
     app::FieldTy,
-    mapping::{self, FieldEmbedded, FieldPrimitive},
+    mapping::{self, FieldPrimitive, FieldStruct},
 };
 use toasty_core::stmt;
+use uuid::Uuid;
 
 use crate::prelude::*;
 
@@ -114,7 +115,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
                 lowering: 0,
                 ..
             }),
-            mapping::Field::Embedded(FieldEmbedded {
+            mapping::Field::Struct(FieldStruct {
                 fields: [
                     mapping::Field::Primitive(FieldPrimitive {
                         column: == user_table.columns[1].id,
@@ -707,7 +708,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
 /// Validates:
 /// - App schema: all embedded models registered
 /// - DB schema: deeply nested fields flattened with proper prefixes
-/// - Mapping: nested Field::Embedded structure with correct columns maps
+/// - Mapping: nested Field::Struct structure with correct columns maps
 /// - model_to_table: nested projection expressions
 #[driver_test]
 pub async fn deeply_nested_embedded_schema(test: &mut Test) {
@@ -820,12 +821,12 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
     let user_table = schema.table_for(user);
     let user_mapping = &schema.mapping.models[&User::id()];
 
-    // Mapping should have nested Field::Embedded structure
-    // User.fields[1] (address) -> FieldEmbedded {
+    // Mapping should have nested Field::Struct structure
+    // User.fields[1] (address) -> FieldStruct {
     //   fields[0] (street) -> FieldPrimitive { column: address_street }
-    //   fields[1] (city) -> FieldEmbedded {
+    //   fields[1] (city) -> FieldStruct {
     //     fields[0] (name) -> FieldPrimitive { column: address_city_name }
-    //     fields[1] (location) -> FieldEmbedded {
+    //     fields[1] (location) -> FieldStruct {
     //       fields[0] (lat) -> FieldPrimitive { column: address_city_location_lat }
     //       fields[1] (lon) -> FieldPrimitive { column: address_city_location_lon }
     //     }
@@ -840,8 +841,8 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
 
     // Check address field (index 1)
     let address_field = user_mapping.fields[1]
-        .as_embedded()
-        .expect("User.address should be Field::Embedded");
+        .as_struct()
+        .expect("User.address should be Field::Struct");
 
     assert_eq!(
         address_field.fields.len(),
@@ -860,8 +861,8 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
 
     // Check address.city (index 1)
     let city_field = address_field.fields[1]
-        .as_embedded()
-        .expect("Address.city should be Field::Embedded");
+        .as_struct()
+        .expect("Address.city should be Field::Struct");
 
     assert_eq!(
         city_field.fields.len(),
@@ -880,8 +881,8 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
 
     // Check address.city.location (index 1)
     let location_field = city_field.fields[1]
-        .as_embedded()
-        .expect("City.location should be Field::Embedded");
+        .as_struct()
+        .expect("City.location should be Field::Struct");
 
     assert_eq!(
         location_field.fields.len(),
@@ -1304,5 +1305,151 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
         zip: "97201",
         ..
     });
+    Ok(())
+}
+
+/// Tests that jiff temporal types inside embedded structs round-trip correctly.
+/// Covers Timestamp (epoch nanos), civil::Date, civil::Time, and civil::DateTime.
+#[driver_test(id(ID))]
+pub async fn embedded_struct_with_jiff_fields(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Schedule {
+        starts_at: jiff::Timestamp,
+        due_date: jiff::civil::Date,
+        reminder_time: jiff::civil::Time,
+        scheduled_at: jiff::civil::DateTime,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        schedule: Schedule,
+    }
+
+    let db = t.setup_db(models!(Event, Schedule)).await;
+
+    let starts_at = jiff::Timestamp::from_second(1_700_000_000).unwrap();
+    let due_date = jiff::civil::date(2025, 6, 15);
+    let reminder_time = jiff::civil::time(9, 30, 0, 0);
+    let scheduled_at = jiff::civil::datetime(2025, 6, 15, 9, 30, 0, 0);
+
+    let event = Event::create()
+        .name("team sync")
+        .schedule(Schedule {
+            starts_at,
+            due_date,
+            reminder_time,
+            scheduled_at,
+        })
+        .exec(&db)
+        .await?;
+
+    let found = Event::get_by_id(&db, &event.id).await?;
+    assert_struct!(found.schedule, _ {
+        starts_at: == starts_at,
+        due_date: == due_date,
+        reminder_time: == reminder_time,
+        scheduled_at: == scheduled_at,
+    });
+    Ok(())
+}
+
+/// Tests a unit enum embedded as a field inside an embedded struct (enum-in-struct nesting).
+/// The struct flattens to columns including the enum's discriminant column.
+#[driver_test(id(ID))]
+pub async fn unit_enum_in_embedded_struct(t: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Priority {
+        #[column(variant = 1)]
+        Low,
+        #[column(variant = 2)]
+        Normal,
+        #[column(variant = 3)]
+        High,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Meta {
+        label: String,
+        priority: Priority,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Task {
+        #[key]
+        #[auto]
+        id: ID,
+        meta: Meta,
+    }
+
+    let db = t.setup_db(models!(Task, Meta, Priority)).await;
+
+    let mut task = Task::create()
+        .meta(Meta {
+            label: "fix bug".to_string(),
+            priority: Priority::High,
+        })
+        .exec(&db)
+        .await?;
+
+    let found = Task::get_by_id(&db, &task.id).await?;
+    assert_eq!(found.meta.label, "fix bug");
+    assert_eq!(found.meta.priority, Priority::High);
+
+    task.update()
+        .with_meta(|m| {
+            m.priority(Priority::Normal);
+        })
+        .exec(&db)
+        .await?;
+
+    let found = Task::get_by_id(&db, &task.id).await?;
+    assert_eq!(found.meta.priority, Priority::Normal);
+
+    Ok(())
+}
+
+/// Tests that UUID fields inside embedded structs round-trip correctly.
+/// UUID requires a type cast on databases that don't support it natively
+/// (e.g., SQLite stores it as text). This exercises the table_to_model
+/// lifting path for embedded struct fields with non-trivial type mappings.
+#[driver_test(id(ID))]
+pub async fn embedded_struct_with_uuid_field(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Meta {
+        ref_id: Uuid,
+        label: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        meta: Meta,
+    }
+
+    let db = t.setup_db(models!(Item, Meta)).await;
+
+    let ref_id = Uuid::new_v4();
+
+    let item = Item::create()
+        .name("widget")
+        .meta(Meta {
+            ref_id,
+            label: "v1".to_string(),
+        })
+        .exec(&db)
+        .await?;
+
+    // Read back and verify the UUID survived the round-trip
+    let found = Item::get_by_id(&db, &item.id).await?;
+    assert_eq!(found.meta.ref_id, ref_id);
+    assert_eq!(found.meta.label, "v1");
+
     Ok(())
 }

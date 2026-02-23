@@ -28,11 +28,17 @@ struct BuildTableFromModels<'a> {
     prefix_table_names: bool,
 }
 
-/// Computes a model's maping
+/// Computes a model's mapping, creating table columns and mapping expressions
+/// in a single recursive pass over the model's fields.
 struct BuildMapping<'a> {
     app: &'a app::Schema,
+    db: &'a driver::Capability,
     table: &'a mut Table,
     mapping: &'a mut mapping::Model,
+    /// Model-name prefix used when multiple models share one table, separated
+    /// from the rest of the column name with `__`. None for single-model tables.
+    schema_prefix: Option<String>,
+    next_bit: usize,
     lowering_columns: Vec<ColumnId>,
     model_to_table: Vec<stmt::Expr>,
     model_pk_to_table: Vec<stmt::Expr>,
@@ -106,9 +112,7 @@ impl BuildSchema<'_> {
 
 impl BuildTableFromModels<'_> {
     fn build(&mut self, model: &Model) {
-        // Populate the rest of the columns
         self.map_model_fields(model);
-
         self.update_index_names();
     }
 
@@ -120,12 +124,13 @@ impl BuildTableFromModels<'_> {
             None
         };
 
-        self.populate_columns(model, schema_prefix.as_deref(), None);
-
         BuildMapping {
             app: self.app,
+            db: self.db,
             table: self.table,
             mapping: self.mapping.model_mut(model),
+            schema_prefix,
+            next_bit: 0,
             lowering_columns: vec![],
             model_to_table: vec![],
             model_pk_to_table: vec![],
@@ -177,82 +182,6 @@ impl BuildTableFromModels<'_> {
         }
     }
 
-    fn create_column(
-        &mut self,
-        column_name: String,
-        field: &app::Field,
-        primitive: &app::FieldPrimitive,
-    ) {
-        let auto_increment = field.is_auto_increment();
-        let storage_ty = db::Type::from_app(
-            &primitive.ty,
-            primitive.storage_ty.as_ref(),
-            &self.db.storage_types,
-        )
-        .expect("unsupported storage type");
-
-        let column = db::Column {
-            id: ColumnId {
-                table: self.table.id,
-                index: self.table.columns.len(),
-            },
-            name: column_name,
-            ty: storage_ty.bridge_type(&primitive.ty),
-            storage_ty,
-            nullable: field.nullable,
-            primary_key: false,
-            auto_increment: auto_increment && self.db.auto_increment,
-        };
-
-        self.table.columns.push(column);
-    }
-
-    /// Creates database columns for all primitive fields in a model, recursing
-    /// into embedded structs. Relations are skipped (they have no columns).
-    fn populate_columns(
-        &mut self,
-        model: &Model,
-        schema_prefix: Option<&str>,
-        embed_prefix: Option<&str>,
-    ) {
-        let fields = match model {
-            app::Model::Root(root) => &root.fields[..],
-            app::Model::EmbeddedStruct(embedded) => &embedded.fields[..],
-            app::Model::EmbeddedEnum(_) => &[],
-        };
-        for field in fields {
-            match &field.ty {
-                app::FieldTy::Primitive(primitive) => {
-                    let column_name = format_column_name(field, schema_prefix, embed_prefix);
-                    self.create_column(column_name, field, primitive);
-                }
-                app::FieldTy::Embedded(embedded) => {
-                    let nested_model = self.app.model(embedded.target);
-                    if matches!(nested_model, app::Model::EmbeddedEnum(_)) {
-                        // Embedded enum: create a single INTEGER column for the discriminant.
-                        let column_name = format_column_name(field, schema_prefix, embed_prefix);
-                        let primitive = app::FieldPrimitive {
-                            ty: stmt::Type::I64,
-                            storage_ty: None,
-                        };
-                        self.create_column(column_name, field, &primitive);
-                    } else {
-                        // schema_prefix stays separate and is not folded into the accumulated
-                        // embed_prefix — it is only applied at the final format_column_name call.
-                        let nested_embed_prefix = format_column_name(field, None, embed_prefix);
-                        self.populate_columns(
-                            nested_model,
-                            schema_prefix,
-                            Some(&nested_embed_prefix),
-                        );
-                    }
-                }
-                app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
-                }
-            }
-        }
-    }
-
     fn update_index_names(&mut self) {
         for index in &mut self.table.indices {
             index.name = format!("index_{}_by", self.table.name);
@@ -273,50 +202,121 @@ impl BuildTableFromModels<'_> {
 
 impl BuildMapping<'_> {
     fn build_mapping(mut self, model: &ModelRoot) {
-        // Build all field mappings in a single unified pass
-        let fields = self.build_field_mappings(model);
+        let fields = self.map_fields(&model.fields, None, None, stmt::Projection::identity());
 
         assert!(!self.model_to_table.is_empty());
         assert_eq!(self.model_to_table.len(), self.lowering_columns.len());
 
-        // Iterate fields again (including PK fields) and build the table -> model map.
-        for (field_index, field) in model.fields.iter().enumerate() {
-            match &field.ty {
-                app::FieldTy::Primitive(primitive) => {
-                    let column_id = fields[field_index].as_primitive().unwrap().column;
-                    let expr = self.map_table_column_to_model(column_id, primitive);
-                    self.table_to_model.push(expr);
-                }
-                app::FieldTy::Embedded(embedded) => {
-                    let nested_model = self.app.model(embedded.target);
-                    if matches!(nested_model, app::Model::EmbeddedEnum(_)) {
-                        // Embedded enum: single column mapped as primitive.
-                        let column_id = fields[field_index].as_primitive().unwrap().column;
-                        let primitive = app::FieldPrimitive {
-                            ty: stmt::Type::I64,
-                            storage_ty: None,
-                        };
-                        let expr = self.map_table_column_to_model(column_id, &primitive);
-                        self.table_to_model.push(expr);
-                    } else {
-                        // Use the mapping information we just built
-                        let field_mapping = &fields[field_index];
-                        let embedded_mapping = field_mapping
-                            .as_embedded()
-                            .expect("embedded field should have embedded mapping");
-                        let expr = self.map_embedded_to_model_from_mapping(embedded_mapping);
-                        self.table_to_model.push(expr);
-                    }
-                }
-                app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
-                    self.table_to_model.push(stmt::Value::Null.into());
-                }
-            }
+        self.build_table_to_model(model, &fields);
+        self.build_pk_lowering(model);
+
+        self.mapping.fields = fields;
+        self.mapping.columns = self.lowering_columns;
+        self.mapping.model_to_table = stmt::ExprRecord::from_vec(self.model_to_table);
+        self.mapping.table_to_model =
+            TableToModel::new(stmt::ExprRecord::from_vec(self.table_to_model));
+        self.mapping.model_pk_to_table = if self.model_pk_to_table.len() == 1 {
+            let expr = self.model_pk_to_table.into_iter().next().unwrap();
+            debug_assert!(expr.is_field() || expr.is_cast(), "expr={expr:#?}");
+            expr
+        } else {
+            stmt::ExprRecord::from_vec(self.model_pk_to_table).into()
+        };
+    }
+
+    fn next_bit(&mut self) -> usize {
+        let bit = self.next_bit;
+        self.next_bit += 1;
+        bit
+    }
+
+    /// Creates a database column, appends it to the table, and returns its ID.
+    fn create_column(
+        &mut self,
+        column_name: String,
+        primitive: &app::FieldPrimitive,
+        nullable: bool,
+        auto_increment: bool,
+    ) -> ColumnId {
+        let storage_ty = db::Type::from_app(
+            &primitive.ty,
+            primitive.storage_ty.as_ref(),
+            &self.db.storage_types,
+        )
+        .expect("unsupported storage type");
+
+        let id = ColumnId {
+            table: self.table.id,
+            index: self.table.columns.len(),
+        };
+
+        let column = db::Column {
+            id,
+            name: column_name,
+            ty: storage_ty.bridge_type(&primitive.ty),
+            storage_ty,
+            nullable,
+            primary_key: false,
+            auto_increment: auto_increment && self.db.auto_increment,
+        };
+
+        self.table.columns.push(column);
+        id
+    }
+
+    fn build_table_to_model(&mut self, model: &ModelRoot, mapping: &[mapping::Field]) {
+        for (index, field) in model.fields.iter().enumerate() {
+            let expr = self.build_table_to_model_field(field, &mapping[index]);
+            self.table_to_model.push(expr);
+        }
+    }
+
+    /// Builds the `table_to_model` expression for an embedded enum field.
+    ///
+    /// For unit-only enums the discriminant column reference suffices.
+    /// For mixed/data-carrying enums a `Match` expression dispatches on the
+    /// discriminant: unit arms return the discriminant directly, data arms
+    /// return `Record([disc, field1, ...])` matching the shape expected by
+    /// `Primitive::load`.
+    fn build_table_to_model_field_enum(
+        &self,
+        model: &app::EmbeddedEnum,
+        mapping: &mapping::FieldEnum,
+    ) -> stmt::Expr {
+        let disc_col_ref = stmt::Expr::column(stmt::ExprColumn {
+            nesting: 0,
+            table: 0,
+            column: mapping.disc_column.index,
+        });
+
+        if !model.has_data_variants() {
+            return disc_col_ref;
         }
 
-        // Build the PK lowering
+        let mut arms = Vec::new();
+
+        for (variant, mapping) in model.variants.iter().zip(&mapping.variants) {
+            let arm_expr = if variant.fields.is_empty() {
+                disc_col_ref.clone()
+            } else {
+                let mut record_elems = vec![disc_col_ref.clone()];
+
+                for (local_idx, field) in variant.fields.iter().enumerate() {
+                    let expr = self.build_table_to_model_field(field, &mapping.fields[local_idx]);
+                    record_elems.push(expr);
+                }
+                stmt::Expr::record(record_elems)
+            };
+            arms.push(stmt::MatchArm {
+                pattern: stmt::Value::I64(variant.discriminant),
+                expr: arm_expr,
+            });
+        }
+        stmt::Expr::match_expr(disc_col_ref, arms, stmt::Expr::null())
+    }
+
+    fn build_pk_lowering(&mut self, model: &ModelRoot) {
         for pk_field in &self.table.primary_key.columns {
-            // Find the column's position in the mapping
             let index = self
                 .lowering_columns
                 .iter()
@@ -345,7 +345,6 @@ impl BuildMapping<'_> {
                     if field_id.index == *step {
                         let mut p = projection.clone();
                         p[0] = i;
-
                         return p;
                     }
                 }
@@ -360,217 +359,263 @@ impl BuildMapping<'_> {
 
             self.model_pk_to_table.push(expr);
         }
-
-        self.mapping.fields = fields;
-        self.mapping.columns = self.lowering_columns;
-        self.mapping.model_to_table = stmt::ExprRecord::from_vec(self.model_to_table);
-        self.mapping.table_to_model =
-            TableToModel::new(stmt::ExprRecord::from_vec(self.table_to_model));
-        self.mapping.model_pk_to_table = if self.model_pk_to_table.len() == 1 {
-            let expr = self.model_pk_to_table.into_iter().next().unwrap();
-            debug_assert!(expr.is_field() || expr.is_cast(), "expr={expr:#?}");
-            expr
-        } else {
-            stmt::ExprRecord::from_vec(self.model_pk_to_table).into()
-        };
     }
 
-    /// Builds field mappings for all fields in the model.
-    ///
-    /// This is a thin wrapper that calls the unified recursive function with
-    /// root-level context (empty prefix, identity projection).
-    fn build_field_mappings(&mut self, model: &ModelRoot) -> Vec<mapping::Field> {
-        let mut next_bit = 0;
-        self.map_fields_recursive(
-            &model.fields,
-            None,
-            None,
-            stmt::Projection::identity(),
-            &mut next_bit,
-        )
-    }
-
-    /// Unified recursive function that builds field mappings for any list of fields.
-    ///
-    /// Handles both root-level and embedded fields uniformly by using context variables:
-    /// - For root fields: prefix="", source_field_id=None, base_projection=identity
-    /// - For embedded fields: prefix="address_city", source_field_id=Some(User.address), base_projection=[1,1]
-    ///
-    /// The differences in column naming and expression building are extracted as
-    /// simple conditionals based on these context variables.
-    ///
-    /// `next_bit` is a monotonically increasing counter that assigns each
-    /// primitive field a unique bit index in the model's field mask space.
-    fn map_fields_recursive(
+    fn map_fields(
         &mut self,
         fields: &[app::Field],
         prefix: Option<&str>,
         source_field_id: Option<FieldId>,
         base_projection: stmt::Projection,
-        next_bit: &mut usize,
     ) -> Vec<mapping::Field> {
-        fields
-            .iter()
-            .enumerate()
-            .map(|(field_index, field)| {
-                match &field.ty {
-                    app::FieldTy::Primitive(primitive) => {
-                        let column_name = format_column_name(field, None, prefix);
+        let mut mapping = Vec::with_capacity(fields.len());
+        for (field_index, field) in fields.iter().enumerate() {
+            mapping.push(self.map_field(
+                field_index,
+                field,
+                prefix,
+                source_field_id,
+                &base_projection,
+            ));
+        }
+        mapping
+    }
 
-                        let column_id = self
-                            .table
-                            .columns
-                            .iter()
-                            .find(|col| col.name == column_name)
-                            .map(|col| col.id)
-                            .expect("column should exist for primitive field");
-
-                        // Expression: root primitives use ref(field.id), embedded uses project(ref(source), projection)
-                        let expr = if let Some(source) = source_field_id {
-                            // Embedded primitive: project from source field through accumulated path
-                            let base = stmt::Expr::ref_self_field(source);
-                            let mut projection = base_projection.clone();
-                            projection.push(field_index);
-                            stmt::Expr::project(base, projection)
-                        } else {
-                            // Root primitive: reference the field directly
-                            stmt::Expr::ref_self_field(field.id)
-                        };
-
-                        let lowering = self.encode_column(column_id, &primitive.ty, expr);
-                        let lowering_index = self.model_to_table.len();
-
-                        self.lowering_columns.push(column_id);
-                        self.model_to_table.push(lowering);
-
-                        // Assign this primitive its unique bit in the field mask space.
-                        let bit = *next_bit;
-                        *next_bit += 1;
-
-                        // sub_projection is the path from the root embedded field
-                        // to this primitive: base_projection + [field_index] for
-                        // embedded primitives, identity for root-level primitives.
-                        let sub_projection = if source_field_id.is_some() {
-                            let mut proj = base_projection.clone();
-                            proj.push(field_index);
-                            proj
-                        } else {
-                            stmt::Projection::identity()
-                        };
-
-                        mapping::Field::Primitive(mapping::FieldPrimitive {
-                            column: column_id,
-                            lowering: lowering_index,
-                            field_mask: stmt::PathFieldSet::from_iter([bit]),
-                            sub_projection,
-                        })
-                    }
-                    app::FieldTy::Embedded(embedded) => {
-                        let embedded_model = self.app.model(embedded.target);
-
-                        if matches!(embedded_model, app::Model::EmbeddedEnum(_)) {
-                            // Embedded enum: single column, mapped as primitive.
-                            let column_name = format_column_name(field, None, prefix);
-                            let column_id = self
-                                .table
-                                .columns
-                                .iter()
-                                .find(|col| col.name == column_name)
-                                .map(|col| col.id)
-                                .expect("column should exist for embedded enum field");
-
-                            let expr = if let Some(source) = source_field_id {
-                                let base = stmt::Expr::ref_self_field(source);
-                                let mut projection = base_projection.clone();
-                                projection.push(field_index);
-                                stmt::Expr::project(base, projection)
-                            } else {
-                                stmt::Expr::ref_self_field(field.id)
-                            };
-
-                            let i64_ty = stmt::Type::I64;
-                            let lowering = self.encode_column(column_id, &i64_ty, expr);
-                            let lowering_index = self.model_to_table.len();
-
-                            self.lowering_columns.push(column_id);
-                            self.model_to_table.push(lowering);
-
-                            let bit = *next_bit;
-                            *next_bit += 1;
-
-                            let sub_projection = if source_field_id.is_some() {
-                                let mut proj = base_projection.clone();
-                                proj.push(field_index);
-                                proj
-                            } else {
-                                stmt::Projection::identity()
-                            };
-
-                            mapping::Field::Primitive(mapping::FieldPrimitive {
-                                column: column_id,
-                                lowering: lowering_index,
-                                field_mask: stmt::PathFieldSet::from_iter([bit]),
-                                sub_projection,
-                            })
-                        } else {
-                            let nested_prefix = format_column_name(field, None, prefix);
-
-                            // Nested source: root embedded uses field.id, nested embedded keeps source_field_id
-                            let nested_source = source_field_id.or(Some(field.id));
-
-                            // Nested projection: reset for root embedded, extend for nested embedded
-                            let nested_projection = if source_field_id.is_none() {
-                                // Root embedded: start fresh with identity projection
-                                stmt::Projection::identity()
-                            } else {
-                                // Nested embedded: extend the accumulated projection
-                                let mut proj = base_projection.clone();
-                                proj.push(field_index);
-                                proj
-                            };
-
-                            // Recurse with a shared bit counter so all nested primitives
-                            // get globally unique bits within the model's field mask space.
-                            let nested_fields = self.map_fields_recursive(
-                                &embedded_model.expect_embedded_struct().fields,
-                                Some(&nested_prefix),
-                                nested_source,
-                                nested_projection.clone(),
-                                next_bit,
-                            );
-
-                            // Derive the columns map from the nested fields
-                            let columns: indexmap::IndexMap<ColumnId, usize> = nested_fields
-                                .iter()
-                                .flat_map(|field| field.columns())
-                                .collect();
-
-                            // The embedded field's mask is the union of all nested
-                            // primitive masks, giving full coverage of the embedded struct.
-                            let field_mask = nested_fields
-                                .iter()
-                                .fold(stmt::PathFieldSet::new(), |acc, f| acc | f.field_mask());
-
-                            mapping::Field::Embedded(mapping::FieldEmbedded {
-                                fields: nested_fields,
-                                columns,
-                                field_mask,
-                                sub_projection: nested_projection,
-                            })
-                        }
-                    }
-                    app::FieldTy::BelongsTo(_)
-                    | app::FieldTy::HasMany(_)
-                    | app::FieldTy::HasOne(_) => {
-                        let bit = *next_bit;
-                        *next_bit += 1;
-                        mapping::Field::Relation(mapping::FieldRelation {
-                            field_mask: stmt::PathFieldSet::from_iter([bit]),
-                        })
-                    }
+    fn map_field(
+        &mut self,
+        field_index: usize,
+        field: &app::Field,
+        prefix: Option<&str>,
+        source_field_id: Option<FieldId>,
+        base_projection: &stmt::Projection,
+    ) -> mapping::Field {
+        match &field.ty {
+            app::FieldTy::Primitive(primitive) => self.map_field_primitive(
+                field_index,
+                field,
+                primitive,
+                prefix,
+                source_field_id,
+                base_projection,
+            ),
+            app::FieldTy::Embedded(embedded) => {
+                let embedded_model = self.app.model(embedded.target);
+                if let app::Model::EmbeddedEnum(embedded_enum) = embedded_model {
+                    self.map_field_enum(
+                        field_index,
+                        field,
+                        embedded_enum,
+                        prefix,
+                        source_field_id,
+                        base_projection,
+                    )
+                } else {
+                    self.map_field_struct(
+                        field_index,
+                        field,
+                        embedded_model.expect_embedded_struct(),
+                        prefix,
+                        source_field_id,
+                        base_projection,
+                    )
                 }
-            })
-            .collect()
+            }
+            app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+                let bit = self.next_bit();
+                mapping::Field::Relation(mapping::FieldRelation {
+                    field_mask: stmt::PathFieldSet::from_iter([bit]),
+                })
+            }
+        }
+    }
+
+    /// Creates the column and builds the mapping for a primitive field in one step.
+    fn map_field_primitive(
+        &mut self,
+        field_index: usize,
+        field: &app::Field,
+        primitive: &app::FieldPrimitive,
+        prefix: Option<&str>,
+        source_field_id: Option<FieldId>,
+        base_projection: &stmt::Projection,
+    ) -> mapping::Field {
+        let column_name = format_column_name(field, self.schema_prefix.as_deref(), prefix);
+        let column_id = self.create_column(
+            column_name,
+            primitive,
+            field.nullable,
+            field.is_auto_increment(),
+        );
+
+        let expr = field_expr(field, field_index, source_field_id, base_projection);
+
+        let lowering = self.encode_column(column_id, &primitive.ty, expr);
+        let lowering_index = self.model_to_table.len();
+        self.lowering_columns.push(column_id);
+        self.model_to_table.push(lowering);
+
+        let bit = self.next_bit();
+
+        let sub_projection = if source_field_id.is_some() {
+            let mut proj = base_projection.clone();
+            proj.push(field_index);
+            proj
+        } else {
+            stmt::Projection::identity()
+        };
+
+        mapping::Field::Primitive(mapping::FieldPrimitive {
+            column: column_id,
+            lowering: lowering_index,
+            field_mask: stmt::PathFieldSet::from_iter([bit]),
+            sub_projection,
+        })
+    }
+
+    /// Creates the discriminant and variant-field columns, then builds the
+    /// enum mapping — all in a single pass.
+    fn map_field_enum(
+        &mut self,
+        field_index: usize,
+        field: &app::Field,
+        embedded_enum: &app::EmbeddedEnum,
+        prefix: Option<&str>,
+        source_field_id: Option<FieldId>,
+        base_projection: &stmt::Projection,
+    ) -> mapping::Field {
+        let disc_col_name = format_column_name(field, self.schema_prefix.as_deref(), prefix);
+
+        // Create the discriminant column. It inherits nullability from the enum field.
+        let disc_primitive = app::FieldPrimitive {
+            ty: stmt::Type::I64,
+            storage_ty: None,
+        };
+        let disc_col_id = self.create_column(
+            disc_col_name.clone(),
+            &disc_primitive,
+            field.nullable,
+            false,
+        );
+
+        let field_expr = field_expr(field, field_index, source_field_id, base_projection);
+
+        // For data-carrying enums the model value is Record([I64(disc), ...]),
+        // so project [0] to extract the discriminant; for unit-only enums the
+        // value IS the I64 discriminant directly.
+        let disc_expr = if embedded_enum.has_data_variants() {
+            stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0))
+        } else {
+            field_expr.clone()
+        };
+
+        let lowering = self.encode_column(disc_col_id, &stmt::Type::I64, disc_expr);
+        let lowering_index = self.model_to_table.len();
+        self.lowering_columns.push(disc_col_id);
+        self.model_to_table.push(lowering);
+
+        let bit = self.next_bit();
+
+        let sub_projection = if source_field_id.is_some() {
+            let mut proj = base_projection.clone();
+            proj.push(field_index);
+            proj
+        } else {
+            stmt::Projection::identity()
+        };
+
+        let disc_proj = stmt::Expr::project(field_expr.clone(), stmt::Projection::single(0));
+        let mut variants = Vec::new();
+
+        for variant in &embedded_enum.variants {
+            let mut vf_fields = Vec::new();
+
+            for (local_idx, vf) in variant.fields.iter().enumerate() {
+                // Create the variant field column. Variant field columns are always
+                // nullable because only the owning variant populates them.
+                let vf_col_name = format_column_name(vf, None, Some(&disc_col_name));
+                let app::FieldTy::Primitive(vf_primitive) = &vf.ty else {
+                    panic!("variant field must be a primitive type");
+                };
+                let vf_col_id = self.create_column(vf_col_name, vf_primitive, true, false);
+
+                let arm = stmt::MatchArm {
+                    pattern: stmt::Value::I64(variant.discriminant),
+                    expr: stmt::Expr::project(
+                        field_expr.clone(),
+                        stmt::Projection::single(local_idx + 1),
+                    ),
+                };
+
+                let vf_lowering_expr = self.encode_column(
+                    vf_col_id,
+                    &vf_primitive.ty,
+                    stmt::Expr::match_expr(disc_proj.clone(), vec![arm], stmt::Expr::null()),
+                );
+                let vf_lowering = self.model_to_table.len();
+                self.lowering_columns.push(vf_col_id);
+                self.model_to_table.push(vf_lowering_expr);
+
+                vf_fields.push(mapping::Field::Primitive(mapping::FieldPrimitive {
+                    column: vf_col_id,
+                    lowering: vf_lowering,
+                    field_mask: stmt::PathFieldSet::from_iter([bit]),
+                    sub_projection: stmt::Projection::single(local_idx + 1),
+                }));
+            }
+
+            variants.push(mapping::EnumVariant {
+                discriminant: variant.discriminant,
+                fields: vf_fields,
+            });
+        }
+
+        mapping::Field::Enum(mapping::FieldEnum {
+            disc_column: disc_col_id,
+            disc_lowering: lowering_index,
+            variants,
+            field_mask: stmt::PathFieldSet::from_iter([bit]),
+            sub_projection,
+        })
+    }
+
+    fn map_field_struct(
+        &mut self,
+        field_index: usize,
+        field: &app::Field,
+        embedded_struct: &app::EmbeddedStruct,
+        prefix: Option<&str>,
+        source_field_id: Option<FieldId>,
+        base_projection: &stmt::Projection,
+    ) -> mapping::Field {
+        let nested_prefix = format_column_name(field, None, prefix);
+        let nested_source = source_field_id.or(Some(field.id));
+        let nested_projection = if source_field_id.is_none() {
+            stmt::Projection::identity()
+        } else {
+            let mut proj = base_projection.clone();
+            proj.push(field_index);
+            proj
+        };
+
+        let nested_fields = self.map_fields(
+            &embedded_struct.fields,
+            Some(&nested_prefix),
+            nested_source,
+            nested_projection.clone(),
+        );
+
+        let columns: indexmap::IndexMap<ColumnId, usize> =
+            nested_fields.iter().flat_map(|f| f.columns()).collect();
+        let field_mask = nested_fields
+            .iter()
+            .fold(stmt::PathFieldSet::new(), |acc, f| acc | f.field_mask());
+
+        mapping::Field::Struct(mapping::FieldStruct {
+            fields: nested_fields,
+            columns,
+            field_mask,
+            sub_projection: nested_projection,
+        })
     }
 
     fn encode_column(
@@ -597,7 +642,7 @@ impl BuildMapping<'_> {
     /// appropriate table column expressions. Handles type conversions between
     /// table storage and model types.
     fn map_table_column_to_model(
-        &mut self,
+        &self,
         column_id: ColumnId,
         primitive: &app::FieldPrimitive,
     ) -> stmt::Expr {
@@ -618,49 +663,49 @@ impl BuildMapping<'_> {
         }
     }
 
-    /// Maps flattened table columns to an embedded struct expression.
-    ///
-    /// Constructs an ExprRecord that builds the embedded struct from multiple
-    /// columns. For example, if Address has fields (street, city) stored as
-    /// columns (address_street, address_city), this creates:
-    /// record(column[1], column[2])
-    ///
-    /// Uses the field mapping information that was already built during `map_embedded`,
-    /// avoiding the need to recompute column names and perform lookups.
-    fn map_embedded_to_model_from_mapping(
+    fn build_table_to_model_field_struct(
         &self,
-        embedded_mapping: &mapping::FieldEmbedded,
+        model: &app::EmbeddedStruct,
+        mapping: &mapping::FieldStruct,
     ) -> stmt::Expr {
-        let mut field_exprs = Vec::new();
+        let exprs: Vec<_> = model
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(index, field)| self.build_table_to_model_field(field, &mapping.fields[index]))
+            .collect();
+        stmt::Expr::record(exprs)
+    }
 
-        for field in &embedded_mapping.fields {
-            match field {
-                mapping::Field::Primitive(primitive_mapping) => {
-                    let column_id = primitive_mapping.column;
-
-                    // Create a column reference expression
-                    let expr_column = stmt::Expr::column(stmt::ExprColumn {
-                        nesting: 0,
-                        table: 0,
-                        column: column_id.index,
-                    });
-
-                    field_exprs.push(expr_column);
+    fn build_table_to_model_field(
+        &self,
+        field: &app::Field,
+        mapping: &mapping::Field,
+    ) -> stmt::Expr {
+        match &field.ty {
+            app::FieldTy::Primitive(primitive) => {
+                let column_id = mapping.as_primitive().unwrap().column;
+                self.map_table_column_to_model(column_id, primitive)
+            }
+            app::FieldTy::Embedded(embedded) => match self.app.model(embedded.target) {
+                app::Model::EmbeddedEnum(embedded) => {
+                    let mapping = mapping
+                        .as_enum()
+                        .expect("embedded enum field should have enum mapping");
+                    self.build_table_to_model_field_enum(embedded, mapping)
                 }
-                mapping::Field::Embedded(nested_embedded_mapping) => {
-                    // Recursively build the nested record expression
-                    let nested_expr =
-                        self.map_embedded_to_model_from_mapping(nested_embedded_mapping);
-                    field_exprs.push(nested_expr);
+                app::Model::EmbeddedStruct(embedded) => {
+                    let mapping = mapping
+                        .as_struct()
+                        .expect("embedded struct field should have struct mapping");
+                    self.build_table_to_model_field_struct(embedded, mapping)
                 }
-                mapping::Field::Relation(_) => {
-                    panic!("relations not allowed in embedded types")
-                }
+                _ => unreachable!("invalid schema"),
+            },
+            app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+                stmt::Value::Null.into()
             }
         }
-
-        // Build a record expression from the field expressions
-        stmt::Expr::record(field_exprs)
     }
 }
 
@@ -676,6 +721,22 @@ impl BuildMapping<'_> {
 /// - `format_column_name(field, None, Some("address"))` → `"address_street"`
 /// - `format_column_name(field, Some("user"), None)` → `"user__street"`
 /// - `format_column_name(field, Some("user"), Some("address"))` → `"user__address_street"`
+fn field_expr(
+    field: &app::Field,
+    field_index: usize,
+    source_field_id: Option<FieldId>,
+    base_projection: &stmt::Projection,
+) -> stmt::Expr {
+    if let Some(source) = source_field_id {
+        let base = stmt::Expr::ref_self_field(source);
+        let mut projection = base_projection.clone();
+        projection.push(field_index);
+        stmt::Expr::project(base, projection)
+    } else {
+        stmt::Expr::ref_self_field(field.id)
+    }
+}
+
 fn format_column_name(
     field: &app::Field,
     schema_prefix: Option<&str>,

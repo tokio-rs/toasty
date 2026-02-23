@@ -121,10 +121,23 @@ pub struct EnumVariant {
 
     /// The discriminant value stored in the database column
     pub discriminant: i64,
+
+    /// Fields carried by this variant (empty for unit variants)
+    pub fields: Vec<Field>,
 }
 
 impl EmbeddedEnum {
-    pub(crate) fn verify(&self, _db: &driver::Capability) -> Result<()> {
+    /// Returns true if at least one variant carries data fields.
+    pub fn has_data_variants(&self) -> bool {
+        self.variants.iter().any(|v| !v.fields.is_empty())
+    }
+
+    pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        for variant in &self.variants {
+            for field in &variant.fields {
+                field.verify(db)?;
+            }
+        }
         Ok(())
     }
 }

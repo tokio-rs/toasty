@@ -3,11 +3,12 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
     ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc, ExprInList, ExprInSubquery,
-    ExprIsNull, ExprList, ExprMap, ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference,
-    ExprSet, ExprSetOp, ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join,
-    JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select,
-    Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
-    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    ExprIsNull, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord,
+    ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert,
+    InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query,
+    Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived,
+    TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values,
+    With,
 };
 
 pub trait Visit {
@@ -96,6 +97,10 @@ pub trait Visit {
 
     fn visit_expr_map(&mut self, i: &ExprMap) {
         visit_expr_map(self, i);
+    }
+
+    fn visit_expr_match(&mut self, i: &ExprMatch) {
+        visit_expr_match(self, i);
     }
 
     fn visit_expr_not(&mut self, i: &ExprNot) {
@@ -332,6 +337,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_map(&mut **self, i);
     }
 
+    fn visit_expr_match(&mut self, i: &ExprMatch) {
+        Visit::visit_expr_match(&mut **self, i);
+    }
+
     fn visit_expr_not(&mut self, i: &ExprNot) {
         Visit::visit_expr_not(&mut **self, i);
     }
@@ -540,6 +549,7 @@ where
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
         Expr::Map(expr) => v.visit_expr_map(expr),
+        Expr::Match(expr) => v.visit_expr_match(expr),
         Expr::Not(expr) => v.visit_expr_not(expr),
         Expr::Or(expr) => v.visit_expr_or(expr),
         Expr::Project(expr) => v.visit_expr_project(expr),
@@ -667,6 +677,17 @@ where
 {
     v.visit_expr(&node.base);
     v.visit_expr(&node.map);
+}
+
+pub fn visit_expr_match<V>(v: &mut V, node: &ExprMatch)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.subject);
+    for arm in &node.arms {
+        v.visit_expr(&arm.expr);
+    }
+    v.visit_expr(&node.else_expr);
 }
 
 pub fn visit_expr_not<V>(v: &mut V, node: &ExprNot)
