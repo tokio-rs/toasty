@@ -34,8 +34,8 @@ impl ConnectionType {
 impl SingleConnection<'_> {
     pub async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response> {
         match self {
-            SingleConnection::Pooled(pool_connection) => pool_connection.exec(schema, plan).await,
-            SingleConnection::Transaction(mutex_guard) => mutex_guard.exec(schema, plan).await,
+            SingleConnection::Pooled(pooled_conn) => pooled_conn.exec(schema, plan).await,
+            SingleConnection::Transaction(conn) => conn.exec(schema, plan).await,
         }
     }
 }

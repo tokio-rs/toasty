@@ -42,8 +42,7 @@ impl Builder {
     }
 
     pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
-        let driver = Arc::new(driver);
-        let pool = Pool::new(driver.clone())?;
+        let pool = Pool::new(driver)?;
 
         // Validate capability consistency
         pool.capability().validate()?;
@@ -53,7 +52,6 @@ impl Builder {
             .build(self.build_app_schema()?, pool.capability())
             .map(Arc::new)?;
 
-        let schema2 = schema.clone();
-        Ok(Db::new(pool.clone(), schema2, ConnectionType::Pool(pool)))
+        Ok(Db::new(pool.clone(), schema, ConnectionType::Pool(pool)))
     }
 }

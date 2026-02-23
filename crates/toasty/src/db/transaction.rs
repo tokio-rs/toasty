@@ -107,7 +107,6 @@ impl<'a> TransactionBuilder<'a> {
     {
         let mut tx = self.db.begin(self.isolation_level).await.map_err(E::from)?;
 
-        // The timeout covers only the user's callback, not BEGIN/COMMIT/ROLLBACK.
         let result = match self.timeout {
             Some(d) => match tokio::time::timeout(d, f(&*tx)).await {
                 Ok(r) => r,
