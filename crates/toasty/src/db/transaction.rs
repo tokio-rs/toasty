@@ -16,12 +16,7 @@ enum TransactionConn<'a> {
 
 impl Transaction<'_> {
     fn exec_op(&self, op: TransactionOp) -> impl Future<Output = crate::Result<()>> {
-        let fut = self.exec(op);
-
-        async {
-            fut.await?;
-            Ok(())
-        }
+        Db::exec_transaction_op(self, op)
     }
 
     async fn commit(&mut self) -> crate::Result<()> {

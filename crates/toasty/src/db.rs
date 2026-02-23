@@ -19,10 +19,18 @@ pub use transaction::TransactionBuilder;
 use crate::{engine::Engine, stmt, Cursor, Model, Result, Statement};
 
 use toasty_core::{
-    driver::Driver,
+    driver::{operation::Transaction as TransactionOp, Driver},
     stmt::{Value, ValueStream},
     Schema,
 };
+
+pub(crate) enum EngineMsg {
+    Statement(
+        toasty_core::stmt::Statement,
+        oneshot::Sender<Result<ValueStream>>,
+    ),
+    Transaction(TransactionOp, oneshot::Sender<Result<()>>),
+}
 
 #[derive(Debug)]
 pub struct Db {
@@ -33,10 +41,7 @@ pub struct Db {
 
     // pub(crate) engine: Engine,
     /// Handle to send statements to be executed
-    pub(crate) in_tx: mpsc::UnboundedSender<(
-        toasty_core::stmt::Statement,
-        oneshot::Sender<Result<ValueStream>>,
-    )>,
+    pub(crate) in_tx: mpsc::UnboundedSender<EngineMsg>,
 
     /// Handle to task driving the query engine
     pub(crate) join_handle: JoinHandle<()>,
@@ -50,38 +55,50 @@ impl Db {
 
         let mut engine = Engine::new(schema.clone(), capabilities);
 
-        let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<(
-            toasty_core::stmt::Statement,
-            oneshot::Sender<crate::Result<ValueStream>>,
-        )>();
+        let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<EngineMsg>();
 
         let join_handle = tokio::spawn(async move {
             loop {
-                let (stmt, tx) = in_rx.recv().await.unwrap();
-                let conn = match connection.get().await {
+                let msg = in_rx.recv().await.unwrap();
+                let mut conn = match connection.get().await {
                     Ok(c) => c,
                     Err(e) => {
-                        let _ = tx.send(Err(e));
+                        match msg {
+                            EngineMsg::Statement(_, tx) => {
+                                let _ = tx.send(Err(e));
+                            }
+                            EngineMsg::Transaction(_, tx) => {
+                                let _ = tx.send(Err(e));
+                            }
+                        }
                         continue;
                     }
                 };
-                match engine.exec(stmt, conn).await {
-                    Ok(mut value_stream) => {
-                        let (row_tx, mut row_rx) =
-                            tokio::sync::mpsc::unbounded_channel::<crate::Result<Value>>();
+                match msg {
+                    EngineMsg::Statement(stmt, tx) => match engine.exec(stmt, conn).await {
+                        Ok(mut value_stream) => {
+                            let (row_tx, mut row_rx) =
+                                tokio::sync::mpsc::unbounded_channel::<crate::Result<Value>>();
 
-                        let _ = tx.send(Ok(ValueStream::from_stream(async_stream::stream! {
-                            while let Some(res) = row_rx.recv().await {
-                                yield res
+                            let _ = tx.send(Ok(ValueStream::from_stream(async_stream::stream! {
+                                while let Some(res) = row_rx.recv().await {
+                                    yield res
+                                }
+                            })));
+
+                            while let Some(res) = value_stream.next().await {
+                                let _ = row_tx.send(res);
                             }
-                        })));
-
-                        while let Some(res) = value_stream.next().await {
-                            let _ = row_tx.send(res);
                         }
-                    }
-                    Err(err) => {
-                        let _ = tx.send(Err(err));
+                        Err(err) => {
+                            let _ = tx.send(Err(err));
+                        }
+                    },
+                    EngineMsg::Transaction(op, tx) => {
+                        let result = conn
+                            .exec(&engine.schema.db, Operation::Transaction(op))
+                            .await;
+                        let _ = tx.send(result.map(|_| ()));
                     }
                 }
             }
@@ -140,12 +157,23 @@ impl Db {
         let (tx, rx) = oneshot::channel();
 
         // Send the statement to the execution engine
-        self.in_tx.send((statement.untyped, tx)).unwrap();
+        self.in_tx
+            .send(EngineMsg::Statement(statement.untyped, tx))
+            .unwrap();
 
         async {
             // Return the typed result
             rx.await.unwrap()
         }
+    }
+
+    pub(crate) fn exec_transaction_op(
+        &self,
+        op: TransactionOp,
+    ) -> impl Future<Output = Result<()>> {
+        let (tx, rx) = oneshot::channel();
+        self.in_tx.send(EngineMsg::Transaction(op, tx)).unwrap();
+        async { rx.await.unwrap() }
     }
 
     /// Execute a statement, assume only one record is returned
