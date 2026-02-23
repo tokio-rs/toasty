@@ -7,34 +7,34 @@ use toasty_core::{
 
 use crate::db::{Pool, PoolConnection};
 
-pub(crate) enum ConnectionType {
+pub(crate) enum ConnectionSource {
     Pool(Pool),
     Transaction(PoolConnection),
 }
 
-pub(crate) enum SingleConnection<'a> {
+pub(crate) enum ConnHandle<'a> {
     Pooled(PoolConnection),
     Transaction(&'a mut PoolConnection),
 }
 
-impl ConnectionType {
+impl ConnectionSource {
     pub fn in_transaction(&self) -> bool {
-        matches!(self, ConnectionType::Transaction(_))
+        matches!(self, ConnectionSource::Transaction(_))
     }
 
-    pub async fn get(&mut self) -> crate::Result<SingleConnection<'_>> {
+    pub async fn get(&mut self) -> crate::Result<ConnHandle<'_>> {
         match self {
-            ConnectionType::Pool(pool) => pool.get().await.map(SingleConnection::Pooled),
-            ConnectionType::Transaction(conn) => Ok(SingleConnection::Transaction(conn)),
+            ConnectionSource::Pool(pool) => pool.get().await.map(ConnHandle::Pooled),
+            ConnectionSource::Transaction(conn) => Ok(ConnHandle::Transaction(conn)),
         }
     }
 }
 
-impl SingleConnection<'_> {
+impl ConnHandle<'_> {
     pub async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<Response> {
         match self {
-            SingleConnection::Pooled(pooled_conn) => pooled_conn.exec(schema, plan).await,
-            SingleConnection::Transaction(conn) => conn.exec(schema, plan).await,
+            ConnHandle::Pooled(pooled_conn) => pooled_conn.exec(schema, plan).await,
+            ConnHandle::Transaction(conn) => conn.exec(schema, plan).await,
         }
     }
 }

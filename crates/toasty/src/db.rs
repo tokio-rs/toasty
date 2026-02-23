@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 pub use builder::Builder;
 pub use connect::*;
-pub(crate) use connection::{ConnectionType, SingleConnection};
+pub(crate) use connection::{ConnHandle, ConnectionSource};
 pub use pool::*;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -47,7 +47,7 @@ pub struct Db {
 }
 
 impl Db {
-    pub(crate) fn new(pool: Pool, schema: Arc<Schema>, mut connection: ConnectionType) -> Self {
+    pub(crate) fn new(pool: Pool, schema: Arc<Schema>, mut connection: ConnectionSource) -> Self {
         let capabilities = pool.capability();
         let in_transaction = connection.in_transaction();
 

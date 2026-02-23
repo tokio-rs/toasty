@@ -13,7 +13,7 @@ use simplify::Simplify;
 mod ty;
 mod verify;
 
-use crate::{db::SingleConnection, Result};
+use crate::{db::ConnHandle, Result};
 use std::sync::Arc;
 use toasty_core::{
     driver::Capability,
@@ -64,7 +64,7 @@ impl Engine {
     pub(crate) async fn exec(
         &mut self,
         stmt: Statement,
-        conn: SingleConnection<'_>,
+        conn: ConnHandle<'_>,
     ) -> Result<ValueStream> {
         if cfg!(debug_assertions) {
             self.verify(&stmt);

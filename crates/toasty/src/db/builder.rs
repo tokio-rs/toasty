@@ -1,5 +1,5 @@
 use crate::{
-    db::{Connect, ConnectionType, Pool},
+    db::{Connect, ConnectionSource, Pool},
     Db, Register, Result,
 };
 
@@ -52,6 +52,6 @@ impl Builder {
             .build(self.build_app_schema()?, pool.capability())
             .map(Arc::new)?;
 
-        Ok(Db::new(pool.clone(), schema, ConnectionType::Pool(pool)))
+        Ok(Db::new(pool.clone(), schema, ConnectionSource::Pool(pool)))
     }
 }

@@ -4,7 +4,7 @@ use toasty_core::driver::{operation::Transaction as TransactionOp, transaction::
 use tokio::sync::oneshot;
 
 use crate::{
-    db::{ConnectionType, EngineMsg},
+    db::{ConnectionSource, EngineMsg},
     Db,
 };
 
@@ -168,7 +168,7 @@ impl Db {
             let db = Db::new(
                 self.pool.clone(),
                 self.schema.clone(),
-                ConnectionType::Transaction(conn),
+                ConnectionSource::Transaction(conn),
             );
 
             Transaction {
