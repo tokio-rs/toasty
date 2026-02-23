@@ -426,4 +426,35 @@ mod tests {
             "statement lowering failed: invalid statement: cannot update primary key field `id`"
         );
     }
+
+    #[test]
+    fn read_only_transaction_display() {
+        let err = Error::read_only_transaction("cannot execute UPDATE in a read-only transaction");
+        assert_eq!(
+            err.to_string(),
+            "read-only transaction: cannot execute UPDATE in a read-only transaction"
+        );
+    }
+
+    #[test]
+    fn read_only_transaction_is_predicate() {
+        let err = Error::read_only_transaction("write not allowed");
+        assert!(err.is_read_only_transaction());
+    }
+
+    #[test]
+    fn read_only_transaction_predicate_false_for_other_errors() {
+        let err = Error::serialization_failure("concurrent update conflict");
+        assert!(!err.is_read_only_transaction());
+    }
+
+    #[test]
+    fn read_only_transaction_with_context() {
+        let err = Error::read_only_transaction("INSERT not allowed")
+            .context(Error::from_args(format_args!("create user failed")));
+        assert_eq!(
+            err.to_string(),
+            "create user failed: read-only transaction: INSERT not allowed"
+        );
+    }
 }
