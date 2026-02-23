@@ -11,6 +11,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let create_struct_ident = &self.model.kind.expect_root().create_struct_ident;
         let create_methods = self.expand_create_methods();
+        let default_stmts = self.expand_create_default_stmts();
 
         quote! {
             #vis struct #create_struct_ident {
@@ -65,12 +66,39 @@ impl Expand<'_> {
 
             impl Default for #create_struct_ident {
                 fn default() -> #create_struct_ident {
-                    #create_struct_ident {
+                    let mut s = #create_struct_ident {
                         stmt: #toasty::stmt::Insert::blank_single(),
-                    }
+                    };
+                    #default_stmts
+                    s
                 }
             }
         }
+    }
+
+    fn expand_create_default_stmts(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        self.model
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| {
+                // #[default] takes priority over #[update] on create
+                let expr = field
+                    .attrs
+                    .default_expr
+                    .as_ref()
+                    .or(field.attrs.update_expr.as_ref())?;
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
+                };
+                let index_tokenized = util::int(index);
+                Some(quote! {
+                    s.stmt.set(#index_tokenized, <#ty as #toasty::IntoExpr<#ty>>::into_expr(#expr));
+                })
+            })
+            .collect()
     }
 
     fn expand_create_methods(&self) -> TokenStream {

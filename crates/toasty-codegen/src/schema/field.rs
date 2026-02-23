@@ -41,6 +41,12 @@ pub(crate) struct FieldAttr {
 
     /// Optional database column name and / or type
     pub(crate) column: Option<Column>,
+
+    /// Expression to use as default value on create: `#[default(<expr>)]`
+    pub(crate) default_expr: Option<syn::Expr>,
+
+    /// Expression to apply on create and update: `#[update(<expr>)]`
+    pub(crate) update_expr: Option<syn::Expr>,
 }
 
 #[derive(Debug)]
@@ -82,6 +88,8 @@ impl Field {
             auto: None,
             index: false,
             column: None,
+            default_expr: None,
+            update_expr: None,
         };
 
         let mut ty = None;
@@ -160,8 +168,42 @@ impl Field {
                 } else {
                     attrs.column = Some(Column::from_ast(attr)?);
                 }
+            } else if attr.path().is_ident("default") {
+                if attrs.default_expr.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[default] attribute",
+                    ));
+                } else {
+                    attrs.default_expr = Some(attr.parse_args()?);
+                }
+            } else if attr.path().is_ident("update") {
+                if attrs.update_expr.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[update] attribute",
+                    ));
+                } else {
+                    attrs.update_expr = Some(attr.parse_args()?);
+                }
             } else if attr.path().is_ident("toasty") {
                 // todo
+            }
+        }
+
+        // Expand #[auto] on timestamp fields:
+        //   created_at → #[default(jiff::Timestamp::now())]
+        //   updated_at → #[update(jiff::Timestamp::now())]
+        if matches!(&attrs.auto, Some(AutoStrategy::Unspecified)) {
+            let field_name = ident.to_string();
+            let now_expr: syn::Expr = syn::parse_quote!(jiff::Timestamp::now());
+
+            if field_name == "created_at" {
+                attrs.auto = None;
+                attrs.default_expr = Some(now_expr);
+            } else if field_name == "updated_at" {
+                attrs.auto = None;
+                attrs.update_expr = Some(now_expr);
             }
         }
 
@@ -169,6 +211,34 @@ impl Field {
             errs.push(syn::Error::new_spanned(
                 field,
                 "relation fields cannot have a database type",
+            ));
+        }
+
+        if ty.is_some() && attrs.default_expr.is_some() {
+            errs.push(syn::Error::new_spanned(
+                field,
+                "#[default] cannot be used on relation fields",
+            ));
+        }
+
+        if ty.is_some() && attrs.update_expr.is_some() {
+            errs.push(syn::Error::new_spanned(
+                field,
+                "#[update] cannot be used on relation fields",
+            ));
+        }
+
+        if attrs.auto.is_some() && attrs.default_expr.is_some() {
+            errs.push(syn::Error::new_spanned(
+                field,
+                "#[default] and #[auto] cannot be combined on the same field",
+            ));
+        }
+
+        if attrs.auto.is_some() && attrs.update_expr.is_some() {
+            errs.push(syn::Error::new_spanned(
+                field,
+                "#[update] and #[auto] cannot be combined on the same field",
             ));
         }
 

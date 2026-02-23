@@ -5,7 +5,9 @@ use quote::quote;
 
 #[proc_macro_derive(
     Model,
-    attributes(key, auto, column, index, unique, table, has_many, has_one, belongs_to)
+    attributes(
+        key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to
+    )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
     match toasty_codegen::generate_model(input.into()) {
