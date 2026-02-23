@@ -37,6 +37,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
     }
 
     let db = t.setup_db(models!(User, Status)).await;
+    let user_table = table_id(&db, "users");
 
     // Create: enum variant is stored as its discriminant (1 = Pending)
     t.log().clear();
@@ -47,25 +48,22 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         .exec(&db)
         .await?;
 
-    // SQL: verify column list and that the discriminant is stored as I64, not a string or record
-    if t.capability().sql {
-        let user_table = table_id(&db, "users");
-        assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
-            stmt: Statement::Insert(_ {
-                source.body: ExprSet::Values(_ {
-                    rows: [== (Any, Any, 1i64)],
-                    ..
-                }),
-                target: toasty_core::stmt::InsertTarget::Table(_ {
-                    table: == user_table,
-                    columns: == columns(&db, "users", &["id", "name", "status"]),
-                    ..
-                }),
+    // Verify column list and that the discriminant is stored as I64, not a string or record
+    assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
+        stmt: Statement::Insert(_ {
+            source.body: ExprSet::Values(_ {
+                rows: [== (Any, Any, 1i64)],
+                ..
+            }),
+            target: toasty_core::stmt::InsertTarget::Table(_ {
+                table: == user_table,
+                columns: == columns(&db, "users", &["id", "name", "status"]),
                 ..
             }),
             ..
-        }));
-    }
+        }),
+        ..
+    }));
 
     // Read: discriminant is loaded back and converted to the enum variant
     let found = User::get_by_id(&db, &user.id).await?;
@@ -75,17 +73,24 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
     t.log().clear();
     user.update().status(Status::Active).exec(&db).await?;
 
-    // SQL: verify the status column receives the new discriminant as I64
+    // Verify the status column receives the new discriminant as I64
+    // Column index 2 is "status"; value I64(2) = Active discriminant
     if t.capability().sql {
-        let user_table = table_id(&db, "users");
-        let (op, _) = t.log().pop();
-        // Column index 2 is "status"; value I64(2) = Active discriminant
-        assert_struct!(op, Operation::QuerySql(_ {
+        assert_struct!(t.log().pop_op(), Operation::QuerySql(_ {
             stmt: Statement::Update(_ {
                 target: toasty_core::stmt::UpdateTarget::Table(== user_table),
                 assignments: #{ 2: _ { expr: == 2i64, .. }},
                 ..
             }),
+            ..
+        }));
+    } else {
+        assert_struct!(t.log().pop_op(), Operation::UpdateByKey(_ {
+            table: == user_table,
+            filter: None,
+            keys: _,
+            assignments: #{ 2: _ { expr: == 2i64, .. }},
+            returning: false,
             ..
         }));
     }
@@ -115,12 +120,8 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
 /// Validates that enum fields can be used in WHERE clauses (comparing discriminants),
 /// and verifies the driver-level representation: the WHERE clause compares the status
 /// column to an I64 discriminant, not a string or other type.
-#[driver_test]
+#[driver_test(requires(sql))]
 pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
-    if !t.capability().sql {
-        return Ok(());
-    }
-
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Status {
         #[column(variant = 1)]
