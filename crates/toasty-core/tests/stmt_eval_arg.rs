@@ -1,4 +1,18 @@
-use toasty_core::stmt::{ConstInput, Expr, Value};
+use toasty_core::stmt::{ConstInput, Expr, ExprArg, Value};
+
+// ---------------------------------------------------------------------------
+// Nesting overflow — nesting deeper than the actual scope stack
+// ---------------------------------------------------------------------------
+
+#[test]
+fn arg_nesting_overflow_is_error() {
+    // nesting=1 at top level: the scope walk overshoots Root
+    let expr = Expr::Arg(ExprArg {
+        position: 0,
+        nesting: 1,
+    });
+    assert!(expr.eval_const().is_err());
+}
 
 // ---------------------------------------------------------------------------
 // eval_const — no input, so Arg always errors

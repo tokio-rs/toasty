@@ -255,6 +255,63 @@ fn le_greater() {
 }
 
 // ---------------------------------------------------------------------------
+// Ordered comparisons with NULL — always an error
+// ---------------------------------------------------------------------------
+
+#[test]
+fn gt_null_lhs_is_error() {
+    assert!(Expr::binary_op(Value::Null, BinaryOp::Gt, 1i64)
+        .eval_const()
+        .is_err());
+}
+
+#[test]
+fn gt_null_rhs_is_error() {
+    assert!(Expr::binary_op(1i64, BinaryOp::Gt, Value::Null)
+        .eval_const()
+        .is_err());
+}
+
+#[test]
+fn ge_null_is_error() {
+    assert!(Expr::binary_op(Value::Null, BinaryOp::Ge, Value::Null)
+        .eval_const()
+        .is_err());
+}
+
+#[test]
+fn lt_null_is_error() {
+    assert!(Expr::binary_op(Value::Null, BinaryOp::Lt, 1i64)
+        .eval_const()
+        .is_err());
+}
+
+#[test]
+fn le_null_is_error() {
+    assert!(Expr::binary_op(Value::Null, BinaryOp::Le, 1i64)
+        .eval_const()
+        .is_err());
+}
+
+// ---------------------------------------------------------------------------
+// Ordered comparisons across incompatible types — always an error
+// ---------------------------------------------------------------------------
+
+#[test]
+fn gt_cross_type_is_error() {
+    assert!(Expr::binary_op(1i64, BinaryOp::Gt, "hello")
+        .eval_const()
+        .is_err());
+}
+
+#[test]
+fn lt_cross_type_is_error() {
+    assert!(Expr::binary_op("hello", BinaryOp::Lt, 1i64)
+        .eval_const()
+        .is_err());
+}
+
+// ---------------------------------------------------------------------------
 // eval() with input agrees with eval_const() for constant operands
 // ---------------------------------------------------------------------------
 
