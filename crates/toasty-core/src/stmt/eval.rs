@@ -1,5 +1,8 @@
 use crate::{
-    stmt::{BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Projection, Statement, Value},
+    stmt::{
+        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Offset, Projection, Statement,
+        Value,
+    },
     Result,
 };
 
@@ -29,16 +32,75 @@ impl Statement {
                     ));
                 }
 
-                assert!(query.order_by.is_none(), "TODO");
-                assert!(query.limit.is_none(), "TODO");
-                assert!(!query.single, "TODO");
+                if query.order_by.is_some() {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "cannot evaluate statement with ORDER BY clause",
+                    ));
+                }
 
-                query.body.eval_ref(scope, input)
+                let mut result = query.body.eval_ref(scope, input)?;
+
+                if let Some(limit) = &query.limit {
+                    limit.eval_ref(&mut result, scope, input)?;
+                }
+
+                if query.single {
+                    let Value::List(mut items) = result else {
+                        return Err(crate::Error::expression_evaluation_failed(
+                            "single-row query requires body to evaluate to a list",
+                        ));
+                    };
+                    if items.len() != 1 {
+                        return Err(crate::Error::expression_evaluation_failed(
+                            "single-row query did not return exactly one row",
+                        ));
+                    }
+                    return Ok(items.remove(0));
+                }
+
+                Ok(result)
             }
             _ => Err(crate::Error::expression_evaluation_failed(
                 "can only evaluate Query statements",
             )),
         }
+    }
+}
+
+impl Limit {
+    fn eval_ref(
+        &self,
+        value: &mut Value,
+        scope: &ScopeStack<'_>,
+        input: &mut impl Input,
+    ) -> Result<()> {
+        let Value::List(ref mut items) = value else {
+            return Err(crate::Error::expression_evaluation_failed(
+                "LIMIT requires body to evaluate to a list",
+            ));
+        };
+
+        if let Some(offset) = &self.offset {
+            match offset {
+                Offset::Count(offset_expr) => {
+                    let skip = offset_expr.eval_ref_usize(scope, input)?;
+                    if skip >= items.len() {
+                        items.clear();
+                    } else {
+                        items.drain(..skip);
+                    }
+                }
+                Offset::After(_) => {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "keyset-based OFFSET cannot be evaluated client-side",
+                    ));
+                }
+            }
+        }
+
+        let n = self.limit.eval_ref_usize(scope, input)?;
+        items.truncate(n);
+        Ok(())
     }
 }
 
@@ -248,6 +310,15 @@ impl Expr {
             Value::Bool(ret) => Ok(ret),
             _ => Err(crate::Error::expression_evaluation_failed(
                 "expected boolean value",
+            )),
+        }
+    }
+
+    fn eval_ref_usize(&self, scope: &ScopeStack<'_>, input: &mut impl Input) -> Result<usize> {
+        match self.eval_ref(scope, input)? {
+            Value::I64(n) if n >= 0 => Ok(n as usize),
+            _ => Err(crate::Error::expression_evaluation_failed(
+                "expected non-negative integer",
             )),
         }
     }
