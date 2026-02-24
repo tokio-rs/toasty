@@ -18,11 +18,9 @@ mod stmt_query;
 // TODO: unify names
 mod lift_in_subquery;
 mod lift_pk_select;
-mod rewrite_root_path_expr;
-
 use toasty_core::{
     schema::{
-        app::{Field, FieldId, Model, ModelId, ModelRoot},
+        app::{Field, FieldId},
         *,
     },
     stmt::{self, Expr, IntoExprTarget, Node, VisitMut},
@@ -218,14 +216,6 @@ impl<'a> Simplify<'a> {
 
     fn schema(&self) -> &'a Schema {
         self.cx.schema()
-    }
-
-    fn model(&self, model_id: impl Into<ModelId>) -> &Model {
-        self.cx.schema().app.model(model_id.into())
-    }
-
-    fn model_root(&self, model_id: impl Into<ModelId>) -> &ModelRoot {
-        self.model(model_id).expect_root()
     }
 
     fn field(&self, field_id: impl Into<FieldId>) -> &Field {

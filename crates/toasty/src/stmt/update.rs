@@ -12,7 +12,7 @@ impl<M: Model> Update<M> {
     pub fn new(mut selection: Select<M>) -> Self {
         if let stmt::ExprSet::Values(values) = &mut selection.untyped.body {
             let rows = std::mem::take(&mut values.rows);
-            let filter = stmt::Expr::in_list(stmt::Expr::key(M::id()), rows);
+            let filter = stmt::Expr::in_list(stmt::Expr::ref_ancestor_model(0), rows);
             selection.untyped.body =
                 stmt::ExprSet::Select(Box::new(stmt::Select::new(M::id(), filter)));
         }

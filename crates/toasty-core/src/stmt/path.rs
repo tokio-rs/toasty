@@ -51,7 +51,7 @@ impl Path {
 
     pub fn into_stmt(self) -> Expr {
         match self.projection.as_slice() {
-            [] => Expr::key(self.root),
+            [] => Expr::ref_ancestor_model(0),
             [field, project @ ..] => {
                 let mut ret = Expr::ref_self_field(FieldId {
                     model: self.root,

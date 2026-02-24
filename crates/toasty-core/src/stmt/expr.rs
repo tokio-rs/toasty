@@ -2,9 +2,9 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprList,
-    ExprMap, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection, Substitute,
-    Value, Visit, VisitMut,
+    ExprBinaryOp, ExprCast, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprList, ExprMap,
+    ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection, Substitute, Value, Visit,
+    VisitMut,
 };
 use std::fmt;
 
@@ -46,9 +46,6 @@ pub enum Expr {
     /// Whether an expression is (or is not) null. This is different from a
     /// binary expression because of how databases treat null comparisons.
     IsNull(ExprIsNull),
-
-    /// References a model's primary key
-    Key(ExprKey),
 
     /// Apply an expression to each item in a list
     Map(ExprMap),
@@ -193,7 +190,6 @@ impl Expr {
             }
             Self::Project(expr_project) => expr_project.base.is_stable(),
             Self::Map(expr_map) => expr_map.base.is_stable() && expr_map.map.is_stable(),
-            Self::Key(_) => true,
 
             // References and statements - stable (they reference existing data)
             Self::Reference(_) | Self::Arg(_) => true,
@@ -278,7 +274,6 @@ impl Expr {
             }
             Self::Project(expr_project) => expr_project.base.is_eval(),
             Self::Map(expr_map) => expr_map.base.is_eval() && expr_map.map.is_eval(),
-            Self::Key(_) => true,
             Self::Func(expr_func) => match expr_func {
                 super::ExprFunc::Count(func_count) => {
                     func_count.arg.as_ref().is_none_or(|e| e.is_eval())
@@ -428,7 +423,6 @@ impl fmt::Debug for Expr {
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),
-            Self::Key(e) => e.fmt(f),
             Self::Map(e) => e.fmt(f),
             Self::Not(e) => e.fmt(f),
             Self::Or(e) => e.fmt(f),
