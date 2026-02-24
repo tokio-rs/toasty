@@ -3,7 +3,7 @@ use crate::stmt::{ExprExists, Input};
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
     ExprBinaryOp, ExprCast, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprKey,
-    ExprList, ExprMap, ExprNot, ExprOr, ExprPattern, ExprProject, ExprRecord, ExprStmt, ExprTy,
+    ExprList, ExprMap, ExprNot, ExprOr, ExprPattern, ExprProject, ExprRecord, ExprStmt,
     Node, Projection, Substitute, Value, Visit, VisitMut,
 };
 use std::fmt;
@@ -77,9 +77,6 @@ pub enum Expr {
 
     /// Evaluate a sub-statement
     Stmt(ExprStmt),
-
-    /// A type reference. This is used by the "is a" expression
-    Type(ExprTy),
 
     /// Evaluates to a constant value reference
     Value(Value),
@@ -179,7 +176,7 @@ impl Expr {
     pub fn is_stable(&self) -> bool {
         match self {
             // Always stable - constant values
-            Self::Value(_) | Self::Type(_) => true,
+            Self::Value(_) => true,
 
             // Never stable - generates new values each evaluation
             Self::Default => false,
@@ -227,7 +224,7 @@ impl Expr {
     pub fn is_const(&self) -> bool {
         match self {
             // Always constant
-            Self::Value(_) | Self::Type(_) => true,
+            Self::Value(_) => true,
 
             // Never constant - references external data
             Self::Reference(_)
@@ -263,7 +260,7 @@ impl Expr {
     pub fn is_eval(&self) -> bool {
         match self {
             // Always evaluable
-            Self::Value(_) | Self::Type(_) => true,
+            Self::Value(_) => true,
 
             // Args are OK for evaluation
             Self::Arg(_) => true,
@@ -454,7 +451,6 @@ impl fmt::Debug for Expr {
             Self::Reference(e) => e.fmt(f),
             Self::List(e) => e.fmt(f),
             Self::Stmt(e) => e.fmt(f),
-            Self::Type(e) => e.fmt(f),
             Self::Value(e) => e.fmt(f),
         }
     }

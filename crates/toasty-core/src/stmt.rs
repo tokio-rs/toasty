@@ -105,9 +105,6 @@ pub use expr_set_op::ExprSetOp;
 mod expr_stmt;
 pub use expr_stmt::ExprStmt;
 
-mod expr_ty;
-pub use expr_ty::ExprTy;
-
 mod filter;
 pub use filter::Filter;
 

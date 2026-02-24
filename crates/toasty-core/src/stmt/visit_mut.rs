@@ -4,7 +4,7 @@ use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
     ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc,
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
-    ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
+    ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt,
     Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
     OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel,
     SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins,
@@ -141,10 +141,6 @@ pub trait VisitMut {
 
     fn visit_expr_stmt_mut(&mut self, i: &mut ExprStmt) {
         visit_expr_stmt_mut(self, i);
-    }
-
-    fn visit_expr_ty_mut(&mut self, i: &mut ExprTy) {
-        visit_expr_ty_mut(self, i);
     }
 
     fn visit_expr_pattern_mut(&mut self, i: &mut ExprPattern) {
@@ -397,10 +393,6 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_stmt_mut(&mut **self, i);
     }
 
-    fn visit_expr_ty_mut(&mut self, i: &mut ExprTy) {
-        VisitMut::visit_expr_ty_mut(&mut **self, i);
-    }
-
     fn visit_expr_pattern_mut(&mut self, i: &mut ExprPattern) {
         VisitMut::visit_expr_pattern_mut(&mut **self, i);
     }
@@ -590,7 +582,6 @@ where
         Expr::Reference(expr) => v.visit_expr_reference_mut(expr),
         Expr::List(expr) => v.visit_expr_list_mut(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt_mut(expr),
-        Expr::Type(expr) => v.visit_expr_ty_mut(expr),
         Expr::Value(expr) => v.visit_value_mut(expr),
     }
 }
@@ -807,13 +798,6 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_stmt_mut(&mut node.stmt);
-}
-
-pub fn visit_expr_ty_mut<V>(v: &mut V, node: &mut ExprTy)
-where
-    V: VisitMut + ?Sized,
-{
-    v.visit_type_mut(&mut node.ty);
 }
 
 pub fn visit_expr_pattern_mut<V>(v: &mut V, node: &mut ExprPattern)

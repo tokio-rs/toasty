@@ -4,7 +4,7 @@ use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
     ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc,
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
-    ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
+    ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt,
     Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
     OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel,
     SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins,
@@ -141,10 +141,6 @@ pub trait Visit {
 
     fn visit_expr_stmt(&mut self, i: &ExprStmt) {
         visit_expr_stmt(self, i);
-    }
-
-    fn visit_expr_ty(&mut self, i: &ExprTy) {
-        visit_expr_ty(self, i);
     }
 
     fn visit_expr_pattern(&mut self, i: &ExprPattern) {
@@ -397,10 +393,6 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_stmt(&mut **self, i);
     }
 
-    fn visit_expr_ty(&mut self, i: &ExprTy) {
-        Visit::visit_expr_ty(&mut **self, i);
-    }
-
     fn visit_expr_pattern(&mut self, i: &ExprPattern) {
         Visit::visit_expr_pattern(&mut **self, i);
     }
@@ -590,7 +582,6 @@ where
         Expr::Reference(expr) => v.visit_expr_reference(expr),
         Expr::List(expr) => v.visit_expr_list(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt(expr),
-        Expr::Type(expr) => v.visit_expr_ty(expr),
         Expr::Value(expr) => v.visit_value(expr),
     }
 }
@@ -807,13 +798,6 @@ where
     V: Visit + ?Sized,
 {
     v.visit_stmt(&node.stmt);
-}
-
-pub fn visit_expr_ty<V>(v: &mut V, node: &ExprTy)
-where
-    V: Visit + ?Sized,
-{
-    v.visit_type(&node.ty);
 }
 
 pub fn visit_expr_pattern<V>(v: &mut V, node: &ExprPattern)
