@@ -54,9 +54,6 @@ pub use expr_cast::ExprCast;
 mod expr_concat;
 pub use expr_concat::ExprConcat;
 
-mod expr_concat_str;
-pub use expr_concat_str::ExprConcatStr;
-
 mod expr_exists;
 pub use expr_exists::ExprExists;
 

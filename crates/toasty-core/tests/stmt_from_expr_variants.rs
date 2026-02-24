@@ -1,6 +1,5 @@
 use toasty_core::stmt::{
-    BinaryOp, Expr, ExprAnd, ExprBinaryOp, ExprConcatStr, ExprIsNull, ExprList, ExprNot,
-    ExprRecord, Value,
+    BinaryOp, Expr, ExprAnd, ExprBinaryOp, ExprIsNull, ExprList, ExprNot, ExprRecord, Value,
 };
 
 // ---------------------------------------------------------------------------
@@ -179,74 +178,3 @@ fn from_expr_binary_op_for_expr() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// From<ExprConcatStr> for Expr
-// ---------------------------------------------------------------------------
-
-#[test]
-fn from_expr_concat_str_for_expr() {
-    let concat = ExprConcatStr {
-        exprs: vec![Expr::Value(Value::from("hello")), Expr::Value(Value::from(" world"))],
-    };
-    assert_eq!(
-        Expr::from(concat),
-        Expr::ConcatStr(ExprConcatStr {
-            exprs: vec![
-                Expr::Value(Value::from("hello")),
-                Expr::Value(Value::from(" world")),
-            ],
-        })
-    );
-}
-
-// ---------------------------------------------------------------------------
-// From<(T1,)> for ExprConcatStr  (1-tuple)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn from_tuple1_for_expr_concat_str() {
-    let concat = ExprConcatStr::from(("hello",));
-    assert_eq!(
-        concat,
-        ExprConcatStr {
-            exprs: vec![Expr::Value(Value::from("hello"))],
-        }
-    );
-}
-
-// ---------------------------------------------------------------------------
-// From<(T1, T2)> for ExprConcatStr  (2-tuple)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn from_tuple2_for_expr_concat_str() {
-    let concat = ExprConcatStr::from(("hello", " world"));
-    assert_eq!(
-        concat,
-        ExprConcatStr {
-            exprs: vec![
-                Expr::Value(Value::from("hello")),
-                Expr::Value(Value::from(" world")),
-            ],
-        }
-    );
-}
-
-// ---------------------------------------------------------------------------
-// From<(T1, T2, T3)> for ExprConcatStr  (3-tuple)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn from_tuple3_for_expr_concat_str() {
-    let concat = ExprConcatStr::from(("a", "b", "c"));
-    assert_eq!(
-        concat,
-        ExprConcatStr {
-            exprs: vec![
-                Expr::Value(Value::from("a")),
-                Expr::Value(Value::from("b")),
-                Expr::Value(Value::from("c")),
-            ],
-        }
-    );
-}

@@ -2,7 +2,7 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprFunc, ExprInList, ExprInSubquery,
+    ExprBinaryOp, ExprCast, ExprConcat, ExprFunc, ExprInList, ExprInSubquery,
     ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr, ExprPattern, ExprProject, ExprRecord,
     ExprStmt, ExprTy, Node, Projection, Substitute, Value, Visit, VisitMut,
 };
@@ -29,9 +29,6 @@ pub enum Expr {
     /// Concat multiple expressions together
     /// TODO: name this something different?
     Concat(ExprConcat),
-
-    /// Concat strings
-    ConcatStr(ExprConcatStr),
 
     /// Suggests that the database should use its default value. Useful for
     /// auto-increment fields and other columns with default values.
@@ -207,9 +204,6 @@ impl Expr {
                 expr_in_list.expr.is_stable() && expr_in_list.list.is_stable()
             }
             Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_stable()),
-            Self::ConcatStr(expr_concat_str) => {
-                expr_concat_str.exprs.iter().all(|expr| expr.is_stable())
-            }
             Self::Project(expr_project) => expr_project.base.is_stable(),
             Self::Pattern(expr_pattern) => match expr_pattern {
                 super::ExprPattern::BeginsWith(e) => e.expr.is_stable() && e.pattern.is_stable(),
@@ -262,9 +256,6 @@ impl Expr {
                 expr_in_list.expr.is_const() && expr_in_list.list.is_const()
             }
             Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_const()),
-            Self::ConcatStr(expr_concat_str) => {
-                expr_concat_str.exprs.iter().all(|expr| expr.is_const())
-            }
             Self::Project(expr_project) => expr_project.base.is_const(),
             _ => todo!("expr={self:#?}"),
         }
@@ -304,9 +295,6 @@ impl Expr {
                 expr_in_list.expr.is_eval() && expr_in_list.list.is_eval()
             }
             Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_eval()),
-            Self::ConcatStr(expr_concat_str) => {
-                expr_concat_str.exprs.iter().all(|expr| expr.is_eval())
-            }
             Self::Project(expr_project) => expr_project.base.is_eval(),
             Self::Pattern(expr_pattern) => match expr_pattern {
                 super::ExprPattern::BeginsWith(e) => e.expr.is_eval() && e.pattern.is_eval(),
@@ -458,7 +446,6 @@ impl fmt::Debug for Expr {
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),
             Self::Concat(e) => e.fmt(f),
-            Self::ConcatStr(e) => e.fmt(f),
             Self::Default => write!(f, "Default"),
             Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),

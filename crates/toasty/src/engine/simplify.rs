@@ -3,7 +3,6 @@ mod expr_and;
 mod expr_any;
 mod expr_binary_op;
 mod expr_cast;
-mod expr_concat_str;
 mod expr_exists;
 mod expr_in_list;
 mod expr_is_null;
@@ -69,7 +68,6 @@ impl VisitMut for Simplify<'_> {
                 self.simplify_expr_binary_op(expr.op, &mut expr.lhs, &mut expr.rhs)
             }
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
-            Expr::ConcatStr(expr) => self.simplify_expr_concat_str(expr),
             Expr::Exists(expr) => self.simplify_expr_exists(expr),
             Expr::InList(expr) => self.simplify_expr_in_list(expr),
             Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),

@@ -10,7 +10,7 @@ use toasty_core::{
     driver::Capability,
     schema::{
         app::{self, FieldTy, ModelRoot},
-        db::{Column, ColumnId},
+        db::ColumnId,
         mapping,
     },
     stmt::{self, visit_mut, IntoExprTarget, VisitMut},
@@ -19,7 +19,7 @@ use toasty_core::{
 
 use crate::engine::{
     hir,
-    simplify::{self, Simplify},
+    simplify::Simplify,
     Engine, HirStatement,
 };
 
@@ -713,91 +713,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
-    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Filter) {
-        let Some(model) = self.expr_cx.target().as_model() else {
-            return;
-        };
-
-        let table = self.schema().table_for(model);
-        let mapping = self.mapping_unwrap();
-
-        // TODO: we really shouldn't have to simplify here, but until
-        // simplification includes overlapping predicate pruning, we have to do
-        // this here.
-        if let Some(expr) = &mut filter.expr {
-            simplify::simplify_expr(self.expr_cx, expr);
-        }
-
-        let mut operands = vec![];
-
-        for column in table.primary_key_columns() {
-            let pattern = match &mapping.model_to_table[column.id.index] {
-                stmt::Expr::ConcatStr(expr) => {
-                    // hax
-                    let stmt::Expr::Value(stmt::Value::String(a)) = &expr.exprs[0] else {
-                        todo!()
-                    };
-                    let stmt::Expr::Value(stmt::Value::String(b)) = &expr.exprs[1] else {
-                        todo!()
-                    };
-
-                    format!("{a}{b}")
-                }
-                stmt::Expr::Value(_) => todo!(),
-                _ => continue,
-            };
-
-            if let Some(filter) = &filter.expr {
-                if self.is_eq_constrained(filter, column) {
-                    continue;
-                }
-            }
-
-            assert_eq!(self.mapping_unwrap().columns[column.id.index], column.id);
-
-            operands.push(stmt::Expr::begins_with(
-                self.expr_cx.expr_ref_column(column),
-                pattern,
-            ));
-        }
-
-        if operands.is_empty() {
-            return;
-        }
-
-        filter.add_filter(stmt::Expr::and_from_vec(operands));
-    }
-
-    fn is_eq_constrained(&self, expr: &stmt::Expr, column: &Column) -> bool {
-        use stmt::Expr::*;
-
-        match expr {
-            And(expr) => expr.iter().any(|expr| self.is_eq_constrained(expr, column)),
-            Or(expr) => expr.iter().all(|expr| self.is_eq_constrained(expr, column)),
-            BinaryOp(expr) => {
-                if !expr.op.is_eq() {
-                    return false;
-                }
-
-                match (&*expr.lhs, &*expr.rhs) {
-                    (Reference(lhs), _) => {
-                        self.expr_cx.resolve_expr_reference(lhs).expect_column().id == column.id
-                    }
-                    (_, Reference(rhs)) => {
-                        self.expr_cx.resolve_expr_reference(rhs).expect_column().id == column.id
-                    }
-                    _ => false,
-                }
-            }
-            InList(expr) => match &*expr.expr {
-                Reference(lhs) => {
-                    self.expr_cx.resolve_expr_reference(lhs).expect_column().id == column.id
-                }
-                _ => todo!("expr={:#?}", expr),
-            },
-            _ => todo!("expr={:#?}", expr),
-        }
-    }
+    fn apply_lowering_filter_constraint(&self, _filter: &mut stmt::Filter) {}
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {

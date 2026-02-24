@@ -108,21 +108,6 @@ impl Expr {
                 }
             }
             Expr::Cast(expr_cast) => expr_cast.ty.cast(expr_cast.expr.eval_ref(scope, input)?),
-            Expr::ConcatStr(expr_concat_str) => {
-                let mut ret = String::new();
-
-                for expr in &expr_concat_str.exprs {
-                    let Value::String(s) = expr.eval_ref(scope, input)? else {
-                        return Err(crate::Error::expression_evaluation_failed(
-                            "string concatenation requires string values",
-                        ));
-                    };
-
-                    ret.push_str(&s);
-                }
-
-                Ok(ret.into())
-            }
             Expr::Default => Err(crate::Error::expression_evaluation_failed(
                 "DEFAULT can only be evaluated by the database",
             )),
