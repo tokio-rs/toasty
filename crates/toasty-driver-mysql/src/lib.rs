@@ -10,7 +10,7 @@ use mysql_async::{
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     async_trait,
-    driver::{operation::Transaction, Capability, Driver, Operation, Response},
+    driver::{Capability, Driver, Operation, Response},
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt::{self, ValueRecord},
     Result,
@@ -192,23 +192,10 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<Response> {
         let (sql, ret, last_insert_id_hack): (sql::Statement, _, _) = match op {
             Operation::QuerySql(op) => (op.stmt.into(), op.ret, op.last_insert_id_hack),
-            Operation::Transaction(Transaction::Start) => {
+            Operation::Transaction(op) => {
+                let sql = sql::Serializer::mysql(schema).serialize_transaction(&op);
                 self.conn
-                    .query_drop("START TRANSACTION")
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Commit) => {
-                self.conn
-                    .query_drop("COMMIT")
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Ok(Response::count(0));
-            }
-            Operation::Transaction(Transaction::Rollback) => {
-                self.conn
-                    .query_drop("ROLLBACK")
+                    .query_drop(sql)
                     .await
                     .map_err(toasty_core::Error::driver_operation_failed)?;
                 return Ok(Response::count(0));

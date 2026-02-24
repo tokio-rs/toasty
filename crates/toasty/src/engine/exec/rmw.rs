@@ -32,11 +32,14 @@ impl Exec<'_> {
     ) -> Result<()> {
         assert!(action.input.is_empty(), "TODO");
 
-        let res = self
-            .connection
-            .exec(&self.engine.schema.db, Transaction::Start.into())
+        let savepoint_id = self.generate_savepoint_id();
+
+        self.connection
+            .exec(
+                &self.engine.schema.db,
+                Transaction::Savepoint(savepoint_id).into(),
+            )
             .await?;
-        assert!(matches!(res.rows, Rows::Count(0)));
 
         let ty = Some(vec![stmt::Type::I64, stmt::Type::I64]);
 
@@ -72,6 +75,14 @@ impl Exec<'_> {
         };
 
         if record[0] != record[1] {
+            // Roll back only the savepoint, then let the outer transaction handle the rest
+            let _ = self
+                .connection
+                .exec(
+                    &self.engine.schema.db,
+                    Transaction::RollbackToSavepoint(savepoint_id).into(),
+                )
+                .await;
             return Err(toasty_core::Error::condition_failed(
                 "update condition did not match",
             ));
@@ -98,11 +109,12 @@ impl Exec<'_> {
 
         assert_eq!(actual, count as u64);
 
-        let res = self
-            .connection
-            .exec(&self.engine.schema.db, Transaction::Commit.into())
+        self.connection
+            .exec(
+                &self.engine.schema.db,
+                Transaction::ReleaseSavepoint(savepoint_id).into(),
+            )
             .await?;
-        assert!(matches!(res.rows, Rows::Count(0)));
 
         if let Some(output) = &action.output {
             let rows = Rows::value_stream(ValueStream::default());
