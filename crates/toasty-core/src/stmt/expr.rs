@@ -3,7 +3,7 @@ use crate::stmt::{ExprExists, Input};
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
     ExprBinaryOp, ExprCast, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprKey,
-    ExprList, ExprMap, ExprNot, ExprOr, ExprPattern, ExprProject, ExprRecord, ExprStmt,
+    ExprList, ExprMap, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt,
     Node, Projection, Substitute, Value, Visit, VisitMut,
 };
 use std::fmt;
@@ -58,9 +58,6 @@ pub enum Expr {
 
     /// OR a set of binary expressions
     Or(ExprOr),
-
-    /// Checks if an expression matches a pattern.
-    Pattern(ExprPattern),
 
     /// Project an expression
     Project(ExprProject),
@@ -149,8 +146,6 @@ impl Expr {
             Self::Exists(_) => true,
             // IN expressions always evaluate to true or false.
             Self::InList(_) | Self::InSubquery(_) => true,
-            // Pattern matching always evaluates to true or false.
-            Self::Pattern(_) => true,
             // For other expressions, we cannot prove non-nullability.
             _ => false,
         }
@@ -197,10 +192,6 @@ impl Expr {
                 expr_in_list.expr.is_stable() && expr_in_list.list.is_stable()
             }
             Self::Project(expr_project) => expr_project.base.is_stable(),
-            Self::Pattern(expr_pattern) => match expr_pattern {
-                super::ExprPattern::BeginsWith(e) => e.expr.is_stable() && e.pattern.is_stable(),
-                super::ExprPattern::Like(e) => e.expr.is_stable() && e.pattern.is_stable(),
-            },
             Self::Map(expr_map) => expr_map.base.is_stable() && expr_map.map.is_stable(),
             Self::Key(_) => true,
 
@@ -286,10 +277,6 @@ impl Expr {
                 expr_in_list.expr.is_eval() && expr_in_list.list.is_eval()
             }
             Self::Project(expr_project) => expr_project.base.is_eval(),
-            Self::Pattern(expr_pattern) => match expr_pattern {
-                super::ExprPattern::BeginsWith(e) => e.expr.is_eval() && e.pattern.is_eval(),
-                super::ExprPattern::Like(e) => e.expr.is_eval() && e.pattern.is_eval(),
-            },
             Self::Map(expr_map) => expr_map.base.is_eval() && expr_map.map.is_eval(),
             Self::Key(_) => true,
             Self::Func(expr_func) => match expr_func {
@@ -445,7 +432,6 @@ impl fmt::Debug for Expr {
             Self::Map(e) => e.fmt(f),
             Self::Not(e) => e.fmt(f),
             Self::Or(e) => e.fmt(f),
-            Self::Pattern(e) => e.fmt(f),
             Self::Project(e) => e.fmt(f),
             Self::Record(e) => e.fmt(f),
             Self::Reference(e) => e.fmt(f),

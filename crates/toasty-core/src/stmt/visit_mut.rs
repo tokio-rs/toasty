@@ -2,9 +2,9 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc,
-    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
-    ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt,
+    ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr,
+    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt,
     Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
     OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel,
     SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins,
@@ -51,10 +51,6 @@ pub trait VisitMut {
         visit_expr_arg_mut(self, i);
     }
 
-    fn visit_expr_begins_with_mut(&mut self, i: &mut ExprBeginsWith) {
-        visit_expr_begins_with_mut(self, i);
-    }
-
     fn visit_expr_binary_op_mut(&mut self, i: &mut ExprBinaryOp) {
         visit_expr_binary_op_mut(self, i);
     }
@@ -99,10 +95,6 @@ pub trait VisitMut {
         visit_expr_is_null_mut(self, i);
     }
 
-    fn visit_expr_like_mut(&mut self, i: &mut ExprLike) {
-        visit_expr_like_mut(self, i);
-    }
-
     fn visit_expr_key_mut(&mut self, i: &mut ExprKey) {
         visit_expr_key_mut(self, i);
     }
@@ -141,10 +133,6 @@ pub trait VisitMut {
 
     fn visit_expr_stmt_mut(&mut self, i: &mut ExprStmt) {
         visit_expr_stmt_mut(self, i);
-    }
-
-    fn visit_expr_pattern_mut(&mut self, i: &mut ExprPattern) {
-        visit_expr_pattern_mut(self, i);
     }
 
     fn visit_filter_mut(&mut self, i: &mut Filter) {
@@ -305,10 +293,6 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_arg_mut(&mut **self, i);
     }
 
-    fn visit_expr_begins_with_mut(&mut self, i: &mut ExprBeginsWith) {
-        VisitMut::visit_expr_begins_with_mut(&mut **self, i);
-    }
-
     fn visit_expr_binary_op_mut(&mut self, i: &mut ExprBinaryOp) {
         VisitMut::visit_expr_binary_op_mut(&mut **self, i);
     }
@@ -349,9 +333,6 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_is_null_mut(&mut **self, i);
     }
 
-    fn visit_expr_like_mut(&mut self, i: &mut ExprLike) {
-        VisitMut::visit_expr_like_mut(&mut **self, i);
-    }
 
     fn visit_expr_key_mut(&mut self, i: &mut ExprKey) {
         VisitMut::visit_expr_key_mut(&mut **self, i);
@@ -393,9 +374,6 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_stmt_mut(&mut **self, i);
     }
 
-    fn visit_expr_pattern_mut(&mut self, i: &mut ExprPattern) {
-        VisitMut::visit_expr_pattern_mut(&mut **self, i);
-    }
 
     fn visit_filter_mut(&mut self, i: &mut Filter) {
         VisitMut::visit_filter_mut(&mut **self, i);
@@ -576,7 +554,6 @@ where
         Expr::Map(expr) => v.visit_expr_map_mut(expr),
         Expr::Not(expr) => v.visit_expr_not_mut(expr),
         Expr::Or(expr) => v.visit_expr_or_mut(expr),
-        Expr::Pattern(expr) => v.visit_expr_pattern_mut(expr),
         Expr::Project(expr) => v.visit_expr_project_mut(expr),
         Expr::Record(expr) => v.visit_expr_record_mut(expr),
         Expr::Reference(expr) => v.visit_expr_reference_mut(expr),
@@ -606,14 +583,6 @@ pub fn visit_expr_arg_mut<V>(v: &mut V, node: &mut ExprArg)
 where
     V: VisitMut + ?Sized,
 {
-}
-
-pub fn visit_expr_begins_with_mut<V>(v: &mut V, node: &mut ExprBeginsWith)
-where
-    V: VisitMut + ?Sized,
-{
-    v.visit_expr_mut(&mut node.expr);
-    v.visit_expr_mut(&mut node.pattern);
 }
 
 pub fn visit_expr_binary_op_mut<V>(v: &mut V, node: &mut ExprBinaryOp)
@@ -704,14 +673,6 @@ where
     v.visit_expr_mut(&mut node.expr);
 }
 
-pub fn visit_expr_like_mut<V>(v: &mut V, node: &mut ExprLike)
-where
-    V: VisitMut + ?Sized,
-{
-    v.visit_expr_mut(&mut node.expr);
-    v.visit_expr_mut(&mut node.pattern);
-}
-
 pub fn visit_expr_key_mut<V>(v: &mut V, node: &mut ExprKey)
 where
     V: VisitMut + ?Sized,
@@ -798,16 +759,6 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_stmt_mut(&mut node.stmt);
-}
-
-pub fn visit_expr_pattern_mut<V>(v: &mut V, node: &mut ExprPattern)
-where
-    V: VisitMut + ?Sized,
-{
-    match node {
-        ExprPattern::BeginsWith(expr) => v.visit_expr_begins_with_mut(expr),
-        ExprPattern::Like(expr) => v.visit_expr_like_mut(expr),
-    }
 }
 
 pub fn visit_expr_project_mut<V>(v: &mut V, node: &mut ExprProject)

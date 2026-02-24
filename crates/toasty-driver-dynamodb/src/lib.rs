@@ -305,11 +305,6 @@ fn ddb_expression(
                 .collect::<Vec<_>>();
             operands.join(" OR ")
         }
-        stmt::Expr::Pattern(stmt::ExprPattern::BeginsWith(begins_with)) => {
-            let expr = ddb_expression(cx, attrs, primary, &begins_with.expr);
-            let substr = ddb_expression(cx, attrs, primary, &begins_with.pattern);
-            format!("begins_with({expr}, {substr})")
-        }
         stmt::Expr::InList(in_list) => {
             let expr = ddb_expression(cx, attrs, primary, &in_list.expr);
 

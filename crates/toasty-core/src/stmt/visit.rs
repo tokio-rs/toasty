@@ -2,9 +2,9 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc,
-    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
-    ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt,
+    ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc,
+    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr,
+    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt,
     Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
     OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel,
     SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins,
@@ -51,10 +51,6 @@ pub trait Visit {
         visit_expr_arg(self, i);
     }
 
-    fn visit_expr_begins_with(&mut self, i: &ExprBeginsWith) {
-        visit_expr_begins_with(self, i);
-    }
-
     fn visit_expr_binary_op(&mut self, i: &ExprBinaryOp) {
         visit_expr_binary_op(self, i);
     }
@@ -99,10 +95,6 @@ pub trait Visit {
         visit_expr_is_null(self, i);
     }
 
-    fn visit_expr_like(&mut self, i: &ExprLike) {
-        visit_expr_like(self, i);
-    }
-
     fn visit_expr_key(&mut self, i: &ExprKey) {
         visit_expr_key(self, i);
     }
@@ -141,10 +133,6 @@ pub trait Visit {
 
     fn visit_expr_stmt(&mut self, i: &ExprStmt) {
         visit_expr_stmt(self, i);
-    }
-
-    fn visit_expr_pattern(&mut self, i: &ExprPattern) {
-        visit_expr_pattern(self, i);
     }
 
     fn visit_filter(&mut self, i: &Filter) {
@@ -305,10 +293,6 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_arg(&mut **self, i);
     }
 
-    fn visit_expr_begins_with(&mut self, i: &ExprBeginsWith) {
-        Visit::visit_expr_begins_with(&mut **self, i);
-    }
-
     fn visit_expr_binary_op(&mut self, i: &ExprBinaryOp) {
         Visit::visit_expr_binary_op(&mut **self, i);
     }
@@ -347,10 +331,6 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_expr_is_null(&mut self, i: &ExprIsNull) {
         Visit::visit_expr_is_null(&mut **self, i);
-    }
-
-    fn visit_expr_like(&mut self, i: &ExprLike) {
-        Visit::visit_expr_like(&mut **self, i);
     }
 
     fn visit_expr_key(&mut self, i: &ExprKey) {
@@ -393,9 +373,6 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_stmt(&mut **self, i);
     }
 
-    fn visit_expr_pattern(&mut self, i: &ExprPattern) {
-        Visit::visit_expr_pattern(&mut **self, i);
-    }
 
     fn visit_filter(&mut self, i: &Filter) {
         Visit::visit_filter(&mut **self, i);
@@ -576,7 +553,6 @@ where
         Expr::Map(expr) => v.visit_expr_map(expr),
         Expr::Not(expr) => v.visit_expr_not(expr),
         Expr::Or(expr) => v.visit_expr_or(expr),
-        Expr::Pattern(expr) => v.visit_expr_pattern(expr),
         Expr::Project(expr) => v.visit_expr_project(expr),
         Expr::Record(expr) => v.visit_expr_record(expr),
         Expr::Reference(expr) => v.visit_expr_reference(expr),
@@ -606,14 +582,6 @@ pub fn visit_expr_arg<V>(v: &mut V, node: &ExprArg)
 where
     V: Visit + ?Sized,
 {
-}
-
-pub fn visit_expr_begins_with<V>(v: &mut V, node: &ExprBeginsWith)
-where
-    V: Visit + ?Sized,
-{
-    v.visit_expr(&node.expr);
-    v.visit_expr(&node.pattern);
 }
 
 pub fn visit_expr_binary_op<V>(v: &mut V, node: &ExprBinaryOp)
@@ -704,14 +672,6 @@ where
     v.visit_expr(&node.expr);
 }
 
-pub fn visit_expr_like<V>(v: &mut V, node: &ExprLike)
-where
-    V: Visit + ?Sized,
-{
-    v.visit_expr(&node.expr);
-    v.visit_expr(&node.pattern);
-}
-
 pub fn visit_expr_key<V>(v: &mut V, node: &ExprKey)
 where
     V: Visit + ?Sized,
@@ -798,16 +758,6 @@ where
     V: Visit + ?Sized,
 {
     v.visit_stmt(&node.stmt);
-}
-
-pub fn visit_expr_pattern<V>(v: &mut V, node: &ExprPattern)
-where
-    V: Visit + ?Sized,
-{
-    match node {
-        ExprPattern::BeginsWith(expr) => v.visit_expr_begins_with(expr),
-        ExprPattern::Like(expr) => v.visit_expr_like(expr),
-    }
 }
 
 pub fn visit_expr_project<V>(v: &mut V, node: &ExprProject)
