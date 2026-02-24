@@ -2,13 +2,13 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc,
-    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr,
-    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt,
-    Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
-    OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel,
-    SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins,
-    Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc, ExprInList, ExprInSubquery,
+    ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr, ExprProject, ExprRecord,
+    ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert,
+    InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query,
+    Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived,
+    TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values,
+    With,
 };
 
 pub trait VisitMut {
@@ -333,7 +333,6 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_is_null_mut(&mut **self, i);
     }
 
-
     fn visit_expr_key_mut(&mut self, i: &mut ExprKey) {
         VisitMut::visit_expr_key_mut(&mut **self, i);
     }
@@ -373,7 +372,6 @@ impl<V: VisitMut> VisitMut for &mut V {
     fn visit_expr_stmt_mut(&mut self, i: &mut ExprStmt) {
         VisitMut::visit_expr_stmt_mut(&mut **self, i);
     }
-
 
     fn visit_filter_mut(&mut self, i: &mut Filter) {
         VisitMut::visit_filter_mut(&mut **self, i);
