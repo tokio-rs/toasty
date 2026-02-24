@@ -61,6 +61,14 @@ impl<M: Model> Select<M> {
         self
     }
 
+    pub fn limit(&mut self, n: usize) -> &mut Self {
+        self.untyped.limit = Some(stmt::Limit {
+            limit: stmt::Value::from(n as i64).into(),
+            offset: None,
+        });
+        self
+    }
+
     // TODO: not quite right
     pub fn delete(self) -> Statement<M> {
         Delete::from_untyped(self.untyped.delete()).into()

@@ -105,3 +105,43 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
     }
     Ok(())
 }
+
+#[driver_test(id(ID), requires(sql))]
+pub async fn limit(t: &mut Test) -> Result<()> {
+    #[derive(toasty::Model)]
+    struct Foo {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[index]
+        order: i64,
+    }
+
+    let db = t.setup_db(models!(Foo)).await;
+
+    for i in 0..20 {
+        Foo::create().order(i).exec(&db).await?;
+    }
+
+    // Basic limit without ordering
+    let foos: Vec<_> = Foo::all().limit(5).collect(&db).await?;
+    assert_eq!(foos.len(), 5);
+
+    // Limit combined with ordering
+    let foos: Vec<_> = Foo::all()
+        .order_by(Foo::fields().order().desc())
+        .limit(7)
+        .collect(&db)
+        .await?;
+    assert_eq!(foos.len(), 7);
+    for i in 0..6 {
+        assert!(foos[i].order > foos[i + 1].order);
+    }
+
+    // Limit larger than the result set returns all results
+    let foos: Vec<_> = Foo::all().limit(100).collect(&db).await?;
+    assert_eq!(foos.len(), 20);
+
+    Ok(())
+}
