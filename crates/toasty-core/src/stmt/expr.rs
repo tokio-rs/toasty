@@ -274,13 +274,7 @@ impl Expr {
             }
             Self::Project(expr_project) => expr_project.base.is_eval(),
             Self::Map(expr_map) => expr_map.base.is_eval() && expr_map.map.is_eval(),
-            Self::Func(expr_func) => match expr_func {
-                super::ExprFunc::Count(func_count) => {
-                    func_count.arg.as_ref().is_none_or(|e| e.is_eval())
-                        && func_count.filter.as_ref().is_none_or(|e| e.is_eval())
-                }
-                super::ExprFunc::LastInsertId(_) => true,
-            },
+            Self::Func(_) => false,
         }
     }
 
