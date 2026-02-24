@@ -412,7 +412,6 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()
 
 #[driver_test(id(ID), requires(sql))]
 pub async fn preload_on_empty_table(test: &mut Test) -> Result<()> {
-
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]

@@ -5,7 +5,6 @@ use toasty::Page;
 
 #[driver_test(id(ID), requires(sql))]
 pub async fn sort_asc(test: &mut Test) -> Result<()> {
-
     #[derive(toasty::Model)]
     struct Foo {
         #[key]
@@ -48,7 +47,6 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
 
 #[driver_test(id(ID), requires(sql))]
 pub async fn paginate(test: &mut Test) -> Result<()> {
-
     #[derive(toasty::Model)]
     struct Foo {
         #[key]
