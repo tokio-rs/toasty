@@ -11,7 +11,7 @@ When working on Toasty, follow this decision tree to efficiently navigate the co
 ### 1. Starting a Task
 
 **First, understand what type of change you're making:**
-- Is it a new feature? → Check docs/CHANGE_GUIDE.md for similar patterns
+- Is it a new feature? → Read relevant component CONTEXT.md files
 - Is it a bug fix? → Read relevant component CONTEXT.md files
 - Is it a refactor? → Review docs/ARCHITECTURE.md for design principles
 
@@ -41,14 +41,12 @@ Database-specific → crates/toasty-driver-*/
 
 #### Adding a Primitive Type
 ```
-Start: docs/CHANGE_GUIDE.md § "Adding a New Primitive Type"
 Read: toasty-core/CONTEXT.md § "Adding a New Primitive Type"
 Follow: The 7-step process with example commits
 ```
 
 #### Adding a Query Feature (ORDER BY, LIMIT, etc.)
 ```
-Start: docs/CHANGE_GUIDE.md § "Adding a Query Feature"
 Read: toasty/CONTEXT.md § "Query Execution Pipeline"
 Check: toasty-sql/CONTEXT.md for SQL generation
 ```
@@ -73,8 +71,7 @@ Focus: engine/simplify/ directory
 
 1. **Read the component's CONTEXT.md** to understand responsibilities
 2. **Check docs/ARCHITECTURE.md** for layer dependencies
-3. **Review docs/CHANGE_GUIDE.md** for similar past changes
-4. **Look for Visit/VisitMut** traits that need updating (for AST changes)
+3. **Look for Visit/VisitMut** traits that need updating (for AST changes)
 
 ### 6. Testing Strategy
 
@@ -108,7 +105,7 @@ Focus: engine/simplify/ directory
 **Debugging approach:**
 1. Check what layer the issue is in
 2. Read that component's CONTEXT.md
-3. Find similar code in recent commits (docs/CHANGE_GUIDE.md has examples)
+3. Find similar code in recent commits
 4. Trace through the execution pipeline
 5. Use debug assertions and dbg!() macros
 
@@ -206,16 +203,8 @@ When working on Toasty engine changes, follow this established pattern:
 ## File Reference
 
 - **docs/ARCHITECTURE.md**: System design and component relationships
-- **docs/CHANGE_GUIDE.md**: How to make common changes with examples
-- **docs/CONTEXT.md**: Writing style guidelines for documentation (load when editing docs/)
 - **Component CONTEXT.md files**: Deep dive into each component
 - **This file (CLAUDE.md)**: Navigation guide for using the documentation
-
-## Context Files
-
-When editing files in certain directories, load the corresponding CONTEXT.md:
-
-- **docs/**: Load `docs/CONTEXT.md` for documentation writing guidelines
 
 ## Remember
 

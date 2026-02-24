@@ -1,10 +1,13 @@
-# Documentation Context
+---
+name: write-docs
+description: Author or edit documentation for the Toasty project, following project writing conventions
+---
 
-Load this file when editing anything in the `docs/` directory.
+# Writing Toasty Documentation
+
+Load this skill when writing or editing any documentation in the `docs/` directory or other markdown files in this project.
 
 ## Writing Style
-
-When writing or editing documentation:
 
 - **Be fact-focused**: State what things are and what they do
 - **Avoid buzzwords**: No "leverage", "synergy", "paradigm", etc.
@@ -14,6 +17,9 @@ When writing or editing documentation:
 - **Avoid dramatic terms**: No "critical", "crucial", "vital", "essential" unless something will actually break
 - **Be direct**: Say what you mean without hedging
 - **Use concrete examples**: Show, don't tell
+- **Use active voice**: "The engine executes queries" not "Queries are executed by the engine"
+- **Use present tense**: Describe how the system works now, not how it was designed or how it will work
+- **Document current behavior only**: Omit historical decisions, deprecated approaches, and planned future work
 
 ### Examples
 
