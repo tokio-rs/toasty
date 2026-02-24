@@ -3,12 +3,8 @@
 use crate::prelude::*;
 use toasty::Page;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn sort_asc(test: &mut Test) -> Result<()> {
-    if !test.capability().sql {
-        return Ok(());
-    }
-
     #[derive(toasty::Model)]
     struct Foo {
         #[key]
@@ -49,12 +45,8 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), requires(sql))]
 pub async fn paginate(test: &mut Test) -> Result<()> {
-    if !test.capability().sql {
-        return Ok(());
-    }
-
     #[derive(toasty::Model)]
     struct Foo {
         #[key]
