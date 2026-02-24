@@ -21,7 +21,11 @@ impl ResetCommand {
         println!();
         println!(
             "  {}",
-            style(format!("Connected to {}", crate::utility::redact_url_password(&db.driver().url()))).dim()
+            style(format!(
+                "Connected to {}",
+                crate::utility::redact_url_password(&db.driver().url())
+            ))
+            .dim()
         );
         println!();
 
