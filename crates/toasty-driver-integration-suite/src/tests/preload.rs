@@ -1,5 +1,70 @@
 use crate::prelude::*;
 
+/// Tests that preloading a `HasOne<Option<_>>` correctly distinguishes between
+/// "not loaded" and "loaded as None" when the relation does not exist.
+#[driver_test(id(ID))]
+pub async fn preload_has_one_option_none_then_some(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: ID,
+
+        name: String,
+
+        #[has_one]
+        profile: toasty::HasOne<Option<Profile>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: ID,
+
+        bio: String,
+
+        #[unique]
+        user_id: Option<ID>,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::BelongsTo<Option<User>>,
+    }
+
+    let db = test.setup_db(models!(User, Profile)).await;
+
+    // Create a user WITHOUT a profile
+    let user_no_profile = User::create().name("No Profile").exec(&db).await?;
+
+    // Preload the profile — no profile exists, so it should be `None` (loaded)
+    let user_no_profile = User::filter_by_id(user_no_profile.id)
+        .include(User::fields().profile())
+        .get(&db)
+        .await?;
+
+    // `.get()` must not panic — the relation was preloaded and is None
+    assert!(user_no_profile.profile.get().is_none());
+
+    // Create a user WITH a profile
+    let user_with_profile = User::create()
+        .name("Has Profile")
+        .profile(Profile::create().bio("A bio"))
+        .exec(&db)
+        .await?;
+
+    // Preload the profile — a profile exists, so it should be `Some`
+    let user_with_profile = User::filter_by_id(user_with_profile.id)
+        .include(User::fields().profile())
+        .get(&db)
+        .await?;
+
+    let profile = user_with_profile.profile.get().as_ref().unwrap();
+    assert_eq!("A bio", profile.bio);
+    assert_eq!(user_with_profile.id, *profile.user_id.as_ref().unwrap());
+
+    Ok(())
+}
+
 #[driver_test(id(ID))]
 pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
