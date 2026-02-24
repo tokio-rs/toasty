@@ -56,7 +56,8 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
   #[toasty::model]
   struct Article {
       #[key]
-      id: Id<Self>,
+      #[auto]
+      id: u64,
       title: String,
       author: BelongsTo<User>,
       #[deferred]
