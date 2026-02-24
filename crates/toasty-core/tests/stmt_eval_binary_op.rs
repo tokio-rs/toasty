@@ -222,12 +222,3 @@ fn eval_with_input_agrees_with_eval_const() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// IsA — not yet implemented
-// ---------------------------------------------------------------------------
-
-#[test]
-#[ignore = "BinaryOp::IsA is not yet implemented (panics with todo!)"]
-fn is_a_not_implemented() {
-    Expr::binary_op(1i64, BinaryOp::IsA, 1i64).eval_const().unwrap();
-}

@@ -3,7 +3,7 @@
 //! - Panic with todo!() — these are marked #[ignore] and document the
 //!   intended behavior so they can be enabled when implemented.
 
-use toasty_core::stmt::{BinaryOp, Expr, ExprOr, Value};
+use toasty_core::stmt::{Expr, ExprOr, Value};
 
 // ---------------------------------------------------------------------------
 // Expr::Default — explicitly errors (database must evaluate it)
@@ -66,17 +66,6 @@ fn eval_or_non_bool_operand_is_error() {
         operands: vec![Expr::from(false), Expr::from(1i64)],
     };
     assert!(Expr::Or(expr).eval_const().is_err());
-}
-
-// ---------------------------------------------------------------------------
-// BinaryOp::IsA — todo!()
-// ---------------------------------------------------------------------------
-
-#[test]
-#[ignore = "BinaryOp::IsA not yet implemented (panics with todo!)"]
-fn eval_binary_op_is_a() {
-    // Placeholder: exact semantics TBD once implemented.
-    Expr::binary_op(1i64, BinaryOp::IsA, 1i64).eval_const().unwrap();
 }
 
 // ---------------------------------------------------------------------------

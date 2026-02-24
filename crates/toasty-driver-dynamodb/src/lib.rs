@@ -282,7 +282,6 @@ fn ddb_expression(
                 stmt::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
                 stmt::BinaryOp::Lt => format!("{lhs} < {rhs}"),
                 stmt::BinaryOp::Le => format!("{lhs} <= {rhs}"),
-                _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
         stmt::Expr::Reference(expr_reference) => {
