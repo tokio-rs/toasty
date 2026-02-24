@@ -5,6 +5,7 @@ use crate::{
     },
     Result,
 };
+use std::cmp::Ordering;
 
 enum ScopeStack<'a> {
     Root,
@@ -163,10 +164,10 @@ impl Expr {
                 match expr_binary_op.op {
                     BinaryOp::Eq => Ok((lhs == rhs).into()),
                     BinaryOp::Ne => Ok((lhs != rhs).into()),
-                    BinaryOp::Ge => Ok((lhs >= rhs).into()),
-                    BinaryOp::Gt => Ok((lhs > rhs).into()),
-                    BinaryOp::Le => Ok((lhs <= rhs).into()),
-                    BinaryOp::Lt => Ok((lhs < rhs).into()),
+                    BinaryOp::Ge => Ok((cmp_ordered(&lhs, &rhs)? != Ordering::Less).into()),
+                    BinaryOp::Gt => Ok((cmp_ordered(&lhs, &rhs)? == Ordering::Greater).into()),
+                    BinaryOp::Le => Ok((cmp_ordered(&lhs, &rhs)? != Ordering::Greater).into()),
+                    BinaryOp::Lt => Ok((cmp_ordered(&lhs, &rhs)? == Ordering::Less).into()),
                 }
             }
             Expr::Cast(expr_cast) => expr_cast.ty.cast(expr_cast.expr.eval_ref(scope, input)?),
@@ -352,4 +353,15 @@ impl ScopeStack<'_> {
     fn scope<'child>(&'child self, args: &'child [Value]) -> ScopeStack<'child> {
         ScopeStack::Scope { args, parent: self }
     }
+}
+
+fn cmp_ordered(lhs: &Value, rhs: &Value) -> Result<Ordering> {
+    if lhs.is_null() || rhs.is_null() {
+        return Err(crate::Error::expression_evaluation_failed(
+            "ordered comparison with NULL is undefined",
+        ));
+    }
+    lhs.partial_cmp(rhs).ok_or_else(|| {
+        crate::Error::expression_evaluation_failed("ordered comparison between incompatible types")
+    })
 }
