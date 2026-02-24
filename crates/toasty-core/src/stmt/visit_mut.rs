@@ -2,7 +2,7 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprExists, ExprFunc,
+    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc,
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
     ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
     Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
@@ -65,10 +65,6 @@ pub trait VisitMut {
 
     fn visit_expr_column_mut(&mut self, i: &mut ExprColumn) {
         visit_expr_column_mut(self, i);
-    }
-
-    fn visit_expr_concat_mut(&mut self, i: &mut ExprConcat) {
-        visit_expr_concat_mut(self, i);
     }
 
     fn visit_expr_default_mut(&mut self) {
@@ -329,10 +325,6 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_column_mut(&mut **self, i);
     }
 
-    fn visit_expr_concat_mut(&mut self, i: &mut ExprConcat) {
-        VisitMut::visit_expr_concat_mut(&mut **self, i);
-    }
-
     fn visit_expr_default_mut(&mut self) {
         VisitMut::visit_expr_default_mut(&mut **self);
     }
@@ -582,7 +574,6 @@ where
         Expr::Arg(expr) => v.visit_expr_arg_mut(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op_mut(expr),
         Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
-        Expr::Concat(expr) => v.visit_expr_concat_mut(expr),
         Expr::Default => v.visit_expr_default_mut(),
         Expr::Exists(expr) => v.visit_expr_exists_mut(expr),
         Expr::Func(expr) => v.visit_expr_func_mut(expr),
@@ -654,15 +645,6 @@ pub fn visit_expr_column_mut<V>(v: &mut V, node: &mut ExprColumn)
 where
     V: VisitMut + ?Sized,
 {
-}
-
-pub fn visit_expr_concat_mut<V>(v: &mut V, node: &mut ExprConcat)
-where
-    V: VisitMut + ?Sized,
-{
-    for expr in node {
-        v.visit_expr_mut(expr);
-    }
 }
 
 pub fn visit_expr_default_mut<V>(v: &mut V)

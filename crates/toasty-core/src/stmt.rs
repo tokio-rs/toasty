@@ -51,9 +51,6 @@ pub use expr_binary_op::ExprBinaryOp;
 mod expr_cast;
 pub use expr_cast::ExprCast;
 
-mod expr_concat;
-pub use expr_concat::ExprConcat;
-
 mod expr_exists;
 pub use expr_exists::ExprExists;
 

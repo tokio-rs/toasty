@@ -2,7 +2,7 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprExists, ExprFunc,
+    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc,
     ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
     ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
     Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
@@ -65,10 +65,6 @@ pub trait Visit {
 
     fn visit_expr_column(&mut self, i: &ExprColumn) {
         visit_expr_column(self, i);
-    }
-
-    fn visit_expr_concat(&mut self, i: &ExprConcat) {
-        visit_expr_concat(self, i);
     }
 
     fn visit_expr_default(&mut self) {
@@ -329,10 +325,6 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_column(&mut **self, i);
     }
 
-    fn visit_expr_concat(&mut self, i: &ExprConcat) {
-        Visit::visit_expr_concat(&mut **self, i);
-    }
-
     fn visit_expr_default(&mut self) {
         Visit::visit_expr_default(&mut **self);
     }
@@ -582,7 +574,6 @@ where
         Expr::Arg(expr) => v.visit_expr_arg(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op(expr),
         Expr::Cast(expr) => v.visit_expr_cast(expr),
-        Expr::Concat(expr) => v.visit_expr_concat(expr),
         Expr::Default => v.visit_expr_default(),
         Expr::Exists(expr) => v.visit_expr_exists(expr),
         Expr::Func(expr) => v.visit_expr_func(expr),
@@ -654,15 +645,6 @@ pub fn visit_expr_column<V>(v: &mut V, node: &ExprColumn)
 where
     V: Visit + ?Sized,
 {
-}
-
-pub fn visit_expr_concat<V>(v: &mut V, node: &ExprConcat)
-where
-    V: Visit + ?Sized,
-{
-    for expr in node {
-        v.visit_expr(expr);
-    }
 }
 
 pub fn visit_expr_default<V>(v: &mut V)
