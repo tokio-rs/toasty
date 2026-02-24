@@ -63,9 +63,6 @@ pub use expr_in_subquery::ExprInSubquery;
 mod expr_is_null;
 pub use expr_is_null::ExprIsNull;
 
-mod expr_key;
-pub use expr_key::ExprKey;
-
 mod expr_list;
 pub use expr_list::ExprList;
 

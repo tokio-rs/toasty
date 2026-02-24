@@ -32,36 +32,43 @@ impl Simplify<'_> {
     }
 
     fn rewrite_expr_in_list_when_model(&self, expr: &mut stmt::ExprInList) {
-        if let stmt::Expr::Key(expr_key) = &mut *expr.expr {
-            let model = self.model_root(expr_key.model);
-
+        let (nesting, pk_field_id) = {
+            let stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Model { nesting }) =
+                &*expr.expr
+            else {
+                return;
+            };
+            let nesting = *nesting;
+            let model = self.cx.resolve_expr_reference(expr_ref).expect_model();
             let [pk_field_id] = &model.primary_key.fields[..] else {
                 todo!()
             };
-            let pk = self.field(*pk_field_id);
+            (nesting, *pk_field_id)
+        };
 
-            // Check RHS format
-            match &mut *expr.list {
-                stmt::Expr::List(expr_list) => {
-                    for expr in &mut expr_list.items {
-                        match expr {
-                            stmt::Expr::Value(value) => {
-                                assert!(value.is_a(&pk.ty.expect_primitive().ty));
-                            }
-                            _ => todo!("{expr:#?}"),
+        let pk = self.field(pk_field_id);
+
+        // Check RHS format
+        match &mut *expr.list {
+            stmt::Expr::List(expr_list) => {
+                for item in &mut expr_list.items {
+                    match item {
+                        stmt::Expr::Value(value) => {
+                            assert!(value.is_a(&pk.ty.expect_primitive().ty));
                         }
+                        _ => todo!("{item:#?}"),
                     }
                 }
-                stmt::Expr::Value(stmt::Value::List(values)) => {
-                    for value in values {
-                        assert!(value.is_a(&pk.ty.expect_primitive().ty));
-                    }
-                }
-                _ => todo!("expr={expr:#?}"),
             }
-
-            *expr.expr = stmt::Expr::ref_self_field(pk.id());
+            stmt::Expr::Value(stmt::Value::List(values)) => {
+                for value in values {
+                    assert!(value.is_a(&pk.ty.expect_primitive().ty));
+                }
+            }
+            _ => todo!("expr={expr:#?}"),
         }
+
+        *expr.expr = stmt::Expr::ref_field(nesting, pk.id());
     }
 
     fn rewrite_expr_in_list_with_single_item(&self, expr: &mut stmt::ExprInList) -> Option<Expr> {
