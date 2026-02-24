@@ -314,37 +314,6 @@ pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) -> Resul
     Ok(())
 }
 
-// TODO: implement this for proc macros
-/*
-#[driver_test(id(ID))]
-pub async fn has_one_must_specify_be_uniquely_indexed(_test: &mut Test) {
-    toasty_core::schema::from_str(
-        "
-        model User {
-            #[key]
-            #[auto]
-            id: Id,
-
-            profile: Option<Profile>,
-        }
-
-        model Profile {
-            #[key]
-            #[auto]
-            id: Id,
-
-            [index]
-            user_id: Id<User>,
-
-            #[relation(key = user_id, references = id)]
-            user: User,
-        }
-        ",
-    )
-    .unwrap();
-}
-*/
-
 #[driver_test(id(ID))]
 pub async fn set_has_one_by_value_in_update_query(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]

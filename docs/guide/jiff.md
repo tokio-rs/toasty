@@ -28,7 +28,8 @@ use jiff::Timestamp;
 #[derive(toasty::Model)]
 struct Event {
     #[key]
-    id: Id<Self>,
+    #[auto]
+    id: u64,
     created_at: Timestamp,
 }
 ```
@@ -49,7 +50,8 @@ use jiff::Zoned;
 #[derive(toasty::Model)]
 struct Appointment {
     #[key]
-    id: Id<Self>,
+    #[auto]
+    id: u64,
     scheduled_at: Zoned,
 }
 ```
@@ -70,7 +72,8 @@ use jiff::civil::Date;
 #[derive(toasty::Model)]
 struct Person {
     #[key]
-    id: Id<Self>,
+    #[auto]
+    id: u64,
     birth_date: Date,
 }
 ```
@@ -91,7 +94,8 @@ use jiff::civil::Time;
 #[derive(toasty::Model)]
 struct Schedule {
     #[key]
-    id: Id<Self>,
+    #[auto]
+    id: u64,
     daily_reminder: Time,
 }
 ```
@@ -112,7 +116,8 @@ use jiff::civil::DateTime;
 #[derive(toasty::Model)]
 struct Meeting {
     #[key]
-    id: Id<Self>,
+    #[auto]
+    id: u64,
     local_time: DateTime,
 }
 ```
@@ -150,7 +155,8 @@ use jiff::Timestamp;
 #[derive(toasty::Model)]
 struct Event {
     #[key]
-    id: Id<Self>,
+    #[auto]
+    id: u64,
 
     // Store with 2 decimal places (centiseconds)
     #[column(type = timestamp(2))]
@@ -170,7 +176,8 @@ use jiff::Timestamp;
 #[derive(toasty::Model)]
 struct HighPrecisionEvent {
     #[key]
-    id: Id<Self>,
+    #[auto]
+    id: u64,
 
     // Store as TEXT to preserve nanosecond precision
     #[column(type = text)]
@@ -216,7 +223,7 @@ use jiff::civil::{Date, Time, DateTime};
 struct Event {
     #[key]
     #[auto]
-    id: Id<Self>,
+    id: u64,
 
     // Standard timestamp (microsecond precision on PostgreSQL/MySQL)
     created_at: Timestamp,
