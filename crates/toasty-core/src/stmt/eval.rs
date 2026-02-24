@@ -132,7 +132,9 @@ impl Expr {
                 let mut base = expr_map.base.eval_ref(scope, input)?;
 
                 let Value::List(ref mut items) = &mut base else {
-                    todo!("error handling; base={base:#?}")
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "Map base must evaluate to a list",
+                    ));
                 };
 
                 for item in items.iter_mut() {

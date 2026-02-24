@@ -73,11 +73,10 @@ fn eval_with_input_agrees() {
 }
 
 // ---------------------------------------------------------------------------
-// Non-list base — currently panics (todo! error handling)
+// Non-list base — returns Err
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "non-list base in Expr::Map panics with todo! instead of returning Err"]
 fn map_non_list_base_is_error() {
     let expr = Expr::map(42i64, Expr::arg(0usize));
     assert!(expr.eval_const().is_err());
