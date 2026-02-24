@@ -6,12 +6,12 @@ use toasty_core::stmt::Value;
 
 #[test]
 fn try_from_value_bool_true() {
-    assert_eq!(bool::try_from(Value::Bool(true)).unwrap(), true);
+    assert!(bool::try_from(Value::Bool(true)).unwrap());
 }
 
 #[test]
 fn try_from_value_bool_false() {
-    assert_eq!(bool::try_from(Value::Bool(false)).unwrap(), false);
+    assert!(!bool::try_from(Value::Bool(false)).unwrap());
 }
 
 #[test]
