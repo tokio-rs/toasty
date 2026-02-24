@@ -9,10 +9,7 @@ use std::{
 };
 use toasty_core::{
     async_trait,
-    driver::{
-        operation::Operation,
-        Capability, Driver, Response,
-    },
+    driver::{operation::Operation, Capability, Driver, Response},
     schema::db::{Migration, Schema, SchemaDiff, Table},
     stmt, Result,
 };

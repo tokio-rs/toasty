@@ -13,8 +13,8 @@ impl ExecPlanner<'_> {
 
         let returning = self.logical_plan.completion().var.get();
 
-        let needs_transaction = self.use_transactions
-            && self.actions.iter().filter(|a| a.is_db_op()).count() > 1;
+        let needs_transaction =
+            self.use_transactions && self.actions.iter().filter(|a| a.is_db_op()).count() > 1;
 
         ExecPlan {
             vars: VarStore::new(self.var_decls),

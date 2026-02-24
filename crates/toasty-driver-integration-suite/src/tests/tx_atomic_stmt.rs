@@ -36,12 +36,18 @@ pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
     let db = t.setup_db(models!(User, Todo)).await;
 
     t.log().clear();
-    let user = User::create().todo(Todo::create().title("task")).exec(&db).await?;
+    let user = User::create()
+        .todo(Todo::create().title("task"))
+        .exec(&db)
+        .await?;
 
     assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT todo
-    assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Commit));
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Commit)
+    );
     assert!(t.log().is_empty());
 
     let todos = user.todos().collect::<Vec<_>>(&db).await?;
@@ -115,7 +121,10 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
     let db = t.setup_db(models!(User, Todo)).await;
 
     // Seed the title that will cause the second INSERT to fail.
-    User::create().todo(Todo::create().title("taken")).exec(&db).await?;
+    User::create()
+        .todo(Todo::create().title("taken"))
+        .exec(&db)
+        .await?;
 
     t.log().clear();
     assert_err!(
@@ -129,7 +138,10 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
     // INSERT todo (fails on unique constraint, NOT logged) → Transaction::Rollback
     assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user
-    assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Rollback));
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Rollback)
+    );
     assert!(t.log().is_empty());
 
     // No orphaned user — count unchanged from pre-seed
@@ -177,7 +189,10 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
     let db = t.setup_db(models!(User, Profile)).await;
 
     // Seed the bio that will cause the second INSERT to fail.
-    User::create().profile(Profile::create().bio("taken")).exec(&db).await?;
+    User::create()
+        .profile(Profile::create().bio("taken"))
+        .exec(&db)
+        .await?;
 
     t.log().clear();
     assert_err!(
@@ -189,7 +204,10 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
 
     assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user
-    assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Rollback));
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Rollback)
+    );
     assert!(t.log().is_empty());
 
     // No orphaned user — count unchanged from pre-seed
@@ -245,7 +263,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
     t.log().clear();
     assert_err!(
         user.update()
-            .name("taken")                         // UPDATE will fail: unique name
+            .name("taken") // UPDATE will fail: unique name
             .todo(Todo::create().title("new-todo")) // INSERT runs first and succeeds
             .exec(&db)
             .await
@@ -255,7 +273,10 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
     // name → Transaction::Rollback undoes the INSERT.
     assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Start));
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT todo (rolled back)
-    assert_struct!(t.log().pop_op(), Operation::Transaction(Transaction::Rollback));
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Rollback)
+    );
     assert!(t.log().is_empty());
 
     // INSERT was rolled back — no orphaned todo
