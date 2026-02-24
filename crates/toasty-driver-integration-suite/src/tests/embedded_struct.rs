@@ -372,12 +372,8 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
 /// Tests comparison operators (gt, lt, ge, le, ne) on embedded struct fields.
 /// SQL-only: DynamoDB doesn't support range queries on non-key attributes.
 /// Validates that all comparison operators work correctly with embedded fields.
-#[driver_test]
+#[driver_test(requires(sql))]
 pub async fn query_embedded_fields_comparison_ops(t: &mut Test) -> Result<()> {
-    // Skip on non-SQL databases (DynamoDB doesn't support range queries on non-key attributes)
-    if !t.capability().sql {
-        return Ok(());
-    }
     #[derive(Debug, toasty::Embed)]
     struct Stats {
         score: i64,
@@ -439,12 +435,8 @@ pub async fn query_embedded_fields_comparison_ops(t: &mut Test) -> Result<()> {
 /// Tests querying by multiple embedded fields in a single query (AND conditions).
 /// SQL-only: DynamoDB requires partition key in queries.
 /// Validates that complex filters with multiple embedded fields work correctly.
-#[driver_test]
+#[driver_test(requires(sql))]
 pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
-    // Skip on non-SQL databases (DynamoDB requires partition key in queries)
-    if !t.capability().sql {
-        return Ok(());
-    }
     #[derive(Debug, toasty::Embed)]
     struct Coordinates {
         x: i64,
@@ -515,12 +507,8 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
 /// Tests UPDATE operations filtered by embedded struct fields.
 /// SQL-only: DynamoDB requires partition key in queries/updates.
 /// Validates that updates can target rows based on embedded field values.
-#[driver_test]
+#[driver_test(requires(sql))]
 pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
-    // Skip on non-SQL databases (DynamoDB requires partition key in queries/updates)
-    if !t.capability().sql {
-        return Ok(());
-    }
     #[derive(Debug, toasty::Embed)]
     struct Metadata {
         version: i64,
