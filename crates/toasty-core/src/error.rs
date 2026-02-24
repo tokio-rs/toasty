@@ -13,7 +13,8 @@ mod invalid_type_conversion;
 mod read_only_transaction;
 mod record_not_found;
 mod serialization_failure;
-mod transaction_timed_out;
+mod transaction_rollback;
+mod transaction_timeout;
 mod unsupported_feature;
 mod validation;
 
@@ -33,7 +34,8 @@ use read_only_transaction::ReadOnlyTransaction;
 use record_not_found::RecordNotFound;
 use serialization_failure::SerializationFailure;
 use std::sync::Arc;
-use transaction_timed_out::TransactionTimedOut;
+use transaction_rollback::TransactionRollback;
+use transaction_timeout::TransactionTimeout;
 use unsupported_feature::UnsupportedFeature;
 use validation::ValidationFailed;
 
@@ -74,7 +76,8 @@ enum ErrorKind {
     UnsupportedFeature(UnsupportedFeature),
     ValidationFailed(ValidationFailed),
     ConditionFailed(ConditionFailed),
-    TransactionTimedOut(TransactionTimedOut),
+    TransactionRollback(TransactionRollback),
+    TransactionTimeout(TransactionTimeout),
 }
 
 impl Error {
@@ -168,7 +171,8 @@ impl core::fmt::Display for ErrorKind {
             UnsupportedFeature(err) => core::fmt::Display::fmt(err, f),
             ValidationFailed(err) => core::fmt::Display::fmt(err, f),
             ConditionFailed(err) => core::fmt::Display::fmt(err, f),
-            TransactionTimedOut(err) => core::fmt::Display::fmt(err, f),
+            TransactionRollback(err) => core::fmt::Display::fmt(err, f),
+            TransactionTimeout(err) => core::fmt::Display::fmt(err, f),
         }
     }
 }

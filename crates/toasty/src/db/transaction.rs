@@ -115,7 +115,7 @@ impl<'a> TransactionBuilder<'a> {
         let result = match self.timeout {
             Some(d) => match tokio::time::timeout(d, f(&*tx)).await {
                 Ok(r) => r,
-                Err(_) => Err(E::from(crate::Error::transaction_timed_out(d))),
+                Err(_) => Err(E::from(crate::Error::transaction_timeout(d))),
             },
             None => f(&*tx).await,
         };

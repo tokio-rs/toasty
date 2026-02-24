@@ -83,7 +83,7 @@ pub async fn rollback_on_error(t: &mut Test) -> Result<()> {
     let result: Result<()> = db
         .transaction(async |tx| {
             Foo::create().val("hello").exec(tx).await?;
-            Err(toasty::Error::invalid_result("deliberate rollback"))
+            Err(toasty::Error::transaction_rollback())
         })
         .await;
 
@@ -124,7 +124,7 @@ pub async fn timeout_rollback(t: &mut Test) -> Result<()> {
         return Ok(());
     }
 
-    assert!(err.to_string().contains("timed out"));
+    assert!(err.is_transaction_timeout());
     let foos: Vec<Foo> = Foo::all().collect(&db).await?;
     assert_eq!(foos.len(), 0);
     Ok(())
@@ -277,7 +277,7 @@ pub async fn nested_inner_commits_outer_fails(t: &mut Test) -> Result<()> {
             })
             .await?;
 
-            Err(toasty::Error::invalid_result("outer rollback"))
+            Err(toasty::Error::transaction_rollback())
         })
         .await;
 
@@ -312,7 +312,7 @@ pub async fn nested_rollback(t: &mut Test) -> Result<()> {
             let inner_result: Result<()> = tx
                 .transaction(async |inner| {
                     Foo::create().val("inner").exec(inner).await?;
-                    Err(toasty::Error::invalid_result("inner rollback"))
+                    Err(toasty::Error::transaction_rollback())
                 })
                 .await;
 
