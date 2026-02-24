@@ -185,6 +185,20 @@ Toasty is an easy-to-use ORM for Rust that supports both SQL and NoSQL databases
 **Tooling & Debugging**
 - Query logging
 
+### Safety & Security
+
+**Sensitive Value Flagging**
+- Flag sensitive fields (e.g. passwords, tokens, secrets) so they are automatically redacted in logs and debug output
+- Attribute-based opt-in: `#[sensitive]` on model fields marks values that must never appear in plaintext outside the database
+- All logging, query tracing, and error messages strip or mask flagged values
+- Prevents accidental credential leakage in application logs, query dumps, and diagnostics
+
+**Trusted vs Untrusted Input**
+- Distinguish between values originating from untrusted user input and values produced internally by the query engine (e.g. literal numbers, generated keys)
+- Engine-produced values can skip escaping/parameterization since they are known-safe, reducing unnecessary overhead
+- Untrusted input continues to be parameterized or escaped to prevent SQL injection
+- Enables more efficient SQL generation without weakening safety guarantees for external data
+
 ## Notes
 
 The roadmap documents describe potential enhancements and missing features. For information about what's currently implemented, refer to the user guide or test the API directly.
