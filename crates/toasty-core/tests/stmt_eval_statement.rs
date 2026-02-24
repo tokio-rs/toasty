@@ -1,8 +1,13 @@
-use toasty_core::stmt::{Expr, Limit, Offset, OrderBy, OrderByExpr, Query, Statement, Value, Values};
+use toasty_core::stmt::{
+    Expr, Limit, Offset, OrderBy, OrderByExpr, Query, Statement, Value, Values,
+};
 
 fn values_query(items: Vec<i64>) -> Query {
     Query::values(Values::new(
-        items.into_iter().map(|n| Expr::from(Value::I64(n))).collect(),
+        items
+            .into_iter()
+            .map(|n| Expr::from(Value::I64(n)))
+            .collect(),
     ))
 }
 
@@ -27,7 +32,10 @@ fn query_with_order_by_is_error() {
 #[test]
 fn limit_returns_first_n_items() {
     let mut query = values_query(vec![1, 2, 3, 4, 5]);
-    query.limit = Some(Limit { limit: Expr::from(3i64), offset: None });
+    query.limit = Some(Limit {
+        limit: Expr::from(3i64),
+        offset: None,
+    });
     let result = Statement::Query(query).eval_const().unwrap();
     assert_eq!(
         result,
@@ -38,7 +46,10 @@ fn limit_returns_first_n_items() {
 #[test]
 fn limit_larger_than_list_returns_all() {
     let mut query = values_query(vec![1, 2]);
-    query.limit = Some(Limit { limit: Expr::from(10i64), offset: None });
+    query.limit = Some(Limit {
+        limit: Expr::from(10i64),
+        offset: None,
+    });
     let result = Statement::Query(query).eval_const().unwrap();
     assert_eq!(result, Value::List(vec![Value::I64(1), Value::I64(2)]));
 }
@@ -46,7 +57,10 @@ fn limit_larger_than_list_returns_all() {
 #[test]
 fn limit_zero_returns_empty_list() {
     let mut query = values_query(vec![1, 2, 3]);
-    query.limit = Some(Limit { limit: Expr::from(0i64), offset: None });
+    query.limit = Some(Limit {
+        limit: Expr::from(0i64),
+        offset: None,
+    });
     let result = Statement::Query(query).eval_const().unwrap();
     assert_eq!(result, Value::List(vec![]));
 }

@@ -7,7 +7,10 @@ use toasty_core::stmt::{ConstInput, Expr, ExprArg, Value};
 #[test]
 fn arg_nesting_overflow_is_error() {
     // nesting=1 at top level: the scope walk overshoots Root
-    let expr = Expr::Arg(ExprArg { position: 0, nesting: 1 });
+    let expr = Expr::Arg(ExprArg {
+        position: 0,
+        nesting: 1,
+    });
     assert!(expr.eval_const().is_err());
 }
 
