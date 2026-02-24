@@ -72,6 +72,11 @@ impl Expand<'_> {
                     self
                 }
 
+                #vis fn limit(mut self, n: usize) -> #query_struct_ident {
+                    self.stmt.limit(n);
+                    self
+                }
+
                 #include
                 #relation_methods
             }
