@@ -114,7 +114,6 @@ impl Simplify<'_> {
                     stmt::BinaryOp::Ge => {
                         PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_ge().into())
                     }
-                    _ => None,
                 }
             }
             // Boolean constant comparisons:

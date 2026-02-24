@@ -2,13 +2,13 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBeginsWith, ExprBinaryOp, ExprCast, ExprColumn, ExprConcat, ExprExists, ExprFunc,
-    ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprLike, ExprList, ExprMap, ExprNot, ExprOr,
-    ExprPattern, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, ExprTy,
-    Filter, FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, Node, Offset,
-    OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel,
-    SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins,
-    Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    ExprBinaryOp, ExprCast, ExprColumn, ExprExists, ExprFunc, ExprInList, ExprInSubquery,
+    ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr, ExprProject, ExprRecord,
+    ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter, FuncCount, FuncLastInsertId, Insert,
+    InsertTarget, Join, JoinOp, Limit, Node, Offset, OrderBy, OrderByExpr, Path, Projection, Query,
+    Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived,
+    TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values,
+    With,
 };
 
 pub trait VisitMut {
@@ -51,10 +51,6 @@ pub trait VisitMut {
         visit_expr_arg_mut(self, i);
     }
 
-    fn visit_expr_begins_with_mut(&mut self, i: &mut ExprBeginsWith) {
-        visit_expr_begins_with_mut(self, i);
-    }
-
     fn visit_expr_binary_op_mut(&mut self, i: &mut ExprBinaryOp) {
         visit_expr_binary_op_mut(self, i);
     }
@@ -65,10 +61,6 @@ pub trait VisitMut {
 
     fn visit_expr_column_mut(&mut self, i: &mut ExprColumn) {
         visit_expr_column_mut(self, i);
-    }
-
-    fn visit_expr_concat_mut(&mut self, i: &mut ExprConcat) {
-        visit_expr_concat_mut(self, i);
     }
 
     fn visit_expr_default_mut(&mut self) {
@@ -101,10 +93,6 @@ pub trait VisitMut {
 
     fn visit_expr_is_null_mut(&mut self, i: &mut ExprIsNull) {
         visit_expr_is_null_mut(self, i);
-    }
-
-    fn visit_expr_like_mut(&mut self, i: &mut ExprLike) {
-        visit_expr_like_mut(self, i);
     }
 
     fn visit_expr_key_mut(&mut self, i: &mut ExprKey) {
@@ -145,14 +133,6 @@ pub trait VisitMut {
 
     fn visit_expr_stmt_mut(&mut self, i: &mut ExprStmt) {
         visit_expr_stmt_mut(self, i);
-    }
-
-    fn visit_expr_ty_mut(&mut self, i: &mut ExprTy) {
-        visit_expr_ty_mut(self, i);
-    }
-
-    fn visit_expr_pattern_mut(&mut self, i: &mut ExprPattern) {
-        visit_expr_pattern_mut(self, i);
     }
 
     fn visit_filter_mut(&mut self, i: &mut Filter) {
@@ -313,10 +293,6 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_arg_mut(&mut **self, i);
     }
 
-    fn visit_expr_begins_with_mut(&mut self, i: &mut ExprBeginsWith) {
-        VisitMut::visit_expr_begins_with_mut(&mut **self, i);
-    }
-
     fn visit_expr_binary_op_mut(&mut self, i: &mut ExprBinaryOp) {
         VisitMut::visit_expr_binary_op_mut(&mut **self, i);
     }
@@ -327,10 +303,6 @@ impl<V: VisitMut> VisitMut for &mut V {
 
     fn visit_expr_column_mut(&mut self, i: &mut ExprColumn) {
         VisitMut::visit_expr_column_mut(&mut **self, i);
-    }
-
-    fn visit_expr_concat_mut(&mut self, i: &mut ExprConcat) {
-        VisitMut::visit_expr_concat_mut(&mut **self, i);
     }
 
     fn visit_expr_default_mut(&mut self) {
@@ -359,10 +331,6 @@ impl<V: VisitMut> VisitMut for &mut V {
 
     fn visit_expr_is_null_mut(&mut self, i: &mut ExprIsNull) {
         VisitMut::visit_expr_is_null_mut(&mut **self, i);
-    }
-
-    fn visit_expr_like_mut(&mut self, i: &mut ExprLike) {
-        VisitMut::visit_expr_like_mut(&mut **self, i);
     }
 
     fn visit_expr_key_mut(&mut self, i: &mut ExprKey) {
@@ -403,14 +371,6 @@ impl<V: VisitMut> VisitMut for &mut V {
 
     fn visit_expr_stmt_mut(&mut self, i: &mut ExprStmt) {
         VisitMut::visit_expr_stmt_mut(&mut **self, i);
-    }
-
-    fn visit_expr_ty_mut(&mut self, i: &mut ExprTy) {
-        VisitMut::visit_expr_ty_mut(&mut **self, i);
-    }
-
-    fn visit_expr_pattern_mut(&mut self, i: &mut ExprPattern) {
-        VisitMut::visit_expr_pattern_mut(&mut **self, i);
     }
 
     fn visit_filter_mut(&mut self, i: &mut Filter) {
@@ -582,7 +542,6 @@ where
         Expr::Arg(expr) => v.visit_expr_arg_mut(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op_mut(expr),
         Expr::Cast(expr) => v.visit_expr_cast_mut(expr),
-        Expr::Concat(expr) => v.visit_expr_concat_mut(expr),
         Expr::Default => v.visit_expr_default_mut(),
         Expr::Exists(expr) => v.visit_expr_exists_mut(expr),
         Expr::Func(expr) => v.visit_expr_func_mut(expr),
@@ -593,20 +552,12 @@ where
         Expr::Map(expr) => v.visit_expr_map_mut(expr),
         Expr::Not(expr) => v.visit_expr_not_mut(expr),
         Expr::Or(expr) => v.visit_expr_or_mut(expr),
-        Expr::Pattern(expr) => v.visit_expr_pattern_mut(expr),
         Expr::Project(expr) => v.visit_expr_project_mut(expr),
         Expr::Record(expr) => v.visit_expr_record_mut(expr),
         Expr::Reference(expr) => v.visit_expr_reference_mut(expr),
         Expr::List(expr) => v.visit_expr_list_mut(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt_mut(expr),
-        Expr::Type(expr) => v.visit_expr_ty_mut(expr),
         Expr::Value(expr) => v.visit_value_mut(expr),
-        // HAX
-        Expr::ConcatStr(expr) => {
-            for expr in &mut expr.exprs {
-                v.visit_expr_mut(expr);
-            }
-        }
     }
 }
 
@@ -632,14 +583,6 @@ where
 {
 }
 
-pub fn visit_expr_begins_with_mut<V>(v: &mut V, node: &mut ExprBeginsWith)
-where
-    V: VisitMut + ?Sized,
-{
-    v.visit_expr_mut(&mut node.expr);
-    v.visit_expr_mut(&mut node.pattern);
-}
-
 pub fn visit_expr_binary_op_mut<V>(v: &mut V, node: &mut ExprBinaryOp)
 where
     V: VisitMut + ?Sized,
@@ -660,15 +603,6 @@ pub fn visit_expr_column_mut<V>(v: &mut V, node: &mut ExprColumn)
 where
     V: VisitMut + ?Sized,
 {
-}
-
-pub fn visit_expr_concat_mut<V>(v: &mut V, node: &mut ExprConcat)
-where
-    V: VisitMut + ?Sized,
-{
-    for expr in node {
-        v.visit_expr_mut(expr);
-    }
 }
 
 pub fn visit_expr_default_mut<V>(v: &mut V)
@@ -735,14 +669,6 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.expr);
-}
-
-pub fn visit_expr_like_mut<V>(v: &mut V, node: &mut ExprLike)
-where
-    V: VisitMut + ?Sized,
-{
-    v.visit_expr_mut(&mut node.expr);
-    v.visit_expr_mut(&mut node.pattern);
 }
 
 pub fn visit_expr_key_mut<V>(v: &mut V, node: &mut ExprKey)
@@ -831,23 +757,6 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_stmt_mut(&mut node.stmt);
-}
-
-pub fn visit_expr_ty_mut<V>(v: &mut V, node: &mut ExprTy)
-where
-    V: VisitMut + ?Sized,
-{
-    v.visit_type_mut(&mut node.ty);
-}
-
-pub fn visit_expr_pattern_mut<V>(v: &mut V, node: &mut ExprPattern)
-where
-    V: VisitMut + ?Sized,
-{
-    match node {
-        ExprPattern::BeginsWith(expr) => v.visit_expr_begins_with_mut(expr),
-        ExprPattern::Like(expr) => v.visit_expr_like_mut(expr),
-    }
 }
 
 pub fn visit_expr_project_mut<V>(v: &mut V, node: &mut ExprProject)

@@ -105,25 +105,9 @@ impl Expr {
                     BinaryOp::Gt => Ok((lhs > rhs).into()),
                     BinaryOp::Le => Ok((lhs <= rhs).into()),
                     BinaryOp::Lt => Ok((lhs < rhs).into()),
-                    BinaryOp::IsA => todo!("IsA binary op not yet implemented"),
                 }
             }
             Expr::Cast(expr_cast) => expr_cast.ty.cast(expr_cast.expr.eval_ref(scope, input)?),
-            Expr::ConcatStr(expr_concat_str) => {
-                let mut ret = String::new();
-
-                for expr in &expr_concat_str.exprs {
-                    let Value::String(s) = expr.eval_ref(scope, input)? else {
-                        return Err(crate::Error::expression_evaluation_failed(
-                            "string concatenation requires string values",
-                        ));
-                    };
-
-                    ret.push_str(&s);
-                }
-
-                Ok(ret.into())
-            }
             Expr::Default => Err(crate::Error::expression_evaluation_failed(
                 "DEFAULT can only be evaluated by the database",
             )),
@@ -202,6 +186,52 @@ impl Expr {
                 };
 
                 expr.eval_ref(scope, input)
+            }
+            Expr::Or(expr_or) => {
+                debug_assert!(!expr_or.operands.is_empty());
+
+                for operand in &expr_or.operands {
+                    if operand.eval_ref_bool(scope, input)? {
+                        return Ok(true.into());
+                    }
+                }
+
+                Ok(false.into())
+            }
+            Expr::Any(expr_any) => {
+                let list = expr_any.expr.eval_ref(scope, input)?;
+
+                let Value::List(items) = list else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "Any expression must evaluate to a list",
+                    ));
+                };
+
+                for item in &items {
+                    match item {
+                        Value::Bool(true) => return Ok(true.into()),
+                        Value::Bool(false) => {}
+                        _ => {
+                            return Err(crate::Error::expression_evaluation_failed(
+                                "Any expression items must evaluate to bool",
+                            ))
+                        }
+                    }
+                }
+
+                Ok(false.into())
+            }
+            Expr::InList(expr_in_list) => {
+                let needle = expr_in_list.expr.eval_ref(scope, input)?;
+                let list = expr_in_list.list.eval_ref(scope, input)?;
+
+                let Value::List(items) = list else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "InList right-hand side must evaluate to a list",
+                    ));
+                };
+
+                Ok(items.iter().any(|item| item == &needle).into())
             }
             Expr::Value(value) => Ok(value.clone()),
             _ => todo!("expr={self:#?}"),

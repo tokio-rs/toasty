@@ -340,6 +340,17 @@ impl From<bool> for Value {
     }
 }
 
+impl TryFrom<Value> for bool {
+    type Error = crate::Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bool(v) => Ok(v),
+            _ => Err(crate::Error::type_conversion(value, "bool")),
+        }
+    }
+}
+
 impl From<String> for Value {
     fn from(src: String) -> Self {
         Self::String(src)

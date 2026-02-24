@@ -282,7 +282,6 @@ fn ddb_expression(
                 stmt::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
                 stmt::BinaryOp::Lt => format!("{lhs} < {rhs}"),
                 stmt::BinaryOp::Le => format!("{lhs} <= {rhs}"),
-                _ => todo!("OP {:?}", expr_binary_op.op),
             }
         }
         stmt::Expr::Reference(expr_reference) => {
@@ -305,11 +304,6 @@ fn ddb_expression(
                 .map(|operand| ddb_expression(cx, attrs, primary, operand))
                 .collect::<Vec<_>>();
             operands.join(" OR ")
-        }
-        stmt::Expr::Pattern(stmt::ExprPattern::BeginsWith(begins_with)) => {
-            let expr = ddb_expression(cx, attrs, primary, &begins_with.expr);
-            let substr = ddb_expression(cx, attrs, primary, &begins_with.pattern);
-            format!("begins_with({expr}, {substr})")
         }
         stmt::Expr::InList(in_list) => {
             let expr = ddb_expression(cx, attrs, primary, &in_list.expr);

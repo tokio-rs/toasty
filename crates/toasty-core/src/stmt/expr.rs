@@ -2,9 +2,9 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     expr_reference::ExprReference, Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprConcat, ExprConcatStr, ExprFunc, ExprInList, ExprInSubquery,
-    ExprIsNull, ExprKey, ExprList, ExprMap, ExprNot, ExprOr, ExprPattern, ExprProject, ExprRecord,
-    ExprStmt, ExprTy, Node, Projection, Substitute, Value, Visit, VisitMut,
+    ExprBinaryOp, ExprCast, ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprKey, ExprList,
+    ExprMap, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection, Substitute,
+    Value, Visit, VisitMut,
 };
 use std::fmt;
 
@@ -25,13 +25,6 @@ pub enum Expr {
 
     /// Cast an expression to a different type
     Cast(ExprCast),
-
-    /// Concat multiple expressions together
-    /// TODO: name this something different?
-    Concat(ExprConcat),
-
-    /// Concat strings
-    ConcatStr(ExprConcatStr),
 
     /// Suggests that the database should use its default value. Useful for
     /// auto-increment fields and other columns with default values.
@@ -66,9 +59,6 @@ pub enum Expr {
     /// OR a set of binary expressions
     Or(ExprOr),
 
-    /// Checks if an expression matches a pattern.
-    Pattern(ExprPattern),
-
     /// Project an expression
     Project(ExprProject),
 
@@ -84,9 +74,6 @@ pub enum Expr {
 
     /// Evaluate a sub-statement
     Stmt(ExprStmt),
-
-    /// A type reference. This is used by the "is a" expression
-    Type(ExprTy),
 
     /// Evaluates to a constant value reference
     Value(Value),
@@ -159,8 +146,6 @@ impl Expr {
             Self::Exists(_) => true,
             // IN expressions always evaluate to true or false.
             Self::InList(_) | Self::InSubquery(_) => true,
-            // Pattern matching always evaluates to true or false.
-            Self::Pattern(_) => true,
             // For other expressions, we cannot prove non-nullability.
             _ => false,
         }
@@ -186,7 +171,7 @@ impl Expr {
     pub fn is_stable(&self) -> bool {
         match self {
             // Always stable - constant values
-            Self::Value(_) | Self::Type(_) => true,
+            Self::Value(_) => true,
 
             // Never stable - generates new values each evaluation
             Self::Default => false,
@@ -206,15 +191,7 @@ impl Expr {
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_stable() && expr_in_list.list.is_stable()
             }
-            Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_stable()),
-            Self::ConcatStr(expr_concat_str) => {
-                expr_concat_str.exprs.iter().all(|expr| expr.is_stable())
-            }
             Self::Project(expr_project) => expr_project.base.is_stable(),
-            Self::Pattern(expr_pattern) => match expr_pattern {
-                super::ExprPattern::BeginsWith(e) => e.expr.is_stable() && e.pattern.is_stable(),
-                super::ExprPattern::Like(e) => e.expr.is_stable() && e.pattern.is_stable(),
-            },
             Self::Map(expr_map) => expr_map.base.is_stable() && expr_map.map.is_stable(),
             Self::Key(_) => true,
 
@@ -238,7 +215,7 @@ impl Expr {
     pub fn is_const(&self) -> bool {
         match self {
             // Always constant
-            Self::Value(_) | Self::Type(_) => true,
+            Self::Value(_) => true,
 
             // Never constant - references external data
             Self::Reference(_)
@@ -261,10 +238,6 @@ impl Expr {
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_const() && expr_in_list.list.is_const()
             }
-            Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_const()),
-            Self::ConcatStr(expr_concat_str) => {
-                expr_concat_str.exprs.iter().all(|expr| expr.is_const())
-            }
             Self::Project(expr_project) => expr_project.base.is_const(),
             _ => todo!("expr={self:#?}"),
         }
@@ -278,7 +251,7 @@ impl Expr {
     pub fn is_eval(&self) -> bool {
         match self {
             // Always evaluable
-            Self::Value(_) | Self::Type(_) => true,
+            Self::Value(_) => true,
 
             // Args are OK for evaluation
             Self::Arg(_) => true,
@@ -303,15 +276,7 @@ impl Expr {
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_eval() && expr_in_list.list.is_eval()
             }
-            Self::Concat(expr_concat) => expr_concat.iter().all(|expr| expr.is_eval()),
-            Self::ConcatStr(expr_concat_str) => {
-                expr_concat_str.exprs.iter().all(|expr| expr.is_eval())
-            }
             Self::Project(expr_project) => expr_project.base.is_eval(),
-            Self::Pattern(expr_pattern) => match expr_pattern {
-                super::ExprPattern::BeginsWith(e) => e.expr.is_eval() && e.pattern.is_eval(),
-                super::ExprPattern::Like(e) => e.expr.is_eval() && e.pattern.is_eval(),
-            },
             Self::Map(expr_map) => expr_map.base.is_eval() && expr_map.map.is_eval(),
             Self::Key(_) => true,
             Self::Func(expr_func) => match expr_func {
@@ -457,8 +422,6 @@ impl fmt::Debug for Expr {
             Self::Arg(e) => e.fmt(f),
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),
-            Self::Concat(e) => e.fmt(f),
-            Self::ConcatStr(e) => e.fmt(f),
             Self::Default => write!(f, "Default"),
             Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
@@ -469,13 +432,11 @@ impl fmt::Debug for Expr {
             Self::Map(e) => e.fmt(f),
             Self::Not(e) => e.fmt(f),
             Self::Or(e) => e.fmt(f),
-            Self::Pattern(e) => e.fmt(f),
             Self::Project(e) => e.fmt(f),
             Self::Record(e) => e.fmt(f),
             Self::Reference(e) => e.fmt(f),
             Self::List(e) => e.fmt(f),
             Self::Stmt(e) => e.fmt(f),
-            Self::Type(e) => e.fmt(f),
             Self::Value(e) => e.fmt(f),
         }
     }

@@ -278,23 +278,6 @@ mod tests {
         assert_eq!(*binary_op.rhs, Expr::Value(Value::from(2i64)));
     }
 
-    #[test]
-    fn not_is_a_not_simplified() {
-        let schema = test_schema();
-        let mut simplify = Simplify::new(&schema);
-
-        // `not(x IsA y)` is not simplified
-        let mut expr = not_expr(Expr::BinaryOp(ExprBinaryOp {
-            lhs: Box::new(Expr::Value(Value::from(1i64))),
-            op: BinaryOp::IsA,
-            rhs: Box::new(Expr::Value(Value::from(2i64))),
-        }));
-
-        let result = simplify.simplify_expr_not(&mut expr);
-
-        assert!(result.is_none());
-    }
-
     // De Morgan's law tests
 
     #[test]

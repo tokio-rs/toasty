@@ -8,7 +8,6 @@ pub enum BinaryOp {
     Gt,
     Le,
     Lt,
-    IsA,
 }
 
 impl BinaryOp {
@@ -18,10 +17,6 @@ impl BinaryOp {
 
     pub fn is_ne(self) -> bool {
         matches!(self, Self::Ne)
-    }
-
-    pub fn is_a(self) -> bool {
-        matches!(self, Self::IsA)
     }
 
     pub fn reverse(&mut self) {
@@ -39,7 +34,6 @@ impl BinaryOp {
     /// - `>=` → `<`
     /// - `>` → `<=`
     /// - `<=` → `>`
-    /// - `IsA` → `None`
     pub fn negate(self) -> Option<Self> {
         match self {
             Self::Eq => Some(Self::Ne),
@@ -48,7 +42,6 @@ impl BinaryOp {
             Self::Ge => Some(Self::Lt),
             Self::Gt => Some(Self::Le),
             Self::Le => Some(Self::Gt),
-            Self::IsA => None,
         }
     }
 
@@ -65,7 +58,6 @@ impl BinaryOp {
             Self::Gt => Self::Lt,
             Self::Le => Self::Ge,
             Self::Lt => Self::Gt,
-            Self::IsA => Self::IsA,
         }
     }
 }
@@ -79,7 +71,6 @@ impl fmt::Display for BinaryOp {
             BinaryOp::Gt => ">".fmt(f),
             BinaryOp::Le => "<=".fmt(f),
             BinaryOp::Lt => "<".fmt(f),
-            BinaryOp::IsA => "is a".fmt(f),
         }
     }
 }
