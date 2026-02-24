@@ -234,6 +234,9 @@ impl Expr {
                 Ok(items.iter().any(|item| item == &needle).into())
             }
             Expr::Value(value) => Ok(value.clone()),
+            Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(
+                "database functions cannot be evaluated client-side",
+            )),
             _ => todo!("expr={self:#?}"),
         }
     }
