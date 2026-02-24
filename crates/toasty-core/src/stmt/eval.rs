@@ -267,7 +267,7 @@ impl ScopeStack<'_> {
             nesting -= 1;
 
             scope = match scope {
-                ScopeStack::Root => todo!("error handling"),
+                ScopeStack::Root => return None,
                 ScopeStack::Scope { parent, .. } => parent,
             };
         }
