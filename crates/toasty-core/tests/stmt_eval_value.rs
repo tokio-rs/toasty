@@ -6,14 +6,12 @@ use toasty_core::stmt::{Expr, Value};
 
 #[test]
 fn eval_value_bool_true() {
-    let expr = Expr::Value(Value::Bool(true));
-    assert_eq!(expr.eval_const().unwrap(), Value::Bool(true));
+    assert_eq!(Expr::from(true).eval_const().unwrap(), Value::Bool(true));
 }
 
 #[test]
 fn eval_value_bool_false() {
-    let expr = Expr::Value(Value::Bool(false));
-    assert_eq!(expr.eval_const().unwrap(), Value::Bool(false));
+    assert_eq!(Expr::from(false).eval_const().unwrap(), Value::Bool(false));
 }
 
 // ---------------------------------------------------------------------------
@@ -22,8 +20,7 @@ fn eval_value_bool_false() {
 
 #[test]
 fn eval_value_null() {
-    let expr = Expr::Value(Value::Null);
-    assert_eq!(expr.eval_const().unwrap(), Value::Null);
+    assert_eq!(Expr::from(Value::Null).eval_const().unwrap(), Value::Null);
 }
 
 // ---------------------------------------------------------------------------
@@ -32,50 +29,63 @@ fn eval_value_null() {
 
 #[test]
 fn eval_value_i8() {
-    let expr = Expr::Value(Value::I8(42));
-    assert_eq!(expr.eval_const().unwrap(), Value::I8(42));
+    assert_eq!(
+        Expr::from(Value::I8(42)).eval_const().unwrap(),
+        Value::I8(42)
+    );
 }
 
 #[test]
 fn eval_value_i8_negative() {
-    let expr = Expr::Value(Value::I8(-1));
-    assert_eq!(expr.eval_const().unwrap(), Value::I8(-1));
+    assert_eq!(
+        Expr::from(Value::I8(-1)).eval_const().unwrap(),
+        Value::I8(-1)
+    );
 }
 
 #[test]
 fn eval_value_i16() {
-    let expr = Expr::Value(Value::I16(1000));
-    assert_eq!(expr.eval_const().unwrap(), Value::I16(1000));
+    assert_eq!(
+        Expr::from(Value::I16(1000)).eval_const().unwrap(),
+        Value::I16(1000)
+    );
 }
 
 #[test]
 fn eval_value_i32() {
-    let expr = Expr::Value(Value::I32(100_000));
-    assert_eq!(expr.eval_const().unwrap(), Value::I32(100_000));
+    assert_eq!(
+        Expr::from(Value::I32(100_000)).eval_const().unwrap(),
+        Value::I32(100_000)
+    );
 }
 
 #[test]
 fn eval_value_i64() {
-    let expr = Expr::Value(Value::I64(9_000_000_000));
-    assert_eq!(expr.eval_const().unwrap(), Value::I64(9_000_000_000));
+    assert_eq!(
+        Expr::from(9_000_000_000i64).eval_const().unwrap(),
+        Value::I64(9_000_000_000)
+    );
 }
 
 #[test]
 fn eval_value_i64_zero() {
-    let expr = Expr::Value(Value::I64(0));
-    assert_eq!(expr.eval_const().unwrap(), Value::I64(0));
+    assert_eq!(Expr::from(0i64).eval_const().unwrap(), Value::I64(0));
 }
 
 #[test]
 fn eval_value_i64_min() {
-    let expr = Expr::Value(Value::I64(i64::MIN));
-    assert_eq!(expr.eval_const().unwrap(), Value::I64(i64::MIN));
+    assert_eq!(
+        Expr::from(i64::MIN).eval_const().unwrap(),
+        Value::I64(i64::MIN)
+    );
 }
 
 #[test]
 fn eval_value_i64_max() {
-    let expr = Expr::Value(Value::I64(i64::MAX));
-    assert_eq!(expr.eval_const().unwrap(), Value::I64(i64::MAX));
+    assert_eq!(
+        Expr::from(i64::MAX).eval_const().unwrap(),
+        Value::I64(i64::MAX)
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -84,32 +94,42 @@ fn eval_value_i64_max() {
 
 #[test]
 fn eval_value_u8() {
-    let expr = Expr::Value(Value::U8(255));
-    assert_eq!(expr.eval_const().unwrap(), Value::U8(255));
+    assert_eq!(
+        Expr::from(Value::U8(255)).eval_const().unwrap(),
+        Value::U8(255)
+    );
 }
 
 #[test]
 fn eval_value_u16() {
-    let expr = Expr::Value(Value::U16(65535));
-    assert_eq!(expr.eval_const().unwrap(), Value::U16(65535));
+    assert_eq!(
+        Expr::from(Value::U16(65535)).eval_const().unwrap(),
+        Value::U16(65535)
+    );
 }
 
 #[test]
 fn eval_value_u32() {
-    let expr = Expr::Value(Value::U32(4_294_967_295));
-    assert_eq!(expr.eval_const().unwrap(), Value::U32(4_294_967_295));
+    assert_eq!(
+        Expr::from(Value::U32(4_294_967_295)).eval_const().unwrap(),
+        Value::U32(4_294_967_295)
+    );
 }
 
 #[test]
 fn eval_value_u64() {
-    let expr = Expr::Value(Value::U64(u64::MAX));
-    assert_eq!(expr.eval_const().unwrap(), Value::U64(u64::MAX));
+    assert_eq!(
+        Expr::from(Value::U64(u64::MAX)).eval_const().unwrap(),
+        Value::U64(u64::MAX)
+    );
 }
 
 #[test]
 fn eval_value_u64_zero() {
-    let expr = Expr::Value(Value::U64(0));
-    assert_eq!(expr.eval_const().unwrap(), Value::U64(0));
+    assert_eq!(
+        Expr::from(Value::U64(0)).eval_const().unwrap(),
+        Value::U64(0)
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -118,14 +138,15 @@ fn eval_value_u64_zero() {
 
 #[test]
 fn eval_value_string() {
-    let expr = Expr::Value(Value::from("hello"));
-    assert_eq!(expr.eval_const().unwrap(), Value::from("hello"));
+    assert_eq!(
+        Expr::from("hello").eval_const().unwrap(),
+        Value::from("hello")
+    );
 }
 
 #[test]
 fn eval_value_string_empty() {
-    let expr = Expr::Value(Value::from(""));
-    assert_eq!(expr.eval_const().unwrap(), Value::from(""));
+    assert_eq!(Expr::from("").eval_const().unwrap(), Value::from(""));
 }
 
 // ---------------------------------------------------------------------------
@@ -134,14 +155,20 @@ fn eval_value_string_empty() {
 
 #[test]
 fn eval_value_bytes() {
-    let expr = Expr::Value(Value::Bytes(vec![1, 2, 3]));
-    assert_eq!(expr.eval_const().unwrap(), Value::Bytes(vec![1, 2, 3]));
+    assert_eq!(
+        Expr::from(Value::Bytes(vec![1, 2, 3]))
+            .eval_const()
+            .unwrap(),
+        Value::Bytes(vec![1, 2, 3])
+    );
 }
 
 #[test]
 fn eval_value_bytes_empty() {
-    let expr = Expr::Value(Value::Bytes(vec![]));
-    assert_eq!(expr.eval_const().unwrap(), Value::Bytes(vec![]));
+    assert_eq!(
+        Expr::from(Value::Bytes(vec![])).eval_const().unwrap(),
+        Value::Bytes(vec![])
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -151,13 +178,9 @@ fn eval_value_bytes_empty() {
 #[test]
 fn eval_and_eval_const_agree() {
     use toasty_core::stmt::ConstInput;
-
-    let value = Value::I64(99);
-    let expr = Expr::Value(value.clone());
-
-    let via_eval = expr.eval(ConstInput::new()).unwrap();
-    let via_eval_const = expr.eval_const().unwrap();
-
-    assert_eq!(via_eval, via_eval_const);
-    assert_eq!(via_eval, value);
+    let expr = Expr::from(99i64);
+    assert_eq!(
+        expr.eval(ConstInput::new()).unwrap(),
+        expr.eval_const().unwrap()
+    );
 }
